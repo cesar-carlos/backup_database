@@ -1,0 +1,253 @@
+import 'package:flutter/foundation.dart';
+
+import '../../core/errors/failure.dart';
+import '../../domain/entities/schedule.dart';
+import '../../domain/repositories/i_schedule_repository.dart';
+import '../../domain/use_cases/scheduling/create_schedule.dart';
+import '../../domain/use_cases/scheduling/update_schedule.dart';
+import '../../domain/use_cases/scheduling/delete_schedule.dart';
+import '../../domain/use_cases/scheduling/execute_scheduled_backup.dart';
+import '../services/scheduler_service.dart';
+import 'backup_progress_provider.dart';
+
+class SchedulerProvider extends ChangeNotifier {
+  final IScheduleRepository _repository;
+  final SchedulerService _schedulerService;
+  final CreateSchedule _createSchedule;
+  final UpdateSchedule _updateSchedule;
+  final DeleteSchedule _deleteSchedule;
+  final ExecuteScheduledBackup _executeBackup;
+  final BackupProgressProvider? _progressProvider;
+
+  List<Schedule> _schedules = [];
+  bool _isLoading = false;
+  String? _error;
+  bool _isSchedulerRunning = true;
+
+  SchedulerProvider({
+    required IScheduleRepository repository,
+    required SchedulerService schedulerService,
+    required CreateSchedule createSchedule,
+    required UpdateSchedule updateSchedule,
+    required DeleteSchedule deleteSchedule,
+    required ExecuteScheduledBackup executeBackup,
+    BackupProgressProvider? progressProvider,
+  }) : _repository = repository,
+       _schedulerService = schedulerService,
+       _createSchedule = createSchedule,
+       _updateSchedule = updateSchedule,
+       _deleteSchedule = deleteSchedule,
+       _executeBackup = executeBackup,
+       _progressProvider = progressProvider;
+
+  List<Schedule> get schedules => _schedules;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+  bool get isSchedulerRunning => _isSchedulerRunning;
+
+  List<Schedule> get activeSchedules =>
+      _schedules.where((s) => s.enabled).toList();
+
+  List<Schedule> get inactiveSchedules =>
+      _schedules.where((s) => !s.enabled).toList();
+
+  Future<void> loadSchedules() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _repository.getAll();
+      result.fold(
+        (schedules) {
+          _schedules = schedules;
+          _error = null;
+        },
+        (failure) {
+          final f = failure as Failure;
+          _error = f.message;
+        },
+      );
+    } catch (e) {
+      _error = 'Erro ao carregar agendamentos: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> createSchedule(Schedule schedule) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _createSchedule(schedule);
+      return await result.fold(
+        (newSchedule) async {
+          // Recarregar do banco para garantir sincronização
+          await loadSchedules();
+          return true;
+        },
+        (failure) async {
+          final f = failure as Failure;
+          _error = f.message;
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        },
+      );
+    } catch (e) {
+      _error = 'Erro ao criar agendamento: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateSchedule(Schedule schedule) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _updateSchedule(schedule);
+      return await result.fold(
+        (updatedSchedule) async {
+          // Recarregar do banco para garantir sincronização
+          await loadSchedules();
+          return true;
+        },
+        (failure) async {
+          final f = failure as Failure;
+          _error = f.message;
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        },
+      );
+    } catch (e) {
+      _error = 'Erro ao atualizar agendamento: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteSchedule(String id) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _deleteSchedule(id);
+      return result.fold(
+        (_) {
+          _schedules.removeWhere((s) => s.id == id);
+          _error = null;
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        },
+        (failure) {
+          final f = failure as Failure;
+          _error = f.message;
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        },
+      );
+    } catch (e) {
+      _error = 'Erro ao deletar agendamento: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> executeNow(String scheduleId) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    final schedule = getScheduleById(scheduleId);
+    final scheduleName = schedule?.name ?? 'Backup';
+    final progressProvider = _progressProvider;
+
+    try {
+      // Iniciar progresso
+      if (progressProvider != null) {
+        progressProvider.startBackup(scheduleName);
+        progressProvider.updateProgress(
+          step: BackupStep.executingBackup,
+          message: 'Executando backup do banco de dados...',
+          progress: 0.2,
+        );
+      }
+
+      final result = await _executeBackup(scheduleId);
+
+      return result.fold(
+        (_) {
+          if (progressProvider != null) {
+            progressProvider.updateProgress(
+              step: BackupStep.completed,
+              message: 'Backup concluído com sucesso!',
+              progress: 1.0,
+            );
+            progressProvider.completeBackup(
+              message: 'Backup concluído com sucesso!',
+            );
+          }
+          _error = null;
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        },
+        (failure) {
+          final f = failure as Failure;
+          if (progressProvider != null) {
+            progressProvider.failBackup(f.message);
+          }
+          _error = f.message;
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        },
+      );
+    } catch (e) {
+      if (progressProvider != null) {
+        progressProvider.failBackup(e.toString());
+      }
+      _error = 'Erro ao executar backup: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> toggleSchedule(String id, bool enabled) async {
+    final schedule = _schedules.firstWhere((s) => s.id == id);
+    return await updateSchedule(schedule.copyWith(enabled: enabled));
+  }
+
+  void startScheduler() {
+    _schedulerService.start();
+    _isSchedulerRunning = true;
+    notifyListeners();
+  }
+
+  void stopScheduler() {
+    _schedulerService.stop();
+    _isSchedulerRunning = false;
+    notifyListeners();
+  }
+
+  Schedule? getScheduleById(String id) {
+    try {
+      return _schedules.firstWhere((s) => s.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+}

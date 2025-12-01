@@ -1,0 +1,131 @@
+name: backup_database
+description: Sistema de backup automático para SQL Server e Sybase ASA
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navegação e Rotas
+  go_router: ^17.0.0
+
+  # HTTP Client
+  dio: ^5.9.0
+
+  # Injeção de Dependências
+  get_it: ^9.1.1
+
+  # Gerenciamento de Estado
+  provider: ^6.1.5+1
+
+  # Formatação BR
+  brasil_fields: ^1.18.0
+
+  # Variáveis de Ambiente
+  flutter_dotenv: ^6.0.0
+
+  # UUID
+  uuid: ^4.5.2
+
+  # Validação
+  zard: ^0.0.24
+
+  # Result Pattern (Error Handling)
+  result_dart: ^2.1.1
+
+  # Controle de Janelas
+  window_manager: ^0.5.1
+  tray_manager: ^0.5.2
+
+  # E-mail (SMTP)
+  mailer: ^6.6.0
+
+  # OAuth2
+  oauth2_client: ^4.2.1
+
+  # Google Drive
+  googleapis: ^15.0.0
+
+  # File Picker
+  file_picker: ^10.3.7
+
+  # Logging
+  logger: ^2.6.2
+
+  # Windows Integration
+  win32: ^5.15.0
+
+  # Internacionalização
+  intl: ^0.20.2
+
+  # Agendamento
+  cron: ^0.6.2
+  timezone: ^0.10.1
+
+  # FTP
+  ftpconnect: ^2.0.10
+
+  # Persistência
+  drift: ^2.29.0
+  sqlite3_flutter_libs: ^0.5.40
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.3
+
+  # Criptografia
+  crypto: ^3.0.7
+  encrypt: ^5.0.3
+
+  # Compressão
+  archive: ^4.0.7
+
+  # Utilitários de Path
+  path: ^1.9.1
+
+  # HTTP (para Google Drive API)
+  http: ^1.2.2
+
+  # Ícones
+  cupertino_icons: ^1.0.8
+
+  # Fontes Google
+  google_fonts: ^6.2.1
+
+  # SVG
+  flutter_svg: ^2.0.10+1
+
+  # URL Launcher (para OAuth no navegador externo)
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: ^2.29.0
+  build_runner: ^2.10.4
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+    - assets/icons/
+    - assets/icons/favicon.ico
+    - assets/icons/icon-512-maskable.png
+    - assets/icons/icon-512-dark.svg
+    - assets/icons/icon-512-embedded.svg
+    - assets/image/
+    - assets/image/apple-touch-icon.png
+    - assets/image/icon-192.png
+    - assets/image/icon-512-maskable.png
+
+flutter_launcher_icons:
+  image_path: "assets/icons/icon-512-maskable.png"
+  android: false
+  windows:
+    generate: true
+    image_path: "assets/icons/icon-512-maskable.png"
+    icon_size: 256
