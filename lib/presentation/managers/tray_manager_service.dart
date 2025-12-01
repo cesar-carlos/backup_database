@@ -30,8 +30,6 @@ class TrayManagerService with TrayListener {
     if (_isInitialized) return;
 
     _onMenuAction = onMenuAction;
-
-    // Adicionar listener ANTES de configurar o ícone
     trayManager.addListener(this);
 
     try {
@@ -39,43 +37,33 @@ class TrayManagerService with TrayListener {
       final iconFile = File(iconPath);
 
       if (iconFile.existsSync()) {
-        LoggerService.info(
-          'Configurando ícone da bandeja: ${iconFile.absolute.path}',
-        );
         await trayManager.setIcon(iconFile.absolute.path);
-        LoggerService.info('Ícone da bandeja configurado com sucesso');
       } else {
-        // Tentar usar o executável diretamente (Windows extrai o ícone automaticamente)
         final executablePath = Platform.resolvedExecutable;
-        LoggerService.info(
-          'Ícone não encontrado, usando executável: $executablePath',
-        );
         await trayManager.setIcon(executablePath);
       }
     } catch (e, stackTrace) {
       LoggerService.error('Erro ao configurar ícone da bandeja', e, stackTrace);
-      // Tentar usar o executável como fallback
       try {
         final executablePath = Platform.resolvedExecutable;
         await trayManager.setIcon(executablePath);
-        LoggerService.info('Fallback: usando executável como ícone');
       } catch (e2) {
         LoggerService.error('Erro crítico ao configurar ícone', e2);
       }
     }
 
     await trayManager.setToolTip('Backup Database - Ativo');
+    await Future.delayed(const Duration(milliseconds: 100));
 
     await _updateMenu();
+    await Future.delayed(const Duration(milliseconds: 100));
 
     _isInitialized = true;
-
     LoggerService.info('TrayManager inicializado');
   }
 
   Future<String> _getTrayIconPath() async {
     if (Platform.isWindows) {
-      // Se já temos o ícone em cache, usar ele
       if (_cachedIconPath != null) {
         final cachedFile = File(_cachedIconPath!);
         if (cachedFile.existsSync()) {
@@ -83,56 +71,36 @@ class TrayManagerService with TrayListener {
         }
       }
 
-      // Tentar copiar o favicon.ico dos assets para um arquivo temporário
       try {
         final tempDir = await getTemporaryDirectory();
         final iconFile = File('${tempDir.path}\\tray_icon.ico');
-
-        // Carregar o asset favicon.ico
         final ByteData data = await rootBundle.load('assets/icons/favicon.ico');
         final Uint8List bytes = data.buffer.asUint8List();
 
-        // Salvar em arquivo temporário
         await iconFile.writeAsBytes(bytes);
         _cachedIconPath = iconFile.absolute.path;
-
-        LoggerService.info('Ícone copiado dos assets para: $_cachedIconPath');
         return _cachedIconPath!;
       } catch (e) {
         LoggerService.warning('Não foi possível copiar ícone dos assets: $e');
-        // Continuar com outros métodos
       }
 
       final executablePath = Platform.resolvedExecutable;
       final executableDir = Directory(executablePath).parent.path;
 
-      // Tentar encontrar favicon.ico em múltiplos caminhos possíveis
+      final paths = [
+        '$executableDir\\data\\flutter_assets\\assets\\icons\\favicon.ico',
+        '${Directory(executablePath).parent.parent.path}\\data\\flutter_assets\\assets\\icons\\favicon.ico',
+        '$executableDir\\assets\\icons\\favicon.ico',
+        '$executableDir\\resources\\app_icon.ico',
+      ];
 
-      // Caminho 1: data/flutter_assets/assets/icons/favicon.ico (modo debug/release)
-      final assetPath1 =
-          '$executableDir\\data\\flutter_assets\\assets\\icons\\favicon.ico';
-      final assetFile1 = File(assetPath1);
-      if (assetFile1.existsSync()) {
-        return assetFile1.absolute.path;
+      for (final path in paths) {
+        final file = File(path);
+        if (file.existsSync()) {
+          return file.absolute.path;
+        }
       }
 
-      // Caminho 2: Subir um nível e procurar data/flutter_assets/assets/icons/favicon.ico
-      final parentDir = Directory(executablePath).parent.parent.path;
-      final assetPath2 =
-          '$parentDir\\data\\flutter_assets\\assets\\icons\\favicon.ico';
-      final assetFile2 = File(assetPath2);
-      if (assetFile2.existsSync()) {
-        return assetFile2.absolute.path;
-      }
-
-      // Caminho 3: Procurar assets/icons/favicon.ico relativo ao executável
-      final assetPath3 = '$executableDir\\assets\\icons\\favicon.ico';
-      final assetFile3 = File(assetPath3);
-      if (assetFile3.existsSync()) {
-        return assetFile3.absolute.path;
-      }
-
-      // Caminho 4: Subir diretórios até encontrar assets/icons/favicon.ico
       var currentDir = Directory(executablePath).parent;
       for (int i = 0; i < 6; i++) {
         final iconPath = '${currentDir.path}\\assets\\icons\\favicon.ico';
@@ -145,44 +113,30 @@ class TrayManagerService with TrayListener {
         currentDir = parent;
       }
 
-      // Caminho 5: Tentar app_icon.ico gerado pelo flutter_launcher_icons
-      final appIconPath = '$executableDir\\resources\\app_icon.ico';
-      final appIconFile = File(appIconPath);
-      if (appIconFile.existsSync()) {
-        return appIconFile.absolute.path;
-      }
-
-      // Fallback: usar o executável (Windows extrai o ícone automaticamente do .exe)
       return executablePath;
     }
     return 'assets/icons/favicon.ico';
   }
 
   Future<void> _updateMenu() async {
-    final menu = Menu(
-      items: [
-        MenuItem(key: 'show', label: 'Abrir Backup Database'),
-        MenuItem.separator(),
-        MenuItem(key: 'execute_backup', label: 'Executar Backup Agora'),
-        MenuItem(
-          key: _isSchedulerPaused ? 'resume_scheduler' : 'pause_scheduler',
-          label: _isSchedulerPaused
-              ? 'Retomar Agendamentos'
-              : 'Pausar Agendamentos',
-        ),
-        MenuItem.separator(),
-        MenuItem(key: 'settings', label: 'Configurações'),
-        MenuItem.separator(),
-        MenuItem(key: 'exit', label: 'Sair'),
-      ],
-    );
+    try {
+      final menu = Menu(
+        items: [
+          MenuItem(key: 'show', label: 'Abrir'),
+          MenuItem.separator(),
+          MenuItem(key: 'exit', label: 'Sair'),
+        ],
+      );
 
-    await trayManager.setContextMenu(menu);
+      await trayManager.setContextMenu(menu);
+    } catch (e, stackTrace) {
+      LoggerService.error('Erro ao configurar menu de contexto', e, stackTrace);
+      rethrow;
+    }
   }
 
   Future<void> setSchedulerPaused(bool paused) async {
     _isSchedulerPaused = paused;
-    await _updateMenu();
     await _updateTooltip();
   }
 
@@ -201,11 +155,8 @@ class TrayManagerService with TrayListener {
     }
   }
 
-  // TrayListener callbacks
   @override
   void onTrayIconMouseDown() {
-    // No Windows, o MouseUp pode não ser disparado corretamente pelo tray_manager
-    // Vamos restaurar também no MouseDown como solução alternativa
     Future.delayed(const Duration(milliseconds: 200), () {
       _restoreWindow()
           .then((_) {
@@ -269,10 +220,27 @@ class TrayManagerService with TrayListener {
   }
 
   @override
-  void onTrayIconRightMouseDown() {}
+  void onTrayIconRightMouseDown() {
+    _showContextMenu();
+  }
 
   @override
   void onTrayIconRightMouseUp() {}
+
+  Future<void> _showContextMenu() async {
+    if (!_isInitialized) {
+      LoggerService.warning('TrayManager não está inicializado');
+      return;
+    }
+
+    try {
+      await _updateMenu();
+      await Future.delayed(const Duration(milliseconds: 50));
+      await trayManager.popUpContextMenu();
+    } catch (e, stackTrace) {
+      LoggerService.error('Erro ao exibir menu de contexto', e, stackTrace);
+    }
+  }
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
@@ -287,31 +255,12 @@ class TrayManagerService with TrayListener {
             });
         break;
 
-      case 'execute_backup':
-        _onMenuAction?.call(TrayMenuAction.executeBackup);
-        break;
-
-      case 'pause_scheduler':
-        _onMenuAction?.call(TrayMenuAction.pauseScheduler);
-        break;
-
-      case 'resume_scheduler':
-        _onMenuAction?.call(TrayMenuAction.resumeScheduler);
-        break;
-
-      case 'settings':
-        _restoreWindow()
-            .then((_) {
-              _onMenuAction?.call(TrayMenuAction.settings);
-            })
-            .catchError((e) {
-              LoggerService.error('Erro ao restaurar janela do menu', e);
-            });
-        break;
-
       case 'exit':
         _onMenuAction?.call(TrayMenuAction.exit);
         break;
+
+      default:
+        LoggerService.warning('Item de menu desconhecido: ${menuItem.key}');
     }
   }
 

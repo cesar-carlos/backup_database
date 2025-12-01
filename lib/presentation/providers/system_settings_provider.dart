@@ -43,6 +43,10 @@ class SystemSettingsProvider extends ChangeNotifier {
       // Aplicar configurações carregadas
       _windowManager.setMinimizeToTray(_minimizeToTray);
       _windowManager.setCloseToTray(_closeToTray);
+      
+      LoggerService.info(
+        'Configurações aplicadas - Minimizar para bandeja: $_minimizeToTray, Fechar para bandeja: $_closeToTray',
+      );
 
       notifyListeners();
       LoggerService.info('Configurações do sistema carregadas');
@@ -88,6 +92,11 @@ class SystemSettingsProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_startMinimizedKey, value);
+      
+      // Se "Iniciar com o Windows" estiver ativado, atualizar o registro
+      if (_startWithWindows) {
+        await _updateStartWithWindows(true);
+      }
     } catch (e) {
       LoggerService.error('Erro ao salvar configuração startMinimized', e);
     }
@@ -95,7 +104,7 @@ class SystemSettingsProvider extends ChangeNotifier {
 
   Future<void> setStartWithWindows(bool value) async {
     _startWithWindows = value;
-    _updateStartWithWindows(value);
+    await _updateStartWithWindows(value);
     notifyListeners();
     LoggerService.debug('Iniciar com Windows alterado: $value');
 
@@ -112,6 +121,15 @@ class SystemSettingsProvider extends ChangeNotifier {
       final executablePath = Platform.resolvedExecutable;
       
       if (enable) {
+        // Verificar se deve iniciar minimizado
+        final prefs = await SharedPreferences.getInstance();
+        final startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
+        
+        // Construir comando com argumento --minimized se necessário
+        final command = startMinimized 
+            ? '"$executablePath" --minimized'
+            : '"$executablePath"';
+        
         // Adicionar ao registro do Windows
         final result = await Process.run(
           'reg',
@@ -123,13 +141,15 @@ class SystemSettingsProvider extends ChangeNotifier {
             '/t',
             'REG_SZ',
             '/d',
-            '"$executablePath"',
+            command,
             '/f',
           ],
         );
         
         if (result.exitCode == 0) {
-          LoggerService.info('Aplicativo adicionado ao início automático do Windows');
+          LoggerService.info(
+            'Aplicativo adicionado ao início automático do Windows${startMinimized ? ' (minimizado)' : ''}',
+          );
         } else {
           LoggerService.error(
             'Erro ao adicionar ao início automático',

@@ -50,10 +50,16 @@ Future<void> main() async {
     final prefs = await SharedPreferences.getInstance();
     final startMinimizedFromSettings =
         prefs.getBool('start_minimized') ?? false;
+    LoggerService.info(
+      'Configuração "Iniciar Minimizado" carregada: $startMinimizedFromSettings',
+    );
 
     // Verificar argumentos de linha de comando
     final args = Platform.executableArguments;
     final startMinimizedFromArgs = args.contains('--minimized');
+    LoggerService.info(
+      'Argumentos de linha de comando: $args (--minimized: $startMinimizedFromArgs)',
+    );
     final scheduleId = _getScheduleIdFromArgs(args);
 
     // Se foi chamado com schedule-id, executar apenas o backup e sair
@@ -64,6 +70,9 @@ Future<void> main() async {
 
     // Usar configuração salva ou argumento de linha de comando
     final startMinimized = startMinimizedFromArgs || startMinimizedFromSettings;
+    LoggerService.info(
+      'Iniciar minimizado: $startMinimized (configuração: $startMinimizedFromSettings, argumento: $startMinimizedFromArgs)',
+    );
 
     // Inicializar window manager
     final windowManager = WindowManagerService();
