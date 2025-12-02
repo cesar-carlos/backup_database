@@ -1,5 +1,5 @@
-#define MyAppName "Backup Database"
-#define MyAppVersion "1.0.1+2"
+﻿#define MyAppName "Backup Database"
+#define MyAppVersion "1.0.2+1"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -33,7 +33,7 @@ Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"; Flags: unchecked
+Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "OpÃ§Ãµes de InicializaÃ§Ã£o"; Flags: unchecked
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -46,8 +46,8 @@ Source: "check_dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
+Name: "{group}\Verificar DependÃªncias"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\DocumentaÃ§Ã£o"; Filename: "{app}\docs\installation_guide.md"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
@@ -78,7 +78,7 @@ procedure InitializeWizard();
 begin
   if VCRedistNeeded then
   begin
-    VCRedistPage := CreateOutputProgressPage('Verificando Dependências', 'Instalando Visual C++ Redistributables...');
+    VCRedistPage := CreateOutputProgressPage('Verificando DependÃªncias', 'Instalando Visual C++ Redistributables...');
   end;
 end;
 
@@ -100,7 +100,7 @@ begin
     
     if not FileExists(VCRedistPath) then
     begin
-      Result := 'Visual C++ Redistributables não encontrado. Por favor, baixe e instale manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe';
+      Result := 'Visual C++ Redistributables nÃ£o encontrado. Por favor, baixe e instale manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe';
       VCRedistPage.Hide;
       Exit;
     end;
@@ -109,7 +109,7 @@ begin
     
     if not ExecResult or (VCRedistErrorCode <> 0) then
     begin
-      Result := 'Erro ao instalar Visual C++ Redistributables. Código de erro: ' + IntToStr(VCRedistErrorCode);
+      Result := 'Erro ao instalar Visual C++ Redistributables. CÃ³digo de erro: ' + IntToStr(VCRedistErrorCode);
       VCRedistPage.Hide;
       Exit;
     end;
@@ -145,7 +145,7 @@ begin
     
     if not SqlCmdFound or not SybaseFound then
     begin
-      MissingDeps := 'ATENÇÃO: Algumas dependências não foram encontradas no sistema:' + #13#10 + #13#10;
+      MissingDeps := 'ATENÃ‡ÃƒO: Algumas dependÃªncias nÃ£o foram encontradas no sistema:' + #13#10 + #13#10;
       
       if not SqlCmdFound then
         MissingDeps := MissingDeps + '- sqlcmd.exe (SQL Server Command Line Tools)' + #13#10;
@@ -154,8 +154,8 @@ begin
         MissingDeps := MissingDeps + '- dbbackup.exe (Sybase SQL Anywhere)' + #13#10;
       
       MissingDeps := MissingDeps + #13#10 +
-        'O aplicativo pode não funcionar corretamente sem essas ferramentas.' + #13#10 + #13#10 +
-        'Deseja continuar com a instalação mesmo assim?';
+        'O aplicativo pode nÃ£o funcionar corretamente sem essas ferramentas.' + #13#10 + #13#10 +
+        'Deseja continuar com a instalaÃ§Ã£o mesmo assim?';
       
       if MsgBox(MissingDeps, mbConfirmation, MB_YESNO) = IDNO then
       begin
