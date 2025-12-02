@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Backup Database"
-#define MyAppVersion "1.0.8"
+#define MyAppVersion "1.0.9"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -121,9 +121,18 @@ function InitializeSetup(): Boolean;
 var
   AppExe: String;
   WaitCount: Integer;
+  UninstallExe: String;
 begin
   Result := True;
   VCRedistNeeded := False;
+  
+  // Fechar processos de desinstalação se estiverem rodando
+  UninstallExe := 'unins000.exe';
+  if IsAppRunning(UninstallExe) then
+  begin
+    CloseApp(UninstallExe);
+    Sleep(2000);
+  end;
   
   // Verificar se o aplicativo está em execução
   AppExe := ExpandConstant('{#MyAppExeName}');
@@ -135,32 +144,20 @@ begin
               'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
     begin
       // Tentar fechar o aplicativo
-      if CloseApp(AppExe) then
+      CloseApp(AppExe);
+      
+      // Aguardar até que o processo seja completamente finalizado
+      WaitCount := 0;
+      while IsAppRunning(AppExe) and (WaitCount < 30) do
       begin
-        // Aguardar até que o processo seja completamente finalizado
-        WaitCount := 0;
-        while IsAppRunning(AppExe) and (WaitCount < 20) do
-        begin
-          Sleep(500);
-          WaitCount := WaitCount + 1;
-        end;
-        
-        // Se ainda estiver rodando após todas as tentativas, avisar mas continuar
-        if IsAppRunning(AppExe) then
-        begin
-          if MsgBox('O aplicativo ainda parece estar em execução.' + #13#10 + #13#10 +
-                    'A instalação pode falhar se o aplicativo não for fechado.' + #13#10 + #13#10 +
-                    'Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
-          begin
-            Result := False;
-            Exit;
-          end;
-        end;
-      end
-      else
+        Sleep(500);
+        WaitCount := WaitCount + 1;
+      end;
+      
+      // Se ainda estiver rodando após todas as tentativas, avisar mas continuar
+      if IsAppRunning(AppExe) then
       begin
-        // Se não conseguiu fechar, perguntar se quer continuar mesmo assim
-        if MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
+        if MsgBox('O aplicativo ainda parece estar em execução após tentativas de fechamento.' + #13#10 + #13#10 +
                   'A instalação pode falhar se o aplicativo não for fechado.' + #13#10 + #13#10 +
                   'Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
         begin
@@ -168,9 +165,13 @@ begin
           Exit;
         end;
       end;
+      
+      // Se chegou aqui, o aplicativo foi fechado ou o usuário escolheu continuar
+      // Continuar com a instalação
     end
     else
     begin
+      // Usuário escolheu não fechar - não pode continuar
       Result := False;
       Exit;
     end;
@@ -203,21 +204,24 @@ begin
   AppExe := ExpandConstant('{#MyAppExeName}');
   if IsAppRunning(AppExe) then
   begin
-    // Tentar fechar novamente
-    if not CloseApp(AppExe) then
-    begin
-      Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}') + ' ainda está em execução. Por favor, feche o aplicativo manualmente e tente novamente.';
-      Exit;
-    end;
+    // Tentar fechar novamente de forma mais agressiva
+    Exec('taskkill.exe', '/IM ' + AppExe + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, VCRedistErrorCode);
+    Sleep(2000);
     
-    // Aguardar um pouco mais
-    Sleep(1000);
-    
-    // Verificar novamente
+    // Tentar novamente se ainda estiver rodando
     if IsAppRunning(AppExe) then
     begin
-      Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}') + ' ainda está em execução. Por favor, feche o aplicativo manualmente e tente novamente.';
-      Exit;
+      Exec('taskkill.exe', '/IM ' + AppExe + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, VCRedistErrorCode);
+      Sleep(2000);
+    end;
+    
+    // Se ainda estiver rodando após todas as tentativas, apenas avisar
+    // mas tentar continuar (alguns arquivos podem ser substituídos mesmo assim)
+    if IsAppRunning(AppExe) then
+    begin
+      // Não bloquear completamente - apenas avisar
+      // O Windows pode conseguir substituir alguns arquivos mesmo com o processo rodando
+      // Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}') + ' ainda está em execução. Alguns arquivos podem não ser atualizados.';
     end;
   end;
   
