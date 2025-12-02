@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Backup Database"
-#define MyAppVersion "1.0.7"
+#define MyAppVersion "1.0.8"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -81,30 +81,46 @@ function CloseApp(const ExeName: String): Boolean;
 var
   ResultCode: Integer;
   Retries: Integer;
+  MaxRetries: Integer;
 begin
   Result := False;
   Retries := 0;
+  MaxRetries := 10;
   
   // Primeira tentativa: fechar graciosamente (sem /F)
   Exec('taskkill.exe', '/IM ' + ExeName + ' /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(1000);
+  Sleep(1500);
   
-  // Se ainda estiver rodando, tentar forçar o fechamento
-  while IsAppRunning(ExeName) and (Retries < 5) do
+  // Verificar se foi fechado
+  if not IsAppRunning(ExeName) then
   begin
-    Exec('taskkill.exe', '/IM ' + ExeName + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Sleep(500);
-    Retries := Retries + 1;
+    Result := True;
+    Exit;
   end;
   
+  // Se ainda estiver rodando, tentar forçar o fechamento
+  while IsAppRunning(ExeName) and (Retries < MaxRetries) do
+  begin
+    Exec('taskkill.exe', '/IM ' + ExeName + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(1000);
+    Retries := Retries + 1;
+    
+    // Verificar se foi fechado após cada tentativa
+    if not IsAppRunning(ExeName) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+  
+  // Verificação final
   Result := not IsAppRunning(ExeName);
 end;
 
 function InitializeSetup(): Boolean;
 var
-  AppPath: String;
   AppExe: String;
-  Retries: Integer;
+  WaitCount: Integer;
 begin
   Result := True;
   VCRedistNeeded := False;
@@ -118,23 +134,39 @@ begin
               'É necessário fechar o aplicativo para continuar com a instalação.' + #13#10 + #13#10 +
               'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
     begin
-      if not CloseApp(AppExe) then
+      // Tentar fechar o aplicativo
+      if CloseApp(AppExe) then
       begin
-        MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
-               'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
-        Result := False;
-        Exit;
-      end;
-      
-      // Aguardar um pouco mais para garantir que o processo foi finalizado
-      Sleep(1000);
-      
-      if IsAppRunning(AppExe) then
+        // Aguardar até que o processo seja completamente finalizado
+        WaitCount := 0;
+        while IsAppRunning(AppExe) and (WaitCount < 20) do
+        begin
+          Sleep(500);
+          WaitCount := WaitCount + 1;
+        end;
+        
+        // Se ainda estiver rodando após todas as tentativas, avisar mas continuar
+        if IsAppRunning(AppExe) then
+        begin
+          if MsgBox('O aplicativo ainda parece estar em execução.' + #13#10 + #13#10 +
+                    'A instalação pode falhar se o aplicativo não for fechado.' + #13#10 + #13#10 +
+                    'Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
+          begin
+            Result := False;
+            Exit;
+          end;
+        end;
+      end
+      else
       begin
-        MsgBox('O aplicativo ainda está em execução.' + #13#10 + #13#10 +
-               'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
-        Result := False;
-        Exit;
+        // Se não conseguiu fechar, perguntar se quer continuar mesmo assim
+        if MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
+                  'A instalação pode falhar se o aplicativo não for fechado.' + #13#10 + #13#10 +
+                  'Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
+        begin
+          Result := False;
+          Exit;
+        end;
       end;
     end
     else
@@ -163,8 +195,31 @@ var
   VCRedistPath: String;
   VCRedistErrorCode: Integer;
   ExecResult: Boolean;
+  AppExe: String;
 begin
   Result := '';
+  
+  // Verificar novamente se o aplicativo está rodando antes de instalar
+  AppExe := ExpandConstant('{#MyAppExeName}');
+  if IsAppRunning(AppExe) then
+  begin
+    // Tentar fechar novamente
+    if not CloseApp(AppExe) then
+    begin
+      Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}') + ' ainda está em execução. Por favor, feche o aplicativo manualmente e tente novamente.';
+      Exit;
+    end;
+    
+    // Aguardar um pouco mais
+    Sleep(1000);
+    
+    // Verificar novamente
+    if IsAppRunning(AppExe) then
+    begin
+      Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}') + ' ainda está em execução. Por favor, feche o aplicativo manualmente e tente novamente.';
+      Exit;
+    end;
+  end;
   
   if VCRedistNeeded then
   begin
