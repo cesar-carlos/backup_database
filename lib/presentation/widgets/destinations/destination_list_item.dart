@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/backup_destination.dart';
 
 class DestinationListItem extends StatelessWidget {
@@ -101,9 +102,9 @@ class DestinationListItem extends StatelessWidget {
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                      Icon(Icons.delete_outline, size: 20, color: AppColors.delete),
                       SizedBox(width: 8),
-                      Text('Excluir', style: TextStyle(color: Colors.red)),
+                      Text('Excluir', style: TextStyle(color: AppColors.delete)),
                     ],
                   ),
                 ),
@@ -130,11 +131,11 @@ class DestinationListItem extends StatelessWidget {
   Color _getTypeColor(DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return Colors.blue;
+        return AppColors.destinationLocal;
       case DestinationType.ftp:
-        return Colors.orange;
+        return AppColors.destinationFtp;
       case DestinationType.googleDrive:
-        return Colors.green;
+        return AppColors.destinationGoogleDrive;
     }
   }
 

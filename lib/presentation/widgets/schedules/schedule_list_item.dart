@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/schedule.dart';
 
 class ScheduleListItem extends StatelessWidget {
@@ -36,9 +37,9 @@ class ScheduleListItem extends StatelessWidget {
         ),
         title: Text(
           schedule.name,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,9 +48,14 @@ class ScheduleListItem extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: _getScheduleTypeColor(schedule.scheduleType).withValues(alpha: 0.1),
+                    color: _getScheduleTypeColor(
+                      schedule.scheduleType,
+                    ).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -61,9 +67,14 @@ class ScheduleListItem extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: _getDatabaseTypeColor(schedule.databaseType).withValues(alpha: 0.1),
+                    color: _getDatabaseTypeColor(
+                      schedule.databaseType,
+                    ).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -98,10 +109,7 @@ class ScheduleListItem extends StatelessWidget {
               tooltip: 'Executar agora',
               onPressed: schedule.enabled ? onRunNow : null,
             ),
-            Switch(
-              value: schedule.enabled,
-              onChanged: onToggleEnabled,
-            ),
+            Switch(value: schedule.enabled, onChanged: onToggleEnabled),
             PopupMenuButton<String>(
               onSelected: (value) {
                 switch (value) {
@@ -128,9 +136,16 @@ class ScheduleListItem extends StatelessWidget {
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                      Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: AppColors.delete,
+                      ),
                       SizedBox(width: 8),
-                      Text('Excluir', style: TextStyle(color: Colors.red)),
+                      Text(
+                        'Excluir',
+                        style: TextStyle(color: AppColors.delete),
+                      ),
                     ],
                   ),
                 ),
@@ -159,13 +174,13 @@ class ScheduleListItem extends StatelessWidget {
   Color _getScheduleTypeColor(ScheduleType type) {
     switch (type) {
       case ScheduleType.daily:
-        return Colors.blue;
+        return AppColors.scheduleDaily;
       case ScheduleType.weekly:
-        return Colors.green;
+        return AppColors.scheduleWeekly;
       case ScheduleType.monthly:
-        return Colors.purple;
+        return AppColors.scheduleMonthly;
       case ScheduleType.interval:
-        return Colors.orange;
+        return AppColors.scheduleInterval;
     }
   }
 
@@ -181,10 +196,9 @@ class ScheduleListItem extends StatelessWidget {
   Color _getDatabaseTypeColor(DatabaseType type) {
     switch (type) {
       case DatabaseType.sqlServer:
-        return Colors.indigo;
+        return AppColors.databaseSqlServer;
       case DatabaseType.sybase:
-        return Colors.teal;
+        return AppColors.databaseSybase;
     }
   }
 }
-

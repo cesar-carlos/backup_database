@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../application/providers/sql_server_config_provider.dart';
 import '../../application/providers/sybase_config_provider.dart';
 import '../../domain/entities/sql_server_config.dart';
@@ -271,8 +272,8 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.delete,
+              foregroundColor: AppColors.buttonTextOnColored,
             ),
             child: const Text('Excluir'),
           ),
@@ -316,8 +317,8 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.delete,
+              foregroundColor: AppColors.buttonTextOnColored,
             ),
             child: const Text('Excluir'),
           ),

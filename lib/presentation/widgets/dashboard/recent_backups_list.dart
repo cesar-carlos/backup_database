@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/backup_history.dart';
 
 class RecentBackupsList extends StatelessWidget {
@@ -62,13 +63,13 @@ class RecentBackupsList extends StatelessWidget {
   Color _getStatusColor(BackupStatus status) {
     switch (status) {
       case BackupStatus.success:
-        return Colors.green;
+        return AppColors.backupSuccess;
       case BackupStatus.error:
-        return Colors.red;
+        return AppColors.backupError;
       case BackupStatus.warning:
-        return Colors.orange;
+        return AppColors.backupWarning;
       case BackupStatus.running:
-        return Colors.blue;
+        return AppColors.backupRunning;
     }
   }
 
@@ -85,4 +86,3 @@ class RecentBackupsList extends StatelessWidget {
     }
   }
 }
-

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/sybase_config.dart';
 
 class SybaseConfigListItem extends StatelessWidget {
@@ -33,9 +34,9 @@ class SybaseConfigListItem extends StatelessWidget {
         ),
         title: Text(
           config.name,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,10 +52,7 @@ class SybaseConfigListItem extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Switch(
-              value: config.enabled,
-              onChanged: onToggleEnabled,
-            ),
+            Switch(value: config.enabled, onChanged: onToggleEnabled),
             const SizedBox(width: 8),
             PopupMenuButton<String>(
               onSelected: (value) {
@@ -82,9 +80,16 @@ class SybaseConfigListItem extends StatelessWidget {
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                      Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: AppColors.delete,
+                      ),
                       SizedBox(width: 8),
-                      Text('Excluir', style: TextStyle(color: Colors.red)),
+                      Text(
+                        'Excluir',
+                        style: TextStyle(color: AppColors.delete),
+                      ),
                     ],
                   ),
                 ),
@@ -97,4 +102,3 @@ class SybaseConfigListItem extends StatelessWidget {
     );
   }
 }
-

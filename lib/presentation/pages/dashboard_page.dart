@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../application/providers/dashboard_provider.dart';
 import '../../domain/entities/schedule.dart';
 import '../widgets/common/common.dart';
@@ -62,7 +63,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           title: 'Backups Hoje',
                           value: provider.backupsToday.toString(),
                           icon: Icons.today,
-                          color: Colors.green,
+                          color: AppColors.statsBackups,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -71,7 +72,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           title: 'Falharam Hoje',
                           value: provider.failedToday.toString(),
                           icon: Icons.error_outline,
-                          color: Colors.red,
+                          color: AppColors.statsFailed,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -80,7 +81,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           title: 'Agendamentos Ativos',
                           value: provider.activeSchedules.toString(),
                           icon: Icons.schedule,
-                          color: Colors.orange,
+                          color: AppColors.statsActive,
                         ),
                       ),
                     ],
@@ -137,11 +138,11 @@ class _DashboardPageState extends State<DashboardPage> {
                                 trailing: schedule.enabled
                                     ? const Icon(
                                         Icons.check_circle,
-                                        color: Colors.green,
+                                        color: AppColors.success,
                                       )
                                     : const Icon(
                                         Icons.cancel,
-                                        color: Colors.grey,
+                                        color: AppColors.grey600,
                                       ),
                               );
                             },

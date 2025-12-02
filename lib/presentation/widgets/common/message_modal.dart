@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+
 enum MessageType { success, info, warning }
 
 class MessageModal extends StatelessWidget {
@@ -83,11 +85,11 @@ class MessageModal extends StatelessWidget {
   Color _getColor(BuildContext context) {
     switch (type) {
       case MessageType.success:
-        return Colors.green;
+        return AppColors.success;
       case MessageType.info:
         return Theme.of(context).colorScheme.primary;
       case MessageType.warning:
-        return Colors.orange;
+        return AppColors.warning;
     }
   }
 
@@ -132,7 +134,7 @@ class MessageModal extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
           style: ElevatedButton.styleFrom(
             backgroundColor: color,
-            foregroundColor: Colors.white,
+            foregroundColor: AppColors.buttonTextOnColored,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           ),
           child: Text(buttonLabel ?? 'OK'),

@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../application/providers/google_auth_provider.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../core/errors/failure.dart';
@@ -15,10 +16,7 @@ import '../common/common.dart';
 class DestinationDialog extends StatefulWidget {
   final BackupDestination? destination;
 
-  const DestinationDialog({
-    super.key,
-    this.destination,
-  });
+  const DestinationDialog({super.key, this.destination});
 
   static Future<BackupDestination?> show(
     BuildContext context, {
@@ -36,14 +34,14 @@ class DestinationDialog extends StatefulWidget {
 
 class _DestinationDialogState extends State<DestinationDialog> {
   final _formKey = GlobalKey<FormState>();
-  
+
   late DestinationType _selectedType;
   final _nameController = TextEditingController();
-  
+
   // Local
   final _localPathController = TextEditingController();
   bool _createSubfoldersByDate = true;
-  
+
   // FTP
   final _ftpHostController = TextEditingController();
   final _ftpPortController = TextEditingController(text: '21');
@@ -52,10 +50,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
   final _ftpRemotePathController = TextEditingController(text: '/backups');
   bool _useFtps = false;
   bool _obscureFtpPassword = true;
-  
+
   // Google Drive
   final _googleFolderNameController = TextEditingController(text: 'Backups');
-  
+
   // Common
   final _retentionDaysController = TextEditingController(text: '30');
   bool _isEnabled = true;
@@ -67,18 +65,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
   void initState() {
     super.initState();
     _selectedType = widget.destination?.type ?? DestinationType.local;
-    
+
     if (widget.destination != null) {
       _nameController.text = widget.destination!.name;
       _isEnabled = widget.destination!.enabled;
-      
-      final config = jsonDecode(widget.destination!.config) as Map<String, dynamic>;
-      
+
+      final config =
+          jsonDecode(widget.destination!.config) as Map<String, dynamic>;
+
       switch (widget.destination!.type) {
         case DestinationType.local:
           _localPathController.text = config['path'] ?? '';
           _createSubfoldersByDate = config['createSubfoldersByDate'] ?? true;
-          _retentionDaysController.text = (config['retentionDays'] ?? 30).toString();
+          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+              .toString();
           break;
         case DestinationType.ftp:
           _ftpHostController.text = config['host'] ?? '';
@@ -87,11 +87,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
           _ftpPasswordController.text = config['password'] ?? '';
           _ftpRemotePathController.text = config['remotePath'] ?? '/backups';
           _useFtps = config['useFtps'] ?? false;
-          _retentionDaysController.text = (config['retentionDays'] ?? 30).toString();
+          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+              .toString();
           break;
         case DestinationType.googleDrive:
           _googleFolderNameController.text = config['folderName'] ?? 'Backups';
-          _retentionDaysController.text = (config['retentionDays'] ?? 30).toString();
+          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+              .toString();
           break;
       }
     }
@@ -148,14 +150,16 @@ class _DestinationDialogState extends State<DestinationDialog> {
                             ),
                           );
                         }).toList(),
-                        onChanged: isEditing ? null : (value) {
-                          setState(() {
-                            _selectedType = value!;
-                          });
-                        },
+                        onChanged: isEditing
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  _selectedType = value!;
+                                });
+                              },
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Nome
                       AppTextField(
                         controller: _nameController,
@@ -170,7 +174,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Campos específicos por tipo
                       if (_selectedType == DestinationType.local)
                         _buildLocalFields()
@@ -178,9 +182,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         _buildFtpFields()
                       else
                         _buildGoogleDriveFields(),
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       // Retenção
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +195,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
                             hint: 'Ex: 30 (mantém backups por 30 dias)',
                             prefixIcon: const Icon(Icons.delete_outline),
                             keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Dias de retenção é obrigatório';
@@ -207,7 +213,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
@@ -223,22 +231,32 @@ class _DestinationDialogState extends State<DestinationDialog> {
                                   child: ValueListenableBuilder<TextEditingValue>(
                                     valueListenable: _retentionDaysController,
                                     builder: (context, value, child) {
-                                      final days = int.tryParse(value.text) ?? 30;
-                                      final cutoffDate = DateTime.now().subtract(Duration(days: days));
+                                      final days =
+                                          int.tryParse(value.text) ?? 30;
+                                      final cutoffDate = DateTime.now()
+                                          .subtract(Duration(days: days));
                                       return Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             'Limpeza Automática',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: Theme.of(context).colorScheme.primary,
-                                            ),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                ),
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
                                             'Backups anteriores a ${_formatDate(cutoffDate)} serão excluídos automaticamente após cada backup executado.',
-                                            style: Theme.of(context).textTheme.bodySmall,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
                                           ),
                                         ],
                                       );
@@ -251,11 +269,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Habilitado
                       SwitchListTile(
                         title: const Text('Habilitado'),
-                        subtitle: const Text('Destino ativo para uso em agendamentos'),
+                        subtitle: const Text(
+                          'Destino ativo para uso em agendamentos',
+                        ),
                         value: _isEnabled,
                         onChanged: (value) {
                           setState(() {
@@ -439,7 +459,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
           prefixIcon: const Icon(Icons.lock_outline),
           suffixIcon: IconButton(
             icon: Icon(
-              _obscureFtpPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              _obscureFtpPassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
             ),
             onPressed: () {
               setState(() {
@@ -499,7 +521,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Widget _buildGoogleDriveFields() {
     final googleAuth = getIt<GoogleAuthProvider>();
-    
+
     return ListenableBuilder(
       listenable: googleAuth,
       builder: (context, _) {
@@ -508,13 +530,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
             // Status de Autenticação
             _buildGoogleAuthStatus(googleAuth),
             const SizedBox(height: 16),
-            
+
             // Configuração OAuth (se não configurado)
             if (!googleAuth.isConfigured) ...[
               _buildOAuthConfigSection(googleAuth),
               const SizedBox(height: 16),
             ],
-            
+
             // Nome da pasta
             AppTextField(
               controller: _googleFolderNameController,
@@ -529,16 +551,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 return null;
               },
             ),
-            
+
             if (!googleAuth.isSignedIn) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.errorContainer.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.error.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
@@ -565,21 +591,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
       },
     );
   }
-  
+
   Widget _buildGoogleAuthStatus(GoogleAuthProvider googleAuth) {
     final isSignedIn = googleAuth.isSignedIn;
     final isLoading = googleAuth.isLoading;
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isSignedIn 
-            ? Colors.green.withValues(alpha: 0.1)
+        color: isSignedIn
+            ? AppColors.googleDriveSignedInBackground
             : Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isSignedIn 
-              ? Colors.green.withValues(alpha: 0.3)
+          color: isSignedIn
+              ? AppColors.googleDriveSignedInBorder
               : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
         ),
       ),
@@ -590,18 +616,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
             children: [
               Icon(
                 isSignedIn ? Icons.check_circle : Icons.cloud_off_outlined,
-                color: isSignedIn ? Colors.green : Theme.of(context).colorScheme.outline,
+                color: isSignedIn
+                    ? AppColors.googleDriveSignedIn
+                    : Theme.of(context).colorScheme.outline,
                 size: 20,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  isSignedIn 
+                  isSignedIn
                       ? 'Conectado como ${googleAuth.currentEmail}'
                       : 'Não conectado ao Google',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -620,15 +648,19 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 )
               else if (googleAuth.isConfigured)
                 ElevatedButton.icon(
-                  onPressed: isLoading ? null : () => _connectToGoogle(googleAuth),
-                  icon: isLoading 
+                  onPressed: isLoading
+                      ? null
+                      : () => _connectToGoogle(googleAuth),
+                  icon: isLoading
                       ? const SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.login, size: 18),
-                  label: Text(isLoading ? 'Conectando...' : 'Conectar ao Google'),
+                  label: Text(
+                    isLoading ? 'Conectando...' : 'Conectar ao Google',
+                  ),
                 ),
             ],
           ),
@@ -645,12 +677,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ),
     );
   }
-  
+
   Widget _buildOAuthConfigSection(GoogleAuthProvider googleAuth) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+        color: Theme.of(
+          context,
+        ).colorScheme.primaryContainer.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
@@ -690,14 +724,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ),
     );
   }
-  
+
   Future<void> _connectToGoogle(GoogleAuthProvider googleAuth) async {
     final success = await googleAuth.signIn();
     if (success && mounted) {
       _showSuccess('Conectado ao Google com sucesso!');
     }
   }
-  
+
   Future<void> _showOAuthConfigDialog(GoogleAuthProvider googleAuth) async {
     final result = await showDialog<bool>(
       context: context,
@@ -707,7 +741,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         initialClientSecret: googleAuth.oauthConfig?.clientSecret ?? '',
       ),
     );
-    
+
     if (result == true && mounted) {
       _showSuccess('Credenciais OAuth configuradas!');
     }
@@ -804,7 +838,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
           }
         },
         (failure) {
-          final message = failure is Failure ? failure.message : failure.toString();
+          final message = failure is Failure
+              ? failure.message
+              : failure.toString();
           _showError('Erro ao testar conexão FTP:\n$message');
         },
       );
@@ -818,17 +854,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   void _showSuccess(String message) {
-    MessageModal.showSuccess(
-      context,
-      message: message,
-    );
+    MessageModal.showSuccess(context, message: message);
   }
 
   void _showError(String message) {
-    ErrorModal.show(
-      context,
-      message: message,
-    );
+    ErrorModal.show(context, message: message);
   }
 
   void _save() {
@@ -913,7 +943,9 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
   void initState() {
     super.initState();
     _clientIdController = TextEditingController(text: widget.initialClientId);
-    _clientSecretController = TextEditingController(text: widget.initialClientSecret);
+    _clientSecretController = TextEditingController(
+      text: widget.initialClientSecret,
+    );
   }
 
   @override
@@ -925,10 +957,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
 
   Future<void> _save() async {
     if (_clientIdController.text.trim().isEmpty) {
-      ErrorModal.show(
-        context,
-        message: 'Client ID é obrigatório',
-      );
+      ErrorModal.show(context, message: 'Client ID é obrigatório');
       return;
     }
 
@@ -980,20 +1009,33 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('1. Acesse console.cloud.google.com',
-                      style: Theme.of(context).textTheme.bodySmall),
-                  Text('2. Crie um projeto ou selecione existente',
-                      style: Theme.of(context).textTheme.bodySmall),
-                  Text('3. Ative a Google Drive API',
-                      style: Theme.of(context).textTheme.bodySmall),
-                  Text('4. Crie credenciais OAuth (Desktop)',
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    '1. Acesse console.cloud.google.com',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    '2. Crie um projeto ou selecione existente',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    '3. Ative a Google Drive API',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    '4. Crie credenciais OAuth (Desktop)',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 4),
-                  Text('5. Na credencial criada, adicione em "URIs de redirecionamento autorizados":',
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    '5. Na credencial criada, adicione em "URIs de redirecionamento autorizados":',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(4),
@@ -1001,18 +1043,18 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
                     child: SelectableText(
                       'http://localhost:8085/oauth2redirect',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          fontStyle: FontStyle.italic,
-                        ),
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ],
               ),
@@ -1062,4 +1104,3 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
     );
   }
 }
-

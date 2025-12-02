@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../application/providers/log_provider.dart';
 import '../../application/services/log_service.dart';
 import '../../domain/entities/backup_log.dart';
@@ -436,11 +437,11 @@ class _LogListItem extends StatelessWidget {
   Color _getLevelColor(BuildContext context, LogLevel level) {
     switch (level) {
       case LogLevel.debug:
-        return Colors.grey;
+        return AppColors.logDebug;
       case LogLevel.info:
         return Theme.of(context).colorScheme.primary;
       case LogLevel.warning:
-        return Colors.orange;
+        return AppColors.logWarning;
       case LogLevel.error:
         return Theme.of(context).colorScheme.error;
     }

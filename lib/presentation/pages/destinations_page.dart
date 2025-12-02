@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../application/providers/destination_provider.dart';
 import '../../domain/entities/backup_destination.dart';
 import '../widgets/common/common.dart';
@@ -157,8 +158,8 @@ class DestinationsPage extends StatelessWidget {
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.delete,
+              foregroundColor: AppColors.buttonTextOnColored,
             ),
             child: const Text('Excluir'),
           ),

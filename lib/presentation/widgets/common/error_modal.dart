@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+
 class ErrorModal extends StatelessWidget {
   final String title;
   final String message;
@@ -21,20 +23,15 @@ class ErrorModal extends StatelessWidget {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => ErrorModal(
-        title: title,
-        message: message,
-        buttonLabel: buttonLabel,
-      ),
+      builder: (context) =>
+          ErrorModal(title: title, message: message, buttonLabel: buttonLabel),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
           Icon(
@@ -47,25 +44,22 @@ class ErrorModal extends StatelessWidget {
             child: Text(
               title,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                    fontWeight: FontWeight.bold,
-                  ),
+                color: Theme.of(context).colorScheme.error,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
       ),
       content: SingleChildScrollView(
-        child: Text(
-          message,
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
+        child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
       ),
       actions: [
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(),
           style: ElevatedButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.error,
-            foregroundColor: Colors.white,
+            foregroundColor: AppColors.buttonTextOnColored,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           ),
           child: Text(buttonLabel ?? 'OK'),
@@ -74,4 +68,3 @@ class ErrorModal extends StatelessWidget {
     );
   }
 }
-

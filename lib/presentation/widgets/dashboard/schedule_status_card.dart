@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/schedule.dart';
 
 class ScheduleStatusCard extends StatelessWidget {
   final Schedule schedule;
   final VoidCallback? onExecute;
 
-  const ScheduleStatusCard({
-    super.key,
-    required this.schedule,
-    this.onExecute,
-  });
+  const ScheduleStatusCard({super.key, required this.schedule, this.onExecute});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +16,7 @@ class ScheduleStatusCard extends StatelessWidget {
       child: ListTile(
         leading: Icon(
           schedule.enabled ? Icons.schedule : Icons.schedule_outlined,
-          color: schedule.enabled ? Colors.green : Colors.grey,
+          color: schedule.enabled ? AppColors.success : AppColors.grey600,
         ),
         title: Text(schedule.name),
         subtitle: Text(
@@ -36,4 +33,3 @@ class ScheduleStatusCard extends StatelessWidget {
     );
   }
 }
-
