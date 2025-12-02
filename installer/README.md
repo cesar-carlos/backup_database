@@ -13,6 +13,7 @@ Este diretório contém os arquivos necessários para criar o instalador do Back
 ### 1. Inno Setup
 
 Baixe e instale o **Inno Setup** (versão 6.0 ou superior):
+
 - Download: https://jrsoftware.org/isdl.php
 - Versão recomendada: Inno Setup 6.2.2 ou superior
 
@@ -42,14 +43,31 @@ Certifique-se de que os seguintes arquivos existem:
 
 ## Como Criar o Instalador
 
-### Método 1: Via Interface do Inno Setup
+### Passo 1: Sincronizar Versão (Obrigatório)
+
+Antes de compilar o instalador, **sempre** sincronize a versão do `pubspec.yaml` com o `setup.iss`:
+
+```powershell
+# Execute na raiz do projeto
+powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+```
+
+Este script:
+
+- Lê a versão do `pubspec.yaml`
+- Atualiza automaticamente o `#define MyAppVersion` no `setup.iss`
+- Garante que a versão esteja sempre sincronizada
+
+### Passo 2: Compilar o Instalador
+
+#### Método 1: Via Interface do Inno Setup
 
 1. Abra o **Inno Setup Compiler**
 2. Abra o arquivo `installer\setup.iss`
 3. Clique em **Build > Compile** (ou pressione `Ctrl+F9`)
-4. O instalador será criado em: `installer\dist\BackupDatabase-Setup-1.0.0.exe`
+4. O instalador será criado em: `installer\dist\BackupDatabase-Setup-{versão}.exe`
 
-### Método 2: Via Linha de Comando
+#### Método 2: Via Linha de Comando
 
 ```bash
 # Navegue até a pasta do Inno Setup
@@ -59,7 +77,22 @@ cd "C:\Program Files (x86)\Inno Setup 6"
 ISCC.exe "D:\Developer\Flutter\backup_database\installer\setup.iss"
 ```
 
-O instalador será criado em: `installer\dist\BackupDatabase-Setup-1.0.0.exe`
+O instalador será criado em: `installer\dist\BackupDatabase-Setup-{versão}.exe`
+
+### Método 3: Script Automatizado (Recomendado)
+
+Use o script `build_installer.ps1` que faz tudo automaticamente:
+
+```powershell
+# Execute na raiz do projeto
+powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
+```
+
+Este script:
+
+1. Sincroniza a versão do `pubspec.yaml` com o `setup.iss`
+2. Compila o instalador usando Inno Setup
+3. Informa onde o instalador foi criado
 
 ## Estrutura do Instalador
 
@@ -76,11 +109,28 @@ O instalador criado inclui:
 
 ### Alterar Versão
 
-Edite `setup.iss` e altere:
+**IMPORTANTE**: A versão é sincronizada automaticamente do `pubspec.yaml`.
 
-```iss
-#define MyAppVersion "1.0.0"
-```
+Para alterar a versão:
+
+1. Edite o `pubspec.yaml` na raiz do projeto:
+
+   ```yaml
+   version: 1.0.2+1
+   ```
+
+2. Execute o script de sincronização:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+   ```
+
+3. Ou use o script automatizado que faz tudo:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
+   ```
+
+**NÃO edite manualmente** o `#define MyAppVersion` no `setup.iss`, pois será sobrescrito pelo script.
 
 ### Alterar Nome do Aplicativo
 
@@ -113,6 +163,7 @@ Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opçõ
 O instalador tenta instalar automaticamente o Visual C++ Redistributables, mas você precisa:
 
 1. **Baixar o instalador** do Visual C++ Redistributables:
+
    - Link: https://aka.ms/vs/17/release/vc_redist.x64.exe
    - Salve em: `installer\dependencies\vc_redist.x64.exe`
 
@@ -167,4 +218,3 @@ Para problemas ou dúvidas:
 ---
 
 **Última atualização**: Versão 1.0.0
-

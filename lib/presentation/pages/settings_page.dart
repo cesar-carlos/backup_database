@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/theme_provider.dart';
@@ -7,8 +8,40 @@ import '../../application/providers/auto_update_provider.dart';
 import '../providers/providers.dart';
 import '../widgets/common/common.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  PackageInfo? _packageInfo;
+  bool _isLoadingVersion = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPackageInfo();
+  }
+
+  Future<void> _loadPackageInfo() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _packageInfo = packageInfo;
+          _isLoadingVersion = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingVersion = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,9 +191,13 @@ class SettingsPage extends StatelessWidget {
                   const SizedBox(height: 16),
                   Text('Sobre', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 16),
-                  const ListTile(
-                    title: Text('Versão'),
-                    subtitle: Text('1.0.0'),
+                  ListTile(
+                    title: const Text('Versão'),
+                    subtitle: _isLoadingVersion
+                        ? const Text('Carregando...')
+                        : Text(
+                            _packageInfo?.version ?? 'Desconhecida',
+                          ),
                   ),
                   const ListTile(
                     title: Text('Licença'),

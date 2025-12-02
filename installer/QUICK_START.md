@@ -2,18 +2,38 @@
 
 ## Passos Rápidos
 
-### 1. Compilar o Projeto
+### Método Rápido (Recomendado)
+
+```powershell
+# Execute na raiz do projeto - faz tudo automaticamente!
+powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
+```
+
+Este script:
+1. ✅ Sincroniza a versão do `pubspec.yaml` com o `setup.iss`
+2. ✅ Verifica se o projeto foi compilado
+3. ✅ Compila o instalador automaticamente
+
+### Método Manual
+
+#### 1. Compilar o Projeto
 
 ```bash
 flutter build windows --release
 ```
 
-### 2. Criar o Instalador
+#### 2. Sincronizar Versão
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+```
+
+#### 3. Criar o Instalador
 
 1. Abra o **Inno Setup Compiler**
 2. Abra `installer\setup.iss`
 3. Compile (Ctrl+F9)
-4. O instalador estará em: `installer\dist\BackupDatabase-Setup-1.0.0.exe`
+4. O instalador estará em: `installer\dist\BackupDatabase-Setup-{versão}.exe`
 
 ### 3. Testar
 

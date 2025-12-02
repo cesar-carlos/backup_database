@@ -81,7 +81,7 @@ Se você já tem o SQL Server instalado, o `sqlcmd.exe` geralmente já está dis
    - SQL Server 2019: https://go.microsoft.com/fwlink/?linkid=2230791
    - SQL Server 2017: https://go.microsoft.com/fwlink/?linkid=853016
 2. Execute o instalador
-3. Adicione o caminho de instalação ao PATH do sistema (veja [PATH_SETUP.md](PATH_SETUP.md))
+3. Adicione o caminho de instalação ao PATH do sistema (veja [path_setup.md](path_setup.md))
 
 **Como verificar**:
 
@@ -110,7 +110,7 @@ Se você já tem o SQL Server instalado, o `sqlcmd.exe` geralmente já está dis
 
 1. Instale o **Sybase SQL Anywhere** no servidor
 2. Localize a pasta `Bin64` na instalação
-3. Adicione o caminho ao PATH do sistema (veja [PATH_SETUP.md](PATH_SETUP.md))
+3. Adicione o caminho ao PATH do sistema (veja [path_setup.md](path_setup.md))
 
 **Caminhos comuns**:
 
@@ -218,7 +218,7 @@ Se todos os comandos retornarem sem erro, as dependências estão instaladas cor
 
 **Solução**:
 
-1. Verifique se as ferramentas estão no PATH (veja [PATH_SETUP.md](PATH_SETUP.md))
+1. Verifique se as ferramentas estão no PATH (veja [path_setup.md](path_setup.md))
 2. Execute o aplicativo como administrador
 3. Verifique as configurações de conexão do banco de dados
 

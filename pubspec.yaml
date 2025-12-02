@@ -103,6 +103,9 @@ dependencies:
   # Auto Updater
   auto_updater: ^1.0.0
 
+  # Package Info
+  package_info_plus: ^8.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
