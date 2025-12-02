@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Backup Database"
-#define MyAppVersion "1.0.6"
+#define MyAppVersion "1.0.7"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -63,10 +63,86 @@ var
   VCRedistPage: TOutputProgressWizardPage;
   VCRedistNeeded: Boolean;
 
+function IsAppRunning(const ExeName: String): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := False;
+  // Usar findstr para verificar se o processo está na lista
+  // findstr retorna 0 se encontrar, 1 se não encontrar
+  if Exec('cmd.exe', '/c tasklist | findstr /I "' + ExeName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    // Se ResultCode = 0, o processo foi encontrado
+    Result := (ResultCode = 0);
+  end;
+end;
+
+function CloseApp(const ExeName: String): Boolean;
+var
+  ResultCode: Integer;
+  Retries: Integer;
+begin
+  Result := False;
+  Retries := 0;
+  
+  // Primeira tentativa: fechar graciosamente (sem /F)
+  Exec('taskkill.exe', '/IM ' + ExeName + ' /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
+  
+  // Se ainda estiver rodando, tentar forçar o fechamento
+  while IsAppRunning(ExeName) and (Retries < 5) do
+  begin
+    Exec('taskkill.exe', '/IM ' + ExeName + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(500);
+    Retries := Retries + 1;
+  end;
+  
+  Result := not IsAppRunning(ExeName);
+end;
+
 function InitializeSetup(): Boolean;
+var
+  AppPath: String;
+  AppExe: String;
+  Retries: Integer;
 begin
   Result := True;
   VCRedistNeeded := False;
+  
+  // Verificar se o aplicativo está em execução
+  AppExe := ExpandConstant('{#MyAppExeName}');
+  
+  if IsAppRunning(AppExe) then
+  begin
+    if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
+              'É necessário fechar o aplicativo para continuar com a instalação.' + #13#10 + #13#10 +
+              'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      if not CloseApp(AppExe) then
+      begin
+        MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
+               'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+      
+      // Aguardar um pouco mais para garantir que o processo foi finalizado
+      Sleep(1000);
+      
+      if IsAppRunning(AppExe) then
+      begin
+        MsgBox('O aplicativo ainda está em execução.' + #13#10 + #13#10 +
+               'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+    end
+    else
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
   
   if not RegKeyExists(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64') then
   begin
@@ -166,7 +242,43 @@ begin
 end;
 
 function InitializeUninstall(): Boolean;
+var
+  AppExe: String;
 begin
   Result := True;
+  AppExe := ExpandConstant('{#MyAppExeName}');
+  
+  // Verificar se o aplicativo está em execução durante a desinstalação
+  if IsAppRunning(AppExe) then
+  begin
+    if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
+              'É necessário fechar o aplicativo para continuar com a desinstalação.' + #13#10 + #13#10 +
+              'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      if not CloseApp(AppExe) then
+      begin
+        MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
+               'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+      
+      // Aguardar um pouco mais para garantir que o processo foi finalizado
+      Sleep(1000);
+      
+      if IsAppRunning(AppExe) then
+      begin
+        MsgBox('O aplicativo ainda está em execução.' + #13#10 + #13#10 +
+               'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+    end
+    else
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
 end;
 
