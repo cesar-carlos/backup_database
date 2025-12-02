@@ -239,11 +239,10 @@ begin
   
   if IsAppRunning(AppExe) then
   begin
-    if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
-              'É necessário fechar o aplicativo para continuar com a instalação.' + #13#10 + #13#10 +
-              'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
+    // Se estiver em modo silencioso (atualização automática), fechar sem perguntar
+    if WizardSilent() then
     begin
-      // Tentar fechar o aplicativo
+      // Modo silencioso: fechar automaticamente sem perguntar
       CloseApp(AppExe);
       
       // Aguardar até que o processo seja completamente finalizado
@@ -253,27 +252,46 @@ begin
         Sleep(500);
         WaitCount := WaitCount + 1;
       end;
-      
-      // Se ainda estiver rodando após todas as tentativas, avisar mas continuar
-      if IsAppRunning(AppExe) then
-      begin
-        if MsgBox('O aplicativo ainda parece estar em execução após tentativas de fechamento.' + #13#10 + #13#10 +
-                  'A instalação pode falhar se o aplicativo não for fechado.' + #13#10 + #13#10 +
-                  'Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
-        begin
-          Result := False;
-          Exit;
-        end;
-      end;
-      
-      // Se chegou aqui, o aplicativo foi fechado ou o usuário escolheu continuar
-      // Continuar com a instalação
     end
     else
     begin
-      // Usuário escolheu não fechar - não pode continuar
-      Result := False;
-      Exit;
+      // Modo interativo: perguntar ao usuário
+      if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
+                'É necessário fechar o aplicativo para continuar com a instalação.' + #13#10 + #13#10 +
+                'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        // Tentar fechar o aplicativo
+        CloseApp(AppExe);
+        
+        // Aguardar até que o processo seja completamente finalizado
+        WaitCount := 0;
+        while IsAppRunning(AppExe) and (WaitCount < 30) do
+        begin
+          Sleep(500);
+          WaitCount := WaitCount + 1;
+        end;
+        
+        // Se ainda estiver rodando após todas as tentativas, avisar mas continuar
+        if IsAppRunning(AppExe) then
+        begin
+          if MsgBox('O aplicativo ainda parece estar em execução após tentativas de fechamento.' + #13#10 + #13#10 +
+                    'A instalação pode falhar se o aplicativo não for fechado.' + #13#10 + #13#10 +
+                    'Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
+          begin
+            Result := False;
+            Exit;
+          end;
+        end;
+        
+        // Se chegou aqui, o aplicativo foi fechado ou o usuário escolheu continuar
+        // Continuar com a instalação
+      end
+      else
+      begin
+        // Usuário escolheu não fechar - não pode continuar
+        Result := False;
+        Exit;
+      end;
     end;
   end;
   

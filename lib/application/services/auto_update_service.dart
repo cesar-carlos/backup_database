@@ -29,9 +29,15 @@ class AutoUpdateService {
       await AutoUpdater.instance.setFeedURL(feedUrl);
       LoggerService.info('AutoUpdateService inicializado com feed URL: $feedUrl');
 
+      // Configurar para atualização automática SILENCIOSA e FORÇADA
       await AutoUpdater.instance.setScheduledCheckInterval(_defaultCheckInterval);
+      
+      // Habilitar download e instalação automática SEM perguntar ao usuário
+      await AutoUpdater.instance.setAutomaticallyDownloadsUpdates(true);
+      await AutoUpdater.instance.setAutomaticallyChecksForUpdates(true);
+      
       LoggerService.info(
-        'Intervalo de verificação automática configurado: $_defaultCheckInterval segundos',
+        'Atualização automática FORÇADA habilitada (sem prompts ao usuário)',
       );
 
       _isInitialized = true;
