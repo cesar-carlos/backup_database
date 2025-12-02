@@ -196,7 +196,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     subtitle: _isLoadingVersion
                         ? const Text('Carregando...')
                         : Text(
-                            _packageInfo?.version ?? 'Desconhecida',
+                            _packageInfo != null
+                                ? '${_packageInfo!.version}+${_packageInfo!.buildNumber}'
+                                : 'Desconhecida',
                           ),
                   ),
                   const ListTile(
