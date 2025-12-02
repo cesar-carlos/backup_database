@@ -124,6 +124,7 @@ var
   UninstallExe: String;
   UninstallPath: String;
   ResultCode: Integer;
+  SecondQuotePos: Integer;
 begin
   Result := True;
   VCRedistNeeded := False;
@@ -190,26 +191,37 @@ begin
     else
     begin
       UninstallPath := ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe');
-      Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      Sleep(2000);
-    end;
-  end
-  else
-  begin
-    // Se não encontrou pelo caminho, tentar procurar pelo registro do Windows
-    // Verificar se há uma chave de registro indicando instalação anterior
-    if RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D_is1', 'UninstallString', UninstallPath) then
-    begin
-      // Extrair apenas o caminho do executável (remover parâmetros se houver)
-      if Pos('"', UninstallPath) > 0 then
+      if Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
       begin
-        UninstallPath := Copy(UninstallPath, 2, Pos('"', UninstallPath, 2) - 2);
-      end;
-      
-      if FileExists(UninstallPath) then
-      begin
-        Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
         Sleep(2000);
+      end
+      else
+      begin
+        // Se não encontrou pelo caminho, tentar procurar pelo registro do Windows
+        // Verificar se há uma chave de registro indicando instalação anterior
+        if RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D_is1', 'UninstallString', UninstallPath) then
+        begin
+          // Extrair apenas o caminho do executável (remover parâmetros se houver)
+          // Se começar com aspas, remover as aspas e pegar até o próximo espaço ou fim
+          if Pos('"', UninstallPath) = 1 then
+          begin
+            // Remover primeira aspas
+            UninstallPath := Copy(UninstallPath, 2, Length(UninstallPath) - 1);
+            // Encontrar a próxima aspas
+            SecondQuotePos := Pos('"', UninstallPath);
+            if SecondQuotePos > 0 then
+            begin
+              // Extrair até a segunda aspas
+              UninstallPath := Copy(UninstallPath, 1, SecondQuotePos - 1);
+            end;
+          end;
+          
+          if FileExists(UninstallPath) then
+          begin
+            Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+            Sleep(2000);
+          end;
+        end;
       end;
     end;
   end;

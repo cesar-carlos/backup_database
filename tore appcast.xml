@@ -1,0 +1,28 @@
+warning: in the working copy of 'appcast.xml', CRLF will be replaced by LF the next time Git touches it
+[1mdiff --git a/appcast.xml b/appcast.xml[m
+[1mindex bf9ec69..2cf41e6 100644[m
+[1m--- a/appcast.xml[m
+[1m+++ b/appcast.xml[m
+[36m@@ -4,21 +4,5 @@[m
+     <title>Backup Database Updates</title>[m
+     <link>https://github.com/cesar-carlos/backup_database/releases</link>[m
+     <description>Atualizações do Backup Database</description>[m
+[31m-    <item>[m
+[31m-      <title>Version 1.0.0</title>[m
+[31m-      <pubDate>ter, 02 dez 2025 13:54:09 +0000</pubDate>[m
+[31m-      <description>&lt;![CDATA[&lt;h2&gt;Versao 1.0.0&lt;/h2&gt;&lt;p&gt;     ## Version 1.0.0[m
+[31m-     [m
+[31m-     Primeira versão do Backup Database.[m
+[31m-     [m
+[31m-     ### Funcionalidades[m
+[31m-     - Backup automático para SQL Server e Sybase ASA[m
+[31m-     - Suporte para múltiplos destinos (Local, FTP, Google Drive)[m
+[31m-     - Agendamento de backups[m
+[31m-     - Notificações por e-mail[m
+[31m-     - Interface gráfica completa[m
+[31m-     - Atualização automática via GitHub Releases&lt;/p&gt;]]&gt;</description>[m
+[31m-      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.0/BackupDatabase-Setup-1.0.0.exe" version="1.0.0" os="windows" length="13107923" type="application/octet-stream" />[m
+[31m-    </item>[m
+   </channel>[m
+ </rss>[m
+\ No newline at end of file[m
