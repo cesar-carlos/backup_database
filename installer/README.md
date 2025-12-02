@@ -55,8 +55,9 @@ powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
 Este script:
 
 - Lê a versão do `pubspec.yaml`
-- Atualiza automaticamente o `#define MyAppVersion` no `setup.iss`
-- Garante que a versão esteja sempre sincronizada
+- Atualiza automaticamente o `#define MyAppVersion` no `setup.iss` (versão completa: `1.0.1+2`)
+- Atualiza automaticamente o `APP_VERSION` no `.env` (versão sem build: `1.0.1`)
+- Garante que todas as versões estejam sempre sincronizadas
 
 ### Passo 2: Compilar o Instalador
 
