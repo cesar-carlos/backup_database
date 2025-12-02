@@ -11,6 +11,7 @@ import 'presentation/managers/managers.dart';
 import 'presentation/providers/system_settings_provider.dart';
 import 'application/providers/providers.dart';
 import 'application/services/scheduler_service.dart';
+import 'application/services/auto_update_service.dart';
 import 'domain/repositories/repositories.dart';
 
 Future<void> main() async {
@@ -44,6 +45,16 @@ Future<void> main() async {
       LoggerService.info('GoogleAuthProvider inicializado');
     } catch (e) {
       LoggerService.warning('Erro ao inicializar GoogleAuthProvider: $e');
+    }
+
+    // Inicializar Auto Update Service
+    try {
+      final autoUpdateService = getIt<AutoUpdateService>();
+      final feedUrl = dotenv.env['AUTO_UPDATE_FEED_URL'];
+      await autoUpdateService.initialize(feedUrl);
+      LoggerService.info('AutoUpdateService inicializado');
+    } catch (e) {
+      LoggerService.warning('Erro ao inicializar AutoUpdateService: $e');
     }
 
     // Carregar configuração "Iniciar Minimizado" do SharedPreferences
@@ -304,6 +315,7 @@ class BackupDatabaseApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => getIt<DestinationProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<BackupProgressProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<DashboardProvider>()),
+        ChangeNotifierProvider(create: (_) => getIt<AutoUpdateProvider>()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

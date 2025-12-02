@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Backup Database Updates</title>
+    <link>https://github.com/cesar-carlos/backup_database/releases</link>
+    <description>Atualizações do Backup Database</description>
+  </channel>
+</rss>
+

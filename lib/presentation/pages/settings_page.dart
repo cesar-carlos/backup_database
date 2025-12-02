@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/theme_provider.dart';
+import '../../application/providers/auto_update_provider.dart';
 import '../providers/providers.dart';
 import '../widgets/common/common.dart';
 
@@ -12,6 +14,7 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final systemSettings = Provider.of<SystemSettingsProvider>(context);
+    final autoUpdateProvider = Provider.of<AutoUpdateProvider>(context);
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -88,6 +91,69 @@ class SettingsPage extends StatelessWidget {
                       systemSettings.setCloseToTray(value);
                     },
                   ),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Atualizações',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  if (!autoUpdateProvider.isInitialized)
+                    ListTile(
+                      title: const Text('Atualizações Automáticas'),
+                      subtitle: const Text(
+                        'Configure AUTO_UPDATE_FEED_URL no arquivo .env',
+                      ),
+                      trailing: const Icon(Icons.info_outline),
+                    )
+                  else ...[
+                    ListTile(
+                      title: const Text('Verificar Atualizações'),
+                      subtitle: Text(
+                        autoUpdateProvider.lastCheckDate != null
+                            ? 'Última verificação: ${DateFormat('dd/MM/yyyy HH:mm').format(autoUpdateProvider.lastCheckDate!)}'
+                            : 'Nunca verificado',
+                      ),
+                      trailing: autoUpdateProvider.isChecking
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : IconButton(
+                              icon: const Icon(Icons.refresh),
+                              onPressed: autoUpdateProvider.isChecking
+                                  ? null
+                                  : () => autoUpdateProvider.checkForUpdates(),
+                              tooltip: 'Verificar atualizações',
+                            ),
+                    ),
+                    if (autoUpdateProvider.error != null)
+                      ListTile(
+                        title: const Text('Erro'),
+                        subtitle: Text(
+                          autoUpdateProvider.error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => autoUpdateProvider.clearError(),
+                        ),
+                      ),
+                    if (autoUpdateProvider.updateAvailable)
+                      ListTile(
+                        title: const Text('Atualização Disponível'),
+                        subtitle: const Text(
+                          'Uma nova versão está disponível para download',
+                        ),
+                        leading: Icon(
+                          Icons.system_update,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                  ],
                   const Divider(),
                   const SizedBox(height: 16),
                   Text('Sobre', style: Theme.of(context).textTheme.titleMedium),

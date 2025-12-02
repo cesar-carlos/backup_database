@@ -172,6 +172,11 @@ Future<void> setupServiceLocator() async {
     () => WindowsTaskSchedulerService(),
   );
 
+  // Auto Update Service
+  getIt.registerLazySingleton<AutoUpdateService>(
+    () => AutoUpdateService(),
+  );
+
   // Use Cases - Scheduling
   getIt.registerLazySingleton<CreateSchedule>(
     () =>
@@ -238,5 +243,11 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerLazySingleton<GoogleAuthProvider>(
     () => GoogleAuthProvider(getIt<GoogleAuthService>()),
+  );
+
+  getIt.registerFactory<AutoUpdateProvider>(
+    () => AutoUpdateProvider(
+      autoUpdateService: getIt<AutoUpdateService>(),
+    ),
   );
 }

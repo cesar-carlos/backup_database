@@ -7,3 +7,4 @@ export 'destination_provider.dart';
 export 'backup_progress_provider.dart';
 export 'dashboard_provider.dart';
 export 'google_auth_provider.dart';
+export 'auto_update_provider.dart';
