@@ -2,12 +2,18 @@
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
     <item>
+      <title>Version 1.0.12</title>
+      <pubDate>Tue, 02 Dec 2025 19:00:23 +0000</pubDate>
+      <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 1.0.12&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.12/BackupDatabase-Setup-1.0.12.exe" sparkle:version="1.0.12" sparkle:os="windows" length="13116954" type="application/octet-stream" />
+    </item>
+  <item>
       <title>Version 1.0.11</title>
       <pubDate>Tue, 02 Dec 2025 18:48:16 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 1.0.11&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
       <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.11/BackupDatabase-Setup-1.0.11.exe" sparkle:version="1.0.11" sparkle:os="windows" length="13117677" type="application/octet-stream" />
     </item>
-  <item>
+    <item>
       <title>Version 1.0.10</title>
       <pubDate>Tue, 02 Dec 2025 18:30:52 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 1.0.10&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
@@ -91,6 +97,12 @@
       <pubDate>Tue, 02 Dec 2025 18:48:16 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 1.0.11&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
       <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.11/BackupDatabase-Setup-1.0.11.exe" sparkle:version="1.0.11" sparkle:os="windows" length="13117677" type="application/octet-stream" />
+    </item>
+    <item>
+      <title>Version 1.0.12</title>
+      <pubDate>Tue, 02 Dec 2025 19:00:23 +0000</pubDate>
+      <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 1.0.12&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.12/BackupDatabase-Setup-1.0.12.exe" sparkle:version="1.0.12" sparkle:os="windows" length="13116954" type="application/octet-stream" />
     </item>
   </channel>
 </rss>
