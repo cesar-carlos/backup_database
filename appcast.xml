@@ -1,7 +1,13 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
-    <title>Backup Database Updates</title>
+    <item>
+      <title>Version 1.0.6</title>
+      <pubDate>Tue, 02 Dec 2025 17:44:39 +0000</pubDate>
+      <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 1.0.6&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.6/BackupDatabase-Setup-1.0.6.exe" sparkle:version="1.0.6" sparkle:os="windows" length="13116527" type="application/octet-stream" />
+    </item>
+  <title>Backup Database Updates</title>
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Atualizações do Backup Database</description>
     <item>
@@ -19,6 +25,12 @@
      - Interface gráfica completa
      - Atualização automática via GitHub Releases&lt;/p&gt;]]&gt;</description>
       <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.0/BackupDatabase-Setup-1.0.0.exe" version="1.0.0" os="windows" length="13107923" type="application/octet-stream" />
+    </item>
+    <item>
+      <title>Version 1.0.6</title>
+      <pubDate>Tue, 02 Dec 2025 17:44:39 +0000</pubDate>
+      <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 1.0.6&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.6/BackupDatabase-Setup-1.0.6.exe" sparkle:version="1.0.6" sparkle:os="windows" length="13116527" type="application/octet-stream" />
     </item>
   </channel>
 </rss>
