@@ -27,17 +27,20 @@ class AutoUpdateService {
     try {
       _feedUrl = feedUrl;
       await AutoUpdater.instance.setFeedURL(feedUrl);
-      LoggerService.info('AutoUpdateService inicializado com feed URL: $feedUrl');
-
-      // Configurar para atualização automática SILENCIOSA e FORÇADA
-      await AutoUpdater.instance.setScheduledCheckInterval(_defaultCheckInterval);
-      
-      // Habilitar download e instalação automática SEM perguntar ao usuário
-      await AutoUpdater.instance.setAutomaticallyDownloadsUpdates(true);
-      await AutoUpdater.instance.setAutomaticallyChecksForUpdates(true);
-      
       LoggerService.info(
-        'Atualização automática FORÇADA habilitada (sem prompts ao usuário)',
+        'AutoUpdateService inicializado com feed URL: $feedUrl',
+      );
+
+      // Configurar intervalo de verificação automática
+      await AutoUpdater.instance.setScheduledCheckInterval(
+        _defaultCheckInterval,
+      );
+
+      LoggerService.info(
+        'Atualização automática configurada (verificação a cada ${_defaultCheckInterval}s)',
+      );
+      LoggerService.info(
+        'IMPORTANTE: Instalador executará em modo /VERYSILENT para atualizações forçadas',
       );
 
       _isInitialized = true;
@@ -76,9 +79,7 @@ class AutoUpdateService {
 
   Future<void> checkForUpdatesManually() async {
     if (!_isInitialized) {
-      throw ValidationFailure(
-        message: 'AutoUpdateService não inicializado',
-      );
+      throw ValidationFailure(message: 'AutoUpdateService não inicializado');
     }
 
     try {
@@ -103,4 +104,3 @@ class AutoUpdateService {
   bool get isInitialized => _isInitialized;
   String? get feedUrl => _feedUrl;
 }
-

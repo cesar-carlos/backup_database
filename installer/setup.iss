@@ -26,6 +26,8 @@ PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64
 ArchitecturesAllowed=x64
 MinVersion=10.0
+CloseApplications=yes
+CloseApplicationsFilter=*.exe
 
 [Languages]
 Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
@@ -156,9 +158,9 @@ begin
   // Tentar executar desinstalação se o arquivo existir
   if FileExists(UninstallPath) then
   begin
-    // Executar desinstalação silenciosa da versão anterior
-    // O desinstalador demora cerca de 7 segundos, então aguardamos adequadamente
-    Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+     // Executar desinstalação MUITO silenciosa da versão anterior
+     // /VERYSILENT é mais agressivo que /SILENT - não mostra nada
+     Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     
     // Aguardar até que o processo de desinstalação termine completamente
     // Verificar se o arquivo de desinstalação ainda existe (indica que ainda está em processo)
@@ -183,47 +185,47 @@ begin
   begin
     // Se não encontrou o arquivo, tentar executar diretamente nos caminhos mais comuns
     // mesmo sem verificar existência (pode ser que a verificação esteja falhando)
-    UninstallPath := ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe');
-    if Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    begin
-      Sleep(2000);
-    end
-    else
-    begin
-      UninstallPath := ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe');
-      if Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-      begin
-        Sleep(2000);
-      end
-      else
-      begin
-        // Se não encontrou pelo caminho, tentar procurar pelo registro do Windows
-        // Verificar se há uma chave de registro indicando instalação anterior
-        if RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D_is1', 'UninstallString', UninstallPath) then
-        begin
-          // Extrair apenas o caminho do executável (remover parâmetros se houver)
-          // Se começar com aspas, remover as aspas e pegar até o próximo espaço ou fim
-          if Pos('"', UninstallPath) = 1 then
-          begin
-            // Remover primeira aspas
-            UninstallPath := Copy(UninstallPath, 2, Length(UninstallPath) - 1);
-            // Encontrar a próxima aspas
-            SecondQuotePos := Pos('"', UninstallPath);
-            if SecondQuotePos > 0 then
-            begin
-              // Extrair até a segunda aspas
-              UninstallPath := Copy(UninstallPath, 1, SecondQuotePos - 1);
-            end;
-          end;
-          
-          if FileExists(UninstallPath) then
-          begin
-            Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-            Sleep(2000);
-          end;
-        end;
-      end;
-    end;
+     UninstallPath := ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe');
+     if Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+     begin
+       Sleep(2000);
+     end
+     else
+     begin
+       UninstallPath := ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe');
+       if Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+       begin
+         Sleep(2000);
+       end
+       else
+       begin
+         // Se não encontrou pelo caminho, tentar procurar pelo registro do Windows
+         // Verificar se há uma chave de registro indicando instalação anterior
+         if RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D_is1', 'UninstallString', UninstallPath) then
+         begin
+           // Extrair apenas o caminho do executável (remover parâmetros se houver)
+           // Se começar com aspas, remover as aspas e pegar até o próximo espaço ou fim
+           if Pos('"', UninstallPath) = 1 then
+           begin
+             // Remover primeira aspas
+             UninstallPath := Copy(UninstallPath, 2, Length(UninstallPath) - 1);
+             // Encontrar a próxima aspas
+             SecondQuotePos := Pos('"', UninstallPath);
+             if SecondQuotePos > 0 then
+             begin
+               // Extrair até a segunda aspas
+               UninstallPath := Copy(UninstallPath, 1, SecondQuotePos - 1);
+             end;
+           end;
+           
+           if FileExists(UninstallPath) then
+           begin
+             Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+             Sleep(2000);
+           end;
+         end;
+       end;
+     end;
   end;
   
   // Fechar processos de desinstalação se estiverem rodando
