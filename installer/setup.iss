@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Backup Database"
-#define MyAppVersion "1.0.9"
+#define MyAppVersion "1.0.10"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -122,9 +122,48 @@ var
   AppExe: String;
   WaitCount: Integer;
   UninstallExe: String;
+  UninstallPath: String;
+  ResultCode: Integer;
 begin
   Result := True;
   VCRedistNeeded := False;
+  
+  // Verificar se existe uma instalação anterior e executar desinstalação silenciosa
+  UninstallPath := ExpandConstant('{pf}\{#MyAppName}\unins000.exe');
+  if FileExists(UninstallPath) then
+  begin
+    // Fechar o aplicativo se estiver rodando antes de desinstalar
+    AppExe := ExpandConstant('{#MyAppExeName}');
+    if IsAppRunning(AppExe) then
+    begin
+      CloseApp(AppExe);
+      Sleep(2000);
+    end;
+    
+    // Executar desinstalação silenciosa da versão anterior
+    // O desinstalador demora cerca de 7 segundos, então aguardamos adequadamente
+    if Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      // Aguardar até que o processo de desinstalação termine completamente
+      // Verificar se o arquivo de desinstalação ainda existe (indica que ainda está em processo)
+      WaitCount := 0;
+      while FileExists(UninstallPath) and (WaitCount < 20) do
+      begin
+        Sleep(500);
+        WaitCount := WaitCount + 1;
+      end;
+      
+      // Aguardar um pouco mais para garantir que todos os processos foram finalizados
+      Sleep(2000);
+      
+      // Verificar se ainda há processos relacionados rodando
+      if IsAppRunning(AppExe) then
+      begin
+        CloseApp(AppExe);
+        Sleep(1000);
+      end;
+    end;
+  end;
   
   // Fechar processos de desinstalação se estiverem rodando
   UninstallExe := 'unins000.exe';
