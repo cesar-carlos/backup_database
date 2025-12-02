@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Get release info
         id: release
@@ -34,15 +34,15 @@ jobs:
         run: |
           ASSET_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "${{ github.api_url }}/repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets")
-          
+
           ASSET_URL=$(echo "$ASSET_RESPONSE" | python3 -c "import sys, json; assets = json.load(sys.stdin); exe = [a for a in assets if a['name'].endswith('.exe')][0]; print(exe['browser_download_url'])" 2>/dev/null || echo "")
           ASSET_SIZE=$(echo "$ASSET_RESPONSE" | python3 -c "import sys, json; assets = json.load(sys.stdin); exe = [a for a in assets if a['name'].endswith('.exe')][0]; print(exe['size'])" 2>/dev/null || echo "")
-          
+
           if [ -z "$ASSET_URL" ]; then
             echo "Error: No .exe asset found in release"
             exit 1
           fi
-          
+
           echo "url=$ASSET_URL" >> $GITHUB_OUTPUT
           echo "size=$ASSET_SIZE" >> $GITHUB_OUTPUT
 
@@ -53,16 +53,19 @@ jobs:
           from datetime import datetime
           import os
           import sys
-          
+
           TAG_NAME = "${{ steps.release.outputs.tag }}"
           VERSION = "${{ steps.release.outputs.version }}"
           ASSET_URL = "${{ steps.asset.outputs.url }}"
           ASSET_SIZE = "${{ steps.asset.outputs.size }}"
-          
+
           if not ASSET_URL or not ASSET_SIZE:
               print("Error: Asset URL or size not found")
               sys.exit(1)
-          
+
+          # Namespace do Sparkle
+          SPARKLE_NS = 'http://www.andymatuschak.org/xml-namespaces/sparkle'
+
           # Criar ou atualizar appcast.xml
           if os.path.exists('appcast.xml'):
               tree = ET.parse('appcast.xml')
@@ -72,44 +75,50 @@ jobs:
               # Remover item existente com a mesma versão (se houver)
               for item in channel.findall('item'):
                   enclosure = item.find('enclosure')
-                  if enclosure is not None and enclosure.get('sparkle:version') == VERSION:
-                      channel.remove(item)
+                  if enclosure is not None:
+                      # Verificar namespace sparkle (tentar ambos os formatos)
+                      sparkle_version = enclosure.get(f'{{{SPARKLE_NS}}}version') or enclosure.get('sparkle:version')
+                      if sparkle_version == VERSION:
+                          channel.remove(item)
           else:
               root = ET.Element('rss')
               root.set('version', '2.0')
-              root.set('xmlns:sparkle', 'http://www.andymatuschak.org/xml-namespaces/sparkle')
+              root.set('xmlns:sparkle', SPARKLE_NS)
               channel = ET.SubElement(root, 'channel')
               ET.SubElement(channel, 'title').text = 'Backup Database Updates'
               ET.SubElement(channel, 'link').text = 'https://github.com/cesar-carlos/backup_database/releases'
               ET.SubElement(channel, 'description').text = 'Atualizações do Backup Database'
-          
+
+          # Registrar namespace para usar prefixo
+          ET.register_namespace('sparkle', SPARKLE_NS)
+
           # Criar novo item (inserir no início)
           item = ET.SubElement(channel, 'item')
           ET.SubElement(item, 'title').text = f'Version {VERSION}'
           ET.SubElement(item, 'pubDate').text = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
-          
+
           desc = ET.SubElement(item, 'description')
           desc.text = f'<![CDATA[<h2>Nova Versão {VERSION}</h2><p>Atualização automática via GitHub Release.</p>]]>'
-          
+
           enclosure = ET.SubElement(item, 'enclosure')
           enclosure.set('url', ASSET_URL)
-          enclosure.set('sparkle:version', VERSION)
-          enclosure.set('sparkle:os', 'windows')
+          enclosure.set(f'{{{SPARKLE_NS}}}version', VERSION)
+          enclosure.set(f'{{{SPARKLE_NS}}}os', 'windows')
           enclosure.set('length', str(ASSET_SIZE))
           enclosure.set('type', 'application/octet-stream')
-          
+
           # Mover o novo item para o início
           channel.insert(0, item)
-          
+
           # Salvar com formatação
           tree = ET.ElementTree(root)
           ET.indent(tree, space='  ')
-          
+
           # Adicionar declaração XML manualmente
           with open('appcast.xml', 'wb') as f:
               f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
               tree.write(f, encoding='utf-8')
-          
+
           print(f"Successfully updated appcast.xml with version {VERSION}")
           EOF
 
@@ -120,4 +129,3 @@ jobs:
           git add appcast.xml
           git diff --staged --quiet || git commit -m "Update appcast.xml for ${{ steps.release.outputs.tag }}"
           git push
-

@@ -1,9 +1,24 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
     <title>Backup Database Updates</title>
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
-    <description>Atualizações do Backup Database</description>
+    <description>AtualizaÃ§Ãµes do Backup Database</description>
+    <item>
+      <title>Version 1.0.0</title>
+      <pubDate>ter, 02 dez 2025 13:54:09 +0000</pubDate>
+      <description>&lt;![CDATA[&lt;h2&gt;Versao 1.0.0&lt;/h2&gt;&lt;p&gt;     ## Version 1.0.0
+     
+     Primeira versão do Backup Database.
+     
+     ### Funcionalidades
+     - Backup automático para SQL Server e Sybase ASA
+     - Suporte para múltiplos destinos (Local, FTP, Google Drive)
+     - Agendamento de backups
+     - Notificações por e-mail
+     - Interface gráfica completa
+     - Atualização automática via GitHub Releases&lt;/p&gt;]]&gt;</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v1.0.0/BackupDatabase-Setup-1.0.0.exe" version="1.0.0" os="windows" length="13107923" type="application/octet-stream" />
+    </item>
   </channel>
 </rss>
-
