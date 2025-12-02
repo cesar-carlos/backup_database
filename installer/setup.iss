@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Backup Database"
-#define MyAppVersion "1.0.10"
+#define MyAppVersion "1.0.11"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -129,38 +129,87 @@ begin
   VCRedistNeeded := False;
   
   // Verificar se existe uma instalação anterior e executar desinstalação silenciosa
-  UninstallPath := ExpandConstant('{pf}\{#MyAppName}\unins000.exe');
+  // Tentar múltiplos caminhos possíveis (na ordem mais provável primeiro)
+  UninstallPath := ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe');
+  if not FileExists(UninstallPath) then
+  begin
+    UninstallPath := ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe');
+  end;
+  if not FileExists(UninstallPath) then
+  begin
+    UninstallPath := ExpandConstant('{pf}\{#MyAppName}\unins000.exe');
+  end;
+  if not FileExists(UninstallPath) then
+  begin
+    UninstallPath := ExpandConstant('{autopf}\{#MyAppName}\unins000.exe');
+  end;
+  
+  // Fechar o aplicativo se estiver rodando antes de desinstalar
+  AppExe := ExpandConstant('{#MyAppExeName}');
+  if IsAppRunning(AppExe) then
+  begin
+    CloseApp(AppExe);
+    Sleep(2000);
+  end;
+  
+  // Tentar executar desinstalação se o arquivo existir
   if FileExists(UninstallPath) then
   begin
-    // Fechar o aplicativo se estiver rodando antes de desinstalar
-    AppExe := ExpandConstant('{#MyAppExeName}');
+    // Executar desinstalação silenciosa da versão anterior
+    // O desinstalador demora cerca de 7 segundos, então aguardamos adequadamente
+    Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    
+    // Aguardar até que o processo de desinstalação termine completamente
+    // Verificar se o arquivo de desinstalação ainda existe (indica que ainda está em processo)
+    WaitCount := 0;
+    while FileExists(UninstallPath) and (WaitCount < 30) do
+    begin
+      Sleep(500);
+      WaitCount := WaitCount + 1;
+    end;
+    
+    // Aguardar um pouco mais para garantir que todos os processos foram finalizados
+    Sleep(2000);
+    
+    // Verificar se ainda há processos relacionados rodando
     if IsAppRunning(AppExe) then
     begin
       CloseApp(AppExe);
-      Sleep(2000);
+      Sleep(1000);
     end;
-    
-    // Executar desinstalação silenciosa da versão anterior
-    // O desinstalador demora cerca de 7 segundos, então aguardamos adequadamente
+  end
+  else
+  begin
+    // Se não encontrou o arquivo, tentar executar diretamente nos caminhos mais comuns
+    // mesmo sem verificar existência (pode ser que a verificação esteja falhando)
+    UninstallPath := ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe');
     if Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     begin
-      // Aguardar até que o processo de desinstalação termine completamente
-      // Verificar se o arquivo de desinstalação ainda existe (indica que ainda está em processo)
-      WaitCount := 0;
-      while FileExists(UninstallPath) and (WaitCount < 20) do
+      Sleep(2000);
+    end
+    else
+    begin
+      UninstallPath := ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe');
+      Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Sleep(2000);
+    end;
+  end
+  else
+  begin
+    // Se não encontrou pelo caminho, tentar procurar pelo registro do Windows
+    // Verificar se há uma chave de registro indicando instalação anterior
+    if RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D_is1', 'UninstallString', UninstallPath) then
+    begin
+      // Extrair apenas o caminho do executável (remover parâmetros se houver)
+      if Pos('"', UninstallPath) > 0 then
       begin
-        Sleep(500);
-        WaitCount := WaitCount + 1;
+        UninstallPath := Copy(UninstallPath, 2, Pos('"', UninstallPath, 2) - 2);
       end;
       
-      // Aguardar um pouco mais para garantir que todos os processos foram finalizados
-      Sleep(2000);
-      
-      // Verificar se ainda há processos relacionados rodando
-      if IsAppRunning(AppExe) then
+      if FileExists(UninstallPath) then
       begin
-        CloseApp(AppExe);
-        Sleep(1000);
+        Exec(UninstallPath, '/SILENT /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        Sleep(2000);
       end;
     end;
   end;
