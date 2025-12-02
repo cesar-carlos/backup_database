@@ -39,15 +39,15 @@ Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opçõ
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\.env.example"; DestDir: "{app}"; Flags: ignoreversion; DestName: ".env.example"
-Source: "..\docs\INSTALLATION_GUIDE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\docs\REQUIREMENTS.md"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\docs\PATH_SETUP.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\installation_guide.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\requirements.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\path_setup.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "check_dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\Documentação"; Filename: "{app}\docs\INSTALLATION_GUIDE.md"
+Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon

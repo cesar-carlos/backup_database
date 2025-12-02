@@ -36,9 +36,9 @@ Certifique-se de que os seguintes arquivos existem:
 - `LICENSE` - Arquivo de licença
 - `.env.example` - Arquivo de exemplo de variáveis de ambiente
 - `assets\icons\icon-512-maskable.png` - Ícone do aplicativo
-- `docs\INSTALLATION_GUIDE.md` - Guia de instalação
-- `docs\REQUIREMENTS.md` - Requisitos do sistema
-- `docs\PATH_SETUP.md` - Guia de configuração do PATH
+- `docs\installation_guide.md` - Guia de instalação
+- `docs\requirements.md` - Requisitos do sistema
+- `docs\path_setup.md` - Guia de configuração do PATH
 
 ## Como Criar o Instalador
 

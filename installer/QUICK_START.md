@@ -42,9 +42,9 @@ flutter build windows --release
 ## Documentação Completa
 
 - **Instalador**: `installer\README.md`
-- **Guia de Instalação**: `docs\INSTALLATION_GUIDE.md`
-- **Requisitos**: `docs\REQUIREMENTS.md`
-- **Configuração PATH**: `docs\PATH_SETUP.md`
+- **Guia de Instalação**: `docs\installation_guide.md`
+- **Requisitos**: `docs\requirements.md`
+- **Configuração PATH**: `docs\path_setup.md`
 
 ---
 

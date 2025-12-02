@@ -36,7 +36,7 @@ try {
 } catch {
     Write-Host "  ✗ sqlcmd NÃO encontrado no PATH" -ForegroundColor Red
     Write-Host "    Instale SQL Server Command Line Tools ou adicione ao PATH" -ForegroundColor Yellow
-    Write-Host "    Consulte: docs\PATH_SETUP.md" -ForegroundColor Yellow
+    Write-Host "    Consulte: docs\path_setup.md" -ForegroundColor Yellow
     $allOk = $false
 }
 Write-Host ""
@@ -57,7 +57,7 @@ try {
 } catch {
     Write-Host "  ⚠ dbbackup NÃO encontrado no PATH" -ForegroundColor Yellow
     Write-Host "    Necessário apenas se você usar Sybase SQL Anywhere" -ForegroundColor Gray
-    Write-Host "    Consulte: docs\PATH_SETUP.md" -ForegroundColor Yellow
+    Write-Host "    Consulte: docs\path_setup.md" -ForegroundColor Yellow
 }
 Write-Host ""
 
@@ -77,7 +77,7 @@ try {
 } catch {
     Write-Host "  ⚠ dbisql NÃO encontrado no PATH" -ForegroundColor Yellow
     Write-Host "    Necessário apenas se você usar Sybase SQL Anywhere" -ForegroundColor Gray
-    Write-Host "    Consulte: docs\PATH_SETUP.md" -ForegroundColor Yellow
+    Write-Host "    Consulte: docs\path_setup.md" -ForegroundColor Yellow
 }
 Write-Host ""
 
@@ -92,8 +92,8 @@ if ($allOk) {
     Write-Host ""
     Write-Host "  Ações necessárias:" -ForegroundColor Yellow
     Write-Host "  1. Instale as dependências faltantes" -ForegroundColor Yellow
-    Write-Host "  2. Consulte docs\REQUIREMENTS.md para mais informações" -ForegroundColor Yellow
-    Write-Host "  3. Consulte docs\PATH_SETUP.md para configurar o PATH" -ForegroundColor Yellow
+    Write-Host "  2. Consulte docs\requirements.md para mais informações" -ForegroundColor Yellow
+    Write-Host "  3. Consulte docs\path_setup.md para configurar o PATH" -ForegroundColor Yellow
 }
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
