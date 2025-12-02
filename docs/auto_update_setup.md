@@ -45,11 +45,13 @@ AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_datab
 ### Fluxo de Trabalho Automatizado
 
 1. **Fazer build do aplicativo:**
+
    ```bash
    flutter build windows --release
    ```
 
 2. **Criar um release no GitHub:**
+
    - Acesse: https://github.com/cesar-carlos/backup_database/releases
    - Clique em "Create a new release"
    - Crie uma tag: `v1.0.1` (use o prefixo `v` seguido da versão)
@@ -60,6 +62,7 @@ AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_datab
    - Clique em "Publish release"
 
 3. **GitHub Actions executa automaticamente:**
+
    - O workflow `.github/workflows/update-appcast.yml` detecta o release
    - Obtém informações do asset (URL, tamanho)
    - Atualiza o `appcast.xml` com a nova versão
@@ -219,24 +222,57 @@ As chaves geradas devem ser mantidas em segurança e usadas para assinar cada at
 
 ## Funcionamento
 
+### ⚠️ ATUALIZAÇÃO AUTOMÁTICA FORÇADA
+
+**IMPORTANTE**: O aplicativo está configurado para **atualização automática FORÇADA**. Isso significa:
+
+- ✅ **SEM prompts ao usuário**: Quando uma nova versão é detectada, a atualização é baixada e instalada automaticamente
+- ✅ **Fechamento automático**: O aplicativo fecha automaticamente para instalar a atualização
+- ✅ **Instalação silenciosa**: O instalador executa em modo `/SILENT` sem mostrar diálogos
+- ✅ **Sempre atualizado**: Os usuários sempre terão a versão mais recente
+
 ### Verificação Automática
 
 - O aplicativo verifica atualizações automaticamente na inicialização
 - Verificações periódicas a cada 1 hora (3600 segundos)
 - As verificações ocorrem em background e não bloqueiam a interface
+- **Quando uma atualização é encontrada, ela é baixada e instalada automaticamente**
 
 ### Verificação Manual
 
 - Os usuários podem verificar atualizações manualmente através da página de Configurações
 - Clique no botão de atualizar na seção "Atualizações"
+- **Mesmo em verificação manual, a atualização é instalada automaticamente se disponível**
 
-### Processo de Atualização
+### Processo de Atualização (Automático)
 
 1. O aplicativo verifica o feed XML
 2. Compara a versão disponível com a versão atual
-3. Se houver atualização disponível, notifica o usuário
-4. O usuário pode iniciar o download e instalação
-5. O WinSparkle gerencia o download e a instalação automaticamente
+3. Se houver atualização disponível:
+   - **Baixa automaticamente** o novo instalador
+   - **Fecha o aplicativo** automaticamente
+   - **Executa o instalador** em modo silencioso (`/SILENT`)
+   - **Desinstala a versão anterior** automaticamente
+   - **Instala a nova versão** automaticamente
+   - **Reinicia o aplicativo** (opcional)
+4. Todo o processo ocorre **SEM interação do usuário**
+
+### Comportamento do Instalador em Modo Silencioso
+
+Quando executado em modo `/SILENT` (atualização automática):
+
+- ✅ Fecha o aplicativo automaticamente se estiver rodando
+- ✅ Desinstala a versão anterior automaticamente
+- ✅ Instala a nova versão sem mostrar diálogos
+- ✅ Não solicita permissões ou confirmações
+- ✅ Não mostra tela de conclusão
+
+Quando executado manualmente (duplo clique):
+
+- ℹ️ Pergunta ao usuário se deseja fechar o aplicativo
+- ℹ️ Mostra progresso da instalação
+- ℹ️ Permite escolher opções (ícones, inicialização automática, etc.)
+- ℹ️ Mostra tela de conclusão
 
 ## Solução de Problemas
 
