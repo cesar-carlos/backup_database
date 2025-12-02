@@ -126,11 +126,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Configuração salva com sucesso!'),
-          backgroundColor: Colors.green,
-        ),
+      MessageModal.showSuccess(
+        context,
+        message: 'Configuração salva com sucesso!',
       );
     } else {
       ErrorModal.show(
@@ -307,21 +305,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
                                       if (!mounted) return;
 
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            success
-                                                ? 'Teste de conexão realizado com sucesso!'
-                                                : provider.error ??
-                                                      'Erro ao testar conexão',
-                                          ),
-                                          backgroundColor: success
-                                              ? Colors.green
-                                              : Colors.red,
-                                        ),
-                                      );
+                                      if (success) {
+                                        MessageModal.showSuccess(
+                                          context,
+                                          message: 'Teste de conexão realizado com sucesso!',
+                                        );
+                                      } else {
+                                        ErrorModal.show(
+                                          context,
+                                          message: provider.error ?? 'Erro ao testar conexão',
+                                        );
+                                      }
                                     },
                             );
                           },

@@ -5,5 +5,5 @@ export 'app_dropdown.dart';
 export 'loading_indicator.dart';
 export 'error_widget.dart';
 export 'error_modal.dart';
+export 'message_modal.dart';
 export 'empty_state.dart';
-

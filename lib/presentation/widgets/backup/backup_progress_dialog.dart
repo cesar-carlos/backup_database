@@ -43,60 +43,63 @@ class BackupProgressDialog extends StatelessWidget {
           ),
           content: SizedBox(
             width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  progress.message,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                if (progress.progress != null && progress.step != BackupStep.completed) ...[
-                  const SizedBox(height: 16),
-                  LinearProgressIndicator(
-                    value: progress.progress,
-                    backgroundColor: Colors.grey[300],
-                  ),
-                  const SizedBox(height: 8),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    '${(progress.progress! * 100).toStringAsFixed(0)}%',
-                    style: Theme.of(context).textTheme.bodySmall,
-                    textAlign: TextAlign.center,
+                    progress.message,
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
-                ],
-                if (progress.elapsed != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Tempo decorrido: ${_formatDuration(progress.elapsed!)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey[600],
-                        ),
-                  ),
-                ],
-                if (progress.error != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[200]!),
+                  if (progress.progress != null && progress.step != BackupStep.completed) ...[
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(
+                      value: progress.progress,
+                      backgroundColor: Colors.grey[300],
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline, color: Colors.red),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            progress.error!,
-                            style: TextStyle(color: Colors.red[900]),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${(progress.progress! * 100).toStringAsFixed(0)}%',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  if (progress.elapsed != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'Tempo decorrido: ${_formatDuration(progress.elapsed!)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey[600],
                           ),
-                        ),
-                      ],
                     ),
-                  ),
+                  ],
+                  if (progress.error != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red[200]!),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.red),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              progress.error!,
+                              style: TextStyle(color: Colors.red[900]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [

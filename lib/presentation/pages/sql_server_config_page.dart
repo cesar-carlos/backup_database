@@ -138,15 +138,11 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              config == null
-                  ? 'Configuração criada com sucesso!'
-                  : 'Configuração atualizada com sucesso!',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: config == null
+              ? 'Configuração criada com sucesso!'
+              : 'Configuração atualizada com sucesso!',
         );
       } else {
         ErrorModal.show(
@@ -193,11 +189,9 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Configuração excluída com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: 'Configuração excluída com sucesso!',
         );
       } else {
         ErrorModal.show(

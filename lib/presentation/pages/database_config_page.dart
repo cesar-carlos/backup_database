@@ -210,15 +210,11 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              config == null
-                  ? 'Configuração criada com sucesso!'
-                  : 'Configuração atualizada com sucesso!',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: config == null
+              ? 'Configuração criada com sucesso!'
+              : 'Configuração atualizada com sucesso!',
         );
       } else {
         ErrorModal.show(
@@ -244,15 +240,11 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              config == null
-                  ? 'Configuração Sybase criada com sucesso!'
-                  : 'Configuração Sybase atualizada com sucesso!',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: config == null
+              ? 'Configuração Sybase criada com sucesso!'
+              : 'Configuração Sybase atualizada com sucesso!',
         );
       } else {
         ErrorModal.show(
@@ -295,11 +287,9 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Configuração SQL Server excluída com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: 'Configuração SQL Server excluída com sucesso!',
         );
       } else {
         ErrorModal.show(
@@ -342,11 +332,9 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Configuração Sybase excluída com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: 'Configuração Sybase excluída com sucesso!',
         );
       } else {
         ErrorModal.show(

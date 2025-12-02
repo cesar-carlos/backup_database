@@ -804,11 +804,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
 
     if (_selectedDestinationIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecione pelo menos um destino'),
-          backgroundColor: Colors.orange,
-        ),
+      MessageModal.showWarning(
+        context,
+        message: 'Selecione pelo menos um destino',
       );
       return;
     }

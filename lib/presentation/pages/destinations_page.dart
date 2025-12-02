@@ -128,15 +128,11 @@ class DestinationsPage extends StatelessWidget {
           : await provider.updateDestination(result);
 
       if (success && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              destination == null
-                  ? 'Destino criado com sucesso!'
-                  : 'Destino atualizado com sucesso!',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: destination == null
+              ? 'Destino criado com sucesso!'
+              : 'Destino atualizado com sucesso!',
         );
       } else if (context.mounted) {
         ErrorModal.show(
@@ -175,11 +171,9 @@ class DestinationsPage extends StatelessWidget {
       final success = await provider.deleteDestination(id);
 
       if (success && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Destino excluído com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: 'Destino excluído com sucesso!',
         );
       } else if (context.mounted) {
         ErrorModal.show(

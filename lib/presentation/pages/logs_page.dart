@@ -71,9 +71,10 @@ class _LogsPageState extends State<LogsPage> {
       await context.read<LogProvider>().cleanOldLogs();
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
+      MessageModal.showSuccess(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Logs limpos com sucesso')));
+        message: 'Logs limpos com sucesso',
+      );
     }
   }
 
@@ -91,8 +92,9 @@ class _LogsPageState extends State<LogsPage> {
     final format = _getFormatFromExtension(result);
     if (format == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Formato de arquivo não suportado')),
+        MessageModal.showWarning(
+          context,
+          message: 'Formato de arquivo não suportado',
         );
       }
       return;
@@ -105,8 +107,9 @@ class _LogsPageState extends State<LogsPage> {
     );
 
     if (filePath != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Logs exportados para: $filePath')),
+      MessageModal.showInfo(
+        context,
+        message: 'Logs exportados para: $filePath',
       );
     } else if (mounted) {
       ErrorModal.show(

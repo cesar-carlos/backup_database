@@ -140,15 +140,11 @@ class _SchedulesPageState extends State<SchedulesPage> {
           : await provider.updateSchedule(result);
 
       if (success && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              schedule == null
-                  ? 'Agendamento criado com sucesso!'
-                  : 'Agendamento atualizado com sucesso!',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: schedule == null
+              ? 'Agendamento criado com sucesso!'
+              : 'Agendamento atualizado com sucesso!',
         );
       } else if (context.mounted) {
         ErrorModal.show(
@@ -187,11 +183,9 @@ class _SchedulesPageState extends State<SchedulesPage> {
       final success = await provider.deleteSchedule(id);
 
       if (success && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Agendamento excluído com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
+        MessageModal.showSuccess(
+          context,
+          message: 'Agendamento excluído com sucesso!',
         );
       } else if (context.mounted) {
         ErrorModal.show(
@@ -239,11 +233,9 @@ class _SchedulesPageState extends State<SchedulesPage> {
         Navigator.of(context).pop(); // Fechar dialog de progresso
 
         if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Backup executado com sucesso!'),
-              backgroundColor: Colors.green,
-            ),
+          MessageModal.showSuccess(
+            context,
+            message: 'Backup executado com sucesso!',
           );
         } else {
           ErrorModal.show(

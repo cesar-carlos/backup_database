@@ -108,12 +108,9 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
       result.fold(
         (_) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Conexão testada com sucesso!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
-            ),
+          MessageModal.showSuccess(
+            context,
+            message: 'Conexão testada com sucesso!',
           );
         },
         (failure) {

@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:ftpconnect/ftpconnect.dart';
-import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
+import 'package:path/path.dart' as p;
 
 import '../../../core/errors/failure.dart' hide FtpFailure;
 import '../../../core/errors/ftp_failure.dart';
@@ -77,8 +77,7 @@ class FtpDestinationService {
             user: config.username,
             pass: config.password,
             timeout: AppConstants.ftpTimeout.inSeconds,
-            securityType:
-                config.useFtps ? SecurityType.ftps : SecurityType.ftp,
+            securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
           );
 
           // Conectar
@@ -94,8 +93,10 @@ class FtpDestinationService {
           }
 
           // Upload diretamente na pasta indicada
-          final uploaded =
-              await ftp.uploadFile(sourceFile, sRemoteName: fileName);
+          final uploaded = await ftp.uploadFile(
+            sourceFile,
+            sRemoteName: fileName,
+          );
           if (!uploaded) {
             throw Exception('Falha no upload do arquivo');
           }
@@ -149,11 +150,13 @@ class FtpDestinationService {
 
   String _getFtpErrorMessage(dynamic e, String host) {
     final errorStr = e.toString().toLowerCase();
-    
+
     if (errorStr.contains('connection refused') || errorStr.contains('host')) {
       return 'Não foi possível conectar ao servidor FTP: $host\n'
           'Verifique se o servidor está online e acessível.';
-    } else if (errorStr.contains('login') || errorStr.contains('530') || errorStr.contains('auth')) {
+    } else if (errorStr.contains('login') ||
+        errorStr.contains('530') ||
+        errorStr.contains('auth')) {
       return 'Falha na autenticação FTP\n'
           'Verifique usuário e senha.';
     } else if (errorStr.contains('timeout')) {
@@ -162,10 +165,12 @@ class FtpDestinationService {
     } else if (errorStr.contains('permission') || errorStr.contains('550')) {
       return 'Sem permissão para escrever no servidor FTP\n'
           'Verifique as permissões do diretório remoto.';
-    } else if (errorStr.contains('disk') || errorStr.contains('space') || errorStr.contains('452')) {
+    } else if (errorStr.contains('disk') ||
+        errorStr.contains('space') ||
+        errorStr.contains('452')) {
       return 'Servidor FTP sem espaço em disco.';
     }
-    
+
     return 'Erro no upload FTP após várias tentativas.\n'
         'Servidor: $host\nDetalhes: $e';
   }
@@ -218,9 +223,7 @@ class FtpDestinationService {
       }
       return const rd.Success(false);
     } catch (e) {
-      return rd.Failure(
-        FtpFailure(message: 'Erro ao testar conexão FTP: $e'),
-      );
+      return rd.Failure(FtpFailure(message: 'Erro ao testar conexão FTP: $e'));
     }
   }
 
@@ -271,11 +274,11 @@ class FtpDestinationService {
             // Procurar padrão de data no nome do arquivo
             final datePattern = RegExp(r'(\d{4}-\d{2}-\d{2})');
             final match = datePattern.firstMatch(fileName);
-            
+
             if (match != null) {
               final dateStr = match.group(1)!;
               final fileDate = DateTime.parse(dateStr);
-              
+
               if (fileDate.isBefore(cutoffDate)) {
                 await ftp.deleteFile(fileName);
                 deletedCount++;
@@ -297,12 +300,8 @@ class FtpDestinationService {
     } catch (e, stackTrace) {
       LoggerService.error('Erro ao limpar backups FTP', e, stackTrace);
       return rd.Failure(
-        FtpFailure(
-          message: 'Erro ao limpar backups FTP: $e',
-          originalError: e,
-        ),
+        FtpFailure(message: 'Erro ao limpar backups FTP: $e', originalError: e),
       );
     }
   }
 }
-

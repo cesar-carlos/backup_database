@@ -606,14 +606,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           _databaseNameController.text.trim().isEmpty ||
           _usernameController.text.trim().isEmpty ||
           _passwordController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Preencha nome da máquina, porta, nome do banco de dados, usuário e senha para testar',
-            ),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
+        MessageModal.showWarning(
+          context,
+          message: 'Preencha nome da máquina, porta, nome do banco de dados, usuário e senha para testar',
         );
         return;
       }
@@ -646,12 +641,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
         connectionResult.fold(
           (_) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Conexão testada com sucesso!'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
+            MessageModal.showSuccess(
+              context,
+              message: 'Conexão testada com sucesso!',
             );
           },
           (failure) {
@@ -694,14 +686,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         _portController.text.trim().isEmpty ||
         _usernameController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Preencha servidor, porta, usuário e senha para testar',
-          ),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ),
+      MessageModal.showWarning(
+        context,
+        message: 'Preencha servidor, porta, usuário e senha para testar',
       );
       return;
     }
@@ -757,16 +744,11 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   }
                 });
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      databases.isEmpty
-                          ? 'Conexão OK, mas nenhum banco encontrado'
-                          : 'Conexão OK! ${databases.length} banco(s) encontrado(s). Selecione um no dropdown.',
-                    ),
-                    backgroundColor: Colors.green,
-                    duration: const Duration(seconds: 4),
-                  ),
+                MessageModal.showInfo(
+                  context,
+                  message: databases.isEmpty
+                      ? 'Conexão OK, mas nenhum banco encontrado'
+                      : 'Conexão OK! ${databases.length} banco(s) encontrado(s). Selecione um no dropdown.',
                 );
               }
             },
@@ -779,13 +761,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 final message = failure is Failure
                     ? failure.message
                     : failure.toString();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Conexão OK, mas erro ao listar bancos: $message',
-                    ),
-                    backgroundColor: Colors.orange,
-                  ),
+                MessageModal.showWarning(
+                  context,
+                  message: 'Conexão OK, mas erro ao listar bancos: $message',
                 );
               }
             },
