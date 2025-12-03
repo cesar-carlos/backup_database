@@ -1,8 +1,10 @@
-#include <flutter/dart_project.h>
-#include <flutter/flutter_view_controller.h>
-#include <windows.h>
+// IMPORTANTE: winsock2.h DEVE vir ANTES de windows.h para evitar conflitos
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
+
+#include <flutter/dart_project.h>
+#include <flutter/flutter_view_controller.h>
 #include <cstring>
 
 #include "flutter_window.h"
@@ -34,7 +36,7 @@ void NotifyExistingInstance() {
     sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(58724);
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    InetPtonA(AF_INET, "127.0.0.1", &addr.sin_addr);
     
     // Configurar timeout de conexão (1 segundo)
     DWORD timeout = 1000;
@@ -43,7 +45,7 @@ void NotifyExistingInstance() {
     
     if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
       const char* message = "SHOW_WINDOW";
-      send(sock, message, strlen(message), 0);
+      send(sock, message, static_cast<int>(strlen(message)), 0);
       closesocket(sock);
       WSACleanup();
       return; // Sucesso!
