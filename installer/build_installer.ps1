@@ -43,11 +43,14 @@ Write-Host ""
 
 # Passo 3: Localizar Inno Setup Compiler
 Write-Host "Passo 3: Localizando Inno Setup Compiler..." -ForegroundColor Yellow
+$programFilesX86 = ${env:ProgramFiles(x86)}
+$programFiles = $env:ProgramFiles
+
 $innoSetupPaths = @(
-    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-    "C:\Program Files\Inno Setup 6\ISCC.exe",
-    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+    'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+    'C:\Program Files\Inno Setup 6\ISCC.exe',
+    "$programFilesX86\Inno Setup 6\ISCC.exe",
+    "$programFiles\Inno Setup 6\ISCC.exe"
 )
 
 $isccPath = $null

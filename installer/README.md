@@ -117,7 +117,7 @@ Para alterar a versão:
 1. Edite o `pubspec.yaml` na raiz do projeto:
 
    ```yaml
-   version: 1.0.2+1
+   version: 1.0.2
    ```
 
 2. Execute o script de sincronização:
