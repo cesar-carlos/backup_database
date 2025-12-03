@@ -32,6 +32,7 @@ test/
 ```dart
 // test/domain/use_cases/get_user_by_id_test.dart
 import 'package:flutter_test/flutter_test.dart';
+import 'package:result_dart/result_dart.dart';
 import 'package:domain/domain.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -57,16 +58,16 @@ void main() {
       );
 
       when(() => mockRepository.getById('123'))
-          .thenAnswer((_) async => Right(user));
+          .thenAnswer((_) async => Success(user));
 
       // Act
       final result = await useCase('123');
 
       // Assert
-      expect(result, isA<Right<Failure, User>>());
+      expect(result.isSuccess(), isTrue);
       result.fold(
+        (success) => expect(success, equals(user)),
         (failure) => fail('Should not return failure'),
-        (user) => expect(user, equals(user)),
       );
 
       verify(() => mockRepository.getById('123')).called(1);
@@ -75,16 +76,16 @@ void main() {
     test('should return Failure when repository fails', () async {
       // Arrange
       when(() => mockRepository.getById('123'))
-          .thenAnswer((_) async => Left(ServerFailure('Error')));
+          .thenAnswer((_) async => Failure(ServerFailure('Error')));
 
       // Act
       final result = await useCase('123');
 
       // Assert
-      expect(result, isA<Left<Failure, User>>());
+      expect(result.isFailure(), isTrue);
       result.fold(
+        (success) => fail('Should not return user'),
         (failure) => expect(failure, isA<ServerFailure>()),
-        (user) => fail('Should not return user'),
       );
     });
 
@@ -93,10 +94,10 @@ void main() {
       final result = await useCase('');
 
       // Assert
-      expect(result, isA<Left<Failure, User>>());
+      expect(result.isFailure(), isTrue);
       result.fold(
+        (success) => fail('Should not return user'),
         (failure) => expect(failure, isA<ValidationFailure>()),
-        (user) => fail('Should not return user'),
       );
 
       verifyNever(() => mockRepository.getById(any()));

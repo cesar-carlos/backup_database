@@ -299,7 +299,7 @@ Shared → (can be used by any layer)
 
 ```dart
 // domain/use_cases/get_user_by_id.dart
-import 'package:core/core.dart';
+import 'package:result_dart/result_dart.dart';
 import '../entities/user.dart';
 import '../repositories/repositories.dart';
 
@@ -308,7 +308,7 @@ class GetUserById {
 
   GetUserById(this.repository);
 
-  Future<Either<Failure, User>> call(String id) async {
+  Future<Result<User>> call(String id) async {
     return await repository.getById(id);
   }
 }
@@ -318,15 +318,16 @@ class GetUserById {
 
 ```dart
 // domain/repositories/i_user_repository.dart
+import 'package:result_dart/result_dart.dart';
 import '../entities/user.dart';
 import '../errors/errors.dart';
 
 abstract class IUserRepository {
-  Future<Either<Failure, User>> getById(String id);
-  Future<Either<Failure, List<User>>> getAll();
-  Future<Either<Failure, User>> create(User user);
-  Future<Either<Failure, void>> update(User user);
-  Future<Either<Failure, void>> delete(String id);
+  Future<Result<User>> getById(String id);
+  Future<Result<List<User>>> getAll();
+  Future<Result<User>> create(User user);
+  Future<Result<void>> update(User user);
+  Future<Result<void>> delete(String id);
 }
 ```
 
@@ -334,8 +335,8 @@ abstract class IUserRepository {
 
 ```dart
 // infrastructure/repositories/user_repository.dart
+import 'package:result_dart/result_dart.dart';
 import 'package:domain/domain.dart';
-import 'package:core/core.dart';
 import '../datasources/datasources.dart';
 import '../models/models.dart';
 
@@ -345,12 +346,12 @@ class UserRepository implements IUserRepository {
   UserRepository(this.dataSource);
 
   @override
-  Future<Either<Failure, User>> getById(String id) async {
+  Future<Result<User>> getById(String id) async {
     try {
       final userModel = await dataSource.getById(id);
-      return Right(userModel.toEntity());
+      return Success(userModel.toEntity());
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Failure(ServerFailure(e.toString()));
     }
   }
 

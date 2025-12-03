@@ -63,7 +63,7 @@ Coding conventions:
 
 - Naming for classes, methods, and variables
 - File structure
-- Error handling (Either pattern)
+- Error handling (Result pattern - result_dart)
 - Dependency injection
 - Import organization
 

@@ -81,7 +81,7 @@ class UserService {
 final cachedUser = await localCache.getUser(id);
 
 // ✅ Bom: explica decisão arquitetural
-// Usar Either ao invés de Exception para manter compatibilidade com Domain Layer
+// Usar Result ao invés de Exception para manter compatibilidade com Domain Layer
 return await repository.getById(id);
 ```
 

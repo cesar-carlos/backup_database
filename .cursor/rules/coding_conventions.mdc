@@ -12,40 +12,28 @@ alwaysApply: true
 
 - **Entities**: Substantivos no singular, PascalCase
   - `User`, `Product`, `Order`
-  
 - **Value Objects**: Substantivos descritivos, PascalCase
   - `Email`, `Money`, `CPF`, `Address`
-  
 - **Use Cases**: Verbos no infinitivo, PascalCase
   - `GetUserById`, `CreateProduct`, `UpdateOrder`
-  
 - **Repositories (Interfaces)**: Prefixo `I` + nome no singular, PascalCase
   - `IUserRepository`, `IProductRepository`
-  
 - **Repositories (Implementações)**: Nome no singular + `Repository`, PascalCase
   - `UserRepository`, `ProductRepository`
-  
 - **Services**: Nome no singular + `Service`, PascalCase
   - `UserService`, `ProductService`
-  
 - **DTOs**: Nome no singular + `DTO`, PascalCase
   - `UserDTO`, `ProductDTO`
-  
 - **Data Sources (Interfaces)**: Prefixo `I` + nome + `DataSource`, PascalCase
   - `IUserDataSource`, `IRemoteDataSource`
-  
 - **Data Sources (Implementações)**: Nome + tipo + `DataSource`, PascalCase
   - `UserRemoteDataSource`, `UserLocalDataSource`
-  
 - **Models**: Nome no singular + `Model`, PascalCase
   - `UserModel`, `ProductModel`
-  
 - **Controllers**: Nome + `Controller`, PascalCase
   - `UserController`, `HomeController`
-  
 - **Providers**: Nome + `Provider`, PascalCase
   - `UserProvider`, `ProductProvider`
-  
 - **Errors/Exceptions**: Nome descritivo + `Failure` ou `Exception`, PascalCase
   - `UserNotFoundFailure`, `NetworkException`, `ValidationFailure`
 
@@ -53,13 +41,10 @@ alwaysApply: true
 
 - **Variáveis**: camelCase
   - `userName`, `productList`, `isLoading`
-  
 - **Métodos**: camelCase, verbos
   - `getUser()`, `createProduct()`, `isValid()`
-  
 - **Constantes**: camelCase com `const` ou `static const`
   - `const maxRetries = 3`, `static const apiUrl = 'https://api.example.com'`
-  
 - **Parâmetros privados**: Prefixo `_` + camelCase
   - `_repository`, `_userService`
 
@@ -76,21 +61,21 @@ alwaysApply: true
 
 ```dart
 // domain/use_cases/get_user_by_id.dart
-import 'package:core/core.dart';
+import 'package:result_dart/result_dart.dart';
 import '../entities/user.dart';
 import '../repositories/repositories.dart';
 import '../errors/errors.dart';
 
 class GetUserById {
   final IUserRepository repository;
-  
+
   GetUserById(this.repository);
-  
-  Future<Either<Failure, User>> call(String id) async {
+
+  Future<Result<User>> call(String id) async {
     if (id.isEmpty) {
-      return Left(ValidationFailure('ID cannot be empty'));
+      return Failure(ValidationFailure('ID cannot be empty'));
     }
-    
+
     return await repository.getById(id);
   }
 }
@@ -100,16 +85,16 @@ class GetUserById {
 
 ```dart
 // domain/repositories/i_user_repository.dart
+import 'package:result_dart/result_dart.dart';
 import '../entities/user.dart';
 import '../errors/errors.dart';
-import 'package:core/core.dart';
 
 abstract class IUserRepository {
-  Future<Either<Failure, User>> getById(String id);
-  Future<Either<Failure, List<User>>> getAll();
-  Future<Either<Failure, User>> create(User user);
-  Future<Either<Failure, void>> update(User user);
-  Future<Either<Failure, void>> delete(String id);
+  Future<Result<User>> getById(String id);
+  Future<Result<List<User>>> getAll();
+  Future<Result<User>> create(User user);
+  Future<Result<void>> update(User user);
+  Future<Result<void>> delete(String id);
 }
 ```
 
@@ -117,49 +102,47 @@ abstract class IUserRepository {
 
 ```dart
 // infrastructure/repositories/user_repository.dart
+import 'package:result_dart/result_dart.dart';
 import 'package:domain/domain.dart';
-import 'package:core/core.dart';
 import '../datasources/datasources.dart';
 import '../models/models.dart';
 
 class UserRepository implements IUserRepository {
   final IUserDataSource remoteDataSource;
   final IUserDataSource localDataSource;
-  
+
   UserRepository({
     required this.remoteDataSource,
     required this.localDataSource,
   });
-  
+
   @override
-  Future<Either<Failure, User>> getById(String id) async {
+  Future<Result<User>> getById(String id) async {
     try {
       final localResult = await localDataSource.getById(id);
       if (localResult != null) {
-        return Right(localResult.toEntity());
+        return Success(localResult.toEntity());
       }
-      
+
       final remoteResult = await remoteDataSource.getById(id);
-      return Right(remoteResult.toEntity());
+      return Success(remoteResult.toEntity());
     } on NetworkException catch (e) {
-      return Left(NetworkFailure(e.message));
+      return Failure(NetworkFailure(e.message));
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Failure(ServerFailure(e.toString()));
     }
   }
-  
+
   // ... outros métodos
 }
 ```
 
 ## Tratamento de Erros
 
-### Usar Either Pattern
+### Usar Result Pattern (result_dart)
 
 ```dart
 // domain/errors/errors.dart
-import 'package:core/core.dart';
-
 abstract class Failure {
   final String message;
   Failure(this.message);
@@ -178,18 +161,33 @@ class ValidationFailure extends Failure {
 }
 
 // Uso
-Future<Either<Failure, User>> getUser(String id) async {
+import 'package:result_dart/result_dart.dart';
+
+Future<Result<User>> getUser(String id) async {
   if (id.isEmpty) {
-    return Left(ValidationFailure('ID cannot be empty'));
+    return Failure(ValidationFailure('ID cannot be empty'));
   }
-  
+
   try {
-    final user = await repository.getById(id);
-    return Right(user);
+    final result = await repository.getById(id);
+    return result;
   } catch (e) {
-    return Left(ServerFailure(e.toString()));
+    return Failure(ServerFailure(e.toString()));
   }
 }
+
+// Tratamento do Result
+final result = await getUser('123');
+result.fold(
+  (success) {
+    // Tratar sucesso
+    print('User: ${success.name}');
+  },
+  (failure) {
+    // Tratar falha
+    print('Error: ${failure.message}');
+  },
+);
 ```
 
 ## Injeção de Dependências
@@ -200,7 +198,7 @@ Future<Either<Failure, User>> getUser(String id) async {
 // ✅ Correto: Injeção via construtor
 class UserService {
   final IUserRepository repository;
-  
+
   UserService(this.repository);
 }
 
@@ -217,7 +215,7 @@ class UserService {
   static final UserService _instance = UserService._();
   factory UserService() => _instance;
   UserService._();
-  
+
   final repository = UserRepository(); // ❌ Dependência hardcoded
 }
 ```
@@ -259,17 +257,20 @@ import '../repositories/repositories.dart';
 ## Documentação e Comentários
 
 ### Regra Importante: Não Criar Documentação Automaticamente
+
 - ❌ **NÃO criar documentação** (`///`, `README.md`, etc.) automaticamente
 - ❌ **NÃO adicionar comentários** desnecessários no código
 - ✅ **Apenas criar documentação quando explicitamente solicitado** pelo usuário
 - ✅ **Código deve ser autoexplicativo** através de nomenclatura clara
 
 ### Quando Documentar (Apenas se Solicitado)
+
 - ✅ Documente apenas APIs públicas complexas quando solicitado
 - ✅ Use `///` para documentação de APIs públicas (apenas quando necessário e solicitado)
 - ✅ Use `//` para comentários internos (apenas quando necessário)
 
 ### Comentários
+
 - ✅ Use comentários apenas para explicar "por quê", não "o quê"
 - ✅ Mantenha comentários atualizados com o código
 - ✅ Prefira código claro sobre comentários

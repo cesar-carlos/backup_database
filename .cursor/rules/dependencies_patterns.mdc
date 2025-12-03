@@ -275,7 +275,56 @@ class User {
 }
 ```
 
-### 8. Validação de Tipo - `zard`
+### 8. Error Handling - `result_dart`
+
+- ✅ **SEMPRE usar `result_dart`** para tratamento de erros
+- ❌ **NUNCA usar** `Either` (dartz) ou outras bibliotecas de error handling
+- ✅ Use `Result<T>` para retornos que podem falhar
+- ✅ Use `Success(value)` para sucesso e `Failure(exception)` para falha
+- ✅ Use `fold()` para tratar sucesso e falha
+- ✅ Use `isSuccess()` e `isFailure()` para verificar o estado
+
+**Exemplo:**
+
+```dart
+import 'package:result_dart/result_dart.dart';
+
+// Retorno de função
+Future<Result<User>> getUser(String id) async {
+  if (id.isEmpty) {
+    return Failure(ValidationFailure('ID cannot be empty'));
+  }
+  
+  try {
+    final user = await repository.getById(id);
+    return Success(user);
+  } catch (e) {
+    return Failure(ServerFailure(e.toString()));
+  }
+}
+
+// Tratamento do Result
+final result = await getUser('123');
+result.fold(
+  (success) {
+    // Tratar sucesso
+    print('User: ${success.name}');
+  },
+  (failure) {
+    // Tratar falha
+    print('Error: ${failure.message}');
+  },
+);
+
+// Verificação de estado
+if (result.isSuccess()) {
+  final user = result.getOrNull();
+} else {
+  final failure = result.exceptionOrNull();
+}
+```
+
+### 9. Validação de Tipo - `zard`
 
 - ✅ **SEMPRE usar `zard`** para validação de tipos e schemas
 - ✅ Use para validação de dados de API
@@ -343,6 +392,9 @@ dependencies:
   # UUID
   uuid: ^4.3.0
 
+  # Error Handling
+  result_dart: ^2.1.1
+
   # Validação
   zard: ^0.0.23
 
@@ -379,6 +431,7 @@ Ao criar um novo recurso, verifique:
 - [ ] Campos brasileiros estão formatados com `brasil_fields`?
 - [ ] Variáveis de ambiente estão usando `flutter_dotenv`?
 - [ ] UUIDs estão sendo gerados com `uuid`?
+- [ ] Tratamento de erros está usando `result_dart`?
 - [ ] Validações estão usando `zard`?
 
 ## Exceções

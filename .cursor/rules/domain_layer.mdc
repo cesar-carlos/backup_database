@@ -105,21 +105,21 @@ class Email {
 - Representam operações de negócio isoladas e testáveis
 - Têm uma única responsabilidade
 - Recebem dependências via construtor
-- Retornam `Either<Failure, T>` para tratamento de erros
+- Retornam `Result<T>` para tratamento de erros
 
 ### Regras
 - ✅ Uma única responsabilidade (SRP)
 - ✅ Recebem dependências via construtor (DIP)
 - ✅ Dependem apenas de interfaces (repositories)
 - ✅ Implementam método `call()` para execução
-- ✅ Retornam `Either<Failure, T>` para tratamento de erros
+- ✅ Retornam `Result<T>` para tratamento de erros
 - ❌ NUNCA contêm lógica de apresentação
 - ❌ NUNCA dependem de frameworks
 
 ### Exemplo
 ```dart
 // domain/use_cases/get_user_by_id.dart
-import 'package:core/core.dart';
+import 'package:result_dart/result_dart.dart';
 import '../entities/user.dart';
 import '../repositories/repositories.dart';
 import '../errors/errors.dart';
@@ -129,16 +129,16 @@ class GetUserById {
   
   GetUserById(this.repository);
   
-  Future<Either<Failure, User>> call(String id) async {
+  Future<Result<User>> call(String id) async {
     if (id.isEmpty) {
-      return Left(ValidationFailure('ID cannot be empty'));
+      return Failure(ValidationFailure('ID cannot be empty'));
     }
     
     try {
       final result = await repository.getById(id);
       return result;
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Failure(ServerFailure(e.toString()));
     }
   }
 }
@@ -150,11 +150,11 @@ class GetUserById {
 - Definem contratos para acesso a dados
 - São abstrações puras (interfaces/abstract classes)
 - Não têm implementações concretas no Domain
-- Retornam entidades do domínio ou `Either<Failure, T>`
+- Retornam entidades do domínio ou `Result<T>`
 
 ### Regras
 - ✅ Apenas interfaces/abstract classes
-- ✅ Métodos retornam entidades do domínio ou `Either<Failure, T>`
+- ✅ Métodos retornam entidades do domínio ou `Result<T>`
 - ✅ NUNCA têm implementações concretas no Domain
 - ✅ NUNCA dependem de frameworks ou tecnologias
 - ✅ Prefixo `I` para interfaces (ex: `IUserRepository`)
@@ -162,16 +162,16 @@ class GetUserById {
 ### Exemplo
 ```dart
 // domain/repositories/i_user_repository.dart
+import 'package:result_dart/result_dart.dart';
 import '../entities/user.dart';
 import '../errors/errors.dart';
-import 'package:core/core.dart';
 
 abstract class IUserRepository {
-  Future<Either<Failure, User>> getById(String id);
-  Future<Either<Failure, List<User>>> getAll();
-  Future<Either<Failure, User>> create(User user);
-  Future<Either<Failure, void>> update(User user);
-  Future<Either<Failure, void>> delete(String id);
+  Future<Result<User>> getById(String id);
+  Future<Result<List<User>>> getAll();
+  Future<Result<User>> create(User user);
+  Future<Result<void>> update(User user);
+  Future<Result<void>> delete(String id);
 }
 ```
 
