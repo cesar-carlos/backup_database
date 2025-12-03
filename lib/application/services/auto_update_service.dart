@@ -7,9 +7,12 @@ import '../../core/errors/failure.dart';
 import '../../core/utils/logger_service.dart';
 
 class AutoUpdateService with UpdaterListener {
-  Timer? _checkTimer;
   bool _isInitialized = false;
   String? _feedUrl;
+  
+  // Intervalo de verificação automática em segundos (1 hora)
+  // O WinSparkle usa esse intervalo para fazer verificações em background
+  // que não mostram diálogo a menos que haja uma atualização disponível
   static const int _defaultCheckInterval = 3600;
 
   Future<void> initialize(String? feedUrl) async {
@@ -49,8 +52,12 @@ class AutoUpdateService with UpdaterListener {
 
       _isInitialized = true;
 
-      await _checkForUpdates();
-      _startPeriodicCheck();
+      // NÃO fazer verificação no startup para evitar mostrar diálogo desnecessário
+      // O WinSparkle fará verificações automáticas em background
+      // e só mostrará diálogo se realmente houver uma atualização disponível
+      LoggerService.info(
+        'WinSparkle configurado para verificações automáticas em background',
+      );
     } catch (e) {
       LoggerService.error('Erro ao inicializar AutoUpdateService', e);
     }
@@ -125,30 +132,10 @@ class AutoUpdateService with UpdaterListener {
     });
   }
 
-  void _startPeriodicCheck() {
-    _checkTimer?.cancel();
-    _checkTimer = Timer.periodic(
-      Duration(seconds: _defaultCheckInterval),
-      (_) => _checkForUpdates(),
-    );
-    LoggerService.info('Verificação periódica de atualizações iniciada');
-  }
-
-  Future<void> _checkForUpdates() async {
-    if (!_isInitialized) {
-      LoggerService.warning(
-        'AutoUpdateService não inicializado. Não é possível verificar atualizações.',
-      );
-      return;
-    }
-
-    try {
-      LoggerService.info('Verificando atualizações...');
-      await AutoUpdater.instance.checkForUpdates();
-    } catch (e) {
-      LoggerService.warning('Erro ao verificar atualizações: $e');
-    }
-  }
+  // Removido _startPeriodicCheck() e _checkForUpdates()
+  // O WinSparkle já faz verificações automáticas em background
+  // usando o intervalo configurado em setScheduledCheckInterval
+  // Essas verificações não mostram diálogo a menos que haja uma atualização disponível
 
   Future<void> checkForUpdatesManually() async {
     if (!_isInitialized) {
@@ -168,9 +155,6 @@ class AutoUpdateService with UpdaterListener {
   }
 
   void dispose() {
-    _checkTimer?.cancel();
-    _checkTimer = null;
-    
     // Remover listener ao finalizar
     if (_isInitialized) {
       try {
