@@ -20,26 +20,52 @@ Future<void> main() async {
   // Inicializar logger PRIMEIRO (antes de qualquer outro serviço)
   LoggerService.init();
 
-  // Verificar instância única usando Named Mutex
+  // O mutex já foi verificado no C++ antes do Flutter iniciar
+  // Se chegou aqui, o C++ já permitiu a execução, então é a primeira instância
+  // Mas verificamos novamente como segurança adicional
   final singleInstanceService = SingleInstanceService();
+  
+  // Verificar via mutex primeiro (mais confiável)
   final isFirstInstance = await singleInstanceService.checkAndLock();
-
+  
   if (!isFirstInstance) {
-    LoggerService.info('Outra instância já está em execução. Notificando...');
+    LoggerService.warning('⚠️ SEGUNDA INSTÂNCIA DETECTADA (Mutex existe). Encerrando imediatamente...');
     
     // Notificar a instância existente para mostrar a janela
-    final notified = await SingleInstanceService.notifyExistingInstance();
-    
-    if (notified) {
-      LoggerService.info('Instância existente notificada. Encerrando...');
-    } else {
-      LoggerService.warning('Não foi possível notificar instância existente');
+    for (int i = 0; i < 5; i++) {
+      final notified = await SingleInstanceService.notifyExistingInstance();
+      if (notified) {
+        LoggerService.info('Instância existente notificada via IPC');
+        break;
+      }
+      await Future.delayed(const Duration(milliseconds: 200));
     }
     
-    // Aguardar um pouco para garantir que a mensagem foi enviada
-    await Future.delayed(const Duration(milliseconds: 500));
+    // ENCERRAR IMEDIATAMENTE - não permitir continuação
     exit(0);
   }
+  
+  // Verificar se o IPC server já está rodando (outra instância)
+  final isServerRunning = await IpcService.checkServerRunning();
+  
+  if (isServerRunning) {
+    LoggerService.warning('⚠️ SEGUNDA INSTÂNCIA DETECTADA (IPC server já existe). Encerrando imediatamente...');
+    
+    // Notificar a instância existente para mostrar a janela
+    for (int i = 0; i < 5; i++) {
+      final notified = await SingleInstanceService.notifyExistingInstance();
+      if (notified) {
+        LoggerService.info('Instância existente notificada via IPC');
+        break;
+      }
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+    
+    // ENCERRAR IMEDIATAMENTE - não permitir continuação
+    exit(0);
+  }
+  
+  LoggerService.info('✅ Primeira instância confirmada - continuando inicialização');
 
   try {
     // Carregar variáveis de ambiente
@@ -97,19 +123,26 @@ Future<void> main() async {
       'Iniciar minimizado: $startMinimized (configuração: $startMinimizedFromSettings, argumento: $startMinimizedFromArgs)',
     );
 
-    // Inicializar window manager
+    // Inicializar window manager primeiro
     final windowManager = WindowManagerService();
     await windowManager.initialize(startMinimized: startMinimized);
 
     // Inicializar IPC Server para receber comandos de outras instâncias
+    // Agora o window manager já está pronto, então podemos mostrar a janela imediatamente
     try {
       await singleInstanceService.startIpcServer(
-        onShowWindow: () {
-          LoggerService.info('Recebido comando para mostrar janela de outra instância');
-          WindowManagerService().show();
+        onShowWindow: () async {
+          LoggerService.info('Recebido comando SHOW_WINDOW via IPC de outra instância');
+          try {
+            // Window manager já está inicializado, pode mostrar imediatamente
+            await WindowManagerService().show();
+            LoggerService.info('Janela trazida para frente após comando IPC');
+          } catch (e, stackTrace) {
+            LoggerService.error('Erro ao mostrar janela via IPC', e, stackTrace);
+          }
         },
       );
-      LoggerService.info('IPC Server inicializado');
+      LoggerService.info('IPC Server inicializado e pronto');
     } catch (e) {
       LoggerService.warning('Erro ao inicializar IPC Server: $e');
     }
