@@ -1,0 +1,125 @@
+---
+description: Clean Architecture - Regras de dependência entre camadas e organização do código
+globs: ["lib/**/*.dart"]
+alwaysApply: true
+---
+
+# Clean Architecture - Regras de Dependência
+
+## Estrutura de Camadas
+
+O projeto segue Clean Architecture com as seguintes camadas:
+- **Domain**: Núcleo (lógica de negócio pura)
+- **Application**: Orquestração (casos de uso)
+- **Infrastructure**: Implementações (dados, APIs)
+- **Presentation**: UI (interface do usuário)
+- **Core**: Componentes centrais compartilhados
+- **Shared**: Componentes compartilhados entre features
+
+## Regras de Dependência
+
+### Domain Layer
+- ✅ PODE importar apenas de `core` e `shared`
+- ❌ NUNCA importar de `application`, `infrastructure` ou `presentation`
+- ❌ NUNCA importar Flutter, HTTP, ou qualquer framework externo
+- ✅ Apenas classes Dart puro
+- ✅ Define interfaces (repositories), não implementações
+- ✅ Contém apenas lógica de negócio pura
+
+**Exemplo Correto:**
+```dart
+// domain/entities/user.dart
+import 'package:core/core.dart'; // ✅ OK
+import '../value_objects/email.dart'; // ✅ OK
+
+class User {
+  final String id;
+  final String name;
+  final Email email;
+  // Lógica de negócio pura
+}
+```
+
+**Exemplo Incorreto:**
+```dart
+// domain/entities/user.dart
+import 'package:flutter/material.dart'; // ❌ ERRADO
+import 'package:infrastructure/infrastructure.dart'; // ❌ ERRADO
+```
+
+### Application Layer
+- ✅ PODE importar de `domain` e `core`
+- ❌ NUNCA importar de `infrastructure` ou `presentation`
+- ✅ Usa interfaces do Domain, não implementações concretas
+- ✅ Orquestra use cases e coordena fluxos
+
+**Exemplo Correto:**
+```dart
+// application/services/user_service.dart
+import 'package:domain/domain.dart'; // ✅ OK
+import 'package:core/core.dart'; // ✅ OK
+
+class UserService {
+  final IUserRepository repository; // Interface do Domain ✅
+  
+  UserService(this.repository);
+}
+```
+
+### Infrastructure Layer
+- ✅ PODE importar de `domain` e `core`
+- ❌ NUNCA importar de `application` ou `presentation`
+- ✅ Implementa interfaces definidas no Domain
+- ✅ Lida com detalhes técnicos (API, DB, Cache)
+
+**Exemplo Correto:**
+```dart
+// infrastructure/repositories/user_repository.dart
+import 'package:domain/domain.dart'; // ✅ OK
+import 'package:core/core.dart'; // ✅ OK
+
+class UserRepository implements IUserRepository {
+  // Implementa interface do Domain ✅
+  @override
+  Future<User> getById(String id) { /* implementação */ }
+}
+```
+
+### Presentation Layer
+- ✅ PODE importar de `domain`, `application` e `core`
+- ❌ NUNCA importar de `infrastructure`
+- ✅ Usa services da Application ou use cases do Domain
+- ✅ Apenas gerencia estado da UI, não lógica de negócio
+
+**Exemplo Correto:**
+```dart
+// presentation/pages/user_page.dart
+import 'package:domain/domain.dart'; // ✅ OK
+import 'package:application/application.dart'; // ✅ OK
+import 'package:core/core.dart'; // ✅ OK
+
+class UserPage extends StatelessWidget {
+  final UserService userService; // Service da Application ✅
+  
+  @override
+  Widget build(BuildContext context) {
+    // UI apenas
+  }
+}
+```
+
+## Regras de Importação
+
+1. **Domain** → Apenas `core` e `shared`
+2. **Application** → `domain` e `core`
+3. **Infrastructure** → `domain` e `core`
+4. **Presentation** → `domain`, `application` e `core`
+5. **Core** → Não importa de outras camadas de negócio
+6. **Shared** → Não importa de outras camadas de negócio
+
+## Princípios
+
+- **Independência**: Domain não depende de frameworks ou tecnologias
+- **Testabilidade**: Lógica de negócio pode ser testada sem dependências externas
+- **Inversão de Dependência**: Camadas externas dependem de camadas internas
+- **Separação de Responsabilidades**: Cada camada tem uma responsabilidade clara

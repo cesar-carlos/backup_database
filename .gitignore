@@ -50,7 +50,6 @@ app.*.map.json
 .env.*.local
 
 # IDE and Editor
-.cursor/
 .metadata
 
 # OS

@@ -1,0 +1,202 @@
+---
+alwaysApply: true
+---
+
+# Cursor Rules
+
+This folder contains the **Project Rules** for Cursor, which are automatically applied when working on project files. The rules provide persistent context for the AI, ensuring code consistency and quality.
+
+## How They Work
+
+Rules are `.mdc` (Markdown Cursor) files that contain:
+
+- **Frontmatter YAML**: Metadata about the rule
+
+  - `description`: Brief description of the rule
+  - `globs`: File patterns to which the rule applies
+  - `alwaysApply`: Defines whether the rule should always be applied
+
+- **Markdown Content**: The rules and guidelines themselves
+
+## Available Rules
+
+### 1. `solid_principles.mdc`
+
+**Applied to**: `lib/**/*.dart`
+
+Defines SOLID principles:
+
+- **Single Responsibility Principle (SRP)**: Each class has a single responsibility
+- **Open/Closed Principle (OCP)**: Open for extension, closed for modification
+- **Liskov Substitution Principle (LSP)**: Subtypes are substitutable for base types
+- **Interface Segregation Principle (ISP)**: Specific interfaces are better
+- **Dependency Inversion Principle (DIP)**: Depend on abstractions
+
+### 2. `clean_architecture.mdc`
+
+**Applied to**: `lib/**/*.dart`
+
+Defines dependency rules between layers:
+
+- Layer structure (Domain, Application, Infrastructure, Presentation)
+- Import rules between layers
+- Clean Architecture principles
+- Domain independence
+
+### 3. `domain_layer.mdc`
+
+**Applied to**: `lib/domain/**/*.dart`
+
+Specific rules for Domain Layer:
+
+- **Entities**: Main domain objects with unique identity
+- **Value Objects**: Immutable objects compared by value
+- **Use Cases**: Isolated and testable business operations
+- **Repositories**: Interfaces that define contracts
+- **Errors**: Domain-specific exceptions
+
+### 4. `coding_conventions.mdc`
+
+**Applied to**: `lib/**/*.dart`
+
+Coding conventions:
+
+- Naming for classes, methods, and variables
+- File structure
+- Error handling (Either pattern)
+- Dependency injection
+- Import organization
+
+### 5. `testing.mdc`
+
+**Applied to**: `test/**/*.dart`
+
+Testing patterns:
+
+- Unit test structure
+- Widget tests
+- Best practices (AAA pattern)
+- Test naming
+- Isolation and mocking
+
+### 6. `dart_style_code.mdc`
+
+**Applied to**: `lib/**/*.dart`, `test/**/*.dart`
+
+Dart style guide based on Effective Dart:
+
+- Naming and conventions
+- Types and null safety
+- Const and final
+- Strings and collections
+- Functions and methods
+- Classes and constructors
+- Imports and organization
+- Dot shorthands
+- Tear-off for widgets (never return Widget from functions)
+
+### 7. `flutter_widgets.mdc`
+
+**Applied to**: `lib/presentation/**/*.dart`, `lib/shared/**/*.dart`
+
+Best practices for Flutter widgets:
+
+- Stateless vs StatefulWidget
+- Performance and optimization
+- Const widgets
+- Widget composition
+- Layout and responsive design
+- Theming and navigation
+- State management
+
+### 8. `null_safety.mdc`
+
+**Applied to**: `lib/**/*.dart`
+
+Best practices for null safety:
+
+- Nullable/non-nullable type declaration
+- Variable initialization
+- Null checks and null-aware operators
+- Nullable collections
+- Functions and methods with null safety
+- External APIs and JSON parsing
+
+### 9. `general_rules.mdc`
+
+**Applied to**: `lib/**/*.dart`, `test/**/*.dart`
+
+General project rules:
+
+- **DO NOT create documentation automatically** (only when requested)
+- **DO NOT create documentation files** without explicit request
+- Self-explanatory code
+- Comments only when necessary
+
+### 10. `dependencies_patterns.mdc`
+
+**Applied to**: `lib/**/*.dart`, `pubspec.yaml`
+
+Dependency and library patterns:
+
+- **go_router** for routes (never Navigator or auto_route)
+- **dio** for HTTP/API (never http package)
+- **get_it** for dependency injection (never Provider for DI)
+- **Provider** for state management (never BLoC, Riverpod, GetX)
+- **brasil_fields** for BR formatting
+- **flutter_dotenv** for environment variables
+- **uuid** for UUID generation
+- **zard** for type validation
+
+### 11. `architecture.mdc`
+
+**Applied to**: `lib/**/*.dart`
+
+Clean Architecture + Domain Driven Design (DDD) overview:
+
+- Architecture principles and SOLID
+- Layer structure and organization
+- Dependency rules between layers
+- Folder structure
+- Data flow examples
+- Barrel files
+- Library configuration (go_router, dio, get_it, Provider, etc.)
+- Import patterns
+- Code review checklist
+- Configuration checklist
+
+## Creating New Rules
+
+To create a new rule:
+
+1. Create a `.mdc` file in the `.cursor/rules/` folder
+2. Add the YAML frontmatter:
+   ```yaml
+   ---
+   description: Rule description
+   globs: ["pattern/**/*.dart"]
+   alwaysApply: true
+   ---
+   ```
+3. Add the rule content in Markdown
+
+## Rule Example
+
+```mdc
+---
+description: Example rule for validation
+globs: ["lib/domain/**/*.dart"]
+alwaysApply: true
+---
+
+# Validation Rule
+
+- All entities must validate their data in the constructor
+- Value objects must throw specific exceptions for invalid values
+- Use cases must validate parameters before executing
+```
+
+## References
+
+- [Cursor Documentation on Rules](https://docs.cursor.com/en/context/rules)
+- [Cursor Context Guide](https://docs.cursor.com/en/guides)
