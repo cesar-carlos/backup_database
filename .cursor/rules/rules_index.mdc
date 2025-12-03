@@ -18,6 +18,19 @@ Rules are `.mdc` (Markdown Cursor) files that contain:
 
 - **Markdown Content**: The rules and guidelines themselves
 
+## Important Behavioral Rules
+
+### Commits and Documentation
+
+- ❌ **NEVER make git commits** unless explicitly requested by the user
+- ❌ **NEVER create documentation** (README.md, comments, etc.) unless explicitly requested
+- ❌ **NEVER push to repository** unless explicitly requested
+- ✅ **ONLY commit/push/document** when the user explicitly asks for it
+- ✅ Always ask for confirmation before committing or pushing changes
+- ✅ Code should be self-explanatory through clear naming
+
+These rules ensure that the AI assistant respects user control over version control and documentation decisions.
+
 ## Available Rules
 
 ### 1. `solid_principles.mdc`
