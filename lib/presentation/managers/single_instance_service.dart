@@ -1,78 +1,72 @@
+import 'dart:ffi';
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
+import 'package:ffi/ffi.dart';
+import 'package:win32/win32.dart';
 
 import '../../core/utils/logger_service.dart';
+import 'ipc_service.dart';
+
+// Definir a função CreateMutex do Windows
+final _kernel32 = DynamicLibrary.open('kernel32.dll');
+
+final _createMutex = _kernel32.lookupFunction<
+    IntPtr Function(Pointer, Int32, Pointer<Utf16>),
+    int Function(Pointer, int, Pointer<Utf16>)>('CreateMutexW');
 
 class SingleInstanceService {
   static final SingleInstanceService _instance = SingleInstanceService._();
   factory SingleInstanceService() => _instance;
   SingleInstanceService._();
 
-  static const String _lockFileName = '.backup_database.lock';
-  File? _lockFile;
+  static const String _mutexName = 'Global\\BackupDatabaseMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
+  
+  int _mutexHandle = 0;
   bool _isFirstInstance = false;
+  final IpcService _ipcService = IpcService();
 
-  /// Verifica se é a primeira instância do aplicativo
+  /// Verifica se é a primeira instância do aplicativo usando Named Mutex do Windows
   /// Retorna true se é a primeira instância, false caso contrário
-  /// 
-  /// Usa uma abordagem mais permissiva que não bloqueia processos filhos como webviews
   Future<bool> checkAndLock() async {
     try {
-      final appDir = await getApplicationSupportDirectory();
-      _lockFile = File('${appDir.path}/$_lockFileName');
-
-      if (await _lockFile!.exists()) {
-        // Verificar idade do lock file
-        try {
-          final stat = await _lockFile!.stat();
-          final lockAge = DateTime.now().difference(stat.modified);
-          
-          // Se o lock é muito antigo (> 1 minuto), assumir que o processo morreu
-          if (lockAge.inSeconds > 60) {
-            await _lockFile!.delete();
-            LoggerService.debug('Lock file antigo removido (idade: ${lockAge.inSeconds}s)');
-          } else {
-            // Lock recente, verificar se processo ainda existe
-            final processName = Platform.resolvedExecutable.split(Platform.pathSeparator).last;
-            final processResult = await Process.run(
-              'tasklist',
-              ['/FI', 'IMAGENAME eq $processName', '/FO', 'CSV', '/NH'],
-              runInShell: true,
-            );
-
-            // Se encontrou processos, verificar se são instâncias diferentes
-            if (processResult.exitCode == 0) {
-              final output = processResult.stdout.toString();
-              final processCount = output.split('\n').where((line) => 
-                line.trim().isNotEmpty && line.contains(processName)
-              ).length;
-              
-              // Se há mais de um processo, pode ser webview ou outra instância
-              // Por segurança, apenas bloquear se o lock é muito recente (< 5 segundos)
-              if (lockAge.inSeconds < 5 && processCount > 1) {
-                LoggerService.info('Outra instância pode estar em execução');
-                _isFirstInstance = false;
-                return false;
-              }
-            }
-          }
-        } catch (e) {
-          // Se houver erro, remover lock e continuar
-          LoggerService.debug('Erro ao verificar lock: $e');
-          try {
-            await _lockFile!.delete();
-          } catch (_) {
-            // Ignorar erro ao deletar
-          }
-        }
+      if (!Platform.isWindows) {
+        LoggerService.warning('Single instance check não suportado nesta plataforma');
+        _isFirstInstance = true;
+        return true;
       }
 
-      // Criar ou atualizar arquivo lock
-      await _lockFile!.writeAsString(DateTime.now().toIso8601String());
-      _isFirstInstance = true;
+      // Criar ou abrir mutex nomeado
+      final mutexNamePtr = _mutexName.toNativeUtf16();
+      
+      // CreateMutex retorna handle para o mutex
+      // Se o mutex já existir, GetLastError retornará ERROR_ALREADY_EXISTS
+      _mutexHandle = _createMutex(nullptr, 0, mutexNamePtr);
+      
+      final lastError = GetLastError();
+      
+      calloc.free(mutexNamePtr);
 
-      LoggerService.info('Primeira instância do aplicativo');
+      if (_mutexHandle == 0) {
+        LoggerService.error('Erro ao criar mutex: código $lastError');
+        // Em caso de erro, permitir execução
+        _isFirstInstance = true;
+        return true;
+      }
+
+      // ERROR_ALREADY_EXISTS = 183
+      if (lastError == ERROR_ALREADY_EXISTS) {
+        LoggerService.info('Outra instância já está em execução (Mutex existe)');
+        _isFirstInstance = false;
+        
+        // Fechar o handle do mutex
+        CloseHandle(_mutexHandle);
+        _mutexHandle = 0;
+        
+        return false;
+      }
+
+      LoggerService.info('Primeira instância do aplicativo (Mutex criado)');
+      _isFirstInstance = true;
       return true;
     } catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar instância única', e, stackTrace);
@@ -82,17 +76,39 @@ class SingleInstanceService {
     }
   }
 
+  /// Inicia o servidor IPC para receber comandos de outras instâncias
+  Future<bool> startIpcServer({Function()? onShowWindow}) async {
+    try {
+      return await _ipcService.startServer(onShowWindow: onShowWindow);
+    } catch (e, stackTrace) {
+      LoggerService.error('Erro ao iniciar IPC Server', e, stackTrace);
+      return false;
+    }
+  }
+
+  /// Envia comando para a instância existente mostrar a janela
+  static Future<bool> notifyExistingInstance() async {
+    return await IpcService.sendShowWindow();
+  }
+
+  /// Libera o mutex e para o servidor IPC
   Future<void> releaseLock() async {
     try {
-      if (_lockFile != null && await _lockFile!.exists()) {
-        await _lockFile!.delete();
-        LoggerService.debug('Lock file removido');
+      // Parar servidor IPC
+      await _ipcService.stop();
+      
+      // Liberar mutex
+      if (_mutexHandle != 0) {
+        CloseHandle(_mutexHandle);
+        _mutexHandle = 0;
+        LoggerService.debug('Mutex liberado');
       }
     } catch (e) {
-      LoggerService.warning('Erro ao remover lock file: $e');
+      LoggerService.warning('Erro ao liberar lock: $e');
     }
   }
 
   bool get isFirstInstance => _isFirstInstance;
+  bool get isIpcRunning => _ipcService.isRunning;
 }
 

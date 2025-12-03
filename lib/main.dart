@@ -20,12 +20,24 @@ Future<void> main() async {
   // Inicializar logger PRIMEIRO (antes de qualquer outro serviço)
   LoggerService.init();
 
-  // Verificar instância única
+  // Verificar instância única usando Named Mutex
   final singleInstanceService = SingleInstanceService();
   final isFirstInstance = await singleInstanceService.checkAndLock();
 
   if (!isFirstInstance) {
-    LoggerService.info('Outra instância já está em execução. Encerrando...');
+    LoggerService.info('Outra instância já está em execução. Notificando...');
+    
+    // Notificar a instância existente para mostrar a janela
+    final notified = await SingleInstanceService.notifyExistingInstance();
+    
+    if (notified) {
+      LoggerService.info('Instância existente notificada. Encerrando...');
+    } else {
+      LoggerService.warning('Não foi possível notificar instância existente');
+    }
+    
+    // Aguardar um pouco para garantir que a mensagem foi enviada
+    await Future.delayed(const Duration(milliseconds: 500));
     exit(0);
   }
 
@@ -88,6 +100,19 @@ Future<void> main() async {
     // Inicializar window manager
     final windowManager = WindowManagerService();
     await windowManager.initialize(startMinimized: startMinimized);
+
+    // Inicializar IPC Server para receber comandos de outras instâncias
+    try {
+      await singleInstanceService.startIpcServer(
+        onShowWindow: () {
+          LoggerService.info('Recebido comando para mostrar janela de outra instância');
+          WindowManagerService().show();
+        },
+      );
+      LoggerService.info('IPC Server inicializado');
+    } catch (e) {
+      LoggerService.warning('Erro ao inicializar IPC Server: $e');
+    }
 
     // Inicializar tray manager
     final trayManager = TrayManagerService();
