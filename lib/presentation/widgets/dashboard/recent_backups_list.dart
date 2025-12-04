@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -50,13 +50,13 @@ class RecentBackupsList extends StatelessWidget {
   IconData _getStatusIcon(BackupStatus status) {
     switch (status) {
       case BackupStatus.success:
-        return Icons.check_circle;
+        return FluentIcons.check_mark;
       case BackupStatus.error:
-        return Icons.error;
+        return FluentIcons.error;
       case BackupStatus.warning:
-        return Icons.warning;
+        return FluentIcons.warning;
       case BackupStatus.running:
-        return Icons.sync;
+        return FluentIcons.sync;
     }
   }
 

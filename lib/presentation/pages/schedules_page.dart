@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -19,7 +19,6 @@ class _SchedulesPageState extends State<SchedulesPage> {
   @override
   void initState() {
     super.initState();
-    // Carregar agendamentos quando a página é aberta
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SchedulerProvider>().loadSchedules();
     });
@@ -27,40 +26,36 @@ class _SchedulesPageState extends State<SchedulesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Padding(
+    return ScaffoldPage(
+      header: PageHeader(
+        title: const Text('Agendamentos'),
+        commandBar: CommandBar(
+          mainAxisAlignment: MainAxisAlignment.end,
+          primaryItems: [
+            CommandBarButton(
+              icon: const Icon(FluentIcons.refresh),
+              onPressed: () {
+                context.read<SchedulerProvider>().loadSchedules();
+              },
+            ),
+            CommandBarButton(
+              icon: const Icon(FluentIcons.add),
+              label: const Text('Novo Agendamento'),
+              onPressed: () => _showScheduleDialog(context, null),
+            ),
+          ],
+        ),
+      ),
+      content: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  'Agendamentos',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    context.read<SchedulerProvider>().loadSchedules();
-                  },
-                  tooltip: 'Atualizar',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  label: 'Novo Agendamento',
-                  icon: Icons.add,
-                  onPressed: () => _showScheduleDialog(context, null),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
             Expanded(
               child: Consumer<SchedulerProvider>(
                 builder: (context, provider, child) {
                   if (provider.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(child: ProgressRing());
                   }
 
                   if (provider.error != null) {
@@ -71,18 +66,18 @@ class _SchedulesPageState extends State<SchedulesPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.error_outline,
+                              FluentIcons.error,
                               size: 64,
-                              color: Theme.of(context).colorScheme.error,
+                              color: AppColors.error,
                             ),
                             const SizedBox(height: 16),
                             Text(
                               provider.error!,
-                              style: Theme.of(context).textTheme.bodyLarge,
+                              style: FluentTheme.of(context).typography.bodyLarge,
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),
-                            ElevatedButton(
+                            Button(
                               onPressed: () => provider.loadSchedules(),
                               child: const Text('Tentar Novamente'),
                             ),
@@ -95,7 +90,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
                   if (provider.schedules.isEmpty) {
                     return AppCard(
                       child: EmptyState(
-                        icon: Icons.schedule_outlined,
+                        icon: FluentIcons.calendar,
                         message: 'Nenhum agendamento configurado',
                         actionLabel: 'Criar Agendamento',
                         onAction: () => _showScheduleDialog(context, null),
@@ -148,7 +143,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
               : 'Agendamento atualizado com sucesso!',
         );
       } else if (context.mounted) {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: provider.error ?? 'Erro ao salvar agendamento',
         );
@@ -159,20 +154,16 @@ class _SchedulesPageState extends State<SchedulesPage> {
   Future<void> _confirmDelete(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => ContentDialog(
         title: const Text('Confirmar Exclusão'),
         content: const Text('Tem certeza que deseja excluir este agendamento?'),
         actions: [
-          TextButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.delete,
-              foregroundColor: AppColors.buttonTextOnColored,
-            ),
             child: const Text('Excluir'),
           ),
         ],
@@ -189,7 +180,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
           message: 'Agendamento excluído com sucesso!',
         );
       } else if (context.mounted) {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: provider.error ?? 'Erro ao excluir agendamento',
         );
@@ -200,18 +191,24 @@ class _SchedulesPageState extends State<SchedulesPage> {
   Future<void> _runNow(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => ContentDialog(
         title: const Text('Executar Backup'),
         content: const Text('Deseja executar este backup agora?'),
         actions: [
-          TextButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton.icon(
+          Button(
             onPressed: () => Navigator.of(context).pop(true),
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Executar'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(FluentIcons.play),
+                const SizedBox(width: 8),
+                const Text('Executar'),
+              ],
+            ),
           ),
         ],
       ),
@@ -220,18 +217,14 @@ class _SchedulesPageState extends State<SchedulesPage> {
     if (confirmed == true && context.mounted) {
       final schedulerProvider = context.read<SchedulerProvider>();
 
-      // Mostrar dialog de progresso
       BackupProgressDialog.show(context);
 
-      // Executar backup em background
       final success = await schedulerProvider.executeNow(id);
 
-      // Aguardar um pouco para mostrar o resultado final
       await Future.delayed(const Duration(seconds: 1));
 
-      // Fechar dialog e mostrar resultado
       if (context.mounted) {
-        Navigator.of(context).pop(); // Fechar dialog de progresso
+        Navigator.of(context).pop();
 
         if (success) {
           MessageModal.showSuccess(
@@ -239,7 +232,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
             message: 'Backup executado com sucesso!',
           );
         } else {
-          ErrorModal.show(
+          MessageModal.showError(
             context,
             title: 'Erro ao Executar Backup',
             message: schedulerProvider.error ?? 'Erro ao executar backup',

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 class LoadingIndicator extends StatelessWidget {
   final String? message;
@@ -11,12 +11,12 @@ class LoadingIndicator extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(),
+          const ProgressRing(),
           if (message != null) ...[
             const SizedBox(height: 16),
             Text(
               message!,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: FluentTheme.of(context).typography.body,
             ),
           ],
         ],
@@ -24,4 +24,3 @@ class LoadingIndicator extends StatelessWidget {
     );
   }
 }
-

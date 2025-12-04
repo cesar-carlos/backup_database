@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -12,40 +12,36 @@ class DestinationsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Padding(
+    return ScaffoldPage(
+      header: PageHeader(
+        title: const Text('Destinos de Backup'),
+        commandBar: CommandBar(
+          mainAxisAlignment: MainAxisAlignment.end,
+          primaryItems: [
+            CommandBarButton(
+              icon: const Icon(FluentIcons.refresh),
+              onPressed: () {
+                context.read<DestinationProvider>().loadDestinations();
+              },
+            ),
+            CommandBarButton(
+              icon: const Icon(FluentIcons.add),
+              label: const Text('Novo Destino'),
+              onPressed: () => _showDestinationDialog(context, null),
+            ),
+          ],
+        ),
+      ),
+      content: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  'Destinos de Backup',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    context.read<DestinationProvider>().loadDestinations();
-                  },
-                  tooltip: 'Atualizar',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  label: 'Novo Destino',
-                  icon: Icons.add,
-                  onPressed: () => _showDestinationDialog(context, null),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
             Expanded(
               child: Consumer<DestinationProvider>(
                 builder: (context, provider, child) {
                   if (provider.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(child: ProgressRing());
                   }
 
                   if (provider.error != null) {
@@ -56,18 +52,18 @@ class DestinationsPage extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.error_outline,
+                              FluentIcons.error,
                               size: 64,
-                              color: Theme.of(context).colorScheme.error,
+                              color: AppColors.error,
                             ),
                             const SizedBox(height: 16),
                             Text(
                               provider.error!,
-                              style: Theme.of(context).textTheme.bodyLarge,
+                              style: FluentTheme.of(context).typography.bodyLarge,
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),
-                            ElevatedButton(
+                            Button(
                               onPressed: () => provider.loadDestinations(),
                               child: const Text('Tentar Novamente'),
                             ),
@@ -80,7 +76,7 @@ class DestinationsPage extends StatelessWidget {
                   if (provider.destinations.isEmpty) {
                     return AppCard(
                       child: EmptyState(
-                        icon: Icons.folder_outlined,
+                        icon: FluentIcons.folder,
                         message: 'Nenhum destino de backup configurado',
                         actionLabel: 'Adicionar Destino',
                         onAction: () => _showDestinationDialog(context, null),
@@ -136,7 +132,7 @@ class DestinationsPage extends StatelessWidget {
               : 'Destino atualizado com sucesso!',
         );
       } else if (context.mounted) {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: provider.error ?? 'Erro ao salvar destino',
         );
@@ -147,20 +143,16 @@ class DestinationsPage extends StatelessWidget {
   Future<void> _confirmDelete(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => ContentDialog(
         title: const Text('Confirmar Exclusão'),
         content: const Text('Tem certeza que deseja excluir este destino?'),
         actions: [
-          TextButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.delete,
-              foregroundColor: AppColors.buttonTextOnColored,
-            ),
             child: const Text('Excluir'),
           ),
         ],
@@ -177,7 +169,7 @@ class DestinationsPage extends StatelessWidget {
           message: 'Destino excluído com sucesso!',
         );
       } else if (context.mounted) {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: provider.error ?? 'Erro ao excluir destino',
         );

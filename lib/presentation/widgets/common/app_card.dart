@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 class AppCard extends StatelessWidget {
   final Widget child;
@@ -17,17 +17,14 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = Card(
-      margin: margin ?? const EdgeInsets.all(16),
-      child: Padding(
-        padding: padding ?? const EdgeInsets.all(16),
-        child: child,
-      ),
+      padding: padding ?? const EdgeInsets.all(16),
+      margin: margin,
+      child: child,
     );
 
     if (onTap != null) {
-      return InkWell(
+      return GestureDetector(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
         child: card,
       );
     }
@@ -35,4 +32,3 @@ class AppCard extends StatelessWidget {
     return card;
   }
 }
-

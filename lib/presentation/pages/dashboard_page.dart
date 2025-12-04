@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -27,132 +27,131 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Consumer<DashboardProvider>(
-            builder: (context, provider, child) {
-              if (provider.isLoading && provider.totalBackups == 0) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(48.0),
-                    child: CircularProgressIndicator(),
-                  ),
-                );
-              }
+    return ScaffoldPage(
+      header: const PageHeader(
+        title: Text('Dashboard'),
+      ),
+      content: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Consumer<DashboardProvider>(
+              builder: (context, provider, child) {
+                if (provider.isLoading && provider.totalBackups == 0) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(48.0),
+                      child: ProgressRing(),
+                    ),
+                  );
+                }
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Stats Cards
-                  Row(
-                    children: [
-                      Expanded(
-                        child: StatsCard(
-                          title: 'Total de Backups',
-                          value: provider.totalBackups.toString(),
-                          iconSvg: 'assets/icons/icon-512-embedded.svg',
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: StatsCard(
-                          title: 'Backups Hoje',
-                          value: provider.backupsToday.toString(),
-                          icon: Icons.today,
-                          color: AppColors.statsBackups,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: StatsCard(
-                          title: 'Falharam Hoje',
-                          value: provider.failedToday.toString(),
-                          icon: Icons.error_outline,
-                          color: AppColors.statsFailed,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: StatsCard(
-                          title: 'Agendamentos Ativos',
-                          value: provider.activeSchedules.toString(),
-                          icon: Icons.schedule,
-                          color: AppColors.statsActive,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Recent Backups
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Backups Recentes',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh),
-                        onPressed: () {
-                          provider.refresh();
-                        },
-                        tooltip: 'Atualizar',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  AppCard(
-                    child: RecentBackupsList(backups: provider.recentBackups),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Active Schedules
-                  Text(
-                    'Agendamentos Ativos',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 16),
-                  AppCard(
-                    child: provider.activeSchedulesList.isEmpty
-                        ? const EmptyState(
-                            icon: Icons.schedule_outlined,
-                            message: 'Nenhum agendamento configurado',
-                          )
-                        : ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: provider.activeSchedulesList.length,
-                            itemBuilder: (context, index) {
-                              final schedule = provider.activeSchedulesList[index];
-                              return ListTile(
-                                leading: const Icon(Icons.schedule),
-                                title: Text(schedule.name),
-                                subtitle: Text(
-                                  _getScheduleDescription(schedule),
-                                ),
-                                trailing: schedule.enabled
-                                    ? const Icon(
-                                        Icons.check_circle,
-                                        color: AppColors.success,
-                                      )
-                                    : const Icon(
-                                        Icons.cancel,
-                                        color: AppColors.grey600,
-                                      ),
-                              );
-                            },
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: StatsCard(
+                            title: 'Total de Backups',
+                            value: provider.totalBackups.toString(),
+                            iconSvg: 'assets/icons/icon-512-embedded.svg',
+                            color: AppColors.primary,
                           ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: StatsCard(
+                            title: 'Backups Hoje',
+                            value: provider.backupsToday.toString(),
+                            icon: FluentIcons.calendar_day,
+                            color: AppColors.statsBackups,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: StatsCard(
+                            title: 'Falharam Hoje',
+                            value: provider.failedToday.toString(),
+                            icon: FluentIcons.error,
+                            color: AppColors.statsFailed,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: StatsCard(
+                            title: 'Agendamentos Ativos',
+                            value: provider.activeSchedules.toString(),
+                            icon: FluentIcons.calendar,
+                            color: AppColors.statsActive,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Backups Recentes',
+                          style: FluentTheme.of(context).typography.title,
+                        ),
+                        IconButton(
+                          icon: const Icon(FluentIcons.refresh),
+                          onPressed: () {
+                            provider.refresh();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    AppCard(
+                      child: RecentBackupsList(backups: provider.recentBackups),
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      'Agendamentos Ativos',
+                      style: FluentTheme.of(context).typography.title,
+                    ),
+                    const SizedBox(height: 16),
+                    AppCard(
+                      child: provider.activeSchedulesList.isEmpty
+                          ? const EmptyState(
+                              icon: FluentIcons.calendar,
+                              message: 'Nenhum agendamento configurado',
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: provider.activeSchedulesList.length,
+                              itemBuilder: (context, index) {
+                                final schedule = provider.activeSchedulesList[index];
+                                return ListTile(
+                                  leading: const Icon(FluentIcons.calendar),
+                                  title: Text(schedule.name),
+                                  subtitle: Text(
+                                    _getScheduleDescription(schedule),
+                                  ),
+                                  trailing: schedule.enabled
+                                      ? const Icon(
+                                          FluentIcons.check_mark,
+                                          color: AppColors.success,
+                                        )
+                                      : const Icon(
+                                          FluentIcons.cancel,
+                                          color: AppColors.grey600,
+                                        ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

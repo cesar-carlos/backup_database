@@ -1,9 +1,10 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../application/providers/providers.dart';
 import '../../../domain/entities/schedule.dart';
 import '../../../domain/entities/sql_server_config.dart';
@@ -31,6 +32,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
+  final _intervalMinutesController = TextEditingController();
 
   DatabaseType _databaseType = DatabaseType.sqlServer;
   String? _selectedDatabaseConfigId;
@@ -56,6 +58,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   @override
   void initState() {
     super.initState();
+    _intervalMinutesController.text = _intervalMinutes.toString();
 
     if (widget.schedule != null) {
       _nameController.text = widget.schedule!.name;
@@ -69,7 +72,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _parseScheduleConfig(widget.schedule!.scheduleConfig);
     }
 
-    // Carregar dados após o build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
@@ -98,6 +100,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           break;
         case ScheduleType.interval:
           _intervalMinutes = config['intervalMinutes'] ?? 60;
+          _intervalMinutesController.text = _intervalMinutes.toString();
           break;
       }
     } catch (e) {
@@ -122,19 +125,16 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         _sybaseConfigs = sybaseProvider.configs;
         _destinations = destinationProvider.destinations;
 
-        // Verificar se o ID selecionado ainda existe após carregar
         if (_selectedDatabaseConfigId != null) {
           final exists = _databaseType == DatabaseType.sqlServer
               ? _sqlServerConfigs.any((c) => c.id == _selectedDatabaseConfigId)
               : _sybaseConfigs.any((c) => c.id == _selectedDatabaseConfigId);
 
           if (!exists) {
-            // Se não existe mais, limpar seleção
             _selectedDatabaseConfigId = null;
           }
         }
 
-        // Verificar se os destinos selecionados ainda existem
         _selectedDestinationIds.removeWhere((id) {
           return !_destinations.any((d) => d.id == id);
         });
@@ -145,231 +145,167 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   }
 
   @override
+  @override
   void dispose() {
     _nameController.dispose();
+    _intervalMinutesController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 600,
-        constraints: const BoxConstraints(maxHeight: 700),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context),
-            Flexible(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Nome
-                            AppTextField(
-                              controller: _nameController,
-                              label: 'Nome do Agendamento',
-                              hint: 'Ex: Backup Diário Produção',
-                              prefixIcon: const Icon(Icons.label_outline),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Nome é obrigatório';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Seção: Banco de Dados
-                            _buildSectionTitle('Banco de Dados'),
-                            const SizedBox(height: 12),
-
-                            // Tipo de banco
-                            DropdownButtonFormField<DatabaseType>(
-                              key: ValueKey('database_type_$_databaseType'),
-                              initialValue: _databaseType,
-                              decoration: const InputDecoration(
-                                labelText: 'Tipo de Banco',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.storage_outlined),
-                              ),
-                              items: DatabaseType.values.map((type) {
-                                return DropdownMenuItem(
-                                  value: type,
-                                  child: Text(_getDatabaseTypeName(type)),
-                                );
-                              }).toList(),
-                              onChanged: isEditing
-                                  ? null
-                                  : (value) {
-                                      setState(() {
-                                        // Limpar imediatamente antes de mudar o tipo
-                                        _selectedDatabaseConfigId = null;
-                                        _databaseType = value!;
-                                      });
-                                      // Forçar validação do formulário para limpar erros
-                                      _formKey.currentState?.validate();
-                                    },
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Configuração do banco
-                            Builder(
-                              key: ValueKey(
-                                'database_config_dropdown_${_databaseType}_${_selectedDatabaseConfigId ?? 'null'}',
-                              ),
-                              builder: (context) =>
-                                  _buildDatabaseConfigDropdown(),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Seção: Agendamento
-                            _buildSectionTitle('Agendamento'),
-                            const SizedBox(height: 12),
-
-                            // Tipo de agendamento
-                            DropdownButtonFormField<ScheduleType>(
-                              initialValue: _scheduleType,
-                              decoration: const InputDecoration(
-                                labelText: 'Frequência',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.schedule_outlined),
-                              ),
-                              items: ScheduleType.values.map((type) {
-                                return DropdownMenuItem(
-                                  value: type,
-                                  child: Text(_getScheduleTypeName(type)),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _scheduleType = value!;
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Campos específicos do agendamento
-                            _buildScheduleFields(),
-                            const SizedBox(height: 24),
-
-                            // Seção: Destinos
-                            _buildSectionTitle('Destinos'),
-                            const SizedBox(height: 12),
-
-                            _buildDestinationSelector(),
-                            const SizedBox(height: 24),
-
-                            // Opções
-                            _buildSectionTitle('Opções'),
-                            const SizedBox(height: 12),
-
-                            SwitchListTile(
-                              title: const Text('Compactar backup'),
-                              subtitle: const Text(
-                                'Gerar arquivo ZIP do backup',
-                              ),
-                              value: _compressBackup,
-                              onChanged: (value) {
-                                setState(() {
-                                  _compressBackup = value;
-                                });
-                              },
-                            ),
-                            SwitchListTile(
-                              title: const Text('Habilitado'),
-                              subtitle: const Text('Agendamento ativo'),
-                              value: _isEnabled,
-                              onChanged: (value) {
-                                setState(() {
-                                  _isEnabled = value;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-            ),
-            _buildFooter(context),
-          ],
-        ),
+    return ContentDialog(
+      constraints: const BoxConstraints(
+        minWidth: 600,
+        maxWidth: 600,
+        maxHeight: 800,
       ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
-        ),
-      ),
-      child: Row(
+      title: Row(
         children: [
-          Icon(
-            Icons.schedule_outlined,
-            color: Theme.of(context).colorScheme.onPrimaryContainer,
-          ),
+          Icon(FluentIcons.calendar, color: AppColors.primary),
           const SizedBox(width: 12),
           Text(
             isEditing ? 'Editar Agendamento' : 'Novo Agendamento',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
+            style: FluentTheme.of(context).typography.title,
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildFooter(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
-        ),
+      content: Container(
+        constraints: const BoxConstraints(),
+        child: _isLoading
+            ? const Center(child: ProgressRing())
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppTextField(
+                        controller: _nameController,
+                        label: 'Nome do Agendamento',
+                        hint: 'Ex: Backup Diário Produção',
+                        prefixIcon: const Icon(FluentIcons.tag),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Nome é obrigatório';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Banco de Dados'),
+                      const SizedBox(height: 12),
+                      AppDropdown<DatabaseType>(
+                        label: 'Tipo de Banco',
+                        value: _databaseType,
+                        placeholder: const Text('Tipo de Banco'),
+                        items: DatabaseType.values.map((type) {
+                          return ComboBoxItem<DatabaseType>(
+                            value: type,
+                            child: Text(_getDatabaseTypeName(type)),
+                          );
+                        }).toList(),
+                        onChanged: isEditing
+                            ? null
+                            : (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedDatabaseConfigId = null;
+                                    _databaseType = value;
+                                  });
+                                  _formKey.currentState?.validate();
+                                }
+                              },
+                      ),
+                      const SizedBox(height: 16),
+                      Builder(
+                        key: ValueKey(
+                          'database_config_dropdown_${_databaseType}_${_selectedDatabaseConfigId ?? 'null'}',
+                        ),
+                        builder: (context) => _buildDatabaseConfigDropdown(),
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Agendamento'),
+                      const SizedBox(height: 12),
+                      AppDropdown<ScheduleType>(
+                        label: 'Frequência',
+                        value: _scheduleType,
+                        placeholder: const Text('Frequência'),
+                        items: ScheduleType.values.map((type) {
+                          return ComboBoxItem<ScheduleType>(
+                            value: type,
+                            child: Text(_getScheduleTypeName(type)),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _scheduleType = value;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _buildScheduleFields(),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Destinos'),
+                      const SizedBox(height: 12),
+                      _buildDestinationSelector(),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Opções'),
+                      const SizedBox(height: 12),
+                      InfoLabel(
+                        label: 'Compactar backup',
+                        child: ToggleSwitch(
+                          checked: _compressBackup,
+                          onChanged: (value) {
+                            setState(() {
+                              _compressBackup = value;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Gerar arquivo ZIP do backup',
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
+                      const SizedBox(height: 16),
+                      InfoLabel(
+                        label: 'Habilitado',
+                        child: ToggleSwitch(
+                          checked: _isEnabled,
+                          onChanged: (value) {
+                            setState(() {
+                              _isEnabled = value;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Agendamento ativo',
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save),
-            label: Text(isEditing ? 'Salvar' : 'Criar'),
-          ),
-        ],
-      ),
+      actions: [
+        const CancelButton(),
+        SaveButton(onPressed: _save, isEditing: isEditing),
+      ],
     );
   }
 
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: Theme.of(
+      style: FluentTheme.of(
         context,
-      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+      ).typography.subtitle?.copyWith(fontWeight: FontWeight.bold),
     );
   }
 
@@ -377,9 +313,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     if (_databaseType == DatabaseType.sqlServer) {
       return Consumer<SqlServerConfigProvider>(
         builder: (context, provider, child) {
-          // Garantir que estamos usando apenas configurações SQL Server
           final sqlServerItems = provider.configs.map((config) {
-            return DropdownMenuItem(
+            return ComboBoxItem<String>(
               value: config.id,
               child: Text(
                 '${config.name} (${config.server}:${config.database})',
@@ -387,7 +322,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             );
           }).toList();
 
-          // Atualizar lista local sincronizada
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted &&
                 _sqlServerConfigs.length != provider.configs.length) {
@@ -397,15 +331,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             }
           });
 
-          // SEMPRE validar: se o tipo é SQL Server, só aceitar IDs de SQL Server
-          // Se _selectedDatabaseConfigId não existe na lista SQL Server, deve ser null
           String? validValue;
           if (_selectedDatabaseConfigId != null) {
             final exists = sqlServerItems.any(
               (item) => item.value == _selectedDatabaseConfigId,
             );
             validValue = exists ? _selectedDatabaseConfigId : null;
-            // Se não existe, limpar imediatamente
             if (!exists) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
@@ -419,27 +350,24 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             validValue = null;
           }
 
-          return DropdownButtonFormField<String>(
+          return ComboBox<String>(
             key: ValueKey(
               'database_config_sqlserver_${_databaseType}_${sqlServerItems.length}_${_selectedDatabaseConfigId ?? 'null'}',
             ),
-            initialValue: validValue,
-            decoration: InputDecoration(
-              labelText: 'Configuração do Banco',
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.dns_outlined),
-              hintText: sqlServerItems.isEmpty
+            value: validValue,
+            placeholder: Text(
+              sqlServerItems.isEmpty
                   ? 'Nenhuma configuração disponível'
                   : 'Selecione uma configuração',
             ),
             items: sqlServerItems.isEmpty
                 ? [
-                    const DropdownMenuItem<String>(
+                    ComboBoxItem<String>(
                       value: null,
-                      enabled: false,
                       child: Text(
                         'Nenhuma configuração disponível',
-                        style: TextStyle(fontStyle: FontStyle.italic),
+                        style: FluentTheme.of(context).typography.caption
+                            ?.copyWith(fontStyle: FontStyle.italic),
                       ),
                     ),
                   ]
@@ -451,12 +379,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                       _selectedDatabaseConfigId = value;
                     });
                   },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Selecione uma configuração de banco';
-              }
-              return null;
-            },
           );
         },
       );
@@ -464,15 +386,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
     return Consumer<SybaseConfigProvider>(
       builder: (context, provider, child) {
-        // Garantir que estamos usando apenas configurações Sybase
         final sybaseItems = provider.configs.map((config) {
-          return DropdownMenuItem(
+          return ComboBoxItem<String>(
             value: config.id,
             child: Text('${config.name} (${config.serverName}:${config.port})'),
           );
         }).toList();
 
-        // Atualizar lista local sincronizada
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _sybaseConfigs.length != provider.configs.length) {
             setState(() {
@@ -481,15 +401,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           }
         });
 
-        // SEMPRE validar: se o tipo é Sybase, só aceitar IDs de Sybase
-        // Se _selectedDatabaseConfigId não existe na lista Sybase, deve ser null
         String? validValue;
         if (_selectedDatabaseConfigId != null) {
           final exists = sybaseItems.any(
             (item) => item.value == _selectedDatabaseConfigId,
           );
           validValue = exists ? _selectedDatabaseConfigId : null;
-          // Se não existe, limpar imediatamente
           if (!exists) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
@@ -503,27 +420,22 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           validValue = null;
         }
 
-        return DropdownButtonFormField<String>(
-          key: ValueKey(
-            'database_config_sybase_${_databaseType}_${sybaseItems.length}_${_selectedDatabaseConfigId ?? 'null'}',
-          ),
-          initialValue: validValue,
-          decoration: InputDecoration(
-            labelText: 'Configuração do Banco',
-            border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.dns_outlined),
-            hintText: sybaseItems.isEmpty
+        return AppDropdown<String>(
+          label: 'Configuração de Banco',
+          value: validValue,
+          placeholder: Text(
+            sybaseItems.isEmpty
                 ? 'Nenhuma configuração disponível'
                 : 'Selecione uma configuração',
           ),
           items: sybaseItems.isEmpty
               ? [
-                  const DropdownMenuItem<String>(
+                  ComboBoxItem<String>(
                     value: null,
-                    enabled: false,
                     child: Text(
                       'Nenhuma configuração disponível',
-                      style: TextStyle(fontStyle: FontStyle.italic),
+                      style: FluentTheme.of(context).typography.caption
+                          ?.copyWith(fontStyle: FontStyle.italic),
                     ),
                   ),
                 ]
@@ -535,12 +447,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     _selectedDatabaseConfigId = value;
                   });
                 },
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Selecione uma configuração de banco';
-            }
-            return null;
-          },
         );
       },
     );
@@ -575,45 +481,43 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     return Row(
       children: [
         Expanded(
-          child: DropdownButtonFormField<int>(
-            initialValue: _hour,
-            decoration: const InputDecoration(
-              labelText: 'Hora',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.access_time),
-            ),
+          child: AppDropdown<int>(
+            label: 'Hora',
+            value: _hour,
+            placeholder: const Text('Hora'),
             items: List.generate(24, (index) {
-              return DropdownMenuItem(
+              return ComboBoxItem<int>(
                 value: index,
                 child: Text(index.toString().padLeft(2, '0')),
               );
             }),
             onChanged: (value) {
-              setState(() {
-                _hour = value!;
-              });
+              if (value != null) {
+                setState(() {
+                  _hour = value;
+                });
+              }
             },
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: DropdownButtonFormField<int>(
-            initialValue: _minute,
-            decoration: const InputDecoration(
-              labelText: 'Minuto',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.timer_outlined),
-            ),
+          child: AppDropdown<int>(
+            label: 'Minuto',
+            value: _minute,
+            placeholder: const Text('Minuto'),
             items: List.generate(60, (index) {
-              return DropdownMenuItem(
+              return ComboBoxItem<int>(
                 value: index,
                 child: Text(index.toString().padLeft(2, '0')),
               );
             }),
             onChanged: (value) {
-              setState(() {
-                _minute = value!;
-              });
+              if (value != null) {
+                setState(() {
+                  _minute = value;
+                });
+              }
             },
           ),
         ),
@@ -630,19 +534,22 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         final dayNumber = index + 1;
         final isSelected = _selectedDaysOfWeek.contains(dayNumber);
 
-        return FilterChip(
-          label: Text(days[index]),
-          selected: isSelected,
-          onSelected: (selected) {
-            setState(() {
-              if (selected) {
-                _selectedDaysOfWeek.add(dayNumber);
-              } else if (_selectedDaysOfWeek.length > 1) {
-                _selectedDaysOfWeek.remove(dayNumber);
-              }
-              _selectedDaysOfWeek.sort();
-            });
-          },
+        return Padding(
+          padding: const EdgeInsets.only(right: 8, bottom: 8),
+          child: Checkbox(
+            checked: isSelected,
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedDaysOfWeek.add(dayNumber);
+                } else if (_selectedDaysOfWeek.length > 1) {
+                  _selectedDaysOfWeek.remove(dayNumber);
+                }
+                _selectedDaysOfWeek.sort();
+              });
+            },
+            content: Text(days[index]),
+          ),
         );
       }),
     );
@@ -656,47 +563,39 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         final day = index + 1;
         final isSelected = _selectedDaysOfMonth.contains(day);
 
-        return FilterChip(
-          label: Text(day.toString()),
-          selected: isSelected,
-          onSelected: (selected) {
-            setState(() {
-              if (selected) {
-                _selectedDaysOfMonth.add(day);
-              } else if (_selectedDaysOfMonth.length > 1) {
-                _selectedDaysOfMonth.remove(day);
-              }
-              _selectedDaysOfMonth.sort();
-            });
-          },
+        return Padding(
+          padding: const EdgeInsets.only(right: 4, bottom: 4),
+          child: Checkbox(
+            checked: isSelected,
+            onChanged: (value) {
+              setState(() {
+                if (value == true) {
+                  _selectedDaysOfMonth.add(day);
+                } else if (_selectedDaysOfMonth.length > 1) {
+                  _selectedDaysOfMonth.remove(day);
+                }
+                _selectedDaysOfMonth.sort();
+              });
+            },
+            content: Text(day.toString()),
+          ),
         );
       }),
     );
   }
 
   Widget _buildIntervalSelector() {
-    return AppTextField(
-      initialValue: _intervalMinutes.toString(),
+    return NumericField(
+      controller: _intervalMinutesController,
       label: 'Intervalo (minutos)',
       hint: 'Ex: 60 para cada hora',
-      prefixIcon: const Icon(Icons.timer_outlined),
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      prefixIcon: FluentIcons.timer,
+      minValue: 1,
       onChanged: (value) {
         final minutes = int.tryParse(value) ?? 60;
         setState(() {
           _intervalMinutes = minutes;
         });
-      },
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Intervalo é obrigatório';
-        }
-        final minutes = int.tryParse(value);
-        if (minutes == null || minutes < 1) {
-          return 'Informe um valor válido';
-        }
-        return null;
       },
     );
   }
@@ -706,25 +605,20 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Theme.of(
-            context,
-          ).colorScheme.errorContainer.withValues(alpha: 0.3),
+          color: AppColors.errorBackground.withOpacity(0.3),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
-          ),
+          border: Border.all(color: AppColors.error.withOpacity(0.3)),
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.warning_outlined,
-              color: Theme.of(context).colorScheme.error,
-            ),
+            Icon(FluentIcons.warning, color: AppColors.error),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 'Nenhum destino configurado. Configure um destino primeiro.',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: FluentTheme.of(
+                  context,
+                ).typography.caption?.copyWith(color: AppColors.error),
               ),
             ),
           ],
@@ -735,20 +629,25 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     return Column(
       children: _destinations.map((destination) {
         final isSelected = _selectedDestinationIds.contains(destination.id);
-        return CheckboxListTile(
-          title: Text(destination.name),
-          subtitle: Text(_getDestinationTypeName(destination.type)),
-          value: isSelected,
-          onChanged: (value) {
-            setState(() {
-              if (value == true) {
-                _selectedDestinationIds.add(destination.id);
-              } else {
-                _selectedDestinationIds.remove(destination.id);
-              }
-            });
-          },
-          secondary: Icon(_getDestinationIcon(destination.type)),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: Icon(_getDestinationIcon(destination.type)),
+            title: Text(destination.name),
+            subtitle: Text(_getDestinationTypeName(destination.type)),
+            trailing: Checkbox(
+              checked: isSelected,
+              onChanged: (value) {
+                setState(() {
+                  if (value == true) {
+                    _selectedDestinationIds.add(destination.id);
+                  } else {
+                    _selectedDestinationIds.remove(destination.id);
+                  }
+                });
+              },
+            ),
+          ),
         );
       }).toList(),
     );
@@ -790,11 +689,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   IconData _getDestinationIcon(DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return Icons.folder_outlined;
+        return FluentIcons.folder;
       case DestinationType.ftp:
-        return Icons.cloud_upload_outlined;
+        return FluentIcons.cloud_upload;
       case DestinationType.googleDrive:
-        return Icons.add_to_drive_outlined;
+        return FluentIcons.cloud;
     }
   }
 

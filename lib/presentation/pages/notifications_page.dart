@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../application/providers/notification_provider.dart';
@@ -35,7 +35,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = context.read<NotificationProvider>();
-      // Garantir que os dados são carregados
       await provider.loadConfig();
       _loadConfig();
     });
@@ -54,7 +53,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
   void _loadConfig() {
     final provider = context.read<NotificationProvider>();
     
-    // Se ainda está carregando, aguardar
     if (provider.isLoading) {
       return;
     }
@@ -84,7 +82,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     final smtpPort = int.tryParse(_smtpPortController.text.trim());
     if (smtpPort == null) {
-      ErrorModal.show(
+      MessageModal.showError(
         context,
         message: 'Porta SMTP inválida',
       );
@@ -93,7 +91,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     final recipientEmail = _recipientEmailController.text.trim();
     if (recipientEmail.isEmpty) {
-      ErrorModal.show(
+      MessageModal.showError(
         context,
         message: 'E-mail de destino é obrigatório',
       );
@@ -131,7 +129,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         message: 'Configuração salva com sucesso!',
       );
     } else {
-      ErrorModal.show(
+      MessageModal.showError(
         context,
         message: provider.error ?? 'Erro ao salvar configuração',
       );
@@ -140,17 +138,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SingleChildScrollView(
+    return ScaffoldPage(
+      header: const PageHeader(
+        title: Text('Configurações de Notificações por E-mail'),
+      ),
+      content: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Configurações de Notificações por E-mail',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 24),
             Consumer<NotificationProvider>(
               builder: (context, provider, child) {
                 return AppCard(
@@ -159,187 +155,167 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    AppTextField(
-                      controller: _smtpServerController,
-                      label: 'Servidor SMTP',
-                      hint: 'smtp.exemplo.com',
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Servidor SMTP é obrigatório';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    AppTextField(
-                      controller: _smtpPortController,
-                      label: 'Porta',
-                      keyboardType: TextInputType.number,
-                      hint: '587',
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Porta é obrigatória';
-                        }
-                        final port = int.tryParse(value.trim());
-                        if (port == null || port < 1 || port > 65535) {
-                          return 'Porta inválida';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    AppTextField(
-                      controller: _emailController,
-                      label: 'E-mail',
-                      keyboardType: TextInputType.emailAddress,
-                      hint: 'seu-email@exemplo.com',
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'E-mail é obrigatório';
-                        }
-                        if (!value.contains('@')) {
-                          return 'E-mail inválido';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    AppTextField(
-                      controller: _passwordController,
-                      label: 'Senha',
-                      obscureText: true,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Senha é obrigatória';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    AppTextField(
-                      controller: _recipientEmailController,
-                      label: 'E-mail de Destino',
-                      keyboardType: TextInputType.emailAddress,
-                      hint: 'destino@exemplo.com',
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'E-mail de destino é obrigatório';
-                        }
-                        if (!value.contains('@')) {
-                          return 'E-mail inválido';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Quando enviar notificações',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text('Notificar em caso de sucesso'),
-                      subtitle: const Text(
-                        'Enviar e-mail quando o backup for concluído com sucesso',
-                      ),
-                      value: _notifyOnSuccess,
-                      onChanged: (value) {
-                        setState(() {
-                          _notifyOnSuccess = value;
-                        });
-                      },
-                    ),
-                    SwitchListTile(
-                      title: const Text('Notificar em caso de erro'),
-                      subtitle: const Text(
-                        'Enviar e-mail quando ocorrer erro no backup',
-                      ),
-                      value: _notifyOnError,
-                      onChanged: (value) {
-                        setState(() {
-                          _notifyOnError = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Detalhamento',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text('Incluir detalhamento/logs no e-mail'),
-                      subtitle: const Text(
-                        'Anexar arquivo com logs detalhados do backup no e-mail',
-                      ),
-                      value: _attachLog,
-                      onChanged: (value) {
-                        setState(() {
-                          _attachLog = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Consumer<NotificationProvider>(
-                          builder: (context, provider, child) {
-                            return AppButton(
-                              label: provider.isTesting
-                                  ? 'Testando...'
-                                  : 'Testar Conexão',
-                              isPrimary: false,
-                              onPressed: provider.isTesting
-                                  ? null
-                                  : () async {
-                                      final success = await provider
-                                          .testConfiguration();
-
-                                      if (!mounted) return;
-
-                                      if (success) {
-                                        MessageModal.showSuccess(
-                                          context,
-                                          message: 'Teste de conexão realizado com sucesso!',
-                                        );
-                                      } else {
-                                        ErrorModal.show(
-                                          context,
-                                          message: provider.error ?? 'Erro ao testar conexão',
-                                        );
-                                      }
-                                    },
-                            );
+                        AppTextField(
+                          controller: _smtpServerController,
+                          label: 'Servidor SMTP',
+                          hint: 'smtp.exemplo.com',
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Servidor SMTP é obrigatório';
+                            }
+                            return null;
                           },
                         ),
-                        const SizedBox(width: 16),
-                        Consumer<NotificationProvider>(
-                          builder: (context, provider, child) {
-                            return AppButton(
-                              label: provider.isLoading
-                                  ? 'Salvando...'
-                                  : 'Salvar',
-                              icon: Icons.save,
-                              onPressed: provider.isLoading
-                                  ? null
-                                  : _saveConfig,
-                            );
+                        const SizedBox(height: 16),
+                        NumericField(
+                          controller: _smtpPortController,
+                          label: 'Porta',
+                          hint: '587',
+                          prefixIcon: FluentIcons.number_field,
+                          minValue: 1,
+                          maxValue: 65535,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          controller: _emailController,
+                          label: 'E-mail',
+                          keyboardType: TextInputType.emailAddress,
+                          hint: 'seu-email@exemplo.com',
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'E-mail é obrigatório';
+                            }
+                            if (!value.contains('@')) {
+                              return 'E-mail inválido';
+                            }
+                            return null;
                           },
+                        ),
+                        const SizedBox(height: 16),
+                        PasswordField(
+                          controller: _passwordController,
+                          label: 'Senha',
+                          hint: 'Senha do e-mail',
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          controller: _recipientEmailController,
+                          label: 'E-mail de Destino',
+                          keyboardType: TextInputType.emailAddress,
+                          hint: 'destino@exemplo.com',
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'E-mail de destino é obrigatório';
+                            }
+                            if (!value.contains('@')) {
+                              return 'E-mail inválido';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        const Divider(),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Quando enviar notificações',
+                          style: FluentTheme.of(context).typography.subtitle?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        InfoLabel(
+                          label: 'Notificar em caso de sucesso',
+                          child: ToggleSwitch(
+                            checked: _notifyOnSuccess,
+                            onChanged: (value) {
+                              setState(() {
+                                _notifyOnSuccess = value;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        InfoLabel(
+                          label: 'Notificar em caso de erro',
+                          child: ToggleSwitch(
+                            checked: _notifyOnError,
+                            onChanged: (value) {
+                              setState(() {
+                                _notifyOnError = value;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Divider(),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Detalhamento',
+                          style: FluentTheme.of(context).typography.subtitle?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        InfoLabel(
+                          label: 'Incluir detalhamento/logs no e-mail',
+                          child: ToggleSwitch(
+                            checked: _attachLog,
+                            onChanged: (value) {
+                              setState(() {
+                                _attachLog = value;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Consumer<NotificationProvider>(
+                              builder: (context, provider, child) {
+                                return ActionButton(
+                                  label: provider.isTesting
+                                      ? 'Testando...'
+                                      : 'Testar Conexão',
+                                  icon: FluentIcons.network_tower,
+                                  isLoading: provider.isTesting,
+                                  onPressed: provider.isTesting
+                                      ? null
+                                      : () async {
+                                          final success = await provider
+                                              .testConfiguration();
+
+                                          if (!mounted) return;
+
+                                          if (success) {
+                                            MessageModal.showSuccess(
+                                              context,
+                                              message: 'Teste de conexão realizado com sucesso!',
+                                            );
+                                          } else {
+                                            MessageModal.showError(
+                                              context,
+                                              message: provider.error ?? 'Erro ao testar conexão',
+                                            );
+                                          }
+                                        },
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 16),
+                            Consumer<NotificationProvider>(
+                              builder: (context, provider, child) {
+                                return SaveButton(
+                                  onPressed: _saveConfig,
+                                  isLoading: provider.isLoading,
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            );
+                  ),
+                );
               },
             ),
           ],

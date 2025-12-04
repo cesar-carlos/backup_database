@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -8,8 +8,9 @@ import '../../application/providers/log_provider.dart';
 import '../../application/providers/scheduler_provider.dart';
 import '../../application/providers/sql_server_config_provider.dart';
 import '../../core/constants/route_names.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/theme_provider.dart';
-import '../widgets/navigation/navigation.dart';
+import '../widgets/navigation/navigation_item.dart';
 
 class MainLayout extends StatefulWidget {
   final Widget child;
@@ -24,45 +25,45 @@ class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
   final List<NavigationItem> _navigationItems = [
-    const NavigationItem(
-      icon: Icons.dashboard_outlined,
-      selectedIcon: Icons.dashboard,
+    NavigationItem(
+      icon: FluentIcons.view_dashboard,
+      selectedIcon: FluentIcons.view_dashboard,
       label: 'Dashboard',
       route: RouteNames.dashboard,
     ),
-    const NavigationItem(
-      icon: Icons.storage_outlined,
-      selectedIcon: Icons.storage,
+    NavigationItem(
+      icon: FluentIcons.database,
+      selectedIcon: FluentIcons.database,
       label: 'Bancos de Dados',
       route: RouteNames.sqlServerConfig,
     ),
-    const NavigationItem(
-      icon: Icons.folder_outlined,
-      selectedIcon: Icons.folder,
+    NavigationItem(
+      icon: FluentIcons.folder,
+      selectedIcon: FluentIcons.folder,
       label: 'Destinos',
       route: RouteNames.destinations,
     ),
-    const NavigationItem(
-      icon: Icons.schedule_outlined,
-      selectedIcon: Icons.schedule,
+    NavigationItem(
+      icon: FluentIcons.calendar,
+      selectedIcon: FluentIcons.calendar,
       label: 'Agendamentos',
       route: RouteNames.schedules,
     ),
-    const NavigationItem(
-      icon: Icons.article_outlined,
-      selectedIcon: Icons.article,
+    NavigationItem(
+      icon: FluentIcons.document,
+      selectedIcon: FluentIcons.document,
       label: 'Logs',
       route: RouteNames.logs,
     ),
-    const NavigationItem(
-      icon: Icons.notifications_outlined,
-      selectedIcon: Icons.notifications,
+    NavigationItem(
+      icon: FluentIcons.megaphone,
+      selectedIcon: FluentIcons.megaphone,
       label: 'Notificações',
       route: RouteNames.notifications,
     ),
-    const NavigationItem(
-      icon: Icons.settings_outlined,
-      selectedIcon: Icons.settings,
+    NavigationItem(
+      icon: FluentIcons.settings,
+      selectedIcon: FluentIcons.settings,
       label: 'Configurações',
       route: RouteNames.settings,
     ),
@@ -104,7 +105,6 @@ class _MainLayoutState extends State<MainLayout> {
         break;
       case RouteNames.notifications:
       case RouteNames.settings:
-        // Essas páginas não têm refresh específico
         break;
     }
   }
@@ -116,14 +116,10 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
+    return NavigationView(
+      content: Row(
         children: [
-          SideNavigation(
-            items: _navigationItems,
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _onDestinationSelected,
-          ),
+          _buildNavigationPane(),
           Expanded(
             child: Column(
               children: [
@@ -137,6 +133,36 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
+  Widget _buildNavigationPane() {
+    return Container(
+      width: 200,
+      color: FluentTheme.of(context).scaffoldBackgroundColor,
+      child: ListView(
+        children: _navigationItems
+            .asMap()
+            .entries
+            .map(
+              (entry) {
+                final index = entry.key;
+                final item = entry.value;
+                final isSelected = index == _selectedIndex;
+                return ListTile(
+                  leading: Icon(
+                    item.icon,
+                    color: isSelected
+                        ? AppColors.primary
+                        : FluentTheme.of(context).resources.textFillColorSecondary,
+                  ),
+                  title: Text(item.label),
+                  onPressed: () => _onDestinationSelected(index),
+                );
+              },
+            )
+            .toList(),
+      ),
+    );
+  }
+
   Widget _buildAppBar() {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
@@ -144,34 +170,40 @@ class _MainLayoutState extends State<MainLayout> {
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: FluentTheme.of(context).scaffoldBackgroundColor,
         border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
+          bottom: BorderSide(
+            color: FluentTheme.of(context).resources.controlStrokeColorDefault,
+          ),
         ),
       ),
       child: Row(
         children: [
           Text(
             _navigationItems[_selectedIndex].label,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: FluentTheme.of(context).typography.title,
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _handleRefresh,
-            tooltip: 'Atualizar',
+          Tooltip(
+            message: 'Atualizar',
+            child: IconButton(
+              icon: const Icon(FluentIcons.refresh),
+              onPressed: _handleRefresh,
+            ),
           ),
           const SizedBox(width: 8),
-          IconButton(
-            icon: Icon(
-              themeProvider.isDarkMode
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
+          Tooltip(
+            message: 'Alternar tema',
+            child: IconButton(
+              icon: Icon(
+                themeProvider.isDarkMode
+                    ? FluentIcons.brightness
+                    : FluentIcons.brightness,
+              ),
+              onPressed: () {
+                themeProvider.toggleTheme();
+              },
             ),
-            onPressed: () {
-              themeProvider.toggleTheme();
-            },
-            tooltip: 'Alternar tema',
           ),
         ],
       ),

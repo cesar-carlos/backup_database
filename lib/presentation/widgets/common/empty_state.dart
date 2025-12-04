@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
+
+import '../../../core/theme/app_colors.dart';
 
 class EmptyState extends StatelessWidget {
   final String message;
@@ -25,17 +27,17 @@ class EmptyState extends StatelessWidget {
             Icon(
               icon,
               size: 64,
-              color: Theme.of(context).colorScheme.secondary,
+              color: AppColors.primary,
             ),
             const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: FluentTheme.of(context).typography.subtitle,
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 24),
-              ElevatedButton(
+              Button(
                 onPressed: onAction,
                 child: Text(actionLabel!),
               ),
@@ -46,4 +48,3 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
-

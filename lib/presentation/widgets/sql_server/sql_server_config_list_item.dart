@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/sql_server_config.dart';
+import '../common/config_list_item.dart';
 
 class SqlServerConfigListItem extends StatelessWidget {
   final SqlServerConfig config;
@@ -19,85 +19,23 @@ class SqlServerConfigListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: config.enabled
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Icon(
-            Icons.storage_outlined,
-            color: config.enabled
-                ? Theme.of(context).colorScheme.onPrimaryContainer
-                : Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        title: Text(
-          config.name,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text('${config.server}:${config.port}'),
-            const SizedBox(height: 2),
-            Text('Banco: ${config.database}'),
-            const SizedBox(height: 2),
-            Text('Usuário: ${config.username}'),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Switch(value: config.enabled, onChanged: onToggleEnabled),
-            const SizedBox(width: 8),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'edit':
-                    onEdit?.call();
-                    break;
-                  case 'delete':
-                    onDelete?.call();
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_outlined, size: 20),
-                      SizedBox(width: 8),
-                      Text('Editar'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.delete_outline,
-                        size: 20,
-                        color: AppColors.delete,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Excluir',
-                        style: TextStyle(color: AppColors.delete),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        isThreeLine: true,
+    return ConfigListItem(
+      name: config.name,
+      icon: FluentIcons.database,
+      enabled: config.enabled,
+      onToggleEnabled: onToggleEnabled,
+      onEdit: onEdit,
+      onDelete: onDelete,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          Text('${config.server}:${config.port}'),
+          const SizedBox(height: 2),
+          Text('Banco: ${config.database}'),
+          const SizedBox(height: 2),
+          Text('Usuário: ${config.username}'),
+        ],
       ),
     );
   }

@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/schedule.dart';
+import '../common/config_list_item.dart';
 
 class ScheduleListItem extends StatelessWidget {
   final Schedule schedule;
@@ -22,138 +23,78 @@ class ScheduleListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: schedule.enabled
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Icon(
-            Icons.schedule_outlined,
-            color: schedule.enabled
-                ? Theme.of(context).colorScheme.onPrimaryContainer
-                : Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        title: Text(
-          schedule.name,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getScheduleTypeColor(
-                      schedule.scheduleType,
-                    ).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    _getScheduleTypeName(schedule.scheduleType),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: _getScheduleTypeColor(schedule.scheduleType),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getDatabaseTypeColor(
-                      schedule.databaseType,
-                    ).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    _getDatabaseTypeName(schedule.databaseType),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: _getDatabaseTypeColor(schedule.databaseType),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            if (schedule.nextRunAt != null)
-              Text(
-                'Próxima execução: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.nextRunAt!)}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            if (schedule.lastRunAt != null)
-              Text(
-                'Última execução: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.lastRunAt!)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.play_arrow_outlined),
-              tooltip: 'Executar agora',
+    return ConfigListItem(
+      name: schedule.name,
+      icon: FluentIcons.calendar,
+      enabled: schedule.enabled,
+      onToggleEnabled: onToggleEnabled,
+      onEdit: onEdit,
+      onDelete: onDelete,
+      trailingAction: onRunNow != null
+          ? IconButton(
+              icon: const Icon(FluentIcons.play),
               onPressed: schedule.enabled ? onRunNow : null,
-            ),
-            Switch(value: schedule.enabled, onChanged: onToggleEnabled),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'edit':
-                    onEdit?.call();
-                    break;
-                  case 'delete':
-                    onDelete?.call();
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_outlined, size: 20),
-                      SizedBox(width: 8),
-                      Text('Editar'),
-                    ],
+            )
+          : null,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: _getScheduleTypeColor(
+                    schedule.scheduleType,
+                  ).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  _getScheduleTypeName(schedule.scheduleType),
+                  style: FluentTheme.of(context).typography.caption?.copyWith(
+                    color: _getScheduleTypeColor(schedule.scheduleType),
                   ),
                 ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.delete_outline,
-                        size: 20,
-                        color: AppColors.delete,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Excluir',
-                        style: TextStyle(color: AppColors.delete),
-                      ),
-                    ],
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: _getDatabaseTypeColor(
+                    schedule.databaseType,
+                  ).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  _getDatabaseTypeName(schedule.databaseType),
+                  style: FluentTheme.of(context).typography.caption?.copyWith(
+                    color: _getDatabaseTypeColor(schedule.databaseType),
                   ),
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (schedule.nextRunAt != null)
+            Text(
+              'Próxima execução: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.nextRunAt!)}',
+              style: FluentTheme.of(context).typography.body,
             ),
-          ],
-        ),
-        isThreeLine: true,
+          if (schedule.lastRunAt != null)
+            Text(
+              'Última execução: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.lastRunAt!)}',
+              style: FluentTheme.of(context).typography.body?.copyWith(
+                color: FluentTheme.of(context).resources.textFillColorSecondary,
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 class AppButton extends StatelessWidget {
   final String label;
@@ -19,39 +19,45 @@ class AppButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return ElevatedButton(
+      return Button(
         onPressed: null,
         child: const SizedBox(
           width: 20,
           height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: ProgressRing(strokeWidth: 2),
         ),
       );
     }
 
     if (icon != null) {
       return isPrimary
-          ? ElevatedButton.icon(
+          ? Button(
               onPressed: onPressed,
-              icon: Icon(icon),
-              label: Text(label),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon),
+                  const SizedBox(width: 8),
+                  Text(label),
+                ],
+              ),
             )
-          : OutlinedButton.icon(
+          : Button(
               onPressed: onPressed,
-              icon: Icon(icon),
-              label: Text(label),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon),
+                  const SizedBox(width: 8),
+                  Text(label),
+                ],
+              ),
             );
     }
 
-    return isPrimary
-        ? ElevatedButton(
-            onPressed: onPressed,
-            child: Text(label),
-          )
-        : OutlinedButton(
-            onPressed: onPressed,
-            child: Text(label),
-          );
+    return Button(
+      onPressed: onPressed,
+      child: Text(label),
+    );
   }
 }
-

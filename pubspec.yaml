@@ -37,6 +37,9 @@ dependencies:
   # Result Pattern (Error Handling)
   result_dart: ^2.1.1
 
+  # Fluent UI
+  fluent_ui: ^4.13.0
+
   # Controle de Janelas
   window_manager: ^0.5.1
   tray_manager: ^0.5.2

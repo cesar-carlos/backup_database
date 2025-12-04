@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../core/theme/app_colors.dart';
 
-enum MessageType { success, info, warning }
+enum MessageType { success, info, warning, error }
 
 class MessageModal extends StatelessWidget {
   final String title;
@@ -27,7 +27,6 @@ class MessageModal extends StatelessWidget {
   }) {
     return showDialog<void>(
       context: context,
-      barrierDismissible: false,
       builder: (context) => MessageModal(
         title: title,
         message: message,
@@ -82,25 +81,44 @@ class MessageModal extends StatelessWidget {
     );
   }
 
+  static Future<void> showError(
+    BuildContext context, {
+    required String message,
+    String title = 'Erro',
+    String? buttonLabel,
+  }) {
+    return show(
+      context,
+      title: title,
+      message: message,
+      buttonLabel: buttonLabel,
+      type: MessageType.error,
+    );
+  }
+
   Color _getColor(BuildContext context) {
     switch (type) {
       case MessageType.success:
         return AppColors.success;
       case MessageType.info:
-        return Theme.of(context).colorScheme.primary;
+        return AppColors.primary;
       case MessageType.warning:
         return AppColors.warning;
+      case MessageType.error:
+        return AppColors.error;
     }
   }
 
   IconData _getIcon() {
     switch (type) {
       case MessageType.success:
-        return Icons.check_circle_outline;
+        return FluentIcons.check_mark;
       case MessageType.info:
-        return Icons.info_outline;
+        return FluentIcons.info;
       case MessageType.warning:
-        return Icons.warning_amber_outlined;
+        return FluentIcons.warning;
+      case MessageType.error:
+        return FluentIcons.error;
     }
   }
 
@@ -109,8 +127,7 @@ class MessageModal extends StatelessWidget {
     final color = _getColor(context);
     final icon = _getIcon();
 
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return ContentDialog(
       title: Row(
         children: [
           Icon(icon, color: color, size: 28),
@@ -118,25 +135,26 @@ class MessageModal extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: color,
-                fontWeight: FontWeight.bold,
-              ),
+              style: FluentTheme.of(context).typography.title?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
           ),
         ],
       ),
-      content: SingleChildScrollView(
-        child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
+      content: SizedBox(
+        width: 600,
+        child: SingleChildScrollView(
+          child: Text(
+            message,
+            style: FluentTheme.of(context).typography.body,
+          ),
+        ),
       ),
       actions: [
-        ElevatedButton(
+        Button(
           onPressed: () => Navigator.of(context).pop(),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: AppColors.buttonTextOnColored,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
           child: Text(buttonLabel ?? 'OK'),
         ),
       ],
