@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -49,7 +49,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
   final _ftpPasswordController = TextEditingController();
   final _ftpRemotePathController = TextEditingController(text: '/backups');
   bool _useFtps = false;
-  bool _obscureFtpPassword = true;
 
   // Google Drive
   final _googleFolderNameController = TextEditingController(text: 'Backups');
@@ -115,258 +114,266 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 500,
-        constraints: const BoxConstraints(maxHeight: 600),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Tipo de destino
-                      DropdownButtonFormField<DestinationType>(
-                        initialValue: _selectedType,
-                        decoration: const InputDecoration(
-                          labelText: 'Tipo de Destino',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: DestinationType.values.map((type) {
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Row(
-                              children: [
-                                Icon(_getTypeIcon(type), size: 20),
-                                const SizedBox(width: 8),
-                                Text(_getTypeName(type)),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: isEditing
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  _selectedType = value!;
-                                });
-                              },
-                      ),
-                      const SizedBox(height: 16),
+    return ContentDialog(
+      constraints: BoxConstraints(minWidth: 600, maxWidth: 600, maxHeight: 800),
+      title: _buildTitle(),
+      content: _buildContent(),
+      actions: _buildActions(),
+    );
+  }
 
-                      // Nome
-                      AppTextField(
-                        controller: _nameController,
-                        label: 'Nome do Destino',
-                        hint: 'Ex: Backup Local, FTP Servidor',
-                        prefixIcon: const Icon(Icons.label_outline),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Nome é obrigatório';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
+  Widget _buildTitle() {
+    return Row(
+      children: [
+        Icon(_getTypeIcon(_selectedType), color: AppColors.primary),
+        const SizedBox(width: 12),
+        Text(
+          isEditing ? 'Editar Destino' : 'Novo Destino',
+          style: FluentTheme.of(context).typography.title,
+        ),
+      ],
+    );
+  }
 
-                      // Campos específicos por tipo
-                      if (_selectedType == DestinationType.local)
-                        _buildLocalFields()
-                      else if (_selectedType == DestinationType.ftp)
-                        _buildFtpFields()
-                      else
-                        _buildGoogleDriveFields(),
-
-                      const SizedBox(height: 16),
-
-                      // Retenção
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppTextField(
-                            controller: _retentionDaysController,
-                            label: 'Dias de Retenção',
-                            hint: 'Ex: 30 (mantém backups por 30 dias)',
-                            prefixIcon: const Icon(Icons.delete_outline),
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Dias de retenção é obrigatório';
-                              }
-                              final days = int.tryParse(value);
-                              if (days == null || days < 1) {
-                                return 'Informe um valor válido';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  size: 20,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: ValueListenableBuilder<TextEditingValue>(
-                                    valueListenable: _retentionDaysController,
-                                    builder: (context, value, child) {
-                                      final days =
-                                          int.tryParse(value.text) ?? 30;
-                                      final cutoffDate = DateTime.now()
-                                          .subtract(Duration(days: days));
-                                      return Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Limpeza Automática',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.primary,
-                                                ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'Backups anteriores a ${_formatDate(cutoffDate)} serão excluídos automaticamente após cada backup executado.',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall,
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Habilitado
-                      SwitchListTile(
-                        title: const Text('Habilitado'),
-                        subtitle: const Text(
-                          'Destino ativo para uso em agendamentos',
-                        ),
-                        value: _isEnabled,
-                        onChanged: (value) {
-                          setState(() {
-                            _isEnabled = value;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            _buildFooter(context),
-          ],
+  Widget _buildContent() {
+    return Container(
+      constraints: const BoxConstraints(),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildTypeSelector(),
+              const SizedBox(height: 16),
+              _buildNameField(),
+              const SizedBox(height: 16),
+              _buildTypeSpecificFields(),
+              const SizedBox(height: 16),
+              _buildRetentionSection(),
+              if (_selectedType == DestinationType.local) ...[
+                const SizedBox(height: 16),
+                _buildCreateSubfoldersSwitch(),
+              ],
+              if (_selectedType == DestinationType.ftp) ...[
+                const SizedBox(height: 16),
+                _buildFtpsSection(),
+              ],
+              const SizedBox(height: 16),
+              _buildEnabledSwitch(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
+  Widget _buildTypeSelector() {
+    return AppDropdown<DestinationType>(
+      label: 'Tipo de Destino',
+      value: _selectedType,
+      placeholder: const Text('Tipo de Destino'),
+      items: DestinationType.values.map((type) {
+        return ComboBoxItem<DestinationType>(
+          value: type,
+          child: Row(
+            children: [
+              Icon(_getTypeIcon(type), size: 20),
+              const SizedBox(width: 8),
+              Text(_getTypeName(type)),
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: isEditing
+          ? null
+          : (value) {
+              if (value != null) {
+                setState(() {
+                  _selectedType = value;
+                });
+              }
+            },
+    );
+  }
+
+  Widget _buildNameField() {
+    return AppTextField(
+      controller: _nameController,
+      label: 'Nome do Destino',
+      hint: 'Ex: Backup Local, FTP Servidor',
+      prefixIcon: const Icon(FluentIcons.tag),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Nome é obrigatório';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildTypeSpecificFields() {
+    if (_selectedType == DestinationType.local) {
+      return _buildLocalFields();
+    } else if (_selectedType == DestinationType.ftp) {
+      return _buildFtpFields();
+    } else {
+      return _buildGoogleDriveFields();
+    }
+  }
+
+  Widget _buildRetentionSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        NumericField(
+          controller: _retentionDaysController,
+          label: 'Dias de Retenção',
+          hint: 'Ex: 30 (mantém backups por 30 dias)',
+          prefixIcon: FluentIcons.delete,
+          minValue: 1,
         ),
+        const SizedBox(height: 8),
+        _buildRetentionInfo(),
+      ],
+    );
+  }
+
+  Widget _buildRetentionInfo() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            _getTypeIcon(_selectedType),
-            color: Theme.of(context).colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            isEditing ? 'Editar Destino' : 'Novo Destino',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
+          Icon(FluentIcons.info, size: 20, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _retentionDaysController,
+              builder: (context, value, child) {
+                final days = int.tryParse(value.text) ?? 30;
+                final cutoffDate = DateTime.now().subtract(
+                  Duration(days: days),
+                );
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Limpeza Automática',
+                      style: FluentTheme.of(context).typography.caption
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Backups anteriores a ${_formatDate(cutoffDate)} serão excluídos automaticamente após cada backup executado.',
+                      style: FluentTheme.of(context).typography.caption,
+                    ),
+                  ],
+                );
+              },
             ),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFooter(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save),
-            label: Text(isEditing ? 'Salvar' : 'Criar'),
-          ),
-        ],
+  Widget _buildCreateSubfoldersSwitch() {
+    return InfoLabel(
+      label: 'Criar subpastas por data',
+      child: ToggleSwitch(
+        checked: _createSubfoldersByDate,
+        onChanged: (value) {
+          setState(() {
+            _createSubfoldersByDate = value;
+          });
+        },
       ),
     );
+  }
+
+  Widget _buildFtpsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InfoLabel(
+          label: 'Usar FTPS',
+          child: ToggleSwitch(
+            checked: _useFtps,
+            onChanged: (value) {
+              setState(() {
+                _useFtps = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Conexão FTP segura (SSL/TLS)',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        ActionButton(
+          label: 'Testar Conexão FTP',
+          icon: FluentIcons.network_tower,
+          onPressed: _testFtpConnection,
+          isLoading: _isTestingFtpConnection,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEnabledSwitch() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InfoLabel(
+          label: 'Habilitado',
+          child: ToggleSwitch(
+            checked: _isEnabled,
+            onChanged: (value) {
+              setState(() {
+                _isEnabled = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Destino ativo para uso em agendamentos',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildActions() {
+    return [
+      const CancelButton(),
+      SaveButton(onPressed: _save, isEditing: isEditing),
+    ];
   }
 
   Widget _buildLocalFields() {
     return Column(
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: AppTextField(
                 controller: _localPathController,
                 label: 'Caminho da Pasta',
                 hint: 'C:\\Backups',
-                prefixIcon: const Icon(Icons.folder_outlined),
+                prefixIcon: const Icon(FluentIcons.folder),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Caminho é obrigatório';
@@ -376,23 +383,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
             ),
             const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.folder_open),
-              tooltip: 'Selecionar pasta',
-              onPressed: _selectLocalFolder,
+            Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: IconButton(
+                icon: const Icon(FluentIcons.folder_open),
+                onPressed: _selectLocalFolder,
+              ),
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        SwitchListTile(
-          title: const Text('Criar subpastas por data'),
-          subtitle: const Text('Organiza backups em pastas YYYY-MM-DD'),
-          value: _createSubfoldersByDate,
-          onChanged: (value) {
-            setState(() {
-              _createSubfoldersByDate = value;
-            });
-          },
         ),
       ],
     );
@@ -409,7 +407,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 controller: _ftpHostController,
                 label: 'Servidor FTP',
                 hint: 'ftp.exemplo.com',
-                prefixIcon: const Icon(Icons.dns_outlined),
+                prefixIcon: const Icon(FluentIcons.server),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Servidor é obrigatório';
@@ -421,18 +419,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
             const SizedBox(width: 16),
             Expanded(
               flex: 1,
-              child: AppTextField(
+              child: NumericField(
                 controller: _ftpPortController,
                 label: 'Porta',
                 hint: '21',
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Porta é obrigatória';
-                  }
-                  return null;
-                },
+                prefixIcon: FluentIcons.number_field,
+                minValue: 1,
+                maxValue: 65535,
               ),
             ),
           ],
@@ -442,7 +435,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           controller: _ftpUsernameController,
           label: 'Usuário',
           hint: 'usuario_ftp',
-          prefixIcon: const Icon(Icons.person_outline),
+          prefixIcon: const Icon(FluentIcons.contact),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return 'Usuário é obrigatório';
@@ -451,69 +444,23 @@ class _DestinationDialogState extends State<DestinationDialog> {
           },
         ),
         const SizedBox(height: 16),
-        AppTextField(
+        PasswordField(
           controller: _ftpPasswordController,
-          label: 'Senha',
+          label: 'Senha FTP',
           hint: 'Senha do FTP',
-          obscureText: _obscureFtpPassword,
-          prefixIcon: const Icon(Icons.lock_outline),
-          suffixIcon: IconButton(
-            icon: Icon(
-              _obscureFtpPassword
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined,
-            ),
-            onPressed: () {
-              setState(() {
-                _obscureFtpPassword = !_obscureFtpPassword;
-              });
-            },
-          ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Senha é obrigatória';
-            }
-            return null;
-          },
         ),
         const SizedBox(height: 16),
         AppTextField(
           controller: _ftpRemotePathController,
           label: 'Caminho Remoto',
           hint: '/backups',
-          prefixIcon: const Icon(Icons.folder_outlined),
+          prefixIcon: const Icon(FluentIcons.folder),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return 'Caminho remoto é obrigatório';
             }
             return null;
           },
-        ),
-        const SizedBox(height: 16),
-        SwitchListTile(
-          title: const Text('Usar FTPS'),
-          subtitle: const Text('Conexão FTP segura (SSL/TLS)'),
-          value: _useFtps,
-          onChanged: (value) {
-            setState(() {
-              _useFtps = value;
-            });
-          },
-        ),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: _isTestingFtpConnection ? null : _testFtpConnection,
-          icon: _isTestingFtpConnection
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.network_check),
-          label: const Text('Testar Conexão FTP'),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
         ),
       ],
     );
@@ -527,68 +474,61 @@ class _DestinationDialogState extends State<DestinationDialog> {
       builder: (context, _) {
         return Column(
           children: [
-            // Status de Autenticação
             _buildGoogleAuthStatus(googleAuth),
             const SizedBox(height: 16),
-
-            // Configuração OAuth (se não configurado)
             if (!googleAuth.isConfigured) ...[
               _buildOAuthConfigSection(googleAuth),
               const SizedBox(height: 16),
             ],
-
-            // Nome da pasta
-            AppTextField(
-              controller: _googleFolderNameController,
-              label: 'Nome da Pasta no Google Drive',
-              hint: 'Backups',
-              prefixIcon: const Icon(Icons.cloud_outlined),
-              enabled: googleAuth.isSignedIn,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Nome da pasta é obrigatório';
-                }
-                return null;
-              },
-            ),
-
+            _buildGoogleFolderField(googleAuth),
             if (!googleAuth.isSignedIn) ...[
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.errorContainer.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.error.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Conecte-se ao Google para configurar o destino.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildGoogleNotSignedInWarning(),
             ],
           ],
         );
       },
+    );
+  }
+
+  Widget _buildGoogleFolderField(GoogleAuthProvider googleAuth) {
+    return AppTextField(
+      controller: _googleFolderNameController,
+      label: 'Nome da Pasta no Google Drive',
+      hint: 'Backups',
+      prefixIcon: const Icon(FluentIcons.cloud),
+      enabled: googleAuth.isSignedIn,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Nome da pasta é obrigatório';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildGoogleNotSignedInWarning() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.errorBackground.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(FluentIcons.warning, color: AppColors.error),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Conecte-se ao Google para configurar o destino.',
+              style: FluentTheme.of(
+                context,
+              ).typography.caption?.copyWith(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -601,12 +541,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
       decoration: BoxDecoration(
         color: isSignedIn
             ? AppColors.googleDriveSignedInBackground
-            : Theme.of(context).colorScheme.surfaceContainerHighest,
+            : FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isSignedIn
               ? AppColors.googleDriveSignedInBorder
-              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              : FluentTheme.of(
+                  context,
+                ).resources.controlStrokeColorDefault.withOpacity(0.3),
         ),
       ),
       child: Column(
@@ -615,21 +557,25 @@ class _DestinationDialogState extends State<DestinationDialog> {
           Row(
             children: [
               Icon(
-                isSignedIn ? Icons.check_circle : Icons.cloud_off_outlined,
+                isSignedIn
+                    ? FluentIcons.check_mark
+                    : FluentIcons.cloud_download,
                 color: isSignedIn
                     ? AppColors.googleDriveSignedIn
-                    : Theme.of(context).colorScheme.outline,
+                    : FluentTheme.of(
+                        context,
+                      ).resources.controlStrokeColorDefault,
                 size: 20,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   isSignedIn
-                      ? 'Conectado como ${googleAuth.currentEmail}'
+                      ? 'Conectado como ${googleAuth.currentEmail ?? 'usuário'}'
                       : 'Não conectado ao Google',
-                  style: Theme.of(
+                  style: FluentTheme.of(
                     context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                  ).typography.body?.copyWith(fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -638,28 +584,36 @@ class _DestinationDialogState extends State<DestinationDialog> {
           Row(
             children: [
               if (isSignedIn)
-                OutlinedButton.icon(
+                Button(
                   onPressed: isLoading ? null : () => googleAuth.signOut(),
-                  icon: const Icon(Icons.logout, size: 18),
-                  label: const Text('Desconectar'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(FluentIcons.sign_out, size: 18),
+                      const SizedBox(width: 8),
+                      const Text('Desconectar'),
+                    ],
                   ),
                 )
               else if (googleAuth.isConfigured)
-                ElevatedButton.icon(
+                Button(
                   onPressed: isLoading
                       ? null
                       : () => _connectToGoogle(googleAuth),
-                  icon: isLoading
-                      ? const SizedBox(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isLoading)
+                        const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: ProgressRing(strokeWidth: 2),
                         )
-                      : const Icon(Icons.login, size: 18),
-                  label: Text(
-                    isLoading ? 'Conectando...' : 'Conectar ao Google',
+                      else
+                        const Icon(FluentIcons.signin, size: 18),
+                      const SizedBox(width: 8),
+                      Text(isLoading ? 'Conectando...' : 'Conectar ao Google'),
+                    ],
                   ),
                 ),
             ],
@@ -668,9 +622,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
             const SizedBox(height: 8),
             Text(
               googleAuth.error!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              style: FluentTheme.of(
+                context,
+              ).typography.caption?.copyWith(color: AppColors.error),
             ),
           ],
         ],
@@ -682,43 +636,43 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(
+        color: FluentTheme.of(
           context,
-        ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+        ).resources.cardBackgroundFillColorDefault.withOpacity(0.3),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.settings_outlined,
-                color: Theme.of(context).colorScheme.primary,
-                size: 20,
-              ),
+              Icon(FluentIcons.settings, color: AppColors.primary, size: 20),
               const SizedBox(width: 8),
               Text(
                 'Configuração OAuth',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+                style: FluentTheme.of(
+                  context,
+                ).typography.subtitle?.copyWith(color: AppColors.primary),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             'Para usar o Google Drive, configure as credenciais OAuth do Google Cloud Console.',
-            style: Theme.of(context).textTheme.bodySmall,
+            style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
+          Button(
             onPressed: () => _showOAuthConfigDialog(googleAuth),
-            icon: const Icon(Icons.key, size: 18),
-            label: const Text('Configurar Credenciais'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(FluentIcons.lock, size: 18),
+                const SizedBox(width: 8),
+                const Text('Configurar Credenciais'),
+              ],
+            ),
           ),
         ],
       ),
@@ -750,11 +704,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
   IconData _getTypeIcon(DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return Icons.folder_outlined;
+        return FluentIcons.folder;
       case DestinationType.ftp:
-        return Icons.cloud_upload_outlined;
+        return FluentIcons.cloud_upload;
       case DestinationType.googleDrive:
-        return Icons.add_to_drive_outlined;
+        return FluentIcons.cloud;
     }
   }
 
@@ -788,7 +742,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Future<void> _testFtpConnection() async {
-    // Validar campos obrigatórios
     if (_ftpHostController.text.trim().isEmpty) {
       _showError('Servidor FTP é obrigatório');
       return;
@@ -858,15 +811,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   void _showError(String message) {
-    ErrorModal.show(context, message: message);
+    MessageModal.showError(context, message: message);
   }
 
   void _save() {
-    if (!_formKey.currentState!.validate()) {
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) {
       return;
     }
 
-    // Validar conexão Google Drive
     if (_selectedType == DestinationType.googleDrive) {
       final googleAuth = getIt<GoogleAuthProvider>();
       if (!googleAuth.isSignedIn) {
@@ -957,7 +910,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
 
   Future<void> _save() async {
     if (_clientIdController.text.trim().isEmpty) {
-      ErrorModal.show(context, message: 'Client ID é obrigatório');
+      MessageModal.showError(context, message: 'Client ID é obrigatório');
       return;
     }
 
@@ -981,126 +934,115 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return ContentDialog(
       title: const Row(
         children: [
-          Icon(Icons.cloud_outlined),
+          Icon(FluentIcons.cloud),
           SizedBox(width: 8),
           Text('Configurar Google OAuth'),
         ],
       ),
       content: SizedBox(
-        width: 450,
+        width: 800,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Obtenha as credenciais no Google Cloud Console:',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: FluentTheme.of(context).typography.caption,
             ),
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '1. Acesse console.cloud.google.com',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  Text(
-                    '2. Crie um projeto ou selecione existente',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  Text(
-                    '3. Ative a Google Drive API',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  Text(
-                    '4. Crie credenciais OAuth (Desktop)',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '5. Na credencial criada, adicione em "URIs de redirecionamento autorizados":',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: SelectableText(
-                      'http://localhost:8085/oauth2redirect',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
+            _buildInstructions(),
+            const SizedBox(height: 16),
+            AppTextField(
+              controller: _clientIdController,
+              label: 'Client ID',
+              hint: 'xxx.apps.googleusercontent.com',
+              prefixIcon: const Icon(FluentIcons.lock),
+              enabled: !_isLoading,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Client ID é obrigatório';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _clientIdController,
-              decoration: const InputDecoration(
-                labelText: 'Client ID *',
-                hintText: 'xxx.apps.googleusercontent.com',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.vpn_key_outlined),
-              ),
-              enabled: !_isLoading,
-            ),
-            const SizedBox(height: 12),
-            TextField(
+            PasswordField(
               controller: _clientSecretController,
-              decoration: const InputDecoration(
-                labelText: 'Client Secret (opcional)',
-                hintText: 'GOCSPX-xxx',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock_outline),
-              ),
-              obscureText: true,
+              label: 'Client Secret',
+              hint: 'GOCSPX-xxx',
               enabled: !_isLoading,
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
+        CancelButton(
           onPressed: _isLoading ? null : () => Navigator.pop(context, false),
-          child: const Text('Cancelar'),
         ),
-        ElevatedButton(
-          onPressed: _isLoading ? null : _save,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Salvar'),
-        ),
+        SaveButton(onPressed: _save, isLoading: _isLoading),
       ],
+    );
+  }
+
+  Widget _buildInstructions() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '1. Acesse console.cloud.google.com',
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          Text(
+            '2. Crie um projeto ou selecione existente',
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          Text(
+            '3. Ative a Google Drive API',
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          Text(
+            '4. Crie credenciais OAuth (Desktop)',
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '5. Na credencial criada, adicione em "URIs de redirecionamento autorizados":',
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: SelectableText(
+              'http://localhost:8085/oauth2redirect',
+              style: FluentTheme.of(context).typography.caption?.copyWith(
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
+            style: FluentTheme.of(context).typography.caption?.copyWith(
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

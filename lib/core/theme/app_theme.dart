@@ -1,9 +1,54 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Typography;
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 class AppTheme {
   AppTheme._();
+
+  static FluentThemeData get lightFluentTheme {
+    final montserratTextTheme = GoogleFonts.montserratTextTheme();
+    final theme = FluentThemeData.light();
+    return theme.copyWith(
+      accentColor: AccentColor('normal', {
+        'normal': AppColors.primary,
+        'dark': AppColors.primaryDark,
+        'light': AppColors.primaryLight,
+      }),
+      typography: Typography.raw(
+        caption: montserratTextTheme.bodySmall,
+        body: montserratTextTheme.bodyMedium,
+        bodyLarge: montserratTextTheme.bodyLarge,
+        bodyStrong: montserratTextTheme.titleMedium,
+        subtitle: montserratTextTheme.titleSmall,
+        title: montserratTextTheme.titleMedium,
+        titleLarge: montserratTextTheme.headlineSmall,
+        display: montserratTextTheme.headlineMedium,
+      ),
+    );
+  }
+
+  static FluentThemeData get darkFluentTheme {
+    final montserratTextTheme = GoogleFonts.montserratTextTheme(ThemeData.dark().textTheme);
+    final theme = FluentThemeData.dark();
+    return theme.copyWith(
+      accentColor: AccentColor('normal', {
+        'normal': AppColors.primary,
+        'dark': AppColors.primaryDark,
+        'light': AppColors.primaryLight,
+      }),
+      typography: Typography.raw(
+        caption: montserratTextTheme.bodySmall,
+        body: montserratTextTheme.bodyMedium,
+        bodyLarge: montserratTextTheme.bodyLarge,
+        bodyStrong: montserratTextTheme.titleMedium,
+        subtitle: montserratTextTheme.titleSmall,
+        title: montserratTextTheme.titleMedium,
+        titleLarge: montserratTextTheme.headlineSmall,
+        display: montserratTextTheme.headlineMedium,
+      ),
+    );
+  }
 
   static ThemeData get lightTheme {
     return ThemeData(

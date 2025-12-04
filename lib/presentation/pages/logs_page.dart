@@ -1,5 +1,5 @@
 import 'package:intl/intl.dart';
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'package:provider/provider.dart';
@@ -50,17 +50,17 @@ class _LogsPageState extends State<LogsPage> {
   Future<void> _handleClearLogs() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => ContentDialog(
         title: const Text('Limpar Logs'),
         content: const Text(
           'Tem certeza que deseja limpar todos os logs antigos? Esta ação não pode ser desfeita.',
         ),
         actions: [
-          TextButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Limpar'),
           ),
@@ -113,7 +113,7 @@ class _LogsPageState extends State<LogsPage> {
         message: 'Logs exportados para: $filePath',
       );
     } else if (mounted) {
-      ErrorModal.show(
+      MessageModal.showError(
         context,
         message: provider.error ?? 'Erro ao exportar logs',
       );
@@ -136,105 +136,107 @@ class _LogsPageState extends State<LogsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('Logs', style: Theme.of(context).textTheme.headlineSmall),
-              const Spacer(),
-              AppButton(
-                label: 'Limpar Logs',
-                icon: Icons.delete_outline,
-                isPrimary: false,
-                onPressed: _handleClearLogs,
-              ),
-              const SizedBox(width: 8),
-              AppButton(
-                label: 'Exportar',
-                icon: Icons.download,
-                onPressed: _handleExportLogs,
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildFilters(context),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Consumer<LogProvider>(
-              builder: (context, provider, child) {
-                if (provider.isLoading && provider.logs.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+    return ScaffoldPage(
+      header: PageHeader(
+        title: const Text('Logs'),
+        commandBar: CommandBar(
+          mainAxisAlignment: MainAxisAlignment.end,
+          primaryItems: [
+            CommandBarButton(
+              icon: const Icon(FluentIcons.delete),
+              label: const Text('Limpar Logs'),
+              onPressed: _handleClearLogs,
+            ),
+            CommandBarButton(
+              icon: const Icon(FluentIcons.download),
+              label: const Text('Exportar'),
+              onPressed: _handleExportLogs,
+            ),
+          ],
+        ),
+      ),
+      content: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildFilters(context),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Consumer<LogProvider>(
+                builder: (context, provider, child) {
+                  if (provider.isLoading && provider.logs.isEmpty) {
+                    return const Center(child: ProgressRing());
+                  }
 
-                if (provider.error != null && provider.logs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 48,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          provider.error!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
+                  if (provider.error != null && provider.logs.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            FluentIcons.error,
+                            size: 48,
+                            color: AppColors.error,
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        AppButton(
-                          label: 'Tentar Novamente',
-                          onPressed: () => provider.refresh(),
+                          const SizedBox(height: 16),
+                          Text(
+                            provider.error!,
+                            style: FluentTheme.of(context).typography.body?.copyWith(
+                                  color: AppColors.error,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          ActionButton(
+                            label: 'Tentar Novamente',
+                            onPressed: () => provider.refresh(),
+                            icon: FluentIcons.refresh,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (provider.logs.isEmpty) {
+                    return const AppCard(
+                      child: EmptyState(
+                        icon: FluentIcons.document,
+                        message: 'Nenhum log registrado',
+                      ),
+                    );
+                  }
+
+                  return AppCard(
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            itemCount:
+                                provider.logs.length + (provider.hasMore ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (index == provider.logs.length) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(
+                                    child: ProgressRing(),
+                                  ),
+                                );
+                              }
+
+                              final log = provider.logs[index];
+                              return _LogListItem(log: log);
+                            },
+                          ),
                         ),
                       ],
                     ),
                   );
-                }
-
-                if (provider.logs.isEmpty) {
-                  return const AppCard(
-                    child: EmptyState(
-                      icon: Icons.article_outlined,
-                      message: 'Nenhum log registrado',
-                    ),
-                  );
-                }
-
-                return AppCard(
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          itemCount:
-                              provider.logs.length + (provider.hasMore ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == provider.logs.length) {
-                              return const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              );
-                            }
-
-                            final log = provider.logs[index];
-                            return _LogListItem(log: log);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -243,75 +245,83 @@ class _LogsPageState extends State<LogsPage> {
     return Consumer<LogProvider>(
       builder: (context, provider, child) {
         return AppCard(
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: AppTextField(
-                      controller: _searchController,
-                      label: 'Buscar',
-                      hint: 'Digite para buscar nos logs...',
-                      prefixIcon: const Icon(Icons.search),
-                      onChanged: (value) {
-                        provider.setSearchQuery(value);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  DropdownButton<LogLevel?>(
-                    value: provider.filterLevel,
-                    hint: const Text('Nível'),
-                    items: [
-                      const DropdownMenuItem<LogLevel?>(
-                        value: null,
-                        child: Text('Todos'),
-                      ),
-                      ...LogLevel.values.map(
-                        (level) => DropdownMenuItem<LogLevel?>(
-                          value: level,
-                          child: Text(_getLevelLabel(level)),
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      provider.setFilterLevel(value);
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  DropdownButton<LogCategory?>(
-                    value: provider.filterCategory,
-                    hint: const Text('Categoria'),
-                    items: [
-                      const DropdownMenuItem<LogCategory?>(
-                        value: null,
-                        child: Text('Todas'),
-                      ),
-                      ...LogCategory.values.map(
-                        (category) => DropdownMenuItem<LogCategory?>(
-                          value: category,
-                          child: Text(_getCategoryLabel(category)),
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      provider.setFilterCategory(value);
-                    },
-                  ),
-                  if (provider.filterLevel != null ||
-                      provider.filterCategory != null ||
-                      provider.searchQuery.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        provider.clearFilters();
-                      },
-                      tooltip: 'Limpar filtros',
-                    ),
-                ],
+              Expanded(
+                child: AppTextField(
+                  controller: _searchController,
+                  label: 'Buscar',
+                  hint: 'Digite para buscar nos logs...',
+                  prefixIcon: const Icon(FluentIcons.search),
+                  onChanged: (value) {
+                    provider.setSearchQuery(value);
+                  },
+                ),
               ),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 150,
+                child: AppDropdown<LogLevel?>(
+                  label: 'Nível',
+                  value: provider.filterLevel,
+                  placeholder: const Text('Nível'),
+                  items: [
+                    ComboBoxItem(
+                      value: null,
+                      child: const Text('Todos'),
+                    ),
+                    ...LogLevel.values.map(
+                      (level) => ComboBoxItem<LogLevel?>(
+                        value: level,
+                        child: Text(_getLevelLabel(level)),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    provider.setFilterLevel(value);
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 150,
+                child: AppDropdown<LogCategory?>(
+                  label: 'Categoria',
+                  value: provider.filterCategory,
+                  placeholder: const Text('Categoria'),
+                  items: [
+                    ComboBoxItem(
+                      value: null,
+                      child: const Text('Todas'),
+                    ),
+                    ...LogCategory.values.map(
+                      (category) => ComboBoxItem<LogCategory?>(
+                        value: category,
+                        child: Text(_getCategoryLabel(category)),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    provider.setFilterCategory(value);
+                  },
+                ),
+              ),
+              if (provider.filterLevel != null ||
+                  provider.filterCategory != null ||
+                  provider.searchQuery.isNotEmpty) ...[
+                const SizedBox(width: 16),
+                Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: IconButton(
+                    icon: const Icon(FluentIcons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      provider.clearFilters();
+                    },
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -356,7 +366,7 @@ class _LogListItem extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            color: FluentTheme.of(context).resources.controlStrokeColorDefault,
           ),
         ),
       ),
@@ -378,15 +388,13 @@ class _LogListItem extends StatelessWidget {
                     Expanded(
                       child: Text(
                         log.message,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: FluentTheme.of(context).typography.body,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       DateFormat('dd/MM/yyyy HH:mm:ss').format(log.createdAt),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                      style: FluentTheme.of(context).typography.caption,
                     ),
                   ],
                 ),
@@ -394,9 +402,7 @@ class _LogListItem extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     log.details!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                    style: FluentTheme.of(context).typography.caption,
                   ),
                 ],
                 const SizedBox(height: 4),
@@ -409,7 +415,7 @@ class _LogListItem extends StatelessWidget {
                     const SizedBox(width: 8),
                     _Chip(
                       label: _getCategoryLabel(log.category),
-                      color: Theme.of(context).colorScheme.primary,
+                      color: AppColors.primary,
                     ),
                   ],
                 ),
@@ -424,13 +430,13 @@ class _LogListItem extends StatelessWidget {
   IconData _getLevelIcon(LogLevel level) {
     switch (level) {
       case LogLevel.debug:
-        return Icons.bug_report;
+        return FluentIcons.bug;
       case LogLevel.info:
-        return Icons.info;
+        return FluentIcons.info;
       case LogLevel.warning:
-        return Icons.warning;
+        return FluentIcons.warning;
       case LogLevel.error:
-        return Icons.error;
+        return FluentIcons.error;
     }
   }
 
@@ -439,11 +445,11 @@ class _LogListItem extends StatelessWidget {
       case LogLevel.debug:
         return AppColors.logDebug;
       case LogLevel.info:
-        return Theme.of(context).colorScheme.primary;
+        return AppColors.primary;
       case LogLevel.warning:
         return AppColors.logWarning;
       case LogLevel.error:
-        return Theme.of(context).colorScheme.error;
+        return AppColors.error;
     }
   }
 
@@ -483,9 +489,9 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Text(
         label,

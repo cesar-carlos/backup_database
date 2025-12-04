@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
@@ -11,10 +11,7 @@ import '../common/common.dart';
 class SybaseConfigDialog extends StatefulWidget {
   final SybaseConfig? config;
 
-  const SybaseConfigDialog({
-    super.key,
-    this.config,
-  });
+  const SybaseConfigDialog({super.key, this.config});
 
   static Future<SybaseConfig?> show(
     BuildContext context, {
@@ -34,13 +31,13 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _serverNameController = TextEditingController(); // Nome da máquina
-  final _databaseNameController = TextEditingController(); // Nome do banco de dados
+  final _databaseNameController =
+      TextEditingController(); // Nome do banco de dados
   final _portController = TextEditingController(text: '2638');
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _isEnabled = true;
-  bool _obscurePassword = true;
   bool _isTestingConnection = false;
 
   late final SybaseBackupService _backupService;
@@ -87,7 +84,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
     try {
       final port = int.tryParse(_portController.text.trim()) ?? 2638;
-      
+
       if (port < 1 || port > 65535) {
         throw Exception('Porta inválida. Deve estar entre 1 e 65535.');
       }
@@ -96,7 +93,8 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
         name: _nameController.text.trim(),
         serverName: _serverNameController.text.trim(),
         databaseName: _databaseNameController.text.trim(),
-        databaseFile: '', // Não necessário para backup, mas mantido para compatibilidade
+        databaseFile:
+            '', // Não necessário para backup, mas mantido para compatibilidade
         port: port,
         username: _usernameController.text.trim(),
         password: _passwordController.text,
@@ -115,11 +113,11 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
         },
         (failure) {
           final f = failure as Failure;
-          final errorMessage = f.message.isNotEmpty 
-              ? f.message 
+          final errorMessage = f.message.isNotEmpty
+              ? f.message
               : 'Erro desconhecido ao testar conexão';
-          
-          ErrorModal.show(
+
+          MessageModal.showError(
             context,
             title: 'Erro ao Testar Conexão',
             message: errorMessage,
@@ -133,8 +131,8 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       LoggerService.error('Erro ao testar conexão Sybase', e, stackTrace);
 
       final errorMessage = e.toString().replaceAll('Exception: ', '');
-      
-      ErrorModal.show(
+
+      MessageModal.showError(
         context,
         title: 'Erro ao Testar Conexão',
         message: errorMessage.isNotEmpty ? errorMessage : 'Erro desconhecido',
@@ -159,7 +157,8 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       name: _nameController.text.trim(),
       serverName: _serverNameController.text.trim(),
       databaseName: _databaseNameController.text.trim(),
-      databaseFile: '', // Não necessário para backup, mas mantido para compatibilidade
+      databaseFile:
+          '', // Não necessário para backup, mas mantido para compatibilidade
       port: port,
       username: _usernameController.text.trim(),
       password: _passwordController.text,
@@ -173,260 +172,171 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 700,
-        constraints: const BoxConstraints(maxHeight: 900),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+    return ContentDialog(
+      constraints: const BoxConstraints(
+        minWidth: 600,
+        maxWidth: 600,
+        maxHeight: 800,
+      ),
+      title: Row(
+        children: [
+          Icon(FluentIcons.server, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              isEditing
+                  ? 'Editar Configuração Sybase'
+                  : 'Nova Configuração Sybase',
+              style: FluentTheme.of(context).typography.title,
+            ),
+          ),
+        ],
+      ),
+      content: Container(
+        constraints: const BoxConstraints(),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppTextField(
+                  controller: _nameController,
+                  label: 'Nome da Configuração',
+                  hint: 'Ex: Produção Sybase',
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Nome é obrigatório';
+                    }
+                    return null;
+                  },
+                  prefixIcon: const Icon(FluentIcons.tag),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: AppTextField(
+                        controller: _serverNameController,
+                        label: 'Nome do Servidor (Engine Name)',
+                        hint: 'Ex: VL (nome do serviço Sybase)',
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Engine Name é obrigatório';
+                          }
+                          return null;
+                        },
+                        prefixIcon: const Icon(FluentIcons.server),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 1,
+                      child: NumericField(
+                        controller: _portController,
+                        label: 'Porta',
+                        hint: '2638',
+                        prefixIcon: FluentIcons.number_field,
+                        minValue: 1,
+                        maxValue: 65535,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _databaseNameController,
+                  label: 'Nome do Banco de Dados (DBN)',
+                  hint: 'Ex: VL (geralmente igual ao Engine Name)',
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Nome do banco de dados é obrigatório';
+                    }
+                    return null;
+                  },
+                  prefixIcon: const Icon(FluentIcons.database),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
                     children: [
-                      AppTextField(
-                        controller: _nameController,
-                        label: 'Nome da Configuração',
-                        hint: 'Ex: Produção Sybase',
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Nome é obrigatório';
-                          }
-                          return null;
-                        },
-                        prefixIcon: const Icon(Icons.label_outline),
+                      Icon(
+                        FluentIcons.info,
+                        size: 18,
+                        color: AppColors.primary,
                       ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: AppTextField(
-                              controller: _serverNameController,
-                              label: 'Nome do Servidor (Engine Name)',
-                              hint: 'Ex: VL (nome do serviço Sybase)',
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Engine Name é obrigatório';
-                                }
-                                return null;
-                              },
-                              prefixIcon: const Icon(Icons.dns_outlined),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            flex: 1,
-                            child: AppTextField(
-                              controller: _portController,
-                              label: 'Porta',
-                              hint: '2638',
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Porta é obrigatória';
-                                }
-                                final port = int.tryParse(value);
-                                if (port == null || port < 1 || port > 65535) {
-                                  return 'Porta inválida';
-                                }
-                                return null;
-                              },
-                              prefixIcon: const Icon(Icons.numbers_outlined),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        controller: _databaseNameController,
-                        label: 'Nome do Banco de Dados (DBN)',
-                        hint: 'Ex: VL (geralmente igual ao Engine Name)',
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Nome do banco de dados é obrigatório';
-                          }
-                          return null;
-                        },
-                        prefixIcon: const Icon(Icons.storage_outlined),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-                          ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'O Engine Name e DBN geralmente são iguais ao nome do serviço Sybase (ex: VL)',
+                          style: FluentTheme.of(context).typography.caption,
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'O Engine Name e DBN geralmente são iguais ao nome do serviço Sybase (ex: VL)',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        controller: _usernameController,
-                        label: 'Usuário',
-                        hint: 'DBA ou usuário do Sybase',
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Usuário é obrigatório';
-                          }
-                          return null;
-                        },
-                        prefixIcon: const Icon(Icons.person_outline),
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        controller: _passwordController,
-                        label: 'Senha',
-                        obscureText: _obscurePassword,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Senha é obrigatória';
-                          }
-                          return null;
-                        },
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: SwitchListTile(
-                              title: const Text('Habilitado'),
-                              subtitle: const Text(
-                                'Permitir uso desta configuração em agendamentos',
-                              ),
-                              value: _isEnabled,
-                              onChanged: (value) {
-                                setState(() {
-                                  _isEnabled = value;
-                                });
-                              },
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _usernameController,
+                  label: 'Usuário',
+                  hint: 'DBA ou usuário do Sybase',
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Usuário é obrigatório';
+                    }
+                    return null;
+                  },
+                  prefixIcon: const Icon(FluentIcons.contact),
+                ),
+                const SizedBox(height: 16),
+                PasswordField(
+                  controller: _passwordController,
+                ),
+                const SizedBox(height: 16),
+                InfoLabel(
+                  label: 'Habilitado',
+                  child: ToggleSwitch(
+                    checked: _isEnabled,
+                    onChanged: (value) {
+                      setState(() {
+                        _isEnabled = value;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Permitir uso desta configuração em agendamentos',
+                  style: FluentTheme.of(context).typography.caption,
+                ),
+              ],
             ),
-            _buildFooter(context),
-          ],
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
+      actions: [
+        const CancelButton(),
+        ActionButton(
+          label: 'Testar Conexão',
+          icon: FluentIcons.check_mark,
+          onPressed: _testConnection,
+          isLoading: _isTestingConnection,
         ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.dns_outlined,
-            size: 28,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              isEditing ? 'Editar Configuração Sybase' : 'Nova Configuração Sybase',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFooter(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
+        SaveButton(
+          onPressed: _save,
+          isEditing: isEditing,
         ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: _isTestingConnection ? null : _testConnection,
-            icon: _isTestingConnection
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_circle_outline),
-            label: const Text('Testar Conexão'),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save_outlined),
-            label: Text(isEditing ? 'Salvar' : 'Criar'),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
-

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,13 +24,15 @@ Future<void> main() async {
   // Se chegou aqui, o C++ já permitiu a execução, então é a primeira instância
   // Mas verificamos novamente como segurança adicional
   final singleInstanceService = SingleInstanceService();
-  
+
   // Verificar via mutex primeiro (mais confiável)
   final isFirstInstance = await singleInstanceService.checkAndLock();
-  
+
   if (!isFirstInstance) {
-    LoggerService.warning('⚠️ SEGUNDA INSTÂNCIA DETECTADA (Mutex existe). Encerrando imediatamente...');
-    
+    LoggerService.warning(
+      '⚠️ SEGUNDA INSTÂNCIA DETECTADA (Mutex existe). Encerrando imediatamente...',
+    );
+
     // Notificar a instância existente para mostrar a janela
     for (int i = 0; i < 5; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();
@@ -40,17 +42,19 @@ Future<void> main() async {
       }
       await Future.delayed(const Duration(milliseconds: 200));
     }
-    
+
     // ENCERRAR IMEDIATAMENTE - não permitir continuação
     exit(0);
   }
-  
+
   // Verificar se o IPC server já está rodando (outra instância)
   final isServerRunning = await IpcService.checkServerRunning();
-  
+
   if (isServerRunning) {
-    LoggerService.warning('⚠️ SEGUNDA INSTÂNCIA DETECTADA (IPC server já existe). Encerrando imediatamente...');
-    
+    LoggerService.warning(
+      '⚠️ SEGUNDA INSTÂNCIA DETECTADA (IPC server já existe). Encerrando imediatamente...',
+    );
+
     // Notificar a instância existente para mostrar a janela
     for (int i = 0; i < 5; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();
@@ -60,12 +64,14 @@ Future<void> main() async {
       }
       await Future.delayed(const Duration(milliseconds: 200));
     }
-    
+
     // ENCERRAR IMEDIATAMENTE - não permitir continuação
     exit(0);
   }
-  
-  LoggerService.info('✅ Primeira instância confirmada - continuando inicialização');
+
+  LoggerService.info(
+    '✅ Primeira instância confirmada - continuando inicialização',
+  );
 
   try {
     // Carregar variáveis de ambiente
@@ -132,13 +138,19 @@ Future<void> main() async {
     try {
       await singleInstanceService.startIpcServer(
         onShowWindow: () async {
-          LoggerService.info('Recebido comando SHOW_WINDOW via IPC de outra instância');
+          LoggerService.info(
+            'Recebido comando SHOW_WINDOW via IPC de outra instância',
+          );
           try {
             // Window manager já está inicializado, pode mostrar imediatamente
             await WindowManagerService().show();
             LoggerService.info('Janela trazida para frente após comando IPC');
           } catch (e, stackTrace) {
-            LoggerService.error('Erro ao mostrar janela via IPC', e, stackTrace);
+            LoggerService.error(
+              'Erro ao mostrar janela via IPC',
+              e,
+              stackTrace,
+            );
           }
         },
       );
@@ -377,11 +389,11 @@ class BackupDatabaseApp extends StatelessWidget {
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
-          return MaterialApp.router(
+          return FluentApp.router(
             title: 'Backup Database',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
+            theme: AppTheme.lightFluentTheme,
+            darkTheme: AppTheme.darkFluentTheme,
             themeMode: themeProvider.isDarkMode
                 ? ThemeMode.dark
                 : ThemeMode.light,

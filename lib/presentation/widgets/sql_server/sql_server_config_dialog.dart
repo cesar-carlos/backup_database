@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
@@ -44,14 +44,14 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   final _nameController = TextEditingController();
   final _serverController = TextEditingController();
   final _databaseController = TextEditingController();
-  final _databaseNameController = TextEditingController(); // Para Sybase: Nome do Banco de Dados
+  final _databaseNameController =
+      TextEditingController(); // Para Sybase: Nome do Banco de Dados
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _portController = TextEditingController(text: '1433');
 
   DatabaseType _selectedType = DatabaseType.sqlServer;
   bool _isEnabled = true;
-  bool _obscurePassword = true;
   bool _isTestingConnection = false;
   bool _isLoadingDatabases = false;
   List<String> _databases = [];
@@ -132,140 +132,149 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 700,
-        constraints: const BoxConstraints(maxHeight: 900),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Dropdown tipo de banco de dados
-                      DropdownButtonFormField<DatabaseType>(
-                        initialValue: _selectedType,
-                        decoration: InputDecoration(
-                          labelText: 'Tipo de Banco de Dados',
-                          border: const OutlineInputBorder(),
-                          prefixIcon: Icon(
-                            _selectedType == DatabaseType.sqlServer
-                                ? Icons.storage_outlined
-                                : Icons.dns_outlined,
-                          ),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: DatabaseType.sqlServer,
-                            child: Text('SQL Server'),
-                          ),
-                          DropdownMenuItem(
-                            value: DatabaseType.sybase,
-                            child: Text('Sybase SQL Anywhere'),
-                          ),
-                        ],
-                        onChanged: isEditing ? null : _onTypeChanged,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Nome da configuração
-                      AppTextField(
-                        controller: _nameController,
-                        label: 'Nome da Configuração',
-                        hint: _selectedType == DatabaseType.sqlServer
-                            ? 'Ex: Produção SQL Server'
-                            : 'Ex: Produção Sybase',
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Nome é obrigatório';
+    return ContentDialog(
+      constraints: const BoxConstraints(
+        minWidth: 600,
+        maxWidth: 600,
+        maxHeight: 800,
+      ),
+      title: Row(
+        children: [
+          Icon(
+            _selectedType == DatabaseType.sqlServer
+                ? FluentIcons.database
+                : FluentIcons.server,
+            color: AppColors.primary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              isEditing
+                  ? 'Editar Configuração'
+                  : 'Nova Configuração de Banco de Dados',
+              style: FluentTheme.of(context).typography.title,
+            ),
+          ),
+        ],
+      ),
+      content: Container(
+        constraints: const BoxConstraints(),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ComboBox tipo de banco de dados
+                AppDropdown<DatabaseType>(
+                  label: 'Tipo de Banco de Dados',
+                  value: _selectedType,
+                  placeholder: const Text('Tipo de Banco de Dados'),
+                  items: const [
+                    ComboBoxItem(
+                      value: DatabaseType.sqlServer,
+                      child: Text('SQL Server'),
+                    ),
+                    ComboBoxItem(
+                      value: DatabaseType.sybase,
+                      child: Text('Sybase SQL Anywhere'),
+                    ),
+                  ],
+                  onChanged: isEditing
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            _onTypeChanged(value);
                           }
-                          return null;
                         },
-                        prefixIcon: const Icon(Icons.label_outline),
-                      ),
-                      const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
 
-                      // Campos específicos por tipo
-                      if (_selectedType == DatabaseType.sqlServer)
-                        _buildSqlServerFields(context)
-                      else
-                        _buildSybaseFields(context),
+                // Nome da configuração
+                AppTextField(
+                  controller: _nameController,
+                  label: 'Nome da Configuração',
+                  hint: _selectedType == DatabaseType.sqlServer
+                      ? 'Ex: Produção SQL Server'
+                      : 'Ex: Produção Sybase',
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Nome é obrigatório';
+                    }
+                    return null;
+                  },
+                  prefixIcon: const Icon(FluentIcons.tag),
+                ),
+                const SizedBox(height: 16),
 
-                      const SizedBox(height: 16),
+                // Campos específicos por tipo
+                if (_selectedType == DatabaseType.sqlServer)
+                  _buildSqlServerFields(context)
+                else
+                  _buildSybaseFields(context),
 
-                      // Usuário
-                      AppTextField(
-                        controller: _usernameController,
-                        label: 'Usuário',
-                        hint: _selectedType == DatabaseType.sqlServer
-                            ? 'sa ou usuário do SQL Server'
-                            : 'DBA ou usuário do Sybase',
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Usuário é obrigatório';
-                          }
-                          return null;
-                        },
-                        prefixIcon: const Icon(Icons.person_outline),
-                      ),
-                      const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                      // Senha
-                      AppTextField(
-                        controller: _passwordController,
-                        label: 'Senha',
-                        hint: 'Senha do usuário',
-                        obscureText: _obscurePassword,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Senha é obrigatória';
-                          }
-                          return null;
-                        },
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 24),
+                // Usuário
+                AppTextField(
+                  controller: _usernameController,
+                  label: 'Usuário',
+                  hint: _selectedType == DatabaseType.sqlServer
+                      ? 'sa ou usuário do SQL Server'
+                      : 'DBA ou usuário do Sybase',
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Usuário é obrigatório';
+                    }
+                    return null;
+                  },
+                  prefixIcon: const Icon(FluentIcons.contact),
+                ),
+                const SizedBox(height: 16),
 
-                      // Switch habilitado
-                      SwitchListTile(
-                        title: const Text('Habilitado'),
-                        subtitle: const Text(
-                          'Configuração ativa para uso em agendamentos',
-                        ),
-                        value: _isEnabled,
-                        onChanged: (value) {
-                          setState(() {
-                            _isEnabled = value;
-                          });
-                        },
-                      ),
-                    ],
+                // Senha
+                PasswordField(
+                  controller: _passwordController,
+                  hint: 'Senha do usuário',
+                ),
+                const SizedBox(height: 24),
+
+                // Switch habilitado
+                InfoLabel(
+                  label: 'Habilitado',
+                  child: ToggleSwitch(
+                    checked: _isEnabled,
+                    onChanged: (value) {
+                      setState(() {
+                        _isEnabled = value;
+                      });
+                    },
                   ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                Text(
+                  'Configuração ativa para uso em agendamentos',
+                  style: FluentTheme.of(context).typography.caption,
+                ),
+              ],
             ),
-            _buildFooter(context),
-          ],
+          ),
         ),
       ),
+      actions: [
+        const CancelButton(),
+        ActionButton(
+          label: 'Testar Conexão',
+          icon: FluentIcons.check_mark,
+          onPressed: _testConnection,
+          isLoading: _isTestingConnection,
+        ),
+        SaveButton(
+          onPressed: _save,
+          isEditing: isEditing,
+        ),
+      ],
     );
   }
 
@@ -288,29 +297,19 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   }
                   return null;
                 },
-                prefixIcon: const Icon(Icons.dns_outlined),
+                prefixIcon: const Icon(FluentIcons.server),
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
               flex: 1,
-              child: AppTextField(
+              child:               NumericField(
                 controller: _portController,
                 label: 'Porta',
                 hint: '1433',
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Porta é obrigatória';
-                  }
-                  final port = int.tryParse(value);
-                  if (port == null || port < 1 || port > 65535) {
-                    return 'Porta inválida';
-                  }
-                  return null;
-                },
-                prefixIcon: const Icon(Icons.numbers_outlined),
+                prefixIcon: FluentIcons.number_field,
+                minValue: 1,
+                maxValue: 65535,
               ),
             ),
           ],
@@ -332,39 +331,30 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                       }
                       return null;
                     },
-                    prefixIcon: const Icon(Icons.storage_outlined),
+                    prefixIcon: const Icon(FluentIcons.database),
                   ),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.3),
+                        color: AppColors.primary.withOpacity(0.3),
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          Icons.info_outline,
+                          FluentIcons.info,
                           size: 18,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: AppColors.primary,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Preencha servidor, porta, usuário e senha, depois clique em "Testar Conexão" para carregar os bancos no dropdown',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
+                            style: FluentTheme.of(context).typography.caption,
                           ),
                         ),
                       ],
@@ -372,56 +362,52 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   ),
                 ],
               )
-            : DropdownButtonFormField<String>(
-                initialValue: _selectedDatabase,
-                decoration: InputDecoration(
-                  labelText: 'Banco de Dados',
-                  hintText: _isLoadingDatabases
-                      ? 'Carregando bancos...'
-                      : _databases.isEmpty
-                      ? 'Nenhum banco encontrado'
-                      : 'Selecione o banco',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.storage_outlined),
-                  suffixIcon: _isLoadingDatabases
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : _databases.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.refresh),
-                          tooltip: 'Recarregar bancos',
-                          onPressed: _testConnection,
-                        )
-                      : null,
-                ),
-                items: _databases.map((db) {
-                  return DropdownMenuItem<String>(value: db, child: Text(db));
-                }).toList(),
-                onChanged: _isLoadingDatabases || _databases.isEmpty
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedDatabase = value;
-                          _databaseController.text = value ?? '';
-                        });
-                      },
-                validator: (value) {
-                  if (_databases.isNotEmpty &&
-                      (value == null || value.trim().isEmpty)) {
-                    return 'Selecione um banco de dados';
-                  }
-                  if (_databases.isEmpty &&
-                      (_databaseController.text.trim().isEmpty)) {
-                    return 'Nome do banco é obrigatório';
-                  }
-                  return null;
-                },
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: AppDropdown<String>(
+                      label: 'Banco de Dados',
+                      value: _selectedDatabase,
+                      placeholder: Text(
+                        _isLoadingDatabases
+                            ? 'Carregando bancos...'
+                            : _databases.isEmpty
+                            ? 'Nenhum banco encontrado'
+                            : 'Selecione o banco',
+                      ),
+                      items: _databases.map((db) {
+                        return ComboBoxItem<String>(value: db, child: Text(db));
+                      }).toList(),
+                      onChanged: _isLoadingDatabases || _databases.isEmpty
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedDatabase = value;
+                                _databaseController.text = value ?? '';
+                              });
+                            },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_isLoadingDatabases)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 24),
+                      child: const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: ProgressRing(strokeWidth: 2),
+                      ),
+                    )
+                  else if (_databases.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 24),
+                      child: IconButton(
+                        icon: const Icon(FluentIcons.refresh),
+                        onPressed: _testConnection,
+                      ),
+                    ),
+                ],
               ),
       ],
     );
@@ -446,35 +432,25 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   }
                   return null;
                 },
-                prefixIcon: const Icon(Icons.dns_outlined),
+                prefixIcon: const Icon(FluentIcons.server),
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
               flex: 1,
-              child: AppTextField(
+              child:               NumericField(
                 controller: _portController,
                 label: 'Porta',
                 hint: '2638',
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Porta é obrigatória';
-                  }
-                  final port = int.tryParse(value);
-                  if (port == null || port < 1 || port > 65535) {
-                    return 'Porta inválida';
-                  }
-                  return null;
-                },
-                prefixIcon: const Icon(Icons.numbers_outlined),
+                prefixIcon: FluentIcons.number_field,
+                minValue: 1,
+                maxValue: 65535,
               ),
             ),
           ],
         ),
         const SizedBox(height: 16),
-        
+
         // Nome do Banco de Dados
         AppTextField(
           controller: _databaseNameController,
@@ -486,114 +462,30 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             }
             return null;
           },
-          prefixIcon: const Icon(Icons.storage_outlined),
+          prefixIcon: const Icon(FluentIcons.database),
         ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+            color: AppColors.primary.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-            ),
+            border: Border.all(color: AppColors.primary.withOpacity(0.3)),
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.info_outline,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+              Icon(FluentIcons.info, size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'O Engine Name e DBN geralmente são iguais ao nome do serviço Sybase (ex: VL)',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  style: FluentTheme.of(context).typography.caption,
                 ),
               ),
             ],
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            _selectedType == DatabaseType.sqlServer
-                ? Icons.storage_outlined
-                : Icons.dns_outlined,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              isEditing
-                  ? 'Editar Configuração'
-                  : 'Nova Configuração de Banco de Dados',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFooter(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: _isTestingConnection ? null : _testConnection,
-            icon: _isTestingConnection
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_circle_outline),
-            label: const Text('Testar Conexão'),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save_outlined),
-            label: Text(isEditing ? 'Salvar' : 'Criar'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -608,7 +500,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           _passwordController.text.isEmpty) {
         MessageModal.showWarning(
           context,
-          message: 'Preencha nome da máquina, porta, nome do banco de dados, usuário e senha para testar',
+          message:
+              'Preencha nome da máquina, porta, nome do banco de dados, usuário e senha para testar',
         );
         return;
       }
@@ -652,7 +545,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 ? f.message
                 : 'Erro desconhecido ao testar conexão';
 
-            ErrorModal.show(
+            MessageModal.showError(
               context,
               title: 'Erro ao Testar Conexão',
               message: errorMessage,
@@ -666,7 +559,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
         final errorMessage = e.toString().replaceAll('Exception: ', '');
 
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           title: 'Erro ao Testar Conexão',
           message: errorMessage.isNotEmpty ? errorMessage : 'Erro desconhecido',
@@ -778,7 +671,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             final message = failure is Failure
                 ? failure.message
                 : failure.toString();
-            ErrorModal.show(
+            MessageModal.showError(
               context,
               title: 'Erro ao Testar Conexão',
               message: message,
@@ -792,11 +685,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           _isLoadingDatabases = false;
           _isTestingConnection = false;
         });
-        ErrorModal.show(
-          context,
-          title: 'Erro',
-          message: e.toString(),
-        );
+        MessageModal.showError(context, title: 'Erro', message: e.toString());
       }
     }
   }
@@ -810,7 +699,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     final database = _selectedDatabase ?? _databaseController.text.trim();
 
     if (_selectedType == DatabaseType.sqlServer && database.isEmpty) {
-      ErrorModal.show(
+      MessageModal.showError(
         context,
         message: 'Selecione ou informe um banco de dados',
       );
@@ -819,10 +708,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
     if (_selectedType == DatabaseType.sybase &&
         _databaseNameController.text.trim().isEmpty) {
-      ErrorModal.show(
-        context,
-        message: 'Informe o nome do banco de dados',
-      );
+      MessageModal.showError(context, message: 'Informe o nome do banco de dados');
       return;
     }
 

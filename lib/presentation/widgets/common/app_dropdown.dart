@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 class AppDropdown<T> extends StatelessWidget {
   final String label;
   final T? value;
-  final List<DropdownMenuItem<T>> items;
+  final List<ComboBoxItem<T>> items;
   final ValueChanged<T?>? onChanged;
   final String? Function(T?)? validator;
+  final Widget? placeholder;
 
   const AppDropdown({
     super.key,
@@ -14,20 +15,23 @@ class AppDropdown<T> extends StatelessWidget {
     required this.items,
     this.onChanged,
     this.validator,
+    this.placeholder,
   });
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      initialValue: value,
-      items: items,
-      onChanged: onChanged,
-      validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
+    return InfoLabel(
+      label: label,
+      child: SizedBox(
+        width: double.infinity,
+        child: ComboBox<T>(
+          value: value,
+          items: items,
+          onChanged: onChanged,
+          isExpanded: true,
+          placeholder: placeholder ?? Text('Selecione $label'),
+        ),
       ),
     );
   }
 }
-

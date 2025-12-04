@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -34,35 +34,29 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SingleChildScrollView(
+    return ScaffoldPage(
+      header: PageHeader(
+        title: const Text('Configurações de Banco de Dados'),
+        commandBar: CommandBar(
+          mainAxisAlignment: MainAxisAlignment.end,
+          primaryItems: [
+            CommandBarButton(
+              icon: const Icon(FluentIcons.refresh),
+              onPressed: _refresh,
+            ),
+            CommandBarButton(
+              icon: const Icon(FluentIcons.add),
+              label: const Text('Nova Configuração'),
+              onPressed: () => _showConfigDialog(context, null),
+            ),
+          ],
+        ),
+      ),
+      content: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  'Configurações de Banco de Dados',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _refresh,
-                  tooltip: 'Atualizar',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  label: 'Nova Configuração',
-                  icon: Icons.add,
-                  onPressed: () => _showConfigDialog(context, null),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // SQL Server Configs
             Consumer<SqlServerConfigProvider>(
               builder: (context, sqlProvider, child) {
                 return Consumer<SybaseConfigProvider>(
@@ -80,7 +74,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(64),
-                          child: CircularProgressIndicator(),
+                          child: ProgressRing(),
                         ),
                       );
                     }
@@ -93,20 +87,20 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                Icons.error_outline,
+                                FluentIcons.error,
                                 size: 64,
-                                color: Theme.of(context).colorScheme.error,
+                                color: AppColors.error,
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 sqlProvider.error ??
                                     sybaseProvider.error ??
                                     'Erro desconhecido',
-                                style: Theme.of(context).textTheme.bodyLarge,
+                                style: FluentTheme.of(context).typography.bodyLarge,
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 16),
-                              ElevatedButton(
+                              Button(
                                 onPressed: _refresh,
                                 child: const Text('Tentar Novamente'),
                               ),
@@ -120,7 +114,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                       return Padding(
                         padding: const EdgeInsets.all(64),
                         child: EmptyState(
-                          icon: Icons.storage_outlined,
+                          icon: FluentIcons.database,
                           message:
                               'Nenhuma configuração de banco de dados cadastrada',
                           actionLabel: 'Adicionar Configuração',
@@ -132,12 +126,12 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // SQL Server Configs
                         if (sqlProvider.configs.isNotEmpty) ...[
                           Text(
                             'SQL Server',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                            style: FluentTheme.of(context).typography.subtitle?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                           ),
                           const SizedBox(height: 12),
                           SqlServerConfigList(
@@ -152,12 +146,12 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                           const SizedBox(height: 24),
                         ],
 
-                        // Sybase Configs
                         if (sybaseProvider.configs.isNotEmpty) ...[
                           Text(
                             'Sybase SQL Anywhere',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                            style: FluentTheme.of(context).typography.subtitle?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                           ),
                           const SizedBox(height: 12),
                           SybaseConfigList(
@@ -191,16 +185,13 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       bool success = false;
       String? errorMessage;
 
-      // Verificar o tipo retornado e salvar no provider correto
       if (result is SybaseConfig) {
-        // Configuração Sybase - salvar no SybaseConfigProvider
         final sybaseProvider = context.read<SybaseConfigProvider>();
         success = config == null
             ? await sybaseProvider.createConfig(result)
             : await sybaseProvider.updateConfig(result);
         errorMessage = sybaseProvider.error;
       } else if (result is SqlServerConfig) {
-        // Configuração SQL Server - salvar no SqlServerConfigProvider
         final sqlServerProvider = context.read<SqlServerConfigProvider>();
         success = config == null
             ? await sqlServerProvider.createConfig(result)
@@ -218,7 +209,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
               : 'Configuração atualizada com sucesso!',
         );
       } else {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: errorMessage ?? 'Erro ao salvar configuração',
         );
@@ -248,7 +239,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
               : 'Configuração Sybase atualizada com sucesso!',
         );
       } else {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: sybaseProvider.error ?? 'Erro ao salvar configuração Sybase',
         );
@@ -259,22 +250,18 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   Future<void> _confirmDeleteSqlServer(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => ContentDialog(
         title: const Text('Confirmar Exclusão'),
         content: const Text(
           'Tem certeza que deseja excluir esta configuração SQL Server?',
         ),
         actions: [
-          TextButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.delete,
-              foregroundColor: AppColors.buttonTextOnColored,
-            ),
             child: const Text('Excluir'),
           ),
         ],
@@ -293,7 +280,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
           message: 'Configuração SQL Server excluída com sucesso!',
         );
       } else {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: provider.error ?? 'Erro ao excluir configuração',
         );
@@ -304,22 +291,18 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   Future<void> _confirmDeleteSybase(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => ContentDialog(
         title: const Text('Confirmar Exclusão'),
         content: const Text(
           'Tem certeza que deseja excluir esta configuração Sybase?',
         ),
         actions: [
-          TextButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.delete,
-              foregroundColor: AppColors.buttonTextOnColored,
-            ),
             child: const Text('Excluir'),
           ),
         ],
@@ -338,7 +321,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
           message: 'Configuração Sybase excluída com sucesso!',
         );
       } else {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: provider.error ?? 'Erro ao excluir configuração Sybase',
         );

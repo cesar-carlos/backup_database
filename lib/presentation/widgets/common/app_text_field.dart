@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
+
+import '../../../core/theme/app_colors.dart';
 
 class AppTextField extends StatelessWidget {
   final String label;
@@ -33,26 +35,61 @@ class AppTextField extends StatelessWidget {
     this.inputFormatters,
   });
 
+  Widget? _buildPrefixIcon() {
+    if (prefixIcon == null) return null;
+
+    if (prefixIcon is Icon) {
+      final icon = prefixIcon as Icon;
+      return Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: Icon(icon.icon, size: 18, color: icon.color),
+      );
+    }
+
+    return Padding(padding: const EdgeInsets.only(left: 8), child: prefixIcon);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
+    String? errorText;
+    if (validator != null &&
+        controller != null &&
+        controller!.text.isNotEmpty) {
+      errorText = validator!(controller!.text);
+    }
+
+    final textBox = TextBox(
       controller: controller,
-      initialValue: controller == null ? initialValue : null,
-      validator: validator,
-      onChanged: onChanged,
+      placeholder: hint,
       obscureText: obscureText,
       keyboardType: keyboardType,
       maxLines: maxLines,
       enabled: enabled,
       inputFormatters: inputFormatters,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        border: const OutlineInputBorder(),
-        suffixIcon: suffixIcon,
-        prefixIcon: prefixIcon,
-      ),
+      onChanged: onChanged,
+      suffix: suffixIcon,
+      prefix: _buildPrefixIcon(),
     );
+
+    if (errorText != null) {
+      return InfoLabel(
+        label: label,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            textBox,
+            const SizedBox(height: 4),
+            Text(
+              errorText,
+              style: FluentTheme.of(
+                context,
+              ).typography.caption?.copyWith(color: AppColors.error),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return InfoLabel(label: label, child: textBox);
   }
 }
-

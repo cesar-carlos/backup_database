@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -19,40 +19,36 @@ class SqlServerConfigPage extends StatefulWidget {
 class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Padding(
+    return ScaffoldPage(
+      header: PageHeader(
+        title: const Text('Configurações do SQL Server'),
+        commandBar: CommandBar(
+          mainAxisAlignment: MainAxisAlignment.end,
+          primaryItems: [
+            CommandBarButton(
+              icon: const Icon(FluentIcons.refresh),
+              onPressed: () {
+                context.read<SqlServerConfigProvider>().loadConfigs();
+              },
+            ),
+            CommandBarButton(
+              icon: const Icon(FluentIcons.add),
+              label: const Text('Nova Configuração'),
+              onPressed: () => _showConfigDialog(context, null),
+            ),
+          ],
+        ),
+      ),
+      content: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  'Configurações do SQL Server',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    context.read<SqlServerConfigProvider>().loadConfigs();
-                  },
-                  tooltip: 'Atualizar',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  label: 'Nova Configuração',
-                  icon: Icons.add,
-                  onPressed: () => _showConfigDialog(context, null),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
             Expanded(
               child: Consumer<SqlServerConfigProvider>(
                 builder: (context, provider, child) {
                   if (provider.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(child: ProgressRing());
                   }
 
                   if (provider.error != null) {
@@ -61,18 +57,18 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.error_outline,
+                            FluentIcons.error,
                             size: 64,
-                            color: Theme.of(context).colorScheme.error,
+                            color: AppColors.error,
                           ),
                           const SizedBox(height: 16),
                           Text(
                             provider.error!,
-                            style: Theme.of(context).textTheme.bodyLarge,
+                            style: FluentTheme.of(context).typography.bodyLarge,
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 16),
-                          ElevatedButton(
+                          Button(
                             onPressed: () => provider.loadConfigs(),
                             child: const Text('Tentar Novamente'),
                           ),
@@ -84,7 +80,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
                   if (provider.configs.isEmpty) {
                     return AppCard(
                       child: EmptyState(
-                        icon: Icons.storage_outlined,
+                        icon: FluentIcons.database,
                         message:
                             'Nenhuma configuração de SQL Server cadastrada',
                         actionLabel: 'Adicionar Configuração',
@@ -119,16 +115,13 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
       bool success = false;
       String? errorMessage;
 
-      // Verificar o tipo retornado e salvar no provider correto
       if (result is SybaseConfig) {
-        // Configuração Sybase - salvar no SybaseConfigProvider
         final sybaseProvider = context.read<SybaseConfigProvider>();
         success = config == null
             ? await sybaseProvider.createConfig(result)
             : await sybaseProvider.updateConfig(result);
         errorMessage = sybaseProvider.error;
       } else if (result is SqlServerConfig) {
-        // Configuração SQL Server - salvar no SqlServerConfigProvider
         final sqlServerProvider = context.read<SqlServerConfigProvider>();
         success = config == null
             ? await sqlServerProvider.createConfig(result)
@@ -146,7 +139,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
               : 'Configuração atualizada com sucesso!',
         );
       } else {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: errorMessage ?? 'Erro ao salvar configuração',
         );
@@ -160,22 +153,18 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => ContentDialog(
         title: const Text('Confirmar Exclusão'),
         content: const Text(
           'Tem certeza que deseja excluir esta configuração? Esta ação não pode ser desfeita.',
         ),
         actions: [
-          TextButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          Button(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.delete,
-              foregroundColor: AppColors.buttonTextOnColored,
-            ),
             child: const Text('Excluir'),
           ),
         ],
@@ -195,7 +184,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
           message: 'Configuração excluída com sucesso!',
         );
       } else {
-        ErrorModal.show(
+        MessageModal.showError(
           context,
           message: provider.error ?? 'Erro ao excluir configuração',
         );
