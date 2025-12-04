@@ -152,6 +152,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
               _buildTypeSpecificFields(),
               const SizedBox(height: 16),
               _buildRetentionSection(),
+              if (_selectedType == DestinationType.local) ...[
+                const SizedBox(height: 16),
+                _buildCreateSubfoldersSwitch(),
+              ],
+              if (_selectedType == DestinationType.ftp) ...[
+                const SizedBox(height: 16),
+                _buildFtpsSection(),
+              ],
               const SizedBox(height: 16),
               _buildEnabledSwitch(),
             ],
@@ -278,6 +286,51 @@ class _DestinationDialogState extends State<DestinationDialog> {
     );
   }
 
+  Widget _buildCreateSubfoldersSwitch() {
+    return InfoLabel(
+      label: 'Criar subpastas por data',
+      child: ToggleSwitch(
+        checked: _createSubfoldersByDate,
+        onChanged: (value) {
+          setState(() {
+            _createSubfoldersByDate = value;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildFtpsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InfoLabel(
+          label: 'Usar FTPS',
+          child: ToggleSwitch(
+            checked: _useFtps,
+            onChanged: (value) {
+              setState(() {
+                _useFtps = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Conexão FTP segura (SSL/TLS)',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        ActionButton(
+          label: 'Testar Conexão FTP',
+          icon: FluentIcons.network_tower,
+          onPressed: _testFtpConnection,
+          isLoading: _isTestingFtpConnection,
+        ),
+      ],
+    );
+  }
+
   Widget _buildEnabledSwitch() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,23 +391,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: 'Criar subpastas por data',
-          child: ToggleSwitch(
-            checked: _createSubfoldersByDate,
-            onChanged: (value) {
-              setState(() {
-                _createSubfoldersByDate = value;
-              });
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Organiza backups em pastas YYYY-MM-DD',
-          style: FluentTheme.of(context).typography.caption,
         ),
       ],
     );
@@ -425,30 +461,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
             }
             return null;
           },
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: 'Usar FTPS',
-          child: ToggleSwitch(
-            checked: _useFtps,
-            onChanged: (value) {
-              setState(() {
-                _useFtps = value;
-              });
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Conexão FTP segura (SSL/TLS)',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        ActionButton(
-          label: 'Testar Conexão FTP',
-          icon: FluentIcons.network_tower,
-          onPressed: _testFtpConnection,
-          isLoading: _isTestingFtpConnection,
         ),
       ],
     );
