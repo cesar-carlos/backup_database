@@ -360,15 +360,19 @@ class SchedulerService {
       }
 
       // Atualizar próxima execução
-      final nextRunAt = _calculator.getNextRunTime(schedule);
-      final updatedSchedule = schedule.copyWith(
-        lastRunAt: DateTime.now(),
+      // Para agendamentos por intervalo, é necessário calcular nextRunAt
+      // APÓS atualizar lastRunAt, pois o cálculo depende dele
+      final now = DateTime.now();
+      final scheduleWithLastRun = schedule.copyWith(lastRunAt: now);
+      final nextRunAt = _calculator.getNextRunTime(scheduleWithLastRun);
+      final updatedSchedule = scheduleWithLastRun.copyWith(
         nextRunAt: nextRunAt,
       );
       await _scheduleRepository.update(updatedSchedule);
 
       LoggerService.info(
-        'Próxima execução de ${schedule.name} agendada para: $nextRunAt',
+        'Próxima execução de ${schedule.name} agendada para: $nextRunAt '
+        '(baseado em lastRunAt: $now, tipo: ${schedule.scheduleType})',
       );
 
       // Limpar backups antigos
