@@ -349,10 +349,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             validValue = null;
           }
 
-          return ComboBox<String>(
-            key: ValueKey(
-              'database_config_sqlserver_${_databaseType}_${sqlServerItems.length}_${_selectedDatabaseConfigId ?? 'null'}',
-            ),
+          return AppDropdown<String>(
+            label: 'Configuração de Banco',
             value: validValue,
             placeholder: Text(
               sqlServerItems.isEmpty
