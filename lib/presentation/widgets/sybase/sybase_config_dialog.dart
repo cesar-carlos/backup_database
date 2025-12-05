@@ -30,9 +30,8 @@ class SybaseConfigDialog extends StatefulWidget {
 class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _serverNameController = TextEditingController(); // Nome da máquina
-  final _databaseNameController =
-      TextEditingController(); // Nome do banco de dados
+  final _serverNameController = TextEditingController();
+  final _databaseNameController = TextEditingController();
   final _portController = TextEditingController(text: '2638');
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -93,8 +92,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
         name: _nameController.text.trim(),
         serverName: _serverNameController.text.trim(),
         databaseName: _databaseNameController.text.trim(),
-        databaseFile:
-            '', // Não necessário para backup, mas mantido para compatibilidade
+        databaseFile: '',
         port: port,
         username: _usernameController.text.trim(),
         password: _passwordController.text,
@@ -127,7 +125,6 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
     } catch (e, stackTrace) {
       if (!mounted) return;
 
-      // Log do erro para debug
       LoggerService.error('Erro ao testar conexão Sybase', e, stackTrace);
 
       final errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -157,8 +154,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       name: _nameController.text.trim(),
       serverName: _serverNameController.text.trim(),
       databaseName: _databaseNameController.text.trim(),
-      databaseFile:
-          '', // Não necessário para backup, mas mantido para compatibilidade
+      databaseFile: '',
       port: port,
       username: _usernameController.text.trim(),
       password: _passwordController.text,
