@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../application/providers/google_auth_provider.dart';
@@ -511,9 +510,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.errorBackground.withOpacity(0.3),
+        color: AppColors.errorBackground.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -548,7 +547,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ? AppColors.googleDriveSignedInBorder
               : FluentTheme.of(
                   context,
-                ).resources.controlStrokeColorDefault.withOpacity(0.3),
+                ).resources.controlStrokeColorDefault.withValues(alpha: 0.3),
         ),
       ),
       child: Column(
@@ -638,9 +637,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
       decoration: BoxDecoration(
         color: FluentTheme.of(
           context,
-        ).resources.cardBackgroundFillColorDefault.withOpacity(0.3),
+        ).resources.cardBackgroundFillColorDefault.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1022,7 +1021,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
             child: SelectableText(

@@ -72,10 +72,7 @@ class _LogsPageState extends State<LogsPage> {
       await context.read<LogProvider>().cleanOldLogs();
       if (!mounted) return;
 
-      MessageModal.showSuccess(
-        context,
-        message: 'Logs limpos com sucesso',
-      );
+      MessageModal.showSuccess(context, message: 'Logs limpos com sucesso');
     }
   }
 
@@ -182,9 +179,9 @@ class _LogsPageState extends State<LogsPage> {
                           const SizedBox(height: 16),
                           Text(
                             provider.error!,
-                            style: FluentTheme.of(context).typography.body?.copyWith(
-                                  color: AppColors.error,
-                                ),
+                            style: FluentTheme.of(
+                              context,
+                            ).typography.body?.copyWith(color: AppColors.error),
                           ),
                           const SizedBox(height: 16),
                           ActionButton(
@@ -213,14 +210,13 @@ class _LogsPageState extends State<LogsPage> {
                           child: ListView.builder(
                             controller: _scrollController,
                             itemCount:
-                                provider.logs.length + (provider.hasMore ? 1 : 0),
+                                provider.logs.length +
+                                (provider.hasMore ? 1 : 0),
                             itemBuilder: (context, index) {
                               if (index == provider.logs.length) {
                                 return const Padding(
                                   padding: EdgeInsets.all(16),
-                                  child: Center(
-                                    child: ProgressRing(),
-                                  ),
+                                  child: Center(child: ProgressRing()),
                                 );
                               }
 
@@ -267,10 +263,7 @@ class _LogsPageState extends State<LogsPage> {
                   value: provider.filterLevel,
                   placeholder: const Text('Nível'),
                   items: [
-                    ComboBoxItem(
-                      value: null,
-                      child: const Text('Todos'),
-                    ),
+                    ComboBoxItem(value: null, child: const Text('Todos')),
                     ...LogLevel.values.map(
                       (level) => ComboBoxItem<LogLevel?>(
                         value: level,
@@ -291,10 +284,7 @@ class _LogsPageState extends State<LogsPage> {
                   value: provider.filterCategory,
                   placeholder: const Text('Categoria'),
                   items: [
-                    ComboBoxItem(
-                      value: null,
-                      child: const Text('Todas'),
-                    ),
+                    ComboBoxItem(value: null, child: const Text('Todas')),
                     ...LogCategory.values.map(
                       (category) => ComboBoxItem<LogCategory?>(
                         value: category,
@@ -489,9 +479,9 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,

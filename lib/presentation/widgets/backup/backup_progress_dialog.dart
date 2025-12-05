@@ -56,19 +56,12 @@ class BackupProgressDialog extends StatelessWidget {
                   if (progress.progress != null &&
                       progress.step != BackupStep.completed) ...[
                     const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: FluentTheme.of(
-                          context,
-                        ).resources.cardBackgroundFillColorDefault,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: ProgressBar(value: progress.progress),
+                    _CustomProgressBar(
+                      value: progress.progress!.clamp(0.0, 1.0),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${(progress.progress! * 100).toStringAsFixed(0)}%',
+                      '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
                       style: FluentTheme.of(context).typography.caption,
                       textAlign: TextAlign.center,
                     ),
@@ -138,5 +131,49 @@ class BackupProgressDialog extends StatelessWidget {
       return '${minutes}m ${seconds}s';
     }
     return '${seconds}s';
+  }
+}
+
+class _CustomProgressBar extends StatelessWidget {
+  final double value;
+
+  const _CustomProgressBar({required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final clampedValue = value.clamp(0.0, 1.0);
+    final theme = FluentTheme.of(context);
+
+    return Container(
+      width: double.infinity,
+      height: 8,
+      decoration: BoxDecoration(
+        color: theme.resources.cardBackgroundFillColorDefault,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Stack(
+          children: [
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: theme.resources.cardBackgroundFillColorDefault,
+            ),
+            FractionallySizedBox(
+              widthFactor: clampedValue,
+              alignment: Alignment.centerLeft,
+              child: Container(
+                height: double.infinity,
+                decoration: BoxDecoration(
+                  color: theme.accentColor,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

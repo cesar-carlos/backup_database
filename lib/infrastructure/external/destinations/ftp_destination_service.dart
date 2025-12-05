@@ -67,6 +67,7 @@ class FtpDestinationService {
 
       // Tentar upload com retry
       Exception? lastError;
+      final List<String> failedAttempts = [];
       for (int attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           LoggerService.debug('Tentativa $attempt de $maxRetries');
@@ -121,7 +122,9 @@ class FtpDestinationService {
           );
         } catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
-          LoggerService.warning('Tentativa $attempt falhou: $e');
+          final errorMessage = 'Tentativa $attempt de $maxRetries falhou: $e';
+          failedAttempts.add(errorMessage);
+          LoggerService.warning(errorMessage);
 
           if (attempt < maxRetries) {
             await Future.delayed(AppConstants.retryDelay);
@@ -130,9 +133,13 @@ class FtpDestinationService {
       }
 
       stopwatch.stop();
+      final baseMessage = _getFtpErrorMessage(lastError, config.host);
+      final attemptsMessage = failedAttempts.isNotEmpty
+          ? '\n\nTentativas realizadas:\n${failedAttempts.join('\n')}'
+          : '';
       return rd.Failure(
         FtpFailure(
-          message: _getFtpErrorMessage(lastError, config.host),
+          message: '$baseMessage$attemptsMessage',
           originalError: lastError,
         ),
       );

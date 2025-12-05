@@ -158,6 +158,8 @@ Future<void> setupServiceLocator() async {
     () => SchedulerService(
       scheduleRepository: getIt<IScheduleRepository>(),
       destinationRepository: getIt<IBackupDestinationRepository>(),
+      backupHistoryRepository: getIt<IBackupHistoryRepository>(),
+      backupLogRepository: getIt<IBackupLogRepository>(),
       backupOrchestratorService: getIt<BackupOrchestratorService>(),
       localDestinationService: getIt<LocalDestinationService>(),
       sendToFtp: getIt<SendToFtp>(),
@@ -173,9 +175,7 @@ Future<void> setupServiceLocator() async {
   );
 
   // Auto Update Service
-  getIt.registerLazySingleton<AutoUpdateService>(
-    () => AutoUpdateService(),
-  );
+  getIt.registerLazySingleton<AutoUpdateService>(() => AutoUpdateService());
 
   // Use Cases - Scheduling
   getIt.registerLazySingleton<CreateSchedule>(
@@ -246,8 +246,6 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerFactory<AutoUpdateProvider>(
-    () => AutoUpdateProvider(
-      autoUpdateService: getIt<AutoUpdateService>(),
-    ),
+    () => AutoUpdateProvider(autoUpdateService: getIt<AutoUpdateService>()),
   );
 }

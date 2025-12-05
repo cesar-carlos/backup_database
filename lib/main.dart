@@ -9,10 +9,10 @@ import 'core/core.dart';
 import 'core/theme/theme_provider.dart';
 import 'presentation/managers/managers.dart';
 import 'presentation/providers/system_settings_provider.dart';
-import 'application/providers/providers.dart';
 import 'application/services/scheduler_service.dart';
 import 'application/services/auto_update_service.dart';
 import 'domain/repositories/repositories.dart';
+import 'application/providers/providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

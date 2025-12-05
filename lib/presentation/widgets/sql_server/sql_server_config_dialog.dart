@@ -270,10 +270,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           onPressed: _testConnection,
           isLoading: _isTestingConnection,
         ),
-        SaveButton(
-          onPressed: _save,
-          isEditing: isEditing,
-        ),
+        SaveButton(onPressed: _save, isEditing: isEditing),
       ],
     );
   }
@@ -303,7 +300,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             const SizedBox(width: 16),
             Expanded(
               flex: 1,
-              child:               NumericField(
+              child: NumericField(
                 controller: _portController,
                 label: 'Porta',
                 hint: '1433',
@@ -337,10 +334,10 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: AppColors.primary.withOpacity(0.3),
+                        color: AppColors.primary.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
@@ -438,7 +435,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             const SizedBox(width: 16),
             Expanded(
               flex: 1,
-              child:               NumericField(
+              child: NumericField(
                 controller: _portController,
                 label: 'Porta',
                 hint: '2638',
@@ -468,9 +465,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -708,7 +705,10 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
     if (_selectedType == DatabaseType.sybase &&
         _databaseNameController.text.trim().isEmpty) {
-      MessageModal.showError(context, message: 'Informe o nome do banco de dados');
+      MessageModal.showError(
+        context,
+        message: 'Informe o nome do banco de dados',
+      );
       return;
     }
 

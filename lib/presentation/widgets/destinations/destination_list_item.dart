@@ -37,7 +37,7 @@ class DestinationListItem extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _getTypeColor(destination.type).withOpacity(0.1),
+                  color: _getTypeColor(destination.type).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -99,14 +99,26 @@ class DestinationListItem extends StatelessWidget {
       final config = destination.config;
       switch (destination.type) {
         case DestinationType.local:
-          final path = RegExp(r'"path"\s*:\s*"([^"]*)"').firstMatch(config)?.group(1) ?? '';
+          final path =
+              RegExp(r'"path"\s*:\s*"([^"]*)"').firstMatch(config)?.group(1) ??
+              '';
           return path;
         case DestinationType.ftp:
-          final host = RegExp(r'"host"\s*:\s*"([^"]*)"').firstMatch(config)?.group(1) ?? '';
-          final remotePath = RegExp(r'"remotePath"\s*:\s*"([^"]*)"').firstMatch(config)?.group(1) ?? '';
+          final host =
+              RegExp(r'"host"\s*:\s*"([^"]*)"').firstMatch(config)?.group(1) ??
+              '';
+          final remotePath =
+              RegExp(
+                r'"remotePath"\s*:\s*"([^"]*)"',
+              ).firstMatch(config)?.group(1) ??
+              '';
           return '$host:$remotePath';
         case DestinationType.googleDrive:
-          final folderName = RegExp(r'"folderName"\s*:\s*"([^"]*)"').firstMatch(config)?.group(1) ?? '';
+          final folderName =
+              RegExp(
+                r'"folderName"\s*:\s*"([^"]*)"',
+              ).firstMatch(config)?.group(1) ??
+              '';
           return 'Pasta: $folderName';
       }
     } catch (e) {
@@ -114,4 +126,3 @@ class DestinationListItem extends StatelessWidget {
     }
   }
 }
-

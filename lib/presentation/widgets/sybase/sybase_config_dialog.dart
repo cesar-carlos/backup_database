@@ -262,10 +262,10 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: AppColors.primary.withOpacity(0.3),
+                      color: AppColors.primary.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -299,9 +299,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                   prefixIcon: const Icon(FluentIcons.contact),
                 ),
                 const SizedBox(height: 16),
-                PasswordField(
-                  controller: _passwordController,
-                ),
+                PasswordField(controller: _passwordController),
                 const SizedBox(height: 16),
                 InfoLabel(
                   label: 'Habilitado',
@@ -332,10 +330,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
           onPressed: _testConnection,
           isLoading: _isTestingConnection,
         ),
-        SaveButton(
-          onPressed: _save,
-          isEditing: isEditing,
-        ),
+        SaveButton(onPressed: _save, isEditing: isEditing),
       ],
     );
   }

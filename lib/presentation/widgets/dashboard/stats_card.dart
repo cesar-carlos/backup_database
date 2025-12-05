@@ -36,7 +36,7 @@ class StatsCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: cardColor.withOpacity(0.1),
+                  color: cardColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: iconSvg != null
@@ -57,15 +57,12 @@ class StatsCard extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             value,
-            style: FluentTheme.of(context).typography.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: FluentTheme.of(
+              context,
+            ).typography.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
-          Text(
-            title,
-            style: FluentTheme.of(context).typography.body,
-          ),
+          Text(title, style: FluentTheme.of(context).typography.body),
         ],
       ),
     );

@@ -39,7 +39,7 @@ class ConfigListItem extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: enabled
-              ? AppColors.primary.withOpacity(0.2)
+              ? AppColors.primary.withValues(alpha: 0.2)
               : FluentTheme.of(context).resources.cardStrokeColorDefault,
           child: Icon(icon, color: effectiveIconColor),
         ),

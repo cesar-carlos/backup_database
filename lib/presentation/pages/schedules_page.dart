@@ -62,26 +62,31 @@ class _SchedulesPageState extends State<SchedulesPage> {
                     return AppCard(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              FluentIcons.error,
-                              size: 64,
-                              color: AppColors.error,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              provider.error!,
-                              style: FluentTheme.of(context).typography.bodyLarge,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            Button(
-                              onPressed: () => provider.loadSchedules(),
-                              child: const Text('Tentar Novamente'),
-                            ),
-                          ],
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                FluentIcons.error,
+                                size: 64,
+                                color: AppColors.error,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                provider.error!,
+                                style: FluentTheme.of(
+                                  context,
+                                ).typography.bodyLarge,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              Button(
+                                onPressed: () => provider.loadSchedules(),
+                                child: const Text('Tentar Novamente'),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
