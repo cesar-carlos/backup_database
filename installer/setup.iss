@@ -1,4 +1,4 @@
-﻿#define MyAppName "Backup Database"
+#define MyAppName "Backup Database"
 #define MyAppVersion "1.0.21"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
@@ -25,7 +25,7 @@ WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64
 ArchitecturesAllowed=x64
-MinVersion=10.0
+MinVersion=6.3
 CloseApplications=yes
 CloseApplicationsFilter=*.exe
 
