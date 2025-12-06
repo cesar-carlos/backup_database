@@ -36,7 +36,7 @@ Usuários precisam de uma ferramenta confiável que permita:
 ### 1.3 Sistema Operacional
 
 - Windows 10 ou superior (64 bits)
-- Windows Server 2012 ou superior (64 bits)
+- Windows Server 2012 R2 ou superior (64 bits)
 - Plataforma: **Somente 64 bits**
 - Compatível com ambientes de servidor (execução como serviço)
 

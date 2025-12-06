@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/core.dart';
 import 'core/theme/theme_provider.dart';
+import 'infrastructure/external/system/os_version_checker.dart';
 import 'presentation/managers/managers.dart';
 import 'presentation/providers/system_settings_provider.dart';
 import 'application/services/scheduler_service.dart';
@@ -19,6 +20,28 @@ Future<void> main() async {
 
   // Inicializar logger PRIMEIRO (antes de qualquer outro serviço)
   LoggerService.init();
+
+  // Verificar compatibilidade do sistema operacional
+  if (!OsVersionChecker.isCompatible()) {
+    LoggerService.warning(
+      '⚠️ Sistema operacional pode não ser compatível. Requisito: Windows 8.1 (6.3) / Server 2012 R2 ou superior.',
+    );
+    LoggerService.warning(
+      'O aplicativo pode não funcionar corretamente em versões mais antigas do Windows.',
+    );
+  } else {
+    final versionInfo = OsVersionChecker.getVersionInfo();
+    versionInfo.fold(
+      (info) {
+        LoggerService.info(
+          '✅ Sistema operacional compatível: ${info.versionName} (${info.majorVersion}.${info.minorVersion})',
+        );
+      },
+      (failure) {
+        LoggerService.warning('Não foi possível verificar versão do SO');
+      },
+    );
+  }
 
   // O mutex já foi verificado no C++ antes do Flutter iniciar
   // Se chegou aqui, o C++ já permitiu a execução, então é a primeira instância

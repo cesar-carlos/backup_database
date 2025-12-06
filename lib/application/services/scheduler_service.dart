@@ -195,24 +195,32 @@ class SchedulerService {
         );
         outputDirectory = localConfig.path;
       } else {
-        // Se não houver destino local, usar pasta temporária acessível pelo SQL Server
-        // O SQL Server precisa de permissão para escrever, então usamos uma pasta no sistema
-        // ou criamos uma pasta específica para backups temporários
-        final systemTemp =
-            Platform.environment['TEMP'] ??
-            Platform.environment['TMP'] ??
-            'C:\\Temp';
-
-        // Criar pasta específica para backups temporários
-        final backupTempDir = Directory('$systemTemp\\BackupDatabase');
-        if (!await backupTempDir.exists()) {
-          await backupTempDir.create(recursive: true);
+        // Usar pasta de backup configurada no agendamento
+        final backupDir = Directory(schedule.backupFolder);
+        if (!await backupDir.exists()) {
+          try {
+            await backupDir.create(recursive: true);
+          } catch (e) {
+            final errorMessage =
+                'Erro ao criar pasta de backup: ${schedule.backupFolder}';
+            LoggerService.error(errorMessage, e);
+            return rd.Failure(ValidationFailure(message: errorMessage));
+          }
         }
 
-        outputDirectory = backupTempDir.path;
+        // Validar permissão de escrita
+        final hasPermission = await _checkWritePermission(backupDir);
+        if (!hasPermission) {
+          final errorMessage =
+              'Sem permissão de escrita na pasta de backup: ${schedule.backupFolder}';
+          LoggerService.error(errorMessage);
+          return rd.Failure(ValidationFailure(message: errorMessage));
+        }
+
+        outputDirectory = backupDir.path;
         shouldDeleteTempFile = true;
         LoggerService.info(
-          'Nenhum destino local configurado, usando pasta temporária para SQL Server: $outputDirectory',
+          'Nenhum destino local configurado, usando pasta de backup do agendamento: $outputDirectory',
         );
       }
 
@@ -635,6 +643,33 @@ class SchedulerService {
   }
 
   bool get isRunning => _isRunning;
+
+  Future<bool> _checkWritePermission(Directory directory) async {
+    try {
+      // Tentar criar um arquivo temporário para testar permissão
+      final testFileName =
+          '.backup_permission_test_${DateTime.now().millisecondsSinceEpoch}';
+      final testFile = File(
+        '${directory.path}${Platform.pathSeparator}$testFileName',
+      );
+
+      // Tentar escrever no arquivo
+      await testFile.writeAsString('test');
+
+      // Se conseguiu escrever, deletar o arquivo
+      if (await testFile.exists()) {
+        await testFile.delete();
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      LoggerService.warning(
+        'Erro ao verificar permissão de escrita na pasta ${directory.path}: $e',
+      );
+      return false;
+    }
+  }
 
   Future<void> _log(String historyId, String levelStr, String message) async {
     try {

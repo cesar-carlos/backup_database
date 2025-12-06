@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -199,6 +199,33 @@ class AppDatabase extends _$AppDatabase {
           } catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v5 para email_configs_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 6) {
+          // Migração para versão 6: Adicionar coluna backup_folder na tabela schedules
+          try {
+            final columns = await (customSelect(
+              "PRAGMA table_info(schedules_table)",
+            ).get());
+            final hasBackupFolderColumn = columns.any(
+              (row) => row.data['name'] == 'backup_folder',
+            );
+
+            if (!hasBackupFolderColumn) {
+              await customStatement(
+                "ALTER TABLE schedules_table ADD COLUMN backup_folder TEXT NOT NULL DEFAULT ''",
+              );
+              LoggerService.info(
+                'Migração v6: Coluna backup_folder adicionada à schedules_table',
+              );
+            }
+          } catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v6 para schedules_table',
               e,
               stackTrace,
             );

@@ -8,7 +8,7 @@ Este guia passo a passo irá ajudá-lo a instalar o **Backup Database** no Windo
 
 Antes de começar, certifique-se de ter:
 
-1. **Windows 10** ou superior (64 bits)
+1. **Windows 10 ou superior / Windows Server 2012 R2 ou superior** (64 bits)
 2. **Permissões de Administrador** para instalação
 3. **Conexão com a Internet** (para baixar dependências, se necessário)
 4. **Espaço em disco** suficiente (mínimo 500 MB)
@@ -70,6 +70,7 @@ O instalador irá verificar automaticamente:
 - **dbbackup.exe** (Sybase): Verifica se está disponível no PATH
 
 **Importante**: Se alguma dependência não for encontrada, você verá um aviso. Você pode:
+
 - Continuar a instalação e configurar depois
 - Cancelar e instalar as dependências primeiro
 
@@ -105,6 +106,7 @@ Se você viu avisos sobre dependências faltando durante a instalação:
 #### Para SQL Server (sqlcmd):
 
 1. **Se você já tem SQL Server instalado**:
+
    - Verifique se `sqlcmd.exe` está no PATH
    - Consulte [PATH_SETUP.md](PATH_SETUP.md) para instruções
 
@@ -144,15 +146,18 @@ Se ambos os comandos mostrarem a ajuda, está tudo configurado!
 Agora você pode configurar o Backup Database:
 
 1. **Configurar conexões com bancos de dados**:
+
    - SQL Server: Vá em **Configurações > SQL Server**
    - Sybase: Vá em **Configurações > Sybase**
 
 2. **Configurar destinos de backup**:
+
    - Local: Vá em **Configurações > Destinos**
    - FTP: Configure servidor FTP
    - Google Drive: Configure autenticação OAuth2
 
 3. **Criar agendamentos**:
+
    - Vá em **Agendamentos**
    - Clique em **"Novo Agendamento"**
    - Configure a frequência e horários
@@ -196,6 +201,7 @@ Para desinstalar o Backup Database:
 ### "Você precisa de permissões de administrador"
 
 **Solução**:
+
 1. Feche o instalador
 2. Clique com o botão direito no arquivo `.exe`
 3. Selecione **"Executar como administrador"**
@@ -203,6 +209,7 @@ Para desinstalar o Backup Database:
 ### "Visual C++ Redistributables falhou ao instalar"
 
 **Solução**:
+
 1. Baixe manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe
 2. Execute o instalador como administrador
 3. Tente instalar o Backup Database novamente
@@ -210,11 +217,13 @@ Para desinstalar o Backup Database:
 ### "Erro ao copiar arquivos"
 
 **Possíveis causas**:
+
 - Antivírus bloqueando
 - Permissões insuficientes
 - Disco cheio
 
 **Solução**:
+
 1. Desative temporariamente o antivírus
 2. Execute como administrador
 3. Verifique espaço em disco
@@ -223,6 +232,7 @@ Para desinstalar o Backup Database:
 ### "Aplicativo não inicia após instalação"
 
 **Solução**:
+
 1. Verifique se o Visual C++ Redistributables está instalado
 2. Verifique os logs em: `C:\ProgramData\BackupDatabase\logs\`
 3. Tente executar como administrador
@@ -256,4 +266,3 @@ Se você encontrar problemas durante a instalação:
 ---
 
 **Boa sorte com seus backups! 🎉**
-

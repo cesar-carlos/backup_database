@@ -9,6 +9,7 @@ class SchedulesTable extends Table {
       text()(); // 'daily', 'weekly', 'monthly', 'interval'
   TextColumn get scheduleConfig => text()(); // JSON
   TextColumn get destinationIds => text()(); // JSON array
+  TextColumn get backupFolder => text().withDefault(const Constant(''))();
   BoolColumn get compressBackup =>
       boolean().withDefault(const Constant(true))();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();

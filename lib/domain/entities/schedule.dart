@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 
 enum ScheduleType { daily, weekly, monthly, interval }
+
 enum DatabaseType { sqlServer, sybase }
 
 class Schedule {
@@ -11,6 +12,7 @@ class Schedule {
   final ScheduleType scheduleType;
   final String scheduleConfig; // JSON com configurações específicas
   final List<String> destinationIds;
+  final String backupFolder;
   final bool compressBackup;
   final bool enabled;
   final DateTime? lastRunAt;
@@ -26,15 +28,16 @@ class Schedule {
     required this.scheduleType,
     required this.scheduleConfig,
     required this.destinationIds,
+    required this.backupFolder,
     this.compressBackup = true,
     this.enabled = true,
     this.lastRunAt,
     this.nextRunAt,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   Schedule copyWith({
     String? id,
@@ -44,6 +47,7 @@ class Schedule {
     ScheduleType? scheduleType,
     String? scheduleConfig,
     List<String>? destinationIds,
+    String? backupFolder,
     bool? compressBackup,
     bool? enabled,
     DateTime? lastRunAt,
@@ -59,6 +63,7 @@ class Schedule {
       scheduleType: scheduleType ?? this.scheduleType,
       scheduleConfig: scheduleConfig ?? this.scheduleConfig,
       destinationIds: destinationIds ?? this.destinationIds,
+      backupFolder: backupFolder ?? this.backupFolder,
       compressBackup: compressBackup ?? this.compressBackup,
       enabled: enabled ?? this.enabled,
       lastRunAt: lastRunAt ?? this.lastRunAt,
@@ -106,10 +111,10 @@ class WeeklyScheduleConfig {
   });
 
   Map<String, dynamic> toJson() => {
-        'daysOfWeek': daysOfWeek,
-        'hour': hour,
-        'minute': minute,
-      };
+    'daysOfWeek': daysOfWeek,
+    'hour': hour,
+    'minute': minute,
+  };
 
   factory WeeklyScheduleConfig.fromJson(Map<String, dynamic> json) {
     return WeeklyScheduleConfig(
@@ -132,10 +137,10 @@ class MonthlyScheduleConfig {
   });
 
   Map<String, dynamic> toJson() => {
-        'daysOfMonth': daysOfMonth,
-        'hour': hour,
-        'minute': minute,
-      };
+    'daysOfMonth': daysOfMonth,
+    'hour': hour,
+    'minute': minute,
+  };
 
   factory MonthlyScheduleConfig.fromJson(Map<String, dynamic> json) {
     return MonthlyScheduleConfig(
@@ -159,4 +164,3 @@ class IntervalScheduleConfig {
     );
   }
 }
-

@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/core.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../application/providers/providers.dart';
 import '../../../domain/entities/schedule.dart';
@@ -32,6 +35,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   final _nameController = TextEditingController();
   final _intervalMinutesController = TextEditingController();
+  final _backupFolderController = TextEditingController();
 
   DatabaseType _databaseType = DatabaseType.sqlServer;
   String? _selectedDatabaseConfigId;
@@ -58,6 +62,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   void initState() {
     super.initState();
     _intervalMinutesController.text = _intervalMinutes.toString();
+    _backupFolderController.text = _getDefaultBackupFolder();
 
     if (widget.schedule != null) {
       _nameController.text = widget.schedule!.name;
@@ -67,6 +72,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
       _isEnabled = widget.schedule!.enabled;
+      _backupFolderController.text = widget.schedule!.backupFolder.isNotEmpty
+          ? widget.schedule!.backupFolder
+          : _getDefaultBackupFolder();
 
       _parseScheduleConfig(widget.schedule!.scheduleConfig);
     }
@@ -74,6 +82,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
+  }
+
+  String _getDefaultBackupFolder() {
+    final systemTemp =
+        Platform.environment['TEMP'] ??
+        Platform.environment['TMP'] ??
+        'C:\\Temp';
+    return '$systemTemp\\BackupDatabase';
   }
 
   void _parseScheduleConfig(String configJson) {
@@ -144,10 +160,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   }
 
   @override
-  @override
   void dispose() {
     _nameController.dispose();
     _intervalMinutesController.dispose();
+    _backupFolderController.dispose();
     super.dispose();
   }
 
@@ -251,6 +267,41 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                       _buildSectionTitle('Destinos'),
                       const SizedBox(height: 12),
                       _buildDestinationSelector(),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Pasta de Backup'),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: AppTextField(
+                              controller: _backupFolderController,
+                              label: 'Pasta para Armazenar Backup',
+                              hint: 'C:\\Backups',
+                              prefixIcon: const Icon(FluentIcons.folder),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Pasta de backup é obrigatória';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 24),
+                            child: IconButton(
+                              icon: const Icon(FluentIcons.folder_open),
+                              onPressed: _selectBackupFolder,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Pasta onde o arquivo de backup será gerado antes de enviar aos destinos',
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Opções'),
                       const SizedBox(height: 12),
@@ -694,7 +745,106 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
   }
 
-  void _save() {
+  Future<void> _selectBackupFolder() async {
+    final result = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Selecionar pasta de backup',
+    );
+    if (result != null) {
+      setState(() {
+        _backupFolderController.text = result;
+      });
+    }
+  }
+
+  Future<bool> _validateBackupFolder() async {
+    final path = _backupFolderController.text.trim();
+    if (path.isEmpty) {
+      MessageModal.showWarning(
+        context,
+        message: 'Pasta de backup é obrigatória',
+      );
+      return false;
+    }
+
+    final directory = Directory(path);
+    if (!await directory.exists()) {
+      final shouldCreate = await showDialog<bool>(
+        context: context,
+        builder: (context) => ContentDialog(
+          title: const Text('Pasta não existe'),
+          content: Text('A pasta "$path" não existe. Deseja criá-la?'),
+          actions: [
+            Button(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Criar Pasta'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldCreate == true) {
+        try {
+          await directory.create(recursive: true);
+        } catch (e) {
+          if (mounted) {
+            MessageModal.showError(context, message: 'Erro ao criar pasta: $e');
+          }
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+
+    // Validar permissão de escrita
+    final hasPermission = await _checkWritePermission(directory);
+    if (!hasPermission) {
+      if (mounted) {
+        MessageModal.showError(
+          context,
+          message:
+              'Sem permissão de escrita na pasta selecionada.\n'
+              'Verifique as permissões do diretório.',
+        );
+      }
+      return false;
+    }
+
+    return true;
+  }
+
+  Future<bool> _checkWritePermission(Directory directory) async {
+    try {
+      // Tentar criar um arquivo temporário para testar permissão
+      final testFileName =
+          '.backup_permission_test_${DateTime.now().millisecondsSinceEpoch}';
+      final testFile = File(
+        '${directory.path}${Platform.pathSeparator}$testFileName',
+      );
+
+      // Tentar escrever no arquivo
+      await testFile.writeAsString('test');
+
+      // Se conseguiu escrever, deletar o arquivo
+      if (await testFile.exists()) {
+        await testFile.delete();
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      LoggerService.warning(
+        'Erro ao verificar permissão de escrita na pasta ${directory.path}: $e',
+      );
+      return false;
+    }
+  }
+
+  void _save() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -704,6 +854,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         context,
         message: 'Selecione pelo menos um destino',
       );
+      return;
+    }
+
+    final isValidFolder = await _validateBackupFolder();
+    if (!isValidFolder) {
       return;
     }
 
@@ -739,6 +894,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       scheduleType: _scheduleType,
       scheduleConfig: scheduleConfigJson,
       destinationIds: _selectedDestinationIds,
+      backupFolder: _backupFolderController.text.trim(),
       compressBackup: _compressBackup,
       enabled: _isEnabled,
       lastRunAt: widget.schedule?.lastRunAt,

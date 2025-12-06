@@ -5,6 +5,7 @@ import '../utils/logger_service.dart';
 import '../../infrastructure/http/api_client.dart';
 import '../../infrastructure/datasources/local/database.dart';
 import '../../domain/repositories/repositories.dart';
+import '../../domain/services/services.dart';
 import '../../infrastructure/repositories/repositories.dart';
 import '../../infrastructure/external/external.dart';
 import '../../domain/use_cases/use_cases.dart';
@@ -170,7 +171,7 @@ Future<void> setupServiceLocator() async {
   );
 
   // Windows Task Scheduler
-  getIt.registerLazySingleton<WindowsTaskSchedulerService>(
+  getIt.registerLazySingleton<ITaskSchedulerService>(
     () => WindowsTaskSchedulerService(),
   );
 
