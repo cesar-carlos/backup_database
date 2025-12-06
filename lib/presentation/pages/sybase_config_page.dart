@@ -32,7 +32,7 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
             CommandBarButton(
               icon: const Icon(FluentIcons.add),
               label: const Text('Nova Configuração'),
-              onPressed: () => _showConfigDialog(context, null),
+              onPressed: () => _showConfigDialog(null),
             ),
           ],
         ),
@@ -81,15 +81,15 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
                         icon: FluentIcons.database,
                         message: 'Nenhuma configuração de Sybase cadastrada',
                         actionLabel: 'Adicionar Configuração',
-                        onAction: () => _showConfigDialog(context, null),
+                        onAction: () => _showConfigDialog(null),
                       ),
                     );
                   }
 
                   return SybaseConfigList(
                     configs: provider.configs,
-                    onEdit: (config) => _showConfigDialog(context, config),
-                    onDelete: (id) => _confirmDelete(context, id),
+                    onEdit: (config) => _showConfigDialog(config),
+                    onDelete: (id) => _confirmDelete(id),
                     onToggleEnabled: (id, enabled) =>
                         provider.toggleEnabled(id, enabled),
                   );
@@ -102,13 +102,12 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
     );
   }
 
-  Future<void> _showConfigDialog(
-    BuildContext context,
-    SybaseConfig? config,
-  ) async {
+  Future<void> _showConfigDialog(SybaseConfig? config) async {
     final result = await SybaseConfigDialog.show(context, config: config);
 
-    if (result != null && mounted) {
+    if (!mounted) return;
+
+    if (result != null) {
       final provider = context.read<SybaseConfigProvider>();
       final success = config == null
           ? await provider.createConfig(result)
@@ -132,7 +131,7 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, String id) async {
+  Future<void> _confirmDelete(String id) async {
     if (!mounted) return;
     final provider = context.read<SybaseConfigProvider>();
 

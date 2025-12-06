@@ -6,8 +6,8 @@ import '../../application/providers/sql_server_config_provider.dart';
 import '../../application/providers/sybase_config_provider.dart';
 import '../../domain/entities/sql_server_config.dart';
 import '../../domain/entities/sybase_config.dart';
-import '../widgets/common/common.dart';
 import '../widgets/sql_server/sql_server.dart';
+import '../widgets/common/common.dart';
 
 class SqlServerConfigPage extends StatefulWidget {
   const SqlServerConfigPage({super.key});
@@ -34,7 +34,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
             CommandBarButton(
               icon: const Icon(FluentIcons.add),
               label: const Text('Nova Configuração'),
-              onPressed: () => _showConfigDialog(context, null),
+              onPressed: () => _showConfigDialog(null),
             ),
           ],
         ),
@@ -84,15 +84,15 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
                         message:
                             'Nenhuma configuração de SQL Server cadastrada',
                         actionLabel: 'Adicionar Configuração',
-                        onAction: () => _showConfigDialog(context, null),
+                        onAction: () => _showConfigDialog(null),
                       ),
                     );
                   }
 
                   return SqlServerConfigList(
                     configs: provider.configs,
-                    onEdit: (config) => _showConfigDialog(context, config),
-                    onDelete: (id) => _confirmDelete(context, id),
+                    onEdit: (config) => _showConfigDialog(config),
+                    onDelete: (id) => _confirmDelete(id),
                     onToggleEnabled: (id, enabled) =>
                         provider.toggleEnabled(id, enabled),
                   );
@@ -105,10 +105,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
     );
   }
 
-  Future<void> _showConfigDialog(
-    BuildContext context,
-    SqlServerConfig? config,
-  ) async {
+  Future<void> _showConfigDialog(SqlServerConfig? config) async {
     final result = await SqlServerConfigDialog.show(context, config: config);
 
     if (result != null && mounted) {
@@ -147,7 +144,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, String id) async {
+  Future<void> _confirmDelete(String id) async {
     if (!mounted) return;
     final provider = context.read<SqlServerConfigProvider>();
 

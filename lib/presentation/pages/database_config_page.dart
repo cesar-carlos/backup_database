@@ -47,7 +47,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
             CommandBarButton(
               icon: const Icon(FluentIcons.add),
               label: const Text('Nova Configuração'),
-              onPressed: () => _showConfigDialog(context, null),
+              onPressed: () => _showConfigDialog(null),
             ),
           ],
         ),
@@ -96,7 +96,9 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                                 sqlProvider.error ??
                                     sybaseProvider.error ??
                                     'Erro desconhecido',
-                                style: FluentTheme.of(context).typography.bodyLarge,
+                                style: FluentTheme.of(
+                                  context,
+                                ).typography.bodyLarge,
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 16),
@@ -118,7 +120,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                           message:
                               'Nenhuma configuração de banco de dados cadastrada',
                           actionLabel: 'Adicionar Configuração',
-                          onAction: () => _showConfigDialog(context, null),
+                          onAction: () => _showConfigDialog(null),
                         ),
                       );
                     }
@@ -129,17 +131,14 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                         if (sqlProvider.configs.isNotEmpty) ...[
                           Text(
                             'SQL Server',
-                            style: FluentTheme.of(context).typography.subtitle?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: FluentTheme.of(context).typography.subtitle
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 12),
                           SqlServerConfigList(
                             configs: sqlProvider.configs,
-                            onEdit: (config) =>
-                                _showConfigDialog(context, config),
-                            onDelete: (id) =>
-                                _confirmDeleteSqlServer(context, id),
+                            onEdit: (config) => _showConfigDialog(config),
+                            onDelete: (id) => _confirmDeleteSqlServer(id),
                             onToggleEnabled: (id, enabled) =>
                                 sqlProvider.toggleEnabled(id, enabled),
                           ),
@@ -149,16 +148,14 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                         if (sybaseProvider.configs.isNotEmpty) ...[
                           Text(
                             'Sybase SQL Anywhere',
-                            style: FluentTheme.of(context).typography.subtitle?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: FluentTheme.of(context).typography.subtitle
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 12),
                           SybaseConfigList(
                             configs: sybaseProvider.configs,
-                            onEdit: (config) =>
-                                _showSybaseConfigDialog(context, config),
-                            onDelete: (id) => _confirmDeleteSybase(context, id),
+                            onEdit: (config) => _showSybaseConfigDialog(config),
+                            onDelete: (id) => _confirmDeleteSybase(id),
                             onToggleEnabled: (id, enabled) =>
                                 sybaseProvider.toggleEnabled(id, enabled),
                           ),
@@ -175,10 +172,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     );
   }
 
-  Future<void> _showConfigDialog(
-    BuildContext context,
-    SqlServerConfig? config,
-  ) async {
+  Future<void> _showConfigDialog(SqlServerConfig? config) async {
     final result = await SqlServerConfigDialog.show(context, config: config);
 
     if (result != null && mounted) {
@@ -217,10 +211,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     }
   }
 
-  Future<void> _showSybaseConfigDialog(
-    BuildContext context,
-    SybaseConfig? config,
-  ) async {
+  Future<void> _showSybaseConfigDialog(SybaseConfig? config) async {
     final result = await SybaseConfigDialog.show(context, config: config);
 
     if (result != null && mounted) {
@@ -247,7 +238,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     }
   }
 
-  Future<void> _confirmDeleteSqlServer(BuildContext context, String id) async {
+  Future<void> _confirmDeleteSqlServer(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
@@ -288,7 +279,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     }
   }
 
-  Future<void> _confirmDeleteSybase(BuildContext context, String id) async {
+  Future<void> _confirmDeleteSybase(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(

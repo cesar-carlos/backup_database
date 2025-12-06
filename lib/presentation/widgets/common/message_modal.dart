@@ -136,9 +136,9 @@ class MessageModal extends StatelessWidget {
             child: Text(
               title,
               style: FluentTheme.of(context).typography.title?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                  ),
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -146,10 +146,7 @@ class MessageModal extends StatelessWidget {
       content: SizedBox(
         width: 600,
         child: SingleChildScrollView(
-          child: Text(
-            message,
-            style: FluentTheme.of(context).typography.body,
-          ),
+          child: Text(message, style: FluentTheme.of(context).typography.body),
         ),
       ),
       actions: [

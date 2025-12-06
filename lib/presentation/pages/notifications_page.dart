@@ -19,7 +19,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
   late final TextEditingController _recipientEmailController;
-  
+
   bool _notifyOnSuccess = true;
   bool _notifyOnError = true;
   bool _attachLog = false;
@@ -52,11 +52,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   void _loadConfig() {
     final provider = context.read<NotificationProvider>();
-    
+
     if (provider.isLoading) {
       return;
     }
-    
+
     final config = provider.emailConfig;
 
     if (config != null) {
@@ -82,10 +82,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     final smtpPort = int.tryParse(_smtpPortController.text.trim());
     if (smtpPort == null) {
-      MessageModal.showError(
-        context,
-        message: 'Porta SMTP inválida',
-      );
+      MessageModal.showError(context, message: 'Porta SMTP inválida');
       return;
     }
 
@@ -218,9 +215,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         const SizedBox(height: 16),
                         Text(
                           'Quando enviar notificações',
-                          style: FluentTheme.of(context).typography.subtitle?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: FluentTheme.of(context).typography.subtitle
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 16),
                         InfoLabel(
@@ -251,9 +247,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         const SizedBox(height: 16),
                         Text(
                           'Detalhamento',
-                          style: FluentTheme.of(context).typography.subtitle?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: FluentTheme.of(context).typography.subtitle
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 16),
                         InfoLabel(
@@ -289,12 +284,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                           if (success) {
                                             MessageModal.showSuccess(
                                               context,
-                                              message: 'Teste de conexão realizado com sucesso!',
+                                              message:
+                                                  'Teste de conexão realizado com sucesso!',
                                             );
                                           } else {
                                             MessageModal.showError(
                                               context,
-                                              message: provider.error ?? 'Erro ao testar conexão',
+                                              message:
+                                                  provider.error ??
+                                                  'Erro ao testar conexão',
                                             );
                                           }
                                         },
