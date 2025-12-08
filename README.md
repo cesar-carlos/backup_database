@@ -5,6 +5,7 @@ Sistema completo de backup automático para SQL Server e Sybase SQL Anywhere (AS
 ## 🎯 Funcionalidades
 
 ### Backup de Bancos de Dados
+
 - ✅ SQL Server (via `sqlcmd`)
 - ✅ Sybase SQL Anywhere 16 (via `dbbackup.exe`)
 - ✅ Compressão ZIP automática
@@ -12,24 +13,28 @@ Sistema completo de backup automático para SQL Server e Sybase SQL Anywhere (AS
 - ✅ Verificação de espaço em disco
 
 ### Destinos de Backup
+
 - ✅ Local (diretório do sistema)
 - ✅ FTP/FTPS
 - ✅ Google Drive (via OAuth2)
 - ✅ Limpeza automática de backups antigos
 
 ### Agendamento
+
 - ✅ Agendamento diário, semanal, mensal
 - ✅ Agendamento por intervalo (horas)
 - ✅ Execução em background
 - ✅ Integração com Windows Task Scheduler
 
 ### Notificações
+
 - ✅ E-mail (SMTP)
 - ✅ Notificação de sucesso, erro e avisos
 - ✅ Anexo automático de logs
 - ✅ Templates personalizados
 
 ### Interface
+
 - ✅ Dashboard com estatísticas
 - ✅ Configuração de bancos de dados
 - ✅ Configuração de destinos
@@ -170,6 +175,7 @@ LOG_LEVEL=info
 3. Clique em **Executar Agora**
 
 Ou via System Tray:
+
 1. Clique com botão direito no ícone na bandeja
 2. Selecione **Executar Backup Agora**
 
@@ -257,6 +263,7 @@ O executável estará em: `build/windows/x64/runner/Release/backup_database.exe`
 ## 📝 Logs
 
 Logs são armazenados em:
+
 - **Windows**: `C:\ProgramData\BackupDatabase\logs\`
 - **Retenção**: 90 dias (configurável)
 - **Níveis**: DEBUG, INFO, WARNING, ERROR
@@ -319,4 +326,4 @@ Contribuições são bem-vindas! Por favor:
 
 ---
 
-**Desenvolvido com ❤️ para facilitar backups no Windows**
+**Desenvolvido para facilitar backups no Windows**
