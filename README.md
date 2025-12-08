@@ -208,24 +208,146 @@ backup_database.exe --minimized
 
 ## 🪟 Windows Service
 
-Para instalar como serviço do Windows (usando NSSM):
+O Backup Database pode ser instalado como serviço do Windows usando o **NSSM (Non-Sucking Service Manager)**. Isso permite que o aplicativo execute automaticamente em background, mesmo sem usuário logado.
+
+### Pré-requisitos
+
+1. **Instalar o aplicativo** normalmente (via instalador)
+2. **Configurar backups** antes de instalar como serviço:
+   - Configurar conexões com bancos de dados
+   - Configurar destinos de backup
+   - Criar agendamentos de backup
+   - (Opcional) Configurar notificações por e-mail
+
+### Instalação do NSSM
+
+1. Baixe o NSSM: https://nssm.cc/download
+2. Extraia o arquivo ZIP
+3. Copie `nssm.exe` (versão 64-bit) para uma pasta no PATH ou use o caminho completo
+
+### Instalação do Serviço
+
+Execute os seguintes comandos no **PowerShell como Administrador**:
 
 ```bash
-# Instalar NSSM
-# https://nssm.cc/download
+# 1. Instalar o serviço (com --minimized recomendado)
+nssm install BackupDatabaseService "C:\Program Files\Backup Database\backup_database.exe" --minimized
 
-# Instalar serviço
-nssm install BackupDatabaseService "C:\Program Files\BackupDatabase\backup_database.exe"
+# 2. Configurar diretório de trabalho
+nssm set BackupDatabaseService AppDirectory "C:\Program Files\Backup Database"
 
-# Configurar
-nssm set BackupDatabaseService AppDirectory "C:\Program Files\BackupDatabase"
+# 3. Configurar nome de exibição
 nssm set BackupDatabaseService DisplayName "Backup Database Service"
+
+# 4. Configurar descrição
 nssm set BackupDatabaseService Description "Serviço de backup automático para SQL Server e Sybase"
+
+# 5. Configurar para iniciar automaticamente
 nssm set BackupDatabaseService Start SERVICE_AUTO_START
 
-# Iniciar
+# 6. (Opcional) Configurar usuário do serviço
+# Use uma conta de usuário com permissões adequadas para acessar bancos de dados
+nssm set BackupDatabaseService ObjectName ".\UsuarioLocal" "SenhaDoUsuario"
+
+# 7. Iniciar o serviço
 nssm start BackupDatabaseService
 ```
+
+**Nota**: Ajuste o caminho `"C:\Program Files\Backup Database"` se você instalou em outro local.
+
+### O que Funciona como Serviço
+
+✅ **Funciona perfeitamente**:
+
+- Execução automática de backups agendados
+- Verificação de agendamentos a cada minuto
+- Envio de notificações por e-mail
+- Geração de logs em `C:\ProgramData\BackupDatabase\logs\`
+- Acesso a bancos de dados SQL Server e Sybase
+- Upload para FTP e Google Drive
+
+⚠️ **Limitações**:
+
+- Interface gráfica pode não ser acessível (mas não é necessária)
+- System tray pode não funcionar corretamente
+- Para acessar a interface, execute o aplicativo normalmente (ele detectará o serviço rodando)
+
+### Gerenciamento do Serviço
+
+```bash
+# Verificar status
+nssm status BackupDatabaseService
+
+# Parar o serviço
+nssm stop BackupDatabaseService
+
+# Iniciar o serviço
+nssm start BackupDatabaseService
+
+# Reiniciar o serviço
+nssm restart BackupDatabaseService
+
+# Ver logs do serviço
+nssm get BackupDatabaseService AppStdout
+nssm get BackupDatabaseService AppStderr
+
+# Remover o serviço
+nssm remove BackupDatabaseService confirm
+```
+
+### Verificação
+
+Após instalar o serviço, verifique:
+
+1. **Status do serviço**:
+
+   ```bash
+   nssm status BackupDatabaseService
+   ```
+
+   Deve retornar: `SERVICE_RUNNING`
+
+2. **Logs do aplicativo**:
+
+   - Verifique os logs em: `C:\ProgramData\BackupDatabase\logs\`
+   - Procure por: `"Serviço de agendamento iniciado"`
+
+3. **Teste um backup**:
+   - Aguarde o próximo horário agendado ou
+   - Execute manualmente via interface gráfica
+
+### Solução de Problemas
+
+**Serviço não inicia**:
+
+- Verifique se o caminho do executável está correto
+- Verifique permissões do usuário do serviço
+- Verifique logs em `C:\ProgramData\BackupDatabase\logs\`
+
+**Backups não executam**:
+
+- Verifique se os agendamentos estão habilitados
+- Verifique se o serviço está rodando: `nssm status BackupDatabaseService`
+- Verifique os logs do aplicativo
+
+**Erro de permissões**:
+
+- Configure o serviço para rodar com uma conta de usuário que tenha acesso aos bancos de dados
+- Use: `nssm set BackupDatabaseService ObjectName ".\Usuario" "Senha"`
+
+### Desinstalação
+
+Para remover o serviço:
+
+```bash
+# Parar o serviço
+nssm stop BackupDatabaseService
+
+# Remover o serviço
+nssm remove BackupDatabaseService confirm
+```
+
+**Importante**: Remover o serviço não desinstala o aplicativo. Use o desinstalador normal para remover o aplicativo completamente.
 
 ## 📁 Estrutura de Diretórios
 
