@@ -1,5 +1,7 @@
 import 'package:uuid/uuid.dart';
 
+import 'backup_type.dart';
+
 enum ScheduleType { daily, weekly, monthly, interval }
 
 enum DatabaseType { sqlServer, sybase }
@@ -13,6 +15,7 @@ class Schedule {
   final String scheduleConfig; // JSON com configurações específicas
   final List<String> destinationIds;
   final String backupFolder;
+  final BackupType backupType;
   final bool compressBackup;
   final bool enabled;
   final DateTime? lastRunAt;
@@ -29,6 +32,7 @@ class Schedule {
     required this.scheduleConfig,
     required this.destinationIds,
     required this.backupFolder,
+    this.backupType = BackupType.full,
     this.compressBackup = true,
     this.enabled = true,
     this.lastRunAt,
@@ -48,6 +52,7 @@ class Schedule {
     String? scheduleConfig,
     List<String>? destinationIds,
     String? backupFolder,
+    BackupType? backupType,
     bool? compressBackup,
     bool? enabled,
     DateTime? lastRunAt,
@@ -64,6 +69,7 @@ class Schedule {
       scheduleConfig: scheduleConfig ?? this.scheduleConfig,
       destinationIds: destinationIds ?? this.destinationIds,
       backupFolder: backupFolder ?? this.backupFolder,
+      backupType: backupType ?? this.backupType,
       compressBackup: compressBackup ?? this.compressBackup,
       enabled: enabled ?? this.enabled,
       lastRunAt: lastRunAt ?? this.lastRunAt,

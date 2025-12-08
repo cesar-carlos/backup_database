@@ -1,13 +1,13 @@
-import 'dart:convert';
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/core.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../application/providers/providers.dart';
+import '../../../domain/entities/backup_type.dart';
 import '../../../domain/entities/schedule.dart';
 import '../../../domain/entities/sql_server_config.dart';
 import '../../../domain/entities/sybase_config.dart';
@@ -40,6 +40,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   DatabaseType _databaseType = DatabaseType.sqlServer;
   String? _selectedDatabaseConfigId;
   ScheduleType _scheduleType = ScheduleType.daily;
+  BackupType _backupType = BackupType.full;
   List<String> _selectedDestinationIds = [];
   bool _compressBackup = true;
   bool _isEnabled = true;
@@ -69,6 +70,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _databaseType = widget.schedule!.databaseType;
       _selectedDatabaseConfigId = widget.schedule!.databaseConfigId;
       _scheduleType = widget.schedule!.scheduleType;
+      _backupType = widget.schedule!.backupType;
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
       _isEnabled = widget.schedule!.enabled;
@@ -239,6 +241,32 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                           'database_config_dropdown_${_databaseType}_${_selectedDatabaseConfigId ?? 'null'}',
                         ),
                         builder: (context) => _buildDatabaseConfigDropdown(),
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Tipo de Backup'),
+                      const SizedBox(height: 12),
+                      AppDropdown<BackupType>(
+                        label: 'Tipo de Backup',
+                        value: _backupType,
+                        placeholder: const Text('Tipo de Backup'),
+                        items: BackupType.values.map((type) {
+                          return ComboBoxItem<BackupType>(
+                            value: type,
+                            child: Text(type.displayName),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _backupType = value;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _getBackupTypeDescription(_backupType),
+                        style: FluentTheme.of(context).typography.caption,
                       ),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Agendamento'),
@@ -723,6 +751,17 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
   }
 
+  String _getBackupTypeDescription(BackupType type) {
+    switch (type) {
+      case BackupType.full:
+        return 'Backup completo do banco de dados. Base para backups diferenciais e logs.';
+      case BackupType.differential:
+        return 'Backup apenas das alterações desde o último backup completo. Requer backup Full anterior.';
+      case BackupType.log:
+        return 'Backup do log de transações. Pode ser executado frequentemente. Requer backup Full anterior.';
+    }
+  }
+
   String _getDestinationTypeName(DestinationType type) {
     switch (type) {
       case DestinationType.local:
@@ -895,6 +934,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       scheduleConfig: scheduleConfigJson,
       destinationIds: _selectedDestinationIds,
       backupFolder: _backupFolderController.text.trim(),
+      backupType: _backupType,
       compressBackup: _compressBackup,
       enabled: _isEnabled,
       lastRunAt: widget.schedule?.lastRunAt,

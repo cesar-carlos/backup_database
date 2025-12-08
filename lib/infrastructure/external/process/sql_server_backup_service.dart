@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
+import '../../../domain/entities/backup_type.dart';
 import '../../../domain/entities/sql_server_config.dart';
 import 'process_service.dart' as ps;
 
@@ -30,11 +31,12 @@ class SqlServerBackupService {
   Future<rd.Result<SqlServerBackupResult>> executeBackup({
     required SqlServerConfig config,
     required String outputDirectory,
+    BackupType backupType = BackupType.full,
     String? customFileName,
   }) async {
     try {
       LoggerService.info(
-        'Iniciando backup SQL Server: ${config.database}',
+        'Iniciando backup SQL Server: ${config.database} (Tipo: ${backupType.displayName})',
       );
 
       // Verificar se o diretório de saída existe
@@ -43,10 +45,11 @@ class SqlServerBackupService {
         await outputDir.create(recursive: true);
       }
 
-      // Gerar nome do arquivo de backup
+      // Gerar nome do arquivo de backup com extensão apropriada
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      final extension = backupType == BackupType.log ? '.trn' : '.bak';
       final fileName = customFileName ??
-          '${config.database}_$timestamp.bak';
+          '${config.database}_$timestamp$extension';
       final backupPath = p.join(outputDirectory, fileName);
 
       // Construir comando sqlcmd
@@ -55,12 +58,35 @@ class SqlServerBackupService {
       // Escapar aspas simples no caminho para SQL Server
       final escapedBackupPath = normalizedPath.replaceAll("'", "''");
       
-      final query = 
-          "BACKUP DATABASE [${config.database}] "
-          "TO DISK = N'$escapedBackupPath' "
-          "WITH NOFORMAT, NOINIT, "
-          "NAME = N'${config.database}-Full Database Backup', "
-          "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
+      // Construir query baseado no tipo de backup
+      String query;
+      
+      switch (backupType) {
+        case BackupType.full:
+          query = 
+              "BACKUP DATABASE [${config.database}] "
+              "TO DISK = N'$escapedBackupPath' "
+              "WITH NOFORMAT, NOINIT, "
+              "NAME = N'${config.database}-Full Database Backup', "
+              "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
+          break;
+        case BackupType.differential:
+          query = 
+              "BACKUP DATABASE [${config.database}] "
+              "TO DISK = N'$escapedBackupPath' "
+              "WITH DIFFERENTIAL, NOFORMAT, NOINIT, "
+              "NAME = N'${config.database}-Differential Database Backup', "
+              "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
+          break;
+        case BackupType.log:
+          query = 
+              "BACKUP LOG [${config.database}] "
+              "TO DISK = N'$escapedBackupPath' "
+              "WITH NOFORMAT, NOINIT, "
+              "NAME = N'${config.database}-Transaction Log Backup', "
+              "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
+          break;
+      }
 
       final arguments = [
         '-S', '${config.server},${config.port}',

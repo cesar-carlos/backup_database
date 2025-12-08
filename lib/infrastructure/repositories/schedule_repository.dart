@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../core/core.dart';
+import '../../domain/entities/backup_type.dart';
 import '../../domain/entities/schedule.dart';
 import '../../domain/repositories/i_schedule_repository.dart';
 import '../datasources/local/database.dart';
@@ -191,6 +192,7 @@ class ScheduleRepository implements IScheduleRepository {
       scheduleConfig: data.scheduleConfig,
       destinationIds: destinationIds,
       backupFolder: data.backupFolder,
+      backupType: BackupType.fromString(data.backupType),
       compressBackup: data.compressBackup,
       enabled: data.enabled,
       lastRunAt: data.lastRunAt,
@@ -210,6 +212,7 @@ class ScheduleRepository implements IScheduleRepository {
       scheduleConfig: Value(schedule.scheduleConfig),
       destinationIds: Value(jsonEncode(schedule.destinationIds)),
       backupFolder: Value(schedule.backupFolder),
+      backupType: Value(schedule.backupType.name),
       compressBackup: Value(schedule.compressBackup),
       enabled: Value(schedule.enabled),
       lastRunAt: Value(schedule.lastRunAt),

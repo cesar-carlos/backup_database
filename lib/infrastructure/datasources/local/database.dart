@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -226,6 +226,51 @@ class AppDatabase extends _$AppDatabase {
           } catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v6 para schedules_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 7) {
+          // Migração para versão 7: Adicionar coluna backup_type nas tabelas schedules e backup_history
+          try {
+            // Adicionar backup_type em schedules_table
+            final schedulesColumns = await (customSelect(
+              "PRAGMA table_info(schedules_table)",
+            ).get());
+            final hasSchedulesBackupTypeColumn = schedulesColumns.any(
+              (row) => row.data['name'] == 'backup_type',
+            );
+
+            if (!hasSchedulesBackupTypeColumn) {
+              await customStatement(
+                "ALTER TABLE schedules_table ADD COLUMN backup_type TEXT NOT NULL DEFAULT 'full'",
+              );
+              LoggerService.info(
+                'Migração v7: Coluna backup_type adicionada à schedules_table',
+              );
+            }
+
+            // Adicionar backup_type em backup_history_table
+            final historyColumns = await (customSelect(
+              "PRAGMA table_info(backup_history_table)",
+            ).get());
+            final hasHistoryBackupTypeColumn = historyColumns.any(
+              (row) => row.data['name'] == 'backup_type',
+            );
+
+            if (!hasHistoryBackupTypeColumn) {
+              await customStatement(
+                "ALTER TABLE backup_history_table ADD COLUMN backup_type TEXT NOT NULL DEFAULT 'full'",
+              );
+              LoggerService.info(
+                'Migração v7: Coluna backup_type adicionada à backup_history_table',
+              );
+            }
+          } catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v7 para backup_type',
               e,
               stackTrace,
             );

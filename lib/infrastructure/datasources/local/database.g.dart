@@ -1826,6 +1826,18 @@ class $SchedulesTableTable extends SchedulesTable
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _backupTypeMeta = const VerificationMeta(
+    'backupType',
+  );
+  @override
+  late final GeneratedColumn<String> backupType = GeneratedColumn<String>(
+    'backup_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('full'),
+  );
   static const VerificationMeta _compressBackupMeta = const VerificationMeta(
     'compressBackup',
   );
@@ -1910,6 +1922,7 @@ class $SchedulesTableTable extends SchedulesTable
     scheduleConfig,
     destinationIds,
     backupFolder,
+    backupType,
     compressBackup,
     enabled,
     lastRunAt,
@@ -2006,6 +2019,12 @@ class $SchedulesTableTable extends SchedulesTable
         ),
       );
     }
+    if (data.containsKey('backup_type')) {
+      context.handle(
+        _backupTypeMeta,
+        backupType.isAcceptableOrUnknown(data['backup_type']!, _backupTypeMeta),
+      );
+    }
     if (data.containsKey('compress_backup')) {
       context.handle(
         _compressBackupMeta,
@@ -2090,6 +2109,10 @@ class $SchedulesTableTable extends SchedulesTable
         DriftSqlType.string,
         data['${effectivePrefix}backup_folder'],
       )!,
+      backupType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}backup_type'],
+      )!,
       compressBackup: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}compress_backup'],
@@ -2133,6 +2156,7 @@ class SchedulesTableData extends DataClass
   final String scheduleConfig;
   final String destinationIds;
   final String backupFolder;
+  final String backupType;
   final bool compressBackup;
   final bool enabled;
   final DateTime? lastRunAt;
@@ -2148,6 +2172,7 @@ class SchedulesTableData extends DataClass
     required this.scheduleConfig,
     required this.destinationIds,
     required this.backupFolder,
+    required this.backupType,
     required this.compressBackup,
     required this.enabled,
     this.lastRunAt,
@@ -2166,6 +2191,7 @@ class SchedulesTableData extends DataClass
     map['schedule_config'] = Variable<String>(scheduleConfig);
     map['destination_ids'] = Variable<String>(destinationIds);
     map['backup_folder'] = Variable<String>(backupFolder);
+    map['backup_type'] = Variable<String>(backupType);
     map['compress_backup'] = Variable<bool>(compressBackup);
     map['enabled'] = Variable<bool>(enabled);
     if (!nullToAbsent || lastRunAt != null) {
@@ -2189,6 +2215,7 @@ class SchedulesTableData extends DataClass
       scheduleConfig: Value(scheduleConfig),
       destinationIds: Value(destinationIds),
       backupFolder: Value(backupFolder),
+      backupType: Value(backupType),
       compressBackup: Value(compressBackup),
       enabled: Value(enabled),
       lastRunAt: lastRunAt == null && nullToAbsent
@@ -2216,6 +2243,7 @@ class SchedulesTableData extends DataClass
       scheduleConfig: serializer.fromJson<String>(json['scheduleConfig']),
       destinationIds: serializer.fromJson<String>(json['destinationIds']),
       backupFolder: serializer.fromJson<String>(json['backupFolder']),
+      backupType: serializer.fromJson<String>(json['backupType']),
       compressBackup: serializer.fromJson<bool>(json['compressBackup']),
       enabled: serializer.fromJson<bool>(json['enabled']),
       lastRunAt: serializer.fromJson<DateTime?>(json['lastRunAt']),
@@ -2236,6 +2264,7 @@ class SchedulesTableData extends DataClass
       'scheduleConfig': serializer.toJson<String>(scheduleConfig),
       'destinationIds': serializer.toJson<String>(destinationIds),
       'backupFolder': serializer.toJson<String>(backupFolder),
+      'backupType': serializer.toJson<String>(backupType),
       'compressBackup': serializer.toJson<bool>(compressBackup),
       'enabled': serializer.toJson<bool>(enabled),
       'lastRunAt': serializer.toJson<DateTime?>(lastRunAt),
@@ -2254,6 +2283,7 @@ class SchedulesTableData extends DataClass
     String? scheduleConfig,
     String? destinationIds,
     String? backupFolder,
+    String? backupType,
     bool? compressBackup,
     bool? enabled,
     Value<DateTime?> lastRunAt = const Value.absent(),
@@ -2269,6 +2299,7 @@ class SchedulesTableData extends DataClass
     scheduleConfig: scheduleConfig ?? this.scheduleConfig,
     destinationIds: destinationIds ?? this.destinationIds,
     backupFolder: backupFolder ?? this.backupFolder,
+    backupType: backupType ?? this.backupType,
     compressBackup: compressBackup ?? this.compressBackup,
     enabled: enabled ?? this.enabled,
     lastRunAt: lastRunAt.present ? lastRunAt.value : this.lastRunAt,
@@ -2298,6 +2329,9 @@ class SchedulesTableData extends DataClass
       backupFolder: data.backupFolder.present
           ? data.backupFolder.value
           : this.backupFolder,
+      backupType: data.backupType.present
+          ? data.backupType.value
+          : this.backupType,
       compressBackup: data.compressBackup.present
           ? data.compressBackup.value
           : this.compressBackup,
@@ -2320,6 +2354,7 @@ class SchedulesTableData extends DataClass
           ..write('scheduleConfig: $scheduleConfig, ')
           ..write('destinationIds: $destinationIds, ')
           ..write('backupFolder: $backupFolder, ')
+          ..write('backupType: $backupType, ')
           ..write('compressBackup: $compressBackup, ')
           ..write('enabled: $enabled, ')
           ..write('lastRunAt: $lastRunAt, ')
@@ -2340,6 +2375,7 @@ class SchedulesTableData extends DataClass
     scheduleConfig,
     destinationIds,
     backupFolder,
+    backupType,
     compressBackup,
     enabled,
     lastRunAt,
@@ -2359,6 +2395,7 @@ class SchedulesTableData extends DataClass
           other.scheduleConfig == this.scheduleConfig &&
           other.destinationIds == this.destinationIds &&
           other.backupFolder == this.backupFolder &&
+          other.backupType == this.backupType &&
           other.compressBackup == this.compressBackup &&
           other.enabled == this.enabled &&
           other.lastRunAt == this.lastRunAt &&
@@ -2376,6 +2413,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
   final Value<String> scheduleConfig;
   final Value<String> destinationIds;
   final Value<String> backupFolder;
+  final Value<String> backupType;
   final Value<bool> compressBackup;
   final Value<bool> enabled;
   final Value<DateTime?> lastRunAt;
@@ -2392,6 +2430,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.scheduleConfig = const Value.absent(),
     this.destinationIds = const Value.absent(),
     this.backupFolder = const Value.absent(),
+    this.backupType = const Value.absent(),
     this.compressBackup = const Value.absent(),
     this.enabled = const Value.absent(),
     this.lastRunAt = const Value.absent(),
@@ -2409,6 +2448,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     required String scheduleConfig,
     required String destinationIds,
     this.backupFolder = const Value.absent(),
+    this.backupType = const Value.absent(),
     this.compressBackup = const Value.absent(),
     this.enabled = const Value.absent(),
     this.lastRunAt = const Value.absent(),
@@ -2434,6 +2474,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Expression<String>? scheduleConfig,
     Expression<String>? destinationIds,
     Expression<String>? backupFolder,
+    Expression<String>? backupType,
     Expression<bool>? compressBackup,
     Expression<bool>? enabled,
     Expression<DateTime>? lastRunAt,
@@ -2451,6 +2492,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       if (scheduleConfig != null) 'schedule_config': scheduleConfig,
       if (destinationIds != null) 'destination_ids': destinationIds,
       if (backupFolder != null) 'backup_folder': backupFolder,
+      if (backupType != null) 'backup_type': backupType,
       if (compressBackup != null) 'compress_backup': compressBackup,
       if (enabled != null) 'enabled': enabled,
       if (lastRunAt != null) 'last_run_at': lastRunAt,
@@ -2470,6 +2512,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Value<String>? scheduleConfig,
     Value<String>? destinationIds,
     Value<String>? backupFolder,
+    Value<String>? backupType,
     Value<bool>? compressBackup,
     Value<bool>? enabled,
     Value<DateTime?>? lastRunAt,
@@ -2487,6 +2530,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       scheduleConfig: scheduleConfig ?? this.scheduleConfig,
       destinationIds: destinationIds ?? this.destinationIds,
       backupFolder: backupFolder ?? this.backupFolder,
+      backupType: backupType ?? this.backupType,
       compressBackup: compressBackup ?? this.compressBackup,
       enabled: enabled ?? this.enabled,
       lastRunAt: lastRunAt ?? this.lastRunAt,
@@ -2524,6 +2568,9 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     if (backupFolder.present) {
       map['backup_folder'] = Variable<String>(backupFolder.value);
     }
+    if (backupType.present) {
+      map['backup_type'] = Variable<String>(backupType.value);
+    }
     if (compressBackup.present) {
       map['compress_backup'] = Variable<bool>(compressBackup.value);
     }
@@ -2559,6 +2606,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
           ..write('scheduleConfig: $scheduleConfig, ')
           ..write('destinationIds: $destinationIds, ')
           ..write('backupFolder: $backupFolder, ')
+          ..write('backupType: $backupType, ')
           ..write('compressBackup: $compressBackup, ')
           ..write('enabled: $enabled, ')
           ..write('lastRunAt: $lastRunAt, ')
@@ -2641,6 +2689,18 @@ class $BackupHistoryTableTable extends BackupHistoryTable
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _backupTypeMeta = const VerificationMeta(
+    'backupType',
+  );
+  @override
+  late final GeneratedColumn<String> backupType = GeneratedColumn<String>(
+    'backup_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('full'),
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -2702,6 +2762,7 @@ class $BackupHistoryTableTable extends BackupHistoryTable
     databaseType,
     backupPath,
     fileSize,
+    backupType,
     status,
     errorMessage,
     startedAt,
@@ -2768,6 +2829,12 @@ class $BackupHistoryTableTable extends BackupHistoryTable
       );
     } else if (isInserting) {
       context.missing(_fileSizeMeta);
+    }
+    if (data.containsKey('backup_type')) {
+      context.handle(
+        _backupTypeMeta,
+        backupType.isAcceptableOrUnknown(data['backup_type']!, _backupTypeMeta),
+      );
     }
     if (data.containsKey('status')) {
       context.handle(
@@ -2842,6 +2909,10 @@ class $BackupHistoryTableTable extends BackupHistoryTable
         DriftSqlType.int,
         data['${effectivePrefix}file_size'],
       )!,
+      backupType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}backup_type'],
+      )!,
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
@@ -2879,6 +2950,7 @@ class BackupHistoryTableData extends DataClass
   final String databaseType;
   final String backupPath;
   final int fileSize;
+  final String backupType;
   final String status;
   final String? errorMessage;
   final DateTime startedAt;
@@ -2891,6 +2963,7 @@ class BackupHistoryTableData extends DataClass
     required this.databaseType,
     required this.backupPath,
     required this.fileSize,
+    required this.backupType,
     required this.status,
     this.errorMessage,
     required this.startedAt,
@@ -2908,6 +2981,7 @@ class BackupHistoryTableData extends DataClass
     map['database_type'] = Variable<String>(databaseType);
     map['backup_path'] = Variable<String>(backupPath);
     map['file_size'] = Variable<int>(fileSize);
+    map['backup_type'] = Variable<String>(backupType);
     map['status'] = Variable<String>(status);
     if (!nullToAbsent || errorMessage != null) {
       map['error_message'] = Variable<String>(errorMessage);
@@ -2932,6 +3006,7 @@ class BackupHistoryTableData extends DataClass
       databaseType: Value(databaseType),
       backupPath: Value(backupPath),
       fileSize: Value(fileSize),
+      backupType: Value(backupType),
       status: Value(status),
       errorMessage: errorMessage == null && nullToAbsent
           ? const Value.absent()
@@ -2958,6 +3033,7 @@ class BackupHistoryTableData extends DataClass
       databaseType: serializer.fromJson<String>(json['databaseType']),
       backupPath: serializer.fromJson<String>(json['backupPath']),
       fileSize: serializer.fromJson<int>(json['fileSize']),
+      backupType: serializer.fromJson<String>(json['backupType']),
       status: serializer.fromJson<String>(json['status']),
       errorMessage: serializer.fromJson<String?>(json['errorMessage']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
@@ -2975,6 +3051,7 @@ class BackupHistoryTableData extends DataClass
       'databaseType': serializer.toJson<String>(databaseType),
       'backupPath': serializer.toJson<String>(backupPath),
       'fileSize': serializer.toJson<int>(fileSize),
+      'backupType': serializer.toJson<String>(backupType),
       'status': serializer.toJson<String>(status),
       'errorMessage': serializer.toJson<String?>(errorMessage),
       'startedAt': serializer.toJson<DateTime>(startedAt),
@@ -2990,6 +3067,7 @@ class BackupHistoryTableData extends DataClass
     String? databaseType,
     String? backupPath,
     int? fileSize,
+    String? backupType,
     String? status,
     Value<String?> errorMessage = const Value.absent(),
     DateTime? startedAt,
@@ -3002,6 +3080,7 @@ class BackupHistoryTableData extends DataClass
     databaseType: databaseType ?? this.databaseType,
     backupPath: backupPath ?? this.backupPath,
     fileSize: fileSize ?? this.fileSize,
+    backupType: backupType ?? this.backupType,
     status: status ?? this.status,
     errorMessage: errorMessage.present ? errorMessage.value : this.errorMessage,
     startedAt: startedAt ?? this.startedAt,
@@ -3026,6 +3105,9 @@ class BackupHistoryTableData extends DataClass
           ? data.backupPath.value
           : this.backupPath,
       fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
+      backupType: data.backupType.present
+          ? data.backupType.value
+          : this.backupType,
       status: data.status.present ? data.status.value : this.status,
       errorMessage: data.errorMessage.present
           ? data.errorMessage.value
@@ -3049,6 +3131,7 @@ class BackupHistoryTableData extends DataClass
           ..write('databaseType: $databaseType, ')
           ..write('backupPath: $backupPath, ')
           ..write('fileSize: $fileSize, ')
+          ..write('backupType: $backupType, ')
           ..write('status: $status, ')
           ..write('errorMessage: $errorMessage, ')
           ..write('startedAt: $startedAt, ')
@@ -3066,6 +3149,7 @@ class BackupHistoryTableData extends DataClass
     databaseType,
     backupPath,
     fileSize,
+    backupType,
     status,
     errorMessage,
     startedAt,
@@ -3082,6 +3166,7 @@ class BackupHistoryTableData extends DataClass
           other.databaseType == this.databaseType &&
           other.backupPath == this.backupPath &&
           other.fileSize == this.fileSize &&
+          other.backupType == this.backupType &&
           other.status == this.status &&
           other.errorMessage == this.errorMessage &&
           other.startedAt == this.startedAt &&
@@ -3097,6 +3182,7 @@ class BackupHistoryTableCompanion
   final Value<String> databaseType;
   final Value<String> backupPath;
   final Value<int> fileSize;
+  final Value<String> backupType;
   final Value<String> status;
   final Value<String?> errorMessage;
   final Value<DateTime> startedAt;
@@ -3110,6 +3196,7 @@ class BackupHistoryTableCompanion
     this.databaseType = const Value.absent(),
     this.backupPath = const Value.absent(),
     this.fileSize = const Value.absent(),
+    this.backupType = const Value.absent(),
     this.status = const Value.absent(),
     this.errorMessage = const Value.absent(),
     this.startedAt = const Value.absent(),
@@ -3124,6 +3211,7 @@ class BackupHistoryTableCompanion
     required String databaseType,
     required String backupPath,
     required int fileSize,
+    this.backupType = const Value.absent(),
     required String status,
     this.errorMessage = const Value.absent(),
     required DateTime startedAt,
@@ -3144,6 +3232,7 @@ class BackupHistoryTableCompanion
     Expression<String>? databaseType,
     Expression<String>? backupPath,
     Expression<int>? fileSize,
+    Expression<String>? backupType,
     Expression<String>? status,
     Expression<String>? errorMessage,
     Expression<DateTime>? startedAt,
@@ -3158,6 +3247,7 @@ class BackupHistoryTableCompanion
       if (databaseType != null) 'database_type': databaseType,
       if (backupPath != null) 'backup_path': backupPath,
       if (fileSize != null) 'file_size': fileSize,
+      if (backupType != null) 'backup_type': backupType,
       if (status != null) 'status': status,
       if (errorMessage != null) 'error_message': errorMessage,
       if (startedAt != null) 'started_at': startedAt,
@@ -3174,6 +3264,7 @@ class BackupHistoryTableCompanion
     Value<String>? databaseType,
     Value<String>? backupPath,
     Value<int>? fileSize,
+    Value<String>? backupType,
     Value<String>? status,
     Value<String?>? errorMessage,
     Value<DateTime>? startedAt,
@@ -3188,6 +3279,7 @@ class BackupHistoryTableCompanion
       databaseType: databaseType ?? this.databaseType,
       backupPath: backupPath ?? this.backupPath,
       fileSize: fileSize ?? this.fileSize,
+      backupType: backupType ?? this.backupType,
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       startedAt: startedAt ?? this.startedAt,
@@ -3217,6 +3309,9 @@ class BackupHistoryTableCompanion
     }
     if (fileSize.present) {
       map['file_size'] = Variable<int>(fileSize.value);
+    }
+    if (backupType.present) {
+      map['backup_type'] = Variable<String>(backupType.value);
     }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
@@ -3248,6 +3343,7 @@ class BackupHistoryTableCompanion
           ..write('databaseType: $databaseType, ')
           ..write('backupPath: $backupPath, ')
           ..write('fileSize: $fileSize, ')
+          ..write('backupType: $backupType, ')
           ..write('status: $status, ')
           ..write('errorMessage: $errorMessage, ')
           ..write('startedAt: $startedAt, ')
@@ -5649,6 +5745,7 @@ typedef $$SchedulesTableTableCreateCompanionBuilder =
       required String scheduleConfig,
       required String destinationIds,
       Value<String> backupFolder,
+      Value<String> backupType,
       Value<bool> compressBackup,
       Value<bool> enabled,
       Value<DateTime?> lastRunAt,
@@ -5667,6 +5764,7 @@ typedef $$SchedulesTableTableUpdateCompanionBuilder =
       Value<String> scheduleConfig,
       Value<String> destinationIds,
       Value<String> backupFolder,
+      Value<String> backupType,
       Value<bool> compressBackup,
       Value<bool> enabled,
       Value<DateTime?> lastRunAt,
@@ -5722,6 +5820,11 @@ class $$SchedulesTableTableFilterComposer
 
   ColumnFilters<String> get backupFolder => $composableBuilder(
     column: $table.backupFolder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backupType => $composableBuilder(
+    column: $table.backupType,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5805,6 +5908,11 @@ class $$SchedulesTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get backupType => $composableBuilder(
+    column: $table.backupType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get compressBackup => $composableBuilder(
     column: $table.compressBackup,
     builder: (column) => ColumnOrderings(column),
@@ -5881,6 +5989,11 @@ class $$SchedulesTableTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get backupType => $composableBuilder(
+    column: $table.backupType,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get compressBackup => $composableBuilder(
     column: $table.compressBackup,
     builder: (column) => column,
@@ -5947,6 +6060,7 @@ class $$SchedulesTableTableTableManager
                 Value<String> scheduleConfig = const Value.absent(),
                 Value<String> destinationIds = const Value.absent(),
                 Value<String> backupFolder = const Value.absent(),
+                Value<String> backupType = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
@@ -5963,6 +6077,7 @@ class $$SchedulesTableTableTableManager
                 scheduleConfig: scheduleConfig,
                 destinationIds: destinationIds,
                 backupFolder: backupFolder,
+                backupType: backupType,
                 compressBackup: compressBackup,
                 enabled: enabled,
                 lastRunAt: lastRunAt,
@@ -5981,6 +6096,7 @@ class $$SchedulesTableTableTableManager
                 required String scheduleConfig,
                 required String destinationIds,
                 Value<String> backupFolder = const Value.absent(),
+                Value<String> backupType = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
@@ -5997,6 +6113,7 @@ class $$SchedulesTableTableTableManager
                 scheduleConfig: scheduleConfig,
                 destinationIds: destinationIds,
                 backupFolder: backupFolder,
+                backupType: backupType,
                 compressBackup: compressBackup,
                 enabled: enabled,
                 lastRunAt: lastRunAt,
@@ -6038,6 +6155,7 @@ typedef $$BackupHistoryTableTableCreateCompanionBuilder =
       required String databaseType,
       required String backupPath,
       required int fileSize,
+      Value<String> backupType,
       required String status,
       Value<String?> errorMessage,
       required DateTime startedAt,
@@ -6053,6 +6171,7 @@ typedef $$BackupHistoryTableTableUpdateCompanionBuilder =
       Value<String> databaseType,
       Value<String> backupPath,
       Value<int> fileSize,
+      Value<String> backupType,
       Value<String> status,
       Value<String?> errorMessage,
       Value<DateTime> startedAt,
@@ -6097,6 +6216,11 @@ class $$BackupHistoryTableTableFilterComposer
 
   ColumnFilters<int> get fileSize => $composableBuilder(
     column: $table.fileSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backupType => $composableBuilder(
+    column: $table.backupType,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6165,6 +6289,11 @@ class $$BackupHistoryTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get backupType => $composableBuilder(
+    column: $table.backupType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -6225,6 +6354,11 @@ class $$BackupHistoryTableTableAnnotationComposer
 
   GeneratedColumn<int> get fileSize =>
       $composableBuilder(column: $table.fileSize, builder: (column) => column);
+
+  GeneratedColumn<String> get backupType => $composableBuilder(
+    column: $table.backupType,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
@@ -6294,6 +6428,7 @@ class $$BackupHistoryTableTableTableManager
                 Value<String> databaseType = const Value.absent(),
                 Value<String> backupPath = const Value.absent(),
                 Value<int> fileSize = const Value.absent(),
+                Value<String> backupType = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String?> errorMessage = const Value.absent(),
                 Value<DateTime> startedAt = const Value.absent(),
@@ -6307,6 +6442,7 @@ class $$BackupHistoryTableTableTableManager
                 databaseType: databaseType,
                 backupPath: backupPath,
                 fileSize: fileSize,
+                backupType: backupType,
                 status: status,
                 errorMessage: errorMessage,
                 startedAt: startedAt,
@@ -6322,6 +6458,7 @@ class $$BackupHistoryTableTableTableManager
                 required String databaseType,
                 required String backupPath,
                 required int fileSize,
+                Value<String> backupType = const Value.absent(),
                 required String status,
                 Value<String?> errorMessage = const Value.absent(),
                 required DateTime startedAt,
@@ -6335,6 +6472,7 @@ class $$BackupHistoryTableTableTableManager
                 databaseType: databaseType,
                 backupPath: backupPath,
                 fileSize: fileSize,
+                backupType: backupType,
                 status: status,
                 errorMessage: errorMessage,
                 startedAt: startedAt,

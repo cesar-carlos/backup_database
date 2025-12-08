@@ -2,26 +2,24 @@ import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 import 'core/core.dart';
 import 'core/theme/theme_provider.dart';
-import 'infrastructure/external/system/os_version_checker.dart';
 import 'presentation/managers/managers.dart';
+import 'infrastructure/external/system/os_version_checker.dart';
 import 'presentation/providers/system_settings_provider.dart';
-import 'application/services/scheduler_service.dart';
 import 'application/services/auto_update_service.dart';
+import 'application/services/scheduler_service.dart';
 import 'domain/repositories/repositories.dart';
 import 'application/providers/providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializar logger PRIMEIRO (antes de qualquer outro serviço)
   LoggerService.init();
 
-  // Verificar compatibilidade do sistema operacional
   if (!OsVersionChecker.isCompatible()) {
     LoggerService.warning(
       '⚠️ Sistema operacional pode não ser compatível. Requisito: Windows 8.1 (6.3) / Server 2012 R2 ou superior.',
@@ -43,12 +41,8 @@ Future<void> main() async {
     );
   }
 
-  // O mutex já foi verificado no C++ antes do Flutter iniciar
-  // Se chegou aqui, o C++ já permitiu a execução, então é a primeira instância
-  // Mas verificamos novamente como segurança adicional
   final singleInstanceService = SingleInstanceService();
 
-  // Verificar via mutex primeiro (mais confiável)
   final isFirstInstance = await singleInstanceService.checkAndLock();
 
   if (!isFirstInstance) {
@@ -56,7 +50,6 @@ Future<void> main() async {
       '⚠️ SEGUNDA INSTÂNCIA DETECTADA (Mutex existe). Encerrando imediatamente...',
     );
 
-    // Notificar a instância existente para mostrar a janela
     for (int i = 0; i < 5; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();
       if (notified) {
@@ -66,11 +59,9 @@ Future<void> main() async {
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
-    // ENCERRAR IMEDIATAMENTE - não permitir continuação
     exit(0);
   }
 
-  // Verificar se o IPC server já está rodando (outra instância)
   final isServerRunning = await IpcService.checkServerRunning();
 
   if (isServerRunning) {
@@ -78,7 +69,6 @@ Future<void> main() async {
       '⚠️ SEGUNDA INSTÂNCIA DETECTADA (IPC server já existe). Encerrando imediatamente...',
     );
 
-    // Notificar a instância existente para mostrar a janela
     for (int i = 0; i < 5; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();
       if (notified) {
@@ -88,7 +78,6 @@ Future<void> main() async {
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
-    // ENCERRAR IMEDIATAMENTE - não permitir continuação
     exit(0);
   }
 
@@ -97,15 +86,12 @@ Future<void> main() async {
   );
 
   try {
-    // Carregar variáveis de ambiente
     await dotenv.load(fileName: '.env');
     LoggerService.info('Variáveis de ambiente carregadas');
 
-    // Configurar injeção de dependências
     await setupServiceLocator();
     LoggerService.info('Dependências configuradas');
 
-    // Inicializar Google Auth Provider
     try {
       final googleAuthProvider = getIt<GoogleAuthProvider>();
       await googleAuthProvider.initialize();
@@ -114,7 +100,6 @@ Future<void> main() async {
       LoggerService.warning('Erro ao inicializar GoogleAuthProvider: $e');
     }
 
-    // Inicializar Auto Update Service
     try {
       final autoUpdateService = getIt<AutoUpdateService>();
       final feedUrl = dotenv.env['AUTO_UPDATE_FEED_URL'];
@@ -124,7 +109,6 @@ Future<void> main() async {
       LoggerService.warning('Erro ao inicializar AutoUpdateService: $e');
     }
 
-    // Carregar configuração "Iniciar Minimizado" do SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final startMinimizedFromSettings =
         prefs.getBool('start_minimized') ?? false;
@@ -132,7 +116,6 @@ Future<void> main() async {
       'Configuração "Iniciar Minimizado" carregada: $startMinimizedFromSettings',
     );
 
-    // Verificar argumentos de linha de comando
     final args = Platform.executableArguments;
     final startMinimizedFromArgs = args.contains('--minimized');
     LoggerService.info(
@@ -140,24 +123,19 @@ Future<void> main() async {
     );
     final scheduleId = _getScheduleIdFromArgs(args);
 
-    // Se foi chamado com schedule-id, executar apenas o backup e sair
     if (scheduleId != null) {
       await _executeScheduledBackupAndExit(scheduleId);
       return;
     }
 
-    // Usar configuração salva ou argumento de linha de comando
     final startMinimized = startMinimizedFromArgs || startMinimizedFromSettings;
     LoggerService.info(
       'Iniciar minimizado: $startMinimized (configuração: $startMinimizedFromSettings, argumento: $startMinimizedFromArgs)',
     );
 
-    // Inicializar window manager primeiro
     final windowManager = WindowManagerService();
     await windowManager.initialize(startMinimized: startMinimized);
 
-    // Inicializar IPC Server para receber comandos de outras instâncias
-    // Agora o window manager já está pronto, então podemos mostrar a janela imediatamente
     try {
       await singleInstanceService.startIpcServer(
         onShowWindow: () async {
@@ -165,7 +143,6 @@ Future<void> main() async {
             'Recebido comando SHOW_WINDOW via IPC de outra instância',
           );
           try {
-            // Window manager já está inicializado, pode mostrar imediatamente
             await WindowManagerService().show();
             LoggerService.info('Janela trazida para frente após comando IPC');
           } catch (e, stackTrace) {
@@ -182,7 +159,6 @@ Future<void> main() async {
       LoggerService.warning('Erro ao inicializar IPC Server: $e');
     }
 
-    // Inicializar tray manager
     final trayManager = TrayManagerService();
     try {
       await trayManager.initialize(onMenuAction: _handleTrayMenuAction);
@@ -190,7 +166,6 @@ Future<void> main() async {
       LoggerService.warning('Erro ao inicializar tray manager: $e');
     }
 
-    // Configurar callbacks do window manager
     windowManager.setCallbacks(
       onClose: () async {
         await _cleanup();
@@ -198,10 +173,8 @@ Future<void> main() async {
       },
     );
 
-    // Iniciar aplicação
     runApp(const BackupDatabaseApp());
 
-    // Iniciar serviço de agendamento
     try {
       final schedulerService = getIt<SchedulerService>();
       await schedulerService.start();
@@ -243,8 +216,6 @@ Future<void> _executeScheduledBackupAndExit(String scheduleId) async {
 void _handleTrayMenuAction(TrayMenuAction action) {
   switch (action) {
     case TrayMenuAction.show:
-      // O TrayManagerService já chama _restoreWindow() antes de chamar este callback
-      // Mas vamos garantir que a janela está visível
       WindowManagerService().show();
       break;
 
@@ -275,24 +246,20 @@ void _handleTrayMenuAction(TrayMenuAction action) {
 Future<void> _cleanup() async {
   LoggerService.info('Encerrando aplicativo...');
 
-  // Parar scheduler
   try {
     getIt<SchedulerService>().stop();
   } catch (e) {
     LoggerService.warning('Erro ao parar scheduler: $e');
   }
 
-  // Liberar lock de instância única
   await SingleInstanceService().releaseLock();
 
-  // Destruir tray
   try {
     TrayManagerService().dispose();
   } catch (e) {
     LoggerService.warning('Erro ao destruir tray: $e');
   }
 
-  // Destruir window manager
   try {
     WindowManagerService().dispose();
   } catch (e) {
@@ -309,7 +276,6 @@ Future<void> _executeManualBackup() async {
     final scheduleRepository = getIt<IScheduleRepository>();
     final schedulerService = getIt<SchedulerService>();
 
-    // Buscar schedules habilitados
     final schedulesResult = await scheduleRepository.getEnabled();
 
     await schedulesResult.fold(
@@ -323,7 +289,6 @@ Future<void> _executeManualBackup() async {
           'Encontrados ${schedules.length} agendamento(s) habilitado(s). Executando...',
         );
 
-        // Executar cada schedule
         int successCount = 0;
         int failureCount = 0;
 
@@ -365,10 +330,8 @@ Future<void> _executeManualBackup() async {
 void _navigateToSettings() {
   LoggerService.info('Navegando para configurações via tray menu');
 
-  // Mostrar a janela se estiver minimizada
   WindowManagerService().show();
 
-  // Navegar para a página de configurações usando o router global
   appRouter.go(RouteNames.settings);
 }
 

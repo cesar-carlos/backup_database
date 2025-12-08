@@ -9,6 +9,7 @@ class BackupHistory {
   final String databaseType;
   final String backupPath;
   final int fileSize;
+  final String backupType;
   final BackupStatus status;
   final String? errorMessage;
   final DateTime startedAt;
@@ -22,6 +23,7 @@ class BackupHistory {
     required this.databaseType,
     required this.backupPath,
     required this.fileSize,
+    this.backupType = 'full',
     required this.status,
     this.errorMessage,
     required this.startedAt,
@@ -36,6 +38,7 @@ class BackupHistory {
     String? databaseType,
     String? backupPath,
     int? fileSize,
+    String? backupType,
     BackupStatus? status,
     String? errorMessage,
     DateTime? startedAt,
@@ -49,6 +52,7 @@ class BackupHistory {
       databaseType: databaseType ?? this.databaseType,
       backupPath: backupPath ?? this.backupPath,
       fileSize: fileSize ?? this.fileSize,
+      backupType: backupType ?? this.backupType,
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       startedAt: startedAt ?? this.startedAt,

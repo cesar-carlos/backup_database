@@ -3,6 +3,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/backup_history.dart';
+import '../../../domain/entities/backup_type.dart';
 
 class RecentBackupsList extends StatelessWidget {
   final List<BackupHistory> backups;
@@ -32,8 +33,32 @@ class RecentBackupsList extends StatelessWidget {
             color: _getStatusColor(backup.status),
           ),
           title: Text(backup.databaseName),
-          subtitle: Text(
-            DateFormat('dd/MM/yyyy HH:mm').format(backup.startedAt),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormat('dd/MM/yyyy HH:mm').format(backup.startedAt),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(
+                    _getBackupTypeIcon(backup.backupType),
+                    size: 14,
+                    color: _getBackupTypeColor(backup.backupType),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    BackupType.fromString(backup.backupType).displayName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _getBackupTypeColor(backup.backupType),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           trailing: Text(
             _getStatusText(backup.status),
@@ -83,6 +108,30 @@ class RecentBackupsList extends StatelessWidget {
         return 'Aviso';
       case BackupStatus.running:
         return 'Em progresso';
+    }
+  }
+
+  IconData _getBackupTypeIcon(String backupType) {
+    final type = BackupType.fromString(backupType);
+    switch (type) {
+      case BackupType.full:
+        return FluentIcons.database;
+      case BackupType.differential:
+        return FluentIcons.database_sync;
+      case BackupType.log:
+        return FluentIcons.database_view;
+    }
+  }
+
+  Color _getBackupTypeColor(String backupType) {
+    final type = BackupType.fromString(backupType);
+    switch (type) {
+      case BackupType.full:
+        return AppColors.primary;
+      case BackupType.differential:
+        return Colors.blue;
+      case BackupType.log:
+        return Colors.orange;
     }
   }
 }

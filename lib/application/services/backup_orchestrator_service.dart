@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../core/errors/failure.dart';
@@ -47,6 +50,45 @@ class BackupOrchestratorService {
   }) async {
     LoggerService.info('Iniciando backup para schedule: ${schedule.name}');
 
+    // Validar que o caminho de saída não está vazio
+    if (outputDirectory.isEmpty) {
+      final errorMessage =
+          'Caminho de saída do backup está vazio para o agendamento: ${schedule.name}';
+      LoggerService.error(errorMessage);
+      return rd.Failure(ValidationFailure(message: errorMessage));
+    }
+
+    // Obter tipo de backup do schedule
+    final backupType = schedule.backupType;
+
+    // Criar subpasta por tipo de backup
+    final typeFolderName = backupType.displayName;
+    final typeOutputDirectory = p.join(outputDirectory, typeFolderName);
+    
+    // Validar que o caminho final não está vazio
+    if (typeOutputDirectory.isEmpty) {
+      final errorMessage =
+          'Caminho de saída do backup por tipo está vazio para o agendamento: ${schedule.name}';
+      LoggerService.error(errorMessage);
+      return rd.Failure(ValidationFailure(message: errorMessage));
+    }
+    
+    final typeOutputDir = Directory(typeOutputDirectory);
+    if (!await typeOutputDir.exists()) {
+      try {
+        await typeOutputDir.create(recursive: true);
+      } catch (e) {
+        final errorMessage =
+            'Erro ao criar pasta de backup por tipo: $typeOutputDirectory';
+        LoggerService.error(errorMessage, e);
+        return rd.Failure(ValidationFailure(message: errorMessage));
+      }
+    }
+
+    LoggerService.info(
+      'Diretório de backup por tipo: $typeOutputDirectory (Tipo: ${backupType.displayName})',
+    );
+
     // Criar registro de histórico com status "running"
     var history = BackupHistory(
       scheduleId: schedule.id,
@@ -54,6 +96,7 @@ class BackupOrchestratorService {
       databaseType: schedule.databaseType.name,
       backupPath: '',
       fileSize: 0,
+      backupType: backupType.name,
       status: BackupStatus.running,
       startedAt: DateTime.now(),
     );
@@ -81,7 +124,8 @@ class BackupOrchestratorService {
 
         final backupResult = await _sqlServerBackupService.executeBackup(
           config: configResult.getOrNull()!,
-          outputDirectory: outputDirectory,
+          outputDirectory: typeOutputDirectory,
+          backupType: backupType,
         );
 
         if (backupResult.isError()) {
@@ -109,7 +153,8 @@ class BackupOrchestratorService {
 
         final backupResult = await _sybaseBackupService.executeBackup(
           config: configResult.getOrNull()!,
-          outputDirectory: outputDirectory,
+          outputDirectory: typeOutputDirectory,
+          backupType: backupType,
         );
 
         if (backupResult.isError()) {

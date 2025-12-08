@@ -7,6 +7,8 @@ class BackupHistoryTable extends Table {
   TextColumn get databaseType => text()();
   TextColumn get backupPath => text()();
   IntColumn get fileSize => integer()();
+  TextColumn get backupType =>
+      text().withDefault(const Constant('full'))(); // 'full', 'differential', 'log'
   TextColumn get status =>
       text()(); // 'success', 'error', 'warning', 'running'
   TextColumn get errorMessage => text().nullable()();

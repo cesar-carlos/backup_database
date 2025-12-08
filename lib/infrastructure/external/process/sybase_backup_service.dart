@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
+import '../../../domain/entities/backup_type.dart';
 import '../../../domain/entities/sybase_config.dart';
 import 'process_service.dart' as ps;
 
@@ -30,11 +31,14 @@ class SybaseBackupService {
   Future<rd.Result<SybaseBackupResult>> executeBackup({
     required SybaseConfig config,
     required String outputDirectory,
+    BackupType backupType = BackupType.full,
     String? customFileName,
     String? dbbackupPath,
   }) async {
     try {
-      LoggerService.info('Iniciando backup Sybase: ${config.serverName}');
+      LoggerService.info(
+        'Iniciando backup Sybase: ${config.serverName} (Tipo: ${backupType.displayName})',
+      );
 
       // Verificar se o diretório de saída existe
       final outputDir = Directory(outputDirectory);
@@ -44,7 +48,8 @@ class SybaseBackupService {
 
       // Gerar nome do arquivo de backup usando databaseName (DBN) ao invés de serverName
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-      final fileName = customFileName ?? '${config.databaseName}_$timestamp';
+      final extension = backupType == BackupType.log ? '.trn' : '';
+      final fileName = customFileName ?? '${config.databaseName}_$timestamp$extension';
       final backupPath = p.join(outputDirectory, fileName);
 
       // Construir comando dbbackup
@@ -88,7 +93,19 @@ class SybaseBackupService {
         LoggerService.debug('Tentando dbisql com: $connStr');
 
         // Comando SQL para backup - o servidor executa o backup internamente
-        final backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
+        // Construir comando baseado no tipo de backup
+        String backupSql;
+        switch (backupType) {
+          case BackupType.full:
+            backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
+            break;
+          case BackupType.differential:
+            backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath' WITH DIFFERENTIAL";
+            break;
+          case BackupType.log:
+            backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
+            break;
+        }
 
         final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
 

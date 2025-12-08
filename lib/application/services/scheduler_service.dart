@@ -193,8 +193,25 @@ class SchedulerService {
                   as int? ??
               30,
         );
+        
+        // Validar que o caminho não está vazio
+        if (localConfig.path.isEmpty) {
+          final errorMessage =
+              'Caminho do destino local está vazio para o agendamento: ${schedule.name}';
+          LoggerService.error(errorMessage);
+          return rd.Failure(ValidationFailure(message: errorMessage));
+        }
+        
         outputDirectory = localConfig.path;
       } else {
+        // Validar que o caminho do agendamento não está vazio
+        if (schedule.backupFolder.isEmpty) {
+          final errorMessage =
+              'Pasta de backup não configurada para o agendamento: ${schedule.name}';
+          LoggerService.error(errorMessage);
+          return rd.Failure(ValidationFailure(message: errorMessage));
+        }
+        
         // Usar pasta de backup configurada no agendamento
         final backupDir = Directory(schedule.backupFolder);
         if (!await backupDir.exists()) {
@@ -222,6 +239,14 @@ class SchedulerService {
         LoggerService.info(
           'Nenhum destino local configurado, usando pasta de backup do agendamento: $outputDirectory',
         );
+      }
+      
+      // Validação final: garantir que outputDirectory não está vazio
+      if (outputDirectory.isEmpty) {
+        final errorMessage =
+            'Caminho de saída do backup está vazio para o agendamento: ${schedule.name}';
+        LoggerService.error(errorMessage);
+        return rd.Failure(ValidationFailure(message: errorMessage));
       }
 
       // Executar backup
