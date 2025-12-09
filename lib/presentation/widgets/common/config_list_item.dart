@@ -11,6 +11,7 @@ class ConfigListItem extends StatelessWidget {
   final bool enabled;
   final ValueChanged<bool>? onToggleEnabled;
   final VoidCallback? onEdit;
+  final VoidCallback? onDuplicate;
   final VoidCallback? onDelete;
   final Widget? trailingAction;
 
@@ -23,6 +24,7 @@ class ConfigListItem extends StatelessWidget {
     required this.enabled,
     this.onToggleEnabled,
     this.onEdit,
+    this.onDuplicate,
     this.onDelete,
     this.trailingAction,
   });
@@ -86,6 +88,21 @@ class ConfigListItem extends StatelessWidget {
       );
     }
 
+    if (onDuplicate != null) {
+      items.add(
+        material.PopupMenuItem(
+          value: 'duplicate',
+          child: const Row(
+            children: [
+              Icon(FluentIcons.copy, size: 16),
+              SizedBox(width: 8),
+              Text('Duplicar'),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (onDelete != null) {
       items.add(
         material.PopupMenuItem(
@@ -122,6 +139,9 @@ class ConfigListItem extends StatelessWidget {
           switch (value) {
             case 'edit':
               onEdit?.call();
+              break;
+            case 'duplicate':
+              onDuplicate?.call();
               break;
             case 'delete':
               onDelete?.call();

@@ -210,25 +210,40 @@ class BackupOrchestratorService {
             fileSize = compressionResult.getOrNull()!.compressedSize;
             await _log(history.id, 'info', 'Compressão concluída');
           } else {
-            final failure = compressionResult.exceptionOrNull()! as Failure;
+            final failure = compressionResult.exceptionOrNull()!;
+            final failureMessage =
+                failure is Failure ? failure.message : failure.toString();
+
             LoggerService.error('Falha na compressão', failure);
             await _log(
               history.id,
-              'warning',
-              'Falha na compressão: ${failure.message}\n'
-              'O backup original foi mantido sem compressão.',
+              'error',
+              'Falha na compressão: $failureMessage',
             );
-            // Não falha o backup completo, apenas registra o aviso
+
+            return rd.Failure(
+              BackupFailure(
+                message:
+                    'Erro ao comprimir backup: $failureMessage. Verifique permissões da pasta de destino.',
+                originalError: failure,
+              ),
+            );
           }
         } catch (e, stackTrace) {
           LoggerService.error('Erro inesperado durante compressão', e, stackTrace);
+          final errorMessage =
+              'Erro ao comprimir backup: $e. Verifique permissões da pasta de destino.';
           await _log(
             history.id,
             'error',
-            'Erro inesperado durante compressão: $e\n'
-            'O backup original foi mantido sem compressão.',
+            errorMessage,
           );
-          // Não falha o backup completo, apenas registra o erro
+          return rd.Failure(
+            BackupFailure(
+              message: errorMessage,
+              originalError: e,
+            ),
+          );
         }
       }
 

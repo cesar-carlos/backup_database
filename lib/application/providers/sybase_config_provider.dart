@@ -137,6 +137,22 @@ class SybaseConfigProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> duplicateConfig(SybaseConfig source) async {
+    final copy = SybaseConfig(
+      name: '${source.name} (cópia)',
+      serverName: source.serverName,
+      databaseName: source.databaseName,
+      databaseFile: source.databaseFile,
+      port: source.port,
+      username: source.username,
+      password: source.password,
+      enabled: source.enabled,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    return await createConfig(copy);
+  }
+
   Future<bool> toggleEnabled(String id, bool enabled) async {
     final config = _configs.firstWhere((c) => c.id == id);
     return await updateConfig(config.copyWith(enabled: enabled));

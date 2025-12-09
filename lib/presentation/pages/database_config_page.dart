@@ -138,6 +138,8 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                           SqlServerConfigList(
                             configs: sqlProvider.configs,
                             onEdit: (config) => _showConfigDialog(config),
+                            onDuplicate: (config) =>
+                                _duplicateSqlServerConfig(config),
                             onDelete: (id) => _confirmDeleteSqlServer(id),
                             onToggleEnabled: (id, enabled) =>
                                 sqlProvider.toggleEnabled(id, enabled),
@@ -155,6 +157,8 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                           SybaseConfigList(
                             configs: sybaseProvider.configs,
                             onEdit: (config) => _showSybaseConfigDialog(config),
+                            onDuplicate: (config) =>
+                                _duplicateSybaseConfig(config),
                             onDelete: (id) => _confirmDeleteSybase(id),
                             onToggleEnabled: (id, enabled) =>
                                 sybaseProvider.toggleEnabled(id, enabled),
@@ -170,6 +174,44 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _duplicateSqlServerConfig(SqlServerConfig config) async {
+    final provider = context.read<SqlServerConfigProvider>();
+    final success = await provider.duplicateConfig(config);
+
+    if (!mounted) return;
+
+    if (success) {
+      MessageModal.showSuccess(
+        context,
+        message: 'Configuração duplicada com sucesso!',
+      );
+    } else {
+      MessageModal.showError(
+        context,
+        message: provider.error ?? 'Erro ao duplicar configuração',
+      );
+    }
+  }
+
+  Future<void> _duplicateSybaseConfig(SybaseConfig config) async {
+    final provider = context.read<SybaseConfigProvider>();
+    final success = await provider.duplicateConfig(config);
+
+    if (!mounted) return;
+
+    if (success) {
+      MessageModal.showSuccess(
+        context,
+        message: 'Configuração duplicada com sucesso!',
+      );
+    } else {
+      MessageModal.showError(
+        context,
+        message: provider.error ?? 'Erro ao duplicar configuração Sybase',
+      );
+    }
   }
 
   Future<void> _showConfigDialog(SqlServerConfig? config) async {

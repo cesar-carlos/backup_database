@@ -139,6 +139,22 @@ class SqlServerConfigProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> duplicateConfig(SqlServerConfig source) async {
+    // Cria nova instância com novo ID (gerado no construtor) e nome indicando cópia
+    final copy = SqlServerConfig(
+      name: '${source.name} (cópia)',
+      server: source.server,
+      database: source.database,
+      username: source.username,
+      password: source.password,
+      port: source.port,
+      enabled: source.enabled,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    return await createConfig(copy);
+  }
+
   Future<bool> toggleEnabled(String id, bool enabled) async {
     final config = _configs.firstWhere((c) => c.id == id);
     return await updateConfig(config.copyWith(enabled: enabled));

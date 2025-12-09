@@ -165,6 +165,27 @@ class SchedulerProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> duplicateSchedule(Schedule source) async {
+    // cria uma nova instância com novo id e timestamps
+    final copy = Schedule(
+      name: '${source.name} (cópia)',
+      databaseConfigId: source.databaseConfigId,
+      databaseType: source.databaseType,
+      scheduleType: source.scheduleType,
+      scheduleConfig: source.scheduleConfig,
+      destinationIds: List<String>.from(source.destinationIds),
+      backupFolder: source.backupFolder,
+      backupType: source.backupType,
+      truncateLog: source.truncateLog,
+      compressBackup: source.compressBackup,
+      enabled: source.enabled,
+      lastRunAt: null,
+      nextRunAt: null,
+    );
+
+    return await createSchedule(copy);
+  }
+
   Future<bool> executeNow(String scheduleId) async {
     _isLoading = true;
     _error = null;

@@ -6,6 +6,7 @@ import 'sybase_config_list_item.dart';
 class SybaseConfigList extends StatelessWidget {
   final List<SybaseConfig> configs;
   final Function(SybaseConfig)? onEdit;
+  final Function(SybaseConfig)? onDuplicate;
   final Function(String)? onDelete;
   final Function(String, bool)? onToggleEnabled;
 
@@ -13,6 +14,7 @@ class SybaseConfigList extends StatelessWidget {
     super.key,
     required this.configs,
     this.onEdit,
+    this.onDuplicate,
     this.onDelete,
     this.onToggleEnabled,
   });
@@ -38,6 +40,8 @@ class SybaseConfigList extends StatelessWidget {
         return SybaseConfigListItem(
           config: config,
           onEdit: onEdit != null ? () => onEdit!(config) : null,
+          onDuplicate:
+              onDuplicate != null ? () => onDuplicate!(config) : null,
           onDelete: onDelete != null ? () => onDelete!(config.id) : null,
           onToggleEnabled: onToggleEnabled != null
               ? (enabled) => onToggleEnabled!(config.id, enabled)

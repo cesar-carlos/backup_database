@@ -8,6 +8,7 @@ import '../common/config_list_item.dart';
 class ScheduleListItem extends StatelessWidget {
   final Schedule schedule;
   final VoidCallback? onEdit;
+  final VoidCallback? onDuplicate;
   final VoidCallback? onDelete;
   final VoidCallback? onRunNow;
   final ValueChanged<bool>? onToggleEnabled;
@@ -16,6 +17,7 @@ class ScheduleListItem extends StatelessWidget {
     super.key,
     required this.schedule,
     this.onEdit,
+    this.onDuplicate,
     this.onDelete,
     this.onRunNow,
     this.onToggleEnabled,
@@ -29,6 +31,7 @@ class ScheduleListItem extends StatelessWidget {
       enabled: schedule.enabled,
       onToggleEnabled: onToggleEnabled,
       onEdit: onEdit,
+      onDuplicate: onDuplicate,
       onDelete: onDelete,
       trailingAction: onRunNow != null
           ? IconButton(

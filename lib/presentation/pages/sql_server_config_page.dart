@@ -92,6 +92,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
                   return SqlServerConfigList(
                     configs: provider.configs,
                     onEdit: (config) => _showConfigDialog(config),
+                    onDuplicate: (config) => _duplicateConfig(config),
                     onDelete: (id) => _confirmDelete(id),
                     onToggleEnabled: (id, enabled) =>
                         provider.toggleEnabled(id, enabled),
@@ -186,6 +187,25 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
           message: provider.error ?? 'Erro ao excluir configuração',
         );
       }
+    }
+  }
+
+  Future<void> _duplicateConfig(SqlServerConfig config) async {
+    final provider = context.read<SqlServerConfigProvider>();
+    final success = await provider.duplicateConfig(config);
+
+    if (!mounted) return;
+
+    if (success) {
+      MessageModal.showSuccess(
+        context,
+        message: 'Configuração duplicada com sucesso!',
+      );
+    } else {
+      MessageModal.showError(
+        context,
+        message: provider.error ?? 'Erro ao duplicar configuração',
+      );
     }
   }
 }

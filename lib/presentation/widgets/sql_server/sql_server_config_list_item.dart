@@ -6,6 +6,7 @@ import '../common/config_list_item.dart';
 class SqlServerConfigListItem extends StatelessWidget {
   final SqlServerConfig config;
   final VoidCallback? onEdit;
+  final VoidCallback? onDuplicate;
   final VoidCallback? onDelete;
   final ValueChanged<bool>? onToggleEnabled;
 
@@ -13,6 +14,7 @@ class SqlServerConfigListItem extends StatelessWidget {
     super.key,
     required this.config,
     this.onEdit,
+    this.onDuplicate,
     this.onDelete,
     this.onToggleEnabled,
   });
@@ -25,6 +27,7 @@ class SqlServerConfigListItem extends StatelessWidget {
       enabled: config.enabled,
       onToggleEnabled: onToggleEnabled,
       onEdit: onEdit,
+      onDuplicate: onDuplicate,
       onDelete: onDelete,
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

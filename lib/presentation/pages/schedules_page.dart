@@ -112,6 +112,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
                       return ScheduleListItem(
                         schedule: schedule,
                         onEdit: () => _showScheduleDialog(context, schedule),
+                        onDuplicate: () => _duplicateSchedule(context, schedule),
                         onDelete: () => _confirmDelete(context, schedule.id),
                         onRunNow: () => _runNow(context, schedule.id),
                         onToggleEnabled: (enabled) =>
@@ -244,6 +245,28 @@ class _SchedulesPageState extends State<SchedulesPage> {
           );
         }
       }
+    }
+  }
+
+  Future<void> _duplicateSchedule(
+    BuildContext context,
+    Schedule schedule,
+  ) async {
+    final provider = context.read<SchedulerProvider>();
+    final success = await provider.duplicateSchedule(schedule);
+
+    if (!context.mounted) return;
+
+    if (success) {
+      MessageModal.showSuccess(
+        context,
+        message: 'Agendamento duplicado com sucesso!',
+      );
+    } else {
+      MessageModal.showError(
+        context,
+        message: provider.error ?? 'Erro ao duplicar agendamento',
+      );
     }
   }
 }
