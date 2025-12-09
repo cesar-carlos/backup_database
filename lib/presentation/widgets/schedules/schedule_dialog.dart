@@ -71,6 +71,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _selectedDatabaseConfigId = widget.schedule!.databaseConfigId;
       _scheduleType = widget.schedule!.scheduleType;
       _backupType = widget.schedule!.backupType;
+      if (_databaseType == DatabaseType.sybase &&
+          _backupType == BackupType.differential) {
+        _backupType = BackupType.full;
+      }
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
       _isEnabled = widget.schedule!.enabled;
@@ -161,6 +165,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
   }
 
+  List<BackupType> _getAvailableBackupTypes() {
+    if (_databaseType == DatabaseType.sybase) {
+      return const [BackupType.full, BackupType.log];
+    }
+    return BackupType.values;
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -249,7 +260,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                         label: 'Tipo de Backup',
                         value: _backupType,
                         placeholder: const Text('Tipo de Backup'),
-                        items: BackupType.values.map((type) {
+                    items: _getAvailableBackupTypes().map((type) {
                           return ComboBoxItem<BackupType>(
                             value: type,
                             child: Text(type.displayName),

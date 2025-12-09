@@ -35,13 +35,29 @@ class SybaseBackupService implements ISybaseBackupService {
         await outputDir.create(recursive: true);
       }
 
-      // Gerar nome do arquivo de backup usando databaseName (DBN) ao invés de serverName
+      // Para Sybase, differential não é suportado; forçamos para full
+      final effectiveType = backupType == BackupType.differential
+          ? BackupType.full
+          : backupType;
+
+      // Gerar nome do arquivo/diretório de backup
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-      final extension = backupType == BackupType.log ? '.trn' : '';
-      final typeSlug = backupType.name; // full | differential | log
-      final fileName = customFileName ??
-          '${config.databaseName}_${typeSlug}_$timestamp$extension';
-      final backupPath = p.join(outputDirectory, fileName);
+      final extension = effectiveType == BackupType.log ? '.trn' : '';
+      final typeSlug = effectiveType.name; // full | log
+
+      // Estratégia: manter um diretório estável por tipo/banco para full,
+      // pois Sybase precisa do mesmo diretório do último full para log/diff.
+      // Como diff foi removido, mantemos para consistência.
+      String backupPath;
+      if (effectiveType == BackupType.full) {
+        // Diretório fixo por banco/tipo
+        backupPath = p.join(outputDirectory, config.databaseName);
+      } else {
+        // Log mantém timestamp para arquivos distintos
+        final fileName = customFileName ??
+            '${config.databaseName}_${typeSlug}_$timestamp$extension';
+        backupPath = p.join(outputDirectory, fileName);
+      }
 
       // Construir comando dbbackup
       final executable = dbbackupPath ?? 'dbbackup';
@@ -86,18 +102,18 @@ class SybaseBackupService implements ISybaseBackupService {
         // Comando SQL para backup - o servidor executa o backup internamente
         // Construir comando baseado no tipo de backup
         String backupSql;
-        switch (backupType) {
+      switch (effectiveType) {
           case BackupType.full:
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
-            break;
-          case BackupType.differential:
-            backupSql =
-                "BACKUP DATABASE DIRECTORY '$escapedBackupPath' WITH DIFFERENTIAL";
             break;
           case BackupType.log:
             backupSql =
                 "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
             break;
+        case BackupType.differential:
+          // Não deve ocorrer, mas fallback para full
+          backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
+          break;
         }
 
         final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
