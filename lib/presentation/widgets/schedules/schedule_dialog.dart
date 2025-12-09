@@ -375,7 +375,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                       _buildSectionTitle('Opções'),
                       const SizedBox(height: 12),
                       InfoLabel(
-                        label: 'Compactar backup',
+                        label: 'Compactar backup (gera ZIP)',
                         child: ToggleSwitch(
                           checked: _compressBackup,
                           onChanged: (value) {
@@ -385,14 +385,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                           },
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Gerar arquivo ZIP do backup',
-                        style: FluentTheme.of(context).typography.caption,
-                      ),
                       const SizedBox(height: 16),
                       InfoLabel(
-                        label: 'Habilitado',
+                        label: 'Agendamento habilitado',
                         child: ToggleSwitch(
                           checked: _isEnabled,
                           onChanged: (value) {
@@ -401,11 +396,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                             });
                           },
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Agendamento ativo',
-                        style: FluentTheme.of(context).typography.caption,
                       ),
                     ],
                   ),
