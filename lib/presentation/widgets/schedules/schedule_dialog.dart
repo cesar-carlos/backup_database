@@ -269,7 +269,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                         label: 'Tipo de Backup',
                         value: _backupType,
                         placeholder: const Text('Tipo de Backup'),
-                    items: _getAvailableBackupTypes().map((type) {
+                        items: _getAvailableBackupTypes().map((type) {
                           return ComboBoxItem<BackupType>(
                             value: type,
                             child: Text(type.displayName),
@@ -278,8 +278,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                         onChanged: (value) {
                           if (value != null) {
                             setState(() {
-                          _backupType = value;
-                          _onBackupTypeChanged();
+                              _backupType = value;
+                              _onBackupTypeChanged();
                             });
                           }
                         },
@@ -926,6 +926,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   void _save() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_selectedDatabaseConfigId == null) {
+      MessageModal.showWarning(
+        context,
+        message: 'Selecione uma configuração de banco de dados',
+      );
       return;
     }
 

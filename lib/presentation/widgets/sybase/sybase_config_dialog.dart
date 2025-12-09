@@ -5,7 +5,7 @@ import '../../../core/di/service_locator.dart';
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
 import '../../../domain/entities/sybase_config.dart';
-import '../../../infrastructure/external/process/sybase_backup_service.dart';
+import '../../../domain/services/i_sybase_backup_service.dart';
 import '../common/common.dart';
 
 class SybaseConfigDialog extends StatefulWidget {
@@ -39,14 +39,14 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   bool _isEnabled = true;
   bool _isTestingConnection = false;
 
-  late final SybaseBackupService _backupService;
+  late final ISybaseBackupService _backupService;
 
   bool get isEditing => widget.config != null;
 
   @override
   void initState() {
     super.initState();
-    _backupService = getIt<SybaseBackupService>();
+    _backupService = getIt<ISybaseBackupService>();
 
     if (widget.config != null) {
       _nameController.text = widget.config!.name;
