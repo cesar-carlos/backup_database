@@ -3,15 +3,20 @@ import 'package:flutter/foundation.dart';
 import '../../core/errors/failure.dart';
 import '../../domain/entities/sybase_config.dart';
 import '../../domain/repositories/i_sybase_config_repository.dart';
+import '../../domain/repositories/i_schedule_repository.dart';
 
 class SybaseConfigProvider extends ChangeNotifier {
   final ISybaseConfigRepository _repository;
+  final IScheduleRepository _scheduleRepository;
 
   List<SybaseConfig> _configs = [];
   bool _isLoading = false;
   String? _error;
 
-  SybaseConfigProvider(this._repository) {
+  SybaseConfigProvider(
+    this._repository,
+    this._scheduleRepository,
+  ) {
     loadConfigs();
   }
 
@@ -107,6 +112,13 @@ class SybaseConfigProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteConfig(String id) async {
+    final schedulesResult = await _scheduleRepository.getByDatabaseConfig(id);
+    if (schedulesResult.isSuccess() && schedulesResult.getOrNull()!.isNotEmpty) {
+      _error =
+          'Há agendamentos vinculados a esta configuração Sybase. Remova-os antes de excluir.';
+      notifyListeners();
+      return false;
+    }
     _isLoading = true;
     _error = null;
     notifyListeners();

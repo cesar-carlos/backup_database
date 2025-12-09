@@ -2,11 +2,16 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/backup_destination.dart';
 import '../../domain/repositories/i_backup_destination_repository.dart';
+import '../../domain/repositories/i_schedule_repository.dart';
 
 class DestinationProvider extends ChangeNotifier {
   final IBackupDestinationRepository _repository;
+  final IScheduleRepository _scheduleRepository;
 
-  DestinationProvider(this._repository) {
+  DestinationProvider(
+    this._repository,
+    this._scheduleRepository,
+  ) {
     loadDestinations();
   }
 
@@ -89,6 +94,18 @@ class DestinationProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteDestination(String id) async {
+    // Bloqueia exclusão se houver agendamentos usando este destino
+    final schedulesResult = await _scheduleRepository.getAll();
+    final hasLinked = schedulesResult.isSuccess() &&
+        schedulesResult.getOrNull()!
+            .any((s) => s.destinationIds.contains(id));
+    if (hasLinked) {
+      _error =
+          'Há agendamentos vinculados a este destino. Remova-os antes de excluir.';
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();

@@ -224,15 +224,24 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerFactory<SqlServerConfigProvider>(
-    () => SqlServerConfigProvider(getIt<ISqlServerConfigRepository>()),
+    () => SqlServerConfigProvider(
+      getIt<ISqlServerConfigRepository>(),
+      getIt<IScheduleRepository>(),
+    ),
   );
 
   getIt.registerFactory<SybaseConfigProvider>(
-    () => SybaseConfigProvider(getIt<ISybaseConfigRepository>()),
+    () => SybaseConfigProvider(
+      getIt<ISybaseConfigRepository>(),
+      getIt<IScheduleRepository>(),
+    ),
   );
 
   getIt.registerFactory<DestinationProvider>(
-    () => DestinationProvider(getIt<IBackupDestinationRepository>()),
+    () => DestinationProvider(
+      getIt<IBackupDestinationRepository>(),
+      getIt<IScheduleRepository>(),
+    ),
   );
 
   getIt.registerFactory<DashboardProvider>(

@@ -3,15 +3,20 @@ import 'package:flutter/foundation.dart';
 import '../../core/errors/failure.dart';
 import '../../domain/entities/sql_server_config.dart';
 import '../../domain/repositories/i_sql_server_config_repository.dart';
+import '../../domain/repositories/i_schedule_repository.dart';
 
 class SqlServerConfigProvider extends ChangeNotifier {
   final ISqlServerConfigRepository _repository;
+  final IScheduleRepository _scheduleRepository;
 
   List<SqlServerConfig> _configs = [];
   bool _isLoading = false;
   String? _error;
 
-  SqlServerConfigProvider(this._repository) {
+  SqlServerConfigProvider(
+    this._repository,
+    this._scheduleRepository,
+  ) {
     loadConfigs();
   }
 
@@ -109,6 +114,13 @@ class SqlServerConfigProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteConfig(String id) async {
+    // Bloqueia exclusão se houver agendamentos vinculados
+    final schedulesResult = await _scheduleRepository.getByDatabaseConfig(id);
+    if (schedulesResult.isSuccess() && schedulesResult.getOrNull()!.isNotEmpty) {
+      _error = 'Há agendamentos vinculados a esta configuração. Remova-os antes de excluir.';
+      notifyListeners();
+      return false;
+    }
     _isLoading = true;
     _error = null;
     notifyListeners();
