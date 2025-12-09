@@ -51,15 +51,15 @@ Future<void> setupServiceLocator() async {
   // Process Services
   getIt.registerLazySingleton<ProcessService>(() => ProcessService());
 
-  getIt.registerLazySingleton<SqlServerBackupService>(
+  getIt.registerLazySingleton<ISqlServerBackupService>(
     () => SqlServerBackupService(getIt<ProcessService>()),
   );
 
-  getIt.registerLazySingleton<SybaseBackupService>(
+  getIt.registerLazySingleton<ISybaseBackupService>(
     () => SybaseBackupService(getIt<ProcessService>()),
   );
 
-  getIt.registerLazySingleton<CompressionService>(
+  getIt.registerLazySingleton<ICompressionService>(
     () => CompressionService(getIt<ProcessService>()),
   );
 
@@ -80,11 +80,11 @@ Future<void> setupServiceLocator() async {
 
   // Use Cases - Backup
   getIt.registerLazySingleton<ExecuteSqlServerBackup>(
-    () => ExecuteSqlServerBackup(getIt<SqlServerBackupService>()),
+    () => ExecuteSqlServerBackup(getIt<ISqlServerBackupService>()),
   );
 
   getIt.registerLazySingleton<ExecuteSybaseBackup>(
-    () => ExecuteSybaseBackup(getIt<SybaseBackupService>()),
+    () => ExecuteSybaseBackup(getIt<ISybaseBackupService>()),
   );
 
   // Use Cases - Destinations
@@ -147,9 +147,9 @@ Future<void> setupServiceLocator() async {
       sybaseConfigRepository: getIt<ISybaseConfigRepository>(),
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
-      sqlServerBackupService: getIt<SqlServerBackupService>(),
-      sybaseBackupService: getIt<SybaseBackupService>(),
-      compressionService: getIt<CompressionService>(),
+      sqlServerBackupService: getIt<ISqlServerBackupService>(),
+      sybaseBackupService: getIt<ISybaseBackupService>(),
+      compressionService: getIt<ICompressionService>(),
       notificationService: getIt<NotificationService>(),
     ),
   );

@@ -6,34 +6,19 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
+import '../../../domain/services/compression_result.dart';
+import '../../../domain/services/i_compression_service.dart';
 import '../process/process_service.dart';
 import 'winrar_service.dart';
 
-class CompressionResult {
-  final String compressedPath;
-  final int compressedSize;
-  final int originalSize;
-  final Duration duration;
-  final double compressionRatio;
-  final bool usedWinRar;
-
-  const CompressionResult({
-    required this.compressedPath,
-    required this.compressedSize,
-    required this.originalSize,
-    required this.duration,
-    required this.compressionRatio,
-    this.usedWinRar = false,
-  });
-}
-
-class CompressionService {
+class CompressionService implements ICompressionService {
   final WinRarService _winRarService;
 
   CompressionService(ProcessService processService)
     : _winRarService = WinRarService(processService);
 
   /// Comprime um arquivo ou diretório automaticamente
+  @override
   Future<rd.Result<CompressionResult>> compress({
     required String path,
     String? outputPath,

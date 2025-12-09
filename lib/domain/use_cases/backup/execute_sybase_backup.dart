@@ -2,14 +2,15 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../../core/errors/failure.dart';
 import '../../entities/sybase_config.dart';
-import '../../../infrastructure/external/process/sybase_backup_service.dart';
+import '../../services/backup_execution_result.dart';
+import '../../services/i_sybase_backup_service.dart';
 
 class ExecuteSybaseBackup {
-  final SybaseBackupService _backupService;
+  final ISybaseBackupService _backupService;
 
   ExecuteSybaseBackup(this._backupService);
 
-  Future<rd.Result<SybaseBackupResult>> call({
+  Future<rd.Result<BackupExecutionResult>> call({
     required SybaseConfig config,
     required String outputDirectory,
     String? customFileName,

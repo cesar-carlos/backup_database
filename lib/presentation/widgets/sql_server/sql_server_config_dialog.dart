@@ -6,8 +6,8 @@ import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
 import '../../../domain/entities/sql_server_config.dart';
 import '../../../domain/entities/sybase_config.dart';
-import '../../../infrastructure/external/process/sql_server_backup_service.dart';
-import '../../../infrastructure/external/process/sybase_backup_service.dart';
+import '../../../domain/services/i_sql_server_backup_service.dart';
+import '../../../domain/services/i_sybase_backup_service.dart';
 import '../common/common.dart';
 
 enum DatabaseType { sqlServer, sybase }
@@ -57,16 +57,16 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   List<String> _databases = [];
   String? _selectedDatabase;
 
-  late final SqlServerBackupService _backupService;
-  late final SybaseBackupService _sybaseBackupService;
+  late final ISqlServerBackupService _backupService;
+  late final ISybaseBackupService _sybaseBackupService;
 
   bool get isEditing => widget.config != null;
 
   @override
   void initState() {
     super.initState();
-    _backupService = getIt<SqlServerBackupService>();
-    _sybaseBackupService = getIt<SybaseBackupService>();
+    _backupService = getIt<ISqlServerBackupService>();
+    _sybaseBackupService = getIt<ISybaseBackupService>();
 
     // Detectar tipo de banco quando está editando
     if (widget.config != null) {
@@ -614,10 +614,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           }
 
           final databasesResult = await _backupService.listDatabases(
-            server: _serverController.text.trim(),
-            port: port,
-            username: _usernameController.text.trim(),
-            password: _passwordController.text,
+            config: tempConfig,
           );
 
           await databasesResult.fold(

@@ -7,28 +7,17 @@ import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
 import '../../../domain/entities/backup_type.dart';
 import '../../../domain/entities/sybase_config.dart';
+import '../../../domain/services/backup_execution_result.dart';
+import '../../../domain/services/i_sybase_backup_service.dart';
 import 'process_service.dart' as ps;
 
-class SybaseBackupResult {
-  final String backupPath;
-  final int fileSize;
-  final Duration duration;
-  final String databaseName;
-
-  const SybaseBackupResult({
-    required this.backupPath,
-    required this.fileSize,
-    required this.duration,
-    required this.databaseName,
-  });
-}
-
-class SybaseBackupService {
+class SybaseBackupService implements ISybaseBackupService {
   final ps.ProcessService _processService;
 
   SybaseBackupService(this._processService);
 
-  Future<rd.Result<SybaseBackupResult>> executeBackup({
+  @override
+  Future<rd.Result<BackupExecutionResult>> executeBackup({
     required SybaseConfig config,
     required String outputDirectory,
     BackupType backupType = BackupType.full,
@@ -49,7 +38,9 @@ class SybaseBackupService {
       // Gerar nome do arquivo de backup usando databaseName (DBN) ao invés de serverName
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final extension = backupType == BackupType.log ? '.trn' : '';
-      final fileName = customFileName ?? '${config.databaseName}_$timestamp$extension';
+      final typeSlug = backupType.name; // full | differential | log
+      final fileName = customFileName ??
+          '${config.databaseName}_${typeSlug}_$timestamp$extension';
       final backupPath = p.join(outputDirectory, fileName);
 
       // Construir comando dbbackup
@@ -100,10 +91,12 @@ class SybaseBackupService {
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
             break;
           case BackupType.differential:
-            backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath' WITH DIFFERENTIAL";
+            backupSql =
+                "BACKUP DATABASE DIRECTORY '$escapedBackupPath' WITH DIFFERENTIAL";
             break;
           case BackupType.log:
-            backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
+            backupSql =
+                "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
             break;
         }
 
@@ -333,7 +326,7 @@ class SybaseBackupService {
         );
 
         return rd.Success(
-          SybaseBackupResult(
+          BackupExecutionResult(
             backupPath: actualBackupPath,
             fileSize: totalSize,
             duration: stopwatch.elapsed,
@@ -352,6 +345,7 @@ class SybaseBackupService {
     }
   }
 
+  @override
   Future<rd.Result<bool>> testConnection(SybaseConfig config) async {
     try {
       LoggerService.info(

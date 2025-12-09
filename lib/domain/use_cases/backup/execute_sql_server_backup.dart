@@ -2,14 +2,15 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../../core/errors/failure.dart';
 import '../../entities/sql_server_config.dart';
-import '../../../infrastructure/external/process/sql_server_backup_service.dart';
+import '../../services/backup_execution_result.dart';
+import '../../services/i_sql_server_backup_service.dart';
 
 class ExecuteSqlServerBackup {
-  final SqlServerBackupService _backupService;
+  final ISqlServerBackupService _backupService;
 
   ExecuteSqlServerBackup(this._backupService);
 
-  Future<rd.Result<SqlServerBackupResult>> call({
+  Future<rd.Result<BackupExecutionResult>> call({
     required SqlServerConfig config,
     required String outputDirectory,
     String? customFileName,

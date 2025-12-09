@@ -382,10 +382,27 @@ class SchedulerService {
       // Se usamos pasta temporária e não há destino local, deletar arquivo após enviar
       if (shouldDeleteTempFile) {
         try {
-          final tempFile = File(tempBackupPath);
-          if (tempFile.existsSync()) {
-            await tempFile.delete();
-            LoggerService.info('Arquivo temporário deletado: $tempBackupPath');
+          final entityType = FileSystemEntity.typeSync(tempBackupPath);
+
+          switch (entityType) {
+            case FileSystemEntityType.file:
+              final tempFile = File(tempBackupPath);
+              if (tempFile.existsSync()) {
+                await tempFile.delete();
+                LoggerService.info('Arquivo temporário deletado: $tempBackupPath');
+              }
+              break;
+            case FileSystemEntityType.directory:
+              final tempDir = Directory(tempBackupPath);
+              if (tempDir.existsSync()) {
+                await tempDir.delete(recursive: true);
+                LoggerService.info('Diretório temporário deletado: $tempBackupPath');
+              }
+              break;
+            default:
+              LoggerService.debug(
+                'Arquivo temporário não encontrado para exclusão: $tempBackupPath',
+              );
           }
         } catch (e) {
           LoggerService.warning('Erro ao deletar arquivo temporário: $e');

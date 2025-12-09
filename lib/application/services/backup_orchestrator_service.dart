@@ -10,9 +10,9 @@ import '../../domain/entities/schedule.dart';
 import '../../domain/entities/backup_history.dart';
 import '../../domain/entities/backup_log.dart';
 import '../../domain/repositories/repositories.dart';
-import '../../infrastructure/external/process/sql_server_backup_service.dart';
-import '../../infrastructure/external/process/sybase_backup_service.dart';
-import '../../infrastructure/external/compression/compression_service.dart';
+import '../../domain/services/i_sql_server_backup_service.dart';
+import '../../domain/services/i_sybase_backup_service.dart';
+import '../../domain/services/i_compression_service.dart';
 import '../providers/backup_progress_provider.dart';
 import 'notification_service.dart';
 
@@ -21,9 +21,9 @@ class BackupOrchestratorService {
   final ISybaseConfigRepository _sybaseConfigRepository;
   final IBackupHistoryRepository _backupHistoryRepository;
   final IBackupLogRepository _backupLogRepository;
-  final SqlServerBackupService _sqlServerBackupService;
-  final SybaseBackupService _sybaseBackupService;
-  final CompressionService _compressionService;
+  final ISqlServerBackupService _sqlServerBackupService;
+  final ISybaseBackupService _sybaseBackupService;
+  final ICompressionService _compressionService;
   final NotificationService _notificationService;
 
   BackupOrchestratorService({
@@ -31,9 +31,9 @@ class BackupOrchestratorService {
     required ISybaseConfigRepository sybaseConfigRepository,
     required IBackupHistoryRepository backupHistoryRepository,
     required IBackupLogRepository backupLogRepository,
-    required SqlServerBackupService sqlServerBackupService,
-    required SybaseBackupService sybaseBackupService,
-    required CompressionService compressionService,
+    required ISqlServerBackupService sqlServerBackupService,
+    required ISybaseBackupService sybaseBackupService,
+    required ICompressionService compressionService,
     required NotificationService notificationService,
   }) : _sqlServerConfigRepository = sqlServerConfigRepository,
        _sybaseConfigRepository = sybaseConfigRepository,
