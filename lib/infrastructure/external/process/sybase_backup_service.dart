@@ -23,6 +23,7 @@ class SybaseBackupService implements ISybaseBackupService {
     BackupType backupType = BackupType.full,
     String? customFileName,
     String? dbbackupPath,
+    bool truncateLog = true,
   }) async {
     try {
       LoggerService.info(
@@ -107,8 +108,8 @@ class SybaseBackupService implements ISybaseBackupService {
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
             break;
           case BackupType.log:
-            backupSql =
-                "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
+          backupSql =
+              "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
             break;
         case BackupType.differential:
           // Não deve ocorrer, mas fallback para full

@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -271,6 +271,33 @@ class AppDatabase extends _$AppDatabase {
           } catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v7 para backup_type',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 8) {
+          // Migração para versão 8: adicionar truncate_log em schedules_table
+          try {
+            final schedulesColumns = await (customSelect(
+              "PRAGMA table_info(schedules_table)",
+            ).get());
+            final hasTruncateLogColumn = schedulesColumns.any(
+              (row) => row.data['name'] == 'truncate_log',
+            );
+
+            if (!hasTruncateLogColumn) {
+              await customStatement(
+                "ALTER TABLE schedules_table ADD COLUMN truncate_log INTEGER NOT NULL DEFAULT 1",
+              );
+              LoggerService.info(
+                'Migração v8: Coluna truncate_log adicionada à schedules_table',
+              );
+            }
+          } catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v8 para truncate_log',
               e,
               stackTrace,
             );

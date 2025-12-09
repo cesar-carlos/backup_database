@@ -15,6 +15,7 @@ class ExecuteSybaseBackup {
     required String outputDirectory,
     String? customFileName,
     String? dbbackupPath,
+    bool truncateLog = true,
   }) async {
     // Validações
     if (config.serverName.isEmpty) {
@@ -38,6 +39,7 @@ class ExecuteSybaseBackup {
       outputDirectory: outputDirectory,
       customFileName: customFileName,
       dbbackupPath: dbbackupPath,
+      truncateLog: truncateLog,
     );
   }
 }

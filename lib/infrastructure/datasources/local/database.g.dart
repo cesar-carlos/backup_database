@@ -1838,6 +1838,21 @@ class $SchedulesTableTable extends SchedulesTable
     requiredDuringInsert: false,
     defaultValue: const Constant('full'),
   );
+  static const VerificationMeta _truncateLogMeta = const VerificationMeta(
+    'truncateLog',
+  );
+  @override
+  late final GeneratedColumn<bool> truncateLog = GeneratedColumn<bool>(
+    'truncate_log',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("truncate_log" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _compressBackupMeta = const VerificationMeta(
     'compressBackup',
   );
@@ -1923,6 +1938,7 @@ class $SchedulesTableTable extends SchedulesTable
     destinationIds,
     backupFolder,
     backupType,
+    truncateLog,
     compressBackup,
     enabled,
     lastRunAt,
@@ -2025,6 +2041,15 @@ class $SchedulesTableTable extends SchedulesTable
         backupType.isAcceptableOrUnknown(data['backup_type']!, _backupTypeMeta),
       );
     }
+    if (data.containsKey('truncate_log')) {
+      context.handle(
+        _truncateLogMeta,
+        truncateLog.isAcceptableOrUnknown(
+          data['truncate_log']!,
+          _truncateLogMeta,
+        ),
+      );
+    }
     if (data.containsKey('compress_backup')) {
       context.handle(
         _compressBackupMeta,
@@ -2113,6 +2138,10 @@ class $SchedulesTableTable extends SchedulesTable
         DriftSqlType.string,
         data['${effectivePrefix}backup_type'],
       )!,
+      truncateLog: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}truncate_log'],
+      )!,
       compressBackup: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}compress_backup'],
@@ -2157,6 +2186,7 @@ class SchedulesTableData extends DataClass
   final String destinationIds;
   final String backupFolder;
   final String backupType;
+  final bool truncateLog;
   final bool compressBackup;
   final bool enabled;
   final DateTime? lastRunAt;
@@ -2173,6 +2203,7 @@ class SchedulesTableData extends DataClass
     required this.destinationIds,
     required this.backupFolder,
     required this.backupType,
+    required this.truncateLog,
     required this.compressBackup,
     required this.enabled,
     this.lastRunAt,
@@ -2192,6 +2223,7 @@ class SchedulesTableData extends DataClass
     map['destination_ids'] = Variable<String>(destinationIds);
     map['backup_folder'] = Variable<String>(backupFolder);
     map['backup_type'] = Variable<String>(backupType);
+    map['truncate_log'] = Variable<bool>(truncateLog);
     map['compress_backup'] = Variable<bool>(compressBackup);
     map['enabled'] = Variable<bool>(enabled);
     if (!nullToAbsent || lastRunAt != null) {
@@ -2216,6 +2248,7 @@ class SchedulesTableData extends DataClass
       destinationIds: Value(destinationIds),
       backupFolder: Value(backupFolder),
       backupType: Value(backupType),
+      truncateLog: Value(truncateLog),
       compressBackup: Value(compressBackup),
       enabled: Value(enabled),
       lastRunAt: lastRunAt == null && nullToAbsent
@@ -2244,6 +2277,7 @@ class SchedulesTableData extends DataClass
       destinationIds: serializer.fromJson<String>(json['destinationIds']),
       backupFolder: serializer.fromJson<String>(json['backupFolder']),
       backupType: serializer.fromJson<String>(json['backupType']),
+      truncateLog: serializer.fromJson<bool>(json['truncateLog']),
       compressBackup: serializer.fromJson<bool>(json['compressBackup']),
       enabled: serializer.fromJson<bool>(json['enabled']),
       lastRunAt: serializer.fromJson<DateTime?>(json['lastRunAt']),
@@ -2265,6 +2299,7 @@ class SchedulesTableData extends DataClass
       'destinationIds': serializer.toJson<String>(destinationIds),
       'backupFolder': serializer.toJson<String>(backupFolder),
       'backupType': serializer.toJson<String>(backupType),
+      'truncateLog': serializer.toJson<bool>(truncateLog),
       'compressBackup': serializer.toJson<bool>(compressBackup),
       'enabled': serializer.toJson<bool>(enabled),
       'lastRunAt': serializer.toJson<DateTime?>(lastRunAt),
@@ -2284,6 +2319,7 @@ class SchedulesTableData extends DataClass
     String? destinationIds,
     String? backupFolder,
     String? backupType,
+    bool? truncateLog,
     bool? compressBackup,
     bool? enabled,
     Value<DateTime?> lastRunAt = const Value.absent(),
@@ -2300,6 +2336,7 @@ class SchedulesTableData extends DataClass
     destinationIds: destinationIds ?? this.destinationIds,
     backupFolder: backupFolder ?? this.backupFolder,
     backupType: backupType ?? this.backupType,
+    truncateLog: truncateLog ?? this.truncateLog,
     compressBackup: compressBackup ?? this.compressBackup,
     enabled: enabled ?? this.enabled,
     lastRunAt: lastRunAt.present ? lastRunAt.value : this.lastRunAt,
@@ -2332,6 +2369,9 @@ class SchedulesTableData extends DataClass
       backupType: data.backupType.present
           ? data.backupType.value
           : this.backupType,
+      truncateLog: data.truncateLog.present
+          ? data.truncateLog.value
+          : this.truncateLog,
       compressBackup: data.compressBackup.present
           ? data.compressBackup.value
           : this.compressBackup,
@@ -2355,6 +2395,7 @@ class SchedulesTableData extends DataClass
           ..write('destinationIds: $destinationIds, ')
           ..write('backupFolder: $backupFolder, ')
           ..write('backupType: $backupType, ')
+          ..write('truncateLog: $truncateLog, ')
           ..write('compressBackup: $compressBackup, ')
           ..write('enabled: $enabled, ')
           ..write('lastRunAt: $lastRunAt, ')
@@ -2376,6 +2417,7 @@ class SchedulesTableData extends DataClass
     destinationIds,
     backupFolder,
     backupType,
+    truncateLog,
     compressBackup,
     enabled,
     lastRunAt,
@@ -2396,6 +2438,7 @@ class SchedulesTableData extends DataClass
           other.destinationIds == this.destinationIds &&
           other.backupFolder == this.backupFolder &&
           other.backupType == this.backupType &&
+          other.truncateLog == this.truncateLog &&
           other.compressBackup == this.compressBackup &&
           other.enabled == this.enabled &&
           other.lastRunAt == this.lastRunAt &&
@@ -2414,6 +2457,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
   final Value<String> destinationIds;
   final Value<String> backupFolder;
   final Value<String> backupType;
+  final Value<bool> truncateLog;
   final Value<bool> compressBackup;
   final Value<bool> enabled;
   final Value<DateTime?> lastRunAt;
@@ -2431,6 +2475,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.destinationIds = const Value.absent(),
     this.backupFolder = const Value.absent(),
     this.backupType = const Value.absent(),
+    this.truncateLog = const Value.absent(),
     this.compressBackup = const Value.absent(),
     this.enabled = const Value.absent(),
     this.lastRunAt = const Value.absent(),
@@ -2449,6 +2494,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     required String destinationIds,
     this.backupFolder = const Value.absent(),
     this.backupType = const Value.absent(),
+    this.truncateLog = const Value.absent(),
     this.compressBackup = const Value.absent(),
     this.enabled = const Value.absent(),
     this.lastRunAt = const Value.absent(),
@@ -2475,6 +2521,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Expression<String>? destinationIds,
     Expression<String>? backupFolder,
     Expression<String>? backupType,
+    Expression<bool>? truncateLog,
     Expression<bool>? compressBackup,
     Expression<bool>? enabled,
     Expression<DateTime>? lastRunAt,
@@ -2493,6 +2540,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       if (destinationIds != null) 'destination_ids': destinationIds,
       if (backupFolder != null) 'backup_folder': backupFolder,
       if (backupType != null) 'backup_type': backupType,
+      if (truncateLog != null) 'truncate_log': truncateLog,
       if (compressBackup != null) 'compress_backup': compressBackup,
       if (enabled != null) 'enabled': enabled,
       if (lastRunAt != null) 'last_run_at': lastRunAt,
@@ -2513,6 +2561,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Value<String>? destinationIds,
     Value<String>? backupFolder,
     Value<String>? backupType,
+    Value<bool>? truncateLog,
     Value<bool>? compressBackup,
     Value<bool>? enabled,
     Value<DateTime?>? lastRunAt,
@@ -2531,6 +2580,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       destinationIds: destinationIds ?? this.destinationIds,
       backupFolder: backupFolder ?? this.backupFolder,
       backupType: backupType ?? this.backupType,
+      truncateLog: truncateLog ?? this.truncateLog,
       compressBackup: compressBackup ?? this.compressBackup,
       enabled: enabled ?? this.enabled,
       lastRunAt: lastRunAt ?? this.lastRunAt,
@@ -2571,6 +2621,9 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     if (backupType.present) {
       map['backup_type'] = Variable<String>(backupType.value);
     }
+    if (truncateLog.present) {
+      map['truncate_log'] = Variable<bool>(truncateLog.value);
+    }
     if (compressBackup.present) {
       map['compress_backup'] = Variable<bool>(compressBackup.value);
     }
@@ -2607,6 +2660,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
           ..write('destinationIds: $destinationIds, ')
           ..write('backupFolder: $backupFolder, ')
           ..write('backupType: $backupType, ')
+          ..write('truncateLog: $truncateLog, ')
           ..write('compressBackup: $compressBackup, ')
           ..write('enabled: $enabled, ')
           ..write('lastRunAt: $lastRunAt, ')
@@ -5746,6 +5800,7 @@ typedef $$SchedulesTableTableCreateCompanionBuilder =
       required String destinationIds,
       Value<String> backupFolder,
       Value<String> backupType,
+      Value<bool> truncateLog,
       Value<bool> compressBackup,
       Value<bool> enabled,
       Value<DateTime?> lastRunAt,
@@ -5765,6 +5820,7 @@ typedef $$SchedulesTableTableUpdateCompanionBuilder =
       Value<String> destinationIds,
       Value<String> backupFolder,
       Value<String> backupType,
+      Value<bool> truncateLog,
       Value<bool> compressBackup,
       Value<bool> enabled,
       Value<DateTime?> lastRunAt,
@@ -5825,6 +5881,11 @@ class $$SchedulesTableTableFilterComposer
 
   ColumnFilters<String> get backupType => $composableBuilder(
     column: $table.backupType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get truncateLog => $composableBuilder(
+    column: $table.truncateLog,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5913,6 +5974,11 @@ class $$SchedulesTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get truncateLog => $composableBuilder(
+    column: $table.truncateLog,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get compressBackup => $composableBuilder(
     column: $table.compressBackup,
     builder: (column) => ColumnOrderings(column),
@@ -5994,6 +6060,11 @@ class $$SchedulesTableTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get truncateLog => $composableBuilder(
+    column: $table.truncateLog,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get compressBackup => $composableBuilder(
     column: $table.compressBackup,
     builder: (column) => column,
@@ -6061,6 +6132,7 @@ class $$SchedulesTableTableTableManager
                 Value<String> destinationIds = const Value.absent(),
                 Value<String> backupFolder = const Value.absent(),
                 Value<String> backupType = const Value.absent(),
+                Value<bool> truncateLog = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
@@ -6078,6 +6150,7 @@ class $$SchedulesTableTableTableManager
                 destinationIds: destinationIds,
                 backupFolder: backupFolder,
                 backupType: backupType,
+                truncateLog: truncateLog,
                 compressBackup: compressBackup,
                 enabled: enabled,
                 lastRunAt: lastRunAt,
@@ -6097,6 +6170,7 @@ class $$SchedulesTableTableTableManager
                 required String destinationIds,
                 Value<String> backupFolder = const Value.absent(),
                 Value<String> backupType = const Value.absent(),
+                Value<bool> truncateLog = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
@@ -6114,6 +6188,7 @@ class $$SchedulesTableTableTableManager
                 destinationIds: destinationIds,
                 backupFolder: backupFolder,
                 backupType: backupType,
+                truncateLog: truncateLog,
                 compressBackup: compressBackup,
                 enabled: enabled,
                 lastRunAt: lastRunAt,

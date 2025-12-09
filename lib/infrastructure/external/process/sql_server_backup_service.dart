@@ -22,6 +22,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
     required String outputDirectory,
     BackupType backupType = BackupType.full,
     String? customFileName,
+    bool truncateLog = true,
   }) async {
     try {
       LoggerService.info(
@@ -69,10 +70,11 @@ class SqlServerBackupService implements ISqlServerBackupService {
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;
         case BackupType.log:
+          final copyOnlyClause = truncateLog ? '' : 'COPY_ONLY, ';
           query =
               "BACKUP LOG [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
-              "WITH NOFORMAT, NOINIT, "
+              "WITH ${copyOnlyClause}NOFORMAT, NOINIT, "
               "NAME = N'${config.database}-Transaction Log Backup', "
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;

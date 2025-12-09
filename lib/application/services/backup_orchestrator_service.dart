@@ -126,6 +126,7 @@ class BackupOrchestratorService {
           config: configResult.getOrNull()!,
           outputDirectory: typeOutputDirectory,
           backupType: backupType,
+          truncateLog: schedule.truncateLog,
         );
 
         if (backupResult.isError()) {
@@ -155,6 +156,7 @@ class BackupOrchestratorService {
           config: configResult.getOrNull()!,
           outputDirectory: typeOutputDirectory,
           backupType: backupType,
+          truncateLog: schedule.truncateLog,
         );
 
         if (backupResult.isError()) {

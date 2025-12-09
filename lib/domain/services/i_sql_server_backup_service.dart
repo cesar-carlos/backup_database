@@ -10,6 +10,7 @@ abstract class ISqlServerBackupService {
     required String outputDirectory,
     BackupType backupType,
     String? customFileName,
+    bool truncateLog,
   });
 
   Future<Result<bool>> testConnection(SqlServerConfig config);

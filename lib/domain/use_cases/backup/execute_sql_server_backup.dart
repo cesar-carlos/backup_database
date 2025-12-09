@@ -14,6 +14,7 @@ class ExecuteSqlServerBackup {
     required SqlServerConfig config,
     required String outputDirectory,
     String? customFileName,
+    bool truncateLog = true,
   }) async {
     // Validações
     if (config.server.isEmpty) {
@@ -36,6 +37,7 @@ class ExecuteSqlServerBackup {
       config: config,
       outputDirectory: outputDirectory,
       customFileName: customFileName,
+      truncateLog: truncateLog,
     );
   }
 }

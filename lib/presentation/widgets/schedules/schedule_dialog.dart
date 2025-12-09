@@ -41,6 +41,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   String? _selectedDatabaseConfigId;
   ScheduleType _scheduleType = ScheduleType.daily;
   BackupType _backupType = BackupType.full;
+  bool _truncateLog = true;
   List<String> _selectedDestinationIds = [];
   bool _compressBackup = true;
   bool _isEnabled = true;
@@ -71,9 +72,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _selectedDatabaseConfigId = widget.schedule!.databaseConfigId;
       _scheduleType = widget.schedule!.scheduleType;
       _backupType = widget.schedule!.backupType;
+      _truncateLog = widget.schedule!.truncateLog;
       if (_databaseType == DatabaseType.sybase &&
           _backupType == BackupType.differential) {
         _backupType = BackupType.full;
+        _truncateLog = true;
       }
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
@@ -162,6 +165,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
         _isLoading = false;
       });
+    }
+  }
+
+  void _onBackupTypeChanged() {
+    if (_backupType != BackupType.log) {
+      _truncateLog = true;
     }
   }
 
@@ -269,7 +278,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                         onChanged: (value) {
                           if (value != null) {
                             setState(() {
-                              _backupType = value;
+                          _backupType = value;
+                          _onBackupTypeChanged();
                             });
                           }
                         },
@@ -300,6 +310,26 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                           }
                         },
                       ),
+                      const SizedBox(height: 16),
+                      if (_backupType == BackupType.log)
+                        InfoLabel(
+                          label: 'Truncar log após backup',
+                          child: ToggleSwitch(
+                            checked: _truncateLog,
+                            onChanged: (value) {
+                              setState(() {
+                                _truncateLog = value;
+                              });
+                            },
+                          ),
+                        ),
+                      if (_backupType == BackupType.log)
+                        const SizedBox(height: 8),
+                      if (_backupType == BackupType.log)
+                        Text(
+                          'Quando habilitado, o backup de log libera espaço (SQL Server: padrão; Sybase: depende do motor).',
+                          style: FluentTheme.of(context).typography.caption,
+                        ),
                       const SizedBox(height: 16),
                       _buildScheduleFields(),
                       const SizedBox(height: 24),
@@ -951,6 +981,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       lastRunAt: widget.schedule?.lastRunAt,
       nextRunAt: widget.schedule?.nextRunAt,
       createdAt: widget.schedule?.createdAt,
+      truncateLog: _truncateLog,
     );
 
     Navigator.of(context).pop(schedule);

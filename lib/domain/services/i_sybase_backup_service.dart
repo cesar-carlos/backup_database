@@ -11,6 +11,7 @@ abstract class ISybaseBackupService {
     BackupType backupType,
     String? customFileName,
     String? dbbackupPath,
+    bool truncateLog,
   });
 
   Future<Result<bool>> testConnection(SybaseConfig config);

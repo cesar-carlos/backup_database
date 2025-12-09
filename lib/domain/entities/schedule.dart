@@ -16,6 +16,7 @@ class Schedule {
   final List<String> destinationIds;
   final String backupFolder;
   final BackupType backupType;
+  final bool truncateLog;
   final bool compressBackup;
   final bool enabled;
   final DateTime? lastRunAt;
@@ -33,6 +34,7 @@ class Schedule {
     required this.destinationIds,
     required this.backupFolder,
     this.backupType = BackupType.full,
+    this.truncateLog = true,
     this.compressBackup = true,
     this.enabled = true,
     this.lastRunAt,
@@ -53,6 +55,7 @@ class Schedule {
     List<String>? destinationIds,
     String? backupFolder,
     BackupType? backupType,
+    bool? truncateLog,
     bool? compressBackup,
     bool? enabled,
     DateTime? lastRunAt,
@@ -70,6 +73,7 @@ class Schedule {
       destinationIds: destinationIds ?? this.destinationIds,
       backupFolder: backupFolder ?? this.backupFolder,
       backupType: backupType ?? this.backupType,
+      truncateLog: truncateLog ?? this.truncateLog,
       compressBackup: compressBackup ?? this.compressBackup,
       enabled: enabled ?? this.enabled,
       lastRunAt: lastRunAt ?? this.lastRunAt,
