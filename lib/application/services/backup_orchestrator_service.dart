@@ -9,6 +9,7 @@ import '../../core/di/service_locator.dart';
 import '../../domain/entities/schedule.dart';
 import '../../domain/entities/backup_history.dart';
 import '../../domain/entities/backup_log.dart';
+import '../../domain/entities/backup_type.dart';
 import '../../domain/repositories/repositories.dart';
 import '../../domain/services/i_sql_server_backup_service.dart';
 import '../../domain/services/i_sybase_backup_service.dart';
@@ -199,9 +200,22 @@ class BackupOrchestratorService {
         }
 
         try {
+          // Nome de saída customizado para Sybase full, para garantir timestamp/tipo no ZIP
+          String? compressionOutputPath;
+          if (schedule.databaseType == DatabaseType.sybase &&
+              backupType == BackupType.full) {
+            final ts = DateTime.now().toIso8601String().replaceAll(':', '-');
+            final baseName = p.basename(backupPath);
+            compressionOutputPath = p.join(
+              p.dirname(backupPath),
+              '${baseName}_${backupType.name}_$ts.zip',
+            );
+          }
+
           // Usar método compress que detecta automaticamente arquivo ou diretório
           final compressionResult = await _compressionService.compress(
             path: backupPath,
+            outputPath: compressionOutputPath,
             deleteOriginal: true,
           );
 
