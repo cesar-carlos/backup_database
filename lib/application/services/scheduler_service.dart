@@ -124,12 +124,15 @@ class SchedulerService {
 
     result.fold((schedules) async {
       for (final schedule in schedules) {
+        final isExecuting = _executingSchedules.contains(schedule.id);
+        final shouldRun = _calculator.shouldRunNow(schedule);
+
         // Evitar execuções duplicadas do mesmo schedule
-        if (_executingSchedules.contains(schedule.id)) {
+        if (isExecuting) {
           continue;
         }
 
-        if (_calculator.shouldRunNow(schedule)) {
+        if (shouldRun) {
           // Marcar como executando antes de iniciar
           _executingSchedules.add(schedule.id);
 
@@ -193,7 +196,7 @@ class SchedulerService {
                   as int? ??
               30,
         );
-        
+
         // Validar que o caminho não está vazio
         if (localConfig.path.isEmpty) {
           final errorMessage =
@@ -201,7 +204,7 @@ class SchedulerService {
           LoggerService.error(errorMessage);
           return rd.Failure(ValidationFailure(message: errorMessage));
         }
-        
+
         outputDirectory = localConfig.path;
       } else {
         // Validar que o caminho do agendamento não está vazio
@@ -211,7 +214,7 @@ class SchedulerService {
           LoggerService.error(errorMessage);
           return rd.Failure(ValidationFailure(message: errorMessage));
         }
-        
+
         // Usar pasta de backup configurada no agendamento
         final backupDir = Directory(schedule.backupFolder);
         if (!await backupDir.exists()) {
@@ -240,7 +243,7 @@ class SchedulerService {
           'Nenhum destino local configurado, usando pasta de backup do agendamento: $outputDirectory',
         );
       }
-      
+
       // Validação final: garantir que outputDirectory não está vazio
       if (outputDirectory.isEmpty) {
         final errorMessage =
@@ -389,14 +392,18 @@ class SchedulerService {
               final tempFile = File(tempBackupPath);
               if (tempFile.existsSync()) {
                 await tempFile.delete();
-                LoggerService.info('Arquivo temporário deletado: $tempBackupPath');
+                LoggerService.info(
+                  'Arquivo temporário deletado: $tempBackupPath',
+                );
               }
               break;
             case FileSystemEntityType.directory:
               final tempDir = Directory(tempBackupPath);
               if (tempDir.existsSync()) {
                 await tempDir.delete(recursive: true);
-                LoggerService.info('Diretório temporário deletado: $tempBackupPath');
+                LoggerService.info(
+                  'Diretório temporário deletado: $tempBackupPath',
+                );
               }
               break;
             default:
