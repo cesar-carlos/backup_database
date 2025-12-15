@@ -6,9 +6,9 @@ import '../../application/providers/sql_server_config_provider.dart';
 import '../../application/providers/sybase_config_provider.dart';
 import '../../domain/entities/sql_server_config.dart';
 import '../../domain/entities/sybase_config.dart';
-import '../widgets/common/common.dart';
 import '../widgets/sql_server/sql_server.dart';
 import '../widgets/sybase/sybase.dart';
+import '../widgets/common/common.dart';
 
 class DatabaseConfigPage extends StatefulWidget {
   const DatabaseConfigPage({super.key});

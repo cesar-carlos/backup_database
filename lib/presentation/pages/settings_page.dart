@@ -1,13 +1,13 @@
-import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/theme_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../application/providers/auto_update_provider.dart';
-import '../providers/providers.dart';
 import '../widgets/common/common.dart';
+import '../providers/providers.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -51,9 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final autoUpdateProvider = Provider.of<AutoUpdateProvider>(context);
 
     return ScaffoldPage(
-      header: const PageHeader(
-        title: Text('Configurações Gerais'),
-      ),
+      header: const PageHeader(title: Text('Configurações Gerais')),
       content: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -166,9 +164,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         title: const Text('Erro'),
                         subtitle: Text(
                           autoUpdateProvider.error!,
-                          style: FluentTheme.of(context).typography.body?.copyWith(
-                                color: const Color(0xFFF44336),
-                              ),
+                          style: FluentTheme.of(context).typography.body
+                              ?.copyWith(color: const Color(0xFFF44336)),
                         ),
                         trailing: IconButton(
                           icon: const Icon(FluentIcons.cancel),

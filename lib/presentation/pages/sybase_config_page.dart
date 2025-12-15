@@ -1,11 +1,11 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../widgets/sybase/sybase.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../application/providers/sybase_config_provider.dart';
 import '../../domain/entities/sybase_config.dart';
 import '../widgets/common/common.dart';
-import '../widgets/sybase/sybase.dart';
 
 class SybaseConfigPage extends StatefulWidget {
   const SybaseConfigPage({super.key});

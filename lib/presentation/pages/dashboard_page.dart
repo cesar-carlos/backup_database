@@ -6,8 +6,8 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../application/providers/dashboard_provider.dart';
 import '../../domain/entities/schedule.dart';
-import '../widgets/common/common.dart';
 import '../widgets/dashboard/dashboard.dart';
+import '../widgets/common/common.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -28,9 +28,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     return ScaffoldPage(
-      header: const PageHeader(
-        title: Text('Dashboard'),
-      ),
+      header: const PageHeader(title: Text('Dashboard')),
       content: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -126,7 +124,8 @@ class _DashboardPageState extends State<DashboardPage> {
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: provider.activeSchedulesList.length,
                               itemBuilder: (context, index) {
-                                final schedule = provider.activeSchedulesList[index];
+                                final schedule =
+                                    provider.activeSchedulesList[index];
                                 return ListTile(
                                   leading: const Icon(FluentIcons.calendar),
                                   title: Text(schedule.name),
