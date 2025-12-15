@@ -1,7 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/di/service_locator.dart';
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
 import '../../../domain/entities/sybase_config.dart';
@@ -10,16 +10,23 @@ import '../common/common.dart';
 
 class SybaseConfigDialog extends StatefulWidget {
   final SybaseConfig? config;
+  final ISybaseBackupService backupService;
 
-  const SybaseConfigDialog({super.key, this.config});
+  const SybaseConfigDialog({
+    super.key,
+    this.config,
+    required this.backupService,
+  });
 
   static Future<SybaseConfig?> show(
     BuildContext context, {
     SybaseConfig? config,
+    required ISybaseBackupService backupService,
   }) async {
     return showDialog<SybaseConfig>(
       context: context,
-      builder: (context) => SybaseConfigDialog(config: config),
+      builder: (context) =>
+          SybaseConfigDialog(config: config, backupService: backupService),
     );
   }
 
@@ -32,7 +39,9 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   final _nameController = TextEditingController();
   final _serverNameController = TextEditingController();
   final _databaseNameController = TextEditingController();
-  final _portController = TextEditingController(text: '2638');
+  final _portController = TextEditingController(
+    text: AppConstants.defaultSybasePort.toString(),
+  );
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -46,7 +55,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   @override
   void initState() {
     super.initState();
-    _backupService = getIt<ISybaseBackupService>();
+    _backupService = widget.backupService;
 
     if (widget.config != null) {
       _nameController.text = widget.config!.name;
@@ -71,7 +80,8 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   }
 
   Future<void> _testConnection() async {
-    if (!_formKey.currentState!.validate()) {
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) {
       return;
     }
 
@@ -144,7 +154,8 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   }
 
   void _save() {
-    if (!_formKey.currentState!.validate()) {
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) {
       return;
     }
 
@@ -233,10 +244,20 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                       child: NumericField(
                         controller: _portController,
                         label: 'Porta',
-                        hint: '2638',
+                        hint: AppConstants.defaultSybasePort.toString(),
                         prefixIcon: FluentIcons.number_field,
                         minValue: 1,
                         maxValue: 65535,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Porta é obrigatória';
+                          }
+                          final port = int.tryParse(value);
+                          if (port == null || port < 1 || port > 65535) {
+                            return 'Porta deve estar entre 1 e 65535';
+                          }
+                          return null;
+                        },
                       ),
                     ),
                   ],

@@ -26,6 +26,9 @@ class AppConstants {
   static const int defaultFtpPort = 21;
   static const int defaultFtpsPort = 990;
 
+  // Sybase
+  static const int defaultSybasePort = 2638;
+
   // Logs
   static const int logRotationDays = 90;
 }

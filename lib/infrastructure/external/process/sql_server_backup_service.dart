@@ -29,27 +29,23 @@ class SqlServerBackupService implements ISqlServerBackupService {
         'Iniciando backup SQL Server: ${config.database} (Tipo: ${backupType.displayName})',
       );
 
-      // Verificar se o diretório de saída existe
       final outputDir = Directory(outputDirectory);
       if (!await outputDir.exists()) {
         await outputDir.create(recursive: true);
       }
 
-      // Gerar nome do arquivo de backup com extensão apropriada
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final extension = backupType == BackupType.log ? '.trn' : '.bak';
-      final typeSlug = backupType.name; // full | differential | log
-      final fileName = customFileName ??
+      final typeSlug = backupType.name;
+      final fileName =
+          customFileName ??
           '${config.database}_${typeSlug}_$timestamp$extension';
       final backupPath = p.join(outputDirectory, fileName);
 
-      // Construir comando sqlcmd
-      // Converter barras invertidas para barras normais (SQL Server aceita ambos)
       final normalizedPath = backupPath.replaceAll('\\', '/');
-      // Escapar aspas simples no caminho para SQL Server
+
       final escapedBackupPath = normalizedPath.replaceAll("'", "''");
 
-      // Construir query baseado no tipo de backup
       String query;
 
       switch (backupType) {
@@ -89,18 +85,15 @@ class SqlServerBackupService implements ISqlServerBackupService {
         query,
       ];
 
-      // Adicionar autenticação
       if (config.username.isNotEmpty) {
         arguments.addAll(['-U', config.username]);
         if (config.password.isNotEmpty) {
           arguments.addAll(['-P', config.password]);
         }
       } else {
-        // Usar autenticação do Windows
         arguments.add('-E');
       }
 
-      // Executar backup
       final stopwatch = Stopwatch()..start();
       final result = await _processService.run(
         executable: 'sqlcmd',
@@ -114,7 +107,6 @@ class SqlServerBackupService implements ISqlServerBackupService {
         final stdout = processResult.stdout;
         final stderr = processResult.stderr;
 
-        // Verificar mensagens de erro comuns no STDOUT/STDERR mesmo com exit code 0
         final outputLower = (stdout + stderr).toLowerCase();
         if (outputLower.contains('error') ||
             outputLower.contains('failed') ||
@@ -156,13 +148,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
           );
         }
 
-        // Aguardar um pouco para garantir que o arquivo foi completamente escrito
         await Future.delayed(const Duration(milliseconds: 1000));
 
-        // Verificar se o arquivo foi criado
         final backupFile = File(backupPath);
 
-        // Tentar verificar múltiplas vezes (até 10 segundos)
         bool fileExists = false;
         for (int i = 0; i < 20; i++) {
           if (await backupFile.exists()) {
@@ -220,9 +209,12 @@ class SqlServerBackupService implements ISqlServerBackupService {
       final query = 'SELECT @@VERSION';
 
       final arguments = [
-        '-S', '${config.server},${config.port}',
-        '-Q', query,
-        '-t', '5', // Timeout de 5 segundos
+        '-S',
+        '${config.server},${config.port}',
+        '-Q',
+        query,
+        '-t',
+        '5',
       ];
 
       if (config.username.isNotEmpty) {
@@ -257,16 +249,19 @@ class SqlServerBackupService implements ISqlServerBackupService {
     Duration? timeout,
   }) async {
     try {
-      // Query para listar bancos de dados
       final query =
           "SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb') ORDER BY name";
 
       final arguments = [
-        '-S', '${config.server},${config.port}',
-        '-Q', query,
-        '-h', '-1', // Sem cabeçalho
-        '-W', // Remover espaços em branco
-        '-t', '10', // Timeout de 10 segundos
+        '-S',
+        '${config.server},${config.port}',
+        '-Q',
+        query,
+        '-h',
+        '-1',
+        '-W',
+        '-t',
+        '10',
       ];
 
       if (config.username.isNotEmpty) {
@@ -294,13 +289,11 @@ class SqlServerBackupService implements ISqlServerBackupService {
           );
         }
 
-        // Parse da saída do sqlcmd
         final output = processResult.stdout.trim();
         if (output.isEmpty) {
           return const rd.Success([]);
         }
 
-        // Dividir por linhas e filtrar linhas vazias
         final databases = output
             .split('\n')
             .map((line) => line.trim())

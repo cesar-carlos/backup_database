@@ -1,9 +1,11 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../application/providers/sql_server_config_provider.dart';
 import '../../application/providers/sybase_config_provider.dart';
+import '../../domain/services/i_sybase_backup_service.dart';
 import '../../domain/entities/sql_server_config.dart';
 import '../../domain/entities/sybase_config.dart';
 import '../widgets/sql_server/sql_server.dart';
@@ -254,7 +256,11 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _showSybaseConfigDialog(SybaseConfig? config) async {
-    final result = await SybaseConfigDialog.show(context, config: config);
+    final result = await SybaseConfigDialog.show(
+      context,
+      config: config,
+      backupService: GetIt.instance<ISybaseBackupService>(),
+    );
 
     if (result != null && mounted) {
       final sybaseProvider = context.read<SybaseConfigProvider>();

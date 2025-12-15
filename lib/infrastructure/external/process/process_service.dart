@@ -49,7 +49,6 @@ class ProcessService {
       String? stdoutError;
       String? stderrError;
 
-      // Capturar stdout com tratamento de erro de encoding
       final stdoutFuture = process.stdout
           .transform(const Utf8Decoder(allowMalformed: true))
           .listen(
@@ -66,9 +65,9 @@ class ProcessService {
               stdoutError = 'Erro ao capturar stdout: $error';
               LoggerService.warning(stdoutError!);
             },
-          ).asFuture();
+          )
+          .asFuture();
 
-      // Capturar stderr com tratamento de erro de encoding
       final stderrFuture = process.stderr
           .transform(const Utf8Decoder(allowMalformed: true))
           .listen(
@@ -85,9 +84,9 @@ class ProcessService {
               stderrError = 'Erro ao capturar stderr: $error';
               LoggerService.warning(stderrError!);
             },
-          ).asFuture();
+          )
+          .asFuture();
 
-      // Aguardar conclusão com timeout
       int exitCode;
       if (timeout != null) {
         exitCode = await process.exitCode.timeout(
@@ -101,13 +100,12 @@ class ProcessService {
         exitCode = await process.exitCode;
       }
 
-      // Aguardar captura de stdout/stderr
       try {
         await stdoutFuture;
       } catch (e) {
         LoggerService.warning('Erro ao aguardar stdout: $e');
       }
-      
+
       try {
         await stderrFuture;
       } catch (e) {
@@ -116,10 +114,9 @@ class ProcessService {
 
       stopwatch.stop();
 
-      // Combinar mensagens de erro se houver
       String stdout = stdoutBuffer.toString();
       String stderr = stderrBuffer.toString();
-      
+
       if (stdoutError != null) {
         stderr = '${stderr.isEmpty ? '' : '$stderr\n'}$stdoutError';
       }

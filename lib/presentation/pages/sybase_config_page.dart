@@ -1,10 +1,12 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 
 import '../widgets/sybase/sybase.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../application/providers/sybase_config_provider.dart';
 import '../../domain/entities/sybase_config.dart';
+import '../../domain/services/i_sybase_backup_service.dart';
 import '../widgets/common/common.dart';
 
 class SybaseConfigPage extends StatefulWidget {
@@ -104,7 +106,11 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
   }
 
   Future<void> _showConfigDialog(SybaseConfig? config) async {
-    final result = await SybaseConfigDialog.show(context, config: config);
+    final result = await SybaseConfigDialog.show(
+      context,
+      config: config,
+      backupService: GetIt.instance<ISybaseBackupService>(),
+    );
 
     if (!mounted) return;
 

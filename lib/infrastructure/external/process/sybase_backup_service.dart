@@ -30,68 +30,51 @@ class SybaseBackupService implements ISybaseBackupService {
         'Iniciando backup Sybase: ${config.serverName} (Tipo: ${backupType.displayName})',
       );
 
-      // Verificar se o diretório de saída existe
       final outputDir = Directory(outputDirectory);
       if (!await outputDir.exists()) {
         await outputDir.create(recursive: true);
       }
 
-      // Para Sybase, differential não é suportado; forçamos para full
       final effectiveType = backupType == BackupType.differential
           ? BackupType.full
           : backupType;
 
-      // Gerar nome do arquivo/diretório de backup
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final extension = effectiveType == BackupType.log ? '.trn' : '';
-      final typeSlug = effectiveType.name; // full | log
+      final typeSlug = effectiveType.name;
 
-      // Estratégia: manter um diretório estável por tipo/banco para full,
-      // pois Sybase precisa do mesmo diretório do último full para log/diff.
-      // Como diff foi removido, mantemos para consistência.
       String backupPath;
       if (effectiveType == BackupType.full) {
-        // Diretório fixo por banco/tipo
         backupPath = p.join(outputDirectory, config.databaseName);
       } else {
-        // Log mantém timestamp para arquivos distintos
-        final fileName = customFileName ??
+        final fileName =
+            customFileName ??
             '${config.databaseName}_${typeSlug}_$timestamp$extension';
         backupPath = p.join(outputDirectory, fileName);
       }
 
-      // Construir comando dbbackup
       final executable = dbbackupPath ?? 'dbbackup';
 
-      // Usar databaseName como DBN (Database Name)
       final databaseName = config.databaseName;
 
       final stopwatch = Stopwatch()..start();
       rd.Result<ps.ProcessResult>? result;
       String lastError = '';
 
-      // ESTRATÉGIA PRINCIPAL: Usar comando SQL BACKUP DATABASE via dbisql
-      // Isso funciona porque o comando é executado pelo próprio servidor
       LoggerService.info('Tentando backup via comando SQL BACKUP DATABASE...');
 
-      // O comando BACKUP DATABASE espera um DIRETÓRIO, não um arquivo
-      // Criar o diretório de backup
       final backupDir = Directory(backupPath);
       if (!await backupDir.exists()) {
         await backupDir.create(recursive: true);
       }
 
-      // Escapar backslashes para o Windows no comando SQL
       final escapedBackupPath = backupPath.replaceAll('\\', '\\\\');
 
-      // Lista de connection strings para tentar com dbisql
-      // Usar databaseName como DBN e serverName como ENG
       final dbisqlConnections = <String>[
-        // Conexão 1: ENG (serverName) + DBN (databaseName) - mais comum
         'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-        // Conexão 2: Apenas ENG (fallback)
+
         'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
-        // Conexão 3: Usando databaseName como ENG também (caso sejam iguais)
+
         'ENG=$databaseName;DBN=$databaseName;UID=${config.username};PWD=${config.password}',
       ];
 
@@ -100,21 +83,18 @@ class SybaseBackupService implements ISybaseBackupService {
       for (final connStr in dbisqlConnections) {
         LoggerService.debug('Tentando dbisql com: $connStr');
 
-        // Comando SQL para backup - o servidor executa o backup internamente
-        // Construir comando baseado no tipo de backup
         String backupSql;
-      switch (effectiveType) {
+        switch (effectiveType) {
           case BackupType.full:
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
             break;
           case BackupType.log:
-          backupSql =
-              "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
+            backupSql =
+                "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
             break;
-        case BackupType.differential:
-          // Não deve ocorrer, mas fallback para full
-          backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
-          break;
+          case BackupType.differential:
+            backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
+            break;
         }
 
         final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
@@ -149,33 +129,28 @@ class SybaseBackupService implements ISybaseBackupService {
         if (sqlBackupSuccess) break;
       }
 
-      // Se o backup via SQL não funcionou, tentar com dbbackup
       if (!sqlBackupSuccess) {
         LoggerService.info('Backup SQL falhou, tentando dbbackup...');
 
-        // Lista de estratégias de conexão para tentar com dbbackup
-        // Baseado no comando que funcionou: dbbackup -x -c "ENG=VL;DBN=VL;UID=dba;PWD=sql"
-        // Usar serverName como ENG e databaseName como DBN
         final connectionStrategies = <Map<String, String>>[
-          // Estratégia 1: ENG (serverName) + DBN (databaseName) - mais provável de funcionar
           {
             'name': 'ENG+DBN (serverName + databaseName)',
             'conn':
                 'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
           },
-          // Estratégia 2: Usar databaseName como ENG também (caso sejam iguais)
+
           {
             'name': 'ENG+DBN (databaseName como ambos)',
             'conn':
                 'ENG=$databaseName;DBN=$databaseName;UID=${config.username};PWD=${config.password}',
           },
-          // Estratégia 3: Apenas ENG por serverName (fallback)
+
           {
             'name': 'Apenas ENG por serverName',
             'conn':
                 'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
           },
-          // Estratégia 4: Conectar via TCPIP com HOST e porta
+
           {
             'name': 'Conexão via TCPIP',
             'conn':
@@ -187,11 +162,10 @@ class SybaseBackupService implements ISybaseBackupService {
           LoggerService.debug('Tentando dbbackup: ${strategy['name']}');
           LoggerService.debug('Connection string: ${strategy['conn']}');
 
-          // Argumentos baseados no comando que funcionou:
-          // dbbackup -x -c "ENG=VL;DBN=VL;UID=dba;PWD=sql"
           final arguments = [
-            '-x', // Backup com extensões (transaction log)
-            '-c', strategy['conn']!,
+            '-x',
+            '-c',
+            strategy['conn']!,
             '-d',
             '-r',
             '-y',
@@ -204,7 +178,6 @@ class SybaseBackupService implements ISybaseBackupService {
             timeout: const Duration(hours: 2),
           );
 
-          // Verificar se funcionou
           bool success = false;
           result.fold(
             (processResult) {
@@ -255,7 +228,6 @@ class SybaseBackupService implements ISybaseBackupService {
             ),
           );
 
-          // Mensagem de erro mais amigável
           String errorMessage = 'Erro ao executar backup Sybase';
           final stderr = processResult.stderr.toLowerCase();
 
@@ -286,21 +258,16 @@ class SybaseBackupService implements ISybaseBackupService {
           return rd.Failure(BackupFailure(message: errorMessage));
         }
 
-        // Aguardar um pouco para garantir que os arquivos foram completamente escritos
         await Future.delayed(const Duration(milliseconds: 500));
 
-        // O backup pode criar um diretório (BACKUP DATABASE) ou arquivo (dbbackup)
-        // Verificar ambos os casos
         int totalSize = 0;
         String actualBackupPath = backupPath;
 
         final backupDir = Directory(backupPath);
         final backupFile = File(backupPath);
 
-        // Tentar verificar múltiplas vezes (até 5 segundos)
         bool backupFound = false;
         for (int i = 0; i < 10; i++) {
-          // Verificar se é um diretório com arquivos
           if (await backupDir.exists()) {
             final files = await backupDir.list().toList();
             if (files.isNotEmpty) {
@@ -315,7 +282,7 @@ class SybaseBackupService implements ISybaseBackupService {
               }
             }
           }
-          // Verificar se é um arquivo direto
+
           if (await backupFile.exists()) {
             totalSize = await backupFile.length();
             if (totalSize > 0) {
@@ -369,7 +336,6 @@ class SybaseBackupService implements ISybaseBackupService {
         'Testando conexão Sybase: Engine=${config.serverName}, DBN=${config.databaseName}',
       );
 
-      // Validar campos obrigatórios
       if (config.serverName.trim().isEmpty) {
         return rd.Failure(
           BackupFailure(
@@ -392,21 +358,17 @@ class SybaseBackupService implements ISybaseBackupService {
         );
       }
 
-      // Usar as mesmas estratégias de conexão que o backup usa
-      // Isso garante que o teste seja consistente com o que será usado no backup
       final databaseName = config.databaseName;
       final connectionStrategies = <String>[
-        // Estratégia 1: ENG (serverName) + DBN (databaseName) - mais comum
         'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-        // Estratégia 2: Usar databaseName como ENG também (caso sejam iguais)
+
         'ENG=$databaseName;DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-        // Estratégia 3: Apenas ENG por serverName (fallback)
+
         'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
       ];
 
       String lastError = '';
 
-      // Tentar cada estratégia de conexão
       for (final connStr in connectionStrategies) {
         try {
           LoggerService.debug('Tentando teste de conexão com: $connStr');
@@ -419,7 +381,6 @@ class SybaseBackupService implements ISybaseBackupService {
             timeout: const Duration(seconds: 10),
           );
 
-          // Verificar se foi sucesso
           final success = result.fold(
             (processResult) => processResult.isSuccess,
             (failure) => false,
@@ -430,7 +391,6 @@ class SybaseBackupService implements ISybaseBackupService {
             return rd.Success(true);
           }
 
-          // Se falhou, registrar erro e continuar tentando outras estratégias
           result.fold(
             (processResult) {
               final combinedOutput =
@@ -450,11 +410,9 @@ class SybaseBackupService implements ISybaseBackupService {
         } catch (e) {
           lastError = e.toString();
           LoggerService.debug('Erro ao testar estratégia: $lastError');
-          // Continuar tentando outras estratégias
         }
       }
 
-      // Se nenhuma estratégia funcionou, retornar erro com mensagem clara
       String errorMessage =
           'Não foi possível conectar ao banco de dados Sybase';
 
