@@ -11,6 +11,7 @@ import '../../../domain/entities/backup_type.dart';
 import '../../../domain/entities/schedule.dart';
 import '../../../domain/entities/sql_server_config.dart';
 import '../../../domain/entities/sybase_config.dart';
+import '../../../domain/entities/postgres_config.dart';
 import '../../../domain/entities/backup_destination.dart';
 import '../common/common.dart';
 
@@ -59,6 +60,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   List<SqlServerConfig> _sqlServerConfigs = [];
   List<SybaseConfig> _sybaseConfigs = [];
+  List<PostgresConfig> _postgresConfigs = [];
   List<BackupDestination> _destinations = [];
   bool _isLoading = true;
 
@@ -143,11 +145,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   Future<void> _loadData() async {
     final sqlServerProvider = context.read<SqlServerConfigProvider>();
     final sybaseProvider = context.read<SybaseConfigProvider>();
+    final postgresProvider = context.read<PostgresConfigProvider>();
     final destinationProvider = context.read<DestinationProvider>();
 
     await Future.wait([
       sqlServerProvider.loadConfigs(),
       sybaseProvider.loadConfigs(),
+      postgresProvider.loadConfigs(),
       destinationProvider.loadDestinations(),
     ]);
 
@@ -155,12 +159,15 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       setState(() {
         _sqlServerConfigs = sqlServerProvider.configs;
         _sybaseConfigs = sybaseProvider.configs;
+        _postgresConfigs = postgresProvider.configs;
         _destinations = destinationProvider.destinations;
 
         if (_selectedDatabaseConfigId != null) {
           final exists = _databaseType == DatabaseType.sqlServer
               ? _sqlServerConfigs.any((c) => c.id == _selectedDatabaseConfigId)
-              : _sybaseConfigs.any((c) => c.id == _selectedDatabaseConfigId);
+              : _databaseType == DatabaseType.sybase
+              ? _sybaseConfigs.any((c) => c.id == _selectedDatabaseConfigId)
+              : _postgresConfigs.any((c) => c.id == _selectedDatabaseConfigId);
 
           if (!exists) {
             _selectedDatabaseConfigId = null;
@@ -185,6 +192,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   List<BackupType> _getAvailableBackupTypes() {
     if (_databaseType == DatabaseType.sybase) {
       return const [BackupType.full, BackupType.log];
+    }
+    if (_databaseType == DatabaseType.postgresql) {
+      return const [
+        BackupType.full,
+        BackupType.fullSingle,
+        BackupType.differential,
+        BackupType.log,
+      ];
     }
     return BackupType.values;
   }
@@ -216,9 +231,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         ],
       ),
       content: Container(
-        constraints: const BoxConstraints(
-          maxHeight: 700,
-        ),
+        constraints: const BoxConstraints(maxHeight: 700),
         child: _isLoading
             ? const Center(child: ProgressRing())
             : Form(
@@ -368,8 +381,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 },
               ),
             ),
-          if (_backupType == BackupType.log)
-            const SizedBox(height: 8),
+          if (_backupType == BackupType.log) const SizedBox(height: 8),
           if (_backupType == BackupType.log)
             Text(
               'Quando habilitado, o backup de log libera espaço (SQL Server: padrão; Sybase: depende do motor).',
@@ -474,7 +486,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 _enableChecksum = value;
               });
             },
-            infoText: 'Habilita o cálculo de checksums durante o backup. '
+            infoText:
+                'Habilita o cálculo de checksums durante o backup. '
                 'Detecta corrupção de dados durante o processo de backup.',
           ),
           const SizedBox(height: 16),
@@ -489,9 +502,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           },
           infoText: _databaseType == DatabaseType.sqlServer
               ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
-                  'Garante que o backup pode ser restaurado sem restaurar os dados.'
+                    'Garante que o backup pode ser restaurado sem restaurar os dados.'
+              : _databaseType == DatabaseType.postgresql
+              ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
+                    'Garante que o backup está íntegro e pode ser restaurado.'
               : 'Verifica a integridade do backup após criação usando dbverify. '
-                  'Garante que o backup está íntegro e pode ser restaurado.',
+                    'Garante que o backup está íntegro e pode ser restaurado.',
         ),
       ],
     );
@@ -634,6 +650,77 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                   ]
                 : sqlServerItems,
             onChanged: sqlServerItems.isEmpty
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedDatabaseConfigId = value;
+                    });
+                  },
+          );
+        },
+      );
+    }
+
+    if (_databaseType == DatabaseType.postgresql) {
+      return Consumer<PostgresConfigProvider>(
+        builder: (context, provider, child) {
+          final postgresItems = provider.configs.map((config) {
+            return ComboBoxItem<String>(
+              value: config.id,
+              child: Text(
+                '${config.name} (${config.host}:${config.port}/${config.database})',
+              ),
+            );
+          }).toList();
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _postgresConfigs.length != provider.configs.length) {
+              setState(() {
+                _postgresConfigs = provider.configs;
+              });
+            }
+          });
+
+          String? validValue;
+          if (_selectedDatabaseConfigId != null) {
+            final exists = postgresItems.any(
+              (item) => item.value == _selectedDatabaseConfigId,
+            );
+            validValue = exists ? _selectedDatabaseConfigId : null;
+            if (!exists) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _selectedDatabaseConfigId = null;
+                  });
+                }
+              });
+            }
+          } else {
+            validValue = null;
+          }
+
+          return AppDropdown<String>(
+            label: 'Configuração de Banco',
+            value: validValue,
+            placeholder: Text(
+              postgresItems.isEmpty
+                  ? 'Nenhuma configuração disponível'
+                  : 'Selecione uma configuração',
+            ),
+            items: postgresItems.isEmpty
+                ? [
+                    ComboBoxItem<String>(
+                      value: null,
+                      child: Text(
+                        'Nenhuma configuração disponível',
+                        style: FluentTheme.of(context).typography.caption
+                            ?.copyWith(fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  ]
+                : postgresItems,
+            onChanged: postgresItems.isEmpty
                 ? null
                 : (value) {
                     setState(() {
@@ -920,6 +1007,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         return 'SQL Server';
       case DatabaseType.sybase:
         return 'Sybase SQL Anywhere';
+      case DatabaseType.postgresql:
+        return 'PostgreSQL';
     }
   }
 
@@ -937,9 +1026,23 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   }
 
   String _getBackupTypeDescription(BackupType type) {
+    if (_databaseType == DatabaseType.postgresql) {
+      switch (type) {
+        case BackupType.full:
+          return 'Backup físico completo usando pg_basebackup. Banco ONLINE. Inclui todos os bancos do cluster, dados, estrutura e catálogo.';
+        case BackupType.fullSingle:
+          return 'Backup lógico completo usando pg_dump. Banco ONLINE. Inclui apenas a base de dados especificada na configuração. Formato .backup.';
+        case BackupType.log:
+          return 'Backup de arquivos WAL (Write-Ahead Log) usando pg_basebackup com streaming. Requer streaming habilitado no PostgreSQL.';
+        case BackupType.differential:
+          return 'Backup incremental usando pg_basebackup. Requer backup FULL anterior com manifest. (PostgreSQL 17+)';
+      }
+    }
     switch (type) {
       case BackupType.full:
         return 'Backup completo do banco de dados. Base para backups diferenciais e logs.';
+      case BackupType.fullSingle:
+        return 'Backup completo de uma base de dados específica.';
       case BackupType.differential:
         return 'Backup apenas das alterações desde o último backup completo. Requer backup Full anterior.';
       case BackupType.log:
@@ -1130,7 +1233,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       backupType: _backupType,
       compressBackup: _compressBackup,
       enabled: _isEnabled,
-      enableChecksum: _databaseType == DatabaseType.sqlServer ? _enableChecksum : false,
+      enableChecksum: _databaseType == DatabaseType.sqlServer
+          ? _enableChecksum
+          : false,
       verifyAfterBackup: _verifyAfterBackup,
       postBackupScript: _postBackupScriptController.text.trim().isEmpty
           ? null

@@ -61,6 +61,7 @@ class AppColors {
   // Database Type Colors
   static const Color databaseSqlServer = Color(0xFF3F51B5);
   static const Color databaseSybase = Color(0xFF009688);
+  static const Color databasePostgresql = Color(0xFF336791);
 
   // Destination Type Colors
   static const Color destinationLocal = Color(0xFF2196F3);

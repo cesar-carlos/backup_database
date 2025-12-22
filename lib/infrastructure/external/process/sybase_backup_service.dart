@@ -93,6 +93,7 @@ class SybaseBackupService implements ISybaseBackupService {
         String backupSql;
         switch (effectiveType) {
           case BackupType.full:
+          case BackupType.fullSingle:
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
             break;
           case BackupType.log:

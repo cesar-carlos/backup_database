@@ -53,6 +53,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
       switch (backupType) {
         case BackupType.full:
+        case BackupType.fullSingle:
           query =
               "BACKUP DATABASE [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
@@ -73,7 +74,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           query =
               "BACKUP LOG [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
-              "WITH ${copyOnlyClause}$checksumClause NOFORMAT, NOINIT, "
+              "WITH $copyOnlyClause$checksumClause NOFORMAT, NOINIT, "
               "NAME = N'${config.database}-Transaction Log Backup', "
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;
@@ -189,7 +190,8 @@ class SqlServerBackupService implements ISqlServerBackupService {
         // Verificar integridade do backup se solicitado
         if (verifyAfterBackup) {
           LoggerService.info('Verificando integridade do backup...');
-          final verifyQuery = "RESTORE VERIFYONLY FROM DISK = N'$escapedBackupPath' "
+          final verifyQuery =
+              "RESTORE VERIFYONLY FROM DISK = N'$escapedBackupPath' "
               "${enableChecksum ? 'WITH CHECKSUM' : ''}";
 
           final verifyArguments = [
@@ -219,7 +221,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
           verifyResult.fold(
             (processResult) {
               if (processResult.isSuccess) {
-                LoggerService.info('Verificação de integridade concluída com sucesso');
+                LoggerService.info(
+                  'Verificação de integridade concluída com sucesso',
+                );
               } else {
                 LoggerService.warning(
                   'Verificação de integridade falhou: ${processResult.stderr}',

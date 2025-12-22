@@ -15,6 +15,7 @@ part 'database.g.dart';
   tables: [
     SqlServerConfigsTable,
     SybaseConfigsTable,
+    PostgresConfigsTable,
     BackupDestinationsTable,
     SchedulesTable,
     BackupHistoryTable,
@@ -24,6 +25,7 @@ part 'database.g.dart';
   daos: [
     SqlServerConfigDao,
     SybaseConfigDao,
+    PostgresConfigDao,
     BackupDestinationDao,
     ScheduleDao,
     BackupHistoryDao,
@@ -35,7 +37,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration {
@@ -364,6 +366,42 @@ class AppDatabase extends _$AppDatabase {
           } catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v10 para enable_checksum e verify_after_backup',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 11) {
+          // Migração para versão 11: criar tabela postgres_configs_table
+          try {
+            final tables = await (customSelect(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name='postgres_configs_table'",
+            ).get());
+            final hasTable = tables.isNotEmpty;
+
+            if (!hasTable) {
+              await customStatement('''
+                CREATE TABLE postgres_configs_table (
+                  id TEXT PRIMARY KEY,
+                  name TEXT NOT NULL,
+                  host TEXT NOT NULL,
+                  port INTEGER NOT NULL DEFAULT 5432,
+                  database TEXT NOT NULL,
+                  username TEXT NOT NULL,
+                  password TEXT NOT NULL,
+                  enabled INTEGER NOT NULL DEFAULT 1,
+                  created_at INTEGER NOT NULL,
+                  updated_at INTEGER NOT NULL
+                )
+              ''');
+              LoggerService.info(
+                'Migração v11: Tabela postgres_configs_table criada',
+              );
+            }
+          } catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v11 para postgres_configs_table',
               e,
               stackTrace,
             );

@@ -13,6 +13,11 @@ O sistema de backup precisa das seguintes ferramentas disponíveis no PATH:
 ### 2. **SQL Server**
 - `sqlcmd.exe` - Para executar backups e testar conexões
 
+### 3. **PostgreSQL**
+- `psql.exe` - Para testar conexões e executar scripts SQL
+- `pg_basebackup.exe` - Para executar backups físicos completos
+- `pg_verifybackup.exe` - Para verificar integridade dos backups
+
 ---
 
 ## 📍 Caminhos Padrão de Instalação
@@ -73,6 +78,34 @@ C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\110\Tools\Binn
 
 ---
 
+### PostgreSQL
+
+O PostgreSQL geralmente instala as ferramentas em:
+
+#### PostgreSQL 16
+```
+C:\Program Files\PostgreSQL\16\bin
+```
+
+#### PostgreSQL 15
+```
+C:\Program Files\PostgreSQL\15\bin
+```
+
+#### PostgreSQL 14
+```
+C:\Program Files\PostgreSQL\14\bin
+```
+
+#### PostgreSQL 13
+```
+C:\Program Files\PostgreSQL\13\bin
+```
+
+**Nota**: Se você instalou em um caminho diferente, localize a pasta `bin` dentro da sua instalação do PostgreSQL.
+
+---
+
 ## ✅ Como Adicionar ao PATH do Windows
 
 ### Método 1: Via Interface Gráfica (Recomendado)
@@ -115,6 +148,15 @@ Abra o **PowerShell** ou **CMD** como **Administrador** e execute:
 )
 ```
 
+#### Para PostgreSQL (ajuste o caminho conforme sua versão):
+```powershell
+[Environment]::SetEnvironmentVariable(
+    "Path",
+    [Environment]::GetEnvironmentVariable("Path", "Machine") + ";C:\Program Files\PostgreSQL\16\bin",
+    "Machine"
+)
+```
+
 **Nota**: Após executar via linha de comando, você ainda precisará reiniciar os programas.
 
 ---
@@ -147,6 +189,20 @@ sqlcmd -?
 
 Se aparecer a ajuda do `sqlcmd`, está configurado corretamente.
 
+#### Verificar psql (PostgreSQL):
+```cmd
+psql --version
+```
+
+Se aparecer a versão do PostgreSQL, está configurado corretamente.
+
+#### Verificar pg_basebackup (PostgreSQL):
+```cmd
+pg_basebackup --version
+```
+
+Se aparecer a versão do pg_basebackup, está configurado corretamente.
+
 ### Via Interface do Aplicativo
 
 1. No aplicativo de backup, vá em **Configurações > Sybase**
@@ -174,6 +230,15 @@ Se aparecer a ajuda do `sqlcmd`, está configurado corretamente.
 3. Adicione o caminho ao PATH
 4. Reinicie o aplicativo de backup
 
+### "psql não é reconhecido como comando" ou "'psql' não reconhecido como um comando interno"
+
+**Solução**:
+1. Verifique se o PostgreSQL está instalado
+2. Localize a pasta `bin` na instalação do PostgreSQL
+3. Adicione o caminho completo ao PATH (ex: `C:\Program Files\PostgreSQL\16\bin`)
+4. Reinicie o aplicativo de backup
+5. Se ainda não funcionar, reinicie o computador para garantir que o PATH seja recarregado
+
 ### Mudanças no PATH não foram aplicadas
 
 **Solução**:
@@ -188,12 +253,14 @@ Se aparecer a ajuda do `sqlcmd`, está configurado corretamente.
 Se você tem:
 - **Sybase SQL Anywhere 16** instalado em `C:\Program Files\SQL Anywhere 16\Bin64`
 - **SQL Server 2019** instalado
+- **PostgreSQL 16** instalado
 
 Adicione os seguintes caminhos ao PATH:
 
 ```
 C:\Program Files\SQL Anywhere 16\Bin64
 C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn
+C:\Program Files\PostgreSQL\16\bin
 ```
 
 ---

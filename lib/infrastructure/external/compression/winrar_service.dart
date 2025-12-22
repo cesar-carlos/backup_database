@@ -25,7 +25,9 @@ class WinRarService {
 
     for (final path in possiblePaths) {
       final file = File(path);
-      if (await file.exists()) {
+      final exists = await file.exists();
+
+      if (exists) {
         _winRarPath = path;
         _isAvailable = true;
         LoggerService.info('WinRAR encontrado em: $path');

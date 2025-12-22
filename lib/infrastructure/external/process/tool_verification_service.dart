@@ -144,4 +144,171 @@ class ToolVerificationService {
       );
     }
   }
+
+  Future<rd.Result<bool>> verifyPsql() async {
+    try {
+      LoggerService.info('Verificando se psql está disponível...');
+
+      final result = await _processService.run(
+        executable: 'psql',
+        arguments: ['--version'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      return result.fold(
+        (processResult) {
+          if (processResult.isSuccess) {
+            LoggerService.info('psql encontrado e disponível');
+            return rd.Success(true);
+          } else {
+            LoggerService.warning(
+              'psql não encontrado (exit code: ${processResult.exitCode})',
+            );
+            return rd.Failure(
+              ValidationFailure(
+                message:
+                    'psql não está disponível no PATH do sistema.\n\n'
+                    'Para fazer backup de PostgreSQL, você precisa:\n'
+                    '1. Instalar PostgreSQL (inclui psql)\n'
+                    '2. Adicionar o caminho bin ao PATH do Windows\n'
+                    '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
+                    'Consulte: docs\\path_setup.md',
+              ),
+            );
+          }
+        },
+        (failure) {
+          final errorMessage = failure is Failure
+              ? failure.message
+              : failure.toString();
+          LoggerService.warning('Erro ao verificar psql: $errorMessage');
+          return rd.Failure(
+            ValidationFailure(
+              message:
+                  'psql não está disponível no PATH do sistema.\n\n'
+                  'Para fazer backup de PostgreSQL, você precisa:\n'
+                  '1. Instalar PostgreSQL (inclui psql)\n'
+                  '2. Adicionar o caminho bin ao PATH do Windows\n'
+                  '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
+                  'Consulte: docs\\path_setup.md',
+            ),
+          );
+        },
+      );
+    } catch (e, stackTrace) {
+      LoggerService.error('Erro ao verificar psql', e, stackTrace);
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Erro ao verificar psql: $e\n\n'
+              'Para fazer backup de PostgreSQL, você precisa:\n'
+              '1. Instalar PostgreSQL (inclui psql)\n'
+              '2. Adicionar o caminho bin ao PATH do Windows\n\n'
+              'Consulte: docs\\path_setup.md',
+        ),
+      );
+    }
+  }
+
+  Future<rd.Result<bool>> verifyPgBasebackup() async {
+    LoggerService.info('Verificando se pg_basebackup está disponível...');
+
+    final result = await _processService.run(
+      executable: 'pg_basebackup',
+      arguments: ['--version'],
+      timeout: const Duration(seconds: 5),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (processResult.isSuccess) {
+          LoggerService.info('pg_basebackup encontrado e disponível');
+          return rd.Success(true);
+        } else {
+          LoggerService.warning(
+            'pg_basebackup não encontrado (exit code: ${processResult.exitCode})',
+          );
+          return rd.Failure(
+            ValidationFailure(
+              message:
+                  'pg_basebackup não está disponível no PATH do sistema.\n\n'
+                  'Para fazer backup de PostgreSQL, você precisa:\n'
+                  '1. Instalar PostgreSQL (inclui pg_basebackup)\n'
+                  '2. Adicionar o caminho bin ao PATH do Windows\n'
+                  '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
+                  'Consulte: docs\\path_setup.md',
+            ),
+          );
+        }
+      },
+      (failure) {
+        final errorMessage =
+            failure is Failure ? failure.message : failure.toString();
+        LoggerService.warning('Erro ao verificar pg_basebackup: $errorMessage');
+        return rd.Failure(
+          ValidationFailure(
+            message:
+                'pg_basebackup não está disponível no PATH do sistema.\n\n'
+                'Para fazer backup de PostgreSQL, você precisa:\n'
+                '1. Instalar PostgreSQL (inclui pg_basebackup)\n'
+                '2. Adicionar o caminho bin ao PATH do Windows\n'
+                '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
+                'Consulte: docs\\path_setup.md',
+          ),
+        );
+      },
+    );
+  }
+
+  Future<rd.Result<bool>> verifyPgVerifybackup() async {
+    LoggerService.info('Verificando se pg_verifybackup está disponível...');
+
+    final result = await _processService.run(
+      executable: 'pg_verifybackup',
+      arguments: ['--version'],
+      timeout: const Duration(seconds: 5),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (processResult.isSuccess) {
+          LoggerService.info('pg_verifybackup encontrado e disponível');
+          return rd.Success(true);
+        } else {
+          LoggerService.warning(
+            'pg_verifybackup não encontrado (exit code: ${processResult.exitCode})',
+          );
+          return rd.Failure(
+            ValidationFailure(
+              message:
+                  'pg_verifybackup não está disponível no PATH do sistema.\n\n'
+                  'Para verificar backups PostgreSQL, você precisa:\n'
+                  '1. Instalar PostgreSQL (inclui pg_verifybackup)\n'
+                  '2. Adicionar o caminho bin ao PATH do Windows\n'
+                  '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
+                  'Consulte: docs\\path_setup.md',
+            ),
+          );
+        }
+      },
+      (failure) {
+        final errorMessage =
+            failure is Failure ? failure.message : failure.toString();
+        LoggerService.warning(
+          'Erro ao verificar pg_verifybackup: $errorMessage',
+        );
+        return rd.Failure(
+          ValidationFailure(
+            message:
+                'pg_verifybackup não está disponível no PATH do sistema.\n\n'
+                'Para verificar backups PostgreSQL, você precisa:\n'
+                '1. Instalar PostgreSQL (inclui pg_verifybackup)\n'
+                '2. Adicionar o caminho bin ao PATH do Windows\n'
+                '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
+                'Consulte: docs\\path_setup.md',
+          ),
+        );
+      },
+    );
+  }
 }

@@ -128,6 +128,8 @@ class ScheduleListItem extends StatelessWidget {
         return 'SQL Server';
       case DatabaseType.sybase:
         return 'Sybase';
+      case DatabaseType.postgresql:
+        return 'PostgreSQL';
     }
   }
 
@@ -137,6 +139,8 @@ class ScheduleListItem extends StatelessWidget {
         return AppColors.databaseSqlServer;
       case DatabaseType.sybase:
         return AppColors.databaseSybase;
+      case DatabaseType.postgresql:
+        return AppColors.databasePostgresql;
     }
   }
 }

@@ -12,10 +12,12 @@ import '../../domain/entities/backup_log.dart';
 import '../../domain/entities/backup_type.dart';
 import '../../domain/entities/sql_server_config.dart';
 import '../../domain/entities/sybase_config.dart';
+import '../../domain/entities/postgres_config.dart';
 import '../../domain/repositories/repositories.dart';
 import '../../domain/services/i_sql_server_backup_service.dart';
 import '../../domain/services/i_sql_script_execution_service.dart';
 import '../../domain/services/i_sybase_backup_service.dart';
+import '../../domain/services/i_postgres_backup_service.dart';
 import '../../domain/services/i_compression_service.dart';
 import '../providers/backup_progress_provider.dart';
 import 'notification_service.dart';
@@ -23,10 +25,12 @@ import 'notification_service.dart';
 class BackupOrchestratorService {
   final ISqlServerConfigRepository _sqlServerConfigRepository;
   final ISybaseConfigRepository _sybaseConfigRepository;
+  final IPostgresConfigRepository _postgresConfigRepository;
   final IBackupHistoryRepository _backupHistoryRepository;
   final IBackupLogRepository _backupLogRepository;
   final ISqlServerBackupService _sqlServerBackupService;
   final ISybaseBackupService _sybaseBackupService;
+  final IPostgresBackupService _postgresBackupService;
   final ICompressionService _compressionService;
   final ISqlScriptExecutionService _sqlScriptExecutionService;
   final NotificationService _notificationService;
@@ -34,22 +38,26 @@ class BackupOrchestratorService {
   BackupOrchestratorService({
     required ISqlServerConfigRepository sqlServerConfigRepository,
     required ISybaseConfigRepository sybaseConfigRepository,
+    required IPostgresConfigRepository postgresConfigRepository,
     required IBackupHistoryRepository backupHistoryRepository,
     required IBackupLogRepository backupLogRepository,
     required ISqlServerBackupService sqlServerBackupService,
     required ISybaseBackupService sybaseBackupService,
+    required IPostgresBackupService postgresBackupService,
     required ICompressionService compressionService,
     required ISqlScriptExecutionService sqlScriptExecutionService,
     required NotificationService notificationService,
-  })  : _sqlServerConfigRepository = sqlServerConfigRepository,
-        _sybaseConfigRepository = sybaseConfigRepository,
-        _backupHistoryRepository = backupHistoryRepository,
-        _backupLogRepository = backupLogRepository,
-        _sqlServerBackupService = sqlServerBackupService,
-        _sybaseBackupService = sybaseBackupService,
-        _compressionService = compressionService,
-        _sqlScriptExecutionService = sqlScriptExecutionService,
-        _notificationService = notificationService;
+  }) : _sqlServerConfigRepository = sqlServerConfigRepository,
+       _sybaseConfigRepository = sybaseConfigRepository,
+       _postgresConfigRepository = postgresConfigRepository,
+       _backupHistoryRepository = backupHistoryRepository,
+       _backupLogRepository = backupLogRepository,
+       _sqlServerBackupService = sqlServerBackupService,
+       _sybaseBackupService = sybaseBackupService,
+       _postgresBackupService = postgresBackupService,
+       _compressionService = compressionService,
+       _sqlScriptExecutionService = sqlScriptExecutionService,
+       _notificationService = notificationService;
 
   Future<rd.Result<BackupHistory>> executeBackup({
     required Schedule schedule,
@@ -71,7 +79,7 @@ class BackupOrchestratorService {
     // Criar subpasta por tipo de backup
     final typeFolderName = backupType.displayName;
     final typeOutputDirectory = p.join(outputDirectory, typeFolderName);
-    
+
     // Validar que o caminho final não está vazio
     if (typeOutputDirectory.isEmpty) {
       final errorMessage =
@@ -79,7 +87,7 @@ class BackupOrchestratorService {
       LoggerService.error(errorMessage);
       return rd.Failure(ValidationFailure(message: errorMessage));
     }
-    
+
     final typeOutputDir = Directory(typeOutputDirectory);
     if (!await typeOutputDir.exists()) {
       try {
@@ -145,14 +153,14 @@ class BackupOrchestratorService {
 
         backupPath = backupResult.getOrNull()!.backupPath;
         fileSize = backupResult.getOrNull()!.fileSize;
-      } else {
+      } else if (schedule.databaseType == DatabaseType.sybase) {
         final configResult = await _sybaseConfigRepository.getById(
           schedule.databaseConfigId,
         );
         if (configResult.isError()) {
           final failure = configResult.exceptionOrNull();
-          final errorMessage = failure is Failure 
-              ? failure.message 
+          final errorMessage = failure is Failure
+              ? failure.message
               : 'Configuração Sybase não encontrada';
           LoggerService.error(
             'Falha ao buscar configuração Sybase',
@@ -176,6 +184,40 @@ class BackupOrchestratorService {
 
         backupPath = backupResult.getOrNull()!.backupPath;
         fileSize = backupResult.getOrNull()!.fileSize;
+      } else if (schedule.databaseType == DatabaseType.postgresql) {
+        final configResult = await _postgresConfigRepository.getById(
+          schedule.databaseConfigId,
+        );
+        if (configResult.isError()) {
+          final failure = configResult.exceptionOrNull();
+          final errorMessage = failure is Failure
+              ? failure.message
+              : 'Configuração PostgreSQL não encontrada';
+          LoggerService.error(
+            'Falha ao buscar configuração PostgreSQL',
+            'Schedule: ${schedule.name}, ConfigId: ${schedule.databaseConfigId}, Erro: $errorMessage',
+          );
+          throw Exception(errorMessage);
+        }
+
+        final backupResult = await _postgresBackupService.executeBackup(
+          config: configResult.getOrNull()!,
+          outputDirectory: typeOutputDirectory,
+          backupType: backupType,
+          verifyAfterBackup: schedule.verifyAfterBackup,
+        );
+
+        if (backupResult.isError()) {
+          final failure = backupResult.exceptionOrNull()! as Failure;
+          throw Exception(failure.message);
+        }
+
+        backupPath = backupResult.getOrNull()!.backupPath;
+        fileSize = backupResult.getOrNull()!.fileSize;
+      } else {
+        throw Exception(
+          'Tipo de banco de dados não suportado: ${schedule.databaseType}',
+        );
       }
 
       await _log(history.id, 'info', 'Backup do banco concluído');
@@ -231,11 +273,13 @@ class BackupOrchestratorService {
           if (compressionResult.isSuccess()) {
             backupPath = compressionResult.getOrNull()!.compressedPath;
             fileSize = compressionResult.getOrNull()!.compressedSize;
+
             await _log(history.id, 'info', 'Compressão concluída');
           } else {
             final failure = compressionResult.exceptionOrNull()!;
-            final failureMessage =
-                failure is Failure ? failure.message : failure.toString();
+            final failureMessage = failure is Failure
+                ? failure.message
+                : failure.toString();
 
             LoggerService.error('Falha na compressão', failure);
             await _log(
@@ -253,19 +297,16 @@ class BackupOrchestratorService {
             );
           }
         } catch (e, stackTrace) {
-          LoggerService.error('Erro inesperado durante compressão', e, stackTrace);
+          LoggerService.error(
+            'Erro inesperado durante compressão',
+            e,
+            stackTrace,
+          );
           final errorMessage =
               'Erro ao comprimir backup: $e. Verifique permissões da pasta de destino.';
-          await _log(
-            history.id,
-            'error',
-            errorMessage,
-          );
+          await _log(history.id, 'error', errorMessage);
           return rd.Failure(
-            BackupFailure(
-              message: errorMessage,
-              originalError: e,
-            ),
+            BackupFailure(message: errorMessage, originalError: e),
           );
         }
       }
@@ -279,6 +320,7 @@ class BackupOrchestratorService {
           // Obter configuração do banco
           SqlServerConfig? sqlServerConfig;
           SybaseConfig? sybaseConfig;
+          PostgresConfig? postgresConfig;
 
           if (schedule.databaseType == DatabaseType.sqlServer) {
             final configResult = await _sqlServerConfigRepository.getById(
@@ -287,12 +329,19 @@ class BackupOrchestratorService {
             if (configResult.isSuccess()) {
               sqlServerConfig = configResult.getOrNull();
             }
-          } else {
+          } else if (schedule.databaseType == DatabaseType.sybase) {
             final configResult = await _sybaseConfigRepository.getById(
               schedule.databaseConfigId,
             );
             if (configResult.isSuccess()) {
               sybaseConfig = configResult.getOrNull();
+            }
+          } else if (schedule.databaseType == DatabaseType.postgresql) {
+            final configResult = await _postgresConfigRepository.getById(
+              schedule.databaseConfigId,
+            );
+            if (configResult.isSuccess()) {
+              postgresConfig = configResult.getOrNull();
             }
           }
 
@@ -300,12 +349,17 @@ class BackupOrchestratorService {
             databaseType: schedule.databaseType,
             sqlServerConfig: sqlServerConfig,
             sybaseConfig: sybaseConfig,
+            postgresConfig: postgresConfig,
             script: schedule.postBackupScript!,
           );
 
           await scriptResult.fold(
             (_) async {
-              await _log(history.id, 'info', 'Script SQL executado com sucesso');
+              await _log(
+                history.id,
+                'info',
+                'Script SQL executado com sucesso',
+              );
             },
             (failure) async {
               final errorMessage = failure is Failure

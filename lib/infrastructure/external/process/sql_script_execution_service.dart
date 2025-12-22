@@ -6,6 +6,7 @@ import '../../../core/utils/logger_service.dart';
 import '../../../domain/entities/schedule.dart';
 import '../../../domain/entities/sql_server_config.dart';
 import '../../../domain/entities/sybase_config.dart';
+import '../../../domain/entities/postgres_config.dart';
 import '../../../domain/services/i_sql_script_execution_service.dart';
 import 'process_service.dart';
 
@@ -19,6 +20,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     required DatabaseType databaseType,
     required SqlServerConfig? sqlServerConfig,
     required SybaseConfig? sybaseConfig,
+    required PostgresConfig? postgresConfig,
     required String script,
   }) async {
     // Validar script não vazio
@@ -35,10 +37,21 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
           config: sqlServerConfig,
           script: trimmedScript,
         );
-      } else {
+      } else if (databaseType == DatabaseType.sybase) {
         return await _executeSybaseScript(
           config: sybaseConfig,
           script: trimmedScript,
+        );
+      } else if (databaseType == DatabaseType.postgresql) {
+        return await _executePostgresScript(
+          config: postgresConfig,
+          script: trimmedScript,
+        );
+      } else {
+        return rd.Failure(
+          ValidationFailure(
+            message: 'Tipo de banco de dados não suportado: $databaseType',
+          ),
         );
       }
     } catch (e, stackTrace) {
@@ -224,6 +237,94 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     } catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao executar script SQL no Sybase',
+        e,
+        stackTrace,
+      );
+      return rd.Failure(
+        BackupFailure(
+          message: 'Erro ao executar script SQL: $e',
+          originalError: e,
+        ),
+      );
+    }
+  }
+
+  Future<rd.Result<void>> _executePostgresScript({
+    required PostgresConfig? config,
+    required String script,
+  }) async {
+    if (config == null) {
+      return rd.Failure(
+        ValidationFailure(message: 'Configuração PostgreSQL não fornecida'),
+      );
+    }
+
+    try {
+      LoggerService.info(
+        'Executando script SQL no PostgreSQL: ${config.database}',
+      );
+
+      final arguments = [
+        '-h',
+        config.host,
+        '-p',
+        config.port.toString(),
+        '-U',
+        config.username,
+        '-d',
+        config.database,
+        '-c',
+        script,
+      ];
+
+      final environment = <String, String>{
+        'PGPASSWORD': config.password,
+      };
+
+      final result = await _processService.run(
+        executable: 'psql',
+        arguments: arguments,
+        environment: environment,
+        timeout: const Duration(seconds: 30),
+      );
+
+      return result.fold(
+        (processResult) {
+          if (processResult.isSuccess) {
+            LoggerService.info(
+              'Script SQL executado com sucesso no PostgreSQL',
+            );
+            return const rd.Success(unit);
+          } else {
+            final errorMessage =
+                'Script SQL falhou (Exit Code: ${processResult.exitCode})\n'
+                'STDOUT: ${processResult.stdout}\n'
+                'STDERR: ${processResult.stderr}';
+            LoggerService.warning(
+              'Script SQL falhou no PostgreSQL',
+              errorMessage,
+            );
+            return rd.Failure(BackupFailure(message: errorMessage));
+          }
+        },
+        (failure) {
+          final errorMessage = failure is Failure
+              ? failure.message
+              : failure.toString();
+          LoggerService.warning(
+            'Erro ao executar script SQL no PostgreSQL',
+            failure,
+          );
+          return rd.Failure(
+            BackupFailure(
+              message: 'Erro ao executar script SQL: $errorMessage',
+            ),
+          );
+        },
+      );
+    } catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao executar script SQL no PostgreSQL',
         e,
         stackTrace,
       );

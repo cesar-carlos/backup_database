@@ -1276,6 +1276,614 @@ class SybaseConfigsTableCompanion
   }
 }
 
+class $PostgresConfigsTableTable extends PostgresConfigsTable
+    with TableInfo<$PostgresConfigsTableTable, PostgresConfigsTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PostgresConfigsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hostMeta = const VerificationMeta('host');
+  @override
+  late final GeneratedColumn<String> host = GeneratedColumn<String>(
+    'host',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _databaseMeta = const VerificationMeta(
+    'database',
+  );
+  @override
+  late final GeneratedColumn<String> database = GeneratedColumn<String>(
+    'database',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _usernameMeta = const VerificationMeta(
+    'username',
+  );
+  @override
+  late final GeneratedColumn<String> username = GeneratedColumn<String>(
+    'username',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _passwordMeta = const VerificationMeta(
+    'password',
+  );
+  @override
+  late final GeneratedColumn<String> password = GeneratedColumn<String>(
+    'password',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _portMeta = const VerificationMeta('port');
+  @override
+  late final GeneratedColumn<int> port = GeneratedColumn<int>(
+    'port',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(5432),
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    host,
+    database,
+    username,
+    password,
+    port,
+    enabled,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'postgres_configs_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PostgresConfigsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('host')) {
+      context.handle(
+        _hostMeta,
+        host.isAcceptableOrUnknown(data['host']!, _hostMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hostMeta);
+    }
+    if (data.containsKey('database')) {
+      context.handle(
+        _databaseMeta,
+        database.isAcceptableOrUnknown(data['database']!, _databaseMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_databaseMeta);
+    }
+    if (data.containsKey('username')) {
+      context.handle(
+        _usernameMeta,
+        username.isAcceptableOrUnknown(data['username']!, _usernameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_usernameMeta);
+    }
+    if (data.containsKey('password')) {
+      context.handle(
+        _passwordMeta,
+        password.isAcceptableOrUnknown(data['password']!, _passwordMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_passwordMeta);
+    }
+    if (data.containsKey('port')) {
+      context.handle(
+        _portMeta,
+        port.isAcceptableOrUnknown(data['port']!, _portMeta),
+      );
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PostgresConfigsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PostgresConfigsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      host: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}host'],
+      )!,
+      database: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}database'],
+      )!,
+      username: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}username'],
+      )!,
+      password: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}password'],
+      )!,
+      port: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}port'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PostgresConfigsTableTable createAlias(String alias) {
+    return $PostgresConfigsTableTable(attachedDatabase, alias);
+  }
+}
+
+class PostgresConfigsTableData extends DataClass
+    implements Insertable<PostgresConfigsTableData> {
+  final String id;
+  final String name;
+  final String host;
+  final String database;
+  final String username;
+  final String password;
+  final int port;
+  final bool enabled;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const PostgresConfigsTableData({
+    required this.id,
+    required this.name,
+    required this.host,
+    required this.database,
+    required this.username,
+    required this.password,
+    required this.port,
+    required this.enabled,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['host'] = Variable<String>(host);
+    map['database'] = Variable<String>(database);
+    map['username'] = Variable<String>(username);
+    map['password'] = Variable<String>(password);
+    map['port'] = Variable<int>(port);
+    map['enabled'] = Variable<bool>(enabled);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  PostgresConfigsTableCompanion toCompanion(bool nullToAbsent) {
+    return PostgresConfigsTableCompanion(
+      id: Value(id),
+      name: Value(name),
+      host: Value(host),
+      database: Value(database),
+      username: Value(username),
+      password: Value(password),
+      port: Value(port),
+      enabled: Value(enabled),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory PostgresConfigsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PostgresConfigsTableData(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      host: serializer.fromJson<String>(json['host']),
+      database: serializer.fromJson<String>(json['database']),
+      username: serializer.fromJson<String>(json['username']),
+      password: serializer.fromJson<String>(json['password']),
+      port: serializer.fromJson<int>(json['port']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'host': serializer.toJson<String>(host),
+      'database': serializer.toJson<String>(database),
+      'username': serializer.toJson<String>(username),
+      'password': serializer.toJson<String>(password),
+      'port': serializer.toJson<int>(port),
+      'enabled': serializer.toJson<bool>(enabled),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  PostgresConfigsTableData copyWith({
+    String? id,
+    String? name,
+    String? host,
+    String? database,
+    String? username,
+    String? password,
+    int? port,
+    bool? enabled,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => PostgresConfigsTableData(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    host: host ?? this.host,
+    database: database ?? this.database,
+    username: username ?? this.username,
+    password: password ?? this.password,
+    port: port ?? this.port,
+    enabled: enabled ?? this.enabled,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  PostgresConfigsTableData copyWithCompanion(
+    PostgresConfigsTableCompanion data,
+  ) {
+    return PostgresConfigsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      host: data.host.present ? data.host.value : this.host,
+      database: data.database.present ? data.database.value : this.database,
+      username: data.username.present ? data.username.value : this.username,
+      password: data.password.present ? data.password.value : this.password,
+      port: data.port.present ? data.port.value : this.port,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PostgresConfigsTableData(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('host: $host, ')
+          ..write('database: $database, ')
+          ..write('username: $username, ')
+          ..write('password: $password, ')
+          ..write('port: $port, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    host,
+    database,
+    username,
+    password,
+    port,
+    enabled,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PostgresConfigsTableData &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.host == this.host &&
+          other.database == this.database &&
+          other.username == this.username &&
+          other.password == this.password &&
+          other.port == this.port &&
+          other.enabled == this.enabled &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class PostgresConfigsTableCompanion
+    extends UpdateCompanion<PostgresConfigsTableData> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> host;
+  final Value<String> database;
+  final Value<String> username;
+  final Value<String> password;
+  final Value<int> port;
+  final Value<bool> enabled;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const PostgresConfigsTableCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.host = const Value.absent(),
+    this.database = const Value.absent(),
+    this.username = const Value.absent(),
+    this.password = const Value.absent(),
+    this.port = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PostgresConfigsTableCompanion.insert({
+    required String id,
+    required String name,
+    required String host,
+    required String database,
+    required String username,
+    required String password,
+    this.port = const Value.absent(),
+    this.enabled = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       host = Value(host),
+       database = Value(database),
+       username = Value(username),
+       password = Value(password),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<PostgresConfigsTableData> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? host,
+    Expression<String>? database,
+    Expression<String>? username,
+    Expression<String>? password,
+    Expression<int>? port,
+    Expression<bool>? enabled,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (host != null) 'host': host,
+      if (database != null) 'database': database,
+      if (username != null) 'username': username,
+      if (password != null) 'password': password,
+      if (port != null) 'port': port,
+      if (enabled != null) 'enabled': enabled,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PostgresConfigsTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? host,
+    Value<String>? database,
+    Value<String>? username,
+    Value<String>? password,
+    Value<int>? port,
+    Value<bool>? enabled,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return PostgresConfigsTableCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      host: host ?? this.host,
+      database: database ?? this.database,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      port: port ?? this.port,
+      enabled: enabled ?? this.enabled,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (host.present) {
+      map['host'] = Variable<String>(host.value);
+    }
+    if (database.present) {
+      map['database'] = Variable<String>(database.value);
+    }
+    if (username.present) {
+      map['username'] = Variable<String>(username.value);
+    }
+    if (password.present) {
+      map['password'] = Variable<String>(password.value);
+    }
+    if (port.present) {
+      map['port'] = Variable<int>(port.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PostgresConfigsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('host: $host, ')
+          ..write('database: $database, ')
+          ..write('username: $username, ')
+          ..write('password: $password, ')
+          ..write('port: $port, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $BackupDestinationsTableTable extends BackupDestinationsTable
     with TableInfo<$BackupDestinationsTableTable, BackupDestinationsTableData> {
   @override
@@ -5007,6 +5615,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $SqlServerConfigsTableTable(this);
   late final $SybaseConfigsTableTable sybaseConfigsTable =
       $SybaseConfigsTableTable(this);
+  late final $PostgresConfigsTableTable postgresConfigsTable =
+      $PostgresConfigsTableTable(this);
   late final $BackupDestinationsTableTable backupDestinationsTable =
       $BackupDestinationsTableTable(this);
   late final $SchedulesTableTable schedulesTable = $SchedulesTableTable(this);
@@ -5021,6 +5631,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this as AppDatabase,
   );
   late final SybaseConfigDao sybaseConfigDao = SybaseConfigDao(
+    this as AppDatabase,
+  );
+  late final PostgresConfigDao postgresConfigDao = PostgresConfigDao(
     this as AppDatabase,
   );
   late final BackupDestinationDao backupDestinationDao = BackupDestinationDao(
@@ -5041,6 +5654,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     sqlServerConfigsTable,
     sybaseConfigsTable,
+    postgresConfigsTable,
     backupDestinationsTable,
     schedulesTable,
     backupHistoryTable,
@@ -5694,6 +6308,317 @@ typedef $$SybaseConfigsTableTableProcessedTableManager =
         >,
       ),
       SybaseConfigsTableData,
+      PrefetchHooks Function()
+    >;
+typedef $$PostgresConfigsTableTableCreateCompanionBuilder =
+    PostgresConfigsTableCompanion Function({
+      required String id,
+      required String name,
+      required String host,
+      required String database,
+      required String username,
+      required String password,
+      Value<int> port,
+      Value<bool> enabled,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$PostgresConfigsTableTableUpdateCompanionBuilder =
+    PostgresConfigsTableCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> host,
+      Value<String> database,
+      Value<String> username,
+      Value<String> password,
+      Value<int> port,
+      Value<bool> enabled,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$PostgresConfigsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $PostgresConfigsTableTable> {
+  $$PostgresConfigsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get database => $composableBuilder(
+    column: $table.database,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get username => $composableBuilder(
+    column: $table.username,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get password => $composableBuilder(
+    column: $table.password,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get port => $composableBuilder(
+    column: $table.port,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PostgresConfigsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $PostgresConfigsTableTable> {
+  $$PostgresConfigsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get database => $composableBuilder(
+    column: $table.database,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get username => $composableBuilder(
+    column: $table.username,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get password => $composableBuilder(
+    column: $table.password,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get port => $composableBuilder(
+    column: $table.port,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PostgresConfigsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PostgresConfigsTableTable> {
+  $$PostgresConfigsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get host =>
+      $composableBuilder(column: $table.host, builder: (column) => column);
+
+  GeneratedColumn<String> get database =>
+      $composableBuilder(column: $table.database, builder: (column) => column);
+
+  GeneratedColumn<String> get username =>
+      $composableBuilder(column: $table.username, builder: (column) => column);
+
+  GeneratedColumn<String> get password =>
+      $composableBuilder(column: $table.password, builder: (column) => column);
+
+  GeneratedColumn<int> get port =>
+      $composableBuilder(column: $table.port, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$PostgresConfigsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PostgresConfigsTableTable,
+          PostgresConfigsTableData,
+          $$PostgresConfigsTableTableFilterComposer,
+          $$PostgresConfigsTableTableOrderingComposer,
+          $$PostgresConfigsTableTableAnnotationComposer,
+          $$PostgresConfigsTableTableCreateCompanionBuilder,
+          $$PostgresConfigsTableTableUpdateCompanionBuilder,
+          (
+            PostgresConfigsTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $PostgresConfigsTableTable,
+              PostgresConfigsTableData
+            >,
+          ),
+          PostgresConfigsTableData,
+          PrefetchHooks Function()
+        > {
+  $$PostgresConfigsTableTableTableManager(
+    _$AppDatabase db,
+    $PostgresConfigsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PostgresConfigsTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PostgresConfigsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$PostgresConfigsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> host = const Value.absent(),
+                Value<String> database = const Value.absent(),
+                Value<String> username = const Value.absent(),
+                Value<String> password = const Value.absent(),
+                Value<int> port = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PostgresConfigsTableCompanion(
+                id: id,
+                name: name,
+                host: host,
+                database: database,
+                username: username,
+                password: password,
+                port: port,
+                enabled: enabled,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String host,
+                required String database,
+                required String username,
+                required String password,
+                Value<int> port = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => PostgresConfigsTableCompanion.insert(
+                id: id,
+                name: name,
+                host: host,
+                database: database,
+                username: username,
+                password: password,
+                port: port,
+                enabled: enabled,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PostgresConfigsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PostgresConfigsTableTable,
+      PostgresConfigsTableData,
+      $$PostgresConfigsTableTableFilterComposer,
+      $$PostgresConfigsTableTableOrderingComposer,
+      $$PostgresConfigsTableTableAnnotationComposer,
+      $$PostgresConfigsTableTableCreateCompanionBuilder,
+      $$PostgresConfigsTableTableUpdateCompanionBuilder,
+      (
+        PostgresConfigsTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $PostgresConfigsTableTable,
+          PostgresConfigsTableData
+        >,
+      ),
+      PostgresConfigsTableData,
       PrefetchHooks Function()
     >;
 typedef $$BackupDestinationsTableTableCreateCompanionBuilder =
@@ -7522,6 +8447,8 @@ class $AppDatabaseManager {
       $$SqlServerConfigsTableTableTableManager(_db, _db.sqlServerConfigsTable);
   $$SybaseConfigsTableTableTableManager get sybaseConfigsTable =>
       $$SybaseConfigsTableTableTableManager(_db, _db.sybaseConfigsTable);
+  $$PostgresConfigsTableTableTableManager get postgresConfigsTable =>
+      $$PostgresConfigsTableTableTableManager(_db, _db.postgresConfigsTable);
   $$BackupDestinationsTableTableTableManager get backupDestinationsTable =>
       $$BackupDestinationsTableTableTableManager(
         _db,

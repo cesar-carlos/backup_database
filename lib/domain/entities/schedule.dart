@@ -4,7 +4,7 @@ import 'backup_type.dart';
 
 enum ScheduleType { daily, weekly, monthly, interval }
 
-enum DatabaseType { sqlServer, sybase }
+enum DatabaseType { sqlServer, sybase, postgresql }
 
 class Schedule {
   final String id;

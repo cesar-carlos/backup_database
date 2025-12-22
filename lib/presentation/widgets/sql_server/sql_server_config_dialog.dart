@@ -6,11 +6,13 @@ import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
 import '../../../domain/entities/sql_server_config.dart';
 import '../../../domain/entities/sybase_config.dart';
+import '../../../domain/entities/postgres_config.dart';
 import '../../../domain/services/i_sql_server_backup_service.dart';
 import '../../../domain/services/i_sybase_backup_service.dart';
+import '../../../domain/services/i_postgres_backup_service.dart';
 import '../common/common.dart';
 
-enum DatabaseType { sqlServer, sybase }
+enum DatabaseType { sqlServer, sybase, postgresql }
 
 class SqlServerConfigDialog extends StatefulWidget {
   final SqlServerConfig? config;
@@ -42,7 +44,8 @@ class SqlServerConfigDialog extends StatefulWidget {
 class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _serverController = TextEditingController();
+  final _serverController = TextEditingController(); // Para SQL Server e Sybase
+  final _hostController = TextEditingController(); // Para PostgreSQL
   final _databaseController = TextEditingController();
   final _databaseNameController =
       TextEditingController(); // Para Sybase: Nome do Banco de Dados
@@ -59,6 +62,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
   late final ISqlServerBackupService _backupService;
   late final ISybaseBackupService _sybaseBackupService;
+  late final IPostgresBackupService _postgresBackupService;
 
   bool get isEditing => widget.config != null;
 
@@ -67,9 +71,14 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     super.initState();
     _backupService = getIt<ISqlServerBackupService>();
     _sybaseBackupService = getIt<ISybaseBackupService>();
+    _postgresBackupService = getIt<IPostgresBackupService>();
 
-    // Detectar tipo de banco quando está editando
-    if (widget.config != null) {
+    // Priorizar initialType se fornecido, caso contrário detectar baseado no config
+    if (widget.initialType != DatabaseType.sqlServer) {
+      // Se initialType foi fornecido explicitamente, usar ele
+      _selectedType = widget.initialType;
+    } else if (widget.config != null) {
+      // Detectar tipo de banco quando está editando (apenas se initialType não foi fornecido)
       // Se porta é 2638 (padrão Sybase) ou database termina com .db (arquivo Sybase)
       // assume que é Sybase
       if (widget.config!.port == 2638 ||
@@ -78,9 +87,21 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       } else {
         _selectedType = DatabaseType.sqlServer;
       }
+    } else {
+      _selectedType = widget.initialType;
+    }
 
+    // Carregar dados do config se estiver editando
+    if (widget.config != null) {
       _nameController.text = widget.config!.name;
-      _serverController.text = widget.config!.server;
+      
+      // Para PostgreSQL, usar server como host (já que foi convertido temporariamente)
+      if (_selectedType == DatabaseType.postgresql) {
+        _hostController.text = widget.config!.server;
+      } else {
+        _serverController.text = widget.config!.server;
+      }
+      
       _databaseController.text = widget.config!.database;
       _usernameController.text = widget.config!.username;
       _passwordController.text = widget.config!.password;
@@ -95,8 +116,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         // Caso contrário, usar o database como fallback
         _databaseNameController.text = widget.config!.database;
       }
-    } else {
-      _selectedType = widget.initialType;
     }
   }
 
@@ -104,6 +123,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   void dispose() {
     _nameController.dispose();
     _serverController.dispose();
+    _hostController.dispose();
     _databaseController.dispose();
     _databaseNameController.dispose();
     _usernameController.dispose();
@@ -119,12 +139,16 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         _databases = [];
         _selectedDatabase = null;
         _databaseController.clear();
+        _hostController.clear();
+        _serverController.clear();
 
         // Ajustar porta padrão
         if (type == DatabaseType.sqlServer) {
           _portController.text = '1433';
-        } else {
+        } else if (type == DatabaseType.sybase) {
           _portController.text = '2638';
+        } else if (type == DatabaseType.postgresql) {
+          _portController.text = '5432';
         }
       });
     }
@@ -180,6 +204,10 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                       value: DatabaseType.sybase,
                       child: Text('Sybase SQL Anywhere'),
                     ),
+                    ComboBoxItem(
+                      value: DatabaseType.postgresql,
+                      child: Text('PostgreSQL'),
+                    ),
                   ],
                   onChanged: isEditing
                       ? null
@@ -197,6 +225,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   label: 'Nome da Configuração',
                   hint: _selectedType == DatabaseType.sqlServer
                       ? 'Ex: Produção SQL Server'
+                      : _selectedType == DatabaseType.postgresql
+                      ? 'Ex: Produção PostgreSQL'
                       : 'Ex: Produção Sybase',
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -211,8 +241,10 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 // Campos específicos por tipo
                 if (_selectedType == DatabaseType.sqlServer)
                   _buildSqlServerFields(context)
-                else
-                  _buildSybaseFields(context),
+                else if (_selectedType == DatabaseType.sybase)
+                  _buildSybaseFields(context)
+                else if (_selectedType == DatabaseType.postgresql)
+                  _buildPostgresFields(context),
 
                 const SizedBox(height: 16),
 
@@ -222,7 +254,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   label: 'Usuário',
                   hint: _selectedType == DatabaseType.sqlServer
                       ? 'sa ou usuário do SQL Server'
-                      : 'DBA ou usuário do Sybase',
+                      : _selectedType == DatabaseType.postgresql
+                          ? 'postgres ou usuário do PostgreSQL'
+                          : 'DBA ou usuário do Sybase',
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Usuário é obrigatório';
@@ -486,6 +520,138 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     );
   }
 
+  Widget _buildPostgresFields(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Host e Porta
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: AppTextField(
+                controller: _hostController,
+                label: 'Host',
+                hint: 'localhost ou IP',
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Host é obrigatório';
+                  }
+                  return null;
+                },
+                prefixIcon: const Icon(FluentIcons.server),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 1,
+              child: NumericField(
+                controller: _portController,
+                label: 'Porta',
+                hint: '5432',
+                prefixIcon: FluentIcons.number_field,
+                minValue: 1,
+                maxValue: 65535,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Banco de dados
+        _databases.isEmpty && !_isLoadingDatabases
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppTextField(
+                    controller: _databaseController,
+                    label: 'Nome do Banco de Dados',
+                    hint:
+                        'Digite ou clique em \'Testar Conexão\' para carregar',
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Nome do banco de dados é obrigatório';
+                      }
+                      return null;
+                    },
+                    prefixIcon: const Icon(FluentIcons.database),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          FluentIcons.info,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Preencha host, porta, usuário e senha, depois clique em \'Testar Conexão\' para carregar os bancos no dropdown',
+                            style: FluentTheme.of(context).typography.caption,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : _isLoadingDatabases
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: ProgressRing(),
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppDropdown<String>(
+                    label: 'Nome do Banco de Dados',
+                    value: _selectedDatabase,
+                    placeholder: const Text('Selecione um banco de dados'),
+                    items: _databases.map((db) {
+                      return ComboBoxItem<String>(value: db, child: Text(db));
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedDatabase = value;
+                        if (value != null) {
+                          _databaseController.text = value;
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  AppTextField(
+                    controller: _databaseController,
+                    label: 'Nome do Banco de Dados (Manual)',
+                    hint: 'Digite o nome do banco de dados',
+                    validator: (value) {
+                      if ((_selectedDatabase == null ||
+                              _selectedDatabase!.isEmpty) &&
+                          (value == null || value.trim().isEmpty)) {
+                        return 'Selecione ou digite um nome de banco de dados';
+                      }
+                      return null;
+                    },
+                    prefixIcon: const Icon(FluentIcons.database),
+                  ),
+                ],
+              ),
+      ],
+    );
+  }
+
   Future<void> _testConnection() async {
     // Validações específicas por tipo
     if (_selectedType == DatabaseType.sybase) {
@@ -566,6 +732,147 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           setState(() {
             _isTestingConnection = false;
           });
+        }
+      }
+      return;
+    }
+
+    // Validações para PostgreSQL
+    if (_selectedType == DatabaseType.postgresql) {
+      if (_hostController.text.trim().isEmpty ||
+          _portController.text.trim().isEmpty ||
+          _usernameController.text.trim().isEmpty ||
+          _passwordController.text.isEmpty) {
+        MessageModal.showWarning(
+          context,
+          message: 'Preencha host, porta, usuário e senha para testar',
+        );
+        return;
+      }
+
+      setState(() {
+        _isTestingConnection = true;
+        _isLoadingDatabases = true;
+        _databases = [];
+        _selectedDatabase = null;
+      });
+
+      try {
+        final port = int.tryParse(_portController.text);
+        if (port == null || port < 1 || port > 65535) {
+          throw Exception('Porta inválida. Deve estar entre 1 e 65535.');
+        }
+
+        final tempConfig = PostgresConfig(
+          name: 'temp',
+          host: _hostController.text.trim(),
+          port: port,
+          database: 'postgres',
+          username: _usernameController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        final connectionResult = await _postgresBackupService.testConnection(
+          tempConfig,
+        );
+
+        await connectionResult.fold(
+          (success) async {
+            // Conexão bem-sucedida, agora listar bancos
+            final databasesResult = await _postgresBackupService.listDatabases(
+              config: tempConfig,
+            );
+
+            await databasesResult.fold(
+              (databases) async {
+                if (mounted) {
+                  setState(() {
+                    _databases = databases;
+                    _isLoadingDatabases = false;
+                    _isTestingConnection = false;
+
+                    if (databases.length == 1) {
+                      _selectedDatabase = databases.first;
+                      _databaseController.text = databases.first;
+                    }
+                  });
+
+                  MessageModal.showInfo(
+                    context,
+                    message: databases.isEmpty
+                        ? 'Conexão OK, mas nenhum banco encontrado'
+                        : 'Conexão OK! ${databases.length} banco(s) encontrado(s). Selecione um no dropdown.',
+                  );
+                }
+              },
+              (failure) async {
+                if (mounted) {
+                  setState(() {
+                    _isLoadingDatabases = false;
+                    _isTestingConnection = false;
+                  });
+                  final message = failure is Failure
+                      ? failure.message
+                      : failure.toString();
+                  MessageModal.showWarning(
+                    context,
+                    message: 'Conexão OK, mas erro ao listar bancos: $message',
+                  );
+                }
+              },
+            );
+          },
+          (failure) async {
+            // Falha na conexão
+            if (mounted) {
+              setState(() {
+                _isLoadingDatabases = false;
+                _isTestingConnection = false;
+              });
+              String message = failure is Failure
+                  ? failure.message
+                  : failure.toString();
+              
+              // Se a mensagem contém erro de psql não encontrado, garantir mensagem melhorada
+              final messageLower = message.toLowerCase();
+              if ((messageLower.contains('psql') ||
+                      messageLower.contains("'psql'")) &&
+                  (messageLower.contains('não é reconhecido') ||
+                      messageLower.contains("não reconhecido") ||
+                      messageLower.contains('não reconhecido como') ||
+                      messageLower.contains('command not found') ||
+                      messageLower.contains('não encontrado'))) {
+                message =
+                    'psql não encontrado no PATH do sistema.\n\n'
+                    'INSTRUÇÕES PARA ADICIONAR AO PATH:\n\n'
+                    '1. Localize a pasta bin do PostgreSQL instalado\n'
+                    '   (geralmente: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
+                    '2. Adicione ao PATH do Windows:\n'
+                    '   - Pressione Win + X e selecione "Sistema"\n'
+                    '   - Clique em "Configurações avançadas do sistema"\n'
+                    '   - Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
+                    '   - Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
+                    '   - Clique em "Novo" e adicione o caminho completo da pasta bin\n'
+                    '   - Clique em "OK" em todas as janelas\n\n'
+                    '3. Reinicie o aplicativo de backup\n\n'
+                    'Consulte: docs\\path_setup.md para mais detalhes.';
+              }
+              
+              MessageModal.showError(
+                context,
+                title: 'Erro ao Testar Conexão',
+                message: message,
+              );
+            }
+          },
+        );
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoadingDatabases = false;
+            _isTestingConnection = false;
+          });
+          MessageModal.showError(context, title: 'Erro', message: e.toString());
         }
       }
       return;
@@ -706,6 +1013,32 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         context,
         message: 'Informe o nome do banco de dados',
       );
+      return;
+    }
+
+    if (_selectedType == DatabaseType.postgresql) {
+      final database = _selectedDatabase ?? _databaseController.text.trim();
+      if (database.isEmpty) {
+        MessageModal.showError(
+          context,
+          message: 'Selecione ou informe um banco de dados',
+        );
+        return;
+      }
+
+      final postgresConfig = PostgresConfig(
+        id: widget.config?.id,
+        name: _nameController.text.trim(),
+        host: _hostController.text.trim(),
+        port: port,
+        database: database,
+        username: _usernameController.text.trim(),
+        password: _passwordController.text,
+        enabled: _isEnabled,
+        createdAt: widget.config?.createdAt,
+        updatedAt: widget.config?.updatedAt,
+      );
+      Navigator.of(context).pop(postgresConfig);
       return;
     }
 

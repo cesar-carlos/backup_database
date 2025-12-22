@@ -115,6 +115,7 @@ class RecentBackupsList extends StatelessWidget {
     final type = BackupType.fromString(backupType);
     switch (type) {
       case BackupType.full:
+      case BackupType.fullSingle:
         return FluentIcons.database;
       case BackupType.differential:
         return FluentIcons.database_sync;
@@ -127,6 +128,7 @@ class RecentBackupsList extends StatelessWidget {
     final type = BackupType.fromString(backupType);
     switch (type) {
       case BackupType.full:
+      case BackupType.fullSingle:
         return AppColors.primary;
       case BackupType.differential:
         return Colors.blue;

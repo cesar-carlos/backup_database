@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 
 import 'core/core.dart';
 import 'core/theme/theme_provider.dart';
-import 'core/utils/windows_user_service.dart';
 import 'presentation/managers/managers.dart';
 import 'infrastructure/external/system/os_version_checker.dart';
 import 'presentation/providers/system_settings_provider.dart';
@@ -411,6 +410,7 @@ class BackupDatabaseApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => getIt<NotificationProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<SqlServerConfigProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<SybaseConfigProvider>()),
+        ChangeNotifierProvider(create: (_) => getIt<PostgresConfigProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<DestinationProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<BackupProgressProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<DashboardProvider>()),

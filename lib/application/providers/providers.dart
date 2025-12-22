@@ -1,6 +1,7 @@
 export 'log_provider.dart';
 export 'scheduler_provider.dart';
 export 'notification_provider.dart';
+export 'postgres_config_provider.dart';
 export 'sql_server_config_provider.dart';
 export 'sybase_config_provider.dart';
 export 'destination_provider.dart';

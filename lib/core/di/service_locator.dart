@@ -32,6 +32,9 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<ISybaseConfigRepository>(
     () => SybaseConfigRepository(getIt<AppDatabase>()),
   );
+  getIt.registerLazySingleton<IPostgresConfigRepository>(
+    () => PostgresConfigRepository(getIt<AppDatabase>()),
+  );
   getIt.registerLazySingleton<IBackupDestinationRepository>(
     () => BackupDestinationRepository(getIt<AppDatabase>()),
   );
@@ -61,6 +64,10 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerLazySingleton<ISybaseBackupService>(
     () => SybaseBackupService(getIt<ProcessService>()),
+  );
+
+  getIt.registerLazySingleton<IPostgresBackupService>(
+    () => PostgresBackupService(getIt<ProcessService>()),
   );
 
   getIt.registerLazySingleton<ICompressionService>(
@@ -153,10 +160,12 @@ Future<void> setupServiceLocator() async {
     () => BackupOrchestratorService(
       sqlServerConfigRepository: getIt<ISqlServerConfigRepository>(),
       sybaseConfigRepository: getIt<ISybaseConfigRepository>(),
+      postgresConfigRepository: getIt<IPostgresConfigRepository>(),
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
       sqlServerBackupService: getIt<ISqlServerBackupService>(),
       sybaseBackupService: getIt<ISybaseBackupService>(),
+      postgresBackupService: getIt<IPostgresBackupService>(),
       compressionService: getIt<ICompressionService>(),
       sqlScriptExecutionService: getIt<ISqlScriptExecutionService>(),
       notificationService: getIt<NotificationService>(),
@@ -245,6 +254,13 @@ Future<void> setupServiceLocator() async {
       getIt<ISybaseConfigRepository>(),
       getIt<IScheduleRepository>(),
       getIt<ToolVerificationService>(),
+    ),
+  );
+
+  getIt.registerFactory<PostgresConfigProvider>(
+    () => PostgresConfigProvider(
+      getIt<IPostgresConfigRepository>(),
+      getIt<IScheduleRepository>(),
     ),
   );
 

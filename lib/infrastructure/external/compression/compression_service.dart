@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
@@ -10,6 +11,52 @@ import '../../../domain/services/compression_result.dart';
 import '../../../domain/services/i_compression_service.dart';
 import '../process/process_service.dart';
 import 'winrar_service.dart';
+
+Future<void> compressFileInIsolate(Map<String, String> params) async {
+  final inputFilePath = params['inputFilePath']!;
+  final outputFilePath = params['outputFilePath']!;
+
+  final inputFile = File(inputFilePath);
+  
+  final outputFileBeforeCreate = File(outputFilePath);
+  final outputExistsBeforeCreate = await outputFileBeforeCreate.exists();
+  if (outputExistsBeforeCreate) {
+    try {
+      await outputFileBeforeCreate.delete();
+      await Future.delayed(const Duration(milliseconds: 200));
+    } catch (e) {
+      throw FileSystemException(
+        'Não foi possível remover arquivo ZIP existente: $outputFilePath',
+        outputFilePath,
+      );
+    }
+  }
+
+  final encoder = ZipFileEncoder();
+
+  try {
+    encoder.create(outputFilePath);
+    encoder.addFile(inputFile);
+
+    try {
+      encoder.close();
+    } on FileSystemException {
+      try {
+        final partialZip = File(outputFilePath);
+        if (await partialZip.exists()) {
+          await partialZip.delete();
+        }
+      } catch (_) {}
+      
+      rethrow;
+    }
+  } catch (e) {
+    try {
+      encoder.close();
+    } catch (_) {}
+    rethrow;
+  }
+}
 
 class CompressionService implements ICompressionService {
   final WinRarService _winRarService;
@@ -79,14 +126,7 @@ class CompressionService implements ICompressionService {
             originalSize = await _calculateDirectorySize(inputDir);
 
             if (deleteOriginal) {
-              try {
-                await inputDir.delete(recursive: true);
-                LoggerService.info(
-                  'Diretório original deletado: $directoryPath',
-                );
-              } catch (e) {
-                LoggerService.warning('Erro ao deletar diretório original', e);
-              }
+              await _deleteDirectoryWithRetry(inputDir, directoryPath);
             }
 
             final compressionRatio = originalSize > 0
@@ -159,8 +199,7 @@ class CompressionService implements ICompressionService {
       );
 
       if (deleteOriginal) {
-        await inputDir.delete(recursive: true);
-        LoggerService.info('Diretório original deletado: $directoryPath');
+        await _deleteDirectoryWithRetry(inputDir, directoryPath);
       }
 
       return rd.Success(
@@ -205,7 +244,9 @@ class CompressionService implements ICompressionService {
       final originalSize = await inputFile.length();
       final outputFilePath = outputPath ?? '$filePath.zip';
 
-      if (await _winRarService.isAvailable()) {
+      final winRarAvailable = await _winRarService.isAvailable();
+
+      if (winRarAvailable) {
         LoggerService.info('Tentando comprimir com WinRAR...');
         final winRarSuccess = await _winRarService.compressFile(
           filePath: filePath,
@@ -219,12 +260,7 @@ class CompressionService implements ICompressionService {
             stopwatch.stop();
 
             if (deleteOriginal) {
-              try {
-                await inputFile.delete();
-                LoggerService.info('Arquivo original deletado: $filePath');
-              } catch (e) {
-                LoggerService.warning('Erro ao deletar arquivo original', e);
-              }
+              await _deleteFileWithRetry(inputFile, filePath);
             }
 
             final compressionRatio = originalSize > 0
@@ -255,14 +291,15 @@ class CompressionService implements ICompressionService {
       LoggerService.info('Usando biblioteca archive para compressão...');
 
       final outputFile = File(outputFilePath);
+
       if (await outputFile.exists()) {
         LoggerService.warning(
           'Arquivo ZIP já existe, removendo: $outputFilePath',
         );
         try {
-          await outputFile.delete();
+          await _deleteFileWithRetry(outputFile, outputFilePath);
 
-          await Future.delayed(const Duration(milliseconds: 100));
+          await Future.delayed(const Duration(milliseconds: 500));
 
           if (await outputFile.exists()) {
             LoggerService.warning(
@@ -342,44 +379,23 @@ class CompressionService implements ICompressionService {
         );
       }
 
-      ZipFileEncoder? encoder;
       try {
         LoggerService.info('Criando arquivo ZIP: $outputFilePath');
         LoggerService.info('Arquivo original: ${_formatBytes(originalSize)}');
-
-        encoder = ZipFileEncoder();
-        LoggerService.info('Inicializando encoder ZIP...');
-
-        try {
-          encoder.create(outputFilePath);
-          LoggerService.info('Arquivo ZIP criado, adicionando arquivo...');
-        } on FileSystemException catch (e) {
-          encoder = null;
-          LoggerService.error('Erro ao criar arquivo ZIP', e);
-          return rd.Failure(
-            FileSystemFailure(
-              message:
-                  'Acesso negado ao criar arquivo ZIP: $outputFilePath\n'
-                  'Possíveis causas:\n'
-                  '- Sem permissão de escrita no diretório\n'
-                  '- Execute o aplicativo como Administrador\n'
-                  '- Escolha outro diretório de destino',
-              originalError: e,
-            ),
-          );
-        }
-
         LoggerService.info(
-          'Adicionando arquivo ao ZIP (isso pode levar alguns minutos para arquivos grandes)...',
+          'Comprimindo arquivo em background (isso pode levar alguns minutos para arquivos grandes)...',
         );
         LoggerService.info('Arquivo: $filePath');
 
         try {
-          encoder.addFile(inputFile);
-          LoggerService.info('Arquivo adicionado ao ZIP');
+          await compute(compressFileInIsolate, {
+            'inputFilePath': filePath,
+            'outputFilePath': outputFilePath,
+          });
+
+          LoggerService.info('Arquivo comprimido com sucesso no isolate');
         } on FileSystemException catch (e) {
-          encoder = null;
-          LoggerService.error('Erro ao adicionar arquivo ao ZIP', e);
+          LoggerService.error('Erro ao comprimir arquivo no isolate', e);
 
           try {
             if (await outputFile.exists()) {
@@ -387,8 +403,7 @@ class CompressionService implements ICompressionService {
             }
           } catch (_) {}
 
-          String errorMessage =
-              'Erro ao adicionar arquivo ao ZIP: ${e.message}';
+          String errorMessage = 'Erro ao comprimir arquivo: ${e.message}';
           if (e.message.contains('writeFrom failed') ||
               e.message.contains('Acesso negado') ||
               e.osError?.errorCode == 5) {
@@ -405,59 +420,10 @@ class CompressionService implements ICompressionService {
           return rd.Failure(
             FileSystemFailure(message: errorMessage, originalError: e),
           );
-        }
-
-        LoggerService.info(
-          'Finalizando criação do ZIP (isso pode levar alguns minutos)...',
-        );
-
-        FileSystemException? closeException;
-        Object? closeError;
-        try {
-          encoder.close();
-          LoggerService.info('Método close() executado');
-        } on FileSystemException catch (e) {
-          closeException = e;
-          closeError = e;
-          LoggerService.error('FileSystemException ao fechar arquivo ZIP', e);
         } catch (e) {
-          closeError = e;
-          LoggerService.error('Erro ao fechar arquivo ZIP', e);
-        } finally {
-          encoder = null;
-        }
-
-        if (closeException != null) {
           LoggerService.error(
-            'Erro ao fechar arquivo ZIP (permissão negada)',
-            closeException,
-          );
-
-          try {
-            if (await outputFile.exists()) {
-              await outputFile.delete();
-              LoggerService.info('Arquivo ZIP parcial removido');
-            }
-          } catch (_) {}
-
-          return rd.Failure(
-            FileSystemFailure(
-              message:
-                  'Acesso negado ao finalizar arquivo ZIP: $outputFilePath\n'
-                  'Possíveis causas:\n'
-                  '- O arquivo está sendo usado por outro processo\n'
-                  '- Sem permissão de escrita no diretório\n'
-                  '- Execute o aplicativo como Administrador\n'
-                  '- Escolha outro diretório de destino',
-              originalError: closeException,
-            ),
-          );
-        }
-
-        if (closeError != null) {
-          LoggerService.error(
-            'Erro inesperado ao fechar arquivo ZIP',
-            closeError,
+            'Erro inesperado ao comprimir arquivo no isolate',
+            e,
           );
 
           try {
@@ -468,8 +434,8 @@ class CompressionService implements ICompressionService {
 
           return rd.Failure(
             FileSystemFailure(
-              message: 'Erro ao finalizar arquivo ZIP: $closeError',
-              originalError: closeError,
+              message: 'Erro ao comprimir arquivo: ${_getUserFriendlyError(e)}',
+              originalError: e,
             ),
           );
         }
@@ -513,11 +479,6 @@ class CompressionService implements ICompressionService {
           'Erro de sistema de arquivos durante compressão',
           e,
         );
-        if (encoder != null) {
-          try {
-            encoder.close();
-          } catch (_) {}
-        }
 
         try {
           if (await outputFile.exists()) {
@@ -553,11 +514,6 @@ class CompressionService implements ICompressionService {
           e,
           stackTrace,
         );
-        if (encoder != null) {
-          try {
-            encoder.close();
-          } catch (_) {}
-        }
 
         try {
           if (await outputFile.exists()) {
@@ -586,8 +542,7 @@ class CompressionService implements ICompressionService {
       );
 
       if (deleteOriginal) {
-        await inputFile.delete();
-        LoggerService.info('Arquivo original deletado: $filePath');
+        await _deleteFileWithRetry(inputFile, filePath);
       }
 
       return rd.Success(
@@ -633,7 +588,8 @@ class CompressionService implements ICompressionService {
       return 'Disco cheio ou sem espaço suficiente para criar o arquivo ZIP.';
     } else if (e.osError?.errorCode == 32) {
       return 'Arquivo em uso por outro processo: $path\n'
-          'Feche outros programas que podem estar usando o arquivo.';
+          'O arquivo pode estar sendo usado pelo sistema ou outro programa.\n'
+          'Aguarde alguns segundos e tente novamente, ou feche outros programas que podem estar usando o arquivo.';
     }
     return 'Erro ao acessar arquivo: ${e.message}';
   }
@@ -720,6 +676,101 @@ class CompressionService implements ICompressionService {
       );
     }
     return totalSize;
+  }
+
+  Future<void> _deleteFileWithRetry(File file, String filePath) async {
+    const maxRetries = 5;
+    const initialDelay = Duration(milliseconds: 500);
+    const retryDelay = Duration(milliseconds: 1000);
+
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          await Future.delayed(retryDelay);
+        } else {
+          await Future.delayed(initialDelay);
+        }
+
+        await file.delete();
+        LoggerService.info('Arquivo original deletado: $filePath');
+        return;
+      } on FileSystemException catch (e) {
+        final errorCode = e.osError?.errorCode;
+        if (errorCode == 32) {
+          if (attempt < maxRetries) {
+            LoggerService.warning(
+              'Arquivo ainda em uso, tentando novamente (tentativa $attempt/$maxRetries): $filePath',
+            );
+            continue;
+          } else {
+            LoggerService.warning(
+              'Não foi possível deletar arquivo original após $maxRetries tentativas. '
+              'Arquivo pode estar em uso por outro processo: $filePath',
+            );
+            return;
+          }
+        } else {
+          LoggerService.warning(
+            'Erro ao deletar arquivo original: ${e.message}',
+          );
+          return;
+        }
+      } catch (e) {
+        LoggerService.warning(
+          'Erro inesperado ao deletar arquivo original: $e',
+        );
+        return;
+      }
+    }
+  }
+
+  Future<void> _deleteDirectoryWithRetry(
+    Directory directory,
+    String directoryPath,
+  ) async {
+    const maxRetries = 5;
+    const initialDelay = Duration(milliseconds: 500);
+    const retryDelay = Duration(milliseconds: 1000);
+
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          await Future.delayed(retryDelay);
+        } else {
+          await Future.delayed(initialDelay);
+        }
+
+        await directory.delete(recursive: true);
+        LoggerService.info('Diretório original deletado: $directoryPath');
+        return;
+      } on FileSystemException catch (e) {
+        final errorCode = e.osError?.errorCode;
+        if (errorCode == 32 || errorCode == 145) {
+          if (attempt < maxRetries) {
+            LoggerService.warning(
+              'Diretório ainda em uso, tentando novamente (tentativa $attempt/$maxRetries): $directoryPath',
+            );
+            continue;
+          } else {
+            LoggerService.warning(
+              'Não foi possível deletar diretório original após $maxRetries tentativas. '
+              'Diretório pode estar em uso por outro processo: $directoryPath',
+            );
+            return;
+          }
+        } else {
+          LoggerService.warning(
+            'Erro ao deletar diretório original: ${e.message}',
+          );
+          return;
+        }
+      } catch (e) {
+        LoggerService.warning(
+          'Erro inesperado ao deletar diretório original: $e',
+        );
+        return;
+      }
+    }
   }
 
   String _formatBytes(int bytes) {
