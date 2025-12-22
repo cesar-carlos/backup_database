@@ -11,6 +11,8 @@ abstract class ISqlServerBackupService {
     BackupType backupType,
     String? customFileName,
     bool truncateLog,
+    bool enableChecksum,
+    bool verifyAfterBackup,
   });
 
   Future<Result<bool>> testConnection(SqlServerConfig config);

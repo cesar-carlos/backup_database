@@ -1883,6 +1883,36 @@ class $SchedulesTableTable extends SchedulesTable
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _enableChecksumMeta = const VerificationMeta(
+    'enableChecksum',
+  );
+  @override
+  late final GeneratedColumn<bool> enableChecksum = GeneratedColumn<bool>(
+    'enable_checksum',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enable_checksum" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _verifyAfterBackupMeta = const VerificationMeta(
+    'verifyAfterBackup',
+  );
+  @override
+  late final GeneratedColumn<bool> verifyAfterBackup = GeneratedColumn<bool>(
+    'verify_after_backup',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("verify_after_backup" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _postBackupScriptMeta = const VerificationMeta(
     'postBackupScript',
   );
@@ -1952,6 +1982,8 @@ class $SchedulesTableTable extends SchedulesTable
     truncateLog,
     compressBackup,
     enabled,
+    enableChecksum,
+    verifyAfterBackup,
     postBackupScript,
     lastRunAt,
     nextRunAt,
@@ -2077,6 +2109,24 @@ class $SchedulesTableTable extends SchedulesTable
         enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
       );
     }
+    if (data.containsKey('enable_checksum')) {
+      context.handle(
+        _enableChecksumMeta,
+        enableChecksum.isAcceptableOrUnknown(
+          data['enable_checksum']!,
+          _enableChecksumMeta,
+        ),
+      );
+    }
+    if (data.containsKey('verify_after_backup')) {
+      context.handle(
+        _verifyAfterBackupMeta,
+        verifyAfterBackup.isAcceptableOrUnknown(
+          data['verify_after_backup']!,
+          _verifyAfterBackupMeta,
+        ),
+      );
+    }
     if (data.containsKey('post_backup_script')) {
       context.handle(
         _postBackupScriptMeta,
@@ -2171,6 +2221,14 @@ class $SchedulesTableTable extends SchedulesTable
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
       )!,
+      enableChecksum: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enable_checksum'],
+      )!,
+      verifyAfterBackup: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}verify_after_backup'],
+      )!,
       postBackupScript: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}post_backup_script'],
@@ -2214,6 +2272,8 @@ class SchedulesTableData extends DataClass
   final bool truncateLog;
   final bool compressBackup;
   final bool enabled;
+  final bool enableChecksum;
+  final bool verifyAfterBackup;
   final String? postBackupScript;
   final DateTime? lastRunAt;
   final DateTime? nextRunAt;
@@ -2232,6 +2292,8 @@ class SchedulesTableData extends DataClass
     required this.truncateLog,
     required this.compressBackup,
     required this.enabled,
+    required this.enableChecksum,
+    required this.verifyAfterBackup,
     this.postBackupScript,
     this.lastRunAt,
     this.nextRunAt,
@@ -2253,6 +2315,8 @@ class SchedulesTableData extends DataClass
     map['truncate_log'] = Variable<bool>(truncateLog);
     map['compress_backup'] = Variable<bool>(compressBackup);
     map['enabled'] = Variable<bool>(enabled);
+    map['enable_checksum'] = Variable<bool>(enableChecksum);
+    map['verify_after_backup'] = Variable<bool>(verifyAfterBackup);
     if (!nullToAbsent || postBackupScript != null) {
       map['post_backup_script'] = Variable<String>(postBackupScript);
     }
@@ -2281,6 +2345,8 @@ class SchedulesTableData extends DataClass
       truncateLog: Value(truncateLog),
       compressBackup: Value(compressBackup),
       enabled: Value(enabled),
+      enableChecksum: Value(enableChecksum),
+      verifyAfterBackup: Value(verifyAfterBackup),
       postBackupScript: postBackupScript == null && nullToAbsent
           ? const Value.absent()
           : Value(postBackupScript),
@@ -2313,6 +2379,8 @@ class SchedulesTableData extends DataClass
       truncateLog: serializer.fromJson<bool>(json['truncateLog']),
       compressBackup: serializer.fromJson<bool>(json['compressBackup']),
       enabled: serializer.fromJson<bool>(json['enabled']),
+      enableChecksum: serializer.fromJson<bool>(json['enableChecksum']),
+      verifyAfterBackup: serializer.fromJson<bool>(json['verifyAfterBackup']),
       postBackupScript: serializer.fromJson<String?>(json['postBackupScript']),
       lastRunAt: serializer.fromJson<DateTime?>(json['lastRunAt']),
       nextRunAt: serializer.fromJson<DateTime?>(json['nextRunAt']),
@@ -2336,6 +2404,8 @@ class SchedulesTableData extends DataClass
       'truncateLog': serializer.toJson<bool>(truncateLog),
       'compressBackup': serializer.toJson<bool>(compressBackup),
       'enabled': serializer.toJson<bool>(enabled),
+      'enableChecksum': serializer.toJson<bool>(enableChecksum),
+      'verifyAfterBackup': serializer.toJson<bool>(verifyAfterBackup),
       'postBackupScript': serializer.toJson<String?>(postBackupScript),
       'lastRunAt': serializer.toJson<DateTime?>(lastRunAt),
       'nextRunAt': serializer.toJson<DateTime?>(nextRunAt),
@@ -2357,6 +2427,8 @@ class SchedulesTableData extends DataClass
     bool? truncateLog,
     bool? compressBackup,
     bool? enabled,
+    bool? enableChecksum,
+    bool? verifyAfterBackup,
     Value<String?> postBackupScript = const Value.absent(),
     Value<DateTime?> lastRunAt = const Value.absent(),
     Value<DateTime?> nextRunAt = const Value.absent(),
@@ -2375,6 +2447,8 @@ class SchedulesTableData extends DataClass
     truncateLog: truncateLog ?? this.truncateLog,
     compressBackup: compressBackup ?? this.compressBackup,
     enabled: enabled ?? this.enabled,
+    enableChecksum: enableChecksum ?? this.enableChecksum,
+    verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,
     postBackupScript: postBackupScript.present
         ? postBackupScript.value
         : this.postBackupScript,
@@ -2415,6 +2489,12 @@ class SchedulesTableData extends DataClass
           ? data.compressBackup.value
           : this.compressBackup,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      enableChecksum: data.enableChecksum.present
+          ? data.enableChecksum.value
+          : this.enableChecksum,
+      verifyAfterBackup: data.verifyAfterBackup.present
+          ? data.verifyAfterBackup.value
+          : this.verifyAfterBackup,
       postBackupScript: data.postBackupScript.present
           ? data.postBackupScript.value
           : this.postBackupScript,
@@ -2440,6 +2520,8 @@ class SchedulesTableData extends DataClass
           ..write('truncateLog: $truncateLog, ')
           ..write('compressBackup: $compressBackup, ')
           ..write('enabled: $enabled, ')
+          ..write('enableChecksum: $enableChecksum, ')
+          ..write('verifyAfterBackup: $verifyAfterBackup, ')
           ..write('postBackupScript: $postBackupScript, ')
           ..write('lastRunAt: $lastRunAt, ')
           ..write('nextRunAt: $nextRunAt, ')
@@ -2463,6 +2545,8 @@ class SchedulesTableData extends DataClass
     truncateLog,
     compressBackup,
     enabled,
+    enableChecksum,
+    verifyAfterBackup,
     postBackupScript,
     lastRunAt,
     nextRunAt,
@@ -2485,6 +2569,8 @@ class SchedulesTableData extends DataClass
           other.truncateLog == this.truncateLog &&
           other.compressBackup == this.compressBackup &&
           other.enabled == this.enabled &&
+          other.enableChecksum == this.enableChecksum &&
+          other.verifyAfterBackup == this.verifyAfterBackup &&
           other.postBackupScript == this.postBackupScript &&
           other.lastRunAt == this.lastRunAt &&
           other.nextRunAt == this.nextRunAt &&
@@ -2505,6 +2591,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
   final Value<bool> truncateLog;
   final Value<bool> compressBackup;
   final Value<bool> enabled;
+  final Value<bool> enableChecksum;
+  final Value<bool> verifyAfterBackup;
   final Value<String?> postBackupScript;
   final Value<DateTime?> lastRunAt;
   final Value<DateTime?> nextRunAt;
@@ -2524,6 +2612,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.truncateLog = const Value.absent(),
     this.compressBackup = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.enableChecksum = const Value.absent(),
+    this.verifyAfterBackup = const Value.absent(),
     this.postBackupScript = const Value.absent(),
     this.lastRunAt = const Value.absent(),
     this.nextRunAt = const Value.absent(),
@@ -2544,6 +2634,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.truncateLog = const Value.absent(),
     this.compressBackup = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.enableChecksum = const Value.absent(),
+    this.verifyAfterBackup = const Value.absent(),
     this.postBackupScript = const Value.absent(),
     this.lastRunAt = const Value.absent(),
     this.nextRunAt = const Value.absent(),
@@ -2572,6 +2664,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Expression<bool>? truncateLog,
     Expression<bool>? compressBackup,
     Expression<bool>? enabled,
+    Expression<bool>? enableChecksum,
+    Expression<bool>? verifyAfterBackup,
     Expression<String>? postBackupScript,
     Expression<DateTime>? lastRunAt,
     Expression<DateTime>? nextRunAt,
@@ -2592,6 +2686,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       if (truncateLog != null) 'truncate_log': truncateLog,
       if (compressBackup != null) 'compress_backup': compressBackup,
       if (enabled != null) 'enabled': enabled,
+      if (enableChecksum != null) 'enable_checksum': enableChecksum,
+      if (verifyAfterBackup != null) 'verify_after_backup': verifyAfterBackup,
       if (postBackupScript != null) 'post_backup_script': postBackupScript,
       if (lastRunAt != null) 'last_run_at': lastRunAt,
       if (nextRunAt != null) 'next_run_at': nextRunAt,
@@ -2614,6 +2710,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Value<bool>? truncateLog,
     Value<bool>? compressBackup,
     Value<bool>? enabled,
+    Value<bool>? enableChecksum,
+    Value<bool>? verifyAfterBackup,
     Value<String?>? postBackupScript,
     Value<DateTime?>? lastRunAt,
     Value<DateTime?>? nextRunAt,
@@ -2634,6 +2732,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       truncateLog: truncateLog ?? this.truncateLog,
       compressBackup: compressBackup ?? this.compressBackup,
       enabled: enabled ?? this.enabled,
+      enableChecksum: enableChecksum ?? this.enableChecksum,
+      verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,
       postBackupScript: postBackupScript ?? this.postBackupScript,
       lastRunAt: lastRunAt ?? this.lastRunAt,
       nextRunAt: nextRunAt ?? this.nextRunAt,
@@ -2682,6 +2782,12 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
     }
+    if (enableChecksum.present) {
+      map['enable_checksum'] = Variable<bool>(enableChecksum.value);
+    }
+    if (verifyAfterBackup.present) {
+      map['verify_after_backup'] = Variable<bool>(verifyAfterBackup.value);
+    }
     if (postBackupScript.present) {
       map['post_backup_script'] = Variable<String>(postBackupScript.value);
     }
@@ -2718,6 +2824,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
           ..write('truncateLog: $truncateLog, ')
           ..write('compressBackup: $compressBackup, ')
           ..write('enabled: $enabled, ')
+          ..write('enableChecksum: $enableChecksum, ')
+          ..write('verifyAfterBackup: $verifyAfterBackup, ')
           ..write('postBackupScript: $postBackupScript, ')
           ..write('lastRunAt: $lastRunAt, ')
           ..write('nextRunAt: $nextRunAt, ')
@@ -5859,6 +5967,8 @@ typedef $$SchedulesTableTableCreateCompanionBuilder =
       Value<bool> truncateLog,
       Value<bool> compressBackup,
       Value<bool> enabled,
+      Value<bool> enableChecksum,
+      Value<bool> verifyAfterBackup,
       Value<String?> postBackupScript,
       Value<DateTime?> lastRunAt,
       Value<DateTime?> nextRunAt,
@@ -5880,6 +5990,8 @@ typedef $$SchedulesTableTableUpdateCompanionBuilder =
       Value<bool> truncateLog,
       Value<bool> compressBackup,
       Value<bool> enabled,
+      Value<bool> enableChecksum,
+      Value<bool> verifyAfterBackup,
       Value<String?> postBackupScript,
       Value<DateTime?> lastRunAt,
       Value<DateTime?> nextRunAt,
@@ -5954,6 +6066,16 @@ class $$SchedulesTableTableFilterComposer
 
   ColumnFilters<bool> get enabled => $composableBuilder(
     column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enableChecksum => $composableBuilder(
+    column: $table.enableChecksum,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get verifyAfterBackup => $composableBuilder(
+    column: $table.verifyAfterBackup,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6052,6 +6174,16 @@ class $$SchedulesTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get enableChecksum => $composableBuilder(
+    column: $table.enableChecksum,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get verifyAfterBackup => $composableBuilder(
+    column: $table.verifyAfterBackup,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get postBackupScript => $composableBuilder(
     column: $table.postBackupScript,
     builder: (column) => ColumnOrderings(column),
@@ -6141,6 +6273,16 @@ class $$SchedulesTableTableAnnotationComposer
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
 
+  GeneratedColumn<bool> get enableChecksum => $composableBuilder(
+    column: $table.enableChecksum,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get verifyAfterBackup => $composableBuilder(
+    column: $table.verifyAfterBackup,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get postBackupScript => $composableBuilder(
     column: $table.postBackupScript,
     builder: (column) => column,
@@ -6208,6 +6350,8 @@ class $$SchedulesTableTableTableManager
                 Value<bool> truncateLog = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<bool> enableChecksum = const Value.absent(),
+                Value<bool> verifyAfterBackup = const Value.absent(),
                 Value<String?> postBackupScript = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
                 Value<DateTime?> nextRunAt = const Value.absent(),
@@ -6227,6 +6371,8 @@ class $$SchedulesTableTableTableManager
                 truncateLog: truncateLog,
                 compressBackup: compressBackup,
                 enabled: enabled,
+                enableChecksum: enableChecksum,
+                verifyAfterBackup: verifyAfterBackup,
                 postBackupScript: postBackupScript,
                 lastRunAt: lastRunAt,
                 nextRunAt: nextRunAt,
@@ -6248,6 +6394,8 @@ class $$SchedulesTableTableTableManager
                 Value<bool> truncateLog = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<bool> enableChecksum = const Value.absent(),
+                Value<bool> verifyAfterBackup = const Value.absent(),
                 Value<String?> postBackupScript = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
                 Value<DateTime?> nextRunAt = const Value.absent(),
@@ -6267,6 +6415,8 @@ class $$SchedulesTableTableTableManager
                 truncateLog: truncateLog,
                 compressBackup: compressBackup,
                 enabled: enabled,
+                enableChecksum: enableChecksum,
+                verifyAfterBackup: verifyAfterBackup,
                 postBackupScript: postBackupScript,
                 lastRunAt: lastRunAt,
                 nextRunAt: nextRunAt,

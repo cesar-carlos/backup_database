@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration {
@@ -325,6 +325,45 @@ class AppDatabase extends _$AppDatabase {
           } catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v9 para post_backup_script',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 10) {
+          // Migração para versão 10: adicionar enable_checksum e verify_after_backup em schedules_table
+          try {
+            final schedulesColumns = await (customSelect(
+              "PRAGMA table_info(schedules_table)",
+            ).get());
+            final hasEnableChecksumColumn = schedulesColumns.any(
+              (row) => row.data['name'] == 'enable_checksum',
+            );
+            final hasVerifyAfterBackupColumn = schedulesColumns.any(
+              (row) => row.data['name'] == 'verify_after_backup',
+            );
+
+            if (!hasEnableChecksumColumn) {
+              await customStatement(
+                "ALTER TABLE schedules_table ADD COLUMN enable_checksum INTEGER NOT NULL DEFAULT 0",
+              );
+              LoggerService.info(
+                'Migração v10: Coluna enable_checksum adicionada à schedules_table',
+              );
+            }
+
+            if (!hasVerifyAfterBackupColumn) {
+              await customStatement(
+                "ALTER TABLE schedules_table ADD COLUMN verify_after_backup INTEGER NOT NULL DEFAULT 0",
+              );
+              LoggerService.info(
+                'Migração v10: Coluna verify_after_backup adicionada à schedules_table',
+              );
+            }
+          } catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v10 para enable_checksum e verify_after_backup',
               e,
               stackTrace,
             );

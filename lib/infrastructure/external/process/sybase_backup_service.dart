@@ -24,6 +24,7 @@ class SybaseBackupService implements ISybaseBackupService {
     String? customFileName,
     String? dbbackupPath,
     bool truncateLog = true,
+    bool verifyAfterBackup = false,
   }) async {
     try {
       LoggerService.info(
@@ -358,6 +359,63 @@ class SybaseBackupService implements ISybaseBackupService {
         LoggerService.info(
           'Backup Sybase concluído: $actualBackupPath (${_formatBytes(totalSize)})',
         );
+
+        // Verificar integridade do backup se solicitado
+        if (verifyAfterBackup) {
+          LoggerService.info('Verificando integridade do backup usando dbverify...');
+          
+          final connectionStrategies = <String>[
+            'ENG=${config.serverName};DBN=${config.databaseName};UID=${config.username};PWD=${config.password}',
+            'ENG=${config.databaseName};DBN=${config.databaseName};UID=${config.username};PWD=${config.password}',
+            'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
+          ];
+
+          bool verifySuccess = false;
+          String lastVerifyError = '';
+
+          for (final connStr in connectionStrategies) {
+            LoggerService.debug('Tentando dbverify com: $connStr');
+
+            final verifyResult = await _processService.run(
+              executable: 'dbverify',
+              arguments: [
+                '-c',
+                connStr,
+                '-d',
+                config.databaseName,
+              ],
+              timeout: const Duration(minutes: 30),
+            );
+
+            verifyResult.fold(
+              (processResult) {
+                if (processResult.isSuccess) {
+                  verifySuccess = true;
+                  LoggerService.info('Verificação de integridade concluída com sucesso');
+                } else {
+                  lastVerifyError = processResult.stderr;
+                  LoggerService.debug('dbverify falhou: ${processResult.stderr}');
+                }
+              },
+              (failure) {
+                if (failure is Failure) {
+                  lastVerifyError = failure.message;
+                } else {
+                  lastVerifyError = failure.toString();
+                }
+              },
+            );
+
+            if (verifySuccess) break;
+          }
+
+          if (!verifySuccess) {
+            LoggerService.warning(
+              'Verificação de integridade falhou: $lastVerifyError',
+            );
+            // Não falha o backup, apenas registra o warning
+          }
+        }
 
         return rd.Success(
           BackupExecutionResult(

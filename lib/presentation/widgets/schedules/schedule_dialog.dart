@@ -47,6 +47,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   List<String> _selectedDestinationIds = [];
   bool _compressBackup = true;
   bool _isEnabled = true;
+  bool _enableChecksum = false;
+  bool _verifyAfterBackup = false;
 
   // Schedule config
   int _hour = 0;
@@ -83,6 +85,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
       _isEnabled = widget.schedule!.enabled;
+      _enableChecksum = widget.schedule!.enableChecksum;
+      _verifyAfterBackup = widget.schedule!.verifyAfterBackup;
       _backupFolderController.text = widget.schedule!.backupFolder.isNotEmpty
           ? widget.schedule!.backupFolder
           : _getDefaultBackupFolder();
@@ -448,8 +452,81 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               },
             ),
           ),
+          const SizedBox(height: 24),
+          _buildIntegrityOptions(),
         ],
       ),
+    );
+  }
+
+  Widget _buildIntegrityOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionTitle('Verificação de Integridade'),
+        const SizedBox(height: 12),
+        if (_databaseType == DatabaseType.sqlServer) ...[
+          _buildCheckboxWithInfo(
+            label: 'Enable CheckSum',
+            value: _enableChecksum,
+            onChanged: (value) {
+              setState(() {
+                _enableChecksum = value;
+              });
+            },
+            infoText: 'Habilita o cálculo de checksums durante o backup. '
+                'Detecta corrupção de dados durante o processo de backup.',
+          ),
+          const SizedBox(height: 16),
+        ],
+        _buildCheckboxWithInfo(
+          label: 'Verify After Backup',
+          value: _verifyAfterBackup,
+          onChanged: (value) {
+            setState(() {
+              _verifyAfterBackup = value;
+            });
+          },
+          infoText: _databaseType == DatabaseType.sqlServer
+              ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
+                  'Garante que o backup pode ser restaurado sem restaurar os dados.'
+              : 'Verifica a integridade do backup após criação usando dbverify. '
+                  'Garante que o backup está íntegro e pode ser restaurado.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCheckboxWithInfo({
+    required String label,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required String infoText,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: InfoLabel(
+            label: label,
+            child: Checkbox(
+              checked: value,
+              onChanged: (checked) => onChanged(checked ?? false),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: Tooltip(
+            message: infoText,
+            child: IconButton(
+              icon: const Icon(FluentIcons.info, size: 16),
+              onPressed: () {},
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1053,6 +1130,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       backupType: _backupType,
       compressBackup: _compressBackup,
       enabled: _isEnabled,
+      enableChecksum: _databaseType == DatabaseType.sqlServer ? _enableChecksum : false,
+      verifyAfterBackup: _verifyAfterBackup,
       postBackupScript: _postBackupScriptController.text.trim().isEmpty
           ? null
           : _postBackupScriptController.text.trim(),

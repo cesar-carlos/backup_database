@@ -23,6 +23,8 @@ class SqlServerBackupService implements ISqlServerBackupService {
     BackupType backupType = BackupType.full,
     String? customFileName,
     bool truncateLog = true,
+    bool enableChecksum = false,
+    bool verifyAfterBackup = false,
   }) async {
     try {
       LoggerService.info(
@@ -46,6 +48,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
       final escapedBackupPath = normalizedPath.replaceAll("'", "''");
 
+      String checksumClause = enableChecksum ? 'CHECKSUM, ' : '';
       String query;
 
       switch (backupType) {
@@ -53,7 +56,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           query =
               "BACKUP DATABASE [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
-              "WITH NOFORMAT, NOINIT, "
+              "WITH $checksumClause NOFORMAT, NOINIT, "
               "NAME = N'${config.database}-Full Database Backup', "
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;
@@ -61,7 +64,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           query =
               "BACKUP DATABASE [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
-              "WITH DIFFERENTIAL, NOFORMAT, NOINIT, "
+              "WITH DIFFERENTIAL, $checksumClause NOFORMAT, NOINIT, "
               "NAME = N'${config.database}-Differential Database Backup', "
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;
@@ -70,7 +73,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           query =
               "BACKUP LOG [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
-              "WITH ${copyOnlyClause}NOFORMAT, NOINIT, "
+              "WITH ${copyOnlyClause}$checksumClause NOFORMAT, NOINIT, "
               "NAME = N'${config.database}-Transaction Log Backup', "
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;
@@ -182,6 +185,56 @@ class SqlServerBackupService implements ISqlServerBackupService {
         LoggerService.info(
           'Backup SQL Server concluído: $backupPath (${_formatBytes(fileSize)})',
         );
+
+        // Verificar integridade do backup se solicitado
+        if (verifyAfterBackup) {
+          LoggerService.info('Verificando integridade do backup...');
+          final verifyQuery = "RESTORE VERIFYONLY FROM DISK = N'$escapedBackupPath' "
+              "${enableChecksum ? 'WITH CHECKSUM' : ''}";
+
+          final verifyArguments = [
+            '-S',
+            '${config.server},${config.port}',
+            '-d',
+            config.database,
+            '-Q',
+            verifyQuery,
+          ];
+
+          if (config.username.isNotEmpty) {
+            verifyArguments.addAll(['-U', config.username]);
+            if (config.password.isNotEmpty) {
+              verifyArguments.addAll(['-P', config.password]);
+            }
+          } else {
+            verifyArguments.add('-E');
+          }
+
+          final verifyResult = await _processService.run(
+            executable: 'sqlcmd',
+            arguments: verifyArguments,
+            timeout: const Duration(minutes: 30),
+          );
+
+          verifyResult.fold(
+            (processResult) {
+              if (processResult.isSuccess) {
+                LoggerService.info('Verificação de integridade concluída com sucesso');
+              } else {
+                LoggerService.warning(
+                  'Verificação de integridade falhou: ${processResult.stderr}',
+                );
+                // Não falha o backup, apenas registra o warning
+              }
+            },
+            (failure) {
+              LoggerService.warning(
+                'Erro ao verificar integridade do backup: ${failure is Failure ? failure.message : failure.toString()}',
+              );
+              // Não falha o backup, apenas registra o warning
+            },
+          );
+        }
 
         return rd.Success(
           BackupExecutionResult(

@@ -134,6 +134,8 @@ class BackupOrchestratorService {
           outputDirectory: typeOutputDirectory,
           backupType: backupType,
           truncateLog: schedule.truncateLog,
+          enableChecksum: schedule.enableChecksum,
+          verifyAfterBackup: schedule.verifyAfterBackup,
         );
 
         if (backupResult.isError()) {
@@ -164,6 +166,7 @@ class BackupOrchestratorService {
           outputDirectory: typeOutputDirectory,
           backupType: backupType,
           truncateLog: schedule.truncateLog,
+          verifyAfterBackup: schedule.verifyAfterBackup,
         );
 
         if (backupResult.isError()) {

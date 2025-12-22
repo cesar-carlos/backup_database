@@ -19,6 +19,8 @@ class Schedule {
   final bool truncateLog;
   final bool compressBackup;
   final bool enabled;
+  final bool enableChecksum;
+  final bool verifyAfterBackup;
   final String? postBackupScript;
   final DateTime? lastRunAt;
   final DateTime? nextRunAt;
@@ -38,6 +40,8 @@ class Schedule {
     this.truncateLog = true,
     this.compressBackup = true,
     this.enabled = true,
+    this.enableChecksum = false,
+    this.verifyAfterBackup = false,
     this.postBackupScript,
     this.lastRunAt,
     this.nextRunAt,
@@ -60,6 +64,8 @@ class Schedule {
     bool? truncateLog,
     bool? compressBackup,
     bool? enabled,
+    bool? enableChecksum,
+    bool? verifyAfterBackup,
     String? postBackupScript,
     DateTime? lastRunAt,
     DateTime? nextRunAt,
@@ -79,6 +85,8 @@ class Schedule {
       truncateLog: truncateLog ?? this.truncateLog,
       compressBackup: compressBackup ?? this.compressBackup,
       enabled: enabled ?? this.enabled,
+      enableChecksum: enableChecksum ?? this.enableChecksum,
+      verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,
       postBackupScript: postBackupScript ?? this.postBackupScript,
       lastRunAt: lastRunAt ?? this.lastRunAt,
       nextRunAt: nextRunAt ?? this.nextRunAt,
