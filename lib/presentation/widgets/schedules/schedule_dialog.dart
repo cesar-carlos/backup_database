@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../../core/core.dart';
 import '../../../application/providers/providers.dart';
 import '../../../domain/entities/backup_type.dart';
+import '../../../domain/entities/compression_format.dart';
 import '../../../domain/entities/schedule.dart';
 import '../../../domain/entities/sql_server_config.dart';
 import '../../../domain/entities/sybase_config.dart';
@@ -47,6 +48,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   bool _truncateLog = true;
   List<String> _selectedDestinationIds = [];
   bool _compressBackup = true;
+  CompressionFormat _compressionFormat = CompressionFormat.zip;
   bool _isEnabled = true;
   bool _enableChecksum = false;
   bool _verifyAfterBackup = false;
@@ -86,6 +88,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       }
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
+      _compressionFormat = widget.schedule!.compressionFormat;
       _isEnabled = widget.schedule!.enabled;
       _enableChecksum = widget.schedule!.enableChecksum;
       _verifyAfterBackup = widget.schedule!.verifyAfterBackup;
@@ -216,8 +219,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   Widget build(BuildContext context) {
     return ContentDialog(
       constraints: const BoxConstraints(
-        minWidth: 700,
-        maxWidth: 800,
+        minWidth: 550,
+        maxWidth: 650,
         maxHeight: 750,
       ),
       title: Row(
@@ -442,16 +445,48 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           _buildSectionTitle('Opções'),
           const SizedBox(height: 12),
           InfoLabel(
-            label: 'Compactar backup (gera ZIP)',
+            label: 'Compactar backup',
             child: ToggleSwitch(
               checked: _compressBackup,
               onChanged: (value) {
                 setState(() {
                   _compressBackup = value;
+                  if (!value) {
+                    _compressionFormat = CompressionFormat.none;
+                  } else if (_compressionFormat == CompressionFormat.none) {
+                    _compressionFormat = CompressionFormat.zip;
+                  }
                 });
               },
             ),
           ),
+          if (_compressBackup) ...[
+            const SizedBox(height: 16),
+            AppDropdown<CompressionFormat>(
+              label: 'Formato de compressão',
+              value: _compressionFormat,
+              placeholder: const Text('Formato de compressão'),
+              items: [
+                ComboBoxItem<CompressionFormat>(
+                  value: CompressionFormat.zip,
+                  child: const Text('ZIP (compressão rápida, menor taxa)'),
+                ),
+                ComboBoxItem<CompressionFormat>(
+                  value: CompressionFormat.rar,
+                  child: const Text(
+                    'RAR (compressão maior, mais processamento)',
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _compressionFormat = value;
+                  });
+                }
+              },
+            ),
+          ],
           const SizedBox(height: 16),
           InfoLabel(
             label: 'Agendamento habilitado',
@@ -1232,6 +1267,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       backupFolder: _backupFolderController.text.trim(),
       backupType: _backupType,
       compressBackup: _compressBackup,
+      compressionFormat: _compressionFormat,
       enabled: _isEnabled,
       enableChecksum: _databaseType == DatabaseType.sqlServer
           ? _enableChecksum

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
+import '../../../domain/entities/compression_format.dart';
 import '../../../domain/services/compression_result.dart';
 import '../../../domain/services/i_compression_service.dart';
 import '../process/process_service.dart';
@@ -17,7 +18,7 @@ Future<void> compressFileInIsolate(Map<String, String> params) async {
   final outputFilePath = params['outputFilePath']!;
 
   final inputFile = File(inputFilePath);
-  
+
   final outputFileBeforeCreate = File(outputFilePath);
   final outputExistsBeforeCreate = await outputFileBeforeCreate.exists();
   if (outputExistsBeforeCreate) {
@@ -47,7 +48,7 @@ Future<void> compressFileInIsolate(Map<String, String> params) async {
           await partialZip.delete();
         }
       } catch (_) {}
-      
+
       rethrow;
     }
   } catch (e) {
@@ -69,13 +70,23 @@ class CompressionService implements ICompressionService {
     required String path,
     String? outputPath,
     bool deleteOriginal = false,
+    CompressionFormat? format,
   }) async {
+    final effectiveFormat = format ?? CompressionFormat.zip;
+
+    if (effectiveFormat == CompressionFormat.none) {
+      return rd.Failure(
+        FileSystemFailure(message: 'Compressão desabilitada (formato: none)'),
+      );
+    }
+
     final dir = Directory(path);
     if (await dir.exists()) {
       return _compressDirectory(
         directoryPath: path,
         outputPath: outputPath,
         deleteOriginal: deleteOriginal,
+        format: effectiveFormat,
       );
     }
 
@@ -83,6 +94,7 @@ class CompressionService implements ICompressionService {
       filePath: path,
       outputPath: outputPath,
       deleteOriginal: deleteOriginal,
+      format: effectiveFormat,
     );
   }
 
@@ -90,6 +102,7 @@ class CompressionService implements ICompressionService {
     required String directoryPath,
     String? outputPath,
     bool deleteOriginal = false,
+    CompressionFormat format = CompressionFormat.zip,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -105,16 +118,29 @@ class CompressionService implements ICompressionService {
         );
       }
 
-      final outputFilePath = outputPath ?? '$directoryPath.zip';
+      final extension = format == CompressionFormat.rar ? '.rar' : '.zip';
+      final outputFilePath = outputPath ?? '$directoryPath$extension';
 
       int originalSize = 0;
       bool useWinRar = await _winRarService.isAvailable();
+
+      if (format == CompressionFormat.rar && !useWinRar) {
+        return rd.Failure(
+          FileSystemFailure(
+            message:
+                'Formato RAR requer WinRAR instalado.\n'
+                'WinRAR não foi encontrado no sistema.\n'
+                'Por favor, instale o WinRAR ou escolha o formato ZIP.',
+          ),
+        );
+      }
 
       if (useWinRar) {
         LoggerService.info('Tentando comprimir diretório com WinRAR...');
         final winRarSuccess = await _winRarService.compressDirectory(
           directoryPath: directoryPath,
           outputPath: outputFilePath,
+          format: format,
         );
 
         if (winRarSuccess) {
@@ -228,6 +254,7 @@ class CompressionService implements ICompressionService {
     required String filePath,
     String? outputPath,
     bool deleteOriginal = false,
+    CompressionFormat format = CompressionFormat.zip,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -242,15 +269,28 @@ class CompressionService implements ICompressionService {
       }
 
       final originalSize = await inputFile.length();
-      final outputFilePath = outputPath ?? '$filePath.zip';
+      final extension = format == CompressionFormat.rar ? '.rar' : '.zip';
+      final outputFilePath = outputPath ?? '$filePath$extension';
 
       final winRarAvailable = await _winRarService.isAvailable();
+
+      if (format == CompressionFormat.rar && !winRarAvailable) {
+        return rd.Failure(
+          FileSystemFailure(
+            message:
+                'Formato RAR requer WinRAR instalado.\n'
+                'WinRAR não foi encontrado no sistema.\n'
+                'Por favor, instale o WinRAR ou escolha o formato ZIP.',
+          ),
+        );
+      }
 
       if (winRarAvailable) {
         LoggerService.info('Tentando comprimir com WinRAR...');
         final winRarSuccess = await _winRarService.compressFile(
           filePath: filePath,
           outputPath: outputFilePath,
+          format: format,
         );
 
         if (winRarSuccess) {

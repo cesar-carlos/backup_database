@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 
 import 'backup_type.dart';
+import 'compression_format.dart';
 
 enum ScheduleType { daily, weekly, monthly, interval }
 
@@ -18,6 +19,7 @@ class Schedule {
   final BackupType backupType;
   final bool truncateLog;
   final bool compressBackup;
+  final CompressionFormat compressionFormat;
   final bool enabled;
   final bool enableChecksum;
   final bool verifyAfterBackup;
@@ -39,6 +41,7 @@ class Schedule {
     this.backupType = BackupType.full,
     this.truncateLog = true,
     this.compressBackup = true,
+    CompressionFormat? compressionFormat,
     this.enabled = true,
     this.enableChecksum = false,
     this.verifyAfterBackup = false,
@@ -48,6 +51,8 @@ class Schedule {
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : id = id ?? const Uuid().v4(),
+       compressionFormat = compressionFormat ??
+           (compressBackup ? CompressionFormat.zip : CompressionFormat.none),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
 
@@ -63,6 +68,7 @@ class Schedule {
     BackupType? backupType,
     bool? truncateLog,
     bool? compressBackup,
+    CompressionFormat? compressionFormat,
     bool? enabled,
     bool? enableChecksum,
     bool? verifyAfterBackup,
@@ -84,6 +90,19 @@ class Schedule {
       backupType: backupType ?? this.backupType,
       truncateLog: truncateLog ?? this.truncateLog,
       compressBackup: compressBackup ?? this.compressBackup,
+      compressionFormat: () {
+        final willCompress = compressBackup ?? this.compressBackup;
+        if (!willCompress) {
+          return CompressionFormat.none;
+        }
+        if (compressionFormat != null) {
+          return compressionFormat;
+        }
+        if (this.compressionFormat == CompressionFormat.none) {
+          return CompressionFormat.zip;
+        }
+        return this.compressionFormat;
+      }(),
       enabled: enabled ?? this.enabled,
       enableChecksum: enableChecksum ?? this.enableChecksum,
       verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,

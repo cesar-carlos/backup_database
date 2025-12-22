@@ -10,12 +10,14 @@ class SchedulesTable extends Table {
   TextColumn get scheduleConfig => text()(); // JSON
   TextColumn get destinationIds => text()(); // JSON array
   TextColumn get backupFolder => text().withDefault(const Constant(''))();
-  TextColumn get backupType =>
-      text().withDefault(const Constant('full'))(); // 'full', 'differential', 'log'
-  BoolColumn get truncateLog =>
-      boolean().withDefault(const Constant(true))();
+  TextColumn get backupType => text().withDefault(
+    const Constant('full'),
+  )(); // 'full', 'differential', 'log'
+  BoolColumn get truncateLog => boolean().withDefault(const Constant(true))();
   BoolColumn get compressBackup =>
       boolean().withDefault(const Constant(true))();
+  TextColumn get compressionFormat =>
+      text().withDefault(const Constant('zip'))();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   BoolColumn get enableChecksum =>
       boolean().withDefault(const Constant(false))();
@@ -30,4 +32,3 @@ class SchedulesTable extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
-

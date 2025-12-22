@@ -10,6 +10,7 @@ import '../../domain/entities/schedule.dart';
 import '../../domain/entities/backup_history.dart';
 import '../../domain/entities/backup_log.dart';
 import '../../domain/entities/backup_type.dart';
+import '../../domain/entities/compression_format.dart';
 import '../../domain/entities/sql_server_config.dart';
 import '../../domain/entities/sybase_config.dart';
 import '../../domain/entities/postgres_config.dart';
@@ -235,7 +236,7 @@ class BackupOrchestratorService {
       }
 
       // Comprimir se configurado
-      if (schedule.compressBackup) {
+      if (schedule.compressionFormat != CompressionFormat.none) {
         await _log(history.id, 'info', 'Iniciando compressão');
 
         // Atualizar progresso
@@ -251,15 +252,19 @@ class BackupOrchestratorService {
         }
 
         try {
-          // Nome de saída customizado para Sybase full, para garantir timestamp/tipo no ZIP
+          // Nome de saída customizado para Sybase full, para garantir timestamp/tipo
           String? compressionOutputPath;
           if (schedule.databaseType == DatabaseType.sybase &&
               backupType == BackupType.full) {
             final ts = DateTime.now().toIso8601String().replaceAll(':', '-');
             final baseName = p.basename(backupPath);
+            final extension =
+                schedule.compressionFormat == CompressionFormat.rar
+                ? '.rar'
+                : '.zip';
             compressionOutputPath = p.join(
               p.dirname(backupPath),
-              '${baseName}_${backupType.name}_$ts.zip',
+              '${baseName}_${backupType.name}_$ts$extension',
             );
           }
 
@@ -268,6 +273,7 @@ class BackupOrchestratorService {
             path: backupPath,
             outputPath: compressionOutputPath,
             deleteOriginal: true,
+            format: schedule.compressionFormat,
           );
 
           if (compressionResult.isSuccess()) {

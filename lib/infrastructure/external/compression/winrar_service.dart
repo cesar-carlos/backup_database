@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../../../core/utils/logger_service.dart';
+import '../../../domain/entities/compression_format.dart';
 import '../process/process_service.dart';
 
 class WinRarService {
@@ -44,6 +45,7 @@ class WinRarService {
   Future<bool> compressFile({
     required String filePath,
     required String outputPath,
+    CompressionFormat format = CompressionFormat.zip,
   }) async {
     if (!await isAvailable() || _winRarPath == null) {
       return false;
@@ -52,15 +54,21 @@ class WinRarService {
     try {
       LoggerService.info('Comprimindo com WinRAR: $filePath → $outputPath');
 
-      final arguments = [
-        'a', // Adicionar ao arquivo
-        '-afzip', // Formato ZIP (não RAR)
-        '-ep1', // Excluir caminho base do arquivo
-        '-ibck', // Executar em background (sem mostrar janela)
-        '-y', // Sim para todas as perguntas
-        outputPath, // Arquivo de saída
-        filePath, // Arquivo a comprimir
+      final arguments = <String>[
+        'a',
+        '-ep1',
+        '-ibck',
+        '-y',
       ];
+
+      if (format == CompressionFormat.zip) {
+        arguments.add('-afzip');
+      }
+
+      arguments.addAll([
+        outputPath,
+        filePath,
+      ]);
 
       final result = await _processService.run(
         executable: _winRarPath!,
@@ -96,6 +104,7 @@ class WinRarService {
   Future<bool> compressDirectory({
     required String directoryPath,
     required String outputPath,
+    CompressionFormat format = CompressionFormat.zip,
   }) async {
     if (!await isAvailable() || _winRarPath == null) {
       return false;
@@ -104,16 +113,22 @@ class WinRarService {
     try {
       LoggerService.info('Comprimindo diretório com WinRAR: $directoryPath → $outputPath');
 
-      final arguments = [
-        'a', // Adicionar ao arquivo
-        '-afzip', // Formato ZIP (não RAR)
-        '-r', // Recursivo (incluir subdiretórios)
-        '-ep1', // Excluir caminho base
-        '-ibck', // Executar em background (sem mostrar janela)
-        '-y', // Sim para todas as perguntas
-        outputPath, // Arquivo de saída
-        '$directoryPath\\*', // Todos os arquivos do diretório
+      final arguments = <String>[
+        'a',
+        '-r',
+        '-ep1',
+        '-ibck',
+        '-y',
       ];
+
+      if (format == CompressionFormat.zip) {
+        arguments.add('-afzip');
+      }
+
+      arguments.addAll([
+        outputPath,
+        '$directoryPath\\*',
+      ]);
 
       final result = await _processService.run(
         executable: _winRarPath!,

@@ -37,7 +37,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration {
@@ -402,6 +402,40 @@ class AppDatabase extends _$AppDatabase {
           } catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v11 para postgres_configs_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 12) {
+          try {
+            final columns = await (customSelect(
+              "PRAGMA table_info(schedules)",
+            ).get());
+            final hasCompressionFormatColumn = columns.any(
+              (row) => row.data['name'] == 'compression_format',
+            );
+
+            if (!hasCompressionFormatColumn) {
+              await m.addColumn(
+                schedulesTable,
+                schedulesTable.compressionFormat,
+              );
+
+              await customStatement(
+                "UPDATE schedules SET compression_format = CASE "
+                "WHEN compress_backup = 0 THEN 'none' "
+                "ELSE 'zip' END",
+              );
+
+              LoggerService.info(
+                'Coluna compression_format adicionada à tabela schedules',
+              );
+            }
+          } catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro ao verificar/adicionar coluna compression_format',
               e,
               stackTrace,
             );

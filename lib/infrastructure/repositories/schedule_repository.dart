@@ -5,6 +5,7 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../core/core.dart';
 import '../../domain/entities/backup_type.dart';
+import '../../domain/entities/compression_format.dart';
 import '../../domain/entities/schedule.dart';
 import '../../domain/repositories/i_schedule_repository.dart';
 import '../datasources/local/database.dart';
@@ -195,6 +196,7 @@ class ScheduleRepository implements IScheduleRepository {
       backupType: BackupType.fromString(data.backupType),
       truncateLog: data.truncateLog,
       compressBackup: data.compressBackup,
+      compressionFormat: CompressionFormat.fromString(data.compressionFormat),
       enabled: data.enabled,
       enableChecksum: data.enableChecksum,
       verifyAfterBackup: data.verifyAfterBackup,
@@ -219,6 +221,7 @@ class ScheduleRepository implements IScheduleRepository {
       backupType: Value(schedule.backupType.name),
       truncateLog: Value(schedule.truncateLog),
       compressBackup: Value(schedule.compressBackup),
+      compressionFormat: Value(schedule.compressionFormat.name),
       enabled: Value(schedule.enabled),
       enableChecksum: Value(schedule.enableChecksum),
       verifyAfterBackup: Value(schedule.verifyAfterBackup),

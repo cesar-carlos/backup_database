@@ -2476,6 +2476,19 @@ class $SchedulesTableTable extends SchedulesTable
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _compressionFormatMeta = const VerificationMeta(
+    'compressionFormat',
+  );
+  @override
+  late final GeneratedColumn<String> compressionFormat =
+      GeneratedColumn<String>(
+        'compression_format',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('zip'),
+      );
   static const VerificationMeta _enabledMeta = const VerificationMeta(
     'enabled',
   );
@@ -2589,6 +2602,7 @@ class $SchedulesTableTable extends SchedulesTable
     backupType,
     truncateLog,
     compressBackup,
+    compressionFormat,
     enabled,
     enableChecksum,
     verifyAfterBackup,
@@ -2711,6 +2725,15 @@ class $SchedulesTableTable extends SchedulesTable
         ),
       );
     }
+    if (data.containsKey('compression_format')) {
+      context.handle(
+        _compressionFormatMeta,
+        compressionFormat.isAcceptableOrUnknown(
+          data['compression_format']!,
+          _compressionFormatMeta,
+        ),
+      );
+    }
     if (data.containsKey('enabled')) {
       context.handle(
         _enabledMeta,
@@ -2825,6 +2848,10 @@ class $SchedulesTableTable extends SchedulesTable
         DriftSqlType.bool,
         data['${effectivePrefix}compress_backup'],
       )!,
+      compressionFormat: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}compression_format'],
+      )!,
       enabled: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
@@ -2879,6 +2906,7 @@ class SchedulesTableData extends DataClass
   final String backupType;
   final bool truncateLog;
   final bool compressBackup;
+  final String compressionFormat;
   final bool enabled;
   final bool enableChecksum;
   final bool verifyAfterBackup;
@@ -2899,6 +2927,7 @@ class SchedulesTableData extends DataClass
     required this.backupType,
     required this.truncateLog,
     required this.compressBackup,
+    required this.compressionFormat,
     required this.enabled,
     required this.enableChecksum,
     required this.verifyAfterBackup,
@@ -2922,6 +2951,7 @@ class SchedulesTableData extends DataClass
     map['backup_type'] = Variable<String>(backupType);
     map['truncate_log'] = Variable<bool>(truncateLog);
     map['compress_backup'] = Variable<bool>(compressBackup);
+    map['compression_format'] = Variable<String>(compressionFormat);
     map['enabled'] = Variable<bool>(enabled);
     map['enable_checksum'] = Variable<bool>(enableChecksum);
     map['verify_after_backup'] = Variable<bool>(verifyAfterBackup);
@@ -2952,6 +2982,7 @@ class SchedulesTableData extends DataClass
       backupType: Value(backupType),
       truncateLog: Value(truncateLog),
       compressBackup: Value(compressBackup),
+      compressionFormat: Value(compressionFormat),
       enabled: Value(enabled),
       enableChecksum: Value(enableChecksum),
       verifyAfterBackup: Value(verifyAfterBackup),
@@ -2986,6 +3017,7 @@ class SchedulesTableData extends DataClass
       backupType: serializer.fromJson<String>(json['backupType']),
       truncateLog: serializer.fromJson<bool>(json['truncateLog']),
       compressBackup: serializer.fromJson<bool>(json['compressBackup']),
+      compressionFormat: serializer.fromJson<String>(json['compressionFormat']),
       enabled: serializer.fromJson<bool>(json['enabled']),
       enableChecksum: serializer.fromJson<bool>(json['enableChecksum']),
       verifyAfterBackup: serializer.fromJson<bool>(json['verifyAfterBackup']),
@@ -3011,6 +3043,7 @@ class SchedulesTableData extends DataClass
       'backupType': serializer.toJson<String>(backupType),
       'truncateLog': serializer.toJson<bool>(truncateLog),
       'compressBackup': serializer.toJson<bool>(compressBackup),
+      'compressionFormat': serializer.toJson<String>(compressionFormat),
       'enabled': serializer.toJson<bool>(enabled),
       'enableChecksum': serializer.toJson<bool>(enableChecksum),
       'verifyAfterBackup': serializer.toJson<bool>(verifyAfterBackup),
@@ -3034,6 +3067,7 @@ class SchedulesTableData extends DataClass
     String? backupType,
     bool? truncateLog,
     bool? compressBackup,
+    String? compressionFormat,
     bool? enabled,
     bool? enableChecksum,
     bool? verifyAfterBackup,
@@ -3054,6 +3088,7 @@ class SchedulesTableData extends DataClass
     backupType: backupType ?? this.backupType,
     truncateLog: truncateLog ?? this.truncateLog,
     compressBackup: compressBackup ?? this.compressBackup,
+    compressionFormat: compressionFormat ?? this.compressionFormat,
     enabled: enabled ?? this.enabled,
     enableChecksum: enableChecksum ?? this.enableChecksum,
     verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,
@@ -3096,6 +3131,9 @@ class SchedulesTableData extends DataClass
       compressBackup: data.compressBackup.present
           ? data.compressBackup.value
           : this.compressBackup,
+      compressionFormat: data.compressionFormat.present
+          ? data.compressionFormat.value
+          : this.compressionFormat,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
       enableChecksum: data.enableChecksum.present
           ? data.enableChecksum.value
@@ -3127,6 +3165,7 @@ class SchedulesTableData extends DataClass
           ..write('backupType: $backupType, ')
           ..write('truncateLog: $truncateLog, ')
           ..write('compressBackup: $compressBackup, ')
+          ..write('compressionFormat: $compressionFormat, ')
           ..write('enabled: $enabled, ')
           ..write('enableChecksum: $enableChecksum, ')
           ..write('verifyAfterBackup: $verifyAfterBackup, ')
@@ -3152,6 +3191,7 @@ class SchedulesTableData extends DataClass
     backupType,
     truncateLog,
     compressBackup,
+    compressionFormat,
     enabled,
     enableChecksum,
     verifyAfterBackup,
@@ -3176,6 +3216,7 @@ class SchedulesTableData extends DataClass
           other.backupType == this.backupType &&
           other.truncateLog == this.truncateLog &&
           other.compressBackup == this.compressBackup &&
+          other.compressionFormat == this.compressionFormat &&
           other.enabled == this.enabled &&
           other.enableChecksum == this.enableChecksum &&
           other.verifyAfterBackup == this.verifyAfterBackup &&
@@ -3198,6 +3239,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
   final Value<String> backupType;
   final Value<bool> truncateLog;
   final Value<bool> compressBackup;
+  final Value<String> compressionFormat;
   final Value<bool> enabled;
   final Value<bool> enableChecksum;
   final Value<bool> verifyAfterBackup;
@@ -3219,6 +3261,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.backupType = const Value.absent(),
     this.truncateLog = const Value.absent(),
     this.compressBackup = const Value.absent(),
+    this.compressionFormat = const Value.absent(),
     this.enabled = const Value.absent(),
     this.enableChecksum = const Value.absent(),
     this.verifyAfterBackup = const Value.absent(),
@@ -3241,6 +3284,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.backupType = const Value.absent(),
     this.truncateLog = const Value.absent(),
     this.compressBackup = const Value.absent(),
+    this.compressionFormat = const Value.absent(),
     this.enabled = const Value.absent(),
     this.enableChecksum = const Value.absent(),
     this.verifyAfterBackup = const Value.absent(),
@@ -3271,6 +3315,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Expression<String>? backupType,
     Expression<bool>? truncateLog,
     Expression<bool>? compressBackup,
+    Expression<String>? compressionFormat,
     Expression<bool>? enabled,
     Expression<bool>? enableChecksum,
     Expression<bool>? verifyAfterBackup,
@@ -3293,6 +3338,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       if (backupType != null) 'backup_type': backupType,
       if (truncateLog != null) 'truncate_log': truncateLog,
       if (compressBackup != null) 'compress_backup': compressBackup,
+      if (compressionFormat != null) 'compression_format': compressionFormat,
       if (enabled != null) 'enabled': enabled,
       if (enableChecksum != null) 'enable_checksum': enableChecksum,
       if (verifyAfterBackup != null) 'verify_after_backup': verifyAfterBackup,
@@ -3317,6 +3363,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Value<String>? backupType,
     Value<bool>? truncateLog,
     Value<bool>? compressBackup,
+    Value<String>? compressionFormat,
     Value<bool>? enabled,
     Value<bool>? enableChecksum,
     Value<bool>? verifyAfterBackup,
@@ -3339,6 +3386,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       backupType: backupType ?? this.backupType,
       truncateLog: truncateLog ?? this.truncateLog,
       compressBackup: compressBackup ?? this.compressBackup,
+      compressionFormat: compressionFormat ?? this.compressionFormat,
       enabled: enabled ?? this.enabled,
       enableChecksum: enableChecksum ?? this.enableChecksum,
       verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,
@@ -3387,6 +3435,9 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     if (compressBackup.present) {
       map['compress_backup'] = Variable<bool>(compressBackup.value);
     }
+    if (compressionFormat.present) {
+      map['compression_format'] = Variable<String>(compressionFormat.value);
+    }
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
     }
@@ -3431,6 +3482,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
           ..write('backupType: $backupType, ')
           ..write('truncateLog: $truncateLog, ')
           ..write('compressBackup: $compressBackup, ')
+          ..write('compressionFormat: $compressionFormat, ')
           ..write('enabled: $enabled, ')
           ..write('enableChecksum: $enableChecksum, ')
           ..write('verifyAfterBackup: $verifyAfterBackup, ')
@@ -6891,6 +6943,7 @@ typedef $$SchedulesTableTableCreateCompanionBuilder =
       Value<String> backupType,
       Value<bool> truncateLog,
       Value<bool> compressBackup,
+      Value<String> compressionFormat,
       Value<bool> enabled,
       Value<bool> enableChecksum,
       Value<bool> verifyAfterBackup,
@@ -6914,6 +6967,7 @@ typedef $$SchedulesTableTableUpdateCompanionBuilder =
       Value<String> backupType,
       Value<bool> truncateLog,
       Value<bool> compressBackup,
+      Value<String> compressionFormat,
       Value<bool> enabled,
       Value<bool> enableChecksum,
       Value<bool> verifyAfterBackup,
@@ -6986,6 +7040,11 @@ class $$SchedulesTableTableFilterComposer
 
   ColumnFilters<bool> get compressBackup => $composableBuilder(
     column: $table.compressBackup,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get compressionFormat => $composableBuilder(
+    column: $table.compressionFormat,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7094,6 +7153,11 @@ class $$SchedulesTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get compressionFormat => $composableBuilder(
+    column: $table.compressionFormat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get enabled => $composableBuilder(
     column: $table.enabled,
     builder: (column) => ColumnOrderings(column),
@@ -7195,6 +7259,11 @@ class $$SchedulesTableTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get compressionFormat => $composableBuilder(
+    column: $table.compressionFormat,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
 
@@ -7274,6 +7343,7 @@ class $$SchedulesTableTableTableManager
                 Value<String> backupType = const Value.absent(),
                 Value<bool> truncateLog = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
+                Value<String> compressionFormat = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 Value<bool> enableChecksum = const Value.absent(),
                 Value<bool> verifyAfterBackup = const Value.absent(),
@@ -7295,6 +7365,7 @@ class $$SchedulesTableTableTableManager
                 backupType: backupType,
                 truncateLog: truncateLog,
                 compressBackup: compressBackup,
+                compressionFormat: compressionFormat,
                 enabled: enabled,
                 enableChecksum: enableChecksum,
                 verifyAfterBackup: verifyAfterBackup,
@@ -7318,6 +7389,7 @@ class $$SchedulesTableTableTableManager
                 Value<String> backupType = const Value.absent(),
                 Value<bool> truncateLog = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
+                Value<String> compressionFormat = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
                 Value<bool> enableChecksum = const Value.absent(),
                 Value<bool> verifyAfterBackup = const Value.absent(),
@@ -7339,6 +7411,7 @@ class $$SchedulesTableTableTableManager
                 backupType: backupType,
                 truncateLog: truncateLog,
                 compressBackup: compressBackup,
+                compressionFormat: compressionFormat,
                 enabled: enabled,
                 enableChecksum: enableChecksum,
                 verifyAfterBackup: verifyAfterBackup,
