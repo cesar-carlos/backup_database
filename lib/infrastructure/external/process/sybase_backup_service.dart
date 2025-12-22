@@ -30,6 +30,12 @@ class SybaseBackupService implements ISybaseBackupService {
         'Iniciando backup Sybase: ${config.serverName} (Tipo: ${backupType.displayName})',
       );
 
+      if (backupType == BackupType.log) {
+        LoggerService.debug(
+          'Truncamento de log: ${truncateLog ? "habilitado" : "desabilitado"}',
+        );
+      }
+
       final outputDir = Directory(outputDirectory);
       if (!await outputDir.exists()) {
         await outputDir.create(recursive: true);
@@ -89,8 +95,11 @@ class SybaseBackupService implements ISybaseBackupService {
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
             break;
           case BackupType.log:
+            final logClause = truncateLog
+                ? "TRANSACTION LOG TRUNCATE"
+                : "TRANSACTION LOG ONLY";
             backupSql =
-                "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
+                "BACKUP DATABASE DIRECTORY '$escapedBackupPath' $logClause";
             break;
           case BackupType.differential:
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
@@ -162,15 +171,20 @@ class SybaseBackupService implements ISybaseBackupService {
           LoggerService.debug('Tentando dbbackup: ${strategy['name']}');
           LoggerService.debug('Connection string: ${strategy['conn']}');
 
-          final arguments = [
-            '-x',
-            '-c',
-            strategy['conn']!,
-            '-d',
-            '-r',
-            '-y',
-            backupPath,
-          ];
+          final arguments = <String>[];
+
+          if (effectiveType == BackupType.log) {
+            if (truncateLog) {
+              arguments.add('-x');
+            } else {
+              arguments.add('-t');
+              arguments.add('-r');
+            }
+          } else if (effectiveType == BackupType.full) {
+            arguments.add('-d');
+          }
+
+          arguments.addAll(['-c', strategy['conn']!, '-y', backupPath]);
 
           result = await _processService.run(
             executable: executable,
@@ -303,6 +317,42 @@ class SybaseBackupService implements ISybaseBackupService {
           return rd.Failure(
             BackupFailure(message: 'Backup foi criado mas está vazio'),
           );
+        }
+
+        // Para backup de log, aguardar um pouco mais para garantir que o arquivo seja fechado pelo Sybase
+        if (effectiveType == BackupType.log && await backupFile.exists()) {
+          LoggerService.debug(
+            'Aguardando arquivo de log ser liberado pelo Sybase...',
+          );
+
+          // Tentar abrir o arquivo várias vezes para garantir que está acessível
+          bool fileAccessible = false;
+          for (int attempt = 0; attempt < 5; attempt++) {
+            try {
+              final testFile = File(actualBackupPath);
+              final randomAccessFile = await testFile.open(mode: FileMode.read);
+              await randomAccessFile.close();
+              fileAccessible = true;
+              LoggerService.debug('Arquivo de log está acessível');
+              break;
+            } catch (e) {
+              if (attempt < 4) {
+                LoggerService.debug(
+                  'Arquivo de log ainda em uso, aguardando... (tentativa ${attempt + 1}/5)',
+                );
+                await Future.delayed(const Duration(seconds: 1));
+              } else {
+                LoggerService.warning(
+                  'Arquivo de log pode ainda estar em uso, mas continuando...',
+                );
+              }
+            }
+          }
+
+          // Aguardar um pouco mais mesmo se conseguiu abrir, para garantir que está totalmente liberado
+          if (fileAccessible) {
+            await Future.delayed(const Duration(milliseconds: 500));
+          }
         }
 
         LoggerService.info(

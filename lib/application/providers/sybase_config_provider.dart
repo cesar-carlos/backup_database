@@ -4,10 +4,12 @@ import '../../core/errors/failure.dart';
 import '../../domain/entities/sybase_config.dart';
 import '../../domain/repositories/i_sybase_config_repository.dart';
 import '../../domain/repositories/i_schedule_repository.dart';
+import '../../infrastructure/external/process/tool_verification_service.dart';
 
 class SybaseConfigProvider extends ChangeNotifier {
   final ISybaseConfigRepository _repository;
   final IScheduleRepository _scheduleRepository;
+  final ToolVerificationService _toolVerificationService;
 
   List<SybaseConfig> _configs = [];
   bool _isLoading = false;
@@ -16,6 +18,7 @@ class SybaseConfigProvider extends ChangeNotifier {
   SybaseConfigProvider(
     this._repository,
     this._scheduleRepository,
+    this._toolVerificationService,
   ) {
     loadConfigs();
   }
@@ -61,6 +64,23 @@ class SybaseConfigProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final toolVerificationResult =
+          await _toolVerificationService.verifySybaseTools();
+      final toolVerification = toolVerificationResult.fold(
+        (_) => true,
+        (failure) {
+          final f = failure as Failure;
+          _error = f.message;
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        },
+      );
+
+      if (!toolVerification) {
+        return false;
+      }
+
       final result = await _repository.create(config);
       return result.fold(
         (_) async {
@@ -89,6 +109,23 @@ class SybaseConfigProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final toolVerificationResult =
+          await _toolVerificationService.verifySybaseTools();
+      final toolVerification = toolVerificationResult.fold(
+        (_) => true,
+        (failure) {
+          final f = failure as Failure;
+          _error = f.message;
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        },
+      );
+
+      if (!toolVerification) {
+        return false;
+      }
+
       final result = await _repository.update(config);
       return result.fold(
         (_) async {

@@ -52,7 +52,7 @@ powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
 
 ✅ Instala o aplicativo  
 ✅ Instala Visual C++ Redistributables (se necessário)  
-✅ Verifica dependências (sqlcmd, dbbackup)  
+✅ Instala sem verificar dependências (usuário pode usar apenas SQL Server ou apenas Sybase)  
 ✅ Cria atalhos  
 ✅ Inclui documentação  
 ✅ Configura inicialização automática (opcional)  

@@ -101,7 +101,7 @@ O instalador criado inclui:
 
 - **Aplicativo**: Todos os arquivos necessários do Flutter
 - **Documentação**: Guias de instalação e requisitos
-- **Verificação de Dependências**: Verifica automaticamente sqlcmd e dbbackup
+- **Script de Verificação**: Inclui script PowerShell para verificar dependências manualmente (opcional)
 - **Instalação de Dependências**: Tenta instalar Visual C++ Redistributables automaticamente
 - **Atalhos**: Cria atalhos no menu Iniciar e área de trabalho (opcional)
 - **Inicialização Automática**: Opção para iniciar com o Windows (opcional)

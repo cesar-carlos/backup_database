@@ -4,10 +4,12 @@ import '../../core/errors/failure.dart';
 import '../../domain/entities/sql_server_config.dart';
 import '../../domain/repositories/i_sql_server_config_repository.dart';
 import '../../domain/repositories/i_schedule_repository.dart';
+import '../../infrastructure/external/process/tool_verification_service.dart';
 
 class SqlServerConfigProvider extends ChangeNotifier {
   final ISqlServerConfigRepository _repository;
   final IScheduleRepository _scheduleRepository;
+  final ToolVerificationService _toolVerificationService;
 
   List<SqlServerConfig> _configs = [];
   bool _isLoading = false;
@@ -16,6 +18,7 @@ class SqlServerConfigProvider extends ChangeNotifier {
   SqlServerConfigProvider(
     this._repository,
     this._scheduleRepository,
+    this._toolVerificationService,
   ) {
     loadConfigs();
   }
@@ -61,6 +64,22 @@ class SqlServerConfigProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final toolVerificationResult = await _toolVerificationService.verifySqlCmd();
+      final toolVerification = toolVerificationResult.fold(
+        (_) => true,
+        (failure) {
+          final f = failure as Failure;
+          _error = f.message;
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        },
+      );
+
+      if (!toolVerification) {
+        return false;
+      }
+
       final result = await _repository.create(config);
       return result.fold(
         (_) async {
@@ -90,6 +109,22 @@ class SqlServerConfigProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final toolVerificationResult = await _toolVerificationService.verifySqlCmd();
+      final toolVerification = toolVerificationResult.fold(
+        (_) => true,
+        (failure) {
+          final f = failure as Failure;
+          _error = f.message;
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        },
+      );
+
+      if (!toolVerification) {
+        return false;
+      }
+
       final result = await _repository.update(config);
       return result.fold(
         (_) async {

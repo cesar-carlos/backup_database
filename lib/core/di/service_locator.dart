@@ -1,5 +1,5 @@
-import 'package:get_it/get_it.dart';
 import 'package:dio/dio.dart';
+import 'package:get_it/get_it.dart';
 
 import '../utils/logger_service.dart';
 import '../../infrastructure/http/api_client.dart';
@@ -50,6 +50,10 @@ Future<void> setupServiceLocator() async {
 
   // Process Services
   getIt.registerLazySingleton<ProcessService>(() => ProcessService());
+
+  getIt.registerLazySingleton<ToolVerificationService>(
+    () => ToolVerificationService(getIt<ProcessService>()),
+  );
 
   getIt.registerLazySingleton<ISqlServerBackupService>(
     () => SqlServerBackupService(getIt<ProcessService>()),
@@ -227,6 +231,7 @@ Future<void> setupServiceLocator() async {
     () => SqlServerConfigProvider(
       getIt<ISqlServerConfigRepository>(),
       getIt<IScheduleRepository>(),
+      getIt<ToolVerificationService>(),
     ),
   );
 
@@ -234,6 +239,7 @@ Future<void> setupServiceLocator() async {
     () => SybaseConfigProvider(
       getIt<ISybaseConfigRepository>(),
       getIt<IScheduleRepository>(),
+      getIt<ToolVerificationService>(),
     ),
   );
 

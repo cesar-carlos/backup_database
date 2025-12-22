@@ -17,32 +17,29 @@ class CompressionService implements ICompressionService {
   CompressionService(ProcessService processService)
     : _winRarService = WinRarService(processService);
 
-  /// Comprime um arquivo ou diretório automaticamente
   @override
   Future<rd.Result<CompressionResult>> compress({
     required String path,
     String? outputPath,
     bool deleteOriginal = false,
   }) async {
-    // Verificar se é diretório ou arquivo
     final dir = Directory(path);
     if (await dir.exists()) {
-      return compressDirectory(
+      return _compressDirectory(
         directoryPath: path,
         outputPath: outputPath,
         deleteOriginal: deleteOriginal,
       );
     }
-    
-    return compressFile(
+
+    return _compressFile(
       filePath: path,
       outputPath: outputPath,
       deleteOriginal: deleteOriginal,
     );
   }
-  
-  /// Comprime um diretório inteiro em um arquivo ZIP
-  Future<rd.Result<CompressionResult>> compressDirectory({
+
+  Future<rd.Result<CompressionResult>> _compressDirectory({
     required String directoryPath,
     String? outputPath,
     bool deleteOriginal = false,
@@ -52,26 +49,21 @@ class CompressionService implements ICompressionService {
     try {
       LoggerService.info('Iniciando compressão de diretório: $directoryPath');
 
-      // Verificar se o diretório existe
       final inputDir = Directory(directoryPath);
       if (!await inputDir.exists()) {
         return rd.Failure(
-          FileSystemFailure(message: 'Diretório não encontrado: $directoryPath'),
+          FileSystemFailure(
+            message: 'Diretório não encontrado: $directoryPath',
+          ),
         );
       }
-      
-      // Calcular tamanho original do diretório
-      int originalSize = 0;
-      await for (final entity in inputDir.list(recursive: true)) {
-        if (entity is File) {
-          originalSize += await entity.length();
-        }
-      }
-      
+
       final outputFilePath = outputPath ?? '$directoryPath.zip';
 
-      // Tentar usar WinRAR primeiro se disponível
-      if (await _winRarService.isAvailable()) {
+      int originalSize = 0;
+      bool useWinRar = await _winRarService.isAvailable();
+
+      if (useWinRar) {
         LoggerService.info('Tentando comprimir diretório com WinRAR...');
         final winRarSuccess = await _winRarService.compressDirectory(
           directoryPath: directoryPath,
@@ -84,10 +76,14 @@ class CompressionService implements ICompressionService {
             final compressedSize = await outputFile.length();
             stopwatch.stop();
 
+            originalSize = await _calculateDirectorySize(inputDir);
+
             if (deleteOriginal) {
               try {
                 await inputDir.delete(recursive: true);
-                LoggerService.info('Diretório original deletado: $directoryPath');
+                LoggerService.info(
+                  'Diretório original deletado: $directoryPath',
+                );
               } catch (e) {
                 LoggerService.warning('Erro ao deletar diretório original', e);
               }
@@ -116,34 +112,37 @@ class CompressionService implements ICompressionService {
         }
 
         LoggerService.warning('WinRAR falhou, tentando biblioteca archive...');
+        useWinRar = false;
       }
 
-      // Fallback para biblioteca archive
-      LoggerService.info('Usando biblioteca archive para compressão de diretório...');
+      LoggerService.info(
+        'Usando biblioteca archive para compressão de diretório...',
+      );
 
-      // Remover arquivo existente se houver
       final outputFile = File(outputFilePath);
       if (await outputFile.exists()) {
         await outputFile.delete();
       }
 
-      // Criar arquivo ZIP
       final encoder = ZipFileEncoder();
       try {
         encoder.create(outputFilePath);
-        
-        // Adicionar todos os arquivos do diretório
+
         await for (final entity in inputDir.list(recursive: true)) {
           if (entity is File) {
+            final fileSize = await entity.length();
+            originalSize += fileSize;
             final relativePath = p.relative(entity.path, from: directoryPath);
             encoder.addFile(entity, relativePath);
             LoggerService.debug('Adicionado ao ZIP: $relativePath');
           }
         }
-        
+
         encoder.close();
       } catch (e) {
-        try { encoder.close(); } catch (_) {}
+        try {
+          encoder.close();
+        } catch (_) {}
         rethrow;
       }
 
@@ -159,7 +158,6 @@ class CompressionService implements ICompressionService {
         '(${compressionRatio.toStringAsFixed(1)}% de redução)',
       );
 
-      // Deletar diretório original se solicitado
       if (deleteOriginal) {
         await inputDir.delete(recursive: true);
         LoggerService.info('Diretório original deletado: $directoryPath');
@@ -187,7 +185,7 @@ class CompressionService implements ICompressionService {
     }
   }
 
-  Future<rd.Result<CompressionResult>> compressFile({
+  Future<rd.Result<CompressionResult>> _compressFile({
     required String filePath,
     String? outputPath,
     bool deleteOriginal = false,
@@ -197,7 +195,6 @@ class CompressionService implements ICompressionService {
     try {
       LoggerService.info('Iniciando compressão: $filePath');
 
-      // Verificar se o arquivo existe
       final inputFile = File(filePath);
       if (!await inputFile.exists()) {
         return rd.Failure(
@@ -208,7 +205,6 @@ class CompressionService implements ICompressionService {
       final originalSize = await inputFile.length();
       final outputFilePath = outputPath ?? '$filePath.zip';
 
-      // Tentar usar WinRAR primeiro se disponível
       if (await _winRarService.isAvailable()) {
         LoggerService.info('Tentando comprimir com WinRAR...');
         final winRarSuccess = await _winRarService.compressFile(
@@ -256,22 +252,18 @@ class CompressionService implements ICompressionService {
         LoggerService.warning('WinRAR falhou, tentando biblioteca archive...');
       }
 
-      // Fallback para biblioteca archive
       LoggerService.info('Usando biblioteca archive para compressão...');
 
-      // Verificar se já existe e remover
       final outputFile = File(outputFilePath);
       if (await outputFile.exists()) {
         LoggerService.warning(
           'Arquivo ZIP já existe, removendo: $outputFilePath',
         );
         try {
-          // Tentar remover com verificação de uso
           await outputFile.delete();
-          // Aguardar um pouco para garantir que o arquivo foi liberado
+
           await Future.delayed(const Duration(milliseconds: 100));
 
-          // Verificar se foi removido
           if (await outputFile.exists()) {
             LoggerService.warning(
               'Arquivo ainda existe após tentativa de remoção',
@@ -316,7 +308,6 @@ class CompressionService implements ICompressionService {
         }
       }
 
-      // Verificar permissões do diretório de saída
       final outputDir = Directory(p.dirname(outputFilePath));
       if (!await outputDir.exists()) {
         try {
@@ -335,7 +326,6 @@ class CompressionService implements ICompressionService {
         }
       }
 
-      // Verificar se temos permissão de escrita no diretório
       try {
         final testFile = File(p.join(outputDir.path, '.test_write_permission'));
         await testFile.writeAsString('test');
@@ -352,7 +342,6 @@ class CompressionService implements ICompressionService {
         );
       }
 
-      // Criar arquivo ZIP com tratamento de erros robusto
       ZipFileEncoder? encoder;
       try {
         LoggerService.info('Criando arquivo ZIP: $outputFilePath');
@@ -361,7 +350,6 @@ class CompressionService implements ICompressionService {
         encoder = ZipFileEncoder();
         LoggerService.info('Inicializando encoder ZIP...');
 
-        // Criar arquivo ZIP
         try {
           encoder.create(outputFilePath);
           LoggerService.info('Arquivo ZIP criado, adicionando arquivo...');
@@ -386,24 +374,36 @@ class CompressionService implements ICompressionService {
         );
         LoggerService.info('Arquivo: $filePath');
 
-        // Adicionar arquivo ao ZIP
         try {
           encoder.addFile(inputFile);
           LoggerService.info('Arquivo adicionado ao ZIP');
         } on FileSystemException catch (e) {
           encoder = null;
           LoggerService.error('Erro ao adicionar arquivo ao ZIP', e);
-          // Tentar remover arquivo parcial
+
           try {
             if (await outputFile.exists()) {
               await outputFile.delete();
             }
           } catch (_) {}
+
+          String errorMessage =
+              'Erro ao adicionar arquivo ao ZIP: ${e.message}';
+          if (e.message.contains('writeFrom failed') ||
+              e.message.contains('Acesso negado') ||
+              e.osError?.errorCode == 5) {
+            errorMessage =
+                'Acesso negado ao criar arquivo ZIP: $outputFilePath\n'
+                'Possíveis causas:\n'
+                '- Arquivo de entrada está em uso por outro processo\n'
+                '- Arquivo ZIP de saída está em uso\n'
+                '- Sem permissão de escrita no diretório\n'
+                '- Execute o aplicativo como Administrador\n'
+                '- Escolha outro diretório de destino';
+          }
+
           return rd.Failure(
-            FileSystemFailure(
-              message: 'Erro ao adicionar arquivo ao ZIP: ${e.message}',
-              originalError: e,
-            ),
+            FileSystemFailure(message: errorMessage, originalError: e),
           );
         }
 
@@ -411,7 +411,6 @@ class CompressionService implements ICompressionService {
           'Finalizando criação do ZIP (isso pode levar alguns minutos)...',
         );
 
-        // Fechar encoder com tratamento de erro específico e abrangente
         FileSystemException? closeException;
         Object? closeError;
         try {
@@ -425,27 +424,22 @@ class CompressionService implements ICompressionService {
           closeError = e;
           LoggerService.error('Erro ao fechar arquivo ZIP', e);
         } finally {
-          encoder = null; // Sempre marcar como fechado
+          encoder = null;
         }
 
-        // Se houve erro ao fechar, tratar e retornar
         if (closeException != null) {
           LoggerService.error(
             'Erro ao fechar arquivo ZIP (permissão negada)',
             closeException,
           );
 
-          // Tentar remover arquivo parcial
           try {
             if (await outputFile.exists()) {
               await outputFile.delete();
               LoggerService.info('Arquivo ZIP parcial removido');
             }
-          } catch (_) {
-            // Ignorar erro ao remover arquivo parcial
-          }
+          } catch (_) {}
 
-          // Retornar erro específico de permissão
           return rd.Failure(
             FileSystemFailure(
               message:
@@ -466,14 +460,11 @@ class CompressionService implements ICompressionService {
             closeError,
           );
 
-          // Tentar remover arquivo parcial
           try {
             if (await outputFile.exists()) {
               await outputFile.delete();
             }
-          } catch (_) {
-            // Ignorar erro ao remover arquivo parcial
-          }
+          } catch (_) {}
 
           return rd.Failure(
             FileSystemFailure(
@@ -487,7 +478,6 @@ class CompressionService implements ICompressionService {
           'ZIP fechado com sucesso, verificando arquivo criado...',
         );
 
-        // Verificar se o arquivo foi criado corretamente
         try {
           if (!await outputFile.exists()) {
             return rd.Failure(
@@ -526,20 +516,15 @@ class CompressionService implements ICompressionService {
         if (encoder != null) {
           try {
             encoder.close();
-          } catch (_) {
-            // Ignorar erro ao fechar encoder com erro
-          }
+          } catch (_) {}
         }
-        // Remover arquivo parcial se existir
+
         try {
           if (await outputFile.exists()) {
             await outputFile.delete();
           }
-        } catch (_) {
-          // Ignorar erro ao remover arquivo parcial
-        }
+        } catch (_) {}
 
-        // Verificar se é erro de permissão
         final errorCode = e.osError?.errorCode;
         if (errorCode == 5) {
           return rd.Failure(
@@ -571,18 +556,14 @@ class CompressionService implements ICompressionService {
         if (encoder != null) {
           try {
             encoder.close();
-          } catch (_) {
-            // Ignorar erro ao fechar encoder com erro
-          }
+          } catch (_) {}
         }
-        // Remover arquivo parcial se existir
+
         try {
           if (await outputFile.exists()) {
             await outputFile.delete();
           }
-        } catch (_) {
-          // Ignorar erro ao remover arquivo parcial
-        }
+        } catch (_) {}
 
         return rd.Failure(
           FileSystemFailure(
@@ -604,7 +585,6 @@ class CompressionService implements ICompressionService {
         '(${compressionRatio.toStringAsFixed(1)}% de redução)',
       );
 
-      // Deletar arquivo original se solicitado
       if (deleteOriginal) {
         await inputFile.delete();
         LoggerService.info('Arquivo original deletado: $filePath');
@@ -672,7 +652,6 @@ class CompressionService implements ICompressionService {
     try {
       LoggerService.info('Descomprimindo: $zipPath');
 
-      // Verificar se o arquivo ZIP existe
       final zipFile = File(zipPath);
       if (!await zipFile.exists()) {
         return rd.Failure(
@@ -680,14 +659,12 @@ class CompressionService implements ICompressionService {
         );
       }
 
-      // Determinar diretório de saída
       final outputDir = outputDirectory ?? p.dirname(zipPath);
       final targetDir = Directory(outputDir);
       if (!await targetDir.exists()) {
         await targetDir.create(recursive: true);
       }
 
-      // Extrair arquivo
       final bytes = await zipFile.readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
 
@@ -726,6 +703,23 @@ class CompressionService implements ICompressionService {
         ),
       );
     }
+  }
+
+  Future<int> _calculateDirectorySize(Directory directory) async {
+    int totalSize = 0;
+    try {
+      await for (final entity in directory.list(recursive: true)) {
+        if (entity is File) {
+          totalSize += await entity.length();
+        }
+      }
+    } catch (e) {
+      LoggerService.warning(
+        'Erro ao calcular tamanho do diretório: ${directory.path}',
+        e,
+      );
+    }
+    return totalSize;
   }
 
   String _formatBytes(int bytes) {

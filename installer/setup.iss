@@ -373,50 +373,8 @@ begin
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
-var
-  SqlCmdFound, SybaseFound: Boolean;
-  ResultCode: Integer;
-  MissingDeps: String;
 begin
   Result := True;
-  
-  if CurPageID = wpReady then
-  begin
-    SqlCmdFound := False;
-    SybaseFound := False;
-    
-    if Exec('cmd.exe', '/c sqlcmd -?', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    begin
-      if ResultCode = 0 then
-        SqlCmdFound := True;
-    end;
-    
-    if Exec('cmd.exe', '/c dbbackup -?', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    begin
-      if ResultCode = 0 then
-        SybaseFound := True;
-    end;
-    
-    if not SqlCmdFound or not SybaseFound then
-    begin
-      MissingDeps := 'ATENÃ‡ÃƒO: Algumas dependÃªncias nÃ£o foram encontradas no sistema:' + #13#10 + #13#10;
-      
-      if not SqlCmdFound then
-        MissingDeps := MissingDeps + '- sqlcmd.exe (SQL Server Command Line Tools)' + #13#10;
-      
-      if not SybaseFound then
-        MissingDeps := MissingDeps + '- dbbackup.exe (Sybase SQL Anywhere)' + #13#10;
-      
-      MissingDeps := MissingDeps + #13#10 +
-        'O aplicativo pode nÃ£o funcionar corretamente sem essas ferramentas.' + #13#10 + #13#10 +
-        'Deseja continuar com a instalaÃ§Ã£o mesmo assim?';
-      
-      if MsgBox(MissingDeps, mbConfirmation, MB_YESNO) = IDNO then
-      begin
-        Result := False;
-      end;
-    end;
-  end;
 end;
 
 function InitializeUninstall(): Boolean;

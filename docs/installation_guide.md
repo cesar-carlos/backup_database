@@ -66,13 +66,8 @@ Selecione as opções desejadas e clique em **"Avançar"**
 O instalador irá verificar automaticamente:
 
 - **Visual C++ Redistributables**: Se não estiver instalado, o instalador tentará instalar automaticamente
-- **sqlcmd.exe** (SQL Server): Verifica se está disponível no PATH
-- **dbbackup.exe** (Sybase): Verifica se está disponível no PATH
 
-**Importante**: Se alguma dependência não for encontrada, você verá um aviso. Você pode:
-
-- Continuar a instalação e configurar depois
-- Cancelar e instalar as dependências primeiro
+**Nota**: As ferramentas de backup (`sqlcmd` para SQL Server e `dbbackup`/`dbisql` para Sybase) não são verificadas durante a instalação, pois o usuário pode querer usar apenas SQL Server ou apenas Sybase. Você pode verificar essas ferramentas manualmente após a instalação usando o script "Verificar Dependências" no menu Iniciar.
 
 ### 3.6 Pronto para Instalar
 
