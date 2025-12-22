@@ -154,7 +154,7 @@ Future<void> main() async {
 
     final prefs = await SharedPreferences.getInstance();
     final startMinimizedFromSettings =
-        prefs.getBool('start_minimized') ?? false;
+        prefs.getBool('start_minimized') ?? true;
     LoggerService.info(
       'Configuração "Iniciar Minimizado" carregada: $startMinimizedFromSettings',
     );

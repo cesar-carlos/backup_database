@@ -32,6 +32,7 @@ class ScheduleDialog extends StatefulWidget {
 
 class _ScheduleDialogState extends State<ScheduleDialog> {
   final _formKey = GlobalKey<FormState>();
+  int _selectedTabIndex = 0;
 
   final _nameController = TextEditingController();
   final _intervalMinutesController = TextEditingController();
@@ -196,9 +197,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   Widget build(BuildContext context) {
     return ContentDialog(
       constraints: const BoxConstraints(
-        minWidth: 600,
-        maxWidth: 600,
-        maxHeight: 800,
+        minWidth: 700,
+        maxWidth: 800,
+        maxHeight: 750,
       ),
       title: Row(
         children: [
@@ -211,220 +212,37 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         ],
       ),
       content: Container(
-        constraints: const BoxConstraints(),
+        constraints: const BoxConstraints(
+          maxHeight: 700,
+        ),
         child: _isLoading
             ? const Center(child: ProgressRing())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      AppTextField(
-                        controller: _nameController,
-                        label: 'Nome do Agendamento',
-                        hint: 'Ex: Backup Diário Produção',
-                        prefixIcon: const Icon(FluentIcons.tag),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Nome é obrigatório';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle('Banco de Dados'),
-                      const SizedBox(height: 12),
-                      AppDropdown<DatabaseType>(
-                        label: 'Tipo de Banco',
-                        value: _databaseType,
-                        placeholder: const Text('Tipo de Banco'),
-                        items: DatabaseType.values.map((type) {
-                          return ComboBoxItem<DatabaseType>(
-                            value: type,
-                            child: Text(_getDatabaseTypeName(type)),
-                          );
-                        }).toList(),
-                        onChanged: isEditing
-                            ? null
-                            : (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    _selectedDatabaseConfigId = null;
-                                    _databaseType = value;
-                                  });
-                                  _formKey.currentState?.validate();
-                                }
-                              },
-                      ),
-                      const SizedBox(height: 16),
-                      Builder(
-                        key: ValueKey(
-                          'database_config_dropdown_${_databaseType}_${_selectedDatabaseConfigId ?? 'null'}',
-                        ),
-                        builder: (context) => _buildDatabaseConfigDropdown(),
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle('Tipo de Backup'),
-                      const SizedBox(height: 12),
-                      AppDropdown<BackupType>(
-                        label: 'Tipo de Backup',
-                        value: _backupType,
-                        placeholder: const Text('Tipo de Backup'),
-                        items: _getAvailableBackupTypes().map((type) {
-                          return ComboBoxItem<BackupType>(
-                            value: type,
-                            child: Text(type.displayName),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _backupType = value;
-                              _onBackupTypeChanged();
-                            });
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _getBackupTypeDescription(_backupType),
-                        style: FluentTheme.of(context).typography.caption,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle('Agendamento'),
-                      const SizedBox(height: 12),
-                      AppDropdown<ScheduleType>(
-                        label: 'Frequência',
-                        value: _scheduleType,
-                        placeholder: const Text('Frequência'),
-                        items: ScheduleType.values.map((type) {
-                          return ComboBoxItem<ScheduleType>(
-                            value: type,
-                            child: Text(_getScheduleTypeName(type)),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _scheduleType = value;
-                            });
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      if (_backupType == BackupType.log)
-                        InfoLabel(
-                          label: 'Truncar log após backup',
-                          child: ToggleSwitch(
-                            checked: _truncateLog,
-                            onChanged: (value) {
-                              setState(() {
-                                _truncateLog = value;
-                              });
-                            },
-                          ),
-                        ),
-                      if (_backupType == BackupType.log)
-                        const SizedBox(height: 8),
-                      if (_backupType == BackupType.log)
-                        Text(
-                          'Quando habilitado, o backup de log libera espaço (SQL Server: padrão; Sybase: depende do motor).',
-                          style: FluentTheme.of(context).typography.caption,
-                        ),
-                      const SizedBox(height: 16),
-                      _buildScheduleFields(),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle('Script SQL Pós-Backup (Opcional)'),
-                      const SizedBox(height: 12),
-                      InfoLabel(
-                        label: 'Script SQL',
-                        child: TextBox(
-                          controller: _postBackupScriptController,
-                          placeholder:
-                              'Ex: UPDATE tabela SET status = \'backup_completo\' WHERE id = 1;',
-                          maxLines: 5,
-                          minLines: 3,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      InfoBar(
-                        title: const Text('Informação'),
-                        content: const Text(
-                          'O script será executado na mesma conexão do backup, '
-                          'após o backup ser concluído com sucesso. '
-                          'Erros no script não impedem o backup de ser considerado bem-sucedido.',
-                        ),
-                        severity: InfoBarSeverity.info,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle('Destinos'),
-                      const SizedBox(height: 12),
-                      _buildDestinationSelector(),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle('Pasta de Backup'),
-                      const SizedBox(height: 12),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: AppTextField(
-                              controller: _backupFolderController,
-                              label: 'Pasta para Armazenar Backup',
-                              hint: 'C:\\Backups',
-                              prefixIcon: const Icon(FluentIcons.folder),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Pasta de backup é obrigatória';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 24),
-                            child: IconButton(
-                              icon: const Icon(FluentIcons.folder_open),
-                              onPressed: _selectBackupFolder,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Pasta onde o arquivo de backup será gerado antes de enviar aos destinos',
-                        style: FluentTheme.of(context).typography.caption,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle('Opções'),
-                      const SizedBox(height: 12),
-                      InfoLabel(
-                        label: 'Compactar backup (gera ZIP)',
-                        child: ToggleSwitch(
-                          checked: _compressBackup,
-                          onChanged: (value) {
-                            setState(() {
-                              _compressBackup = value;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      InfoLabel(
-                        label: 'Agendamento habilitado',
-                        child: ToggleSwitch(
-                          checked: _isEnabled,
-                          onChanged: (value) {
-                            setState(() {
-                              _isEnabled = value;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+            : Form(
+                key: _formKey,
+                child: TabView(
+                  currentIndex: _selectedTabIndex,
+                  onChanged: (index) {
+                    setState(() {
+                      _selectedTabIndex = index;
+                    });
+                  },
+                  tabs: [
+                    Tab(
+                      text: const Text('Geral'),
+                      icon: const Icon(FluentIcons.settings),
+                      body: _buildGeneralTab(),
+                    ),
+                    Tab(
+                      text: const Text('Configurações'),
+                      icon: const Icon(FluentIcons.folder),
+                      body: _buildSettingsTab(),
+                    ),
+                    Tab(
+                      text: const Text('Script SQL'),
+                      icon: const Icon(FluentIcons.code),
+                      body: _buildScriptTab(),
+                    ),
+                  ],
                 ),
               ),
       ),
@@ -432,6 +250,239 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         const CancelButton(),
         SaveButton(onPressed: _save, isEditing: isEditing),
       ],
+    );
+  }
+
+  Widget _buildGeneralTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(
+            controller: _nameController,
+            label: 'Nome do Agendamento',
+            hint: 'Ex: Backup Diário Produção',
+            prefixIcon: const Icon(FluentIcons.tag),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Nome é obrigatório';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Banco de Dados'),
+          const SizedBox(height: 12),
+          AppDropdown<DatabaseType>(
+            label: 'Tipo de Banco',
+            value: _databaseType,
+            placeholder: const Text('Tipo de Banco'),
+            items: DatabaseType.values.map((type) {
+              return ComboBoxItem<DatabaseType>(
+                value: type,
+                child: Text(_getDatabaseTypeName(type)),
+              );
+            }).toList(),
+            onChanged: isEditing
+                ? null
+                : (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedDatabaseConfigId = null;
+                        _databaseType = value;
+                      });
+                      _formKey.currentState?.validate();
+                    }
+                  },
+          ),
+          const SizedBox(height: 16),
+          Builder(
+            key: ValueKey(
+              'database_config_dropdown_${_databaseType}_${_selectedDatabaseConfigId ?? 'null'}',
+            ),
+            builder: (context) => _buildDatabaseConfigDropdown(),
+          ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Tipo de Backup'),
+          const SizedBox(height: 12),
+          AppDropdown<BackupType>(
+            label: 'Tipo de Backup',
+            value: _backupType,
+            placeholder: const Text('Tipo de Backup'),
+            items: _getAvailableBackupTypes().map((type) {
+              return ComboBoxItem<BackupType>(
+                value: type,
+                child: Text(type.displayName),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  _backupType = value;
+                  _onBackupTypeChanged();
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _getBackupTypeDescription(_backupType),
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Agendamento'),
+          const SizedBox(height: 12),
+          AppDropdown<ScheduleType>(
+            label: 'Frequência',
+            value: _scheduleType,
+            placeholder: const Text('Frequência'),
+            items: ScheduleType.values.map((type) {
+              return ComboBoxItem<ScheduleType>(
+                value: type,
+                child: Text(_getScheduleTypeName(type)),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  _scheduleType = value;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          if (_backupType == BackupType.log)
+            InfoLabel(
+              label: 'Truncar log após backup',
+              child: ToggleSwitch(
+                checked: _truncateLog,
+                onChanged: (value) {
+                  setState(() {
+                    _truncateLog = value;
+                  });
+                },
+              ),
+            ),
+          if (_backupType == BackupType.log)
+            const SizedBox(height: 8),
+          if (_backupType == BackupType.log)
+            Text(
+              'Quando habilitado, o backup de log libera espaço (SQL Server: padrão; Sybase: depende do motor).',
+              style: FluentTheme.of(context).typography.caption,
+            ),
+          const SizedBox(height: 16),
+          _buildScheduleFields(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSectionTitle('Destinos'),
+          const SizedBox(height: 12),
+          _buildDestinationSelector(),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Pasta de Backup'),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: _backupFolderController,
+                  label: 'Pasta para Armazenar Backup',
+                  hint: 'C:\\Backups',
+                  prefixIcon: const Icon(FluentIcons.folder),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Pasta de backup é obrigatória';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 24),
+                child: IconButton(
+                  icon: const Icon(FluentIcons.folder_open),
+                  onPressed: _selectBackupFolder,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Pasta onde o arquivo de backup será gerado antes de enviar aos destinos',
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          const SizedBox(height: 24),
+          _buildSectionTitle('Opções'),
+          const SizedBox(height: 12),
+          InfoLabel(
+            label: 'Compactar backup (gera ZIP)',
+            child: ToggleSwitch(
+              checked: _compressBackup,
+              onChanged: (value) {
+                setState(() {
+                  _compressBackup = value;
+                });
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          InfoLabel(
+            label: 'Agendamento habilitado',
+            child: ToggleSwitch(
+              checked: _isEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _isEnabled = value;
+                });
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScriptTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSectionTitle('Script SQL Pós-Backup (Opcional)'),
+          const SizedBox(height: 16),
+          InfoLabel(
+            label: 'Script SQL',
+            child: TextBox(
+              controller: _postBackupScriptController,
+              placeholder:
+                  'Ex: UPDATE tabela SET status = \'backup_completo\' WHERE id = 1;',
+              maxLines: 15,
+              minLines: 10,
+            ),
+          ),
+          const SizedBox(height: 16),
+          InfoBar(
+            title: const Text('Informação'),
+            content: const Text(
+              'O script será executado na mesma conexão do backup, '
+              'após o backup ser concluído com sucesso. '
+              'Erros no script não impedem o backup de ser considerado bem-sucedido.',
+            ),
+            severity: InfoBarSeverity.info,
+          ),
+        ],
+      ),
     );
   }
 

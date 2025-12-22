@@ -16,8 +16,8 @@ class SystemSettingsProvider extends ChangeNotifier {
 
   bool _minimizeToTray = true;
   bool _closeToTray = true;
-  bool _startMinimized = false;
-  bool _startWithWindows = false;
+  bool _startMinimized = true;
+  bool _startWithWindows = true;
   bool _isInitialized = false;
 
   SystemSettingsProvider({
@@ -34,10 +34,32 @@ class SystemSettingsProvider extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
+      
+      // Verificar se é a primeira inicialização (nenhum valor salvo)
+      final isFirstRun = !prefs.containsKey(_minimizeToTrayKey) &&
+          !prefs.containsKey(_closeToTrayKey) &&
+          !prefs.containsKey(_startMinimizedKey) &&
+          !prefs.containsKey(_startWithWindowsKey);
+      
       _minimizeToTray = prefs.getBool(_minimizeToTrayKey) ?? true;
       _closeToTray = prefs.getBool(_closeToTrayKey) ?? true;
-      _startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
-      _startWithWindows = prefs.getBool(_startWithWindowsKey) ?? false;
+      _startMinimized = prefs.getBool(_startMinimizedKey) ?? true;
+      _startWithWindows = prefs.getBool(_startWithWindowsKey) ?? true;
+      
+      // Se for a primeira inicialização, salvar os valores padrão
+      if (isFirstRun) {
+        await prefs.setBool(_minimizeToTrayKey, _minimizeToTray);
+        await prefs.setBool(_closeToTrayKey, _closeToTray);
+        await prefs.setBool(_startMinimizedKey, _startMinimized);
+        await prefs.setBool(_startWithWindowsKey, _startWithWindows);
+        LoggerService.info('Primeira inicialização - valores padrão salvos');
+        
+        // Se "Iniciar com o Windows" estiver ativado, configurar no registro
+        if (_startWithWindows) {
+          await _updateStartWithWindows(true);
+        }
+      }
+      
       _isInitialized = true;
 
       // Aplicar configurações carregadas
@@ -123,7 +145,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       if (enable) {
         // Verificar se deve iniciar minimizado
         final prefs = await SharedPreferences.getInstance();
-        final startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
+        final startMinimized = prefs.getBool(_startMinimizedKey) ?? true;
         
         // Construir comando com argumento --minimized se necessário
         final command = startMinimized 
