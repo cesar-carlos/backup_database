@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration {
@@ -298,6 +298,33 @@ class AppDatabase extends _$AppDatabase {
           } catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v8 para truncate_log',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 9) {
+          // Migração para versão 9: adicionar post_backup_script em schedules_table
+          try {
+            final schedulesColumns = await (customSelect(
+              "PRAGMA table_info(schedules_table)",
+            ).get());
+            final hasPostBackupScriptColumn = schedulesColumns.any(
+              (row) => row.data['name'] == 'post_backup_script',
+            );
+
+            if (!hasPostBackupScriptColumn) {
+              await customStatement(
+                "ALTER TABLE schedules_table ADD COLUMN post_backup_script TEXT",
+              );
+              LoggerService.info(
+                'Migração v9: Coluna post_backup_script adicionada à schedules_table',
+              );
+            }
+          } catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v9 para post_backup_script',
               e,
               stackTrace,
             );

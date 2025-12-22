@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'core/core.dart';
 import 'core/theme/theme_provider.dart';
+import 'core/utils/windows_user_service.dart';
 import 'presentation/managers/managers.dart';
 import 'infrastructure/external/system/os_version_checker.dart';
 import 'presentation/providers/system_settings_provider.dart';
@@ -46,9 +47,30 @@ Future<void> main() async {
   final isFirstInstance = await singleInstanceService.checkAndLock();
 
   if (!isFirstInstance) {
-    LoggerService.warning(
-      '⚠️ SEGUNDA INSTÂNCIA DETECTADA (Mutex existe). Encerrando imediatamente...',
-    );
+    final currentUser = WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
+    
+    String? existingUser;
+    try {
+      existingUser = await IpcService.getExistingInstanceUser();
+    } catch (e) {
+      LoggerService.debug('Não foi possível obter usuário da instância existente: $e');
+    }
+    
+    final isDifferentUser = existingUser != null && existingUser != currentUser;
+    final couldNotDetermineUser = existingUser == null;
+    
+    if (isDifferentUser || couldNotDetermineUser) {
+      LoggerService.warning(
+        '⚠️ SEGUNDA INSTÂNCIA DETECTADA (Mutex existe). '
+        'Usuário atual: $currentUser. '
+        '${existingUser != null ? "Instância existente em: $existingUser" : "Não foi possível determinar usuário da instância existente"}',
+      );
+    } else {
+      LoggerService.info(
+        '⚠️ SEGUNDA INSTÂNCIA DETECTADA (mesmo usuário). '
+        'Usuário: $currentUser. Encerrando silenciosamente.',
+      );
+    }
 
     for (int i = 0; i < 5; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();
@@ -65,9 +87,30 @@ Future<void> main() async {
   final isServerRunning = await IpcService.checkServerRunning();
 
   if (isServerRunning) {
-    LoggerService.warning(
-      '⚠️ SEGUNDA INSTÂNCIA DETECTADA (IPC server já existe). Encerrando imediatamente...',
-    );
+    final currentUser = WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
+    
+    String? existingUser;
+    try {
+      existingUser = await IpcService.getExistingInstanceUser();
+    } catch (e) {
+      LoggerService.debug('Não foi possível obter usuário da instância existente: $e');
+    }
+    
+    final isDifferentUser = existingUser != null && existingUser != currentUser;
+    final couldNotDetermineUser = existingUser == null;
+    
+    if (isDifferentUser || couldNotDetermineUser) {
+      LoggerService.warning(
+        '⚠️ SEGUNDA INSTÂNCIA DETECTADA (IPC server já existe). '
+        'Usuário atual: $currentUser. '
+        '${existingUser != null ? "Instância existente em: $existingUser" : "Não foi possível determinar usuário da instância existente"}',
+      );
+    } else {
+      LoggerService.info(
+        '⚠️ SEGUNDA INSTÂNCIA DETECTADA (mesmo usuário). '
+        'Usuário: $currentUser. Encerrando silenciosamente.',
+      );
+    }
 
     for (int i = 0; i < 5; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();

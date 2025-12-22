@@ -17,6 +17,7 @@ class SchedulesTable extends Table {
   BoolColumn get compressBackup =>
       boolean().withDefault(const Constant(true))();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  TextColumn get postBackupScript => text().nullable()();
   DateTimeColumn get lastRunAt => dateTime().nullable()();
   DateTimeColumn get nextRunAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime()();

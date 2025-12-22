@@ -6,6 +6,7 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <cstring>
+#include <string>
 
 #include "flutter_window.h"
 #include "utils.h"
@@ -13,6 +14,97 @@
 #pragma comment(lib, "ws2_32.lib")
 
 static HANDLE g_hMutex = nullptr;
+
+std::wstring GetExistingInstanceUser() {
+  WSADATA wsaData;
+  if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    return L"";
+  }
+  
+  for (int attempt = 0; attempt < 3; attempt++) {
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock == INVALID_SOCKET) {
+      if (attempt < 2) {
+        Sleep(200);
+        continue;
+      }
+      WSACleanup();
+      return L"";
+    }
+    
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(58724);
+    InetPtonA(AF_INET, "127.0.0.1", &addr.sin_addr);
+    
+    DWORD timeout = 1000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+    
+    if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
+      const char* request = "GET_USER_INFO";
+      send(sock, request, static_cast<int>(strlen(request)), 0);
+      
+      char buffer[256] = {0};
+      int bytesReceived = recv(sock, buffer, sizeof(buffer) - 1, 0);
+      
+      closesocket(sock);
+      WSACleanup();
+      
+      if (bytesReceived > 0) {
+        buffer[bytesReceived] = '\0';
+        std::string response(buffer);
+        if (response.find("USER_INFO:") == 0) {
+          std::string username = response.substr(10);
+          int size_needed = MultiByteToWideChar(CP_UTF8, 0, username.c_str(), -1, NULL, 0);
+          if (size_needed > 0) {
+            std::wstring wusername(size_needed - 1, 0);
+            MultiByteToWideChar(CP_UTF8, 0, username.c_str(), -1, &wusername[0], size_needed);
+            return wusername;
+          }
+        }
+      }
+      
+      return L"";
+    }
+    
+    closesocket(sock);
+    
+    if (attempt < 2) {
+      Sleep(200);
+    }
+  }
+  
+  WSACleanup();
+  return L"";
+}
+
+void ShowInstanceBlockedMessage(const std::wstring& existingUser) {
+  wchar_t currentUsername[256];
+  DWORD usernameSize = 256;
+  
+  if (GetUserNameW(currentUsername, &usernameSize) == 0) {
+    wcscpy_s(currentUsername, 256, L"Desconhecido");
+  }
+  
+  std::wstring message = L"O aplicativo Backup Database já está em execução em outro usuário ou sessão do Windows.\n\n";
+  message += L"Usuário atual: ";
+  message += currentUsername;
+  if (!existingUser.empty()) {
+    message += L"\nUsuário da instância existente: ";
+    message += existingUser;
+  }
+  message += L"\n\n";
+  message += L"Não é permitido executar múltiplas instâncias do aplicativo simultaneamente em diferentes usuários do mesmo computador.\n\n";
+  message += L"Por favor, feche a instância existente antes de tentar abrir novamente.";
+  
+  MessageBoxW(
+    nullptr,
+    message.c_str(),
+    L"Instância Já em Execução - Backup Database",
+    MB_OK | MB_ICONWARNING | MB_TOPMOST
+  );
+}
 
 void NotifyExistingInstance() {
   WSADATA wsaData;
@@ -84,6 +176,27 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     if (g_hMutex != nullptr) {
       ::CloseHandle(g_hMutex);
       g_hMutex = nullptr;
+    }
+    
+    // Obter usuário atual
+    wchar_t currentUsername[256];
+    DWORD usernameSize = 256;
+    std::wstring currentUser;
+    if (GetUserNameW(currentUsername, &usernameSize) != 0) {
+      currentUser = currentUsername;
+    }
+    
+    // Tentar obter usuário da instância existente via IPC
+    std::wstring existingUser = GetExistingInstanceUser();
+    
+    // Só mostrar mensagem se for usuário diferente ou se não conseguir obter informação
+    // Se for o mesmo usuário, apenas encerrar silenciosamente
+    bool isDifferentUser = !existingUser.empty() && existingUser != currentUser;
+    bool couldNotDetermineUser = existingUser.empty();
+    
+    if (isDifferentUser || couldNotDetermineUser) {
+      // Mostrar mensagem informativa ao usuário apenas se for outro usuário
+      ShowInstanceBlockedMessage(existingUser);
     }
     
     // Tentar notificar instância existente via IPC

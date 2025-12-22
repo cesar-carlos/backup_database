@@ -36,6 +36,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   final _nameController = TextEditingController();
   final _intervalMinutesController = TextEditingController();
   final _backupFolderController = TextEditingController();
+  final _postBackupScriptController = TextEditingController();
 
   DatabaseType _databaseType = DatabaseType.sqlServer;
   String? _selectedDatabaseConfigId;
@@ -84,6 +85,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _backupFolderController.text = widget.schedule!.backupFolder.isNotEmpty
           ? widget.schedule!.backupFolder
           : _getDefaultBackupFolder();
+      _postBackupScriptController.text =
+          widget.schedule!.postBackupScript ?? '';
 
       _parseScheduleConfig(widget.schedule!.scheduleConfig);
     }
@@ -332,6 +335,29 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                         ),
                       const SizedBox(height: 16),
                       _buildScheduleFields(),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Script SQL Pós-Backup (Opcional)'),
+                      const SizedBox(height: 12),
+                      InfoLabel(
+                        label: 'Script SQL',
+                        child: TextBox(
+                          controller: _postBackupScriptController,
+                          placeholder:
+                              'Ex: UPDATE tabela SET status = \'backup_completo\' WHERE id = 1;',
+                          maxLines: 5,
+                          minLines: 3,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      InfoBar(
+                        title: const Text('Informação'),
+                        content: const Text(
+                          'O script será executado na mesma conexão do backup, '
+                          'após o backup ser concluído com sucesso. '
+                          'Erros no script não impedem o backup de ser considerado bem-sucedido.',
+                        ),
+                        severity: InfoBarSeverity.info,
+                      ),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Destinos'),
                       const SizedBox(height: 12),
@@ -976,6 +1002,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       backupType: _backupType,
       compressBackup: _compressBackup,
       enabled: _isEnabled,
+      postBackupScript: _postBackupScriptController.text.trim().isEmpty
+          ? null
+          : _postBackupScriptController.text.trim(),
       lastRunAt: widget.schedule?.lastRunAt,
       nextRunAt: widget.schedule?.nextRunAt,
       createdAt: widget.schedule?.createdAt,

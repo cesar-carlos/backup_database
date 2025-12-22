@@ -67,6 +67,10 @@ Future<void> setupServiceLocator() async {
     () => CompressionService(getIt<ProcessService>()),
   );
 
+  getIt.registerLazySingleton<ISqlScriptExecutionService>(
+    () => SqlScriptExecutionService(getIt<ProcessService>()),
+  );
+
   // Destination Services
   getIt.registerLazySingleton<LocalDestinationService>(
     () => LocalDestinationService(),
@@ -154,6 +158,7 @@ Future<void> setupServiceLocator() async {
       sqlServerBackupService: getIt<ISqlServerBackupService>(),
       sybaseBackupService: getIt<ISybaseBackupService>(),
       compressionService: getIt<ICompressionService>(),
+      sqlScriptExecutionService: getIt<ISqlScriptExecutionService>(),
       notificationService: getIt<NotificationService>(),
     ),
   );

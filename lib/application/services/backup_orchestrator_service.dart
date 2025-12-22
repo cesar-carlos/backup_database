@@ -10,8 +10,11 @@ import '../../domain/entities/schedule.dart';
 import '../../domain/entities/backup_history.dart';
 import '../../domain/entities/backup_log.dart';
 import '../../domain/entities/backup_type.dart';
+import '../../domain/entities/sql_server_config.dart';
+import '../../domain/entities/sybase_config.dart';
 import '../../domain/repositories/repositories.dart';
 import '../../domain/services/i_sql_server_backup_service.dart';
+import '../../domain/services/i_sql_script_execution_service.dart';
 import '../../domain/services/i_sybase_backup_service.dart';
 import '../../domain/services/i_compression_service.dart';
 import '../providers/backup_progress_provider.dart';
@@ -25,6 +28,7 @@ class BackupOrchestratorService {
   final ISqlServerBackupService _sqlServerBackupService;
   final ISybaseBackupService _sybaseBackupService;
   final ICompressionService _compressionService;
+  final ISqlScriptExecutionService _sqlScriptExecutionService;
   final NotificationService _notificationService;
 
   BackupOrchestratorService({
@@ -35,15 +39,17 @@ class BackupOrchestratorService {
     required ISqlServerBackupService sqlServerBackupService,
     required ISybaseBackupService sybaseBackupService,
     required ICompressionService compressionService,
+    required ISqlScriptExecutionService sqlScriptExecutionService,
     required NotificationService notificationService,
-  }) : _sqlServerConfigRepository = sqlServerConfigRepository,
-       _sybaseConfigRepository = sybaseConfigRepository,
-       _backupHistoryRepository = backupHistoryRepository,
-       _backupLogRepository = backupLogRepository,
-       _sqlServerBackupService = sqlServerBackupService,
-       _sybaseBackupService = sybaseBackupService,
-       _compressionService = compressionService,
-       _notificationService = notificationService;
+  })  : _sqlServerConfigRepository = sqlServerConfigRepository,
+        _sybaseConfigRepository = sybaseConfigRepository,
+        _backupHistoryRepository = backupHistoryRepository,
+        _backupLogRepository = backupLogRepository,
+        _sqlServerBackupService = sqlServerBackupService,
+        _sybaseBackupService = sybaseBackupService,
+        _compressionService = compressionService,
+        _sqlScriptExecutionService = sqlScriptExecutionService,
+        _notificationService = notificationService;
 
   Future<rd.Result<BackupHistory>> executeBackup({
     required Schedule schedule,
@@ -257,6 +263,73 @@ class BackupOrchestratorService {
               message: errorMessage,
               originalError: e,
             ),
+          );
+        }
+      }
+
+      // Executar script SQL pós-backup se configurado
+      if (schedule.postBackupScript != null &&
+          schedule.postBackupScript!.trim().isNotEmpty) {
+        await _log(history.id, 'info', 'Executando script SQL pós-backup');
+
+        try {
+          // Obter configuração do banco
+          SqlServerConfig? sqlServerConfig;
+          SybaseConfig? sybaseConfig;
+
+          if (schedule.databaseType == DatabaseType.sqlServer) {
+            final configResult = await _sqlServerConfigRepository.getById(
+              schedule.databaseConfigId,
+            );
+            if (configResult.isSuccess()) {
+              sqlServerConfig = configResult.getOrNull();
+            }
+          } else {
+            final configResult = await _sybaseConfigRepository.getById(
+              schedule.databaseConfigId,
+            );
+            if (configResult.isSuccess()) {
+              sybaseConfig = configResult.getOrNull();
+            }
+          }
+
+          final scriptResult = await _sqlScriptExecutionService.executeScript(
+            databaseType: schedule.databaseType,
+            sqlServerConfig: sqlServerConfig,
+            sybaseConfig: sybaseConfig,
+            script: schedule.postBackupScript!,
+          );
+
+          await scriptResult.fold(
+            (_) async {
+              await _log(history.id, 'info', 'Script SQL executado com sucesso');
+            },
+            (failure) async {
+              final errorMessage = failure is Failure
+                  ? failure.message
+                  : failure.toString();
+              LoggerService.warning(
+                'Erro ao executar script SQL pós-backup: $errorMessage',
+                failure,
+              );
+              await _log(
+                history.id,
+                'warning',
+                'Script SQL pós-backup falhou: $errorMessage',
+              );
+              // Não falha o backup, apenas registra o erro como warning
+            },
+          );
+        } catch (e, stackTrace) {
+          LoggerService.error(
+            'Erro inesperado ao executar script SQL',
+            e,
+            stackTrace,
+          );
+          await _log(
+            history.id,
+            'warning',
+            'Erro ao executar script SQL pós-backup: $e',
           );
         }
       }

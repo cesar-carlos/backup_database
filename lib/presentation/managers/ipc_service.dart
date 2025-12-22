@@ -2,12 +2,15 @@ import 'dart:async';
 import 'dart:io';
 
 import '../../core/utils/logger_service.dart';
+import '../../core/utils/windows_user_service.dart';
 
 /// Serviço de Comunicação Inter-Processos (IPC)
 /// Permite que múltiplas instâncias do aplicativo se comuniquem
 class IpcService {
   static const int _port = 58724; // Porta fixa para IPC local
   static const String _showWindowCommand = 'SHOW_WINDOW';
+  static const String _getUserInfoCommand = 'GET_USER_INFO';
+  static const String _userInfoResponsePrefix = 'USER_INFO:';
   
   ServerSocket? _server;
   Function()? _onShowWindow;
@@ -53,7 +56,7 @@ class IpcService {
     LoggerService.debug('Nova conexão IPC recebida');
     
     socket.listen(
-      (data) {
+      (data) async {
         try {
           final message = String.fromCharCodes(data).trim();
           LoggerService.debug('Mensagem IPC recebida: $message');
@@ -61,6 +64,12 @@ class IpcService {
           if (message == _showWindowCommand) {
             LoggerService.info('Comando SHOW_WINDOW recebido via IPC');
             _onShowWindow?.call();
+          } else if (message == _getUserInfoCommand) {
+            LoggerService.debug('Comando GET_USER_INFO recebido via IPC');
+            final username = WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
+            socket.write('$_userInfoResponsePrefix$username');
+            await socket.flush();
+            LoggerService.debug('Resposta USER_INFO enviada: $username');
           }
         } catch (e) {
           LoggerService.error('Erro ao processar mensagem IPC', e);
@@ -113,6 +122,53 @@ class IpcService {
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Obtém o nome do usuário da instância existente via IPC
+  static Future<String?> getExistingInstanceUser() async {
+    try {
+      final socket = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        _port,
+        timeout: const Duration(seconds: 2),
+      );
+      
+      socket.write(_getUserInfoCommand);
+      await socket.flush();
+      
+      final completer = Completer<String?>();
+      
+      socket.listen(
+        (data) {
+          final message = String.fromCharCodes(data).trim();
+          if (message.startsWith(_userInfoResponsePrefix)) {
+            final username = message.substring(_userInfoResponsePrefix.length);
+            if (!completer.isCompleted) {
+              completer.complete(username);
+            }
+          }
+        },
+        onDone: () {
+          if (!completer.isCompleted) {
+            completer.complete(null);
+          }
+          socket.close();
+        },
+        onError: (e) {
+          if (!completer.isCompleted) {
+            completer.complete(null);
+          }
+        },
+      );
+      
+      return await completer.future.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => null,
+      );
+    } catch (e) {
+      LoggerService.debug('Erro ao obter usuário da instância existente: $e');
+      return null;
     }
   }
 

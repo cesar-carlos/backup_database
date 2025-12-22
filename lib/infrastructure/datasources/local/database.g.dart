@@ -1883,6 +1883,17 @@ class $SchedulesTableTable extends SchedulesTable
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _postBackupScriptMeta = const VerificationMeta(
+    'postBackupScript',
+  );
+  @override
+  late final GeneratedColumn<String> postBackupScript = GeneratedColumn<String>(
+    'post_backup_script',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _lastRunAtMeta = const VerificationMeta(
     'lastRunAt',
   );
@@ -1941,6 +1952,7 @@ class $SchedulesTableTable extends SchedulesTable
     truncateLog,
     compressBackup,
     enabled,
+    postBackupScript,
     lastRunAt,
     nextRunAt,
     createdAt,
@@ -2065,6 +2077,15 @@ class $SchedulesTableTable extends SchedulesTable
         enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
       );
     }
+    if (data.containsKey('post_backup_script')) {
+      context.handle(
+        _postBackupScriptMeta,
+        postBackupScript.isAcceptableOrUnknown(
+          data['post_backup_script']!,
+          _postBackupScriptMeta,
+        ),
+      );
+    }
     if (data.containsKey('last_run_at')) {
       context.handle(
         _lastRunAtMeta,
@@ -2150,6 +2171,10 @@ class $SchedulesTableTable extends SchedulesTable
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
       )!,
+      postBackupScript: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}post_backup_script'],
+      ),
       lastRunAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}last_run_at'],
@@ -2189,6 +2214,7 @@ class SchedulesTableData extends DataClass
   final bool truncateLog;
   final bool compressBackup;
   final bool enabled;
+  final String? postBackupScript;
   final DateTime? lastRunAt;
   final DateTime? nextRunAt;
   final DateTime createdAt;
@@ -2206,6 +2232,7 @@ class SchedulesTableData extends DataClass
     required this.truncateLog,
     required this.compressBackup,
     required this.enabled,
+    this.postBackupScript,
     this.lastRunAt,
     this.nextRunAt,
     required this.createdAt,
@@ -2226,6 +2253,9 @@ class SchedulesTableData extends DataClass
     map['truncate_log'] = Variable<bool>(truncateLog);
     map['compress_backup'] = Variable<bool>(compressBackup);
     map['enabled'] = Variable<bool>(enabled);
+    if (!nullToAbsent || postBackupScript != null) {
+      map['post_backup_script'] = Variable<String>(postBackupScript);
+    }
     if (!nullToAbsent || lastRunAt != null) {
       map['last_run_at'] = Variable<DateTime>(lastRunAt);
     }
@@ -2251,6 +2281,9 @@ class SchedulesTableData extends DataClass
       truncateLog: Value(truncateLog),
       compressBackup: Value(compressBackup),
       enabled: Value(enabled),
+      postBackupScript: postBackupScript == null && nullToAbsent
+          ? const Value.absent()
+          : Value(postBackupScript),
       lastRunAt: lastRunAt == null && nullToAbsent
           ? const Value.absent()
           : Value(lastRunAt),
@@ -2280,6 +2313,7 @@ class SchedulesTableData extends DataClass
       truncateLog: serializer.fromJson<bool>(json['truncateLog']),
       compressBackup: serializer.fromJson<bool>(json['compressBackup']),
       enabled: serializer.fromJson<bool>(json['enabled']),
+      postBackupScript: serializer.fromJson<String?>(json['postBackupScript']),
       lastRunAt: serializer.fromJson<DateTime?>(json['lastRunAt']),
       nextRunAt: serializer.fromJson<DateTime?>(json['nextRunAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -2302,6 +2336,7 @@ class SchedulesTableData extends DataClass
       'truncateLog': serializer.toJson<bool>(truncateLog),
       'compressBackup': serializer.toJson<bool>(compressBackup),
       'enabled': serializer.toJson<bool>(enabled),
+      'postBackupScript': serializer.toJson<String?>(postBackupScript),
       'lastRunAt': serializer.toJson<DateTime?>(lastRunAt),
       'nextRunAt': serializer.toJson<DateTime?>(nextRunAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -2322,6 +2357,7 @@ class SchedulesTableData extends DataClass
     bool? truncateLog,
     bool? compressBackup,
     bool? enabled,
+    Value<String?> postBackupScript = const Value.absent(),
     Value<DateTime?> lastRunAt = const Value.absent(),
     Value<DateTime?> nextRunAt = const Value.absent(),
     DateTime? createdAt,
@@ -2339,6 +2375,9 @@ class SchedulesTableData extends DataClass
     truncateLog: truncateLog ?? this.truncateLog,
     compressBackup: compressBackup ?? this.compressBackup,
     enabled: enabled ?? this.enabled,
+    postBackupScript: postBackupScript.present
+        ? postBackupScript.value
+        : this.postBackupScript,
     lastRunAt: lastRunAt.present ? lastRunAt.value : this.lastRunAt,
     nextRunAt: nextRunAt.present ? nextRunAt.value : this.nextRunAt,
     createdAt: createdAt ?? this.createdAt,
@@ -2376,6 +2415,9 @@ class SchedulesTableData extends DataClass
           ? data.compressBackup.value
           : this.compressBackup,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      postBackupScript: data.postBackupScript.present
+          ? data.postBackupScript.value
+          : this.postBackupScript,
       lastRunAt: data.lastRunAt.present ? data.lastRunAt.value : this.lastRunAt,
       nextRunAt: data.nextRunAt.present ? data.nextRunAt.value : this.nextRunAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -2398,6 +2440,7 @@ class SchedulesTableData extends DataClass
           ..write('truncateLog: $truncateLog, ')
           ..write('compressBackup: $compressBackup, ')
           ..write('enabled: $enabled, ')
+          ..write('postBackupScript: $postBackupScript, ')
           ..write('lastRunAt: $lastRunAt, ')
           ..write('nextRunAt: $nextRunAt, ')
           ..write('createdAt: $createdAt, ')
@@ -2420,6 +2463,7 @@ class SchedulesTableData extends DataClass
     truncateLog,
     compressBackup,
     enabled,
+    postBackupScript,
     lastRunAt,
     nextRunAt,
     createdAt,
@@ -2441,6 +2485,7 @@ class SchedulesTableData extends DataClass
           other.truncateLog == this.truncateLog &&
           other.compressBackup == this.compressBackup &&
           other.enabled == this.enabled &&
+          other.postBackupScript == this.postBackupScript &&
           other.lastRunAt == this.lastRunAt &&
           other.nextRunAt == this.nextRunAt &&
           other.createdAt == this.createdAt &&
@@ -2460,6 +2505,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
   final Value<bool> truncateLog;
   final Value<bool> compressBackup;
   final Value<bool> enabled;
+  final Value<String?> postBackupScript;
   final Value<DateTime?> lastRunAt;
   final Value<DateTime?> nextRunAt;
   final Value<DateTime> createdAt;
@@ -2478,6 +2524,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.truncateLog = const Value.absent(),
     this.compressBackup = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.postBackupScript = const Value.absent(),
     this.lastRunAt = const Value.absent(),
     this.nextRunAt = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2497,6 +2544,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.truncateLog = const Value.absent(),
     this.compressBackup = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.postBackupScript = const Value.absent(),
     this.lastRunAt = const Value.absent(),
     this.nextRunAt = const Value.absent(),
     required DateTime createdAt,
@@ -2524,6 +2572,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Expression<bool>? truncateLog,
     Expression<bool>? compressBackup,
     Expression<bool>? enabled,
+    Expression<String>? postBackupScript,
     Expression<DateTime>? lastRunAt,
     Expression<DateTime>? nextRunAt,
     Expression<DateTime>? createdAt,
@@ -2543,6 +2592,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       if (truncateLog != null) 'truncate_log': truncateLog,
       if (compressBackup != null) 'compress_backup': compressBackup,
       if (enabled != null) 'enabled': enabled,
+      if (postBackupScript != null) 'post_backup_script': postBackupScript,
       if (lastRunAt != null) 'last_run_at': lastRunAt,
       if (nextRunAt != null) 'next_run_at': nextRunAt,
       if (createdAt != null) 'created_at': createdAt,
@@ -2564,6 +2614,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Value<bool>? truncateLog,
     Value<bool>? compressBackup,
     Value<bool>? enabled,
+    Value<String?>? postBackupScript,
     Value<DateTime?>? lastRunAt,
     Value<DateTime?>? nextRunAt,
     Value<DateTime>? createdAt,
@@ -2583,6 +2634,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       truncateLog: truncateLog ?? this.truncateLog,
       compressBackup: compressBackup ?? this.compressBackup,
       enabled: enabled ?? this.enabled,
+      postBackupScript: postBackupScript ?? this.postBackupScript,
       lastRunAt: lastRunAt ?? this.lastRunAt,
       nextRunAt: nextRunAt ?? this.nextRunAt,
       createdAt: createdAt ?? this.createdAt,
@@ -2630,6 +2682,9 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
     }
+    if (postBackupScript.present) {
+      map['post_backup_script'] = Variable<String>(postBackupScript.value);
+    }
     if (lastRunAt.present) {
       map['last_run_at'] = Variable<DateTime>(lastRunAt.value);
     }
@@ -2663,6 +2718,7 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
           ..write('truncateLog: $truncateLog, ')
           ..write('compressBackup: $compressBackup, ')
           ..write('enabled: $enabled, ')
+          ..write('postBackupScript: $postBackupScript, ')
           ..write('lastRunAt: $lastRunAt, ')
           ..write('nextRunAt: $nextRunAt, ')
           ..write('createdAt: $createdAt, ')
@@ -5803,6 +5859,7 @@ typedef $$SchedulesTableTableCreateCompanionBuilder =
       Value<bool> truncateLog,
       Value<bool> compressBackup,
       Value<bool> enabled,
+      Value<String?> postBackupScript,
       Value<DateTime?> lastRunAt,
       Value<DateTime?> nextRunAt,
       required DateTime createdAt,
@@ -5823,6 +5880,7 @@ typedef $$SchedulesTableTableUpdateCompanionBuilder =
       Value<bool> truncateLog,
       Value<bool> compressBackup,
       Value<bool> enabled,
+      Value<String?> postBackupScript,
       Value<DateTime?> lastRunAt,
       Value<DateTime?> nextRunAt,
       Value<DateTime> createdAt,
@@ -5896,6 +5954,11 @@ class $$SchedulesTableTableFilterComposer
 
   ColumnFilters<bool> get enabled => $composableBuilder(
     column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get postBackupScript => $composableBuilder(
+    column: $table.postBackupScript,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5989,6 +6052,11 @@ class $$SchedulesTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get postBackupScript => $composableBuilder(
+    column: $table.postBackupScript,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get lastRunAt => $composableBuilder(
     column: $table.lastRunAt,
     builder: (column) => ColumnOrderings(column),
@@ -6073,6 +6141,11 @@ class $$SchedulesTableTableAnnotationComposer
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
 
+  GeneratedColumn<String> get postBackupScript => $composableBuilder(
+    column: $table.postBackupScript,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get lastRunAt =>
       $composableBuilder(column: $table.lastRunAt, builder: (column) => column);
 
@@ -6135,6 +6208,7 @@ class $$SchedulesTableTableTableManager
                 Value<bool> truncateLog = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<String?> postBackupScript = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
                 Value<DateTime?> nextRunAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -6153,6 +6227,7 @@ class $$SchedulesTableTableTableManager
                 truncateLog: truncateLog,
                 compressBackup: compressBackup,
                 enabled: enabled,
+                postBackupScript: postBackupScript,
                 lastRunAt: lastRunAt,
                 nextRunAt: nextRunAt,
                 createdAt: createdAt,
@@ -6173,6 +6248,7 @@ class $$SchedulesTableTableTableManager
                 Value<bool> truncateLog = const Value.absent(),
                 Value<bool> compressBackup = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<String?> postBackupScript = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
                 Value<DateTime?> nextRunAt = const Value.absent(),
                 required DateTime createdAt,
@@ -6191,6 +6267,7 @@ class $$SchedulesTableTableTableManager
                 truncateLog: truncateLog,
                 compressBackup: compressBackup,
                 enabled: enabled,
+                postBackupScript: postBackupScript,
                 lastRunAt: lastRunAt,
                 nextRunAt: nextRunAt,
                 createdAt: createdAt,
