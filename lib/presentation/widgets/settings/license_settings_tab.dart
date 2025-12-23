@@ -1,8 +1,14 @@
-import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
+
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../application/providers/license_provider.dart';
+import '../../../core/constants/license_features.dart';
+import '../../../core/di/service_locator.dart';
+import '../../../core/utils/clipboard_service.dart';
 import '../../../domain/entities/license.dart';
 import '../../widgets/common/common.dart';
 
@@ -15,11 +21,21 @@ class LicenseSettingsTab extends StatefulWidget {
 
 class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
   final _licenseKeyController = TextEditingController();
-  final bool _isDeveloperMode = false;
+  late final ClipboardService _clipboardService;
+  final ValueNotifier<bool> _isAuthenticatedNotifier = ValueNotifier<bool>(
+    false,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _clipboardService = getIt<ClipboardService>();
+  }
 
   @override
   void dispose() {
     _licenseKeyController.dispose();
+    _isAuthenticatedNotifier.dispose();
     super.dispose();
   }
 
@@ -51,8 +67,26 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                         suffix: IconButton(
                           icon: const Icon(FluentIcons.copy),
                           onPressed: licenseProvider.deviceKey != null
-                              ? () {
-                                  // TODO: Implementar cópia para clipboard
+                              ? () async {
+                                  final success = await _clipboardService
+                                      .copyToClipboard(
+                                        licenseProvider.deviceKey!,
+                                      );
+                                  if (mounted) {
+                                    if (success) {
+                                      MessageModal.showSuccess(
+                                        context,
+                                        message:
+                                            'Chave do dispositivo copiada para clipboard!',
+                                      );
+                                    } else {
+                                      MessageModal.showError(
+                                        context,
+                                        message:
+                                            'Erro ao copiar para clipboard',
+                                      );
+                                    }
+                                  }
                                 }
                               : null,
                         ),
@@ -127,9 +161,9 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                   ],
                 ),
               ),
-              if (_isDeveloperMode) ...[
+              if (kDebugMode) ...[
                 const SizedBox(height: 16),
-                _buildDeveloperMode(context, licenseProvider),
+                _buildLicenseGenerator(context, licenseProvider),
               ],
             ],
           ),
@@ -197,7 +231,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
     );
   }
 
-  Widget _buildDeveloperMode(
+  Widget _buildLicenseGenerator(
     BuildContext context,
     LicenseProvider licenseProvider,
   ) {
@@ -205,15 +239,346 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Modo Desenvolvedor',
-            style: FluentTheme.of(context).typography.subtitle,
+          Row(
+            children: [
+              Text(
+                'Gerador de Licenças',
+                style: FluentTheme.of(context).typography.subtitle,
+              ),
+              const Spacer(),
+              ValueListenableBuilder<bool>(
+                valueListenable: _isAuthenticatedNotifier,
+                builder: (context, isAuthenticated, child) {
+                  if (!isAuthenticated)
+                    return Button(
+                      onPressed: () => _showAuthDialog(context),
+                      child: const Text('Acessar Gerador'),
+                    );
+                  return Button(
+                    onPressed: () =>
+                        _showGeneratorDialog(context, licenseProvider),
+                    child: const Text('Gerar Licença'),
+                  );
+                },
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          // TODO: Implementar gerador de licenças
-          const Text('Gerador de licenças será implementado aqui'),
         ],
       ),
+    );
+  }
+
+  Future<void> _showAuthDialog(BuildContext context) async {
+    final passwordController = TextEditingController();
+    String? errorMessage;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => ContentDialog(
+          title: const Row(
+            children: [
+              Icon(FluentIcons.lock),
+              SizedBox(width: 8),
+              Text('Autenticação'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Digite a senha de administrador para acessar o gerador de licenças:',
+              ),
+              const SizedBox(height: 16),
+              PasswordField(
+                controller: passwordController,
+                label: 'Senha',
+                hint: 'Digite a senha',
+              ),
+              if (errorMessage != null) ...[
+                const SizedBox(height: 16),
+                InfoBar(
+                  severity: InfoBarSeverity.error,
+                  title: const Text('Erro'),
+                  content: Text(errorMessage!),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            CancelButton(
+              onPressed: () {
+                passwordController.dispose();
+                Navigator.pop(dialogContext);
+              },
+            ),
+            Button(
+              onPressed: () {
+                final adminPassword =
+                    dotenv.env['LICENSE_ADMIN_PASSWORD'] ?? '';
+                final enteredPassword = passwordController.text.trim();
+
+                if (enteredPassword.isEmpty) {
+                  setState(() {
+                    errorMessage = 'Senha não pode estar vazia';
+                  });
+                  return;
+                }
+
+                if (enteredPassword == adminPassword) {
+                  passwordController.dispose();
+                  Navigator.pop(dialogContext);
+                  _isAuthenticatedNotifier.value = true;
+                } else {
+                  setState(() {
+                    errorMessage = 'Senha incorreta';
+                  });
+                }
+              },
+              child: const Text('Entrar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showGeneratorDialog(
+    BuildContext context,
+    LicenseProvider licenseProvider,
+  ) async {
+    if (!mounted) return;
+
+    final deviceKeyController = TextEditingController();
+    final generatedLicenseController = TextEditingController();
+    final expiresAtController = TextEditingController();
+    DateTime? selectedExpiresAt;
+    final selectedFeatures = <String>{};
+    bool isLoading = false;
+    String? errorMessage;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => ContentDialog(
+            title: const Row(
+              children: [
+                Icon(FluentIcons.certificate),
+                SizedBox(width: 8),
+                Text('Gerador de Licença'),
+              ],
+            ),
+            content: SizedBox(
+              width: 650,
+              child: SingleChildScrollView(
+                child: Form(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      InfoLabel(
+                        label: 'Chave do Dispositivo',
+                        child: TextBox(
+                          controller: deviceKeyController,
+                          placeholder:
+                              'Digite a chave do dispositivo para gerar a licença',
+                          enabled: !isLoading,
+                        ),
+                      ),
+                      if (licenseProvider.deviceKey != null) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Button(
+                            onPressed: isLoading
+                                ? null
+                                : () {
+                                    setDialogState(() {
+                                      deviceKeyController.text =
+                                          licenseProvider.deviceKey!;
+                                    });
+                                  },
+                            child: const Text('Usar Chave Atual'),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Text(
+                        'Recursos Permitidos',
+                        style: FluentTheme.of(ctx).typography.bodyStrong,
+                      ),
+                      const SizedBox(height: 8),
+                      ...LicenseFeatures.allFeatures.map(
+                        (feature) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Checkbox(
+                            checked: selectedFeatures.contains(feature),
+                            onChanged: isLoading
+                                ? null
+                                : (value) {
+                                    setDialogState(() {
+                                      if (value == true) {
+                                        selectedFeatures.add(feature);
+                                      } else {
+                                        selectedFeatures.remove(feature);
+                                      }
+                                    });
+                                  },
+                            content: Text(feature),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      InfoLabel(
+                        label: 'Data de Expiração (opcional)',
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextBox(
+                                controller: expiresAtController,
+                                placeholder:
+                                    'DD/MM/YYYY ou deixe vazio para licença permanente',
+                                enabled: !isLoading,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Button(
+                              onPressed: isLoading
+                                  ? null
+                                  : () {
+                                      final now = DateTime.now();
+                                      final defaultDate =
+                                          selectedExpiresAt ??
+                                          DateTime(
+                                            now.year,
+                                            now.month,
+                                            now.day,
+                                          ).add(const Duration(days: 30));
+                                      setDialogState(() {
+                                        selectedExpiresAt = defaultDate;
+                                        expiresAtController.text = DateFormat(
+                                          'dd/MM/yyyy',
+                                        ).format(defaultDate);
+                                      });
+                                    },
+                              child: const Icon(FluentIcons.calendar),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 16),
+                        InfoBar(
+                          severity: InfoBarSeverity.error,
+                          title: const Text('Erro'),
+                          content: Text(errorMessage!),
+                        ),
+                      ],
+                      if (generatedLicenseController.text.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        InfoLabel(
+                          label: 'Licença Gerada',
+                          child: TextBox(
+                            controller: generatedLicenseController,
+                            maxLines: 5,
+                            readOnly: true,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Button(
+                          onPressed: () async {
+                            final success = await _clipboardService
+                                .copyToClipboard(
+                                  generatedLicenseController.text,
+                                );
+                            if (success) {
+                              setDialogState(() {
+                                errorMessage = null;
+                              });
+                              MessageModal.showSuccess(
+                                ctx,
+                                message: 'Licença copiada para clipboard!',
+                              );
+                            } else {
+                              setDialogState(() {
+                                errorMessage = 'Erro ao copiar para clipboard';
+                              });
+                            }
+                          },
+                          child: const Text('Copiar Licença'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              CancelButton(
+                onPressed: isLoading
+                    ? null
+                    : () {
+                        Navigator.pop(dialogContext);
+                        deviceKeyController.dispose();
+                        generatedLicenseController.dispose();
+                        expiresAtController.dispose();
+                      },
+              ),
+              Button(
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        final deviceKey = deviceKeyController.text.trim();
+
+                        if (deviceKey.isEmpty) {
+                          setDialogState(() {
+                            errorMessage = 'Chave do dispositivo é obrigatória';
+                          });
+                          return;
+                        }
+
+                        if (selectedFeatures.isEmpty) {
+                          setDialogState(() {
+                            errorMessage = 'Selecione pelo menos um recurso';
+                          });
+                          return;
+                        }
+
+                        setDialogState(() {
+                          isLoading = true;
+                          errorMessage = null;
+                        });
+
+                        final licenseKey = await licenseProvider
+                            .generateLicense(
+                              deviceKey: deviceKey,
+                              expiresAt: selectedExpiresAt,
+                              allowedFeatures: selectedFeatures.toList(),
+                            );
+
+                        setDialogState(() {
+                          isLoading = false;
+                          if (licenseKey != null) {
+                            generatedLicenseController.text = licenseKey;
+                            errorMessage = null;
+                          } else {
+                            errorMessage =
+                                licenseProvider.error ??
+                                'Erro ao gerar licença';
+                          }
+                        });
+                      },
+                child: isLoading
+                    ? const ProgressRing(strokeWidth: 2)
+                    : const Text('Gerar Licença'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

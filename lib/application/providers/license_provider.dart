@@ -23,10 +23,10 @@ class LicenseProvider extends ChangeNotifier {
     required LicenseGenerationService generationService,
     required ILicenseRepository licenseRepository,
     required IDeviceKeyService deviceKeyService,
-  })  : _validationService = validationService,
-        _generationService = generationService,
-        _licenseRepository = licenseRepository,
-        _deviceKeyService = deviceKeyService {
+  }) : _validationService = validationService,
+       _generationService = generationService,
+       _licenseRepository = licenseRepository,
+       _deviceKeyService = deviceKeyService {
     loadDeviceKey();
     loadLicense();
   }
@@ -35,7 +35,8 @@ class LicenseProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get deviceKey => _deviceKey;
-  bool get hasValidLicense => _currentLicense != null && _currentLicense!.isValid;
+  bool get hasValidLicense =>
+      _currentLicense != null && _currentLicense!.isValid;
 
   Future<void> loadDeviceKey() async {
     try {
@@ -155,10 +156,7 @@ class LicenseProvider extends ChangeNotifier {
   Future<bool> isFeatureAllowed(String feature) async {
     try {
       final result = await _validationService.isFeatureAllowed(feature);
-      return result.fold(
-        (allowed) => allowed,
-        (_) => false,
-      );
+      return result.fold((allowed) => allowed, (_) => false);
     } catch (e) {
       return false;
     }
@@ -173,5 +171,46 @@ class LicenseProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
-}
 
+  Future<String?> generateLicense({
+    required String deviceKey,
+    DateTime? expiresAt,
+    required List<String> allowedFeatures,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final generateResult = await _generationService.generateLicenseKey(
+        deviceKey: deviceKey,
+        expiresAt: expiresAt,
+        allowedFeatures: allowedFeatures,
+      );
+
+      return generateResult.fold(
+        (licenseKey) {
+          _isLoading = false;
+          _error = null;
+          notifyListeners();
+          return licenseKey;
+        },
+        (failure) {
+          if (failure is core.Failure) {
+            _error = failure.message;
+          } else {
+            _error = failure.toString();
+          }
+          _isLoading = false;
+          notifyListeners();
+          return null;
+        },
+      );
+    } catch (e) {
+      _error = 'Erro ao gerar licença: $e';
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+}

@@ -8,9 +8,10 @@ import '../../core/utils/logger_service.dart';
 import '../../domain/entities/license.dart';
 
 class LicenseGenerationService {
-  LicenseGenerationService();
+  final String _secretKey;
 
-  static const String _secretKey = 'BACKUP_DATABASE_LICENSE_SECRET_2024';
+  LicenseGenerationService({required String secretKey})
+    : _secretKey = secretKey;
 
   Future<rd.Result<String>> generateLicenseKey({
     required String deviceKey,
@@ -32,10 +33,7 @@ class LicenseGenerationService {
       final hmac = Hmac(sha256, keyBytes);
       final digest = hmac.convert(bytes);
 
-      final licenseData = {
-        'data': data,
-        'signature': digest.toString(),
-      };
+      final licenseData = {'data': data, 'signature': digest.toString()};
 
       final licenseJson = jsonEncode(licenseData);
       final licenseBytes = utf8.encode(licenseJson);
@@ -43,11 +41,7 @@ class LicenseGenerationService {
 
       return rd.Success(licenseBase64);
     } catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao gerar chave de licença',
-        e,
-        stackTrace,
-      );
+      LoggerService.error('Erro ao gerar chave de licença', e, stackTrace);
       return rd.Failure(
         core.ServerFailure(
           message: 'Erro ao gerar chave de licença: $e',
@@ -57,11 +51,61 @@ class LicenseGenerationService {
     }
   }
 
-  Future<rd.Result<Map<String, dynamic>>> decodeLicenseKey(String licenseKey) async {
+  Future<rd.Result<Map<String, dynamic>>> decodeLicenseKey(
+    String licenseKey,
+  ) async {
     try {
-      final licenseBytes = base64.decode(licenseKey);
+      // Validar se a chave não está vazia
+      final trimmedKey = licenseKey.trim();
+      if (trimmedKey.isEmpty) {
+        return rd.Failure(
+          core.ValidationFailure(
+            message: 'Chave de licença não pode estar vazia',
+          ),
+        );
+      }
+
+      // Tentar decodificar base64
+      List<int> licenseBytes;
+      try {
+        licenseBytes = base64.decode(trimmedKey);
+      } catch (e) {
+        return rd.Failure(
+          core.ValidationFailure(
+            message: 'Chave de licença inválida. Formato base64 incorreto.',
+          ),
+        );
+      }
+
+      // Validar se há bytes decodificados
+      if (licenseBytes.isEmpty) {
+        return rd.Failure(
+          core.ValidationFailure(
+            message: 'Chave de licença vazia após decodificação',
+          ),
+        );
+      }
+
+      // Decodificar JSON
       final licenseJson = utf8.decode(licenseBytes);
-      final licenseData = jsonDecode(licenseJson) as Map<String, dynamic>;
+      if (licenseJson.trim().isEmpty) {
+        return rd.Failure(
+          core.ValidationFailure(
+            message: 'Chave de licença contém dados vazios',
+          ),
+        );
+      }
+
+      Map<String, dynamic> licenseData;
+      try {
+        licenseData = jsonDecode(licenseJson) as Map<String, dynamic>;
+      } catch (e) {
+        return rd.Failure(
+          core.ValidationFailure(
+            message: 'Chave de licença inválida. Formato JSON incorreto.',
+          ),
+        );
+      }
 
       final data = licenseData['data'] as Map<String, dynamic>;
       final signature = licenseData['signature'] as String;
@@ -88,9 +132,9 @@ class LicenseGenerationService {
         stackTrace,
       );
       return rd.Failure(
-        core.ServerFailure(
-          message: 'Erro ao decodificar chave de licença: $e',
-          originalError: e,
+        core.ValidationFailure(
+          message:
+              'Erro ao processar chave de licença. Verifique se a chave está correta.',
         ),
       );
     }
@@ -102,36 +146,33 @@ class LicenseGenerationService {
   }) async {
     try {
       final decodeResult = await decodeLicenseKey(licenseKey);
-      return decodeResult.fold(
-        (data) {
-          if (data['deviceKey'] as String != deviceKey) {
-            return rd.Failure(
-              core.ValidationFailure(
-                message: 'Chave de licença não corresponde ao dispositivo',
-              ),
-            );
-          }
-
-          final expiresAtStr = data['expiresAt'] as String?;
-          final expiresAt = expiresAtStr != null
-              ? DateTime.parse(expiresAtStr)
-              : null;
-
-          final allowedFeatures = (data['allowedFeatures'] as List)
-              .cast<String>()
-              .toList();
-
-          final license = License(
-            deviceKey: deviceKey,
-            licenseKey: licenseKey,
-            expiresAt: expiresAt,
-            allowedFeatures: allowedFeatures,
+      return decodeResult.fold((data) {
+        if (data['deviceKey'] as String != deviceKey) {
+          return rd.Failure(
+            core.ValidationFailure(
+              message: 'Chave de licença não corresponde ao dispositivo',
+            ),
           );
+        }
 
-          return rd.Success(license);
-        },
-        (failure) => rd.Failure(failure),
-      );
+        final expiresAtStr = data['expiresAt'] as String?;
+        final expiresAt = expiresAtStr != null
+            ? DateTime.parse(expiresAtStr)
+            : null;
+
+        final allowedFeatures = (data['allowedFeatures'] as List)
+            .cast<String>()
+            .toList();
+
+        final license = License(
+          deviceKey: deviceKey,
+          licenseKey: licenseKey,
+          expiresAt: expiresAt,
+          allowedFeatures: allowedFeatures,
+        );
+
+        return rd.Success(license);
+      }, (failure) => rd.Failure(failure));
     } catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao criar licença a partir da chave',
@@ -147,4 +188,3 @@ class LicenseGenerationService {
     }
   }
 }
-

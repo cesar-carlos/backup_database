@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 
 import '../utils/logger_service.dart';
+import '../utils/clipboard_service.dart';
 import '../../infrastructure/http/api_client.dart';
 import '../../infrastructure/datasources/local/database.dart';
 import '../../domain/repositories/repositories.dart';
@@ -17,6 +19,7 @@ final getIt = GetIt.instance;
 Future<void> setupServiceLocator() async {
   // Core
   getIt.registerLazySingleton<LoggerService>(() => LoggerService());
+  getIt.registerLazySingleton<ClipboardService>(() => ClipboardService());
 
   // HTTP Client
   getIt.registerLazySingleton<Dio>(() => Dio());
@@ -55,9 +58,7 @@ Future<void> setupServiceLocator() async {
   );
 
   // System Services
-  getIt.registerLazySingleton<IDeviceKeyService>(
-    () => DeviceKeyService(),
-  );
+  getIt.registerLazySingleton<IDeviceKeyService>(() => DeviceKeyService());
 
   // License Services
   getIt.registerLazySingleton<ILicenseValidationService>(
@@ -66,9 +67,17 @@ Future<void> setupServiceLocator() async {
       deviceKeyService: getIt<IDeviceKeyService>(),
     ),
   );
-  getIt.registerLazySingleton<LicenseGenerationService>(
-    () => LicenseGenerationService(),
-  );
+  getIt.registerLazySingleton<LicenseGenerationService>(() {
+    final secretKey =
+        dotenv.env['LICENSE_SECRET_KEY'] ??
+        'BACKUP_DATABASE_LICENSE_SECRET_2024';
+    if (secretKey.isEmpty) {
+      LoggerService.warning(
+        'LICENSE_SECRET_KEY não configurada no .env, usando fallback',
+      );
+    }
+    return LicenseGenerationService(secretKey: secretKey);
+  });
 
   // Process Services
   getIt.registerLazySingleton<ProcessService>(() => ProcessService());
