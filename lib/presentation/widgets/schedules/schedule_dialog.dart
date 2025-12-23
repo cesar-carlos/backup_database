@@ -1013,30 +1013,41 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       children: _destinations.map((destination) {
         final isSelected = _selectedDestinationIds.contains(destination.id);
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: Icon(_getDestinationIcon(destination.type)),
-            title: Text(destination.name),
-            subtitle: Text(
-              _getDestinationTypeName(destination.type),
-              style: FluentTheme.of(context).typography.caption,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
-            trailing: Checkbox(
-              checked: isSelected,
-              onChanged: (value) {
-                setState(() {
-                  if (value == true) {
-                    _selectedDestinationIds.add(destination.id);
-                  } else {
-                    _selectedDestinationIds.remove(destination.id);
-                  }
-                });
-              },
-            ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(_getDestinationIcon(destination.type), size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      destination.name,
+                      style: FluentTheme.of(context).typography.body,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _getDestinationTypeName(destination.type),
+                      style: FluentTheme.of(context).typography.caption,
+                    ),
+                  ],
+                ),
+              ),
+              Checkbox(
+                checked: isSelected,
+                onChanged: (value) {
+                  setState(() {
+                    if (value == true) {
+                      _selectedDestinationIds.add(destination.id);
+                    } else {
+                      _selectedDestinationIds.remove(destination.id);
+                    }
+                  });
+                },
+              ),
+            ],
           ),
         );
       }).toList(),
