@@ -2,10 +2,13 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/constants/license_features.dart';
 import '../../../application/providers/google_auth_provider.dart';
 import '../../../application/providers/dropbox_auth_provider.dart';
+import '../../../application/providers/license_provider.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../core/errors/failure.dart';
 import '../../../domain/entities/backup_destination.dart';
@@ -159,6 +162,38 @@ class _DestinationDialogState extends State<DestinationDialog> {
             children: [
               _buildTypeSelector(),
               const SizedBox(height: 16),
+              Consumer<LicenseProvider>(
+                builder: (context, licenseProvider, child) {
+                  final hasGoogleDrive = licenseProvider.hasValidLicense &&
+                      licenseProvider.currentLicense!.hasFeature(LicenseFeatures.googleDrive);
+                  final hasDropbox = licenseProvider.hasValidLicense &&
+                      licenseProvider.currentLicense!.hasFeature(LicenseFeatures.dropbox);
+                  
+                  final isGoogleDriveBlocked = _selectedType == DestinationType.googleDrive && !hasGoogleDrive;
+                  final isDropboxBlocked = _selectedType == DestinationType.dropbox && !hasDropbox;
+                  
+                  if (isGoogleDriveBlocked || isDropboxBlocked) {
+                    return InfoBar(
+                      severity: InfoBarSeverity.warning,
+                      title: const Text('Recurso Bloqueado'),
+                      content: const Text(
+                        'Este destino requer uma licença válida. '
+                        'Acesse Configurações > Licenciamento para mais informações.',
+                      ),
+                      action: Button(
+                        child: const Text('Ver Licenciamento'),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          // Navegação será feita pelo contexto pai após fechar o diálogo
+                        },
+                      ),
+                    );
+                  }
+                  
+                  return const SizedBox.shrink();
+                },
+              ),
+              const SizedBox(height: 16),
               _buildNameField(),
               const SizedBox(height: 16),
               _buildTypeSpecificFields(),
@@ -182,31 +217,98 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildTypeSelector() {
-    return AppDropdown<DestinationType>(
-      label: 'Tipo de Destino',
-      value: _selectedType,
-      placeholder: const Text('Tipo de Destino'),
-      items: DestinationType.values.map((type) {
-        return ComboBoxItem<DestinationType>(
-          value: type,
-          child: Row(
-            children: [
-              Icon(_getTypeIcon(type), size: 20),
-              const SizedBox(width: 8),
-              Text(_getTypeName(type)),
-            ],
-          ),
+    return Consumer<LicenseProvider>(
+      builder: (context, licenseProvider, child) {
+        final hasGoogleDrive = licenseProvider.hasValidLicense &&
+            licenseProvider.currentLicense!.hasFeature(LicenseFeatures.googleDrive);
+        final hasDropbox = licenseProvider.hasValidLicense &&
+            licenseProvider.currentLicense!.hasFeature(LicenseFeatures.dropbox);
+        
+        return AppDropdown<DestinationType>(
+          label: 'Tipo de Destino',
+          value: _selectedType,
+          placeholder: const Text('Tipo de Destino'),
+          items: DestinationType.values.map((type) {
+            final isGoogleDriveBlocked = type == DestinationType.googleDrive && !hasGoogleDrive;
+            final isDropboxBlocked = type == DestinationType.dropbox && !hasDropbox;
+            final isBlocked = isGoogleDriveBlocked || isDropboxBlocked;
+            
+            return ComboBoxItem<DestinationType>(
+              value: type,
+              enabled: !isBlocked,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    _getTypeIcon(type),
+                    size: 20,
+                    color: isBlocked
+                        ? FluentTheme.of(context).resources.controlStrokeColorDefault.withValues(alpha: 0.4)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            isBlocked
+                                ? '${_getTypeName(type)} (Requer licença)'
+                                : _getTypeName(type),
+                            textAlign: TextAlign.start,
+                            style: TextStyle(
+                              color: isBlocked
+                                  ? FluentTheme.of(context)
+                                      .resources
+                                      .controlStrokeColorDefault
+                                      .withValues(alpha: 0.4)
+                                  : null,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isBlocked) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            FluentIcons.lock,
+                            size: 16,
+                            color: FluentTheme.of(context)
+                                .resources
+                                .controlStrokeColorDefault
+                                .withValues(alpha: 0.4),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: isEditing
+              ? null
+              : (value) {
+                  if (value != null) {
+                    final isGoogleDriveBlocked = value == DestinationType.googleDrive && !hasGoogleDrive;
+                    final isDropboxBlocked = value == DestinationType.dropbox && !hasDropbox;
+                    
+                    if (isGoogleDriveBlocked || isDropboxBlocked) {
+                      MessageModal.showWarning(
+                        context,
+                        message: 'Este destino requer uma licença válida. '
+                            'Acesse Configurações > Licenciamento para mais informações.',
+                      );
+                      return;
+                    }
+                    
+                    setState(() {
+                      _selectedType = value;
+                    });
+                  }
+                },
         );
-      }).toList(),
-      onChanged: isEditing
-          ? null
-          : (value) {
-              if (value != null) {
-                setState(() {
-                  _selectedType = value;
-                });
-              }
-            },
+      },
     );
   }
 

@@ -21,6 +21,7 @@ part 'database.g.dart';
     BackupHistoryTable,
     BackupLogsTable,
     EmailConfigsTable,
+    LicensesTable,
   ],
   daos: [
     SqlServerConfigDao,
@@ -31,13 +32,14 @@ part 'database.g.dart';
     BackupHistoryDao,
     BackupLogDao,
     EmailConfigDao,
+    LicenseDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration {
@@ -436,6 +438,29 @@ class AppDatabase extends _$AppDatabase {
           } catch (e, stackTrace) {
             LoggerService.warning(
               'Erro ao verificar/adicionar coluna compression_format',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 13) {
+          // Migração para versão 13: criar tabela licenses_table
+          try {
+            final tables = await (customSelect(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name='licenses_table'",
+            ).get());
+            final hasTable = tables.isNotEmpty;
+
+            if (!hasTable) {
+              await m.createTable(licensesTable);
+              LoggerService.info(
+                'Migração v13: Tabela licenses_table criada com sucesso',
+              );
+            }
+          } catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v13 para licenses_table',
               e,
               stackTrace,
             );

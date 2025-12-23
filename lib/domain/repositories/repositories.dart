@@ -2,6 +2,7 @@ export 'i_backup_destination_repository.dart';
 export 'i_backup_history_repository.dart';
 export 'i_backup_log_repository.dart';
 export 'i_email_config_repository.dart';
+export 'i_license_repository.dart';
 export 'i_postgres_config_repository.dart';
 export 'i_schedule_repository.dart';
 export 'i_sql_server_config_repository.dart';

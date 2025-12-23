@@ -422,6 +422,7 @@ class BackupDatabaseApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => getIt<BackupProgressProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<DashboardProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<AutoUpdateProvider>()),
+        ChangeNotifierProvider(create: (_) => getIt<LicenseProvider>()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

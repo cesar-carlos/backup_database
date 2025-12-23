@@ -1,7 +1,11 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../application/providers/license_provider.dart';
 import '../../application/providers/notification_provider.dart';
+import '../../core/constants/license_features.dart';
+import '../../core/constants/route_names.dart';
 import '../../domain/entities/email_config.dart';
 import '../widgets/common/common.dart';
 
@@ -144,8 +148,45 @@ class _NotificationsPageState extends State<NotificationsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Consumer<NotificationProvider>(
-              builder: (context, provider, child) {
+            Consumer<LicenseProvider>(
+              builder: (context, licenseProvider, child) {
+                final hasEmailNotification =
+                    licenseProvider.hasValidLicense &&
+                    licenseProvider.currentLicense!.hasFeature(
+                      LicenseFeatures.emailNotification,
+                    );
+
+                if (!hasEmailNotification) {
+                  return AppCard(
+                    child: InfoBar(
+                      severity: InfoBarSeverity.warning,
+                      title: const Text('Recurso Requer Licença'),
+                      content: const Text(
+                        'As notificações por e-mail são um recurso premium. '
+                        'É necessária uma licença válida com permissão para este recurso.',
+                      ),
+                      action: Button(
+                        child: const Text('Ver Licenciamento'),
+                        onPressed: () {
+                          context.go(RouteNames.settings);
+                        },
+                      ),
+                    ),
+                  );
+                }
+
+                return const SizedBox.shrink();
+              },
+            ),
+            const SizedBox(height: 16),
+            Consumer2<NotificationProvider, LicenseProvider>(
+              builder: (context, provider, licenseProvider, child) {
+                final hasEmailNotification =
+                    licenseProvider.hasValidLicense &&
+                    licenseProvider.currentLicense!.hasFeature(
+                      LicenseFeatures.emailNotification,
+                    );
+
                 return AppCard(
                   child: Form(
                     key: _formKey,
@@ -156,6 +197,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           controller: _smtpServerController,
                           label: 'Servidor SMTP',
                           hint: 'smtp.exemplo.com',
+                          enabled: hasEmailNotification,
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Servidor SMTP é obrigatório';
@@ -171,6 +213,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           prefixIcon: FluentIcons.number_field,
                           minValue: 1,
                           maxValue: 65535,
+                          enabled: hasEmailNotification,
                         ),
                         const SizedBox(height: 16),
                         AppTextField(
@@ -178,6 +221,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           label: 'E-mail',
                           keyboardType: TextInputType.emailAddress,
                           hint: 'seu-email@exemplo.com',
+                          enabled: hasEmailNotification,
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'E-mail é obrigatório';
@@ -193,6 +237,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           controller: _passwordController,
                           label: 'Senha',
                           hint: 'Senha do e-mail',
+                          enabled: hasEmailNotification,
                         ),
                         const SizedBox(height: 16),
                         AppTextField(
@@ -200,6 +245,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           label: 'E-mail de Destino',
                           keyboardType: TextInputType.emailAddress,
                           hint: 'destino@exemplo.com',
+                          enabled: hasEmailNotification,
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'E-mail de destino é obrigatório';
@@ -223,11 +269,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           label: 'Notificar em caso de sucesso',
                           child: ToggleSwitch(
                             checked: _notifyOnSuccess,
-                            onChanged: (value) {
-                              setState(() {
-                                _notifyOnSuccess = value;
-                              });
-                            },
+                            onChanged: hasEmailNotification
+                                ? (value) {
+                                    setState(() {
+                                      _notifyOnSuccess = value;
+                                    });
+                                  }
+                                : null,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -235,11 +283,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           label: 'Notificar em caso de erro',
                           child: ToggleSwitch(
                             checked: _notifyOnError,
-                            onChanged: (value) {
-                              setState(() {
-                                _notifyOnError = value;
-                              });
-                            },
+                            onChanged: hasEmailNotification
+                                ? (value) {
+                                    setState(() {
+                                      _notifyOnError = value;
+                                    });
+                                  }
+                                : null,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -255,11 +305,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           label: 'Incluir detalhamento/logs no e-mail',
                           child: ToggleSwitch(
                             checked: _attachLog,
-                            onChanged: (value) {
-                              setState(() {
-                                _attachLog = value;
-                              });
-                            },
+                            onChanged: hasEmailNotification
+                                ? (value) {
+                                    setState(() {
+                                      _attachLog = value;
+                                    });
+                                  }
+                                : null,
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -273,7 +325,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                       : 'Testar Conexão',
                                   icon: FluentIcons.network_tower,
                                   isLoading: provider.isTesting,
-                                  onPressed: provider.isTesting
+                                  onPressed:
+                                      (provider.isTesting ||
+                                          !hasEmailNotification)
                                       ? null
                                       : () async {
                                           final success = await provider
@@ -303,8 +357,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                             Consumer<NotificationProvider>(
                               builder: (context, provider, child) {
                                 return SaveButton(
-                                  onPressed: _saveConfig,
+                                  onPressed: hasEmailNotification
+                                      ? _saveConfig
+                                      : null,
                                   isLoading: provider.isLoading,
+                                  isEditing: true,
                                 );
                               },
                             ),

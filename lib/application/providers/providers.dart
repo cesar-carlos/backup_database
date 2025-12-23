@@ -1,4 +1,5 @@
 export 'log_provider.dart';
+export 'license_provider.dart';
 export 'scheduler_provider.dart';
 export 'notification_provider.dart';
 export 'postgres_config_provider.dart';

@@ -50,6 +50,25 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<IEmailConfigRepository>(
     () => EmailConfigRepository(getIt<AppDatabase>()),
   );
+  getIt.registerLazySingleton<ILicenseRepository>(
+    () => LicenseRepository(getIt<AppDatabase>()),
+  );
+
+  // System Services
+  getIt.registerLazySingleton<IDeviceKeyService>(
+    () => DeviceKeyService(),
+  );
+
+  // License Services
+  getIt.registerLazySingleton<ILicenseValidationService>(
+    () => LicenseValidationService(
+      licenseRepository: getIt<ILicenseRepository>(),
+      deviceKeyService: getIt<IDeviceKeyService>(),
+    ),
+  );
+  getIt.registerLazySingleton<LicenseGenerationService>(
+    () => LicenseGenerationService(),
+  );
 
   // Process Services
   getIt.registerLazySingleton<ProcessService>(() => ProcessService());
@@ -301,5 +320,14 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerFactory<AutoUpdateProvider>(
     () => AutoUpdateProvider(autoUpdateService: getIt<AutoUpdateService>()),
+  );
+
+  getIt.registerFactory<LicenseProvider>(
+    () => LicenseProvider(
+      validationService: getIt<ILicenseValidationService>(),
+      generationService: getIt<LicenseGenerationService>(),
+      licenseRepository: getIt<ILicenseRepository>(),
+      deviceKeyService: getIt<IDeviceKeyService>(),
+    ),
   );
 }

@@ -6,6 +6,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/core.dart';
+import '../../../core/constants/license_features.dart';
 import '../../../application/providers/providers.dart';
 import '../../../domain/entities/backup_type.dart';
 import '../../../domain/entities/compression_format.dart';
@@ -192,20 +193,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
   }
 
-  List<BackupType> _getAvailableBackupTypes() {
-    if (_databaseType == DatabaseType.sybase) {
-      return const [BackupType.full, BackupType.log];
-    }
-    if (_databaseType == DatabaseType.postgresql) {
-      return const [
-        BackupType.full,
-        BackupType.fullSingle,
-        BackupType.differential,
-        BackupType.log,
-      ];
-    }
-    return BackupType.values;
-  }
 
   @override
   void dispose() {
@@ -326,23 +313,126 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           const SizedBox(height: 24),
           _buildSectionTitle('Tipo de Backup'),
           const SizedBox(height: 12),
-          AppDropdown<BackupType>(
-            label: 'Tipo de Backup',
-            value: _backupType,
-            placeholder: const Text('Tipo de Backup'),
-            items: _getAvailableBackupTypes().map((type) {
-              return ComboBoxItem<BackupType>(
-                value: type,
-                child: Text(type.displayName),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _backupType = value;
-                  _onBackupTypeChanged();
-                });
+          Consumer<LicenseProvider>(
+            builder: (context, licenseProvider, child) {
+              final hasDifferential =
+                  licenseProvider.hasValidLicense &&
+                  licenseProvider.currentLicense!.hasFeature(
+                    LicenseFeatures.differentialBackup,
+                  );
+              final hasLog =
+                  licenseProvider.hasValidLicense &&
+                  licenseProvider.currentLicense!.hasFeature(
+                    LicenseFeatures.logBackup,
+                  );
+
+              List<BackupType> allTypes;
+              if (_databaseType == DatabaseType.sybase) {
+                allTypes = [BackupType.full, BackupType.log];
+              } else if (_databaseType == DatabaseType.postgresql) {
+                allTypes = [
+                  BackupType.full,
+                  BackupType.fullSingle,
+                  BackupType.differential,
+                  BackupType.log,
+                ];
+              } else {
+                allTypes = [
+                  BackupType.full,
+                  BackupType.fullSingle,
+                  BackupType.differential,
+                  BackupType.log,
+                ];
               }
+
+              return AppDropdown<BackupType>(
+                label: 'Tipo de Backup',
+                value: _backupType,
+                placeholder: const Text('Tipo de Backup'),
+                items: allTypes.map((type) {
+                  final isDifferentialBlocked = type == BackupType.differential &&
+                      !hasDifferential;
+                  final isLogBlocked = type == BackupType.log && !hasLog;
+                  final isBlocked = isDifferentialBlocked || isLogBlocked;
+
+                  return ComboBoxItem<BackupType>(
+                    value: type,
+                    enabled: !isBlocked,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  isBlocked
+                                      ? '${type.displayName} (Requer licença)'
+                                      : type.displayName,
+                                  textAlign: TextAlign.start,
+                                  style: TextStyle(
+                                    color: isBlocked
+                                        ? FluentTheme.of(context)
+                                            .resources
+                                            .controlStrokeColorDefault
+                                            .withValues(alpha: 0.4)
+                                        : null,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isBlocked) ...[
+                                const SizedBox(width: 8),
+                                Icon(
+                                  FluentIcons.lock,
+                                  size: 16,
+                                  color: FluentTheme.of(context)
+                                      .resources
+                                      .controlStrokeColorDefault
+                                      .withValues(alpha: 0.4),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    final hasDifferential =
+                        licenseProvider.hasValidLicense &&
+                        licenseProvider.currentLicense!.hasFeature(
+                          LicenseFeatures.differentialBackup,
+                        );
+                    final hasLog =
+                        licenseProvider.hasValidLicense &&
+                        licenseProvider.currentLicense!.hasFeature(
+                          LicenseFeatures.logBackup,
+                        );
+
+                    final isDifferentialBlocked = value == BackupType.differential &&
+                        !hasDifferential;
+                    final isLogBlocked = value == BackupType.log && !hasLog;
+
+                    if (isDifferentialBlocked || isLogBlocked) {
+                      MessageModal.showWarning(
+                        context,
+                        message: 'Este tipo de backup requer uma licença válida. '
+                            'Acesse Configurações > Licenciamento para mais informações.',
+                      );
+                      return;
+                    }
+
+                    setState(() {
+                      _backupType = value;
+                      _onBackupTypeChanged();
+                    });
+                  }
+                },
+              );
             },
           ),
           const SizedBox(height: 8),
@@ -353,22 +443,90 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           const SizedBox(height: 24),
           _buildSectionTitle('Agendamento'),
           const SizedBox(height: 12),
-          AppDropdown<ScheduleType>(
-            label: 'Frequência',
-            value: _scheduleType,
-            placeholder: const Text('Frequência'),
-            items: ScheduleType.values.map((type) {
-              return ComboBoxItem<ScheduleType>(
-                value: type,
-                child: Text(_getScheduleTypeName(type)),
+          Consumer<LicenseProvider>(
+            builder: (context, licenseProvider, child) {
+              final hasInterval =
+                  licenseProvider.hasValidLicense &&
+                  licenseProvider.currentLicense!.hasFeature(
+                    LicenseFeatures.intervalSchedule,
+                  );
+
+              return AppDropdown<ScheduleType>(
+                label: 'Frequência',
+                value: _scheduleType,
+                placeholder: const Text('Frequência'),
+                items: ScheduleType.values.map((type) {
+                  final isIntervalBlocked =
+                      type == ScheduleType.interval && !hasInterval;
+
+                  return ComboBoxItem<ScheduleType>(
+                    value: type,
+                    enabled: !isIntervalBlocked,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  isIntervalBlocked
+                                      ? '${_getScheduleTypeName(type)} (Requer licença)'
+                                      : _getScheduleTypeName(type),
+                                  textAlign: TextAlign.start,
+                                  style: TextStyle(
+                                    color: isIntervalBlocked
+                                        ? FluentTheme.of(context)
+                                            .resources
+                                            .controlStrokeColorDefault
+                                            .withValues(alpha: 0.4)
+                                        : null,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isIntervalBlocked) ...[
+                                const SizedBox(width: 8),
+                                Icon(
+                                  FluentIcons.lock,
+                                  size: 16,
+                                  color: FluentTheme.of(context)
+                                      .resources
+                                      .controlStrokeColorDefault
+                                      .withValues(alpha: 0.4),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    final hasInterval =
+                        licenseProvider.hasValidLicense &&
+                        licenseProvider.currentLicense!.hasFeature(
+                          LicenseFeatures.intervalSchedule,
+                        );
+
+                    if (value == ScheduleType.interval && !hasInterval) {
+                      MessageModal.showWarning(
+                        context,
+                        message: 'Agendamento por intervalo requer uma licença válida. '
+                            'Acesse Configurações > Licenciamento para mais informações.',
+                      );
+                      return;
+                    }
+
+                    setState(() {
+                      _scheduleType = value;
+                    });
+                  }
+                },
               );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _scheduleType = value;
-                });
-              }
             },
           ),
           const SizedBox(height: 16),
@@ -527,22 +685,61 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           ),
           const SizedBox(height: 16),
         ],
-        _buildCheckboxWithInfo(
-          label: 'Verify After Backup',
-          value: _verifyAfterBackup,
-          onChanged: (value) {
-            setState(() {
-              _verifyAfterBackup = value;
-            });
+        Consumer<LicenseProvider>(
+          builder: (context, licenseProvider, child) {
+            final hasVerifyIntegrity =
+                licenseProvider.hasValidLicense &&
+                licenseProvider.currentLicense!.hasFeature(
+                  LicenseFeatures.verifyIntegrity,
+                );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCheckboxWithInfo(
+                        label: hasVerifyIntegrity
+                            ? 'Verify After Backup'
+                            : 'Verify After Backup (Requer licença)',
+                        value: _verifyAfterBackup,
+                        onChanged: hasVerifyIntegrity
+                            ? (value) {
+                                setState(() {
+                                  _verifyAfterBackup = value;
+                                });
+                              }
+                            : null,
+                        infoText: hasVerifyIntegrity
+                            ? (_databaseType == DatabaseType.sqlServer
+                                  ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
+                                        'Garante que o backup pode ser restaurado sem restaurar os dados.'
+                                  : _databaseType == DatabaseType.postgresql
+                                  ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
+                                        'Garante que o backup está íntegro e pode ser restaurado.'
+                                  : 'Verifica a integridade do backup após criação usando dbverify. '
+                                        'Garante que o backup está íntegro e pode ser restaurado.')
+                            : 'Este recurso requer uma licença válida. '
+                                'Acesse Configurações > Licenciamento para mais informações.',
+                      ),
+                    ),
+                    if (!hasVerifyIntegrity) ...[
+                      const SizedBox(width: 8),
+                      Icon(
+                        FluentIcons.lock,
+                        size: 16,
+                        color: FluentTheme.of(context)
+                            .resources
+                            .controlStrokeColorDefault
+                            .withValues(alpha: 0.4),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            );
           },
-          infoText: _databaseType == DatabaseType.sqlServer
-              ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
-                    'Garante que o backup pode ser restaurado sem restaurar os dados.'
-              : _databaseType == DatabaseType.postgresql
-              ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
-                    'Garante que o backup está íntegro e pode ser restaurado.'
-              : 'Verifica a integridade do backup após criação usando dbverify. '
-                    'Garante que o backup está íntegro e pode ser restaurado.',
         ),
       ],
     );
@@ -551,7 +748,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   Widget _buildCheckboxWithInfo({
     required String label,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    ValueChanged<bool>? onChanged,
     required String infoText,
   }) {
     return Row(
@@ -562,7 +759,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             label: label,
             child: Checkbox(
               checked: value,
-              onChanged: (checked) => onChanged(checked ?? false),
+              onChanged: onChanged != null
+                  ? (checked) => onChanged(checked ?? false)
+                  : null,
             ),
           ),
         ),
@@ -582,35 +781,55 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   }
 
   Widget _buildScriptTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildSectionTitle('Script SQL Pós-Backup (Opcional)'),
-          const SizedBox(height: 16),
-          InfoLabel(
-            label: 'Script SQL',
-            child: TextBox(
-              controller: _postBackupScriptController,
-              placeholder:
-                  'Ex: UPDATE tabela SET status = \'backup_completo\' WHERE id = 1;',
-              maxLines: 15,
-              minLines: 10,
-            ),
+    return Consumer<LicenseProvider>(
+      builder: (context, licenseProvider, child) {
+        final hasPostScript =
+            licenseProvider.hasValidLicense &&
+            licenseProvider.currentLicense!.hasFeature(
+              LicenseFeatures.postBackupScript,
+            );
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSectionTitle('Script SQL Pós-Backup (Opcional)'),
+              const SizedBox(height: 16),
+              if (!hasPostScript)
+                InfoBar(
+                  severity: InfoBarSeverity.warning,
+                  title: const Text('Recurso Bloqueado'),
+                  content: const Text(
+                    'Este recurso requer uma licença válida com permissão para scripts SQL pós-backup.',
+                  ),
+                ),
+              if (!hasPostScript) const SizedBox(height: 16),
+              InfoLabel(
+                label: 'Script SQL',
+                child: TextBox(
+                  controller: _postBackupScriptController,
+                  placeholder:
+                      'Ex: UPDATE tabela SET status = \'backup_completo\' WHERE id = 1;',
+                  maxLines: 15,
+                  minLines: 10,
+                  readOnly: !hasPostScript,
+                ),
+              ),
+              const SizedBox(height: 16),
+              InfoBar(
+                title: const Text('Informação'),
+                content: const Text(
+                  'O script será executado na mesma conexão do backup, '
+                  'após o backup ser concluído com sucesso. '
+                  'Erros no script não impedem o backup de ser considerado bem-sucedido.',
+                ),
+                severity: InfoBarSeverity.info,
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          InfoBar(
-            title: const Text('Informação'),
-            content: const Text(
-              'O script será executado na mesma conexão do backup, '
-              'após o backup ser concluído com sucesso. '
-              'Erros no script não impedem o backup de ser considerado bem-sucedido.',
-            ),
-            severity: InfoBarSeverity.info,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

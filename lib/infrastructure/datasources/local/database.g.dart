@@ -5660,6 +5660,477 @@ class EmailConfigsTableCompanion
   }
 }
 
+class $LicensesTableTable extends LicensesTable
+    with TableInfo<$LicensesTableTable, LicensesTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LicensesTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceKeyMeta = const VerificationMeta(
+    'deviceKey',
+  );
+  @override
+  late final GeneratedColumn<String> deviceKey = GeneratedColumn<String>(
+    'device_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _licenseKeyMeta = const VerificationMeta(
+    'licenseKey',
+  );
+  @override
+  late final GeneratedColumn<String> licenseKey = GeneratedColumn<String>(
+    'license_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _expiresAtMeta = const VerificationMeta(
+    'expiresAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> expiresAt = GeneratedColumn<DateTime>(
+    'expires_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _allowedFeaturesMeta = const VerificationMeta(
+    'allowedFeatures',
+  );
+  @override
+  late final GeneratedColumn<String> allowedFeatures = GeneratedColumn<String>(
+    'allowed_features',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    deviceKey,
+    licenseKey,
+    expiresAt,
+    allowedFeatures,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'licenses_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LicensesTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('device_key')) {
+      context.handle(
+        _deviceKeyMeta,
+        deviceKey.isAcceptableOrUnknown(data['device_key']!, _deviceKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceKeyMeta);
+    }
+    if (data.containsKey('license_key')) {
+      context.handle(
+        _licenseKeyMeta,
+        licenseKey.isAcceptableOrUnknown(data['license_key']!, _licenseKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_licenseKeyMeta);
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(
+        _expiresAtMeta,
+        expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta),
+      );
+    }
+    if (data.containsKey('allowed_features')) {
+      context.handle(
+        _allowedFeaturesMeta,
+        allowedFeatures.isAcceptableOrUnknown(
+          data['allowed_features']!,
+          _allowedFeaturesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LicensesTableData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LicensesTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      deviceKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_key'],
+      )!,
+      licenseKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}license_key'],
+      )!,
+      expiresAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}expires_at'],
+      ),
+      allowedFeatures: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}allowed_features'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LicensesTableTable createAlias(String alias) {
+    return $LicensesTableTable(attachedDatabase, alias);
+  }
+}
+
+class LicensesTableData extends DataClass
+    implements Insertable<LicensesTableData> {
+  final String id;
+  final String deviceKey;
+  final String licenseKey;
+  final DateTime? expiresAt;
+  final String allowedFeatures;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const LicensesTableData({
+    required this.id,
+    required this.deviceKey,
+    required this.licenseKey,
+    this.expiresAt,
+    required this.allowedFeatures,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['device_key'] = Variable<String>(deviceKey);
+    map['license_key'] = Variable<String>(licenseKey);
+    if (!nullToAbsent || expiresAt != null) {
+      map['expires_at'] = Variable<DateTime>(expiresAt);
+    }
+    map['allowed_features'] = Variable<String>(allowedFeatures);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  LicensesTableCompanion toCompanion(bool nullToAbsent) {
+    return LicensesTableCompanion(
+      id: Value(id),
+      deviceKey: Value(deviceKey),
+      licenseKey: Value(licenseKey),
+      expiresAt: expiresAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(expiresAt),
+      allowedFeatures: Value(allowedFeatures),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory LicensesTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LicensesTableData(
+      id: serializer.fromJson<String>(json['id']),
+      deviceKey: serializer.fromJson<String>(json['deviceKey']),
+      licenseKey: serializer.fromJson<String>(json['licenseKey']),
+      expiresAt: serializer.fromJson<DateTime?>(json['expiresAt']),
+      allowedFeatures: serializer.fromJson<String>(json['allowedFeatures']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'deviceKey': serializer.toJson<String>(deviceKey),
+      'licenseKey': serializer.toJson<String>(licenseKey),
+      'expiresAt': serializer.toJson<DateTime?>(expiresAt),
+      'allowedFeatures': serializer.toJson<String>(allowedFeatures),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  LicensesTableData copyWith({
+    String? id,
+    String? deviceKey,
+    String? licenseKey,
+    Value<DateTime?> expiresAt = const Value.absent(),
+    String? allowedFeatures,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => LicensesTableData(
+    id: id ?? this.id,
+    deviceKey: deviceKey ?? this.deviceKey,
+    licenseKey: licenseKey ?? this.licenseKey,
+    expiresAt: expiresAt.present ? expiresAt.value : this.expiresAt,
+    allowedFeatures: allowedFeatures ?? this.allowedFeatures,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  LicensesTableData copyWithCompanion(LicensesTableCompanion data) {
+    return LicensesTableData(
+      id: data.id.present ? data.id.value : this.id,
+      deviceKey: data.deviceKey.present ? data.deviceKey.value : this.deviceKey,
+      licenseKey: data.licenseKey.present
+          ? data.licenseKey.value
+          : this.licenseKey,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+      allowedFeatures: data.allowedFeatures.present
+          ? data.allowedFeatures.value
+          : this.allowedFeatures,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LicensesTableData(')
+          ..write('id: $id, ')
+          ..write('deviceKey: $deviceKey, ')
+          ..write('licenseKey: $licenseKey, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('allowedFeatures: $allowedFeatures, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    deviceKey,
+    licenseKey,
+    expiresAt,
+    allowedFeatures,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LicensesTableData &&
+          other.id == this.id &&
+          other.deviceKey == this.deviceKey &&
+          other.licenseKey == this.licenseKey &&
+          other.expiresAt == this.expiresAt &&
+          other.allowedFeatures == this.allowedFeatures &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
+  final Value<String> id;
+  final Value<String> deviceKey;
+  final Value<String> licenseKey;
+  final Value<DateTime?> expiresAt;
+  final Value<String> allowedFeatures;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const LicensesTableCompanion({
+    this.id = const Value.absent(),
+    this.deviceKey = const Value.absent(),
+    this.licenseKey = const Value.absent(),
+    this.expiresAt = const Value.absent(),
+    this.allowedFeatures = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LicensesTableCompanion.insert({
+    required String id,
+    required String deviceKey,
+    required String licenseKey,
+    this.expiresAt = const Value.absent(),
+    this.allowedFeatures = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       deviceKey = Value(deviceKey),
+       licenseKey = Value(licenseKey),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<LicensesTableData> custom({
+    Expression<String>? id,
+    Expression<String>? deviceKey,
+    Expression<String>? licenseKey,
+    Expression<DateTime>? expiresAt,
+    Expression<String>? allowedFeatures,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (deviceKey != null) 'device_key': deviceKey,
+      if (licenseKey != null) 'license_key': licenseKey,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      if (allowedFeatures != null) 'allowed_features': allowedFeatures,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LicensesTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? deviceKey,
+    Value<String>? licenseKey,
+    Value<DateTime?>? expiresAt,
+    Value<String>? allowedFeatures,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return LicensesTableCompanion(
+      id: id ?? this.id,
+      deviceKey: deviceKey ?? this.deviceKey,
+      licenseKey: licenseKey ?? this.licenseKey,
+      expiresAt: expiresAt ?? this.expiresAt,
+      allowedFeatures: allowedFeatures ?? this.allowedFeatures,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (deviceKey.present) {
+      map['device_key'] = Variable<String>(deviceKey.value);
+    }
+    if (licenseKey.present) {
+      map['license_key'] = Variable<String>(licenseKey.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<DateTime>(expiresAt.value);
+    }
+    if (allowedFeatures.present) {
+      map['allowed_features'] = Variable<String>(allowedFeatures.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LicensesTableCompanion(')
+          ..write('id: $id, ')
+          ..write('deviceKey: $deviceKey, ')
+          ..write('licenseKey: $licenseKey, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('allowedFeatures: $allowedFeatures, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5679,6 +6150,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $EmailConfigsTableTable emailConfigsTable =
       $EmailConfigsTableTable(this);
+  late final $LicensesTableTable licensesTable = $LicensesTableTable(this);
   late final SqlServerConfigDao sqlServerConfigDao = SqlServerConfigDao(
     this as AppDatabase,
   );
@@ -5699,6 +6171,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final EmailConfigDao emailConfigDao = EmailConfigDao(
     this as AppDatabase,
   );
+  late final LicenseDao licenseDao = LicenseDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5712,6 +6185,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     backupHistoryTable,
     backupLogsTable,
     emailConfigsTable,
+    licensesTable,
   ];
 }
 
@@ -8512,6 +8986,252 @@ typedef $$EmailConfigsTableTableProcessedTableManager =
       EmailConfigsTableData,
       PrefetchHooks Function()
     >;
+typedef $$LicensesTableTableCreateCompanionBuilder =
+    LicensesTableCompanion Function({
+      required String id,
+      required String deviceKey,
+      required String licenseKey,
+      Value<DateTime?> expiresAt,
+      Value<String> allowedFeatures,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$LicensesTableTableUpdateCompanionBuilder =
+    LicensesTableCompanion Function({
+      Value<String> id,
+      Value<String> deviceKey,
+      Value<String> licenseKey,
+      Value<DateTime?> expiresAt,
+      Value<String> allowedFeatures,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$LicensesTableTableFilterComposer
+    extends Composer<_$AppDatabase, $LicensesTableTable> {
+  $$LicensesTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceKey => $composableBuilder(
+    column: $table.deviceKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get licenseKey => $composableBuilder(
+    column: $table.licenseKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get allowedFeatures => $composableBuilder(
+    column: $table.allowedFeatures,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LicensesTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $LicensesTableTable> {
+  $$LicensesTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceKey => $composableBuilder(
+    column: $table.deviceKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get licenseKey => $composableBuilder(
+    column: $table.licenseKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get allowedFeatures => $composableBuilder(
+    column: $table.allowedFeatures,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LicensesTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LicensesTableTable> {
+  $$LicensesTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get deviceKey =>
+      $composableBuilder(column: $table.deviceKey, builder: (column) => column);
+
+  GeneratedColumn<String> get licenseKey => $composableBuilder(
+    column: $table.licenseKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+
+  GeneratedColumn<String> get allowedFeatures => $composableBuilder(
+    column: $table.allowedFeatures,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$LicensesTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LicensesTableTable,
+          LicensesTableData,
+          $$LicensesTableTableFilterComposer,
+          $$LicensesTableTableOrderingComposer,
+          $$LicensesTableTableAnnotationComposer,
+          $$LicensesTableTableCreateCompanionBuilder,
+          $$LicensesTableTableUpdateCompanionBuilder,
+          (
+            LicensesTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $LicensesTableTable,
+              LicensesTableData
+            >,
+          ),
+          LicensesTableData,
+          PrefetchHooks Function()
+        > {
+  $$LicensesTableTableTableManager(_$AppDatabase db, $LicensesTableTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LicensesTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LicensesTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LicensesTableTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> deviceKey = const Value.absent(),
+                Value<String> licenseKey = const Value.absent(),
+                Value<DateTime?> expiresAt = const Value.absent(),
+                Value<String> allowedFeatures = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LicensesTableCompanion(
+                id: id,
+                deviceKey: deviceKey,
+                licenseKey: licenseKey,
+                expiresAt: expiresAt,
+                allowedFeatures: allowedFeatures,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String deviceKey,
+                required String licenseKey,
+                Value<DateTime?> expiresAt = const Value.absent(),
+                Value<String> allowedFeatures = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => LicensesTableCompanion.insert(
+                id: id,
+                deviceKey: deviceKey,
+                licenseKey: licenseKey,
+                expiresAt: expiresAt,
+                allowedFeatures: allowedFeatures,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LicensesTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LicensesTableTable,
+      LicensesTableData,
+      $$LicensesTableTableFilterComposer,
+      $$LicensesTableTableOrderingComposer,
+      $$LicensesTableTableAnnotationComposer,
+      $$LicensesTableTableCreateCompanionBuilder,
+      $$LicensesTableTableUpdateCompanionBuilder,
+      (
+        LicensesTableData,
+        BaseReferences<_$AppDatabase, $LicensesTableTable, LicensesTableData>,
+      ),
+      LicensesTableData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -8535,4 +9255,6 @@ class $AppDatabaseManager {
       $$BackupLogsTableTableTableManager(_db, _db.backupLogsTable);
   $$EmailConfigsTableTableTableManager get emailConfigsTable =>
       $$EmailConfigsTableTableTableManager(_db, _db.emailConfigsTable);
+  $$LicensesTableTableTableManager get licensesTable =>
+      $$LicensesTableTableTableManager(_db, _db.licensesTable);
 }

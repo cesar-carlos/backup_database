@@ -3,10 +3,13 @@ import 'dart:io';
 import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../core/utils/logger_service.dart';
+import '../../core/constants/license_features.dart';
+import '../../core/di/service_locator.dart' as service_locator;
 import '../../domain/entities/email_config.dart';
 import '../../domain/entities/backup_history.dart';
 import '../../domain/repositories/i_email_config_repository.dart';
 import '../../domain/repositories/i_backup_log_repository.dart';
+import '../../domain/services/i_license_validation_service.dart';
 import '../../infrastructure/external/email/email_service.dart';
 
 class NotificationService {
@@ -25,6 +28,25 @@ class NotificationService {
   Future<rd.Result<bool>> notifyBackupComplete(
     BackupHistory history,
   ) async {
+    // Verificar licença para notificações por email
+    try {
+      final licenseValidationService = service_locator.getIt<ILicenseValidationService>();
+      final hasEmailNotification = await licenseValidationService
+          .isFeatureAllowed(LicenseFeatures.emailNotification);
+      
+      if (!hasEmailNotification.getOrElse((_) => false)) {
+        LoggerService.info(
+          'Notificação por email bloqueada - licença não possui permissão',
+        );
+        return const rd.Success(false);
+      }
+    } catch (e) {
+      LoggerService.warning(
+        'Erro ao verificar licença para notificação: $e',
+      );
+      // Continuar mesmo se houver erro na verificação
+    }
+
     final configResult = await _emailConfigRepository.get();
 
     return configResult.fold(
