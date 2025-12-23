@@ -411,7 +411,7 @@ class AppDatabase extends _$AppDatabase {
         if (from < 12) {
           try {
             final columns = await (customSelect(
-              "PRAGMA table_info(schedules)",
+              "PRAGMA table_info(schedules_table)",
             ).get());
             final hasCompressionFormatColumn = columns.any(
               (row) => row.data['name'] == 'compression_format',
@@ -424,13 +424,13 @@ class AppDatabase extends _$AppDatabase {
               );
 
               await customStatement(
-                "UPDATE schedules SET compression_format = CASE "
+                "UPDATE schedules_table SET compression_format = CASE "
                 "WHEN compress_backup = 0 THEN 'none' "
                 "ELSE 'zip' END",
               );
 
               LoggerService.info(
-                'Coluna compression_format adicionada à tabela schedules',
+                'Coluna compression_format adicionada à tabela schedules_table',
               );
             }
           } catch (e, stackTrace) {

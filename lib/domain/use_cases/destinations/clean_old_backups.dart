@@ -11,33 +11,41 @@ import '../../../infrastructure/external/destinations/ftp_destination_service.da
     as ftp;
 import '../../../infrastructure/external/destinations/google_drive_destination_service.dart'
     as gd;
+import '../../../infrastructure/external/dropbox/dropbox_destination_service.dart'
+    as dropbox;
 
 class CleanOldBackupsResult {
   final int localDeleted;
   final int ftpDeleted;
   final int googleDriveDeleted;
+  final int dropboxDeleted;
 
   const CleanOldBackupsResult({
     this.localDeleted = 0,
     this.ftpDeleted = 0,
     this.googleDriveDeleted = 0,
+    this.dropboxDeleted = 0,
   });
 
-  int get total => localDeleted + ftpDeleted + googleDriveDeleted;
+  int get total =>
+      localDeleted + ftpDeleted + googleDriveDeleted + dropboxDeleted;
 }
 
 class CleanOldBackups {
   final local.LocalDestinationService _localService;
   final ftp.FtpDestinationService _ftpService;
   final gd.GoogleDriveDestinationService _googleDriveService;
+  final dropbox.DropboxDestinationService _dropboxService;
 
   CleanOldBackups({
     required local.LocalDestinationService localService,
     required ftp.FtpDestinationService ftpService,
     required gd.GoogleDriveDestinationService googleDriveService,
+    required dropbox.DropboxDestinationService dropboxService,
   })  : _localService = localService,
         _ftpService = ftpService,
-        _googleDriveService = googleDriveService;
+        _googleDriveService = googleDriveService,
+        _dropboxService = dropboxService;
 
   Future<rd.Result<CleanOldBackupsResult>> call(
     List<BackupDestination> destinations,
@@ -47,6 +55,7 @@ class CleanOldBackups {
     int localDeleted = 0;
     int ftpDeleted = 0;
     int googleDriveDeleted = 0;
+    int dropboxDeleted = 0;
 
     for (final destination in destinations) {
       if (!destination.enabled) continue;
@@ -115,6 +124,26 @@ class CleanOldBackups {
               },
             );
             break;
+
+          case DestinationType.dropbox:
+            final config = dropbox.DropboxDestinationConfig(
+              folderPath: configJson['folderPath'] as String? ?? '',
+              folderName: configJson['folderName'] as String? ?? 'Backups',
+              retentionDays: configJson['retentionDays'] as int? ?? 30,
+            );
+            final result = await _dropboxService.cleanOldBackups(
+              config: config,
+            );
+            result.fold(
+              (count) => dropboxDeleted += count,
+              (exception) {
+                final failure = exception as Failure;
+                LoggerService.warning(
+                  'Erro ao limpar Dropbox: ${failure.message}',
+                );
+              },
+            );
+            break;
         }
       } catch (e) {
         LoggerService.warning(
@@ -127,6 +156,7 @@ class CleanOldBackups {
       localDeleted: localDeleted,
       ftpDeleted: ftpDeleted,
       googleDriveDeleted: googleDriveDeleted,
+      dropboxDeleted: dropboxDeleted,
     );
 
     LoggerService.info('Limpeza concluída: ${result.total} arquivos removidos');

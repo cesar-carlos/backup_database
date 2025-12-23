@@ -19,6 +19,11 @@ import '../../infrastructure/external/destinations/ftp_destination_service.dart'
     as ftp;
 import '../../infrastructure/external/destinations/google_drive_destination_service.dart'
     as gd;
+import '../../infrastructure/external/dropbox/dropbox_destination_service.dart'
+    as dropbox;
+import '../../domain/use_cases/destinations/send_to_dropbox.dart';
+import '../../core/di/service_locator.dart';
+import '../providers/backup_progress_provider.dart';
 import 'backup_orchestrator_service.dart';
 import 'notification_service.dart';
 
@@ -32,6 +37,8 @@ class SchedulerService {
   final SendToFtp _sendToFtp;
   final ftp.FtpDestinationService _ftpDestinationService;
   final gd.GoogleDriveDestinationService _googleDriveDestinationService;
+  final dropbox.DropboxDestinationService _dropboxDestinationService;
+  final SendToDropbox _sendToDropbox;
   final NotificationService _notificationService;
 
   final ScheduleCalculator _calculator = ScheduleCalculator();
@@ -49,6 +56,8 @@ class SchedulerService {
     required SendToFtp sendToFtp,
     required ftp.FtpDestinationService ftpDestinationService,
     required gd.GoogleDriveDestinationService googleDriveDestinationService,
+    required dropbox.DropboxDestinationService dropboxDestinationService,
+    required SendToDropbox sendToDropbox,
     required NotificationService notificationService,
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
@@ -59,19 +68,18 @@ class SchedulerService {
        _sendToFtp = sendToFtp,
        _ftpDestinationService = ftpDestinationService,
        _googleDriveDestinationService = googleDriveDestinationService,
+       _dropboxDestinationService = dropboxDestinationService,
+       _sendToDropbox = sendToDropbox,
        _notificationService = notificationService;
 
-  /// Inicia o serviço de agendamento
   Future<void> start() async {
     if (_isRunning) return;
 
     LoggerService.info('Iniciando serviço de agendamento');
     _isRunning = true;
 
-    // Atualizar próximas execuções de todos os schedules
     await _updateAllNextRuns();
 
-    // Verificar schedules a cada minuto
     _checkTimer = Timer.periodic(
       const Duration(minutes: 1),
       (_) => _checkSchedules(),
@@ -80,7 +88,6 @@ class SchedulerService {
     LoggerService.info('Serviço de agendamento iniciado');
   }
 
-  /// Para o serviço de agendamento
   void stop() {
     LoggerService.info('Parando serviço de agendamento');
     _isRunning = false;
@@ -88,7 +95,6 @@ class SchedulerService {
     _checkTimer = null;
   }
 
-  /// Atualiza a próxima execução de todos os schedules
   Future<void> _updateAllNextRuns() async {
     final result = await _scheduleRepository.getEnabled();
 
@@ -116,7 +122,6 @@ class SchedulerService {
     );
   }
 
-  /// Verifica schedules pendentes
   Future<void> _checkSchedules() async {
     if (!_isRunning) return;
 
@@ -127,16 +132,13 @@ class SchedulerService {
         final isExecuting = _executingSchedules.contains(schedule.id);
         final shouldRun = _calculator.shouldRunNow(schedule);
 
-        // Evitar execuções duplicadas do mesmo schedule
         if (isExecuting) {
           continue;
         }
 
         if (shouldRun) {
-          // Marcar como executando antes de iniciar
           _executingSchedules.add(schedule.id);
 
-          // Atualizar nextRunAt imediatamente para evitar execuções duplicadas
           final nextRunAt = _calculator.getNextRunTime(schedule);
           if (nextRunAt != null) {
             await _scheduleRepository.update(
@@ -144,7 +146,6 @@ class SchedulerService {
             );
           }
 
-          // Executar em background para não bloquear
           unawaited(
             _executeScheduledBackup(schedule)
                 .then((_) {
@@ -159,7 +160,6 @@ class SchedulerService {
     }, (failure) => null);
   }
 
-  /// Executa o backup agendado
   Future<rd.Result<void>> _executeScheduledBackup(Schedule schedule) async {
     LoggerService.info(
       'Executando backup agendado: ${schedule.name} '
@@ -170,7 +170,6 @@ class SchedulerService {
     bool shouldDeleteTempFile = false;
 
     try {
-      // Obter destinos
       final destinations = await _getDestinations(schedule.destinationIds);
       final localDestination = destinations
           .where((d) => d.type == DestinationType.local)
@@ -179,7 +178,6 @@ class SchedulerService {
       String outputDirectory;
 
       if (localDestination != null) {
-        // Se houver destino local, usar o caminho dele
         final localConfig = local.LocalDestinationConfig(
           path:
               (jsonDecode(localDestination.config)
@@ -197,7 +195,6 @@ class SchedulerService {
               30,
         );
 
-        // Validar que o caminho não está vazio
         if (localConfig.path.isEmpty) {
           final errorMessage =
               'Caminho do destino local está vazio para o agendamento: ${schedule.name}';
@@ -207,7 +204,6 @@ class SchedulerService {
 
         outputDirectory = localConfig.path;
       } else {
-        // Validar que o caminho do agendamento não está vazio
         if (schedule.backupFolder.isEmpty) {
           final errorMessage =
               'Pasta de backup não configurada para o agendamento: ${schedule.name}';
@@ -215,7 +211,6 @@ class SchedulerService {
           return rd.Failure(ValidationFailure(message: errorMessage));
         }
 
-        // Usar pasta de backup configurada no agendamento
         final backupDir = Directory(schedule.backupFolder);
         if (!await backupDir.exists()) {
           try {
@@ -228,7 +223,6 @@ class SchedulerService {
           }
         }
 
-        // Validar permissão de escrita
         final hasPermission = await _checkWritePermission(backupDir);
         if (!hasPermission) {
           final errorMessage =
@@ -244,7 +238,6 @@ class SchedulerService {
         );
       }
 
-      // Validação final: garantir que outputDirectory não está vazio
       if (outputDirectory.isEmpty) {
         final errorMessage =
             'Caminho de saída do backup está vazio para o agendamento: ${schedule.name}';
@@ -252,36 +245,102 @@ class SchedulerService {
         return rd.Failure(ValidationFailure(message: errorMessage));
       }
 
-      // Executar backup
       final backupResult = await _backupOrchestratorService.executeBackup(
         schedule: schedule,
         outputDirectory: outputDirectory,
       );
 
       if (backupResult.isError()) {
-        // Em caso de erro no backup, a notificação já foi enviada pelo BackupOrchestratorService
-        // Não há upload para fazer, então o email é enviado imediatamente
+        try {
+          final progressProvider = getIt<BackupProgressProvider>();
+          final error = backupResult.exceptionOrNull()!;
+          final errorMessage = error is Failure ? error.message : error.toString();
+          progressProvider.failBackup(errorMessage);
+        } catch (_) {
+          // Ignorar se não estiver disponível
+        }
         return rd.Failure(backupResult.exceptionOrNull()!);
       }
 
       final backupHistory = backupResult.getOrNull()!;
       tempBackupPath = backupHistory.backupPath;
 
-      // Verificar se há destinos remotos (FTP ou Google Drive)
+      final backupFile = File(backupHistory.backupPath);
+      if (!await backupFile.exists()) {
+        final errorMessage =
+            'Arquivo de backup não existe: ${backupHistory.backupPath}';
+        LoggerService.error(errorMessage);
+        final finishedAt = DateTime.now();
+        final failedHistory = backupHistory.copyWith(
+          status: BackupStatus.error,
+          errorMessage: errorMessage,
+          finishedAt: finishedAt,
+          durationSeconds: finishedAt
+              .difference(backupHistory.startedAt)
+              .inSeconds,
+        );
+        await _backupHistoryRepository.update(failedHistory);
+
+        try {
+          final progressProvider = getIt<BackupProgressProvider>();
+          progressProvider.failBackup(errorMessage);
+        } catch (_) {
+          // Ignorar se não estiver disponível
+        }
+
+        return rd.Failure(BackupFailure(message: errorMessage));
+      }
+
       final hasRemoteDestinations = destinations.any(
         (d) =>
             d.type == DestinationType.ftp ||
-            d.type == DestinationType.googleDrive,
+            d.type == DestinationType.googleDrive ||
+            d.type == DestinationType.dropbox,
       );
 
-      // Enviar para destinos configurados e coletar erros
+      if (hasRemoteDestinations) {
+        try {
+          final progressProvider = getIt<BackupProgressProvider>();
+          progressProvider.updateProgress(
+            step: BackupStep.uploading,
+            message: 'Enviando para destinos remotos...',
+            progress: 0.85,
+          );
+        } catch (_) {
+          // Ignorar se não estiver disponível
+        }
+      }
+
       final List<String> uploadErrors = [];
       bool hasCriticalUploadError = false;
 
-      for (final destination in destinations) {
-        if (destination.type == DestinationType.local) {
-          // Destino local já foi salvo durante o backup
+      final remoteDestinations = destinations
+          .where((d) => d.type != DestinationType.local)
+          .toList();
+      final totalRemoteDestinations = remoteDestinations.length;
+
+      for (int index = 0; index < remoteDestinations.length; index++) {
+        final destination = remoteDestinations[index];
+
+        if (!await backupFile.exists()) {
+          final errorMessage =
+              'Arquivo de backup foi deletado antes de enviar para ${destination.name}: ${backupHistory.backupPath}';
+          uploadErrors.add(errorMessage);
+          LoggerService.error(errorMessage);
+          hasCriticalUploadError = true;
           continue;
+        }
+
+        try {
+          final progressProvider = getIt<BackupProgressProvider>();
+          final progress = 0.85 + (0.1 * (index + 1) / totalRemoteDestinations);
+          progressProvider.updateProgress(
+            step: BackupStep.uploading,
+            message: 'Enviando para ${destination.name}...',
+            progress: progress,
+          );
+        } catch (_) {
+          // Ignorar se não estiver disponível
         }
 
         final sendResult = await _sendToDestination(
@@ -289,24 +348,18 @@ class SchedulerService {
           destination: destination,
         );
 
-        sendResult.fold(
-          (_) {
-            // Sucesso
-          },
-          (failure) {
-            final failureMessage = failure is Failure
-                ? failure.message
-                : failure.toString();
-            final errorMessage =
-                'Falha ao enviar para ${destination.name}: $failureMessage';
-            uploadErrors.add(errorMessage);
-            LoggerService.error(errorMessage, failure);
-            hasCriticalUploadError = true;
-          },
-        );
+        sendResult.fold((_) {}, (failure) {
+          final failureMessage = failure is Failure
+              ? failure.message
+              : failure.toString();
+          final errorMessage =
+              'Falha ao enviar para ${destination.name}: $failureMessage';
+          uploadErrors.add(errorMessage);
+          LoggerService.error(errorMessage, failure);
+          hasCriticalUploadError = true;
+        });
       }
 
-      // Se houver erros críticos de upload, marcar backup como erro
       if (hasCriticalUploadError) {
         final errorMessage = uploadErrors.join('\n');
         final finishedAt = DateTime.now();
@@ -321,14 +374,12 @@ class SchedulerService {
         );
         await _backupHistoryRepository.update(failedHistory);
 
-        // Gravar log de erro no banco
         await _log(
           backupHistory.id,
           'error',
           'Falha ao enviar backup para destinos remotos:\n$errorMessage',
         );
 
-        // Enviar notificação por email
         final notifyResult = await _notificationService.notifyBackupComplete(
           failedHistory,
         );
@@ -358,10 +409,17 @@ class SchedulerService {
           'Backup marcado como erro devido a falhas no upload',
           failure,
         );
+
+        try {
+          final progressProvider = getIt<BackupProgressProvider>();
+          progressProvider.failBackup(errorMessage);
+        } catch (_) {
+          // Ignorar se não estiver disponível
+        }
+
         return rd.Failure(failure);
       }
 
-      // Se houver erros não críticos (apenas avisos), notificar mas manter sucesso
       if (uploadErrors.isNotEmpty) {
         final warningMessage =
             'O backup foi concluído, mas houve avisos:\n\n'
@@ -373,8 +431,6 @@ class SchedulerService {
         );
       }
 
-      // Enviar notificação por e-mail apenas após upload para destinos remotos
-      // Se não houver destinos remotos, enviar imediatamente
       if (hasRemoteDestinations) {
         LoggerService.info(
           'Uploads para destinos remotos concluídos, enviando notificação por e-mail',
@@ -382,7 +438,15 @@ class SchedulerService {
       }
       await _notificationService.notifyBackupComplete(backupHistory);
 
-      // Se usamos pasta temporária e não há destino local, deletar arquivo após enviar
+      try {
+        final progressProvider = getIt<BackupProgressProvider>();
+        progressProvider.completeBackup(
+          message: 'Backup concluído com sucesso!',
+        );
+      } catch (_) {
+        // Ignorar se não estiver disponível
+      }
+
       if (shouldDeleteTempFile) {
         try {
           final entityType = FileSystemEntity.typeSync(tempBackupPath);
@@ -416,9 +480,6 @@ class SchedulerService {
         }
       }
 
-      // Atualizar próxima execução
-      // Para agendamentos por intervalo, é necessário calcular nextRunAt
-      // APÓS atualizar lastRunAt, pois o cálculo depende dele
       final now = DateTime.now();
       final scheduleWithLastRun = schedule.copyWith(lastRunAt: now);
       final nextRunAt = _calculator.getNextRunTime(scheduleWithLastRun);
@@ -432,7 +493,6 @@ class SchedulerService {
         '(baseado em lastRunAt: $now, tipo: ${schedule.scheduleType})',
       );
 
-      // Limpar backups antigos
       await _cleanOldBackups(destinations, backupHistory.id);
 
       LoggerService.info('Backup agendado concluído: ${schedule.name}');
@@ -468,7 +528,6 @@ class SchedulerService {
 
       switch (destination.type) {
         case DestinationType.local:
-          // Já foi salvo localmente
           return rd.Success(());
 
         case DestinationType.ftp:
@@ -520,6 +579,20 @@ class SchedulerService {
             (_) => rd.Success(()),
             (failure) => rd.Failure(failure),
           );
+
+        case DestinationType.dropbox:
+          final config = dropbox.DropboxDestinationConfig(
+            folderPath: configJson['folderPath'] as String? ?? '',
+            folderName: configJson['folderName'] as String? ?? 'Backups',
+          );
+          final result = await _sendToDropbox.call(
+            sourceFilePath: sourceFilePath,
+            config: config,
+          );
+          return result.fold(
+            (_) => rd.Success(()),
+            (failure) => rd.Failure(failure),
+          );
       }
     } catch (e) {
       LoggerService.error('Erro ao enviar para ${destination.name}: $e', e);
@@ -563,34 +636,27 @@ class SchedulerService {
             final cleanResult = await _ftpDestinationService.cleanOldBackups(
               config: config,
             );
-            cleanResult.fold(
-              (_) {
-                // Sucesso
-              },
-              (exception) async {
-                LoggerService.error(
-                  'Erro ao limpar backups FTP em ${destination.name}',
-                  exception,
-                );
-                final failureMessage = exception is Failure
-                    ? exception.message
-                    : exception.toString();
+            cleanResult.fold((_) {}, (exception) async {
+              LoggerService.error(
+                'Erro ao limpar backups FTP em ${destination.name}',
+                exception,
+              );
+              final failureMessage = exception is Failure
+                  ? exception.message
+                  : exception.toString();
 
-                // Gravar log de erro no banco
-                await _log(
-                  backupHistoryId,
-                  'error',
-                  'Erro ao limpar backups antigos no FTP ${destination.name}: $failureMessage',
-                );
+              await _log(
+                backupHistoryId,
+                'error',
+                'Erro ao limpar backups antigos no FTP ${destination.name}: $failureMessage',
+              );
 
-                // Enviar notificação por email
-                await _notificationService.sendWarning(
-                  databaseName: destination.name,
-                  message:
-                      'Erro ao limpar backups antigos no FTP ${destination.name}: $failureMessage',
-                );
-              },
-            );
+              await _notificationService.sendWarning(
+                databaseName: destination.name,
+                message:
+                    'Erro ao limpar backups antigos no FTP ${destination.name}: $failureMessage',
+              );
+            });
             break;
 
           case DestinationType.googleDrive:
@@ -601,34 +667,58 @@ class SchedulerService {
             );
             final cleanResult = await _googleDriveDestinationService
                 .cleanOldBackups(config: config);
-            cleanResult.fold(
-              (_) {
-                // Sucesso
-              },
-              (exception) async {
-                LoggerService.error(
-                  'Erro ao limpar backups Google Drive em ${destination.name}',
-                  exception,
-                );
-                final failureMessage = exception is Failure
-                    ? exception.message
-                    : exception.toString();
+            cleanResult.fold((_) {}, (exception) async {
+              LoggerService.error(
+                'Erro ao limpar backups Google Drive em ${destination.name}',
+                exception,
+              );
+              final failureMessage = exception is Failure
+                  ? exception.message
+                  : exception.toString();
 
-                // Gravar log de erro no banco
-                await _log(
-                  backupHistoryId,
-                  'error',
-                  'Erro ao limpar backups antigos no Google Drive ${destination.name}: $failureMessage',
-                );
+              await _log(
+                backupHistoryId,
+                'error',
+                'Erro ao limpar backups antigos no Google Drive ${destination.name}: $failureMessage',
+              );
 
-                // Enviar notificação por email
-                await _notificationService.sendWarning(
-                  databaseName: destination.name,
-                  message:
-                      'Erro ao limpar backups antigos no Google Drive ${destination.name}: $failureMessage',
-                );
-              },
+              await _notificationService.sendWarning(
+                databaseName: destination.name,
+                message:
+                    'Erro ao limpar backups antigos no Google Drive ${destination.name}: $failureMessage',
+              );
+            });
+            break;
+
+          case DestinationType.dropbox:
+            final config = dropbox.DropboxDestinationConfig(
+              folderPath: configJson['folderPath'] as String? ?? '',
+              folderName: configJson['folderName'] as String? ?? 'Backups',
+              retentionDays: configJson['retentionDays'] as int? ?? 30,
             );
+            final cleanResult = await _dropboxDestinationService
+                .cleanOldBackups(config: config);
+            cleanResult.fold((_) {}, (exception) async {
+              LoggerService.error(
+                'Erro ao limpar backups Dropbox em ${destination.name}',
+                exception,
+              );
+              final failureMessage = exception is Failure
+                  ? exception.message
+                  : exception.toString();
+
+              await _log(
+                backupHistoryId,
+                'error',
+                'Erro ao limpar backups antigos no Dropbox ${destination.name}: $failureMessage',
+              );
+
+              await _notificationService.sendWarning(
+                databaseName: destination.name,
+                message:
+                    'Erro ao limpar backups antigos no Dropbox ${destination.name}: $failureMessage',
+              );
+            });
             break;
         }
       } catch (e, stackTrace) {
@@ -638,14 +728,12 @@ class SchedulerService {
           stackTrace,
         );
 
-        // Gravar log de erro no banco
         await _log(
           backupHistoryId,
           'error',
           'Erro ao limpar backups antigos em ${destination.name}: $e',
         );
 
-        // Enviar notificação por email
         await _notificationService.sendWarning(
           databaseName: destination.name,
           message: 'Erro ao limpar backups antigos em ${destination.name}: $e',
@@ -665,7 +753,6 @@ class SchedulerService {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
-  /// Executa um backup manualmente
   Future<rd.Result<void>> executeNow(String scheduleId) async {
     final result = await _scheduleRepository.getById(scheduleId);
 
@@ -675,12 +762,10 @@ class SchedulerService {
     );
   }
 
-  /// Adiciona/atualiza um schedule no serviço
   Future<rd.Result<void>> refreshSchedule(String scheduleId) async {
     final result = await _scheduleRepository.getById(scheduleId);
 
     return result.fold((schedule) async {
-      // Calcular e atualizar próxima execução
       final nextRunAt = _calculator.getNextRunTime(schedule);
       if (nextRunAt != null) {
         await _scheduleRepository.update(
@@ -695,17 +780,14 @@ class SchedulerService {
 
   Future<bool> _checkWritePermission(Directory directory) async {
     try {
-      // Tentar criar um arquivo temporário para testar permissão
       final testFileName =
           '.backup_permission_test_${DateTime.now().millisecondsSinceEpoch}';
       final testFile = File(
         '${directory.path}${Platform.pathSeparator}$testFileName',
       );
 
-      // Tentar escrever no arquivo
       await testFile.writeAsString('test');
 
-      // Se conseguiu escrever, deletar o arquivo
       if (await testFile.exists()) {
         await testFile.delete();
         return true;

@@ -143,6 +143,13 @@ Future<void> main() async {
     }
 
     try {
+      final dropboxAuthProvider = getIt<DropboxAuthProvider>();
+      await dropboxAuthProvider.initialize();
+    } catch (e) {
+      // Ignore initialization errors
+    }
+
+    try {
       final autoUpdateService = getIt<AutoUpdateService>();
       final feedUrl = dotenv.env['AUTO_UPDATE_FEED_URL'];
       await autoUpdateService.initialize(feedUrl);

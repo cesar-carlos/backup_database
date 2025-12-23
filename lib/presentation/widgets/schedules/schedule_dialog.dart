@@ -1017,7 +1017,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           child: ListTile(
             leading: Icon(_getDestinationIcon(destination.type)),
             title: Text(destination.name),
-            subtitle: Text(_getDestinationTypeName(destination.type)),
+            subtitle: Text(
+              _getDestinationTypeName(destination.type),
+              style: FluentTheme.of(context).typography.caption,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
             trailing: Checkbox(
               checked: isSelected,
               onChanged: (value) {
@@ -1093,6 +1100,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         return 'Servidor FTP';
       case DestinationType.googleDrive:
         return 'Google Drive';
+      case DestinationType.dropbox:
+        return 'Dropbox';
     }
   }
 
@@ -1103,6 +1112,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       case DestinationType.ftp:
         return FluentIcons.cloud_upload;
       case DestinationType.googleDrive:
+        return FluentIcons.cloud;
+      case DestinationType.dropbox:
         return FluentIcons.cloud;
     }
   }
@@ -1206,6 +1217,22 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
   }
 
+  Future<bool> _checkWinRarAvailable() async {
+    final possiblePaths = [
+      r'C:\Program Files\WinRAR\WinRAR.exe',
+      r'C:\Program Files (x86)\WinRAR\WinRAR.exe',
+    ];
+
+    for (final path in possiblePaths) {
+      final file = File(path);
+      if (await file.exists()) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   void _save() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -1226,6 +1253,24 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       );
       return;
     }
+
+    if (_compressBackup && _compressionFormat == CompressionFormat.rar) {
+      final winRarAvailable = await _checkWinRarAvailable();
+      if (!winRarAvailable) {
+        MessageModal.showError(
+          context,
+          message:
+              'Formato RAR requer WinRAR instalado.\n\n'
+              'WinRAR não foi encontrado no sistema.\n'
+              'Por favor, instale o WinRAR ou escolha o formato ZIP.',
+        );
+        return;
+      }
+    }
+
+    final effectiveCompressionFormat = _compressBackup
+        ? _compressionFormat
+        : CompressionFormat.none;
 
     final isValidFolder = await _validateBackupFolder();
     if (!isValidFolder) {
@@ -1267,7 +1312,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       backupFolder: _backupFolderController.text.trim(),
       backupType: _backupType,
       compressBackup: _compressBackup,
-      compressionFormat: _compressionFormat,
+      compressionFormat: effectiveCompressionFormat,
       enabled: _isEnabled,
       enableChecksum: _databaseType == DatabaseType.sqlServer
           ? _enableChecksum

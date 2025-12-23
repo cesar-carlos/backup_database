@@ -281,6 +281,17 @@ class BackupOrchestratorService {
             fileSize = compressionResult.getOrNull()!.compressedSize;
 
             await _log(history.id, 'info', 'Compressão concluída');
+
+            try {
+              final progressProvider = getIt<BackupProgressProvider>();
+              progressProvider.updateProgress(
+                step: BackupStep.compressing,
+                message: 'Compressão concluída',
+                progress: 0.8,
+              );
+            } catch (_) {
+              // Ignorar se não estiver disponível
+            }
           } else {
             final failure = compressionResult.exceptionOrNull()!;
             final failureMessage = failure is Failure

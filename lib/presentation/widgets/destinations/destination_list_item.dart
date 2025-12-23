@@ -69,6 +69,8 @@ class DestinationListItem extends StatelessWidget {
         return FluentIcons.cloud_upload;
       case DestinationType.googleDrive:
         return FluentIcons.cloud;
+      case DestinationType.dropbox:
+        return FluentIcons.cloud;
     }
   }
 
@@ -80,6 +82,8 @@ class DestinationListItem extends StatelessWidget {
         return AppColors.destinationFtp;
       case DestinationType.googleDrive:
         return AppColors.destinationGoogleDrive;
+      case DestinationType.dropbox:
+        return AppColors.destinationDropbox;
     }
   }
 
@@ -91,6 +95,8 @@ class DestinationListItem extends StatelessWidget {
         return 'FTP';
       case DestinationType.googleDrive:
         return 'Google Drive';
+      case DestinationType.dropbox:
+        return 'Dropbox';
     }
   }
 
@@ -120,6 +126,21 @@ class DestinationListItem extends StatelessWidget {
               ).firstMatch(config)?.group(1) ??
               '';
           return 'Pasta: $folderName';
+        case DestinationType.dropbox:
+          final folderPath =
+              RegExp(
+                r'"folderPath"\s*:\s*"([^"]*)"',
+              ).firstMatch(config)?.group(1) ??
+              '';
+          final folderName =
+              RegExp(
+                r'"folderName"\s*:\s*"([^"]*)"',
+              ).firstMatch(config)?.group(1) ??
+              '';
+          if (folderPath.isEmpty) {
+            return 'Pasta: /$folderName';
+          }
+          return 'Pasta: $folderPath/$folderName';
       }
     } catch (e) {
       return '';

@@ -1,6 +1,6 @@
 import 'package:uuid/uuid.dart';
 
-enum DestinationType { local, ftp, googleDrive }
+enum DestinationType { local, ftp, googleDrive, dropbox }
 
 class BackupDestination {
   final String id;
@@ -152,6 +152,32 @@ class GoogleDriveDestinationConfig {
       folderName: json['folderName'] as String,
       accessToken: json['accessToken'] as String,
       refreshToken: json['refreshToken'] as String,
+      retentionDays: json['retentionDays'] as int? ?? 30,
+    );
+  }
+}
+
+class DropboxDestinationConfig {
+  final String folderPath;
+  final String folderName;
+  final int retentionDays;
+
+  const DropboxDestinationConfig({
+    required this.folderPath,
+    this.folderName = 'Backups',
+    this.retentionDays = 30,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'folderPath': folderPath,
+        'folderName': folderName,
+        'retentionDays': retentionDays,
+      };
+
+  factory DropboxDestinationConfig.fromJson(Map<String, dynamic> json) {
+    return DropboxDestinationConfig(
+      folderPath: json['folderPath'] as String,
+      folderName: json['folderName'] as String? ?? 'Backups',
       retentionDays: json['retentionDays'] as int? ?? 30,
     );
   }

@@ -93,6 +93,12 @@ Future<void> setupServiceLocator() async {
     () => GoogleDriveDestinationService(getIt<GoogleAuthService>()),
   );
 
+  getIt.registerLazySingleton<DropboxAuthService>(() => DropboxAuthService());
+
+  getIt.registerLazySingleton<DropboxDestinationService>(
+    () => DropboxDestinationService(getIt<DropboxAuthService>()),
+  );
+
   // Use Cases - Backup
   getIt.registerLazySingleton<ExecuteSqlServerBackup>(
     () => ExecuteSqlServerBackup(getIt<ISqlServerBackupService>()),
@@ -115,11 +121,16 @@ Future<void> setupServiceLocator() async {
     () => SendToGoogleDrive(getIt<GoogleDriveDestinationService>()),
   );
 
+  getIt.registerLazySingleton<SendToDropbox>(
+    () => SendToDropbox(getIt<DropboxDestinationService>()),
+  );
+
   getIt.registerLazySingleton<CleanOldBackups>(
     () => CleanOldBackups(
       localService: getIt<LocalDestinationService>(),
       ftpService: getIt<FtpDestinationService>(),
       googleDriveService: getIt<GoogleDriveDestinationService>(),
+      dropboxService: getIt<DropboxDestinationService>(),
     ),
   );
 
@@ -184,6 +195,8 @@ Future<void> setupServiceLocator() async {
       sendToFtp: getIt<SendToFtp>(),
       ftpDestinationService: getIt<FtpDestinationService>(),
       googleDriveDestinationService: getIt<GoogleDriveDestinationService>(),
+      dropboxDestinationService: getIt<DropboxDestinationService>(),
+      sendToDropbox: getIt<SendToDropbox>(),
       notificationService: getIt<NotificationService>(),
     ),
   );
@@ -280,6 +293,10 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerLazySingleton<GoogleAuthProvider>(
     () => GoogleAuthProvider(getIt<GoogleAuthService>()),
+  );
+
+  getIt.registerLazySingleton<DropboxAuthProvider>(
+    () => DropboxAuthProvider(getIt<DropboxAuthService>()),
   );
 
   getIt.registerFactory<AutoUpdateProvider>(
