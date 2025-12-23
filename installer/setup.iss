@@ -41,7 +41,7 @@ Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "OpÃƒ
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\.env.example"; DestDir: "{app}"; Flags: ignoreversion; DestName: ".env.example"
-Source: "..\docs\installation_guide.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\install\installation_guide.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\path_setup.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "check_dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
