@@ -5,6 +5,7 @@ class LicenseFeatures {
   static const String googleDrive = 'google_drive';
   static const String dropbox = 'dropbox';
   static const String verifyIntegrity = 'verify_integrity';
+  static const String checksum = 'checksum';
   static const String postBackupScript = 'post_backup_script';
   static const String emailNotification = 'email_notification';
 
@@ -15,6 +16,7 @@ class LicenseFeatures {
     googleDrive,
     dropbox,
     verifyIntegrity,
+    checksum,
     postBackupScript,
     emailNotification,
   ];

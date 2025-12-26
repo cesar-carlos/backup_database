@@ -3,7 +3,6 @@ import 'package:logger/logger.dart';
 class LoggerService {
   static Logger? _logger;
 
-  // Lazy initialization - cria o logger na primeira vez que é usado
   static Logger get _instance {
     _logger ??= Logger(
       printer: PrettyPrinter(
@@ -18,7 +17,6 @@ class LoggerService {
     return _logger!;
   }
 
-  // Método init() mantido para compatibilidade (mas agora é opcional)
   static void init() {
     _logger ??= Logger(
       printer: PrettyPrinter(

@@ -674,21 +674,58 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       children: [
         _buildSectionTitle('Verificação de Integridade'),
         const SizedBox(height: 12),
-        if (_databaseType == DatabaseType.sqlServer) ...[
-          _buildCheckboxWithInfo(
-            label: 'Enable CheckSum',
-            value: _enableChecksum,
-            onChanged: (value) {
-              setState(() {
-                _enableChecksum = value;
-              });
+        if (_databaseType == DatabaseType.sqlServer)
+          Consumer<LicenseProvider>(
+            builder: (context, licenseProvider, child) {
+              final hasChecksum =
+                  licenseProvider.hasValidLicense &&
+                  licenseProvider.currentLicense!.hasFeature(
+                    LicenseFeatures.checksum,
+                  );
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildCheckboxWithInfo(
+                          label: hasChecksum
+                              ? 'Enable CheckSum'
+                              : 'Enable CheckSum (Requer licença)',
+                          value: _enableChecksum,
+                          onChanged: hasChecksum
+                              ? (value) {
+                                  setState(() {
+                                    _enableChecksum = value;
+                                  });
+                                }
+                              : null,
+                          infoText: hasChecksum
+                              ? 'Habilita o cálculo de checksums durante o backup. '
+                                  'Detecta corrupção de dados durante o processo de backup.'
+                              : 'Este recurso requer uma licença válida. '
+                                  'Acesse Configurações > Licenciamento para mais informações.',
+                        ),
+                      ),
+                      if (!hasChecksum) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          FluentIcons.lock,
+                          size: 16,
+                          color: FluentTheme.of(context)
+                              .resources
+                              .controlStrokeColorDefault
+                              .withValues(alpha: 0.4),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              );
             },
-            infoText:
-                'Habilita o cálculo de checksums durante o backup. '
-                'Detecta corrupção de dados durante o processo de backup.',
           ),
-          const SizedBox(height: 16),
-        ],
         Consumer<LicenseProvider>(
           builder: (context, licenseProvider, child) {
             final hasVerifyIntegrity =
@@ -1511,6 +1548,16 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       return;
     }
 
+    final licenseProvider = Provider.of<LicenseProvider>(context, listen: false);
+    final hasChecksum = licenseProvider.hasValidLicense &&
+        licenseProvider.currentLicense!.hasFeature(
+          LicenseFeatures.checksum,
+        );
+
+    final effectiveEnableChecksum = _databaseType == DatabaseType.sqlServer
+        ? (hasChecksum ? _enableChecksum : false)
+        : false;
+
     String scheduleConfigJson;
     switch (_scheduleType) {
       case ScheduleType.daily:
@@ -1548,9 +1595,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       compressBackup: _compressBackup,
       compressionFormat: effectiveCompressionFormat,
       enabled: _isEnabled,
-      enableChecksum: _databaseType == DatabaseType.sqlServer
-          ? _enableChecksum
-          : false,
+      enableChecksum: effectiveEnableChecksum,
       verifyAfterBackup: _verifyAfterBackup,
       postBackupScript: _postBackupScriptController.text.trim().isEmpty
           ? null
