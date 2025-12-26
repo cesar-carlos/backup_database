@@ -75,7 +75,11 @@ class BackupOrchestratorService {
     }
 
     // Obter tipo de backup do schedule
-    final backupType = schedule.backupType;
+    final backupType =
+        (schedule.databaseType != DatabaseType.postgresql &&
+                schedule.backupType == BackupType.fullSingle)
+            ? BackupType.full
+            : schedule.backupType;
 
     // Criar subpasta por tipo de backup
     final typeFolderName = backupType.displayName;

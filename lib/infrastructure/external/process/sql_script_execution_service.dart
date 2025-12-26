@@ -89,6 +89,9 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         '${config.server},${config.port}',
         '-d',
         config.database,
+        '-b',
+        '-r',
+        '1',
         '-Q',
         script,
         '-t',
@@ -96,10 +99,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
       ];
 
       if (config.username.isNotEmpty) {
-        arguments.addAll(['-U', config.username]);
-        if (config.password.isNotEmpty) {
-          arguments.addAll(['-P', config.password]);
-        }
+        arguments.addAll(['-U', config.username, '-P', config.password]);
       } else {
         arguments.add('-E'); // Windows Authentication
       }

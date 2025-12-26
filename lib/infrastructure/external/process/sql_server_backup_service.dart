@@ -16,6 +16,44 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
   SqlServerBackupService(this._processService);
 
+  List<String> _baseSqlcmdArgs(SqlServerConfig config) {
+    final args = <String>[
+      '-S',
+      '${config.server},${config.port}',
+      '-d',
+      config.database,
+      // Fail fast for automation: return non-zero exit code on error.
+      '-b',
+      // Send error messages to STDERR (helps logging and parsing).
+      '-r',
+      '1',
+    ];
+
+    if (config.username.isNotEmpty) {
+      args.addAll(['-U', config.username, '-P', config.password]);
+    } else {
+      args.add('-E');
+    }
+
+    return args;
+  }
+
+  bool _hasSqlcmdErrorOutput(String combinedOutputLower) {
+    // More precise than "contains('error')" to avoid false positives like "0 errors".
+    // Typical SQL Server error format: "Msg 3013, Level 16, State ..."
+    final msgPattern = RegExp(r'\bmsg\s+\d+\b');
+    final levelPattern = RegExp(r'\blevel\s+\d+\b');
+    if (msgPattern.hasMatch(combinedOutputLower) &&
+        levelPattern.hasMatch(combinedOutputLower)) {
+      return true;
+    }
+
+    // sqlcmd client-side errors usually start with "Sqlcmd:".
+    if (combinedOutputLower.contains('sqlcmd: error')) return true;
+
+    return false;
+  }
+
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
     required SqlServerConfig config,
@@ -57,7 +95,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           query =
               "BACKUP DATABASE [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
-              "WITH $checksumClause NOFORMAT, NOINIT, "
+              "WITH $checksumClause NOFORMAT, INIT, "
               "NAME = N'${config.database}-Full Database Backup', "
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;
@@ -65,7 +103,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           query =
               "BACKUP DATABASE [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
-              "WITH DIFFERENTIAL, $checksumClause NOFORMAT, NOINIT, "
+              "WITH DIFFERENTIAL, $checksumClause NOFORMAT, INIT, "
               "NAME = N'${config.database}-Differential Database Backup', "
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;
@@ -74,29 +112,13 @@ class SqlServerBackupService implements ISqlServerBackupService {
           query =
               "BACKUP LOG [${config.database}] "
               "TO DISK = N'$escapedBackupPath' "
-              "WITH $copyOnlyClause$checksumClause NOFORMAT, NOINIT, "
+              "WITH $copyOnlyClause$checksumClause NOFORMAT, INIT, "
               "NAME = N'${config.database}-Transaction Log Backup', "
               "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
           break;
       }
 
-      final arguments = [
-        '-S',
-        '${config.server},${config.port}',
-        '-d',
-        config.database,
-        '-Q',
-        query,
-      ];
-
-      if (config.username.isNotEmpty) {
-        arguments.addAll(['-U', config.username]);
-        if (config.password.isNotEmpty) {
-          arguments.addAll(['-P', config.password]);
-        }
-      } else {
-        arguments.add('-E');
-      }
+      final arguments = [..._baseSqlcmdArgs(config), '-Q', query];
 
       final stopwatch = Stopwatch()..start();
       final result = await _processService.run(
@@ -112,10 +134,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
         final stderr = processResult.stderr;
 
         final outputLower = (stdout + stderr).toLowerCase();
-        if (outputLower.contains('error') ||
-            outputLower.contains('failed') ||
-            outputLower.contains('cannot') ||
-            outputLower.contains('unable')) {
+        if (_hasSqlcmdErrorOutput(outputLower)) {
           LoggerService.error(
             'Backup SQL Server falhou (mensagem de erro detectada)',
             Exception(
@@ -195,22 +214,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
               "${enableChecksum ? 'WITH CHECKSUM' : ''}";
 
           final verifyArguments = [
-            '-S',
-            '${config.server},${config.port}',
-            '-d',
-            config.database,
+            ..._baseSqlcmdArgs(config),
             '-Q',
             verifyQuery,
           ];
-
-          if (config.username.isNotEmpty) {
-            verifyArguments.addAll(['-U', config.username]);
-            if (config.password.isNotEmpty) {
-              verifyArguments.addAll(['-P', config.password]);
-            }
-          } else {
-            verifyArguments.add('-E');
-          }
 
           final verifyResult = await _processService.run(
             executable: 'sqlcmd',
@@ -265,23 +272,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
     try {
       final query = 'SELECT @@VERSION';
 
-      final arguments = [
-        '-S',
-        '${config.server},${config.port}',
-        '-Q',
-        query,
-        '-t',
-        '5',
-      ];
-
-      if (config.username.isNotEmpty) {
-        arguments.addAll(['-U', config.username]);
-        if (config.password.isNotEmpty) {
-          arguments.addAll(['-P', config.password]);
-        }
-      } else {
-        arguments.add('-E');
-      }
+      final arguments = [..._baseSqlcmdArgs(config), '-Q', query, '-t', '5'];
 
       final result = await _processService.run(
         executable: 'sqlcmd',
@@ -310,8 +301,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           "SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb') ORDER BY name";
 
       final arguments = [
-        '-S',
-        '${config.server},${config.port}',
+        ..._baseSqlcmdArgs(config),
         '-Q',
         query,
         '-h',
@@ -320,15 +310,6 @@ class SqlServerBackupService implements ISqlServerBackupService {
         '-t',
         '10',
       ];
-
-      if (config.username.isNotEmpty) {
-        arguments.addAll(['-U', config.username]);
-        if (config.password.isNotEmpty) {
-          arguments.addAll(['-P', config.password]);
-        }
-      } else {
-        arguments.add('-E');
-      }
 
       final result = await _processService.run(
         executable: 'sqlcmd',

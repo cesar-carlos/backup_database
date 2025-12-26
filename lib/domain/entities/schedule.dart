@@ -13,7 +13,7 @@ class Schedule {
   final String databaseConfigId;
   final DatabaseType databaseType;
   final ScheduleType scheduleType;
-  final String scheduleConfig; // JSON com configurações específicas
+  final String scheduleConfig;
   final List<String> destinationIds;
   final String backupFolder;
   final BackupType backupType;
@@ -51,7 +51,8 @@ class Schedule {
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : id = id ?? const Uuid().v4(),
-       compressionFormat = compressionFormat ??
+       compressionFormat =
+           compressionFormat ??
            (compressBackup ? CompressionFormat.zip : CompressionFormat.none),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
@@ -123,7 +124,6 @@ class Schedule {
   int get hashCode => id.hashCode;
 }
 
-// Configurações específicas para cada tipo de agendamento
 class DailyScheduleConfig {
   final int hour;
   final int minute;
@@ -141,7 +141,7 @@ class DailyScheduleConfig {
 }
 
 class WeeklyScheduleConfig {
-  final List<int> daysOfWeek; // 1=Segunda, 7=Domingo
+  final List<int> daysOfWeek;
   final int hour;
   final int minute;
 
@@ -167,7 +167,7 @@ class WeeklyScheduleConfig {
 }
 
 class MonthlyScheduleConfig {
-  final List<int> daysOfMonth; // 1-31
+  final List<int> daysOfMonth;
   final int hour;
   final int minute;
 

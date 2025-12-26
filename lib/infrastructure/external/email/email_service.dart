@@ -107,7 +107,8 @@ class EmailService {
     }
 
     final subject = '⚠️ Aviso de Backup - $databaseName';
-    final body = '''
+    final body =
+        '''
 Aviso durante o backup!
 
 Base de Dados: $databaseName
@@ -170,4 +171,3 @@ Este é um e-mail automático do Sistema de Backup.
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 }
-

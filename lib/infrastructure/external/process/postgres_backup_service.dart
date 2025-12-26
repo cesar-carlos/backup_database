@@ -39,10 +39,10 @@ class PostgresBackupService implements IPostgresBackupService {
     final typeSlug = backupType == BackupType.log
         ? 'log'
         : backupType == BackupType.differential
-            ? 'incremental'
-            : backupType == BackupType.fullSingle
-                ? 'fullSingle'
-                : 'full';
+        ? 'incremental'
+        : backupType == BackupType.fullSingle
+        ? 'fullSingle'
+        : 'full';
 
     final String backupPath;
     if (backupType == BackupType.fullSingle) {
@@ -303,8 +303,7 @@ class PostgresBackupService implements IPostgresBackupService {
       config.port.toString(),
       '-U',
       config.username,
-      '--incremental',
-      manifestPath,
+      '--incremental=$manifestPath',
       '-D',
       backupPath,
       '-P',
@@ -339,8 +338,6 @@ class PostgresBackupService implements IPostgresBackupService {
       '-D',
       backupPath,
       '-P',
-      '-X',
-      'stream',
       '--wal-method=stream',
     ];
 
@@ -469,7 +466,7 @@ class PostgresBackupService implements IPostgresBackupService {
   }
 
   Future<rd.Result<void>> _verifyBackup(String backupPath) async {
-    final verifyArgs = ['-D', backupPath, '-m'];
+    final verifyArgs = ['-D', backupPath];
 
     final verifyResult = await _processService.run(
       executable: 'pg_verifybackup',

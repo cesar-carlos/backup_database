@@ -7,4 +7,3 @@ class DropboxFailure extends Failure {
     super.originalError,
   });
 }
-

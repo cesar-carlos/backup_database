@@ -42,22 +42,25 @@ class SybaseBackupService implements ISybaseBackupService {
         await outputDir.create(recursive: true);
       }
 
-      final effectiveType = backupType == BackupType.differential
-          ? BackupType.full
-          : backupType;
+      final effectiveType =
+          (backupType == BackupType.differential ||
+                  backupType == BackupType.fullSingle)
+              ? BackupType.full
+              : backupType;
 
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-      final extension = effectiveType == BackupType.log ? '.trn' : '';
       final typeSlug = effectiveType.name;
 
       String backupPath;
       if (effectiveType == BackupType.full) {
         backupPath = p.join(outputDirectory, config.databaseName);
       } else {
-        final fileName =
-            customFileName ??
-            '${config.databaseName}_${typeSlug}_$timestamp$extension';
-        backupPath = p.join(outputDirectory, fileName);
+        // Para backup de log, as ferramentas do SQL Anywhere costumam receber um
+        // diretório destino. Criamos uma pasta única por execução para evitar
+        // sobrescrita e facilitar a descoberta do arquivo gerado (quando existir).
+        final folderName =
+            customFileName ?? '${config.databaseName}_${typeSlug}_$timestamp';
+        backupPath = p.join(outputDirectory, folderName);
       }
 
       final executable = dbbackupPath ?? 'dbbackup';
@@ -176,14 +179,11 @@ class SybaseBackupService implements ISybaseBackupService {
           final arguments = <String>[];
 
           if (effectiveType == BackupType.log) {
-            if (truncateLog) {
-              arguments.add('-x');
-            } else {
-              arguments.add('-t');
-              arguments.add('-r');
-            }
-          } else if (effectiveType == BackupType.full) {
-            arguments.add('-d');
+            // Referência (ASA/SQL Anywhere): -t = transaction log only;
+            // -r renomeia backups anteriores e cria um novo; -x remove backups
+            // anteriores e cria um novo.
+            arguments.add('-t');
+            arguments.add(truncateLog ? '-x' : '-r');
           }
 
           arguments.addAll(['-c', strategy['conn']!, '-y', backupPath]);
@@ -321,8 +321,18 @@ class SybaseBackupService implements ISybaseBackupService {
           );
         }
 
+        // Para backup de log, tentar resolver o arquivo gerado dentro do diretório.
+        if (effectiveType == BackupType.log && await backupDir.exists()) {
+          final resolvedLogFile = await _tryFindLogFile(backupDir);
+          if (resolvedLogFile != null) {
+            actualBackupPath = resolvedLogFile.path;
+            totalSize = await resolvedLogFile.length();
+          }
+        }
+
         // Para backup de log, aguardar um pouco mais para garantir que o arquivo seja fechado pelo Sybase
-        if (effectiveType == BackupType.log && await backupFile.exists()) {
+        final resolvedBackupFile = File(actualBackupPath);
+        if (effectiveType == BackupType.log && await resolvedBackupFile.exists()) {
           LoggerService.debug(
             'Aguardando arquivo de log ser liberado pelo Sybase...',
           );
@@ -331,8 +341,9 @@ class SybaseBackupService implements ISybaseBackupService {
           bool fileAccessible = false;
           for (int attempt = 0; attempt < 5; attempt++) {
             try {
-              final testFile = File(actualBackupPath);
-              final randomAccessFile = await testFile.open(mode: FileMode.read);
+              final randomAccessFile = await resolvedBackupFile.open(
+                mode: FileMode.read,
+              );
               await randomAccessFile.close();
               fileAccessible = true;
               LoggerService.debug('Arquivo de log está acessível');
@@ -363,51 +374,99 @@ class SybaseBackupService implements ISybaseBackupService {
 
         // Verificar integridade do backup se solicitado
         if (verifyAfterBackup) {
-          LoggerService.info('Verificando integridade do backup usando dbverify...');
-          
-          final connectionStrategies = <String>[
-            'ENG=${config.serverName};DBN=${config.databaseName};UID=${config.username};PWD=${config.password}',
-            'ENG=${config.databaseName};DBN=${config.databaseName};UID=${config.username};PWD=${config.password}',
-            'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
-          ];
+          LoggerService.info('Verificando integridade do backup Sybase...');
 
           bool verifySuccess = false;
           String lastVerifyError = '';
 
-          for (final connStr in connectionStrategies) {
-            LoggerService.debug('Tentando dbverify com: $connStr');
+          // Preferir validar o ARQUIVO do backup (offline), quando houver.
+          // Para backup full, o destino é um diretório com o .db copiado.
+          if (effectiveType == BackupType.full) {
+            final dir = Directory(actualBackupPath);
+            if (await dir.exists()) {
+              final backupDbFile = await _tryFindBackupDbFile(dir);
+              if (backupDbFile != null) {
+                final connStr =
+                    'UID=${config.username};PWD=${config.password};DBF=${backupDbFile.path}';
+                LoggerService.debug('Tentando dbvalid no arquivo: ${backupDbFile.path}');
 
-            final verifyResult = await _processService.run(
-              executable: 'dbverify',
-              arguments: [
-                '-c',
-                connStr,
-                '-d',
-                config.databaseName,
-              ],
-              timeout: const Duration(minutes: 30),
-            );
+                final verifyResult = await _processService.run(
+                  executable: 'dbvalid',
+                  arguments: ['-c', connStr],
+                  timeout: const Duration(minutes: 30),
+                );
 
-            verifyResult.fold(
-              (processResult) {
-                if (processResult.isSuccess) {
-                  verifySuccess = true;
-                  LoggerService.info('Verificação de integridade concluída com sucesso');
-                } else {
-                  lastVerifyError = processResult.stderr;
-                  LoggerService.debug('dbverify falhou: ${processResult.stderr}');
-                }
-              },
-              (failure) {
-                if (failure is Failure) {
-                  lastVerifyError = failure.message;
-                } else {
-                  lastVerifyError = failure.toString();
-                }
-              },
-            );
+                verifyResult.fold(
+                  (processResult) {
+                    if (processResult.isSuccess) {
+                      verifySuccess = true;
+                      LoggerService.info(
+                        'Verificação de integridade concluída com sucesso (dbvalid)',
+                      );
+                    } else {
+                      lastVerifyError = processResult.stderr.isNotEmpty
+                          ? processResult.stderr
+                          : processResult.stdout;
+                      LoggerService.debug(
+                        'dbvalid falhou: $lastVerifyError',
+                      );
+                    }
+                  },
+                  (failure) {
+                    lastVerifyError =
+                        failure is Failure ? failure.message : failure.toString();
+                  },
+                );
+              } else {
+                lastVerifyError =
+                    'Não foi possível localizar um arquivo .db no diretório do backup';
+              }
+            }
+          }
 
-            if (verifySuccess) break;
+          // Fallback: caso não seja possível validar o arquivo do backup (ou não seja full),
+          // tenta dbverify por conexão (melhor que nada, mas valida o banco acessível via conexão).
+          if (!verifySuccess) {
+            final connectionStrategies = <String>[
+              'ENG=${config.serverName};DBN=${config.databaseName};UID=${config.username};PWD=${config.password}',
+              'ENG=${config.databaseName};DBN=${config.databaseName};UID=${config.username};PWD=${config.password}',
+              'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
+            ];
+
+            for (final connStr in connectionStrategies) {
+              LoggerService.debug('Tentando dbverify com: $connStr');
+
+              final verifyResult = await _processService.run(
+                executable: 'dbverify',
+                arguments: [
+                  '-c',
+                  connStr,
+                  '-d',
+                  config.databaseName,
+                ],
+                timeout: const Duration(minutes: 30),
+              );
+
+              verifyResult.fold(
+                (processResult) {
+                  if (processResult.isSuccess) {
+                    verifySuccess = true;
+                    LoggerService.info(
+                      'Verificação de integridade concluída com sucesso (dbverify)',
+                    );
+                  } else {
+                    lastVerifyError = processResult.stderr;
+                    LoggerService.debug('dbverify falhou: ${processResult.stderr}');
+                  }
+                },
+                (failure) {
+                  lastVerifyError =
+                      failure is Failure ? failure.message : failure.toString();
+                },
+              );
+
+              if (verifySuccess) break;
+            }
           }
 
           if (!verifySuccess) {
@@ -435,6 +494,43 @@ class SybaseBackupService implements ISybaseBackupService {
           originalError: e,
         ),
       );
+    }
+  }
+
+  Future<File?> _tryFindLogFile(Directory backupDir) async {
+    try {
+      final entities = await backupDir.list().toList();
+      final files = entities.whereType<File>().toList()
+        ..sort(
+          (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+        );
+
+      if (files.isEmpty) return null;
+
+      final logCandidates = files.where((f) {
+        final ext = p.extension(f.path).toLowerCase();
+        return ext == '.trn' || ext == '.log';
+      }).toList();
+
+      if (logCandidates.isNotEmpty) return logCandidates.first;
+      return files.first;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<File?> _tryFindBackupDbFile(Directory backupDir) async {
+    try {
+      final entities = await backupDir.list().toList();
+      final dbFiles = entities.whereType<File>().where((f) {
+        return p.extension(f.path).toLowerCase() == '.db';
+      }).toList()
+        ..sort((a, b) => b.lengthSync().compareTo(a.lengthSync()));
+
+      if (dbFiles.isEmpty) return null;
+      return dbFiles.first;
+    } catch (_) {
+      return null;
     }
   }
 

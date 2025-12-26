@@ -6,7 +6,7 @@ class BackupDestination {
   final String id;
   final String name;
   final DestinationType type;
-  final String config; // JSON com configurações específicas do tipo
+  final String config;
   final bool enabled;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -19,9 +19,9 @@ class BackupDestination {
     this.enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   BackupDestination copyWith({
     String? id,
@@ -54,7 +54,6 @@ class BackupDestination {
   int get hashCode => id.hashCode;
 }
 
-// Configurações específicas para cada tipo de destino
 class LocalDestinationConfig {
   final String path;
   final bool createSubfoldersByDate;
@@ -67,10 +66,10 @@ class LocalDestinationConfig {
   });
 
   Map<String, dynamic> toJson() => {
-        'path': path,
-        'createSubfoldersByDate': createSubfoldersByDate,
-        'retentionDays': retentionDays,
-      };
+    'path': path,
+    'createSubfoldersByDate': createSubfoldersByDate,
+    'retentionDays': retentionDays,
+  };
 
   factory LocalDestinationConfig.fromJson(Map<String, dynamic> json) {
     return LocalDestinationConfig(
@@ -101,14 +100,14 @@ class FtpDestinationConfig {
   });
 
   Map<String, dynamic> toJson() => {
-        'host': host,
-        'port': port,
-        'username': username,
-        'password': password,
-        'remotePath': remotePath,
-        'useFtps': useFtps,
-        'retentionDays': retentionDays,
-      };
+    'host': host,
+    'port': port,
+    'username': username,
+    'password': password,
+    'remotePath': remotePath,
+    'useFtps': useFtps,
+    'retentionDays': retentionDays,
+  };
 
   factory FtpDestinationConfig.fromJson(Map<String, dynamic> json) {
     return FtpDestinationConfig(
@@ -139,12 +138,12 @@ class GoogleDriveDestinationConfig {
   });
 
   Map<String, dynamic> toJson() => {
-        'folderId': folderId,
-        'folderName': folderName,
-        'accessToken': accessToken,
-        'refreshToken': refreshToken,
-        'retentionDays': retentionDays,
-      };
+    'folderId': folderId,
+    'folderName': folderName,
+    'accessToken': accessToken,
+    'refreshToken': refreshToken,
+    'retentionDays': retentionDays,
+  };
 
   factory GoogleDriveDestinationConfig.fromJson(Map<String, dynamic> json) {
     return GoogleDriveDestinationConfig(
@@ -169,10 +168,10 @@ class DropboxDestinationConfig {
   });
 
   Map<String, dynamic> toJson() => {
-        'folderPath': folderPath,
-        'folderName': folderName,
-        'retentionDays': retentionDays,
-      };
+    'folderPath': folderPath,
+    'folderName': folderName,
+    'retentionDays': retentionDays,
+  };
 
   factory DropboxDestinationConfig.fromJson(Map<String, dynamic> json) {
     return DropboxDestinationConfig(
@@ -182,4 +181,3 @@ class DropboxDestinationConfig {
     );
   }
 }
-

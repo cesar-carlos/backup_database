@@ -36,9 +36,7 @@ class RecentBackupsList extends StatelessWidget {
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                DateFormat('dd/MM/yyyy HH:mm').format(backup.startedAt),
-              ),
+              Text(DateFormat('dd/MM/yyyy HH:mm').format(backup.startedAt)),
               const SizedBox(height: 4),
               Row(
                 children: [

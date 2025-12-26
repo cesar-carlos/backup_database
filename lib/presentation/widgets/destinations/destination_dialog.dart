@@ -164,14 +164,23 @@ class _DestinationDialogState extends State<DestinationDialog> {
               const SizedBox(height: 16),
               Consumer<LicenseProvider>(
                 builder: (context, licenseProvider, child) {
-                  final hasGoogleDrive = licenseProvider.hasValidLicense &&
-                      licenseProvider.currentLicense!.hasFeature(LicenseFeatures.googleDrive);
-                  final hasDropbox = licenseProvider.hasValidLicense &&
-                      licenseProvider.currentLicense!.hasFeature(LicenseFeatures.dropbox);
-                  
-                  final isGoogleDriveBlocked = _selectedType == DestinationType.googleDrive && !hasGoogleDrive;
-                  final isDropboxBlocked = _selectedType == DestinationType.dropbox && !hasDropbox;
-                  
+                  final hasGoogleDrive =
+                      licenseProvider.hasValidLicense &&
+                      licenseProvider.currentLicense!.hasFeature(
+                        LicenseFeatures.googleDrive,
+                      );
+                  final hasDropbox =
+                      licenseProvider.hasValidLicense &&
+                      licenseProvider.currentLicense!.hasFeature(
+                        LicenseFeatures.dropbox,
+                      );
+
+                  final isGoogleDriveBlocked =
+                      _selectedType == DestinationType.googleDrive &&
+                      !hasGoogleDrive;
+                  final isDropboxBlocked =
+                      _selectedType == DestinationType.dropbox && !hasDropbox;
+
                   if (isGoogleDriveBlocked || isDropboxBlocked) {
                     return InfoBar(
                       severity: InfoBarSeverity.warning,
@@ -189,7 +198,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       ),
                     );
                   }
-                  
+
                   return const SizedBox.shrink();
                 },
               ),
@@ -219,20 +228,26 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Widget _buildTypeSelector() {
     return Consumer<LicenseProvider>(
       builder: (context, licenseProvider, child) {
-        final hasGoogleDrive = licenseProvider.hasValidLicense &&
-            licenseProvider.currentLicense!.hasFeature(LicenseFeatures.googleDrive);
-        final hasDropbox = licenseProvider.hasValidLicense &&
+        final hasGoogleDrive =
+            licenseProvider.hasValidLicense &&
+            licenseProvider.currentLicense!.hasFeature(
+              LicenseFeatures.googleDrive,
+            );
+        final hasDropbox =
+            licenseProvider.hasValidLicense &&
             licenseProvider.currentLicense!.hasFeature(LicenseFeatures.dropbox);
-        
+
         return AppDropdown<DestinationType>(
           label: 'Tipo de Destino',
           value: _selectedType,
           placeholder: const Text('Tipo de Destino'),
           items: DestinationType.values.map((type) {
-            final isGoogleDriveBlocked = type == DestinationType.googleDrive && !hasGoogleDrive;
-            final isDropboxBlocked = type == DestinationType.dropbox && !hasDropbox;
+            final isGoogleDriveBlocked =
+                type == DestinationType.googleDrive && !hasGoogleDrive;
+            final isDropboxBlocked =
+                type == DestinationType.dropbox && !hasDropbox;
             final isBlocked = isGoogleDriveBlocked || isDropboxBlocked;
-            
+
             return ComboBoxItem<DestinationType>(
               value: type,
               enabled: !isBlocked,
@@ -243,7 +258,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     _getTypeIcon(type),
                     size: 20,
                     color: isBlocked
-                        ? FluentTheme.of(context).resources.controlStrokeColorDefault.withValues(alpha: 0.4)
+                        ? FluentTheme.of(context)
+                              .resources
+                              .controlStrokeColorDefault
+                              .withValues(alpha: 0.4)
                         : null,
                   ),
                   const SizedBox(width: 8),
@@ -260,9 +278,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
                             style: TextStyle(
                               color: isBlocked
                                   ? FluentTheme.of(context)
-                                      .resources
-                                      .controlStrokeColorDefault
-                                      .withValues(alpha: 0.4)
+                                        .resources
+                                        .controlStrokeColorDefault
+                                        .withValues(alpha: 0.4)
                                   : null,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -290,18 +308,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ? null
               : (value) {
                   if (value != null) {
-                    final isGoogleDriveBlocked = value == DestinationType.googleDrive && !hasGoogleDrive;
-                    final isDropboxBlocked = value == DestinationType.dropbox && !hasDropbox;
-                    
+                    final isGoogleDriveBlocked =
+                        value == DestinationType.googleDrive && !hasGoogleDrive;
+                    final isDropboxBlocked =
+                        value == DestinationType.dropbox && !hasDropbox;
+
                     if (isGoogleDriveBlocked || isDropboxBlocked) {
                       MessageModal.showWarning(
                         context,
-                        message: 'Este destino requer uma licença válida. '
+                        message:
+                            'Este destino requer uma licença válida. '
                             'Acesse Configurações > Licenciamento para mais informações.',
                       );
                       return;
                     }
-                    
+
                     setState(() {
                       _selectedType = value;
                     });
@@ -1038,9 +1059,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
               children: [
                 const Icon(FluentIcons.lock, size: 18),
                 const SizedBox(width: 8),
-                Text(isConfigured && hasClientId
-                    ? 'Alterar Credenciais'
-                    : 'Configurar Credenciais'),
+                Text(
+                  isConfigured && hasClientId
+                      ? 'Alterar Credenciais'
+                      : 'Configurar Credenciais',
+                ),
               ],
             ),
           ),
@@ -1454,8 +1477,7 @@ class _DropboxOAuthConfigDialog extends StatefulWidget {
       _DropboxOAuthConfigDialogState();
 }
 
-class _DropboxOAuthConfigDialogState
-    extends State<_DropboxOAuthConfigDialog> {
+class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
   late final TextEditingController _clientIdController;
   late final TextEditingController _clientSecretController;
   bool _isLoading = false;
@@ -1596,18 +1618,18 @@ class _DropboxOAuthConfigDialogState
             child: SelectableText(
               'http://localhost:8085/oauth2redirect',
               style: FluentTheme.of(context).typography.caption?.copyWith(
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.bold,
-                  ),
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
             style: FluentTheme.of(context).typography.caption?.copyWith(
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
-                ),
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+            ),
           ),
         ],
       ),

@@ -1,5 +1,4 @@
 class RouteNames {
-  // Paths
   static const String dashboard = '/';
   static const String sqlServerConfig = '/sql-server';
   static const String sybaseConfig = '/sybase';
@@ -9,7 +8,6 @@ class RouteNames {
   static const String notifications = '/notifications';
   static const String settings = '/settings';
 
-  // Names
   static const String dashboardName = 'dashboard';
   static const String sqlServerConfigName = 'sql-server-config';
   static const String sybaseConfigName = 'sybase-config';

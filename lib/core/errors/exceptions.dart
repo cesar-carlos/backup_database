@@ -45,4 +45,3 @@ class FileSystemException implements Exception {
   @override
   String toString() => 'FileSystemException: $message (path: $path)';
 }
-

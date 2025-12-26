@@ -3,8 +3,8 @@ import 'package:uuid/uuid.dart';
 class SybaseConfig {
   final String id;
   final String name;
-  final String serverName; // Nome da máquina/servidor
-  final String databaseName; // Nome do banco de dados (DBN)
+  final String serverName;
+  final String databaseName;
   final String databaseFile;
   final int port;
   final String username;
@@ -18,16 +18,16 @@ class SybaseConfig {
     required this.name,
     required this.serverName,
     required this.databaseName,
-    this.databaseFile = '', // Opcional - não necessário para backup quando usando ENG+DBN
+    this.databaseFile = '',
     this.port = 2638,
     required this.username,
     required this.password,
     this.enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   SybaseConfig copyWith({
     String? id,
@@ -67,4 +67,3 @@ class SybaseConfig {
   @override
   int get hashCode => id.hashCode;
 }
-

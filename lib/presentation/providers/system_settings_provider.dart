@@ -20,9 +20,8 @@ class SystemSettingsProvider extends ChangeNotifier {
   bool _startWithWindows = true;
   bool _isInitialized = false;
 
-  SystemSettingsProvider({
-    WindowManagerService? windowManager,
-  })  : _windowManager = windowManager ?? WindowManagerService();
+  SystemSettingsProvider({WindowManagerService? windowManager})
+    : _windowManager = windowManager ?? WindowManagerService();
 
   bool get minimizeToTray => _minimizeToTray;
   bool get closeToTray => _closeToTray;
@@ -34,38 +33,35 @@ class SystemSettingsProvider extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      
-      // Verificar se é a primeira inicialização (nenhum valor salvo)
-      final isFirstRun = !prefs.containsKey(_minimizeToTrayKey) &&
+
+      final isFirstRun =
+          !prefs.containsKey(_minimizeToTrayKey) &&
           !prefs.containsKey(_closeToTrayKey) &&
           !prefs.containsKey(_startMinimizedKey) &&
           !prefs.containsKey(_startWithWindowsKey);
-      
+
       _minimizeToTray = prefs.getBool(_minimizeToTrayKey) ?? true;
       _closeToTray = prefs.getBool(_closeToTrayKey) ?? true;
       _startMinimized = prefs.getBool(_startMinimizedKey) ?? true;
       _startWithWindows = prefs.getBool(_startWithWindowsKey) ?? true;
-      
-      // Se for a primeira inicialização, salvar os valores padrão
+
       if (isFirstRun) {
         await prefs.setBool(_minimizeToTrayKey, _minimizeToTray);
         await prefs.setBool(_closeToTrayKey, _closeToTray);
         await prefs.setBool(_startMinimizedKey, _startMinimized);
         await prefs.setBool(_startWithWindowsKey, _startWithWindows);
         LoggerService.info('Primeira inicialização - valores padrão salvos');
-        
-        // Se "Iniciar com o Windows" estiver ativado, configurar no registro
+
         if (_startWithWindows) {
           await _updateStartWithWindows(true);
         }
       }
-      
+
       _isInitialized = true;
 
-      // Aplicar configurações carregadas
       _windowManager.setMinimizeToTray(_minimizeToTray);
       _windowManager.setCloseToTray(_closeToTray);
-      
+
       LoggerService.info(
         'Configurações aplicadas - Minimizar para bandeja: $_minimizeToTray, Fechar para bandeja: $_closeToTray',
       );
@@ -114,8 +110,7 @@ class SystemSettingsProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_startMinimizedKey, value);
-      
-      // Se "Iniciar com o Windows" estiver ativado, atualizar o registro
+
       if (_startWithWindows) {
         await _updateStartWithWindows(true);
       }
@@ -141,33 +136,27 @@ class SystemSettingsProvider extends ChangeNotifier {
   Future<void> _updateStartWithWindows(bool enable) async {
     try {
       final executablePath = Platform.resolvedExecutable;
-      
+
       if (enable) {
-        // Verificar se deve iniciar minimizado
         final prefs = await SharedPreferences.getInstance();
         final startMinimized = prefs.getBool(_startMinimizedKey) ?? true;
-        
-        // Construir comando com argumento --minimized se necessário
-        final command = startMinimized 
+
+        final command = startMinimized
             ? '"$executablePath" --minimized'
             : '"$executablePath"';
-        
-        // Adicionar ao registro do Windows
-        final result = await Process.run(
-          'reg',
-          [
-            'add',
-            'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
-            '/v',
-            'BackupDatabase',
-            '/t',
-            'REG_SZ',
-            '/d',
-            command,
-            '/f',
-          ],
-        );
-        
+
+        final result = await Process.run('reg', [
+          'add',
+          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+          '/v',
+          'BackupDatabase',
+          '/t',
+          'REG_SZ',
+          '/d',
+          command,
+          '/f',
+        ]);
+
         if (result.exitCode == 0) {
           LoggerService.info(
             'Aplicativo adicionado ao início automático do Windows${startMinimized ? ' (minimizado)' : ''}',
@@ -179,22 +168,19 @@ class SystemSettingsProvider extends ChangeNotifier {
           );
         }
       } else {
-        // Remover do registro do Windows
-        final result = await Process.run(
-          'reg',
-          [
-            'delete',
-            'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
-            '/v',
-            'BackupDatabase',
-            '/f',
-          ],
-        );
-        
+        final result = await Process.run('reg', [
+          'delete',
+          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+          '/v',
+          'BackupDatabase',
+          '/f',
+        ]);
+
         if (result.exitCode == 0) {
-          LoggerService.info('Aplicativo removido do início automático do Windows');
+          LoggerService.info(
+            'Aplicativo removido do início automático do Windows',
+          );
         } else {
-          // Exit code 1 significa que a chave não existe, o que é OK
           if (result.exitCode != 1) {
             LoggerService.error(
               'Erro ao remover do início automático',
@@ -225,4 +211,3 @@ class SystemSettingsProvider extends ChangeNotifier {
     }
   }
 }
-

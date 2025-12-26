@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 
 enum LogLevel { debug, info, warning, error }
+
 enum LogCategory { execution, system, audit }
 
 class BackupLog {
@@ -20,8 +21,8 @@ class BackupLog {
     required this.message,
     this.details,
     DateTime? createdAt,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now();
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now();
 
   @override
   bool operator ==(Object other) =>
@@ -31,4 +32,3 @@ class BackupLog {
   @override
   int get hashCode => id.hashCode;
 }
-

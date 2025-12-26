@@ -15,7 +15,6 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
   @override
   Future<rd.Result<List<SybaseConfig>>> getAll() async {
     try {
-      // Verificar se a tabela existe antes de consultar
       if (!await _tableExists()) {
         LoggerService.warning(
           'Tabela sybase_configs não existe, retornando lista vazia',
@@ -40,7 +39,6 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           )
           .get());
 
-      // Converter cada registro com tratamento de erro individual
       final entities = <SybaseConfig>[];
       for (final row in rows) {
         try {
@@ -53,14 +51,13 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
             e,
             stackTrace,
           );
-          // Continuar processando outras configurações ao invés de falhar tudo
+
           continue;
         }
       }
 
       return rd.Success(entities);
     } catch (e, stackTrace) {
-      // Se o erro for sobre tabela inexistente, retornar lista vazia
       final errorStr = e.toString().toLowerCase();
       if (errorStr.contains('no such table') ||
           errorStr.contains('sybase_configs')) {
@@ -99,7 +96,6 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
   @override
   Future<rd.Result<SybaseConfig>> getById(String id) async {
     try {
-      // Verificar se a tabela existe antes de consultar
       if (!await _tableExists()) {
         LoggerService.warning(
           'Tabela sybase_configs não existe ao buscar por ID: $id',
@@ -311,7 +307,6 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           )
           .get());
 
-      // Converter cada registro com tratamento de erro individual
       final entities = <SybaseConfig>[];
       for (final row in rows) {
         try {
@@ -324,14 +319,13 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
             e,
             stackTrace,
           );
-          // Continuar processando outras configurações
+
           continue;
         }
       }
 
       return rd.Success(entities);
     } catch (e, stackTrace) {
-      // Se o erro for sobre tabela inexistente, retornar lista vazia
       final errorStr = e.toString().toLowerCase();
       if (errorStr.contains('no such table') ||
           errorStr.contains('sybase_configs')) {

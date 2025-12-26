@@ -24,11 +24,11 @@ class DropboxAuthResult {
   });
 
   Map<String, dynamic> toJson() => {
-        'accessToken': accessToken,
-        'refreshToken': refreshToken,
-        'email': email,
-        'expirationDate': expirationDate?.toIso8601String(),
-      };
+    'accessToken': accessToken,
+    'refreshToken': refreshToken,
+    'email': email,
+    'expirationDate': expirationDate?.toIso8601String(),
+  };
 
   factory DropboxAuthResult.fromJson(Map<String, dynamic> json) {
     return DropboxAuthResult(
@@ -93,9 +93,7 @@ class DropboxAuthService {
 
       if (tokenResponse == null || tokenResponse['access_token'] == null) {
         return const rd.Failure(
-          DropboxFailure(
-            message: 'Falha ao obter token de acesso do Dropbox.',
-          ),
+          DropboxFailure(message: 'Falha ao obter token de acesso do Dropbox.'),
         );
       }
 
@@ -167,7 +165,8 @@ class DropboxAuthService {
       await request.response.close();
 
       if (error != null) {
-        final errorMessage = errorDescription != null && errorDescription.isNotEmpty
+        final errorMessage =
+            errorDescription != null && errorDescription.isNotEmpty
             ? '$error: $errorDescription'
             : error;
         throw Exception('Erro de autenticação: $errorMessage');
@@ -228,7 +227,9 @@ class DropboxAuthService {
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Falha ao trocar código por token: ${response.statusCode}');
+        throw Exception(
+          'Falha ao trocar código por token: ${response.statusCode}',
+        );
       }
 
       return response.data as Map<String, dynamic>;
@@ -285,10 +286,10 @@ class DropboxAuthService {
       );
     }
 
-      try {
-        if (_cachedAccessToken != null && _cachedEmail != null) {
-          if (_isTokenExpired()) {
-            final refreshResult = await _refreshToken();
+    try {
+      if (_cachedAccessToken != null && _cachedEmail != null) {
+        if (_isTokenExpired()) {
+          final refreshResult = await _refreshToken();
           if (refreshResult.isError()) {
             return refreshResult;
           }
@@ -347,7 +348,8 @@ class DropboxAuthService {
 
       final data = response.data as Map<String, dynamic>;
       _cachedAccessToken = data['access_token'] as String;
-      _cachedRefreshToken = data['refresh_token'] as String? ?? _cachedRefreshToken;
+      _cachedRefreshToken =
+          data['refresh_token'] as String? ?? _cachedRefreshToken;
 
       final expiresIn = data['expires_in'] as int?;
       if (expiresIn != null) {
@@ -401,9 +403,7 @@ class DropboxAuthService {
     try {
       final response = await _dio!.post(
         '/2/users/get_current_account',
-        options: Options(
-          headers: {'Authorization': 'Bearer $accessToken'},
-        ),
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
       );
 
       if (response.statusCode == 200) {
@@ -420,9 +420,7 @@ class DropboxAuthService {
       }
 
       return rd.Failure(
-        DropboxFailure(
-          message: 'Erro ao obter email: ${response.statusCode}',
-        ),
+        DropboxFailure(message: 'Erro ao obter email: ${response.statusCode}'),
       );
     } catch (e) {
       return rd.Failure(
@@ -530,4 +528,3 @@ class DropboxAuthService {
     _cachedRefreshToken = refreshToken;
   }
 }
-

@@ -82,6 +82,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _scheduleType = widget.schedule!.scheduleType;
       _backupType = widget.schedule!.backupType;
       _truncateLog = widget.schedule!.truncateLog;
+      if (_databaseType != DatabaseType.postgresql &&
+          _backupType == BackupType.fullSingle) {
+        _backupType = BackupType.full;
+      }
       if (_databaseType == DatabaseType.sybase &&
           _backupType == BackupType.differential) {
         _backupType = BackupType.full;
@@ -192,7 +196,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _truncateLog = true;
     }
   }
-
 
   @override
   void dispose() {
@@ -339,7 +342,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               } else {
                 allTypes = [
                   BackupType.full,
-                  BackupType.fullSingle,
                   BackupType.differential,
                   BackupType.log,
                 ];
@@ -350,8 +352,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 value: _backupType,
                 placeholder: const Text('Tipo de Backup'),
                 items: allTypes.map((type) {
-                  final isDifferentialBlocked = type == BackupType.differential &&
-                      !hasDifferential;
+                  final isDifferentialBlocked =
+                      type == BackupType.differential && !hasDifferential;
                   final isLogBlocked = type == BackupType.log && !hasLog;
                   final isBlocked = isDifferentialBlocked || isLogBlocked;
 
@@ -374,9 +376,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                   style: TextStyle(
                                     color: isBlocked
                                         ? FluentTheme.of(context)
-                                            .resources
-                                            .controlStrokeColorDefault
-                                            .withValues(alpha: 0.4)
+                                              .resources
+                                              .controlStrokeColorDefault
+                                              .withValues(alpha: 0.4)
                                         : null,
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -413,14 +415,15 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                           LicenseFeatures.logBackup,
                         );
 
-                    final isDifferentialBlocked = value == BackupType.differential &&
-                        !hasDifferential;
+                    final isDifferentialBlocked =
+                        value == BackupType.differential && !hasDifferential;
                     final isLogBlocked = value == BackupType.log && !hasLog;
 
                     if (isDifferentialBlocked || isLogBlocked) {
                       MessageModal.showWarning(
                         context,
-                        message: 'Este tipo de backup requer uma licença válida. '
+                        message:
+                            'Este tipo de backup requer uma licença válida. '
                             'Acesse Configurações > Licenciamento para mais informações.',
                       );
                       return;
@@ -478,9 +481,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                   style: TextStyle(
                                     color: isIntervalBlocked
                                         ? FluentTheme.of(context)
-                                            .resources
-                                            .controlStrokeColorDefault
-                                            .withValues(alpha: 0.4)
+                                              .resources
+                                              .controlStrokeColorDefault
+                                              .withValues(alpha: 0.4)
                                         : null,
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -515,7 +518,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     if (value == ScheduleType.interval && !hasInterval) {
                       MessageModal.showWarning(
                         context,
-                        message: 'Agendamento por intervalo requer uma licença válida. '
+                        message:
+                            'Agendamento por intervalo requer uma licença válida. '
                             'Acesse Configurações > Licenciamento para mais informações.',
                       );
                       return;
@@ -721,7 +725,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                   : 'Verifica a integridade do backup após criação usando dbverify. '
                                         'Garante que o backup está íntegro e pode ser restaurado.')
                             : 'Este recurso requer uma licença válida. '
-                                'Acesse Configurações > Licenciamento para mais informações.',
+                                  'Acesse Configurações > Licenciamento para mais informações.',
                       ),
                     ),
                     if (!hasVerifyIntegrity) ...[
