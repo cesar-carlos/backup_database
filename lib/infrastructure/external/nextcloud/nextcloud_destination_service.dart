@@ -187,6 +187,10 @@ class NextcloudDestinationService {
     required NextcloudDestinationConfig config,
     required String password,
   }) {
+    // Nota: Tanto appPassword quanto userPassword usam Basic Auth no Nextcloud WebDAV.
+    // O campo authMode é mantido para documentação e possível validação futura.
+    // appPassword: Senha de aplicativo gerada no Nextcloud (recomendado para segurança)
+    // userPassword: Senha do usuário (menos seguro, mas suportado)
     final base64Auth = base64Encode(utf8.encode('${config.username}:$password'));
 
     final dio = Dio(

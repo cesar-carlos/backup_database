@@ -308,7 +308,9 @@ class SchedulerService {
         try {
           final progressProvider = getIt<BackupProgressProvider>();
           final error = backupResult.exceptionOrNull()!;
-          final errorMessage = error is Failure ? error.message : error.toString();
+          final errorMessage = error is Failure
+              ? error.message
+              : error.toString();
           progressProvider.failBackup(errorMessage);
         } catch (_) {
           // Ignorar se não estiver disponível
@@ -659,15 +661,7 @@ class SchedulerService {
           );
 
         case DestinationType.nextcloud:
-          final config = NextcloudDestinationConfig(
-            serverUrl: configJson['serverUrl'] as String,
-            username: configJson['username'] as String,
-            appPassword: configJson['appPassword'] as String,
-            remotePath: configJson['remotePath'] as String? ?? '/',
-            folderName: configJson['folderName'] as String? ?? 'Backups',
-            allowInvalidCertificates:
-                configJson['allowInvalidCertificates'] as bool? ?? false,
-          );
+          final config = NextcloudDestinationConfig.fromJson(configJson);
           final result = await _sendToNextcloud.call(
             sourceFilePath: sourceFilePath,
             config: config,
@@ -694,7 +688,9 @@ class SchedulerService {
   ) async {
     for (final destination in destinations) {
       try {
-        final licenseCheck = await _ensureDestinationFeatureAllowed(destination);
+        final licenseCheck = await _ensureDestinationFeatureAllowed(
+          destination,
+        );
         if (licenseCheck.isError()) {
           LoggerService.info(
             'Limpeza ignorada por licença: ${destination.name} '
@@ -814,16 +810,7 @@ class SchedulerService {
             break;
 
           case DestinationType.nextcloud:
-            final config = NextcloudDestinationConfig(
-              serverUrl: configJson['serverUrl'] as String,
-              username: configJson['username'] as String,
-              appPassword: configJson['appPassword'] as String,
-              remotePath: configJson['remotePath'] as String? ?? '/',
-              folderName: configJson['folderName'] as String? ?? 'Backups',
-              allowInvalidCertificates:
-                  configJson['allowInvalidCertificates'] as bool? ?? false,
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
+            final config = NextcloudDestinationConfig.fromJson(configJson);
             final cleanResult = await _nextcloudDestinationService
                 .cleanOldBackups(config: config);
             cleanResult.fold((_) {}, (exception) async {

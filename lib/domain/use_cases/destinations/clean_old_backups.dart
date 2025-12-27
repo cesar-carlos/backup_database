@@ -52,11 +52,11 @@ class CleanOldBackups {
     required gd.GoogleDriveDestinationService googleDriveService,
     required dropbox.DropboxDestinationService dropboxService,
     required nextcloud.NextcloudDestinationService nextcloudService,
-  })  : _localService = localService,
-        _ftpService = ftpService,
-        _googleDriveService = googleDriveService,
-        _dropboxService = dropboxService,
-        _nextcloudService = nextcloudService;
+  }) : _localService = localService,
+       _ftpService = ftpService,
+       _googleDriveService = googleDriveService,
+       _dropboxService = dropboxService,
+       _nextcloudService = nextcloudService;
 
   Future<rd.Result<CleanOldBackupsResult>> call(
     List<BackupDestination> destinations,
@@ -73,7 +73,8 @@ class CleanOldBackups {
       if (!destination.enabled) continue;
 
       try {
-        final configJson = jsonDecode(destination.config) as Map<String, dynamic>;
+        final configJson =
+            jsonDecode(destination.config) as Map<String, dynamic>;
 
         switch (destination.type) {
           case DestinationType.local:
@@ -84,15 +85,10 @@ class CleanOldBackups {
               retentionDays: configJson['retentionDays'] as int? ?? 30,
             );
             final result = await _localService.cleanOldBackups(config: config);
-            result.fold(
-              (count) => localDeleted += count,
-              (exception) {
-                final failure = exception as Failure;
-                LoggerService.warning(
-                  'Erro ao limpar local: ${failure.message}',
-                );
-              },
-            );
+            result.fold((count) => localDeleted += count, (exception) {
+              final failure = exception as Failure;
+              LoggerService.warning('Erro ao limpar local: ${failure.message}');
+            });
             break;
 
           case DestinationType.ftp:
@@ -106,15 +102,10 @@ class CleanOldBackups {
               retentionDays: configJson['retentionDays'] as int? ?? 30,
             );
             final result = await _ftpService.cleanOldBackups(config: config);
-            result.fold(
-              (count) => ftpDeleted += count,
-              (exception) {
-                final failure = exception as Failure;
-                LoggerService.warning(
-                  'Erro ao limpar FTP: ${failure.message}',
-                );
-              },
-            );
+            result.fold((count) => ftpDeleted += count, (exception) {
+              final failure = exception as Failure;
+              LoggerService.warning('Erro ao limpar FTP: ${failure.message}');
+            });
             break;
 
           case DestinationType.googleDrive:
@@ -126,15 +117,12 @@ class CleanOldBackups {
             final result = await _googleDriveService.cleanOldBackups(
               config: config,
             );
-            result.fold(
-              (count) => googleDriveDeleted += count,
-              (exception) {
-                final failure = exception as Failure;
-                LoggerService.warning(
-                  'Erro ao limpar Google Drive: ${failure.message}',
-                );
-              },
-            );
+            result.fold((count) => googleDriveDeleted += count, (exception) {
+              final failure = exception as Failure;
+              LoggerService.warning(
+                'Erro ao limpar Google Drive: ${failure.message}',
+              );
+            });
             break;
 
           case DestinationType.dropbox:
@@ -146,40 +134,25 @@ class CleanOldBackups {
             final result = await _dropboxService.cleanOldBackups(
               config: config,
             );
-            result.fold(
-              (count) => dropboxDeleted += count,
-              (exception) {
-                final failure = exception as Failure;
-                LoggerService.warning(
-                  'Erro ao limpar Dropbox: ${failure.message}',
-                );
-              },
-            );
+            result.fold((count) => dropboxDeleted += count, (exception) {
+              final failure = exception as Failure;
+              LoggerService.warning(
+                'Erro ao limpar Dropbox: ${failure.message}',
+              );
+            });
             break;
 
           case DestinationType.nextcloud:
-            final config = NextcloudDestinationConfig(
-              serverUrl: configJson['serverUrl'] as String,
-              username: configJson['username'] as String,
-              appPassword: configJson['appPassword'] as String,
-              remotePath: configJson['remotePath'] as String? ?? '/',
-              folderName: configJson['folderName'] as String? ?? 'Backups',
-              allowInvalidCertificates:
-                  configJson['allowInvalidCertificates'] as bool? ?? false,
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
+            final config = NextcloudDestinationConfig.fromJson(configJson);
             final result = await _nextcloudService.cleanOldBackups(
               config: config,
             );
-            result.fold(
-              (count) => nextcloudDeleted += count,
-              (exception) {
-                final failure = exception as Failure;
-                LoggerService.warning(
-                  'Erro ao limpar Nextcloud: ${failure.message}',
-                );
-              },
-            );
+            result.fold((count) => nextcloudDeleted += count, (exception) {
+              final failure = exception as Failure;
+              LoggerService.warning(
+                'Erro ao limpar Nextcloud: ${failure.message}',
+              );
+            });
             break;
         }
       } catch (e) {
@@ -201,4 +174,3 @@ class CleanOldBackups {
     return rd.Success(result);
   }
 }
-
