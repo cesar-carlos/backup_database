@@ -68,6 +68,7 @@ class AppColors {
   static const Color destinationFtp = Color(0xFFFF9800);
   static const Color destinationGoogleDrive = Color(0xFF4CAF50);
   static const Color destinationDropbox = Color(0xFF0061FF);
+  static const Color destinationNextcloud = Color(0xFF0082C9);
 
   // Dashboard Stats Colors
   static const Color statsBackups = Color(0xFF4CAF50);

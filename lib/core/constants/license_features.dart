@@ -4,6 +4,7 @@ class LicenseFeatures {
   static const String intervalSchedule = 'interval_schedule';
   static const String googleDrive = 'google_drive';
   static const String dropbox = 'dropbox';
+  static const String nextcloud = 'nextcloud';
   static const String verifyIntegrity = 'verify_integrity';
   static const String checksum = 'checksum';
   static const String postBackupScript = 'post_backup_script';
@@ -15,6 +16,7 @@ class LicenseFeatures {
     intervalSchedule,
     googleDrive,
     dropbox,
+    nextcloud,
     verifyIntegrity,
     checksum,
     postBackupScript,

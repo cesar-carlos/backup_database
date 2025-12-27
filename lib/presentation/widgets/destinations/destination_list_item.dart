@@ -71,6 +71,8 @@ class DestinationListItem extends StatelessWidget {
         return FluentIcons.cloud;
       case DestinationType.dropbox:
         return FluentIcons.cloud;
+      case DestinationType.nextcloud:
+        return FluentIcons.cloud;
     }
   }
 
@@ -84,6 +86,8 @@ class DestinationListItem extends StatelessWidget {
         return AppColors.destinationGoogleDrive;
       case DestinationType.dropbox:
         return AppColors.destinationDropbox;
+      case DestinationType.nextcloud:
+        return AppColors.destinationNextcloud;
     }
   }
 
@@ -97,6 +101,8 @@ class DestinationListItem extends StatelessWidget {
         return 'Google Drive';
       case DestinationType.dropbox:
         return 'Dropbox';
+      case DestinationType.nextcloud:
+        return 'Nextcloud';
     }
   }
 
@@ -141,6 +147,34 @@ class DestinationListItem extends StatelessWidget {
             return 'Pasta: /$folderName';
           }
           return 'Pasta: $folderPath/$folderName';
+        case DestinationType.nextcloud:
+          final serverUrl =
+              RegExp(
+                r'"serverUrl"\s*:\s*"([^"]*)"',
+              ).firstMatch(config)?.group(1) ??
+              '';
+          final remotePath =
+              RegExp(
+                r'"remotePath"\s*:\s*"([^"]*)"',
+              ).firstMatch(config)?.group(1) ??
+              '';
+          final folderName =
+              RegExp(
+                r'"folderName"\s*:\s*"([^"]*)"',
+              ).firstMatch(config)?.group(1) ??
+              '';
+
+          final folderSummary = folderName.isEmpty ? '' : '/$folderName';
+          final pathSummary = remotePath.isEmpty ? '' : remotePath;
+          final fullPath = '$pathSummary$folderSummary';
+
+          if (serverUrl.isEmpty) {
+            return fullPath.isEmpty ? '' : fullPath;
+          }
+          if (fullPath.isEmpty) {
+            return serverUrl;
+          }
+          return '$serverUrl $fullPath';
       }
     } catch (e) {
       return '';

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:backup_database/domain/use_cases/storage/check_disk_space.dart';
 
@@ -10,32 +12,42 @@ void main() {
     });
 
     test('deve retornar informações do disco', () async {
+      if (!await _hasWmic()) {
+        return;
+      }
+
       final result = await checkDiskSpace('C:\\');
 
       expect(result.isSuccess(), true);
 
-      result.fold(
-        (info) {
-          expect(info.totalBytes, greaterThan(0));
-          expect(info.freeBytes, greaterThanOrEqualTo(0));
-          expect(info.usedPercentage, greaterThanOrEqualTo(0));
-          expect(info.usedPercentage, lessThanOrEqualTo(100));
-        },
-        (failure) => fail('Não deveria falhar: ${failure.toString()}'),
-      );
+      result.fold((info) {
+        expect(info.totalBytes, greaterThan(0));
+        expect(info.freeBytes, greaterThanOrEqualTo(0));
+        expect(info.usedPercentage, greaterThanOrEqualTo(0));
+        expect(info.usedPercentage, lessThanOrEqualTo(100));
+      }, (failure) => fail('Não deveria falhar: ${failure.toString()}'));
     });
 
     test('deve verificar se há espaço suficiente', () async {
+      if (!await _hasWmic()) {
+        return;
+      }
+
       final result = await checkDiskSpace('C:\\');
 
-      result.fold(
-        (info) {
-          expect(info.hasEnoughSpace(1024), true);
-          expect(info.hasEnoughSpace(info.freeBytes + 1), false);
-        },
-        (failure) => fail('Não deveria falhar: ${failure.toString()}'),
-      );
+      result.fold((info) {
+        expect(info.hasEnoughSpace(1024), true);
+        expect(info.hasEnoughSpace(info.freeBytes + 1), false);
+      }, (failure) => fail('Não deveria falhar: ${failure.toString()}'));
     });
   });
 }
 
+Future<bool> _hasWmic() async {
+  try {
+    final result = await Process.run('wmic', ['os', 'get', 'caption']);
+    return result.exitCode == 0;
+  } catch (_) {
+    return false;
+  }
+}

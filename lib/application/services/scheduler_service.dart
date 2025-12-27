@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:result_dart/result_dart.dart' as rd;
 
+import '../../core/constants/license_features.dart';
 import '../../core/errors/failure.dart';
 import '../../core/utils/logger_service.dart';
 import '../../domain/entities/schedule.dart';
@@ -11,6 +12,7 @@ import '../../domain/entities/backup_destination.dart';
 import '../../domain/entities/backup_history.dart';
 import '../../domain/entities/backup_log.dart';
 import '../../domain/repositories/repositories.dart';
+import '../../domain/services/i_license_validation_service.dart';
 import '../../infrastructure/external/scheduler/cron_parser.dart';
 import '../../domain/use_cases/destinations/send_to_ftp.dart';
 import '../../infrastructure/external/destinations/local_destination_service.dart'
@@ -21,7 +23,10 @@ import '../../infrastructure/external/destinations/google_drive_destination_serv
     as gd;
 import '../../infrastructure/external/dropbox/dropbox_destination_service.dart'
     as dropbox;
+import '../../infrastructure/external/nextcloud/nextcloud_destination_service.dart'
+    as nextcloud;
 import '../../domain/use_cases/destinations/send_to_dropbox.dart';
+import '../../domain/use_cases/destinations/send_to_nextcloud.dart';
 import '../../core/di/service_locator.dart';
 import '../providers/backup_progress_provider.dart';
 import 'backup_orchestrator_service.dart';
@@ -39,7 +44,10 @@ class SchedulerService {
   final gd.GoogleDriveDestinationService _googleDriveDestinationService;
   final dropbox.DropboxDestinationService _dropboxDestinationService;
   final SendToDropbox _sendToDropbox;
+  final nextcloud.NextcloudDestinationService _nextcloudDestinationService;
+  final SendToNextcloud _sendToNextcloud;
   final NotificationService _notificationService;
+  final ILicenseValidationService _licenseValidationService;
 
   final ScheduleCalculator _calculator = ScheduleCalculator();
   Timer? _checkTimer;
@@ -58,7 +66,10 @@ class SchedulerService {
     required gd.GoogleDriveDestinationService googleDriveDestinationService,
     required dropbox.DropboxDestinationService dropboxDestinationService,
     required SendToDropbox sendToDropbox,
+    required nextcloud.NextcloudDestinationService nextcloudDestinationService,
+    required SendToNextcloud sendToNextcloud,
     required NotificationService notificationService,
+    required ILicenseValidationService licenseValidationService,
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
        _backupHistoryRepository = backupHistoryRepository,
@@ -70,7 +81,50 @@ class SchedulerService {
        _googleDriveDestinationService = googleDriveDestinationService,
        _dropboxDestinationService = dropboxDestinationService,
        _sendToDropbox = sendToDropbox,
-       _notificationService = notificationService;
+       _nextcloudDestinationService = nextcloudDestinationService,
+       _sendToNextcloud = sendToNextcloud,
+       _notificationService = notificationService,
+       _licenseValidationService = licenseValidationService;
+
+  Future<rd.Result<void>> _ensureDestinationFeatureAllowed(
+    BackupDestination destination,
+  ) async {
+    String? requiredFeature;
+    switch (destination.type) {
+      case DestinationType.googleDrive:
+        requiredFeature = LicenseFeatures.googleDrive;
+        break;
+      case DestinationType.dropbox:
+        requiredFeature = LicenseFeatures.dropbox;
+        break;
+      case DestinationType.nextcloud:
+        requiredFeature = LicenseFeatures.nextcloud;
+        break;
+      case DestinationType.local:
+      case DestinationType.ftp:
+        requiredFeature = null;
+        break;
+    }
+
+    if (requiredFeature == null) {
+      return rd.Success(());
+    }
+
+    final allowedResult = await _licenseValidationService.isFeatureAllowed(
+      requiredFeature,
+    );
+    final allowed = allowedResult.getOrElse((_) => false);
+    if (!allowed) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Destino ${destination.name} requer licença (${destination.type.name}).',
+        ),
+      );
+    }
+
+    return rd.Success(());
+  }
 
   Future<void> start() async {
     if (_isRunning) return;
@@ -524,6 +578,16 @@ class SchedulerService {
     required BackupDestination destination,
   }) async {
     try {
+      final licenseCheck = await _ensureDestinationFeatureAllowed(destination);
+      if (licenseCheck.isError()) {
+        final failure = licenseCheck.exceptionOrNull()!;
+        LoggerService.warning(
+          'Envio bloqueado por licença: ${destination.name}',
+          failure,
+        );
+        return rd.Failure(failure);
+      }
+
       final configJson = jsonDecode(destination.config) as Map<String, dynamic>;
 
       switch (destination.type) {
@@ -593,6 +657,25 @@ class SchedulerService {
             (_) => rd.Success(()),
             (failure) => rd.Failure(failure),
           );
+
+        case DestinationType.nextcloud:
+          final config = NextcloudDestinationConfig(
+            serverUrl: configJson['serverUrl'] as String,
+            username: configJson['username'] as String,
+            appPassword: configJson['appPassword'] as String,
+            remotePath: configJson['remotePath'] as String? ?? '/',
+            folderName: configJson['folderName'] as String? ?? 'Backups',
+            allowInvalidCertificates:
+                configJson['allowInvalidCertificates'] as bool? ?? false,
+          );
+          final result = await _sendToNextcloud.call(
+            sourceFilePath: sourceFilePath,
+            config: config,
+          );
+          return result.fold(
+            (_) => rd.Success(()),
+            (failure) => rd.Failure(failure),
+          );
       }
     } catch (e) {
       LoggerService.error('Erro ao enviar para ${destination.name}: $e', e);
@@ -611,6 +694,15 @@ class SchedulerService {
   ) async {
     for (final destination in destinations) {
       try {
+        final licenseCheck = await _ensureDestinationFeatureAllowed(destination);
+        if (licenseCheck.isError()) {
+          LoggerService.info(
+            'Limpeza ignorada por licença: ${destination.name} '
+            '(${destination.type.name})',
+          );
+          continue;
+        }
+
         final configJson =
             jsonDecode(destination.config) as Map<String, dynamic>;
 
@@ -717,6 +809,42 @@ class SchedulerService {
                 databaseName: destination.name,
                 message:
                     'Erro ao limpar backups antigos no Dropbox ${destination.name}: $failureMessage',
+              );
+            });
+            break;
+
+          case DestinationType.nextcloud:
+            final config = NextcloudDestinationConfig(
+              serverUrl: configJson['serverUrl'] as String,
+              username: configJson['username'] as String,
+              appPassword: configJson['appPassword'] as String,
+              remotePath: configJson['remotePath'] as String? ?? '/',
+              folderName: configJson['folderName'] as String? ?? 'Backups',
+              allowInvalidCertificates:
+                  configJson['allowInvalidCertificates'] as bool? ?? false,
+              retentionDays: configJson['retentionDays'] as int? ?? 30,
+            );
+            final cleanResult = await _nextcloudDestinationService
+                .cleanOldBackups(config: config);
+            cleanResult.fold((_) {}, (exception) async {
+              LoggerService.error(
+                'Erro ao limpar backups Nextcloud em ${destination.name}',
+                exception,
+              );
+              final failureMessage = exception is Failure
+                  ? exception.message
+                  : exception.toString();
+
+              await _log(
+                backupHistoryId,
+                'error',
+                'Erro ao limpar backups antigos no Nextcloud ${destination.name}: $failureMessage',
+              );
+
+              await _notificationService.sendWarning(
+                databaseName: destination.name,
+                message:
+                    'Erro ao limpar backups antigos no Nextcloud ${destination.name}: $failureMessage',
               );
             });
             break;

@@ -703,9 +703,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                               : null,
                           infoText: hasChecksum
                               ? 'Habilita o cálculo de checksums durante o backup. '
-                                  'Detecta corrupção de dados durante o processo de backup.'
+                                    'Detecta corrupção de dados durante o processo de backup.'
                               : 'Este recurso requer uma licença válida. '
-                                  'Acesse Configurações > Licenciamento para mais informações.',
+                                    'Acesse Configurações > Licenciamento para mais informações.',
                         ),
                       ),
                       if (!hasChecksum) ...[
@@ -1269,48 +1269,114 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       );
     }
 
-    return Column(
-      children: _destinations.map((destination) {
-        final isSelected = _selectedDestinationIds.contains(destination.id);
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(_getDestinationIcon(destination.type), size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      destination.name,
-                      style: FluentTheme.of(context).typography.body,
+    return Consumer<LicenseProvider>(
+      builder: (context, licenseProvider, _) {
+        final hasGoogleDrive =
+            licenseProvider.hasValidLicense &&
+            licenseProvider.currentLicense!.hasFeature(
+              LicenseFeatures.googleDrive,
+            );
+        final hasDropbox =
+            licenseProvider.hasValidLicense &&
+            licenseProvider.currentLicense!.hasFeature(LicenseFeatures.dropbox);
+        final hasNextcloud =
+            licenseProvider.hasValidLicense &&
+            licenseProvider.currentLicense!.hasFeature(
+              LicenseFeatures.nextcloud,
+            );
+
+        bool isBlocked(DestinationType type) {
+          if (type == DestinationType.googleDrive) return !hasGoogleDrive;
+          if (type == DestinationType.dropbox) return !hasDropbox;
+          if (type == DestinationType.nextcloud) return !hasNextcloud;
+          return false;
+        }
+
+        return Column(
+          children: _destinations.map((destination) {
+            final selected = _selectedDestinationIds.contains(destination.id);
+            final blocked = isBlocked(destination.type);
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(_getDestinationIcon(destination.type), size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          destination.name,
+                          style: FluentTheme.of(context).typography.body,
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                blocked
+                                    ? '${_getDestinationTypeName(destination.type)} (Requer licença)'
+                                    : _getDestinationTypeName(destination.type),
+                                style: FluentTheme.of(context)
+                                    .typography
+                                    .caption
+                                    ?.copyWith(
+                                      color: blocked
+                                          ? FluentTheme.of(context)
+                                                .resources
+                                                .controlStrokeColorDefault
+                                                .withValues(alpha: 0.6)
+                                          : null,
+                                    ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (blocked) ...[
+                              const SizedBox(width: 8),
+                              Icon(
+                                FluentIcons.lock,
+                                size: 14,
+                                color: FluentTheme.of(context)
+                                    .resources
+                                    .controlStrokeColorDefault
+                                    .withValues(alpha: 0.6),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _getDestinationTypeName(destination.type),
-                      style: FluentTheme.of(context).typography.caption,
-                    ),
-                  ],
-                ),
+                  ),
+                  Checkbox(
+                    checked: selected,
+                    onChanged: (value) {
+                      if (value == true && blocked) {
+                        MessageModal.showWarning(
+                          context,
+                          message:
+                              'Este destino requer uma licença válida. '
+                              'Acesse Configurações > Licenciamento para mais informações.',
+                        );
+                        return;
+                      }
+                      setState(() {
+                        if (value == true) {
+                          _selectedDestinationIds.add(destination.id);
+                        } else {
+                          _selectedDestinationIds.remove(destination.id);
+                        }
+                      });
+                    },
+                  ),
+                ],
               ),
-              Checkbox(
-                checked: isSelected,
-                onChanged: (value) {
-                  setState(() {
-                    if (value == true) {
-                      _selectedDestinationIds.add(destination.id);
-                    } else {
-                      _selectedDestinationIds.remove(destination.id);
-                    }
-                  });
-                },
-              ),
-            ],
-          ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 
@@ -1373,6 +1439,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         return 'Google Drive';
       case DestinationType.dropbox:
         return 'Dropbox';
+      case DestinationType.nextcloud:
+        return 'Nextcloud';
     }
   }
 
@@ -1385,6 +1453,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       case DestinationType.googleDrive:
         return FluentIcons.cloud;
       case DestinationType.dropbox:
+        return FluentIcons.cloud;
+      case DestinationType.nextcloud:
         return FluentIcons.cloud;
     }
   }
@@ -1548,11 +1618,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       return;
     }
 
-    final licenseProvider = Provider.of<LicenseProvider>(context, listen: false);
-    final hasChecksum = licenseProvider.hasValidLicense &&
-        licenseProvider.currentLicense!.hasFeature(
-          LicenseFeatures.checksum,
-        );
+    final licenseProvider = Provider.of<LicenseProvider>(
+      context,
+      listen: false,
+    );
+    final hasChecksum =
+        licenseProvider.hasValidLicense &&
+        licenseProvider.currentLicense!.hasFeature(LicenseFeatures.checksum);
 
     final effectiveEnableChecksum = _databaseType == DatabaseType.sqlServer
         ? (hasChecksum ? _enableChecksum : false)

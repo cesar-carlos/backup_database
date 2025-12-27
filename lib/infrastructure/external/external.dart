@@ -3,6 +3,7 @@ export 'compression/compression.dart';
 export 'destinations/destinations.dart';
 export 'google/google.dart';
 export 'dropbox/dropbox.dart';
+export 'nextcloud/nextcloud.dart';
 export 'scheduler/scheduler.dart';
 export 'email/email.dart';
 export 'system/system.dart';

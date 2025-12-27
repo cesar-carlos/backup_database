@@ -109,10 +109,26 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
   }
 
   BackupDestination _toEntity(BackupDestinationsTableData data) {
+    DestinationType parsedType;
+    try {
+      parsedType = DestinationType.values.firstWhere(
+        (e) => e.name == data.type,
+      );
+    } catch (e, stackTrace) {
+      LoggerService.warning(
+        'Tipo de destino desconhecido no banco: ${data.type} '
+        '(id: ${data.id}, name: ${data.name}). '
+        'Fazendo fallback para local.',
+        e,
+        stackTrace,
+      );
+      parsedType = DestinationType.local;
+    }
+
     return BackupDestination(
       id: data.id,
       name: data.name,
-      type: DestinationType.values.firstWhere((e) => e.name == data.type),
+      type: parsedType,
       config: data.config,
       enabled: data.enabled,
       createdAt: data.createdAt,

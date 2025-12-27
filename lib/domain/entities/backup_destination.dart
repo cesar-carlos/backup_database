@@ -1,6 +1,6 @@
 import 'package:uuid/uuid.dart';
 
-enum DestinationType { local, ftp, googleDrive, dropbox }
+enum DestinationType { local, ftp, googleDrive, dropbox, nextcloud }
 
 class BackupDestination {
   final String id;
@@ -177,6 +177,61 @@ class DropboxDestinationConfig {
     return DropboxDestinationConfig(
       folderPath: json['folderPath'] as String,
       folderName: json['folderName'] as String? ?? 'Backups',
+      retentionDays: json['retentionDays'] as int? ?? 30,
+    );
+  }
+}
+
+enum NextcloudAuthMode { appPassword, userPassword }
+
+class NextcloudDestinationConfig {
+  final String serverUrl;
+  final String username;
+  final String appPassword;
+  final NextcloudAuthMode authMode;
+  final String remotePath;
+  final String folderName;
+  final bool allowInvalidCertificates;
+  final int retentionDays;
+
+  const NextcloudDestinationConfig({
+    required this.serverUrl,
+    required this.username,
+    required this.appPassword,
+    this.authMode = NextcloudAuthMode.appPassword,
+    this.remotePath = '/',
+    this.folderName = 'Backups',
+    this.allowInvalidCertificates = false,
+    this.retentionDays = 30,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'serverUrl': serverUrl,
+    'username': username,
+    'appPassword': appPassword,
+    'authMode': authMode.name,
+    'remotePath': remotePath,
+    'folderName': folderName,
+    'allowInvalidCertificates': allowInvalidCertificates,
+    'retentionDays': retentionDays,
+  };
+
+  factory NextcloudDestinationConfig.fromJson(Map<String, dynamic> json) {
+    final authModeStr = json['authMode'] as String?;
+    final authMode = NextcloudAuthMode.values.firstWhere(
+      (e) => e.name == authModeStr,
+      orElse: () => NextcloudAuthMode.appPassword,
+    );
+
+    return NextcloudDestinationConfig(
+      serverUrl: json['serverUrl'] as String,
+      username: json['username'] as String,
+      appPassword: json['appPassword'] as String,
+      authMode: authMode,
+      remotePath: json['remotePath'] as String? ?? '/',
+      folderName: json['folderName'] as String? ?? 'Backups',
+      allowInvalidCertificates:
+          json['allowInvalidCertificates'] as bool? ?? false,
       retentionDays: json['retentionDays'] as int? ?? 30,
     );
   }

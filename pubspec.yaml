@@ -101,6 +101,9 @@ dependencies:
   # SVG
   flutter_svg: ^2.0.10+1
 
+  # XML (WebDAV PROPFIND)
+  xml: ^6.5.0
+
   # URL Launcher (para OAuth no navegador externo)
   url_launcher: ^6.3.1
 

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/license_features.dart';
+import '../../../core/encryption/encryption_service.dart';
 import '../../../application/providers/google_auth_provider.dart';
 import '../../../application/providers/dropbox_auth_provider.dart';
 import '../../../application/providers/license_provider.dart';
@@ -60,6 +61,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
   final _dropboxFolderPathController = TextEditingController();
   final _dropboxFolderNameController = TextEditingController(text: 'Backups');
 
+  // Nextcloud
+  final _nextcloudServerUrlController = TextEditingController();
+  final _nextcloudUsernameController = TextEditingController();
+  final _nextcloudAppPasswordController = TextEditingController();
+  final _nextcloudRemotePathController = TextEditingController(text: '/');
+  final _nextcloudFolderNameController = TextEditingController(text: 'Backups');
+  bool _nextcloudAllowInvalidCertificates = false;
+  NextcloudAuthMode _nextcloudAuthMode = NextcloudAuthMode.appPassword;
+
   // Common
   final _retentionDaysController = TextEditingController(text: '30');
   bool _isEnabled = true;
@@ -107,6 +117,24 @@ class _DestinationDialogState extends State<DestinationDialog> {
           _retentionDaysController.text = (config['retentionDays'] ?? 30)
               .toString();
           break;
+        case DestinationType.nextcloud:
+          _nextcloudServerUrlController.text = config['serverUrl'] ?? '';
+          _nextcloudUsernameController.text = config['username'] ?? '';
+          _nextcloudAppPasswordController.text = EncryptionService.decrypt(
+            config['appPassword'] ?? '',
+          );
+          _nextcloudAuthMode = NextcloudAuthMode.values.firstWhere(
+            (e) => e.name == (config['authMode'] ?? ''),
+            orElse: () => NextcloudAuthMode.appPassword,
+          );
+          _nextcloudRemotePathController.text = config['remotePath'] ?? '/';
+          _nextcloudFolderNameController.text =
+              config['folderName'] ?? 'Backups';
+          _nextcloudAllowInvalidCertificates =
+              config['allowInvalidCertificates'] ?? false;
+          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+              .toString();
+          break;
       }
     }
   }
@@ -123,6 +151,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
     _googleFolderNameController.dispose();
     _dropboxFolderPathController.dispose();
     _dropboxFolderNameController.dispose();
+    _nextcloudServerUrlController.dispose();
+    _nextcloudUsernameController.dispose();
+    _nextcloudAppPasswordController.dispose();
+    _nextcloudRemotePathController.dispose();
+    _nextcloudFolderNameController.dispose();
     _retentionDaysController.dispose();
     super.dispose();
   }
@@ -174,14 +207,24 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       licenseProvider.currentLicense!.hasFeature(
                         LicenseFeatures.dropbox,
                       );
+                  final hasNextcloud =
+                      licenseProvider.hasValidLicense &&
+                      licenseProvider.currentLicense!.hasFeature(
+                        LicenseFeatures.nextcloud,
+                      );
 
                   final isGoogleDriveBlocked =
                       _selectedType == DestinationType.googleDrive &&
                       !hasGoogleDrive;
                   final isDropboxBlocked =
                       _selectedType == DestinationType.dropbox && !hasDropbox;
+                  final isNextcloudBlocked =
+                      _selectedType == DestinationType.nextcloud &&
+                      !hasNextcloud;
 
-                  if (isGoogleDriveBlocked || isDropboxBlocked) {
+                  if (isGoogleDriveBlocked ||
+                      isDropboxBlocked ||
+                      isNextcloudBlocked) {
                     return InfoBar(
                       severity: InfoBarSeverity.warning,
                       title: const Text('Recurso Bloqueado'),
@@ -236,6 +279,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
         final hasDropbox =
             licenseProvider.hasValidLicense &&
             licenseProvider.currentLicense!.hasFeature(LicenseFeatures.dropbox);
+        final hasNextcloud =
+            licenseProvider.hasValidLicense &&
+            licenseProvider.currentLicense!.hasFeature(
+              LicenseFeatures.nextcloud,
+            );
 
         return AppDropdown<DestinationType>(
           label: 'Tipo de Destino',
@@ -246,7 +294,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 type == DestinationType.googleDrive && !hasGoogleDrive;
             final isDropboxBlocked =
                 type == DestinationType.dropbox && !hasDropbox;
-            final isBlocked = isGoogleDriveBlocked || isDropboxBlocked;
+            final isNextcloudBlocked =
+                type == DestinationType.nextcloud && !hasNextcloud;
+            final isBlocked =
+                isGoogleDriveBlocked || isDropboxBlocked || isNextcloudBlocked;
 
             return ComboBoxItem<DestinationType>(
               value: type,
@@ -312,8 +363,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         value == DestinationType.googleDrive && !hasGoogleDrive;
                     final isDropboxBlocked =
                         value == DestinationType.dropbox && !hasDropbox;
+                    final isNextcloudBlocked =
+                        value == DestinationType.nextcloud && !hasNextcloud;
 
-                    if (isGoogleDriveBlocked || isDropboxBlocked) {
+                    if (isGoogleDriveBlocked ||
+                        isDropboxBlocked ||
+                        isNextcloudBlocked) {
                       MessageModal.showWarning(
                         context,
                         message:
@@ -355,8 +410,160 @@ class _DestinationDialogState extends State<DestinationDialog> {
       return _buildFtpFields();
     } else if (_selectedType == DestinationType.googleDrive) {
       return _buildGoogleDriveFields();
-    } else {
+    } else if (_selectedType == DestinationType.dropbox) {
       return _buildDropboxFields();
+    } else {
+      return _buildNextcloudFields();
+    }
+  }
+
+  Widget _buildNextcloudFields() {
+    return Column(
+      children: [
+        AppTextField(
+          controller: _nextcloudServerUrlController,
+          label: 'URL do Nextcloud',
+          hint: 'https://cloud.exemplo.com',
+          prefixIcon: const Icon(FluentIcons.globe),
+          validator: (value) {
+            final text = value?.trim() ?? '';
+            if (text.isEmpty) return 'URL é obrigatória';
+
+            final uri = Uri.tryParse(text);
+            if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+              return 'URL inválida';
+            }
+            if (uri.scheme != 'https' && uri.scheme != 'http') {
+              return 'Use http ou https';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _nextcloudUsernameController,
+          label: 'Usuário',
+          hint: 'usuario',
+          prefixIcon: const Icon(FluentIcons.contact),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Usuário é obrigatório';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<NextcloudAuthMode>(
+          label: 'Tipo de Credencial',
+          value: _nextcloudAuthMode,
+          placeholder: const Text('Tipo de Credencial'),
+          items: NextcloudAuthMode.values.map((mode) {
+            final label = mode == NextcloudAuthMode.appPassword
+                ? 'App Password (recomendado)'
+                : 'Senha do usuário';
+            return ComboBoxItem<NextcloudAuthMode>(
+              value: mode,
+              child: Text(label),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() {
+              _nextcloudAuthMode = value;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _nextcloudAppPasswordController,
+          label: _nextcloudAuthMode == NextcloudAuthMode.appPassword
+              ? 'App Password'
+              : 'Senha do usuário',
+          hint: _nextcloudAuthMode == NextcloudAuthMode.appPassword
+              ? 'Senha de aplicativo do Nextcloud'
+              : 'Senha do usuário do Nextcloud',
+          prefixIcon: const Icon(FluentIcons.lock),
+          obscureText: true,
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return _nextcloudAuthMode == NextcloudAuthMode.appPassword
+                  ? 'App Password é obrigatório'
+                  : 'Senha do usuário é obrigatória';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _nextcloudRemotePathController,
+          label: 'Caminho Remoto (opcional)',
+          hint: '/ ou /Backups',
+          prefixIcon: const Icon(FluentIcons.folder),
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _nextcloudFolderNameController,
+          label: 'Nome da Pasta',
+          hint: 'Backups',
+          prefixIcon: const Icon(FluentIcons.cloud),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Nome da pasta é obrigatório';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InfoLabel(
+              label: 'Permitir certificado inválido (self-signed)',
+              child: ToggleSwitch(
+                checked: _nextcloudAllowInvalidCertificates,
+                onChanged: _setNextcloudAllowInvalidCertificates,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Use apenas se seu Nextcloud usa certificado self-signed ou CA interna.',
+              style: FluentTheme.of(context).typography.caption,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _setNextcloudAllowInvalidCertificates(bool value) async {
+    if (!value) {
+      setState(() => _nextcloudAllowInvalidCertificates = false);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => ContentDialog(
+        title: const Text('Atenção'),
+        content: const Text(
+          'Permitir certificado inválido reduz a segurança da conexão.\n'
+          'Habilite apenas se o servidor usa certificado self-signed ou CA interna.',
+        ),
+        actions: [
+          Button(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Habilitar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() => _nextcloudAllowInvalidCertificates = true);
     }
   }
 
@@ -1106,6 +1313,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
         return FluentIcons.cloud;
       case DestinationType.dropbox:
         return FluentIcons.cloud;
+      case DestinationType.nextcloud:
+        return FluentIcons.cloud;
     }
   }
 
@@ -1119,6 +1328,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
         return 'Google Drive';
       case DestinationType.dropbox:
         return 'Dropbox';
+      case DestinationType.nextcloud:
+        return 'Nextcloud';
     }
   }
 
@@ -1235,6 +1446,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
       }
     }
 
+    if (_selectedType == DestinationType.nextcloud) {
+      final licenseProvider = context.read<LicenseProvider>();
+      final hasNextcloud =
+          licenseProvider.hasValidLicense &&
+          licenseProvider.currentLicense!.hasFeature(LicenseFeatures.nextcloud);
+      if (!hasNextcloud) {
+        _showError(
+          'Este destino requer uma licença válida. '
+          'Acesse Configurações > Licenciamento.',
+        );
+        return;
+      }
+    }
+
     final retentionDays = int.parse(_retentionDaysController.text);
     String configJson;
 
@@ -1268,6 +1493,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
         configJson = jsonEncode({
           'folderPath': _dropboxFolderPathController.text.trim(),
           'folderName': _dropboxFolderNameController.text.trim(),
+          'retentionDays': retentionDays,
+        });
+        break;
+      case DestinationType.nextcloud:
+        configJson = jsonEncode({
+          'serverUrl': _nextcloudServerUrlController.text.trim(),
+          'username': _nextcloudUsernameController.text.trim(),
+          'appPassword': EncryptionService.encrypt(
+            _nextcloudAppPasswordController.text,
+          ),
+          'authMode': _nextcloudAuthMode.name,
+          'remotePath': _nextcloudRemotePathController.text.trim(),
+          'folderName': _nextcloudFolderNameController.text.trim(),
+          'allowInvalidCertificates': _nextcloudAllowInvalidCertificates,
           'retentionDays': retentionDays,
         });
         break;
