@@ -2,14 +2,16 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
+import 'package:crypto/crypto.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:win32/win32.dart';
 
 import '../../../core/errors/failure.dart' as core;
 import '../../../core/utils/logger_service.dart';
 import '../../../domain/services/i_device_key_service.dart';
+
+enum VirtualizationPlatform { none, vmware, virtualbox, hyperv, unknown }
 
 class DeviceKeyService implements IDeviceKeyService {
   DeviceKeyService();
@@ -29,12 +31,26 @@ class DeviceKeyService implements IDeviceKeyService {
         'Obtendo informações do sistema para gerar chave do dispositivo...',
       );
 
-      // Tentar múltiplos métodos para obter identificadores únicos
+      final virtualizationPlatform = await _detectVirtualization();
+      if (virtualizationPlatform != VirtualizationPlatform.none) {
+        LoggerService.info(
+          'Ambiente virtualizado detectado: ${virtualizationPlatform.name}',
+        );
+      }
+
+      String? biosUuid;
       String? machineGuid;
-      String? computerName;
+      String? macAddress;
       String? volumeSerial;
 
-      // Método 1: Machine GUID do Windows Registry (mais confiável)
+      final biosUuidResult = await _getBiosUuid();
+      biosUuidResult.fold((uuid) {
+        if (uuid.isNotEmpty) {
+          biosUuid = uuid;
+          LoggerService.info('BIOS UUID obtido: $biosUuid');
+        }
+      }, (_) {});
+
       final guidResult = _getMachineGuidFromRegistry();
       guidResult.fold((guid) {
         if (guid.isNotEmpty) {
@@ -43,18 +59,14 @@ class DeviceKeyService implements IDeviceKeyService {
         }
       }, (_) {});
 
-      // Método 2: Computer Name (nome do computador)
-      try {
-        final name = _getComputerName();
-        if (name.isNotEmpty) {
-          computerName = name;
-          LoggerService.info('Computer Name obtido: $computerName');
+      final macResult = await _getMacAddress();
+      macResult.fold((mac) {
+        if (mac.isNotEmpty) {
+          macAddress = mac;
+          LoggerService.info('MAC Address obtido: $macAddress');
         }
-      } catch (e) {
-        LoggerService.warning('Erro ao obter Computer Name: $e');
-      }
+      }, (_) {});
 
-      // Método 3: Volume Serial Number do disco C:
       try {
         final serial = _getVolumeSerialNumber('C:\\');
         if (serial.isNotEmpty) {
@@ -65,10 +77,10 @@ class DeviceKeyService implements IDeviceKeyService {
         LoggerService.warning('Erro ao obter Volume Serial Number: $e');
       }
 
-      // Combinar todos os identificadores disponíveis para criar uma chave única
       final identifiers = <String>[];
+      if (biosUuid != null) identifiers.add('BIOS:$biosUuid');
       if (machineGuid != null) identifiers.add('GUID:$machineGuid');
-      if (computerName != null) identifiers.add('COMP:$computerName');
+      if (macAddress != null) identifiers.add('MAC:$macAddress');
       if (volumeSerial != null) identifiers.add('VOL:$volumeSerial');
 
       if (identifiers.isEmpty) {
@@ -81,13 +93,23 @@ class DeviceKeyService implements IDeviceKeyService {
         );
       }
 
-      // Gerar hash SHA-256 dos identificadores combinados
+      if (virtualizationPlatform != VirtualizationPlatform.none) {
+        identifiers.add('VM:${virtualizationPlatform.name}');
+      }
+
       final combinedString = identifiers.join('|');
       final bytes = utf8.encode(combinedString);
       final hash = sha256.convert(bytes);
       final deviceKey = hash.toString().toUpperCase();
 
-      LoggerService.info('Chave do dispositivo gerada com sucesso');
+      LoggerService.info(
+        'Chave do dispositivo gerada com sucesso (${identifiers.length} identificadores)',
+      );
+      if (virtualizationPlatform != VirtualizationPlatform.none) {
+        LoggerService.info(
+          '⚠️ Ambiente virtualizado: Licença vinculada a esta VM específica',
+        );
+      }
       return rd.Success(deviceKey);
     } catch (e, stackTrace) {
       LoggerService.error(
@@ -178,32 +200,217 @@ class DeviceKeyService implements IDeviceKeyService {
     }
   }
 
-  String _getComputerName() {
+  Future<rd.Result<String>> _getBiosUuid() async {
     try {
-      final bufferSize = calloc<DWORD>()..value = 256;
-      final buffer = calloc<Uint16>(bufferSize.value).cast<Utf16>();
+      final result = await Process.run('wmic', [
+        'path',
+        'Win32_ComputerSystemProduct',
+        'get',
+        'UUID',
+        '/format:value',
+      ], runInShell: true);
 
-      try {
-        final result = GetComputerNameEx(
-          ComputerNameNetBIOS,
-          buffer,
-          bufferSize,
+      if (result.exitCode != 0) {
+        return rd.Failure(
+          core.ServerFailure(
+            message:
+                'Erro ao executar WMIC para obter BIOS UUID: ${result.stderr}',
+          ),
         );
-
-        if (result == 0) {
-          final error = GetLastError();
-          LoggerService.warning('Erro ao obter Computer Name: $error');
-          return '';
-        }
-
-        return buffer.toDartString();
-      } finally {
-        calloc.free(bufferSize);
-        calloc.free(buffer.cast<Uint16>());
       }
+
+      final output = result.stdout.toString();
+      final lines = output.split('\n');
+
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.startsWith('UUID=')) {
+          final uuid = trimmed.substring(5).trim();
+          if (uuid.isNotEmpty &&
+              uuid != '{}' &&
+              uuid.toLowerCase() != 'ffffffff-ffff-ffff-ffff-ffffffffffff') {
+            return rd.Success(uuid.toUpperCase());
+          }
+        }
+      }
+
+      return rd.Failure(
+        core.NotFoundFailure(message: 'BIOS UUID não encontrado ou inválido'),
+      );
+    } catch (e, stackTrace) {
+      LoggerService.error('Erro ao obter BIOS UUID via WMI', e, stackTrace);
+      return rd.Failure(
+        core.ServerFailure(
+          message: 'Erro ao obter BIOS UUID: $e',
+          originalError: e,
+        ),
+      );
+    }
+  }
+
+  Future<rd.Result<String>> _getMacAddress() async {
+    try {
+      final result = await Process.run('wmic', [
+        'path',
+        'Win32_NetworkAdapter',
+        'where',
+        'NetConnectionStatus=2',
+        'get',
+        'MACAddress',
+        '/format:value',
+      ], runInShell: true);
+
+      if (result.exitCode != 0) {
+        return rd.Failure(
+          core.ServerFailure(
+            message:
+                'Erro ao executar WMIC para obter MAC Address: ${result.stderr}',
+          ),
+        );
+      }
+
+      final output = result.stdout.toString();
+      final lines = output.split('\n');
+
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.startsWith('MACAddress=')) {
+          final mac = trimmed.substring(11).trim();
+          if (mac.isNotEmpty &&
+              mac != '00:00:00:00:00:00' &&
+              !mac.startsWith('00:00:00:00:00:0')) {
+            return rd.Success(mac.replaceAll(':', '').toUpperCase());
+          }
+        }
+      }
+
+      return rd.Failure(
+        core.NotFoundFailure(message: 'MAC Address não encontrado ou inválido'),
+      );
+    } catch (e, stackTrace) {
+      LoggerService.error('Erro ao obter MAC Address via WMI', e, stackTrace);
+      return rd.Failure(
+        core.ServerFailure(
+          message: 'Erro ao obter MAC Address: $e',
+          originalError: e,
+        ),
+      );
+    }
+  }
+
+  Future<VirtualizationPlatform> _detectVirtualization() async {
+    try {
+      final registryChecks = _checkVirtualizationRegistry();
+      if (registryChecks != VirtualizationPlatform.none) {
+        return registryChecks;
+      }
+
+      final wmiResult = await _checkVirtualizationWmi();
+      if (wmiResult != VirtualizationPlatform.none) {
+        return wmiResult;
+      }
+
+      return VirtualizationPlatform.none;
     } catch (e) {
-      LoggerService.warning('Erro ao obter Computer Name: $e');
-      return '';
+      LoggerService.warning('Erro ao detectar virtualização: $e');
+      return VirtualizationPlatform.none;
+    }
+  }
+
+  VirtualizationPlatform _checkVirtualizationRegistry() {
+    try {
+      final vmwareKey = TEXT(r'SOFTWARE\VMware, Inc.\VMware Tools');
+      Pointer<HKEY> phkResult = calloc<HKEY>();
+      final result = RegOpenKeyEx(
+        HKEY_LOCAL_MACHINE,
+        vmwareKey,
+        0,
+        KEY_READ,
+        phkResult,
+      );
+      if (result == ERROR_SUCCESS) {
+        RegCloseKey(phkResult.value);
+        calloc.free(phkResult);
+        return VirtualizationPlatform.vmware;
+      }
+      calloc.free(phkResult);
+
+      final vboxKey = TEXT(r'SOFTWARE\Oracle\VirtualBox Guest Additions');
+      phkResult = calloc<HKEY>();
+      final vboxResult = RegOpenKeyEx(
+        HKEY_LOCAL_MACHINE,
+        vboxKey,
+        0,
+        KEY_READ,
+        phkResult,
+      );
+      if (vboxResult == ERROR_SUCCESS) {
+        RegCloseKey(phkResult.value);
+        calloc.free(phkResult);
+        return VirtualizationPlatform.virtualbox;
+      }
+      calloc.free(phkResult);
+
+      final hypervKey = TEXT(
+        r'SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters',
+      );
+      phkResult = calloc<HKEY>();
+      final hypervResult = RegOpenKeyEx(
+        HKEY_LOCAL_MACHINE,
+        hypervKey,
+        0,
+        KEY_READ,
+        phkResult,
+      );
+      if (hypervResult == ERROR_SUCCESS) {
+        RegCloseKey(phkResult.value);
+        calloc.free(phkResult);
+        return VirtualizationPlatform.hyperv;
+      }
+      calloc.free(phkResult);
+
+      return VirtualizationPlatform.none;
+    } catch (e) {
+      LoggerService.warning(
+        'Erro ao verificar registro para virtualização: $e',
+      );
+      return VirtualizationPlatform.none;
+    }
+  }
+
+  Future<VirtualizationPlatform> _checkVirtualizationWmi() async {
+    try {
+      final result = await Process.run('wmic', [
+        'path',
+        'Win32_ComputerSystem',
+        'get',
+        'Manufacturer',
+        '/format:value',
+      ], runInShell: true);
+
+      if (result.exitCode != 0) {
+        return VirtualizationPlatform.none;
+      }
+
+      final output = result.stdout.toString().toLowerCase();
+
+      if (output.contains('vmware')) {
+        return VirtualizationPlatform.vmware;
+      } else if (output.contains('virtualbox') || output.contains('innotek')) {
+        return VirtualizationPlatform.virtualbox;
+      } else if (output.contains('microsoft corporation') &&
+          output.contains('virtual')) {
+        return VirtualizationPlatform.hyperv;
+      } else if (output.contains('qemu') ||
+          output.contains('xen') ||
+          output.contains('parallels')) {
+        return VirtualizationPlatform.unknown;
+      }
+
+      return VirtualizationPlatform.none;
+    } catch (e) {
+      LoggerService.warning('Erro ao verificar WMI para virtualização: $e');
+      return VirtualizationPlatform.none;
     }
   }
 
