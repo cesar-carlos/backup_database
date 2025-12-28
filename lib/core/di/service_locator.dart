@@ -86,6 +86,11 @@ Future<void> setupServiceLocator() async {
     () => ToolVerificationService(getIt<ProcessService>()),
   );
 
+  // Windows Service
+  getIt.registerLazySingleton<IWindowsServiceService>(
+    () => WindowsServiceService(getIt<ProcessService>()),
+  );
+
   getIt.registerLazySingleton<ISqlServerBackupService>(
     () => SqlServerBackupService(getIt<ProcessService>()),
   );
@@ -350,5 +355,9 @@ Future<void> setupServiceLocator() async {
       licenseRepository: getIt<ILicenseRepository>(),
       deviceKeyService: getIt<IDeviceKeyService>(),
     ),
+  );
+
+  getIt.registerFactory<WindowsServiceProvider>(
+    () => WindowsServiceProvider(getIt<IWindowsServiceService>()),
   );
 }

@@ -1,0 +1,22 @@
+# Pasta para dependências do instalador
+
+## NSSM (Non-Sucking Service Manager)
+
+Baixe o NSSM de: https://nssm.cc/download
+
+1. Baixe o arquivo ZIP do NSSM
+2. Extraia o arquivo mantendo a estrutura de pastas
+3. A estrutura deve ficar: `installer/dependencies/nssm-2.24/win64/nssm.exe`
+4. O instalador copiará o `nssm.exe` para `{app}\tools\nssm.exe` durante a instalação
+
+O NSSM é necessário para instalar o aplicativo como serviço do Windows.
+
+**Estrutura esperada:**
+```
+installer/
+  dependencies/
+    nssm-2.24/
+      win64/
+        nssm.exe  ← Este arquivo será incluído no instalador
+```
+

@@ -79,6 +79,8 @@ Coding conventions:
 - Error handling (Result pattern - result_dart)
 - Dependency injection
 - Import organization
+- Avoid unnecessary comments
+- Use named constants instead of magic numbers
 
 ### 5. `testing.mdc`
 
@@ -92,7 +94,7 @@ Testing patterns:
 - Test naming
 - Isolation and mocking
 
-### 6. `dart_style_code.mdc`
+### 6. `coding_style.mdc`
 
 **Applied to**: `lib/**/*.dart`, `test/**/*.dart`
 
@@ -107,6 +109,8 @@ Dart style guide based on Effective Dart:
 - Imports and organization
 - Dot shorthands
 - Tear-off for widgets (never return Widget from functions)
+- Avoid magic numbers - use named constants
+- Comments only when necessary (explain "why", not "what")
 
 ### 7. `flutter_widgets.mdc`
 
@@ -143,8 +147,11 @@ General project rules:
 
 - **DO NOT create documentation automatically** (only when requested)
 - **DO NOT create documentation files** without explicit request
-- Self-explanatory code
-- Comments only when necessary
+- **DO NOT add unnecessary comments** - code should be self-explanatory
+- **Comments only to explain "why", not "what"**
+- Self-explanatory code through clear naming
+- Avoid magic numbers - use named constants
+- Keep code clean and maintainable
 
 ### 10. `dependencies_patterns.mdc`
 

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'core/core.dart';
 import 'core/theme/theme_provider.dart';
+import 'core/utils/service_mode_detector.dart';
 import 'presentation/managers/managers.dart';
 import 'infrastructure/external/system/os_version_checker.dart';
 import 'presentation/providers/system_settings_provider.dart';
@@ -19,6 +20,15 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   LoggerService.init();
+
+  // Verificar se está rodando como serviço do Windows ANTES de qualquer outra verificação
+  final isServiceMode = ServiceModeDetector.isServiceMode();
+
+  if (isServiceMode) {
+    LoggerService.info('🔧 Modo Serviço detectado - inicializando sem UI');
+    await _initializeServiceMode();
+    return;
+  }
 
   if (!OsVersionChecker.isCompatible()) {
     LoggerService.warning(
@@ -46,18 +56,21 @@ Future<void> main() async {
   final isFirstInstance = await singleInstanceService.checkAndLock();
 
   if (!isFirstInstance) {
-    final currentUser = WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
-    
+    final currentUser =
+        WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
+
     String? existingUser;
     try {
       existingUser = await IpcService.getExistingInstanceUser();
     } catch (e) {
-      LoggerService.debug('Não foi possível obter usuário da instância existente: $e');
+      LoggerService.debug(
+        'Não foi possível obter usuário da instância existente: $e',
+      );
     }
-    
+
     final isDifferentUser = existingUser != null && existingUser != currentUser;
     final couldNotDetermineUser = existingUser == null;
-    
+
     if (isDifferentUser || couldNotDetermineUser) {
       LoggerService.warning(
         '⚠️ SEGUNDA INSTÂNCIA DETECTADA (Mutex existe). '
@@ -86,18 +99,21 @@ Future<void> main() async {
   final isServerRunning = await IpcService.checkServerRunning();
 
   if (isServerRunning) {
-    final currentUser = WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
-    
+    final currentUser =
+        WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
+
     String? existingUser;
     try {
       existingUser = await IpcService.getExistingInstanceUser();
     } catch (e) {
-      LoggerService.debug('Não foi possível obter usuário da instância existente: $e');
+      LoggerService.debug(
+        'Não foi possível obter usuário da instância existente: $e',
+      );
     }
-    
+
     final isDifferentUser = existingUser != null && existingUser != currentUser;
     final couldNotDetermineUser = existingUser == null;
-    
+
     if (isDifferentUser || couldNotDetermineUser) {
       LoggerService.warning(
         '⚠️ SEGUNDA INSTÂNCIA DETECTADA (IPC server já existe). '
@@ -146,7 +162,7 @@ Future<void> main() async {
       final dropboxAuthProvider = getIt<DropboxAuthProvider>();
       await dropboxAuthProvider.initialize();
     } catch (e) {
-      // Ignore initialization errors
+      LoggerService.debug('Erro ao inicializar DropboxAuthProvider: $e');
     }
 
     try {
@@ -159,8 +175,7 @@ Future<void> main() async {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final startMinimizedFromSettings =
-        prefs.getBool('start_minimized') ?? true;
+    final startMinimizedFromSettings = prefs.getBool('start_minimized') ?? true;
     LoggerService.info(
       'Configuração "Iniciar Minimizado" carregada: $startMinimizedFromSettings',
     );
@@ -183,7 +198,13 @@ Future<void> main() async {
     );
 
     final windowManager = WindowManagerService();
-    await windowManager.initialize(startMinimized: startMinimized);
+    try {
+      await windowManager.initialize(startMinimized: startMinimized);
+    } catch (e) {
+      LoggerService.warning(
+        'Erro ao inicializar window manager (continuando sem UI): $e',
+      );
+    }
 
     try {
       await singleInstanceService.startIpcServer(
@@ -205,14 +226,26 @@ Future<void> main() async {
       );
       LoggerService.info('IPC Server inicializado e pronto');
     } catch (e) {
-      LoggerService.warning('Erro ao inicializar IPC Server: $e');
+      if (ServiceModeDetector.isServiceMode()) {
+        LoggerService.debug(
+          'IPC Server não disponível em modo serviço (normal)',
+        );
+      } else {
+        LoggerService.warning('Erro ao inicializar IPC Server: $e');
+      }
     }
 
     final trayManager = TrayManagerService();
     try {
       await trayManager.initialize(onMenuAction: _handleTrayMenuAction);
     } catch (e) {
-      LoggerService.warning('Erro ao inicializar tray manager: $e');
+      if (ServiceModeDetector.isServiceMode()) {
+        LoggerService.debug(
+          'Tray Manager não disponível em modo serviço (normal)',
+        );
+      } else {
+        LoggerService.warning('Erro ao inicializar tray manager: $e');
+      }
     }
 
     windowManager.setCallbacks(
@@ -234,6 +267,36 @@ Future<void> main() async {
   } catch (e, stackTrace) {
     LoggerService.error('Erro fatal na inicialização', e, stackTrace);
     await _cleanup();
+    exit(1);
+  }
+}
+
+Future<void> _initializeServiceMode() async {
+  try {
+    await dotenv.load(fileName: '.env');
+    LoggerService.info('Variáveis de ambiente carregadas');
+
+    await setupServiceLocator();
+    LoggerService.info('Dependências configuradas');
+
+    try {
+      final schedulerService = getIt<SchedulerService>();
+      await schedulerService.start();
+      LoggerService.info('✅ Serviço de agendamento iniciado em modo serviço');
+    } catch (e) {
+      LoggerService.error('Erro ao iniciar scheduler em modo serviço', e);
+      exit(1);
+    }
+
+    LoggerService.info('✅ Aplicativo rodando como serviço do Windows');
+
+    await Future.delayed(const Duration(days: 365));
+  } catch (e, stackTrace) {
+    LoggerService.error(
+      'Erro fatal na inicialização do modo serviço',
+      e,
+      stackTrace,
+    );
     exit(1);
   }
 }
@@ -423,6 +486,7 @@ class BackupDatabaseApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => getIt<DashboardProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<AutoUpdateProvider>()),
         ChangeNotifierProvider(create: (_) => getIt<LicenseProvider>()),
+        ChangeNotifierProvider(create: (_) => getIt<WindowsServiceProvider>()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

@@ -8,3 +8,4 @@ export 'i_sql_server_backup_service.dart';
 export 'i_sql_script_execution_service.dart';
 export 'i_sybase_backup_service.dart';
 export 'i_task_scheduler_service.dart';
+export 'i_windows_service_service.dart';

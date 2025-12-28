@@ -12,7 +12,7 @@ enum BackupStep {
 class BackupProgress {
   final BackupStep step;
   final String message;
-  final double? progress; // 0.0 a 1.0
+  final double? progress;
   final String? error;
   final DateTime? startedAt;
   final Duration? elapsed;
@@ -74,7 +74,8 @@ class BackupProgressProvider extends ChangeNotifier {
         ? DateTime.now().difference(_currentProgress!.startedAt!)
         : null;
 
-    _currentProgress = _currentProgress?.copyWith(
+    _currentProgress =
+        _currentProgress?.copyWith(
           step: step,
           message: message,
           progress: progress,
@@ -125,4 +126,3 @@ class BackupProgressProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

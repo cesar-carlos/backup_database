@@ -11,3 +11,4 @@ export 'dashboard_provider.dart';
 export 'google_auth_provider.dart';
 export 'dropbox_auth_provider.dart';
 export 'auto_update_provider.dart';
+export 'windows_service_provider.dart';

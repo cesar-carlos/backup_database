@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 
 import '../widgets/settings/general_settings_tab.dart';
 import '../widgets/settings/license_settings_tab.dart';
+import '../widgets/settings/service_settings_tab.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -32,6 +33,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: const Icon(FluentIcons.settings),
                   text: const Text('Geral'),
                   body: const GeneralSettingsTab(),
+                ),
+                Tab(
+                  icon: const Icon(FluentIcons.server),
+                  text: const Text('Serviço Windows'),
+                  body: const ServiceSettingsTab(),
                 ),
                 Tab(
                   icon: const Icon(FluentIcons.lock),
