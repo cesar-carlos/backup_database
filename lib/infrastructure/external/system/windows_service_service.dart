@@ -1,6 +1,9 @@
 import 'dart:io';
 
-import 'package:result_dart/result_dart.dart' as rd;
+import 'package:result_dart/result_dart.dart'
+    as rd
+    show Result, Success, Failure;
+import 'package:result_dart/result_dart.dart' show unit;
 
 import '../../../core/errors/failure.dart';
 import '../../../core/utils/logger_service.dart';
@@ -14,51 +17,57 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _description =
       'Serviço de backup automático para SQL Server e Sybase';
 
+  static const Duration _shortTimeout = Duration(seconds: 10);
+  static const Duration _longTimeout = Duration(seconds: 30);
+  static const Duration _serviceDelay = Duration(seconds: 2);
+  static const int _successExitCode = 0;
+  static const int _serviceNotFoundExitCode = 3;
+  static const String _nssmExeName = 'nssm.exe';
+  static const String _scExeName = 'sc';
+  static const String _toolsSubdir = 'tools';
+  static const String _logSubdir = 'logs';
+  static const String _programDataEnv = 'ProgramData';
+  static const String _defaultProgramData = 'C:\\ProgramData';
+  static const String _runningState = 'RUNNING';
+  static const String _localSystemAccount = 'LocalSystem';
+
   WindowsServiceService(this._processService);
 
   @override
   Future<rd.Result<WindowsServiceStatus>> getStatus() async {
     if (!Platform.isWindows) {
       return rd.Failure(
-        ValidationFailure(
-          message: 'Windows Service só é suportado no Windows',
-        ),
+        ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
 
     try {
       final result = await _processService.run(
-        executable: 'sc',
+        executable: _scExeName,
         arguments: ['query', _serviceName],
-        timeout: const Duration(seconds: 10),
+        timeout: _shortTimeout,
       );
 
-      return result.fold(
-        (processResult) {
-          final isInstalled = processResult.exitCode == 0;
+      return result.fold((processResult) {
+        final isInstalled = processResult.exitCode == _successExitCode;
 
-          if (!isInstalled) {
-            return rd.Success(
-              const WindowsServiceStatus(
-                isInstalled: false,
-                isRunning: false,
-              ),
-            );
-          }
-
-          final isRunning = processResult.stdout.contains('RUNNING');
-
+        if (!isInstalled) {
           return rd.Success(
-            WindowsServiceStatus(
-              isInstalled: true,
-              isRunning: isRunning,
-              serviceName: _serviceName,
-              displayName: _displayName,
-            ),
+            const WindowsServiceStatus(isInstalled: false, isRunning: false),
           );
-        },
-        (failure) => rd.Failure(failure),
-      );
+        }
+
+        final isRunning = processResult.stdout.contains(_runningState);
+
+        return rd.Success(
+          WindowsServiceStatus(
+            isInstalled: true,
+            isRunning: isRunning,
+            serviceName: _serviceName,
+            displayName: _displayName,
+          ),
+        );
+      }, (failure) => rd.Failure(failure));
     } catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar status do serviço', e, stackTrace);
       return rd.Failure(
@@ -74,16 +83,14 @@ class WindowsServiceService implements IWindowsServiceService {
   }) async {
     if (!Platform.isWindows) {
       return rd.Failure(
-        ValidationFailure(
-          message: 'Windows Service só é suportado no Windows',
-        ),
+        ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
 
     try {
       final appPath = Platform.resolvedExecutable;
       final appDir = File(appPath).parent.path;
-      final nssmPath = '$appDir\\tools\\nssm.exe';
+      final nssmPath = '$appDir\\$_toolsSubdir\\$_nssmExeName';
 
       if (!File(nssmPath).existsSync()) {
         return rd.Failure(
@@ -102,37 +109,54 @@ class WindowsServiceService implements IWindowsServiceService {
       if (existingStatus?.isInstalled == true) {
         LoggerService.info('Serviço já existe. Removendo versão anterior...');
         await uninstallService();
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(_serviceDelay);
       }
 
       final installResult = await _processService.run(
         executable: nssmPath,
         arguments: ['install', _serviceName, appPath, '--minimized'],
-        timeout: const Duration(seconds: 30),
+        timeout: _longTimeout,
       );
 
-      return installResult.fold(
-        (processResult) async {
-          if (processResult.exitCode != 0) {
+      return installResult.fold((processResult) async {
+        if (processResult.exitCode != _successExitCode) {
+          final errorMessage = processResult.stderr.isNotEmpty
+              ? processResult.stderr
+              : processResult.stdout;
+
+          final isAccessDenied =
+              errorMessage.contains('Acesso negado') ||
+              errorMessage.contains('Access denied') ||
+              errorMessage.contains('FALHA 5') ||
+              errorMessage.contains('FAILURE 5');
+
+          if (isAccessDenied) {
             return rd.Failure(
               ServerFailure(
-                message: 'Erro ao instalar serviço: ${processResult.stderr}',
+                message:
+                    'Acesso negado. É necessário executar o aplicativo como Administrador para instalar o serviço.\n\n'
+                    'Solução:\n'
+                    '1. Feche o aplicativo\n'
+                    '2. Clique com botão direito no ícone do aplicativo\n'
+                    '3. Selecione "Executar como administrador"\n'
+                    '4. Tente instalar o serviço novamente',
               ),
             );
           }
 
-          await _configureService(nssmPath, serviceUser, servicePassword);
+          return rd.Failure(
+            ServerFailure(message: 'Erro ao instalar serviço: $errorMessage'),
+          );
+        }
 
-          LoggerService.info('Serviço instalado com sucesso');
-          return rd.Success(());
-        },
-        (failure) => rd.Failure(failure),
-      );
+        await _configureService(nssmPath, serviceUser, servicePassword);
+
+        LoggerService.info('Serviço instalado com sucesso');
+        return rd.Success(unit);
+      }, (failure) => rd.Failure(failure));
     } catch (e, stackTrace) {
       LoggerService.error('Erro ao instalar serviço', e, stackTrace);
-      return rd.Failure(
-        ServerFailure(message: 'Erro ao instalar serviço: $e'),
-      );
+      return rd.Failure(ServerFailure(message: 'Erro ao instalar serviço: $e'));
     }
   }
 
@@ -142,9 +166,9 @@ class WindowsServiceService implements IWindowsServiceService {
     String? servicePassword,
   ) async {
     final appDir = File(Platform.resolvedExecutable).parent.path;
-    final logPath = Platform.environment['ProgramData'] != null
-        ? '${Platform.environment['ProgramData']}\\BackupDatabase\\logs'
-        : 'C:\\ProgramData\\BackupDatabase\\logs';
+    final programData =
+        Platform.environment[_programDataEnv] ?? _defaultProgramData;
+    final logPath = '$programData\\BackupDatabase\\$_logSubdir';
 
     final logDir = Directory(logPath);
     if (!logDir.existsSync()) {
@@ -169,21 +193,19 @@ class WindowsServiceService implements IWindowsServiceService {
       final result = await _processService.run(
         executable: nssmPath,
         arguments: config,
-        timeout: const Duration(seconds: 10),
+        timeout: _shortTimeout,
       );
 
       result.fold(
         (processResult) {
-          if (processResult.exitCode != 0) {
+          if (processResult.exitCode != _successExitCode) {
             LoggerService.warning(
               'Aviso ao configurar ${config[1]}: ${processResult.stderr}',
             );
           }
         },
         (failure) {
-          LoggerService.warning(
-            'Erro ao configurar ${config[1]}: $failure',
-          );
+          LoggerService.warning('Erro ao configurar ${config[1]}: $failure');
         },
       );
     }
@@ -195,8 +217,8 @@ class WindowsServiceService implements IWindowsServiceService {
 
       await _processService.run(
         executable: nssmPath,
-        arguments: ['set', _serviceName, 'ObjectName', 'LocalSystem'],
-        timeout: const Duration(seconds: 10),
+        arguments: ['set', _serviceName, 'ObjectName', _localSystemAccount],
+        timeout: _shortTimeout,
       );
     } else if (servicePassword != null) {
       await _processService.run(
@@ -206,9 +228,9 @@ class WindowsServiceService implements IWindowsServiceService {
           _serviceName,
           'ObjectName',
           serviceUser,
-          servicePassword
+          servicePassword,
         ],
-        timeout: const Duration(seconds: 10),
+        timeout: _shortTimeout,
       );
     }
   }
@@ -217,55 +239,69 @@ class WindowsServiceService implements IWindowsServiceService {
   Future<rd.Result<void>> uninstallService() async {
     if (!Platform.isWindows) {
       return rd.Failure(
-        ValidationFailure(
-          message: 'Windows Service só é suportado no Windows',
-        ),
+        ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
 
     try {
       final appDir = File(Platform.resolvedExecutable).parent.path;
-      final nssmPath = '$appDir\\tools\\nssm.exe';
+      final nssmPath = '$appDir\\$_toolsSubdir\\$_nssmExeName';
 
       if (!File(nssmPath).existsSync()) {
-        return rd.Failure(
-          ValidationFailure(message: 'NSSM não encontrado'),
-        );
+        return rd.Failure(ValidationFailure(message: 'NSSM não encontrado'));
       }
 
       await _processService.run(
-        executable: 'sc',
+        executable: _scExeName,
         arguments: ['stop', _serviceName],
-        timeout: const Duration(seconds: 30),
+        timeout: _longTimeout,
       );
 
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(_serviceDelay);
 
       final removeResult = await _processService.run(
         executable: nssmPath,
         arguments: ['remove', _serviceName, 'confirm'],
-        timeout: const Duration(seconds: 30),
+        timeout: _longTimeout,
       );
 
-      return removeResult.fold(
-        (processResult) {
-          if (processResult.exitCode != 0 && processResult.exitCode != 3) {
+      return removeResult.fold((processResult) {
+        if (processResult.exitCode != _successExitCode &&
+            processResult.exitCode != _serviceNotFoundExitCode) {
+          final errorMessage = processResult.stderr.isNotEmpty
+              ? processResult.stderr
+              : processResult.stdout;
+
+          final isAccessDenied =
+              errorMessage.contains('Acesso negado') ||
+              errorMessage.contains('Access denied') ||
+              errorMessage.contains('FALHA 5') ||
+              errorMessage.contains('FAILURE 5');
+
+          if (isAccessDenied) {
             return rd.Failure(
               ServerFailure(
-                message: 'Erro ao remover serviço: ${processResult.stderr}',
+                message:
+                    'Acesso negado. É necessário executar o aplicativo como Administrador para remover o serviço.\n\n'
+                    'Solução:\n'
+                    '1. Feche o aplicativo\n'
+                    '2. Clique com botão direito no ícone do aplicativo\n'
+                    '3. Selecione "Executar como administrador"\n'
+                    '4. Tente remover o serviço novamente',
               ),
             );
           }
-          LoggerService.info('Serviço removido com sucesso');
-          return rd.Success(());
-        },
-        (failure) => rd.Failure(failure),
-      );
+
+          return rd.Failure(
+            ServerFailure(message: 'Erro ao remover serviço: $errorMessage'),
+          );
+        }
+        LoggerService.info('Serviço removido com sucesso');
+        return rd.Success(unit);
+      }, (failure) => rd.Failure(failure));
     } catch (e, stackTrace) {
       LoggerService.error('Erro ao remover serviço', e, stackTrace);
-      return rd.Failure(
-        ServerFailure(message: 'Erro ao remover serviço: $e'),
-      );
+      return rd.Failure(ServerFailure(message: 'Erro ao remover serviço: $e'));
     }
   }
 
@@ -273,74 +309,176 @@ class WindowsServiceService implements IWindowsServiceService {
   Future<rd.Result<void>> startService() async {
     if (!Platform.isWindows) {
       return rd.Failure(
-        ValidationFailure(
-          message: 'Windows Service só é suportado no Windows',
-        ),
+        ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
-    return _controlService('start');
+
+    try {
+      final statusResult = await getStatus();
+      final status = statusResult.getOrNull();
+
+      if (status?.isRunning == true) {
+        LoggerService.info('Serviço já está em execução');
+        return rd.Success(unit);
+      }
+
+      final result = await _processService.run(
+        executable: _scExeName,
+        arguments: ['start', _serviceName],
+        timeout: _longTimeout,
+      );
+
+      return result.fold((processResult) async {
+        await Future.delayed(_serviceDelay);
+
+        final statusAfterResult = await getStatus();
+        final statusAfter = statusAfterResult.getOrNull();
+
+        if (statusAfter?.isRunning == true) {
+          LoggerService.info('Serviço iniciado com sucesso');
+          return rd.Success(unit);
+        }
+
+        final errorMessage = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+
+        final isSuccessMessage =
+            errorMessage.contains('SERVICE_ALREADY_RUNNING') ||
+            errorMessage.contains('já está em execução');
+
+        if (processResult.exitCode == _successExitCode || isSuccessMessage) {
+          await Future.delayed(_serviceDelay);
+          final finalStatusResult = await getStatus();
+          final finalStatus = finalStatusResult.getOrNull();
+
+          if (finalStatus?.isRunning == true) {
+            LoggerService.info('Serviço iniciado com sucesso');
+            return rd.Success(unit);
+          }
+        }
+
+        final isAccessDenied =
+            errorMessage.contains('Acesso negado') ||
+            errorMessage.contains('Access denied') ||
+            errorMessage.contains('FALHA 5') ||
+            errorMessage.contains('FAILURE 5');
+
+        if (isAccessDenied) {
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Acesso negado. É necessário executar o aplicativo como Administrador para iniciar o serviço.\n\n'
+                  'Solução:\n'
+                  '1. Feche o aplicativo\n'
+                  '2. Clique com botão direito no ícone do aplicativo\n'
+                  '3. Selecione "Executar como administrador"\n'
+                  '4. Tente iniciar o serviço novamente',
+            ),
+          );
+        }
+
+        return rd.Failure(
+          ServerFailure(message: 'Erro ao iniciar serviço: $errorMessage'),
+        );
+      }, (failure) => rd.Failure(failure));
+    } catch (e, stackTrace) {
+      LoggerService.error('Erro ao iniciar serviço', e, stackTrace);
+      return rd.Failure(ServerFailure(message: 'Erro ao iniciar serviço: $e'));
+    }
   }
 
   @override
   Future<rd.Result<void>> stopService() async {
     if (!Platform.isWindows) {
       return rd.Failure(
-        ValidationFailure(
-          message: 'Windows Service só é suportado no Windows',
-        ),
+        ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
-    return _controlService('stop');
+
+    try {
+      final statusResult = await getStatus();
+      final status = statusResult.getOrNull();
+
+      if (status?.isRunning != true) {
+        LoggerService.info('Serviço já está parado');
+        return rd.Success(unit);
+      }
+
+      final result = await _processService.run(
+        executable: _scExeName,
+        arguments: ['stop', _serviceName],
+        timeout: _longTimeout,
+      );
+
+      return result.fold((processResult) async {
+        await Future.delayed(_serviceDelay);
+
+        final statusAfterResult = await getStatus();
+        final statusAfter = statusAfterResult.getOrNull();
+
+        if (statusAfter?.isRunning != true) {
+          LoggerService.info('Serviço parado com sucesso');
+          return rd.Success(unit);
+        }
+
+        final errorMessage = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+
+        final isAccessDenied =
+            errorMessage.contains('Acesso negado') ||
+            errorMessage.contains('Access denied') ||
+            errorMessage.contains('FALHA 5') ||
+            errorMessage.contains('FAILURE 5');
+
+        if (isAccessDenied) {
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Acesso negado. É necessário executar o aplicativo como Administrador para parar o serviço.\n\n'
+                  'Solução:\n'
+                  '1. Feche o aplicativo\n'
+                  '2. Clique com botão direito no ícone do aplicativo\n'
+                  '3. Selecione "Executar como administrador"\n'
+                  '4. Tente parar o serviço novamente',
+            ),
+          );
+        }
+
+        if (processResult.exitCode == _successExitCode) {
+          await Future.delayed(_serviceDelay);
+          final finalStatusResult = await getStatus();
+          final finalStatus = finalStatusResult.getOrNull();
+
+          if (finalStatus?.isRunning != true) {
+            LoggerService.info('Serviço parado com sucesso');
+            return rd.Success(unit);
+          }
+        }
+
+        return rd.Failure(
+          ServerFailure(message: 'Erro ao parar serviço: $errorMessage'),
+        );
+      }, (failure) => rd.Failure(failure));
+    } catch (e, stackTrace) {
+      LoggerService.error('Erro ao parar serviço', e, stackTrace);
+      return rd.Failure(ServerFailure(message: 'Erro ao parar serviço: $e'));
+    }
   }
 
   @override
   Future<rd.Result<void>> restartService() async {
     if (!Platform.isWindows) {
       return rd.Failure(
-        ValidationFailure(
-          message: 'Windows Service só é suportado no Windows',
-        ),
+        ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
 
     final stopResult = await stopService();
-    return stopResult.fold(
-      (_) async {
-        await Future.delayed(const Duration(seconds: 2));
-        return await startService();
-      },
-      (failure) => rd.Failure(failure),
-    );
-  }
-
-  Future<rd.Result<void>> _controlService(String action) async {
-    try {
-      final result = await _processService.run(
-        executable: 'sc',
-        arguments: [action, _serviceName],
-        timeout: const Duration(seconds: 30),
-      );
-
-      return result.fold(
-        (processResult) {
-          if (processResult.exitCode != 0) {
-            return rd.Failure(
-              ServerFailure(
-                message: 'Erro ao $action serviço: ${processResult.stderr}',
-              ),
-            );
-          }
-          LoggerService.info('Serviço $action com sucesso');
-          return rd.Success(());
-        },
-        (failure) => rd.Failure(failure),
-      );
-    } catch (e, stackTrace) {
-      LoggerService.error('Erro ao $action serviço', e, stackTrace);
-      return rd.Failure(
-        ServerFailure(message: 'Erro ao $action serviço: $e'),
-      );
-    }
+    return stopResult.fold((_) async {
+      await Future.delayed(_serviceDelay);
+      return await startService();
+    }, (failure) => rd.Failure(failure));
   }
 }
-

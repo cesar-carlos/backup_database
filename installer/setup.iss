@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Backup Database"
-#define MyAppVersion "2.0.1"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -35,7 +35,7 @@ Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "OpÃƒÂ§ÃƒÂµes de InicializaÃƒÂ§ÃƒÂ£o"; Flags: unchecked
+Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"; Flags: unchecked
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -50,10 +50,10 @@ Source: "uninstall_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\Verificar DependÃƒÂªncias"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\Instalar como ServiÃƒÂ§o do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Flags: runasadmin
-Name: "{group}\Remover ServiÃƒÂ§o do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Flags: runasadmin
-Name: "{group}\DocumentaÃƒÂ§ÃƒÂ£o"; Filename: "{app}\docs\installation_guide.md"
+Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
@@ -74,8 +74,8 @@ var
   ResultCode: Integer;
 begin
   Result := False;
-  // Usar findstr para verificar se o processo estÃ¡ na lista
-  // findstr retorna 0 se encontrar, 1 se nÃ£o encontrar
+  // Usar findstr para verificar se o processo está na lista
+  // findstr retorna 0 se encontrar, 1 se não encontrar
   if Exec('cmd.exe', '/c tasklist | findstr /I "' + ExeName + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
     // Se ResultCode = 0, o processo foi encontrado
@@ -104,14 +104,14 @@ begin
     Exit;
   end;
   
-  // Se ainda estiver rodando, tentar forÃ§ar o fechamento
+  // Se ainda estiver rodando, tentar forçar o fechamento
   while IsAppRunning(ExeName) and (Retries < MaxRetries) do
   begin
     Exec('taskkill.exe', '/IM ' + ExeName + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Sleep(1000);
     Retries := Retries + 1;
     
-    // Verificar se foi fechado apÃ³s cada tentativa
+    // Verificar se foi fechado após cada tentativa
     if not IsAppRunning(ExeName) then
     begin
       Result := True;
@@ -119,7 +119,7 @@ begin
     end;
   end;
   
-  // VerificaÃ§Ã£o final
+  // Verificação final
   Result := not IsAppRunning(ExeName);
 end;
 
@@ -135,8 +135,8 @@ begin
   Result := True;
   VCRedistNeeded := False;
   
-  // Verificar se existe uma instalaÃ§Ã£o anterior e executar desinstalaÃ§Ã£o silenciosa
-  // Tentar mÃºltiplos caminhos possÃ­veis (na ordem mais provÃ¡vel primeiro)
+  // Verificar se existe uma instalação anterior e executar desinstalação silenciosa
+  // Tentar múltiplos caminhos possíveis (na ordem mais provável primeiro)
   UninstallPath := ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe');
   if not FileExists(UninstallPath) then
   begin
@@ -159,15 +159,15 @@ begin
     Sleep(2000);
   end;
   
-  // Tentar executar desinstalaÃ§Ã£o se o arquivo existir
+  // Tentar executar desinstalação se o arquivo existir
   if FileExists(UninstallPath) then
   begin
-     // Executar desinstalaÃ§Ã£o MUITO silenciosa da versÃ£o anterior
-     // /VERYSILENT Ã© mais agressivo que /SILENT - nÃ£o mostra nada
+     // Executar desinstalação MUITO silenciosa da versão anterior
+     // /VERYSILENT é mais agressivo que /SILENT - não mostra nada
      Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     
-    // Aguardar atÃ© que o processo de desinstalaÃ§Ã£o termine completamente
-    // Verificar se o arquivo de desinstalaÃ§Ã£o ainda existe (indica que ainda estÃ¡ em processo)
+    // Aguardar até que o processo de desinstalação termine completamente
+    // Verificar se o arquivo de desinstalação ainda existe (indica que ainda está em processo)
     WaitCount := 0;
     while FileExists(UninstallPath) and (WaitCount < 30) do
     begin
@@ -178,7 +178,7 @@ begin
     // Aguardar um pouco mais para garantir que todos os processos foram finalizados
     Sleep(2000);
     
-    // Verificar se ainda hÃ¡ processos relacionados rodando
+    // Verificar se ainda há processos relacionados rodando
     if IsAppRunning(AppExe) then
     begin
       CloseApp(AppExe);
@@ -187,8 +187,8 @@ begin
   end
   else
   begin
-    // Se nÃ£o encontrou o arquivo, tentar executar diretamente nos caminhos mais comuns
-    // mesmo sem verificar existÃªncia (pode ser que a verificaÃ§Ã£o esteja falhando)
+    // Se não encontrou o arquivo, tentar executar diretamente nos caminhos mais comuns
+    // mesmo sem verificar existência (pode ser que a verificação esteja falhando)
      UninstallPath := ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe');
      if Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
      begin
@@ -203,21 +203,21 @@ begin
        end
        else
        begin
-         // Se nÃ£o encontrou pelo caminho, tentar procurar pelo registro do Windows
-         // Verificar se hÃ¡ uma chave de registro indicando instalaÃ§Ã£o anterior
+        // Se não encontrou pelo caminho, tentar procurar pelo registro do Windows
+        // Verificar se há uma chave de registro indicando instalação anterior
          if RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D_is1', 'UninstallString', UninstallPath) then
          begin
-           // Extrair apenas o caminho do executÃ¡vel (remover parÃ¢metros se houver)
-           // Se comeÃ§ar com aspas, remover as aspas e pegar atÃ© o prÃ³ximo espaÃ§o ou fim
+           // Extrair apenas o caminho do executável (remover parâmetros se houver)
+           // Se começar com aspas, remover as aspas e pegar até o próximo espaço ou fim
            if Pos('"', UninstallPath) = 1 then
            begin
              // Remover primeira aspas
              UninstallPath := Copy(UninstallPath, 2, Length(UninstallPath) - 1);
-             // Encontrar a prÃ³xima aspas
+             // Encontrar a próxima aspas
              SecondQuotePos := Pos('"', UninstallPath);
              if SecondQuotePos > 0 then
              begin
-               // Extrair atÃ© a segunda aspas
+               // Extrair até a segunda aspas
                UninstallPath := Copy(UninstallPath, 1, SecondQuotePos - 1);
              end;
            end;
@@ -232,7 +232,7 @@ begin
      end;
   end;
   
-  // Fechar processos de desinstalaÃ§Ã£o se estiverem rodando
+  // Fechar processos de desinstalação se estiverem rodando
   UninstallExe := 'unins000.exe';
   if IsAppRunning(UninstallExe) then
   begin
@@ -240,18 +240,18 @@ begin
     Sleep(2000);
   end;
   
-  // Verificar se o aplicativo estÃ¡ em execuÃ§Ã£o
+  // Verificar se o aplicativo está em execução
   AppExe := ExpandConstant('{#MyAppExeName}');
   
   if IsAppRunning(AppExe) then
   begin
-    // Se estiver em modo silencioso (atualizaÃ§Ã£o automÃ¡tica), fechar sem perguntar
+    // Se estiver em modo silencioso (atualização automática), fechar sem perguntar
     if WizardSilent() then
     begin
       // Modo silencioso: fechar automaticamente sem perguntar
       CloseApp(AppExe);
       
-      // Aguardar atÃ© que o processo seja completamente finalizado
+      // Aguardar até que o processo seja completamente finalizado
       WaitCount := 0;
       while IsAppRunning(AppExe) and (WaitCount < 30) do
       begin
@@ -261,15 +261,15 @@ begin
     end
     else
     begin
-      // Modo interativo: perguntar ao usuÃ¡rio
-      if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' estÃ¡ em execuÃ§Ã£o.' + #13#10 + #13#10 +
-                'Ã‰ necessÃ¡rio fechar o aplicativo para continuar com a instalaÃ§Ã£o.' + #13#10 + #13#10 +
+      // Modo interativo: perguntar ao usuário
+      if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
+                'É necessário fechar o aplicativo para continuar com a instalação.' + #13#10 + #13#10 +
                 'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
       begin
         // Tentar fechar o aplicativo
         CloseApp(AppExe);
         
-        // Aguardar atÃ© que o processo seja completamente finalizado
+        // Aguardar até que o processo seja completamente finalizado
         WaitCount := 0;
         while IsAppRunning(AppExe) and (WaitCount < 30) do
         begin
@@ -277,11 +277,11 @@ begin
           WaitCount := WaitCount + 1;
         end;
         
-        // Se ainda estiver rodando apÃ³s todas as tentativas, avisar mas continuar
+        // Se ainda estiver rodando após todas as tentativas, avisar mas continuar
         if IsAppRunning(AppExe) then
         begin
-          if MsgBox('O aplicativo ainda parece estar em execuÃ§Ã£o apÃ³s tentativas de fechamento.' + #13#10 + #13#10 +
-                    'A instalaÃ§Ã£o pode falhar se o aplicativo nÃ£o for fechado.' + #13#10 + #13#10 +
+          if MsgBox('O aplicativo ainda parece estar em execução após tentativas de fechamento.' + #13#10 + #13#10 +
+                    'A instalação pode falhar se o aplicativo não for fechado.' + #13#10 + #13#10 +
                     'Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
           begin
             Result := False;
@@ -289,12 +289,12 @@ begin
           end;
         end;
         
-        // Se chegou aqui, o aplicativo foi fechado ou o usuÃ¡rio escolheu continuar
-        // Continuar com a instalaÃ§Ã£o
+        // Se chegou aqui, o aplicativo foi fechado ou o usuário escolheu continuar
+        // Continuar com a instalação
       end
       else
       begin
-        // UsuÃ¡rio escolheu nÃ£o fechar - nÃ£o pode continuar
+        // Usuário escolheu não fechar - não pode continuar
         Result := False;
         Exit;
       end;
@@ -311,7 +311,7 @@ procedure InitializeWizard();
 begin
   if VCRedistNeeded then
   begin
-    VCRedistPage := CreateOutputProgressPage('Verificando DependÃƒÂªncias', 'Instalando Visual C++ Redistributables...');
+    VCRedistPage := CreateOutputProgressPage('Verificando Dependências', 'Instalando Visual C++ Redistributables...');
   end;
 end;
 
@@ -324,7 +324,7 @@ var
 begin
   Result := '';
   
-  // Verificar novamente se o aplicativo estÃ¡ rodando antes de instalar
+  // Verificar novamente se o aplicativo está rodando antes de instalar
   AppExe := ExpandConstant('{#MyAppExeName}');
   if IsAppRunning(AppExe) then
   begin
@@ -339,13 +339,13 @@ begin
       Sleep(2000);
     end;
     
-    // Se ainda estiver rodando apÃ³s todas as tentativas, apenas avisar
-    // mas tentar continuar (alguns arquivos podem ser substituÃ­dos mesmo assim)
+    // Se ainda estiver rodando após todas as tentativas, apenas avisar
+    // mas tentar continuar (alguns arquivos podem ser substituídos mesmo assim)
     if IsAppRunning(AppExe) then
     begin
-      // NÃ£o bloquear completamente - apenas avisar
+      // Não bloquear completamente - apenas avisar
       // O Windows pode conseguir substituir alguns arquivos mesmo com o processo rodando
-      // Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}') + ' ainda estÃ¡ em execuÃ§Ã£o. Alguns arquivos podem nÃ£o ser atualizados.';
+      // Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}') + ' ainda está em execução. Alguns arquivos podem não ser atualizados.';
     end;
   end;
   
@@ -359,7 +359,7 @@ begin
     
     if not FileExists(VCRedistPath) then
     begin
-      Result := 'Visual C++ Redistributables nÃƒÂ£o encontrado. Por favor, baixe e instale manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe';
+      Result := 'Visual C++ Redistributables não encontrado. Por favor, baixe e instale manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe';
       VCRedistPage.Hide;
       Exit;
     end;
@@ -368,7 +368,7 @@ begin
     
     if not ExecResult or (VCRedistErrorCode <> 0) then
     begin
-      Result := 'Erro ao instalar Visual C++ Redistributables. CÃƒÂ³digo de erro: ' + IntToStr(VCRedistErrorCode);
+      Result := 'Erro ao instalar Visual C++ Redistributables. Código de erro: ' + IntToStr(VCRedistErrorCode);
       VCRedistPage.Hide;
       Exit;
     end;
@@ -382,23 +382,114 @@ begin
   Result := True;
 end;
 
+function IsServiceInstalled(const ServiceName: String): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := False;
+  if Exec('sc.exe', 'query ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    Result := (ResultCode = 0);
+  end;
+end;
+
+function RemoveService(const ServiceName: String): Boolean;
+var
+  ResultCode: Integer;
+  Retries: Integer;
+  MaxRetries: Integer;
+begin
+  Result := False;
+  Retries := 0;
+  MaxRetries := 5;
+  
+  if not IsServiceInstalled(ServiceName) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  
+  while (Retries < MaxRetries) do
+  begin
+    Exec('sc.exe', 'stop ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(2000);
+    
+    Exec('sc.exe', 'delete ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    
+    if ResultCode = 0 then
+    begin
+      Result := True;
+      Sleep(1000);
+      Exit;
+    end;
+    
+    Retries := Retries + 1;
+    Sleep(1000);
+  end;
+  
+  Result := not IsServiceInstalled(ServiceName);
+end;
+
+function StopService(const ServiceName: String): Boolean;
+var
+  ResultCode: Integer;
+  Retries: Integer;
+  MaxRetries: Integer;
+begin
+  Result := False;
+  Retries := 0;
+  MaxRetries := 5;
+  
+  if not IsServiceInstalled(ServiceName) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  
+  while (Retries < MaxRetries) do
+  begin
+    Exec('sc.exe', 'stop ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    
+    if ResultCode = 0 then
+    begin
+      Sleep(2000);
+      Result := True;
+      Exit;
+    end;
+    
+    Retries := Retries + 1;
+    Sleep(1000);
+  end;
+  
+  Result := False;
+end;
+
 function InitializeUninstall(): Boolean;
 var
   AppExe: String;
+  ServiceName: String;
 begin
   Result := True;
   AppExe := ExpandConstant('{#MyAppExeName}');
+  ServiceName := 'BackupDatabaseService';
   
-  // Verificar se o aplicativo estÃ¡ em execuÃ§Ã£o durante a desinstalaÃ§Ã£o
+  // Parar o serviço do Windows ANTES de qualquer outra ação
+  if IsServiceInstalled(ServiceName) then
+  begin
+    StopService(ServiceName);
+    Sleep(2000);
+  end;
+  
+  // Verificar se o aplicativo está em execução durante a desinstalação
   if IsAppRunning(AppExe) then
   begin
-    if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' estÃ¡ em execuÃ§Ã£o.' + #13#10 + #13#10 +
-              'Ã‰ necessÃ¡rio fechar o aplicativo para continuar com a desinstalaÃ§Ã£o.' + #13#10 + #13#10 +
+    if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
+              'É necessário fechar o aplicativo para continuar com a desinstalação.' + #13#10 + #13#10 +
               'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
     begin
       if not CloseApp(AppExe) then
       begin
-        MsgBox('NÃ£o foi possÃ­vel fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
+        MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
                'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
         Result := False;
         Exit;
@@ -409,7 +500,7 @@ begin
       
       if IsAppRunning(AppExe) then
       begin
-        MsgBox('O aplicativo ainda estÃ¡ em execuÃ§Ã£o.' + #13#10 + #13#10 +
+        MsgBox('O aplicativo ainda está em execução.' + #13#10 + #13#10 +
                'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
         Result := False;
         Exit;
@@ -419,6 +510,21 @@ begin
     begin
       Result := False;
       Exit;
+    end;
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ServiceName: String;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    ServiceName := 'BackupDatabaseService';
+    
+    if IsServiceInstalled(ServiceName) then
+    begin
+      RemoveService(ServiceName);
     end;
   end;
 end;

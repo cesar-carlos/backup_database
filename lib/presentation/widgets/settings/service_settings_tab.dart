@@ -72,57 +72,25 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: InfoLabel(
-                    label: 'Estado',
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(provider),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        _getStatusText(provider),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+            InfoLabel(
+              label: 'Estado',
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: _getStatusColor(provider),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  _getStatusText(provider),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
                   ),
                 ),
-                const SizedBox(width: 16),
-                if (provider.isInstalled)
-                  Expanded(
-                    child: InfoLabel(
-                      label: 'Execução',
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: provider.isRunning
-                              ? Colors.green
-                              : Colors.orange,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          provider.isRunning ? 'Em execução' : 'Parado',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
             if (provider.status?.serviceName != null) ...[
               const SizedBox(height: 12),
