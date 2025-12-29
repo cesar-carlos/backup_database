@@ -15,6 +15,7 @@ import '../../../core/errors/failure.dart';
 import '../../../domain/entities/backup_destination.dart';
 import '../../../infrastructure/external/destinations/ftp_destination_service.dart'
     as ftp;
+import '../../../infrastructure/external/nextcloud/nextcloud.dart' as nextcloud;
 import '../common/common.dart';
 
 class DestinationDialog extends StatefulWidget {
@@ -74,6 +75,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   final _retentionDaysController = TextEditingController(text: '30');
   bool _isEnabled = true;
   bool _isTestingFtpConnection = false;
+  bool _isTestingNextcloudConnection = false;
 
   bool get isEditing => widget.destination != null;
 
@@ -530,6 +532,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
               style: FluentTheme.of(context).typography.caption,
             ),
           ],
+        ),
+        const SizedBox(height: 16),
+        ActionButton(
+          label: 'Testar Conexão Nextcloud',
+          icon: FluentIcons.network_tower,
+          onPressed: _testNextcloudConnection,
+          isLoading: _isTestingNextcloudConnection,
         ),
       ],
     );
@@ -1412,6 +1421,66 @@ class _DestinationDialogState extends State<DestinationDialog> {
     } finally {
       setState(() {
         _isTestingFtpConnection = false;
+      });
+    }
+  }
+
+  Future<void> _testNextcloudConnection() async {
+    if (_nextcloudServerUrlController.text.trim().isEmpty) {
+      _showError('URL do Nextcloud é obrigatória');
+      return;
+    }
+    if (_nextcloudUsernameController.text.trim().isEmpty) {
+      _showError('Usuário é obrigatório');
+      return;
+    }
+    if (_nextcloudAppPasswordController.text.trim().isEmpty) {
+      _showError(
+        _nextcloudAuthMode == NextcloudAuthMode.appPassword
+            ? 'App Password é obrigatório'
+            : 'Senha do usuário é obrigatória',
+      );
+      return;
+    }
+
+    setState(() {
+      _isTestingNextcloudConnection = true;
+    });
+
+    try {
+      final config = NextcloudDestinationConfig(
+        serverUrl: _nextcloudServerUrlController.text.trim(),
+        username: _nextcloudUsernameController.text.trim(),
+        appPassword: EncryptionService.encrypt(_nextcloudAppPasswordController.text),
+        authMode: _nextcloudAuthMode,
+        remotePath: _nextcloudRemotePathController.text.trim(),
+        folderName: _nextcloudFolderNameController.text.trim(),
+        allowInvalidCertificates: _nextcloudAllowInvalidCertificates,
+      );
+
+      final nextcloudService = getIt<nextcloud.NextcloudDestinationService>();
+      final result = await nextcloudService.testConnection(config);
+
+      result.fold(
+        (success) {
+          if (success) {
+            _showSuccess('Conexão Nextcloud estabelecida com sucesso!');
+          } else {
+            _showError('Falha ao conectar ao servidor Nextcloud');
+          }
+        },
+        (failure) {
+          final message = failure is Failure
+              ? failure.message
+              : failure.toString();
+          _showError('Erro ao testar conexão Nextcloud:\n$message');
+        },
+      );
+    } catch (e) {
+      _showError('Erro inesperado: $e');
+    } finally {
+      setState(() {
+        _isTestingNextcloudConnection = false;
       });
     }
   }

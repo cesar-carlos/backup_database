@@ -46,10 +46,7 @@ class NextcloudDestinationService {
 
       final password = EncryptionService.decrypt(config.appPassword);
 
-      final dio = _createDio(
-        config: config,
-        password: password,
-      );
+      final dio = _createDio(config: config, password: password);
 
       final baseFolderPath = _buildBaseFolderPath(
         remotePath: config.remotePath,
@@ -66,8 +63,16 @@ class NextcloudDestinationService {
       Exception? lastError;
       for (int attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          await _ensureFolderExists(dio: dio, config: config, path: baseFolderPath);
-          await _ensureFolderExists(dio: dio, config: config, path: dateFolderPath);
+          await _ensureFolderExists(
+            dio: dio,
+            config: config,
+            path: baseFolderPath,
+          );
+          await _ensureFolderExists(
+            dio: dio,
+            config: config,
+            path: dateFolderPath,
+          );
 
           final uploadUrl = NextcloudWebdavUtils.buildDavUrl(
             serverUrl: config.serverUrl,
@@ -124,6 +129,41 @@ class NextcloudDestinationService {
       return rd.Failure(
         NextcloudFailure(
           message: _getNextcloudErrorMessage(e),
+          originalError: e,
+        ),
+      );
+    }
+  }
+
+  Future<rd.Result<bool>> testConnection(
+    NextcloudDestinationConfig config,
+  ) async {
+    try {
+      final password = EncryptionService.decrypt(config.appPassword);
+      final dio = _createDio(config: config, password: password);
+
+      final testUrl = NextcloudWebdavUtils.buildDavUrl(
+        serverUrl: config.serverUrl,
+        username: config.username,
+        path: '/',
+      );
+
+      final response = await dio.requestUri(
+        testUrl,
+        options: Options(method: 'PROPFIND', headers: {'Depth': '0'}),
+      );
+
+      final statusCode = response.statusCode;
+      if (statusCode != null && (statusCode == 200 || statusCode == 207)) {
+        return const rd.Success(true);
+      }
+
+      return const rd.Success(false);
+    } catch (e) {
+      return rd.Failure(
+        NextcloudFailure(
+          message:
+              'Erro ao testar conexão Nextcloud: ${_getNextcloudErrorMessage(e)}',
           originalError: e,
         ),
       );
@@ -191,15 +231,15 @@ class NextcloudDestinationService {
     // O campo authMode é mantido para documentação e possível validação futura.
     // appPassword: Senha de aplicativo gerada no Nextcloud (recomendado para segurança)
     // userPassword: Senha do usuário (menos seguro, mas suportado)
-    final base64Auth = base64Encode(utf8.encode('${config.username}:$password'));
+    final base64Auth = base64Encode(
+      utf8.encode('${config.username}:$password'),
+    );
 
     final dio = Dio(
       BaseOptions(
         connectTimeout: const Duration(minutes: 5),
         receiveTimeout: const Duration(minutes: 5),
-        headers: {
-          'Authorization': 'Basic $base64Auth',
-        },
+        headers: {'Authorization': 'Basic $base64Auth'},
       ),
     );
 
@@ -245,12 +285,11 @@ class NextcloudDestinationService {
     required String serverUrl,
     required String username,
     required String path,
-  }) =>
-      NextcloudWebdavUtils.buildDavUrl(
-        serverUrl: serverUrl,
-        username: username,
-        path: path,
-      );
+  }) => NextcloudWebdavUtils.buildDavUrl(
+    serverUrl: serverUrl,
+    username: username,
+    path: path,
+  );
 
   Future<void> _ensureFolderExists({
     required Dio dio,
@@ -264,10 +303,7 @@ class NextcloudDestinationService {
     );
 
     try {
-      await dio.requestUri(
-        url,
-        options: Options(method: 'MKCOL'),
-      );
+      await dio.requestUri(url, options: Options(method: 'MKCOL'));
     } on DioException catch (e) {
       final statusCode = e.response?.statusCode;
       if (statusCode == 405 || statusCode == 409) {
@@ -303,10 +339,7 @@ class NextcloudDestinationService {
       data: propfindBody,
       options: Options(
         method: 'PROPFIND',
-        headers: {
-          'Depth': '1',
-          'Content-Type': 'application/xml',
-        },
+        headers: {'Depth': '1', 'Content-Type': 'application/xml'},
       ),
     );
 
@@ -352,5 +385,3 @@ class NextcloudDestinationService {
         'Detalhes: $e';
   }
 }
-
-
