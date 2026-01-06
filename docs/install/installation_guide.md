@@ -224,6 +224,16 @@ Para desinstalar o Backup Database:
 3. Verifique espaço em disco
 4. Tente novamente
 
+### "Antivírus bloqueando durante teste de conexão (FTP, Nextcloud, etc.)"
+
+**Causa**: Falso positivo comum com aplicativos que fazem conexões de rede legítimas.
+
+**Solução**:
+
+1. Adicione uma exceção no seu antivírus para a pasta de instalação
+2. Adicione uma exceção para o arquivo `backup_database.exe` (se necessário)
+3. O Backup Database é um aplicativo legítimo - as conexões de rede são necessárias para armazenar backups em servidores remotos
+
 ### "Aplicativo não inicia após instalação"
 
 **Solução**:
@@ -241,9 +251,10 @@ Após a instalação bem-sucedida:
 
 1. ✅ Leia a [documentação de requisitos](REQUIREMENTS.md)
 2. ✅ Configure o PATH se necessário ([PATH_SETUP.md](PATH_SETUP.md))
-3. ✅ Configure suas conexões de banco de dados
-4. ✅ Crie seus primeiros agendamentos de backup
-5. ✅ Teste um backup manual antes de confiar nos agendamentos
+3. ✅ Se o antivírus bloquear conexões, adicione uma exceção para a pasta de instalação e para `backup_database.exe` (se necessário)
+4. ✅ Configure suas conexões de banco de dados
+5. ✅ Crie seus primeiros agendamentos de backup
+6. ✅ Teste um backup manual antes de confiar nos agendamentos
 
 ---
 

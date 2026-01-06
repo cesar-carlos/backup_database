@@ -23,7 +23,8 @@ if (Test-Path $updateVersionScript) {
         Write-Host "ERRO: Falha ao sincronizar versão" -ForegroundColor Red
         exit 1
     }
-} else {
+}
+else {
     Write-Host "AVISO: Script update_version.ps1 não encontrado. Pulando sincronização." -ForegroundColor Yellow
 }
 Write-Host ""
@@ -66,6 +67,7 @@ if (-not $isccPath) {
     Write-Host "Instale o Inno Setup 6 de: https://jrsoftware.org/isdl.php" -ForegroundColor Yellow
     exit 1
 }
+$isccPath = (Resolve-Path $isccPath).Path
 Write-Host "✓ Inno Setup encontrado: $isccPath" -ForegroundColor Green
 Write-Host ""
 
@@ -73,10 +75,16 @@ Write-Host ""
 Write-Host "Passo 4: Compilando instalador..." -ForegroundColor Yellow
 Write-Host "Aguarde, isso pode levar alguns minutos..." -ForegroundColor Gray
 
-$setupIssFullPath = Resolve-Path $setupIssPath
-& $isccPath $setupIssFullPath
+$setupIssFullPath = (Resolve-Path $setupIssPath).Path
 
-if ($LASTEXITCODE -ne 0) {
+$process = Start-Process `
+    -FilePath $isccPath `
+    -ArgumentList @($setupIssFullPath) `
+    -Wait `
+    -NoNewWindow `
+    -PassThru
+
+if ($process.ExitCode -ne 0) {
     Write-Host "ERRO: Falha ao compilar instalador" -ForegroundColor Red
     exit 1
 }

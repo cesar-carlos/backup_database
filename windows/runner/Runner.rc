@@ -89,14 +89,15 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.se7esistemas" "\0"
-            VALUE "FileDescription", "backup_database" "\0"
+            VALUE "CompanyName", "Backup Database" "\0"
+            VALUE "FileDescription", "Backup Database - Sistema de Backup Automatizado para Bancos de Dados" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "backup_database" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 com.se7esistemas. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2024-2025 Backup Database. All rights reserved." "\0"
             VALUE "OriginalFilename", "backup_database.exe" "\0"
-            VALUE "ProductName", "backup_database" "\0"
+            VALUE "ProductName", "Backup Database" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
+            VALUE "Comments", "Aplicativo legítimo para backup automatizado de bancos de dados SQL Server, Sybase e PostgreSQL. Faz conexões de rede (FTP, Nextcloud, Google Drive, Dropbox) para armazenar backups de forma segura." "\0"
         END
     END
     BLOCK "VarFileInfo"
