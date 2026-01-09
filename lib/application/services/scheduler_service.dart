@@ -225,72 +225,39 @@ class SchedulerService {
 
     try {
       final destinations = await _getDestinations(schedule.destinationIds);
-      final localDestination = destinations
-          .where((d) => d.type == DestinationType.local)
-          .firstOrNull;
 
-      String outputDirectory;
-
-      if (localDestination != null) {
-        final localConfig = local.LocalDestinationConfig(
-          path:
-              (jsonDecode(localDestination.config)
-                      as Map<String, dynamic>)['path']
-                  as String,
-          createSubfoldersByDate:
-              (jsonDecode(localDestination.config)
-                      as Map<String, dynamic>)['createSubfoldersByDate']
-                  as bool? ??
-              true,
-          retentionDays:
-              (jsonDecode(localDestination.config)
-                      as Map<String, dynamic>)['retentionDays']
-                  as int? ??
-              30,
-        );
-
-        if (localConfig.path.isEmpty) {
-          final errorMessage =
-              'Caminho do destino local está vazio para o agendamento: ${schedule.name}';
-          LoggerService.error(errorMessage);
-          return rd.Failure(ValidationFailure(message: errorMessage));
-        }
-
-        outputDirectory = localConfig.path;
-      } else {
-        if (schedule.backupFolder.isEmpty) {
-          final errorMessage =
-              'Pasta de backup não configurada para o agendamento: ${schedule.name}';
-          LoggerService.error(errorMessage);
-          return rd.Failure(ValidationFailure(message: errorMessage));
-        }
-
-        final backupDir = Directory(schedule.backupFolder);
-        if (!await backupDir.exists()) {
-          try {
-            await backupDir.create(recursive: true);
-          } catch (e) {
-            final errorMessage =
-                'Erro ao criar pasta de backup: ${schedule.backupFolder}';
-            LoggerService.error(errorMessage, e);
-            return rd.Failure(ValidationFailure(message: errorMessage));
-          }
-        }
-
-        final hasPermission = await _checkWritePermission(backupDir);
-        if (!hasPermission) {
-          final errorMessage =
-              'Sem permissão de escrita na pasta de backup: ${schedule.backupFolder}';
-          LoggerService.error(errorMessage);
-          return rd.Failure(ValidationFailure(message: errorMessage));
-        }
-
-        outputDirectory = backupDir.path;
-        shouldDeleteTempFile = true;
-        LoggerService.info(
-          'Nenhum destino local configurado, usando pasta de backup do agendamento: $outputDirectory',
-        );
+      if (schedule.backupFolder.isEmpty) {
+        final errorMessage =
+            'Pasta de backup não configurada para o agendamento: ${schedule.name}';
+        LoggerService.error(errorMessage);
+        return rd.Failure(ValidationFailure(message: errorMessage));
       }
+
+      final backupDir = Directory(schedule.backupFolder);
+      if (!await backupDir.exists()) {
+        try {
+          await backupDir.create(recursive: true);
+        } catch (e) {
+          final errorMessage =
+              'Erro ao criar pasta de backup: ${schedule.backupFolder}';
+          LoggerService.error(errorMessage, e);
+          return rd.Failure(ValidationFailure(message: errorMessage));
+        }
+      }
+
+      final hasPermission = await _checkWritePermission(backupDir);
+      if (!hasPermission) {
+        final errorMessage =
+            'Sem permissão de escrita na pasta de backup: ${schedule.backupFolder}';
+        LoggerService.error(errorMessage);
+        return rd.Failure(ValidationFailure(message: errorMessage));
+      }
+
+      final outputDirectory = backupDir.path;
+      shouldDeleteTempFile = true;
+      LoggerService.info(
+        'Usando pasta temporária de backup: $outputDirectory',
+      );
 
       if (outputDirectory.isEmpty) {
         final errorMessage =
@@ -347,19 +314,14 @@ class SchedulerService {
         return rd.Failure(BackupFailure(message: errorMessage));
       }
 
-      final hasRemoteDestinations = destinations.any(
-        (d) =>
-            d.type == DestinationType.ftp ||
-            d.type == DestinationType.googleDrive ||
-            d.type == DestinationType.dropbox,
-      );
+      final hasDestinations = destinations.isNotEmpty;
 
-      if (hasRemoteDestinations) {
+      if (hasDestinations) {
         try {
           final progressProvider = getIt<BackupProgressProvider>();
           progressProvider.updateProgress(
             step: BackupStep.uploading,
-            message: 'Enviando para destinos remotos...',
+            message: 'Enviando para destinos...',
             progress: 0.85,
           );
         } catch (_) {
@@ -370,13 +332,10 @@ class SchedulerService {
       final List<String> uploadErrors = [];
       bool hasCriticalUploadError = false;
 
-      final remoteDestinations = destinations
-          .where((d) => d.type != DestinationType.local)
-          .toList();
-      final totalRemoteDestinations = remoteDestinations.length;
+      final totalDestinations = destinations.length;
 
-      for (int index = 0; index < remoteDestinations.length; index++) {
-        final destination = remoteDestinations[index];
+      for (int index = 0; index < destinations.length; index++) {
+        final destination = destinations[index];
 
         if (!await backupFile.exists()) {
           final errorMessage =
@@ -389,7 +348,7 @@ class SchedulerService {
 
         try {
           final progressProvider = getIt<BackupProgressProvider>();
-          final progress = 0.85 + (0.1 * (index + 1) / totalRemoteDestinations);
+          final progress = 0.85 + (0.1 * (index + 1) / totalDestinations);
           progressProvider.updateProgress(
             step: BackupStep.uploading,
             message: 'Enviando para ${destination.name}...',
@@ -422,7 +381,7 @@ class SchedulerService {
         final failedHistory = backupHistory.copyWith(
           status: BackupStatus.error,
           errorMessage:
-              'Backup concluído localmente, mas falhou ao enviar para destinos remotos:\n$errorMessage',
+              'Backup concluído na pasta temporária, mas falhou ao enviar para destinos:\n$errorMessage',
           finishedAt: finishedAt,
           durationSeconds: finishedAt
               .difference(backupHistory.startedAt)
@@ -433,7 +392,7 @@ class SchedulerService {
         await _log(
           backupHistory.id,
           'error',
-          'Falha ao enviar backup para destinos remotos:\n$errorMessage',
+          'Falha ao enviar backup para destinos:\n$errorMessage',
         );
 
         final notifyResult = await _notificationService.notifyBackupComplete(
@@ -459,7 +418,7 @@ class SchedulerService {
 
         final failure = BackupFailure(
           message:
-              'Falha ao enviar backup para destinos remotos:\n$errorMessage',
+              'Falha ao enviar backup para destinos:\n$errorMessage',
         );
         LoggerService.error(
           'Backup marcado como erro devido a falhas no upload',
@@ -487,9 +446,9 @@ class SchedulerService {
         );
       }
 
-      if (hasRemoteDestinations) {
+      if (hasDestinations) {
         LoggerService.info(
-          'Uploads para destinos remotos concluídos, enviando notificação por e-mail',
+          'Uploads para destinos concluídos, enviando notificação por e-mail',
         );
       }
       await _notificationService.notifyBackupComplete(backupHistory);
@@ -594,7 +553,45 @@ class SchedulerService {
 
       switch (destination.type) {
         case DestinationType.local:
-          return rd.Success(());
+          final config = local.LocalDestinationConfig(
+            path: configJson['path'] as String,
+            createSubfoldersByDate:
+                configJson['createSubfoldersByDate'] as bool? ?? true,
+            retentionDays: configJson['retentionDays'] as int? ?? 30,
+          );
+
+          if (config.path.isEmpty) {
+            final errorMessage =
+                'Caminho do destino local está vazio para o destino: ${destination.name}';
+            LoggerService.error(errorMessage);
+            return rd.Failure(ValidationFailure(message: errorMessage));
+          }
+
+          LoggerService.info(
+            'Copiando backup para destino local: ${destination.name} (${config.path})',
+          );
+
+          final uploadResult = await _localDestinationService.upload(
+            sourceFilePath: sourceFilePath,
+            config: config,
+          );
+
+          return uploadResult.fold(
+            (result) {
+              LoggerService.info(
+                'Upload local concluído com sucesso: ${result.destinationPath} '
+                '(${_formatBytes(result.fileSize)} em ${result.duration.inSeconds}s)',
+              );
+              return rd.Success(());
+            },
+            (failure) {
+              LoggerService.error(
+                'Erro ao copiar backup para destino local ${destination.name}',
+                failure,
+              );
+              return rd.Failure(failure);
+            },
+          );
 
         case DestinationType.ftp:
           final config = ftp.FtpDestinationConfig(

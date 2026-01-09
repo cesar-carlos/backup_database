@@ -52,9 +52,7 @@ class AppTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     String? errorText;
-    if (validator != null &&
-        controller != null &&
-        controller!.text.isNotEmpty) {
+    if (validator != null && controller != null) {
       errorText = validator!(controller!.text);
     }
 

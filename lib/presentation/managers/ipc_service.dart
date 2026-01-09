@@ -4,19 +4,22 @@ import 'dart:io';
 import '../../core/utils/logger_service.dart';
 import '../../core/utils/windows_user_service.dart';
 
-/// Serviço de Comunicação Inter-Processos (IPC)
-/// Permite que múltiplas instâncias do aplicativo se comuniquem
 class IpcService {
-  static const int _port = 58724; // Porta fixa para IPC local
+  static const int _defaultPort = 58724;
+  static const List<int> _alternativePorts = [58725, 58726, 58727, 58728, 58729];
   static const String _showWindowCommand = 'SHOW_WINDOW';
   static const String _getUserInfoCommand = 'GET_USER_INFO';
   static const String _userInfoResponsePrefix = 'USER_INFO:';
-  
+
+  static const Duration _connectionTimeout = Duration(seconds: 1);
+  static const Duration _socketCloseDelay = Duration(milliseconds: 100);
+  static const Duration _quickConnectionTimeout = Duration(milliseconds: 500);
+
   ServerSocket? _server;
   Function()? _onShowWindow;
   bool _isRunning = false;
+  int _currentPort = _defaultPort;
 
-  /// Inicia o servidor IPC que escuta por comandos de outras instâncias
   Future<bool> startServer({Function()? onShowWindow}) async {
     if (_isRunning) {
       LoggerService.debug('IPC Server já está rodando');
@@ -25,48 +28,76 @@ class IpcService {
 
     _onShowWindow = onShowWindow;
 
-    try {
-      _server = await ServerSocket.bind(InternetAddress.loopbackIPv4, _port);
-      _isRunning = true;
-      
-      LoggerService.info('IPC Server iniciado na porta $_port');
-      
-      // Escutar conexões
-      _server!.listen(
-        _handleConnection,
-        onError: (error) {
-          LoggerService.error('Erro no IPC Server', error);
-        },
-        onDone: () {
-          LoggerService.info('IPC Server encerrado');
-          _isRunning = false;
-        },
-      );
-      
-      return true;
-    } catch (e) {
-      LoggerService.error('Erro ao iniciar IPC Server', e);
-      _isRunning = false;
-      return false;
+    final portsToTry = [_defaultPort, ..._alternativePorts];
+
+    for (final port in portsToTry) {
+      try {
+        LoggerService.debug('Tentando iniciar IPC Server na porta $port...');
+        _server = await ServerSocket.bind(
+          InternetAddress.loopbackIPv4,
+          port,
+        );
+        _currentPort = port;
+        _isRunning = true;
+
+        LoggerService.info('IPC Server iniciado na porta $_currentPort');
+
+        _server!.listen(
+          _handleConnection,
+          onError: (error) {
+            LoggerService.error('Erro no IPC Server', error);
+          },
+          onDone: () {
+            LoggerService.info('IPC Server encerrado');
+            _isRunning = false;
+          },
+        );
+
+        return true;
+      } on SocketException catch (e) {
+        if (e.osError?.errorCode == 10013 || e.osError?.errorCode == 10048) {
+          LoggerService.debug(
+            'Porta $port não disponível (${e.osError?.errorCode}), tentando próxima...',
+          );
+          continue;
+        } else {
+          LoggerService.warning(
+            'Erro ao tentar porta $port: ${e.message}',
+          );
+          continue;
+        }
+      } catch (e) {
+        LoggerService.warning(
+          'Erro inesperado ao tentar porta $port: $e',
+        );
+        continue;
+      }
     }
+
+    LoggerService.error(
+      'Não foi possível iniciar IPC Server em nenhuma porta tentada. '
+      'Tentativas: ${portsToTry.join(", ")}',
+    );
+    _isRunning = false;
+    return false;
   }
 
-  /// Trata conexões recebidas de outras instâncias
   void _handleConnection(Socket socket) {
     LoggerService.debug('Nova conexão IPC recebida');
-    
+
     socket.listen(
       (data) async {
         try {
           final message = String.fromCharCodes(data).trim();
           LoggerService.debug('Mensagem IPC recebida: $message');
-          
+
           if (message == _showWindowCommand) {
             LoggerService.info('Comando SHOW_WINDOW recebido via IPC');
             _onShowWindow?.call();
           } else if (message == _getUserInfoCommand) {
             LoggerService.debug('Comando GET_USER_INFO recebido via IPC');
-            final username = WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
+            final username =
+                WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
             socket.write('$_userInfoResponsePrefix$username');
             await socket.flush();
             LoggerService.debug('Resposta USER_INFO enviada: $username');
@@ -84,95 +115,116 @@ class IpcService {
     );
   }
 
-  /// Envia comando para a instância existente mostrar a janela
   static Future<bool> sendShowWindow() async {
-    try {
-      LoggerService.info('Enviando comando SHOW_WINDOW via IPC...');
-      
-      final socket = await Socket.connect(
-        InternetAddress.loopbackIPv4,
-        _port,
-        timeout: const Duration(seconds: 2),
-      );
-      
-      socket.write(_showWindowCommand);
-      await socket.flush();
-      
-      await Future.delayed(const Duration(milliseconds: 100));
-      await socket.close();
-      
-      LoggerService.info('Comando SHOW_WINDOW enviado com sucesso');
-      return true;
-    } catch (e) {
-      LoggerService.warning('Não foi possível enviar comando IPC: $e');
-      return false;
+    final portsToTry = [_defaultPort, ..._alternativePorts];
+
+    for (final port in portsToTry) {
+      try {
+        LoggerService.debug('Tentando enviar comando SHOW_WINDOW na porta $port...');
+
+        final socket = await Socket.connect(
+          InternetAddress.loopbackIPv4,
+          port,
+          timeout: _connectionTimeout,
+        );
+
+        socket.write(_showWindowCommand);
+        await socket.flush();
+
+        await Future.delayed(_socketCloseDelay);
+        await socket.close();
+
+        LoggerService.info('Comando SHOW_WINDOW enviado com sucesso na porta $port');
+        return true;
+      } catch (e) {
+        LoggerService.debug('Porta $port não disponível, tentando próxima...');
+        continue;
+      }
     }
+
+    LoggerService.warning(
+      'Não foi possível enviar comando IPC em nenhuma porta tentada',
+    );
+    return false;
   }
 
-  /// Verifica se já existe uma instância rodando tentando conectar no servidor
   static Future<bool> checkServerRunning() async {
-    try {
-      final socket = await Socket.connect(
-        InternetAddress.loopbackIPv4,
-        _port,
-        timeout: const Duration(seconds: 1),
-      );
-      
-      await socket.close();
-      return true;
-    } catch (e) {
-      return false;
+    final portsToTry = [_defaultPort, ..._alternativePorts];
+
+    for (final port in portsToTry) {
+      try {
+        final socket = await Socket.connect(
+          InternetAddress.loopbackIPv4,
+          port,
+          timeout: _quickConnectionTimeout,
+        );
+
+        await socket.close();
+        return true;
+      } catch (e) {
+        continue;
+      }
     }
+
+    return false;
   }
 
-  /// Obtém o nome do usuário da instância existente via IPC
   static Future<String?> getExistingInstanceUser() async {
-    try {
-      final socket = await Socket.connect(
-        InternetAddress.loopbackIPv4,
-        _port,
-        timeout: const Duration(seconds: 2),
-      );
-      
-      socket.write(_getUserInfoCommand);
-      await socket.flush();
-      
-      final completer = Completer<String?>();
-      
-      socket.listen(
-        (data) {
-          final message = String.fromCharCodes(data).trim();
-          if (message.startsWith(_userInfoResponsePrefix)) {
-            final username = message.substring(_userInfoResponsePrefix.length);
-            if (!completer.isCompleted) {
-              completer.complete(username);
+    final portsToTry = [_defaultPort, ..._alternativePorts];
+
+    for (final port in portsToTry) {
+      try {
+        final socket = await Socket.connect(
+          InternetAddress.loopbackIPv4,
+          port,
+          timeout: _connectionTimeout,
+        );
+
+        socket.write(_getUserInfoCommand);
+        await socket.flush();
+
+        final completer = Completer<String?>();
+
+        socket.listen(
+          (data) {
+            final message = String.fromCharCodes(data).trim();
+            if (message.startsWith(_userInfoResponsePrefix)) {
+              final username = message.substring(_userInfoResponsePrefix.length);
+              if (!completer.isCompleted) {
+                completer.complete(username);
+              }
             }
-          }
-        },
-        onDone: () {
-          if (!completer.isCompleted) {
-            completer.complete(null);
-          }
-          socket.close();
-        },
-        onError: (e) {
-          if (!completer.isCompleted) {
-            completer.complete(null);
-          }
-        },
-      );
-      
-      return await completer.future.timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => null,
-      );
-    } catch (e) {
-      LoggerService.debug('Erro ao obter usuário da instância existente: $e');
-      return null;
+          },
+          onDone: () {
+            if (!completer.isCompleted) {
+              completer.complete(null);
+            }
+            socket.close();
+          },
+          onError: (e) {
+            if (!completer.isCompleted) {
+              completer.complete(null);
+            }
+          },
+        );
+
+        final result = await completer.future.timeout(
+          _connectionTimeout,
+          onTimeout: () => null,
+        );
+
+        if (result != null) {
+          return result;
+        }
+      } catch (e) {
+        continue;
+      }
     }
+
+    LoggerService.debug('Não foi possível obter usuário da instância existente');
+    return null;
   }
 
-  /// Encerra o servidor IPC
   Future<void> stop() async {
     if (_server != null) {
       try {
@@ -187,4 +239,3 @@ class IpcService {
 
   bool get isRunning => _isRunning;
 }
-

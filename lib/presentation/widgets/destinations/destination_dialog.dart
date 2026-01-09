@@ -4,14 +4,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/errors/failure.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/di/service_locator.dart';
 import '../../../core/constants/license_features.dart';
 import '../../../core/encryption/encryption_service.dart';
 import '../../../application/providers/google_auth_provider.dart';
 import '../../../application/providers/dropbox_auth_provider.dart';
 import '../../../application/providers/license_provider.dart';
-import '../../../core/di/service_locator.dart';
-import '../../../core/errors/failure.dart';
 import '../../../domain/entities/backup_destination.dart';
 import '../../../infrastructure/external/destinations/ftp_destination_service.dart'
     as ftp;
@@ -72,7 +72,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   NextcloudAuthMode _nextcloudAuthMode = NextcloudAuthMode.appPassword;
 
   // Common
-  final _retentionDaysController = TextEditingController(text: '30');
+  final _retentionDaysController = TextEditingController(text: '7');
   bool _isEnabled = true;
   bool _isTestingFtpConnection = false;
   bool _isTestingNextcloudConnection = false;
@@ -95,7 +95,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         case DestinationType.local:
           _localPathController.text = config['path'] ?? '';
           _createSubfoldersByDate = config['createSubfoldersByDate'] ?? true;
-          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+          _retentionDaysController.text = (config['retentionDays'] ?? 7)
               .toString();
           break;
         case DestinationType.ftp:
@@ -105,18 +105,18 @@ class _DestinationDialogState extends State<DestinationDialog> {
           _ftpPasswordController.text = config['password'] ?? '';
           _ftpRemotePathController.text = config['remotePath'] ?? '/backups';
           _useFtps = config['useFtps'] ?? false;
-          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+          _retentionDaysController.text = (config['retentionDays'] ?? 7)
               .toString();
           break;
         case DestinationType.googleDrive:
           _googleFolderNameController.text = config['folderName'] ?? 'Backups';
-          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+          _retentionDaysController.text = (config['retentionDays'] ?? 7)
               .toString();
           break;
         case DestinationType.dropbox:
           _dropboxFolderPathController.text = config['folderPath'] ?? '';
           _dropboxFolderNameController.text = config['folderName'] ?? 'Backups';
-          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+          _retentionDaysController.text = (config['retentionDays'] ?? 7)
               .toString();
           break;
         case DestinationType.nextcloud:
@@ -134,7 +134,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               config['folderName'] ?? 'Backups';
           _nextcloudAllowInvalidCertificates =
               config['allowInvalidCertificates'] ?? false;
-          _retentionDaysController.text = (config['retentionDays'] ?? 30)
+          _retentionDaysController.text = (config['retentionDays'] ?? 7)
               .toString();
           break;
       }
@@ -583,7 +583,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         NumericField(
           controller: _retentionDaysController,
           label: 'Dias de Retenção',
-          hint: 'Ex: 30 (mantém backups por 30 dias)',
+          hint: 'Ex: 7 (mantém backups por 7 dias)',
           prefixIcon: FluentIcons.delete,
           minValue: 1,
         ),
@@ -609,7 +609,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
             child: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _retentionDaysController,
               builder: (context, value, child) {
-                final days = int.tryParse(value.text) ?? 30;
+                final days = int.tryParse(value.text) ?? 7;
                 final cutoffDate = DateTime.now().subtract(
                   Duration(days: days),
                 );
@@ -1451,7 +1451,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
       final config = NextcloudDestinationConfig(
         serverUrl: _nextcloudServerUrlController.text.trim(),
         username: _nextcloudUsernameController.text.trim(),
-        appPassword: EncryptionService.encrypt(_nextcloudAppPasswordController.text),
+        appPassword: EncryptionService.encrypt(
+          _nextcloudAppPasswordController.text,
+        ),
         authMode: _nextcloudAuthMode,
         remotePath: _nextcloudRemotePathController.text.trim(),
         folderName: _nextcloudFolderNameController.text.trim(),

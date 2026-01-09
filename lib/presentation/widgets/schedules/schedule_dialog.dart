@@ -36,6 +36,7 @@ class ScheduleDialog extends StatefulWidget {
 class _ScheduleDialogState extends State<ScheduleDialog> {
   final _formKey = GlobalKey<FormState>();
   int _selectedTabIndex = 0;
+  bool _nameFieldTouched = false;
 
   final _nameController = TextEditingController();
   final _intervalMinutesController = TextEditingController();
@@ -275,10 +276,19 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             hint: 'Ex: Backup Diário Produção',
             prefixIcon: const Icon(FluentIcons.tag),
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Nome é obrigatório';
+              if (_nameFieldTouched) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Nome é obrigatório';
+                }
               }
               return null;
+            },
+            onChanged: (value) {
+              if (!_nameFieldTouched) {
+                setState(() {
+                  _nameFieldTouched = true;
+                });
+              }
             },
           ),
           const SizedBox(height: 24),
@@ -1575,7 +1585,24 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   }
 
   void _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() {
+        _selectedTabIndex = 0;
+        _nameFieldTouched = true;
+      });
+      _formKey.currentState?.validate();
+      MessageModal.showWarning(
+        context,
+        message: 'Nome do agendamento é obrigatório',
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
+      setState(() {
+        _nameFieldTouched = true;
+      });
       return;
     }
 
