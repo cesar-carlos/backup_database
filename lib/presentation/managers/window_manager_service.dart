@@ -49,14 +49,16 @@ class WindowManagerService with WindowListener {
         await windowManager.focus();
       }
     });
-    
+
     // Garantir que a janela permaneça oculta se startMinimized for true
     if (startMinimized) {
       // Aguardar um pouco para garantir que a janela foi processada
       await Future.delayed(const Duration(milliseconds: 200));
       final isVisible = await windowManager.isVisible();
       if (isVisible) {
-        LoggerService.warning('Janela ainda visível após hide(), tentando ocultar novamente...');
+        LoggerService.warning(
+          'Janela ainda visível após hide(), tentando ocultar novamente...',
+        );
         await windowManager.hide();
         await windowManager.setSkipTaskbar(true);
       }
@@ -98,13 +100,13 @@ class WindowManagerService with WindowListener {
   void setCloseToTray(bool value) {
     _closeToTray = value;
     LoggerService.debug('Fechar para bandeja: $value');
-    
+
     // Configurar preventClose baseado na configuração (assíncrono em background)
     _updatePreventClose(value).catchError((e) {
       LoggerService.warning('Erro ao configurar preventClose: $e');
     });
   }
-  
+
   Future<void> _updatePreventClose(bool closeToTray) async {
     try {
       if (closeToTray) {
@@ -114,7 +116,9 @@ class WindowManagerService with WindowListener {
       } else {
         // Quando closeToTray é false, permitir fechamento normal
         await windowManager.setPreventClose(false);
-        LoggerService.debug('PreventClose desativado - fechar irá encerrar aplicativo');
+        LoggerService.debug(
+          'PreventClose desativado - fechar irá encerrar aplicativo',
+        );
       }
     } catch (e) {
       LoggerService.warning('Erro ao configurar preventClose: $e');
@@ -258,20 +262,24 @@ class WindowManagerService with WindowListener {
 
   @override
   void onWindowClose() async {
-    LoggerService.info('Tentativa de fechar janela - closeToTray: $_closeToTray');
-    
+    LoggerService.info(
+      'Tentativa de fechar janela - closeToTray: $_closeToTray',
+    );
+
     // Verificar se o fechamento está sendo prevenido (ex: durante OAuth)
     try {
       final isPreventClose = await windowManager.isPreventClose();
       if (isPreventClose && !_closeToTray) {
         // Se preventClose está ativo por outro motivo (ex: OAuth) e não é closeToTray, ignorar
-        LoggerService.debug('Fechamento prevenido por outro motivo - ignorando evento');
+        LoggerService.debug(
+          'Fechamento prevenido por outro motivo - ignorando evento',
+        );
         return;
       }
     } catch (e) {
       LoggerService.warning('Erro ao verificar preventClose: $e');
     }
-    
+
     if (_closeToTray) {
       // Prevenir o fechamento padrão e ocultar para a bandeja
       try {
@@ -281,7 +289,9 @@ class WindowManagerService with WindowListener {
         await hide();
         // Ocultar da taskbar
         await windowManager.setSkipTaskbar(true);
-        LoggerService.info('✅ Janela ocultada para a bandeja (fechamento prevenido)');
+        LoggerService.info(
+          '✅ Janela ocultada para a bandeja (fechamento prevenido)',
+        );
       } catch (e) {
         LoggerService.error('Erro ao ocultar janela para bandeja', e);
         // Se falhar, tentar apenas ocultar
