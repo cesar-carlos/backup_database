@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:intl/intl.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../application/providers/license_provider.dart';
@@ -249,11 +249,12 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
               ValueListenableBuilder<bool>(
                 valueListenable: _isAuthenticatedNotifier,
                 builder: (context, isAuthenticated, child) {
-                  if (!isAuthenticated)
+                  if (!isAuthenticated) {
                     return Button(
                       onPressed: () => _showAuthDialog(context),
                       child: const Text('Acessar Gerador'),
                     );
+                  }
                   return Button(
                     onPressed: () =>
                         _showGeneratorDialog(context, licenseProvider),

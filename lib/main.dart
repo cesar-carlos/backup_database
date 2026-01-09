@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 
 import 'core/core.dart';
 import 'core/theme/theme_provider.dart';
-import 'core/utils/service_mode_detector.dart';
 import 'presentation/managers/managers.dart';
 import 'infrastructure/external/system/os_version_checker.dart';
 import 'presentation/providers/system_settings_provider.dart';

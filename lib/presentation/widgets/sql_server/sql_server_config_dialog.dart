@@ -24,7 +24,6 @@ class SqlServerConfigDialog extends StatefulWidget {
     this.initialType = DatabaseType.sqlServer,
   });
 
-  /// Retorna SqlServerConfig ou SybaseConfig dependendo do tipo selecionado
   static Future<Object?> show(
     BuildContext context, {
     SqlServerConfig? config,
@@ -44,11 +43,10 @@ class SqlServerConfigDialog extends StatefulWidget {
 class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _serverController = TextEditingController(); // Para SQL Server e Sybase
-  final _hostController = TextEditingController(); // Para PostgreSQL
+  final _serverController = TextEditingController();
+  final _hostController = TextEditingController();
   final _databaseController = TextEditingController();
-  final _databaseNameController =
-      TextEditingController(); // Para Sybase: Nome do Banco de Dados
+  final _databaseNameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _portController = TextEditingController(text: '1433');
@@ -73,14 +71,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     _sybaseBackupService = getIt<ISybaseBackupService>();
     _postgresBackupService = getIt<IPostgresBackupService>();
 
-    // Priorizar initialType se fornecido, caso contrário detectar baseado no config
     if (widget.initialType != DatabaseType.sqlServer) {
-      // Se initialType foi fornecido explicitamente, usar ele
       _selectedType = widget.initialType;
     } else if (widget.config != null) {
-      // Detectar tipo de banco quando está editando (apenas se initialType não foi fornecido)
-      // Se porta é 2638 (padrão Sybase) ou database termina com .db (arquivo Sybase)
-      // assume que é Sybase
       if (widget.config!.port == 2638 ||
           widget.config!.database.toLowerCase().endsWith('.db')) {
         _selectedType = DatabaseType.sybase;
@@ -91,17 +84,15 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       _selectedType = widget.initialType;
     }
 
-    // Carregar dados do config se estiver editando
     if (widget.config != null) {
       _nameController.text = widget.config!.name;
-      
-      // Para PostgreSQL, usar server como host (já que foi convertido temporariamente)
+
       if (_selectedType == DatabaseType.postgresql) {
         _hostController.text = widget.config!.server;
       } else {
         _serverController.text = widget.config!.server;
       }
-      
+
       _databaseController.text = widget.config!.database;
       _usernameController.text = widget.config!.username;
       _passwordController.text = widget.config!.password;
@@ -109,11 +100,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       _isEnabled = widget.config!.enabled;
       _selectedDatabase = widget.config!.database;
 
-      // Se for Sybase, tentar extrair databaseName do database
-      // (assumindo que pode estar salvo como databaseName ou serverName)
       if (_selectedType == DatabaseType.sybase) {
-        // Se o config for SybaseConfig, usar databaseName
-        // Caso contrário, usar o database como fallback
         _databaseNameController.text = widget.config!.database;
       }
     }
@@ -142,7 +129,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         _hostController.clear();
         _serverController.clear();
 
-        // Ajustar porta padrão
         if (type == DatabaseType.sqlServer) {
           _portController.text = '1433';
         } else if (type == DatabaseType.sybase) {
@@ -190,7 +176,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ComboBox tipo de banco de dados
                 AppDropdown<DatabaseType>(
                   label: 'Tipo de Banco de Dados',
                   value: _selectedType,
@@ -219,7 +204,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Nome da configuração
                 AppTextField(
                   controller: _nameController,
                   label: 'Nome da Configuração',
@@ -238,7 +222,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Campos específicos por tipo
                 if (_selectedType == DatabaseType.sqlServer)
                   _buildSqlServerFields(context)
                 else if (_selectedType == DatabaseType.sybase)
@@ -248,15 +231,14 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
                 const SizedBox(height: 16),
 
-                // Usuário
                 AppTextField(
                   controller: _usernameController,
                   label: 'Usuário',
                   hint: _selectedType == DatabaseType.sqlServer
                       ? 'sa ou usuário do SQL Server'
                       : _selectedType == DatabaseType.postgresql
-                          ? 'postgres ou usuário do PostgreSQL'
-                          : 'DBA ou usuário do Sybase',
+                      ? 'postgres ou usuário do PostgreSQL'
+                      : 'DBA ou usuário do Sybase',
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Usuário é obrigatório';
@@ -267,14 +249,12 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Senha
                 PasswordField(
                   controller: _passwordController,
                   hint: 'Senha do usuário',
                 ),
                 const SizedBox(height: 24),
 
-                // Switch habilitado
                 InfoLabel(
                   label: 'Habilitado',
                   child: ToggleSwitch(
@@ -313,7 +293,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Servidor e Porta
         Row(
           children: [
             Expanded(
@@ -347,7 +326,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         ),
         const SizedBox(height: 16),
 
-        // Banco de dados
         _databases.isEmpty && !_isLoadingDatabases
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -448,7 +426,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Nome do Servidor (Engine Name) e Porta
         Row(
           children: [
             Expanded(
@@ -482,7 +459,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         ),
         const SizedBox(height: 16),
 
-        // Nome do Banco de Dados
         AppTextField(
           controller: _databaseNameController,
           label: 'Nome do Banco de Dados (DBN)',
@@ -524,7 +500,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Host e Porta
         Row(
           children: [
             Expanded(
@@ -558,7 +533,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         ),
         const SizedBox(height: 16),
 
-        // Banco de dados
         _databases.isEmpty && !_isLoadingDatabases
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -653,9 +627,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   }
 
   Future<void> _testConnection() async {
-    // Validações específicas por tipo
     if (_selectedType == DatabaseType.sybase) {
-      // Validações para Sybase
       if (_serverController.text.trim().isEmpty ||
           _portController.text.trim().isEmpty ||
           _databaseNameController.text.trim().isEmpty ||
@@ -683,7 +655,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           name: 'temp',
           serverName: _serverController.text.trim(),
           databaseName: _databaseNameController.text.trim(),
-          databaseFile: '', // Não necessário para backup
+          databaseFile: '',
           port: port,
           username: _usernameController.text.trim(),
           password: _passwordController.text,
@@ -737,7 +709,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       return;
     }
 
-    // Validações para PostgreSQL
     if (_selectedType == DatabaseType.postgresql) {
       if (_hostController.text.trim().isEmpty ||
           _portController.text.trim().isEmpty ||
@@ -778,7 +749,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
         await connectionResult.fold(
           (success) async {
-            // Conexão bem-sucedida, agora listar bancos
             final databasesResult = await _postgresBackupService.listDatabases(
               config: tempConfig,
             );
@@ -823,7 +793,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             );
           },
           (failure) async {
-            // Falha na conexão
             if (mounted) {
               setState(() {
                 _isLoadingDatabases = false;
@@ -832,8 +801,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
               String message = failure is Failure
                   ? failure.message
                   : failure.toString();
-              
-              // Se a mensagem contém erro de psql não encontrado, garantir mensagem melhorada
+
               final messageLower = message.toLowerCase();
               if ((messageLower.contains('psql') ||
                       messageLower.contains("'psql'")) &&
@@ -857,7 +825,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                     '3. Reinicie o aplicativo de backup\n\n'
                     'Consulte: docs\\path_setup.md para mais detalhes.';
               }
-              
+
               MessageModal.showError(
                 context,
                 title: 'Erro ao Testar Conexão',
@@ -878,7 +846,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       return;
     }
 
-    // Validações para SQL Server
     if (_serverController.text.trim().isEmpty ||
         _portController.text.trim().isEmpty ||
         _usernameController.text.trim().isEmpty ||
@@ -1042,14 +1009,13 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       return;
     }
 
-    // Retornar o tipo correto baseado na seleção
     if (_selectedType == DatabaseType.sybase) {
       final sybaseConfig = SybaseConfig(
         id: widget.config?.id,
         name: _nameController.text.trim(),
         serverName: _serverController.text.trim(),
         databaseName: _databaseNameController.text.trim(),
-        databaseFile: '', // Não necessário para backup
+        databaseFile: '',
         port: port,
         username: _usernameController.text.trim(),
         password: _passwordController.text,

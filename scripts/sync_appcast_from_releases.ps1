@@ -16,7 +16,8 @@ try {
     $releasesUrl = "https://api.github.com/repos/$REPO/releases"
     $releasesResponse = Invoke-RestMethod -Uri $releasesUrl -Method Get
     Write-Host "Encontrados $($releasesResponse.Count) releases" -ForegroundColor Green
-} catch {
+}
+catch {
     Write-Host "ERRO ao buscar releases: $_" -ForegroundColor Red
     exit 1
 }
@@ -37,7 +38,8 @@ if (Test-Path $appcastFile) {
         $channel.RemoveChild($item) | Out-Null
     }
     Write-Host "Arquivo appcast.xml carregado, itens antigos removidos" -ForegroundColor Gray
-} else {
+}
+else {
     # Criar novo appcast.xml
     $appcast = New-Object System.Xml.XmlDocument
     $rss = $appcast.CreateElement("rss")
@@ -76,7 +78,8 @@ foreach ($release in $releasesResponse) {
     # Remover prefixo 'v' se existir
     if ($tagName.StartsWith("v")) {
         $version = $tagName.Substring(1)
-    } else {
+    }
+    else {
         $version = $tagName
     }
     
@@ -110,7 +113,8 @@ foreach ($release in $releasesResponse) {
     try {
         $publishedDate = [DateTime]::Parse($release.published_at)
         $pubDateStr = $publishedDate.ToUniversalTime().ToString("ddd, dd MMM yyyy HH:mm:ss +0000")
-    } catch {
+    }
+    catch {
         $pubDateStr = (Get-Date).ToUniversalTime().ToString("ddd, dd MMM yyyy HH:mm:ss +0000")
     }
     $pubDate.InnerText = $pubDateStr
@@ -119,7 +123,8 @@ foreach ($release in $releasesResponse) {
     $desc = $appcast.CreateElement("description")
     if ($release.body) {
         $body = $release.body
-    } else {
+    }
+    else {
         $body = "Atualizacao automatica via GitHub Release."
     }
     $desc.InnerText = "<![CDATA[<h2>Versao $version</h2><p>$body</p>]]>"
