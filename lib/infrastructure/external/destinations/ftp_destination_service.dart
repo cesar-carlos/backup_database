@@ -41,10 +41,11 @@ class FtpDestinationService implements IFtpService {
       Exception? lastError;
       final List<String> failedAttempts = [];
       for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        FTPConnect? ftp;
         try {
           LoggerService.debug('Tentativa $attempt de $maxRetries');
 
-          final ftp = FTPConnect(
+          ftp = FTPConnect(
             config.host,
             port: config.port,
             user: config.username,
@@ -100,6 +101,7 @@ class FtpDestinationService implements IFtpService {
 
           // Desconectar
           await ftp.disconnect();
+          ftp = null;
 
           stopwatch.stop();
 
@@ -117,6 +119,15 @@ class FtpDestinationService implements IFtpService {
             ),
           );
         } catch (e) {
+          // Garantir desconexão em caso de erro
+          if (ftp != null) {
+            try {
+              await ftp.disconnect();
+            } catch (disconnectError) {
+              LoggerService.debug('Erro ao desconectar FTP após falha: $disconnectError');
+            }
+          }
+
           lastError = e is Exception ? e : Exception(e.toString());
           final errorMessage = 'Tentativa $attempt de $maxRetries falhou: $e';
           failedAttempts.add(errorMessage);
