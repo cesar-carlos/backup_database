@@ -97,16 +97,27 @@ class DropboxDestinationService {
 
             final dio = dioResult.getOrNull()!;
 
-            if (useResumableUpload) {
-              return await _uploadResumable(
-                dio,
-                sourceFile,
-                filePath,
-                fileSize,
-              );
-            } else {
-              return await _uploadSimple(dio, sourceFile, filePath, fileSize);
+            final uploadResult = useResumableUpload 
+                ? await _uploadResumable(dio, sourceFile, filePath, fileSize)
+                : await _uploadSimple(dio, sourceFile, filePath, fileSize);
+
+            // Validação de Integridade
+            if (uploadResult.containsKey('size')) {
+              final remoteSize = uploadResult['size'] as int;
+              if (remoteSize != fileSize) {
+                 // Tentar apagar arquivo
+                 try {
+                    await dio.post('/2/files/delete_v2', data: {'path': filePath});
+                 } catch(_) {}
+
+                 throw Exception(
+                   'Arquivo corrompido no Dropbox. '
+                   'Local: $fileSize, Remoto: $remoteSize'
+                 );
+              }
             }
+
+            return uploadResult;
           });
 
           stopwatch.stop();

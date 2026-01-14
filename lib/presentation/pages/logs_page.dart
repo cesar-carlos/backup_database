@@ -68,7 +68,7 @@ class _LogsPageState extends State<LogsPage> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       await context.read<LogProvider>().cleanOldLogs();
       if (!mounted) return;
 
@@ -97,7 +97,7 @@ class _LogsPageState extends State<LogsPage> {
       }
       return;
     }
-
+    if (!mounted) return;
     final provider = context.read<LogProvider>();
     final filePath = await provider.exportLogs(
       outputPath: result,

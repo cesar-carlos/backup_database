@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../../core/errors/failure.dart';
+import '../../../core/utils/logger_service.dart';
 import '../../../core/errors/nextcloud_failure.dart';
 import '../../../core/encryption/encryption_service.dart';
 import '../../../domain/entities/backup_destination.dart';
@@ -94,6 +95,36 @@ class NextcloudDestinationService {
           if (response.statusCode != null &&
               response.statusCode! >= 200 &&
               response.statusCode! < 300) {
+
+            // Validação de Integridade via HEAD
+            try {
+              final headResponse = await dio.headUri(uploadUrl);
+              final contentLengthStr = headResponse.headers.value('content-length');
+              if (contentLengthStr != null) {
+                final remoteSize = int.tryParse(contentLengthStr);
+                if (remoteSize != null && remoteSize != fileSize) {
+                   // Tentar apagar
+                   try {
+                     await dio.deleteUri(uploadUrl);
+                   } catch(_) {}
+
+                   throw Exception(
+                     'Arquivo corrompido no Nextcloud. '
+                     'Local: $fileSize, Remoto: $remoteSize'
+                   );
+                }
+              }
+            } catch(e) {
+              LoggerService.warning('Não foi possível validar integridade no Nextcloud: $e');
+              // Se falhar o HEAD, assumimos que pode ser problema de permissão ou rede
+              // mas não necessariamente arquivo corrompido, então seguimos.
+              // O ideal seria falhar, mas Nextcloud as vezes bloqueia HEAD/PROPFIND.
+              // Mas aqui como acabamos de enviar, devemos ter acesso.
+              if (e is Exception && e.toString().contains('Arquivo corrompido')) {
+                rethrow;
+              }
+            }
+
             stopwatch.stop();
             return rd.Success(
               NextcloudUploadResult(

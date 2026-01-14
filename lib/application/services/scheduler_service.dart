@@ -17,8 +17,7 @@ import '../../infrastructure/external/scheduler/cron_parser.dart';
 import '../../domain/use_cases/destinations/send_to_ftp.dart';
 import '../../infrastructure/external/destinations/local_destination_service.dart'
     as local;
-import '../../infrastructure/external/destinations/ftp_destination_service.dart'
-    as ftp;
+import '../../domain/services/i_ftp_service.dart';
 import '../../infrastructure/external/destinations/google_drive_destination_service.dart'
     as gd;
 import '../../infrastructure/external/dropbox/dropbox_destination_service.dart'
@@ -40,7 +39,7 @@ class SchedulerService {
   final BackupOrchestratorService _backupOrchestratorService;
   final local.LocalDestinationService _localDestinationService;
   final SendToFtp _sendToFtp;
-  final ftp.FtpDestinationService _ftpDestinationService;
+  final IFtpService _ftpDestinationService;
   final gd.GoogleDriveDestinationService _googleDriveDestinationService;
   final dropbox.DropboxDestinationService _dropboxDestinationService;
   final SendToDropbox _sendToDropbox;
@@ -62,7 +61,7 @@ class SchedulerService {
     required BackupOrchestratorService backupOrchestratorService,
     required local.LocalDestinationService localDestinationService,
     required SendToFtp sendToFtp,
-    required ftp.FtpDestinationService ftpDestinationService,
+    required IFtpService ftpDestinationService,
     required gd.GoogleDriveDestinationService googleDriveDestinationService,
     required dropbox.DropboxDestinationService dropboxDestinationService,
     required SendToDropbox sendToDropbox,
@@ -594,7 +593,7 @@ class SchedulerService {
           );
 
         case DestinationType.ftp:
-          final config = ftp.FtpDestinationConfig(
+          final config = FtpDestinationConfig(
             host: configJson['host'] as String,
             port: configJson['port'] as int? ?? 21,
             username: configJson['username'] as String,
@@ -709,7 +708,7 @@ class SchedulerService {
             break;
 
           case DestinationType.ftp:
-            final config = ftp.FtpDestinationConfig(
+            final config = FtpDestinationConfig(
               host: configJson['host'] as String,
               port: configJson['port'] as int? ?? 21,
               username: configJson['username'] as String,

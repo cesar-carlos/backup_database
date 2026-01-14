@@ -318,7 +318,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         Row(
                           children: [
                             Consumer<NotificationProvider>(
-                              builder: (context, provider, child) {
+                              builder: (_, provider, child) {
                                 return ActionButton(
                                   label: provider.isTesting
                                       ? 'Testando...'
@@ -336,18 +336,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                           if (!mounted) return;
 
                                           if (success) {
-                                            MessageModal.showSuccess(
-                                              context,
-                                              message:
-                                                  'Teste de conexão realizado com sucesso!',
-                                            );
+                                            if (mounted) {
+                                              MessageModal.showSuccess(
+                                                this.context,
+                                                message:
+                                                    'Teste de conexão realizado com sucesso!',
+                                              );
+                                            }
                                           } else {
-                                            MessageModal.showError(
-                                              context,
-                                              message:
-                                                  provider.error ??
-                                                  'Erro ao testar conexão',
-                                            );
+                                            if (mounted) {
+                                              MessageModal.showError(
+                                                this.context,
+                                                message:
+                                                    provider.error ??
+                                                    'Erro ao testar conexão',
+                                              );
+                                            }
                                           }
                                         },
                                 );

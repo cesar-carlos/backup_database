@@ -98,7 +98,14 @@ class LocalDestinationService {
         stopwatch.stop();
 
         final fileSize = await destinationFile.length();
-        LoggerService.info('Arquivo copiado: $destinationPath ($fileSize bytes)');
+        final sourceSize = await sourceFile.length();
+        if (fileSize != sourceSize) {
+          throw const FileSystemException(
+            'Tamanho do arquivo de destino difere do arquivo de origem (cópia corrompida)',
+          );
+        }
+        
+        LoggerService.info('Arquivo copiado com sucesso: $destinationPath ($fileSize bytes)');
 
         return rd.Success(
           LocalUploadResult(

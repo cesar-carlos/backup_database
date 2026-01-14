@@ -5,10 +5,9 @@ import 'package:result_dart/result_dart.dart' as rd;
 import '../../../core/utils/logger_service.dart';
 import '../../../core/errors/failure.dart';
 import '../../entities/backup_destination.dart';
+import '../../services/i_ftp_service.dart';
 import '../../../infrastructure/external/destinations/local_destination_service.dart'
     as local;
-import '../../../infrastructure/external/destinations/ftp_destination_service.dart'
-    as ftp;
 import '../../../infrastructure/external/destinations/google_drive_destination_service.dart'
     as gd;
 import '../../../infrastructure/external/dropbox/dropbox_destination_service.dart'
@@ -41,14 +40,14 @@ class CleanOldBackupsResult {
 
 class CleanOldBackups {
   final local.LocalDestinationService _localService;
-  final ftp.FtpDestinationService _ftpService;
+  final IFtpService _ftpService;
   final gd.GoogleDriveDestinationService _googleDriveService;
   final dropbox.DropboxDestinationService _dropboxService;
   final nextcloud.NextcloudDestinationService _nextcloudService;
 
   CleanOldBackups({
     required local.LocalDestinationService localService,
-    required ftp.FtpDestinationService ftpService,
+    required IFtpService ftpService,
     required gd.GoogleDriveDestinationService googleDriveService,
     required dropbox.DropboxDestinationService dropboxService,
     required nextcloud.NextcloudDestinationService nextcloudService,
@@ -92,7 +91,7 @@ class CleanOldBackups {
             break;
 
           case DestinationType.ftp:
-            final config = ftp.FtpDestinationConfig(
+            final config = FtpDestinationConfig(
               host: configJson['host'] as String,
               port: configJson['port'] as int? ?? 21,
               username: configJson['username'] as String,

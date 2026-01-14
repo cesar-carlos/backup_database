@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
@@ -254,7 +255,15 @@ Future<void> main() async {
       },
     );
 
-    runApp(const BackupDatabaseApp());
+    runZonedGuarded(() {
+      runApp(const BackupDatabaseApp());
+    }, (error, stack) {
+      if (error.toString().contains('physicalKey is already pressed')) {
+        // Ignore this specific framework bug
+        return;
+      }
+      LoggerService.error('Erro não tratado na UI', error, stack);
+    });
 
     try {
       final schedulerService = getIt<SchedulerService>();

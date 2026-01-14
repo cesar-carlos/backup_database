@@ -13,8 +13,7 @@ import '../../../application/providers/google_auth_provider.dart';
 import '../../../application/providers/dropbox_auth_provider.dart';
 import '../../../application/providers/license_provider.dart';
 import '../../../domain/entities/backup_destination.dart';
-import '../../../infrastructure/external/destinations/ftp_destination_service.dart'
-    as ftp;
+import '../../../domain/services/i_ftp_service.dart';
 import '../../../infrastructure/external/nextcloud/nextcloud.dart' as nextcloud;
 import '../common/common.dart';
 
@@ -1389,7 +1388,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         return;
       }
 
-      final config = ftp.FtpDestinationConfig(
+      final config = FtpDestinationConfig(
         host: _ftpHostController.text.trim(),
         port: port,
         username: _ftpUsernameController.text.trim(),
@@ -1398,7 +1397,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         useFtps: _useFtps,
       );
 
-      final ftpService = getIt<ftp.FtpDestinationService>();
+      final ftpService = getIt<IFtpService>();
       final result = await ftpService.testConnection(config);
 
       result.fold(

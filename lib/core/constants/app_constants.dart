@@ -1,6 +1,6 @@
 class AppConstants {
   // Timeouts
-  static const Duration ftpTimeout = Duration(minutes: 10);
+  static const Duration ftpTimeout = Duration(minutes: 60);
   static const Duration httpTimeout = Duration(minutes: 5);
   static const Duration processTimeout = Duration(hours: 2);
 

@@ -116,7 +116,7 @@ Future<void> setupServiceLocator() async {
     () => LocalDestinationService(),
   );
 
-  getIt.registerLazySingleton<FtpDestinationService>(
+  getIt.registerLazySingleton<IFtpService>(
     () => FtpDestinationService(),
   );
 
@@ -151,7 +151,7 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerLazySingleton<SendToFtp>(
-    () => SendToFtp(getIt<FtpDestinationService>()),
+    () => SendToFtp(getIt<IFtpService>()),
   );
 
   getIt.registerLazySingleton<SendToGoogleDrive>(
@@ -169,7 +169,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<CleanOldBackups>(
     () => CleanOldBackups(
       localService: getIt<LocalDestinationService>(),
-      ftpService: getIt<FtpDestinationService>(),
+      ftpService: getIt<IFtpService>(),
       googleDriveService: getIt<GoogleDriveDestinationService>(),
       dropboxService: getIt<DropboxDestinationService>(),
       nextcloudService: getIt<NextcloudDestinationService>(),
@@ -235,7 +235,7 @@ Future<void> setupServiceLocator() async {
       backupOrchestratorService: getIt<BackupOrchestratorService>(),
       localDestinationService: getIt<LocalDestinationService>(),
       sendToFtp: getIt<SendToFtp>(),
-      ftpDestinationService: getIt<FtpDestinationService>(),
+      ftpDestinationService: getIt<IFtpService>(),
       googleDriveDestinationService: getIt<GoogleDriveDestinationService>(),
       dropboxDestinationService: getIt<DropboxDestinationService>(),
       sendToDropbox: getIt<SendToDropbox>(),

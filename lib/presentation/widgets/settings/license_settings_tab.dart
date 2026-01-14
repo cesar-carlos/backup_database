@@ -42,7 +42,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
   @override
   Widget build(BuildContext context) {
     return Consumer<LicenseProvider>(
-      builder: (context, licenseProvider, child) {
+      builder: (_, licenseProvider, child) {
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -74,17 +74,21 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                       );
                                   if (mounted) {
                                     if (success) {
-                                      MessageModal.showSuccess(
-                                        context,
-                                        message:
-                                            'Chave do dispositivo copiada para clipboard!',
-                                      );
+                                      if (mounted) {
+                                        MessageModal.showSuccess(
+                                          this.context,
+                                          message:
+                                              'Chave do dispositivo copiada para clipboard!',
+                                        );
+                                      }
                                     } else {
-                                      MessageModal.showError(
-                                        context,
-                                        message:
-                                            'Erro ao copiar para clipboard',
-                                      );
+                                      if (mounted) {
+                                        MessageModal.showError(
+                                          this.context,
+                                          message:
+                                              'Erro ao copiar para clipboard',
+                                        );
+                                      }
                                     }
                                   }
                                 }
@@ -112,14 +116,14 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                   );
                               if (success && mounted) {
                                 MessageModal.showSuccess(
-                                  context,
+                                  this.context,
                                   message:
                                       'Licença validada e salva com sucesso!',
                                 );
                                 _licenseKeyController.clear();
                               } else if (mounted) {
                                 MessageModal.showError(
-                                  context,
+                                  this.context,
                                   message:
                                       licenseProvider.error ??
                                       'Erro ao validar licença',
@@ -499,8 +503,9 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                               setDialogState(() {
                                 errorMessage = null;
                               });
+                              if (!mounted) return;
                               MessageModal.showSuccess(
-                                ctx,
+                                this.context,
                                 message: 'Licença copiada para clipboard!',
                               );
                             } else {

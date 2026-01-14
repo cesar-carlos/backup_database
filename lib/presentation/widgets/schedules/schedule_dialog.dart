@@ -1492,6 +1492,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
     final directory = Directory(path);
     if (!await directory.exists()) {
+      if (!mounted) return false;
       final shouldCreate = await showDialog<bool>(
         context: context,
         builder: (context) => ContentDialog(
@@ -1625,13 +1626,15 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     if (_compressBackup && _compressionFormat == CompressionFormat.rar) {
       final winRarAvailable = await _checkWinRarAvailable();
       if (!winRarAvailable) {
-        MessageModal.showError(
-          context,
-          message:
-              'Formato RAR requer WinRAR instalado.\n\n'
-              'WinRAR não foi encontrado no sistema.\n'
-              'Por favor, instale o WinRAR ou escolha o formato ZIP.',
-        );
+        if (mounted) {
+          MessageModal.showError(
+            context,
+            message:
+                'Formato RAR requer WinRAR instalado.\n\n'
+                'WinRAR não foi encontrado no sistema.\n'
+                'Por favor, instale o WinRAR ou escolha o formato ZIP.',
+          );
+        }
         return;
       }
     }
@@ -1644,6 +1647,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     if (!isValidFolder) {
       return;
     }
+
+    if (!mounted) return;
 
     final licenseProvider = Provider.of<LicenseProvider>(
       context,
@@ -1705,6 +1710,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       truncateLog: _truncateLog,
     );
 
-    Navigator.of(context).pop(schedule);
+    if (mounted) {
+      Navigator.of(context).pop(schedule);
+    }
   }
 }

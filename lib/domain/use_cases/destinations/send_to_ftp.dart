@@ -1,10 +1,11 @@
 import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../../core/errors/failure.dart';
-import '../../../infrastructure/external/destinations/ftp_destination_service.dart';
+import '../../entities/backup_destination.dart';
+import '../../services/i_ftp_service.dart';
 
 class SendToFtp {
-  final FtpDestinationService _service;
+  final IFtpService _service;
 
   SendToFtp(this._service);
 

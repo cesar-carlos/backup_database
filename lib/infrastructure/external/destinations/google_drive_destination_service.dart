@@ -140,10 +140,29 @@ class GoogleDriveDestinationService {
             );
 
             // O googleapis usa upload resumável automaticamente para arquivos grandes
-            return await driveApi.files.create(
+            final uploadedFile = await driveApi.files.create(
               driveFile,
               uploadMedia: media,
+              $fields: 'id, name, size',
             );
+            
+            // Validação de integridade
+            if (uploadedFile.size != null) {
+              final remoteSize = int.parse(uploadedFile.size!);
+              if (remoteSize != fileSize) {
+                 // Tentar apagar arquivo corrompido
+                 try {
+                   await driveApi.files.delete(uploadedFile.id!);
+                 } catch (_) {}
+                 
+                 throw Exception(
+                   'Arquivo corrompido no Google Drive. '
+                   'Local: $fileSize, Remoto: $remoteSize'
+                 );
+              }
+            }
+            
+            return uploadedFile;
           });
 
           stopwatch.stop();

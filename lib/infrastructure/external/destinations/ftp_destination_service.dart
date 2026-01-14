@@ -8,40 +8,12 @@ import '../../../core/errors/failure.dart' hide FtpFailure;
 import '../../../core/errors/ftp_failure.dart';
 import '../../../core/utils/logger_service.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../domain/entities/backup_destination.dart';
+import '../../../domain/services/i_ftp_service.dart';
 
-class FtpDestinationConfig {
-  final String host;
-  final int port;
-  final String username;
-  final String password;
-  final String remotePath;
-  final bool useFtps;
-  final int retentionDays;
+class FtpDestinationService implements IFtpService {
 
-  const FtpDestinationConfig({
-    required this.host,
-    this.port = 21,
-    required this.username,
-    required this.password,
-    this.remotePath = '/',
-    this.useFtps = false,
-    this.retentionDays = 30,
-  });
-}
-
-class FtpUploadResult {
-  final String remotePath;
-  final int fileSize;
-  final Duration duration;
-
-  const FtpUploadResult({
-    required this.remotePath,
-    required this.fileSize,
-    required this.duration,
-  });
-}
-
-class FtpDestinationService {
+  @override
   Future<rd.Result<FtpUploadResult>> upload({
     required String sourceFilePath,
     required FtpDestinationConfig config,
@@ -79,12 +51,20 @@ class FtpDestinationService {
             pass: config.password,
             timeout: AppConstants.ftpTimeout.inSeconds,
             securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
+            showLog: true, 
           );
 
           // Conectar
           final connected = await ftp.connect();
           if (!connected) {
             throw Exception('Falha ao conectar ao servidor FTP');
+          }
+
+          // Forçar modo binário se possível
+          try {
+             await ftp.sendCustomCommand('TYPE I');
+          } catch(e) {
+             LoggerService.warning('Não foi possível setar TYPE I (Binary): $e');
           }
 
           // Navegar para diretório remoto
@@ -98,8 +78,24 @@ class FtpDestinationService {
             sourceFile,
             sRemoteName: fileName,
           );
+          
           if (!uploaded) {
-            throw Exception('Falha no upload do arquivo');
+            throw Exception('Falha no upload do arquivo (retorno falso)');
+          }
+
+          // Validar integridade verificando tamanho do arquivo remoto
+          await Future.delayed(const Duration(seconds: 2));
+          final remoteSize = await ftp.sizeFile(fileName);
+          if (remoteSize != -1 && remoteSize != fileSize) {
+            // Tentar deletar arquivo corrompido
+            try {
+              await ftp.deleteFile(fileName);
+            } catch (_) {}
+            
+            throw Exception(
+              'Arquivo corrompido no destino. '
+              'Tamanho local: $fileSize, Remoto: $remoteSize'
+            );
           }
 
           // Desconectar
@@ -212,6 +208,7 @@ class FtpDestinationService {
     }
   }
 
+  @override
   Future<rd.Result<bool>> testConnection(FtpDestinationConfig config) async {
     try {
       final ftp = FTPConnect(
@@ -234,6 +231,7 @@ class FtpDestinationService {
     }
   }
 
+  @override
   Future<rd.Result<int>> cleanOldBackups({
     required FtpDestinationConfig config,
   }) async {
