@@ -1,222 +1,33 @@
 ---
+description: Index of available Cursor rules in this repo
+globs: ["**/*"]
 alwaysApply: true
 ---
 
-# Cursor Rules
+# Rules Index
 
-This folder contains the **Project Rules** for Cursor, which are automatically applied when working on project files. The rules provide persistent context for the AI, ensuring code consistency and quality.
+## Behavioral Guardrails
 
-## How They Work
+- ❌ Never commit, push, or create docs unless explicitly requested
+- ✅ Prefer self-explanatory code via naming and structure
 
-Rules are `.mdc` (Markdown Cursor) files that contain:
+## Rules (single source of truth per topic)
 
-- **Frontmatter YAML**: Metadata about the rule
+### Generic (reusable)
 
-  - `description`: Brief description of the rule
-  - `globs`: File patterns to which the rule applies
-  - `alwaysApply`: Defines whether the rule should always be applied
+- **`general_rules.mdc`**: core coding principles (readability, duplication, docs/comments policy)
+- **`clean_architecture.mdc`**: layer boundaries and dependency direction (generic)
+- **`coding_style.mdc`**: Dart language/style (naming, formatting, imports, modern Dart, logging, codegen)
+- **`null_safety.mdc`**: sound null-safety guidelines and patterns
+- **`solid_principles.mdc`**: SOLID principles with examples
+- **`flutter_widgets.mdc`**: widget construction/performance patterns (composition, const, lists, layout, theming tokens)
+- **`ui_ux_design.mdc`**: desktop UI/UX principles (Fluent vs Material policy, navigation, a11y, responsive desktop)
+- **`testing.mdc`**: unit/widget testing conventions (AAA, naming, isolation, mocking)
 
-- **Markdown Content**: The rules and guidelines themselves
+### Project-specific (`backup_database`)
 
-## Important Behavioral Rules
+- **`project_specifics.mdc`**: decisions specific to this repo (Clean Architecture + DDD, dependencies, desktop specifics)
 
-### Commits and Documentation
+## Copying to other projects
 
-- ❌ **NEVER make git commits** unless explicitly requested by the user
-- ❌ **NEVER create documentation** (README.md, comments, etc.) unless explicitly requested
-- ❌ **NEVER push to repository** unless explicitly requested
-- ✅ **ONLY commit/push/document** when the user explicitly asks for it
-- ✅ Always ask for confirmation before committing or pushing changes
-- ✅ Code should be self-explanatory through clear naming
-
-These rules ensure that the AI assistant respects user control over version control and documentation decisions.
-
-## Available Rules
-
-### 1. `solid_principles.mdc`
-
-**Applied to**: `lib/**/*.dart`
-
-Defines SOLID principles:
-
-- **Single Responsibility Principle (SRP)**: Each class has a single responsibility
-- **Open/Closed Principle (OCP)**: Open for extension, closed for modification
-- **Liskov Substitution Principle (LSP)**: Subtypes are substitutable for base types
-- **Interface Segregation Principle (ISP)**: Specific interfaces are better
-- **Dependency Inversion Principle (DIP)**: Depend on abstractions
-
-### 2. `clean_architecture.mdc`
-
-**Applied to**: `lib/**/*.dart`
-
-Defines dependency rules between layers:
-
-- Layer structure (Domain, Application, Infrastructure, Presentation)
-- Import rules between layers
-- Clean Architecture principles
-- Domain independence
-
-### 3. `domain_layer.mdc`
-
-**Applied to**: `lib/domain/**/*.dart`
-
-Specific rules for Domain Layer:
-
-- **Entities**: Main domain objects with unique identity
-- **Value Objects**: Immutable objects compared by value
-- **Use Cases**: Isolated and testable business operations
-- **Repositories**: Interfaces that define contracts
-- **Errors**: Domain-specific exceptions
-
-### 4. `coding_conventions.mdc`
-
-**Applied to**: `lib/**/*.dart`
-
-Coding conventions:
-
-- Naming for classes, methods, and variables
-- File structure
-- Error handling (Result pattern - result_dart)
-- Dependency injection
-- Import organization
-- Avoid unnecessary comments
-- Use named constants instead of magic numbers
-
-### 5. `testing.mdc`
-
-**Applied to**: `test/**/*.dart`
-
-Testing patterns:
-
-- Unit test structure
-- Widget tests
-- Best practices (AAA pattern)
-- Test naming
-- Isolation and mocking
-
-### 6. `coding_style.mdc`
-
-**Applied to**: `lib/**/*.dart`, `test/**/*.dart`
-
-Dart style guide based on Effective Dart:
-
-- Naming and conventions
-- Types and null safety
-- Const and final
-- Strings and collections
-- Functions and methods
-- Classes and constructors
-- Imports and organization
-- Dot shorthands
-- Tear-off for widgets (never return Widget from functions)
-- Avoid magic numbers - use named constants
-- Comments only when necessary (explain "why", not "what")
-
-### 7. `flutter_widgets.mdc`
-
-**Applied to**: `lib/presentation/**/*.dart`, `lib/shared/**/*.dart`
-
-Best practices for Flutter widgets:
-
-- Stateless vs StatefulWidget
-- Performance and optimization
-- Const widgets
-- Widget composition
-- Layout and responsive design
-- Theming and navigation
-- State management
-
-### 8. `null_safety.mdc`
-
-**Applied to**: `lib/**/*.dart`
-
-Best practices for null safety:
-
-- Nullable/non-nullable type declaration
-- Variable initialization
-- Null checks and null-aware operators
-- Nullable collections
-- Functions and methods with null safety
-- External APIs and JSON parsing
-
-### 9. `general_rules.mdc`
-
-**Applied to**: `lib/**/*.dart`, `test/**/*.dart`
-
-General project rules:
-
-- **DO NOT create documentation automatically** (only when requested)
-- **DO NOT create documentation files** without explicit request
-- **DO NOT add unnecessary comments** - code should be self-explanatory
-- **Comments only to explain "why", not "what"**
-- Self-explanatory code through clear naming
-- Avoid magic numbers - use named constants
-- Keep code clean and maintainable
-
-### 10. `dependencies_patterns.mdc`
-
-**Applied to**: `lib/**/*.dart`, `pubspec.yaml`
-
-Dependency and library patterns:
-
-- **go_router** for routes (never Navigator or auto_route)
-- **dio** for HTTP/API (never http package)
-- **get_it** for dependency injection (never Provider for DI)
-- **Provider** for state management (never BLoC, Riverpod, GetX)
-- **brasil_fields** for BR formatting
-- **flutter_dotenv** for environment variables
-- **uuid** for UUID generation
-- **zard** for type validation
-
-### 11. `architecture.mdc`
-
-**Applied to**: `lib/**/*.dart`
-
-Clean Architecture + Domain Driven Design (DDD) overview:
-
-- Architecture principles and SOLID
-- Layer structure and organization
-- Dependency rules between layers
-- Folder structure
-- Data flow examples
-- Barrel files
-- Library configuration (go_router, dio, get_it, Provider, etc.)
-- Import patterns
-- Code review checklist
-- Configuration checklist
-
-## Creating New Rules
-
-To create a new rule:
-
-1. Create a `.mdc` file in the `.cursor/rules/` folder
-2. Add the YAML frontmatter:
-   ```yaml
-   ---
-   description: Rule description
-   globs: ["pattern/**/*.dart"]
-   alwaysApply: true
-   ---
-   ```
-3. Add the rule content in Markdown
-
-## Rule Example
-
-```mdc
----
-description: Example rule for validation
-globs: ["lib/domain/**/*.dart"]
-alwaysApply: true
----
-
-# Validation Rule
-
-- All entities must validate their data in the constructor
-- Value objects must throw specific exceptions for invalid values
-- Use cases must validate parameters before executing
-```
-
-## References
-
-- [Cursor Documentation on Rules](https://docs.cursor.com/en/context/rules)
-- [Cursor Context Guide](https://docs.cursor.com/en/guides)
+See `README.md` in this folder. Keep generic rules, and replace `project_specifics.mdc`.
