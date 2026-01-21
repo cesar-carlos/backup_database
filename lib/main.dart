@@ -93,6 +93,14 @@ Future<void> main() async {
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
+    // Mostrar mensagem ao usuário antes de encerrar
+    WindowsMessageBox.showWarning(
+      'Backup Database - Já está em execução',
+      'O aplicativo Backup Database já está aberto.\n\n'
+      'A janela existente foi trazida para frente.\n\n'
+      'Não é possível executar mais de uma instância do aplicativo ao mesmo tempo.',
+    );
+
     exit(0);
   }
 
@@ -135,6 +143,14 @@ Future<void> main() async {
       }
       await Future.delayed(const Duration(milliseconds: 200));
     }
+
+    // Mostrar mensagem ao usuário antes de encerrar
+    WindowsMessageBox.showWarning(
+      'Backup Database - Já está em execução',
+      'O aplicativo Backup Database já está aberto.\n\n'
+      'A janela existente foi trazida para frente.\n\n'
+      'Não é possível executar mais de uma instância do aplicativo ao mesmo tempo.',
+    );
 
     exit(0);
   }
@@ -284,6 +300,15 @@ Future<void> _initializeServiceMode() async {
     await dotenv.load(fileName: '.env');
     LoggerService.info('Variáveis de ambiente carregadas');
 
+    // Serviço usa seu próprio mutex para não conflitar com a UI
+    final singleInstanceService = SingleInstanceService();
+    final isFirstServiceInstance = await singleInstanceService.checkAndLock(isServiceMode: true);
+
+    if (!isFirstServiceInstance) {
+      LoggerService.warning('⚠️ Outra instância do SERVIÇO já está em execução. Encerrando.');
+      exit(0);
+    }
+
     await setupServiceLocator();
     LoggerService.info('Dependências configuradas');
 
@@ -298,13 +323,21 @@ Future<void> _initializeServiceMode() async {
 
     LoggerService.info('✅ Aplicativo rodando como serviço do Windows');
 
+    // Manter o serviço rodando indefinidamente
     await Future.delayed(const Duration(days: 365));
+
+    // Libera o mutex do serviço ao encerrar
+    await singleInstanceService.releaseLock();
   } catch (e, stackTrace) {
     LoggerService.error(
       'Erro fatal na inicialização do modo serviço',
       e,
       stackTrace,
     );
+    // Tentar liberar o mutex em caso de erro
+    try {
+      await SingleInstanceService().releaseLock();
+    } catch (_) {}
     exit(1);
   }
 }

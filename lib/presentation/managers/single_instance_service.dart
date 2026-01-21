@@ -19,15 +19,19 @@ class SingleInstanceService {
   factory SingleInstanceService() => _instance;
   SingleInstanceService._();
 
-  static const String _mutexName = 'Global\\BackupDatabaseMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
-  
+  // Mutex para aplicação UI normal
+  static const String _uiMutexName = 'Global\\BackupDatabase_UIMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
+  // Mutex para serviço do Windows
+  static const String _serviceMutexName = 'Global\\BackupDatabase_ServiceMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
+
   int _mutexHandle = 0;
   bool _isFirstInstance = false;
   final IpcService _ipcService = IpcService();
 
   /// Verifica se é a primeira instância do aplicativo usando Named Mutex do Windows
+  /// [isServiceMode] - se true, usa mutex de serviço; se false, usa mutex de UI
   /// Retorna true se é a primeira instância, false caso contrário
-  Future<bool> checkAndLock() async {
+  Future<bool> checkAndLock({bool isServiceMode = false}) async {
     try {
       if (!Platform.isWindows) {
         LoggerService.warning('Single instance check não suportado nesta plataforma');
@@ -35,23 +39,27 @@ class SingleInstanceService {
         return true;
       }
 
+      // Escolher o mutex correto baseado no modo
+      final mutexName = isServiceMode ? _serviceMutexName : _uiMutexName;
+      final modeName = isServiceMode ? 'Serviço' : 'UI';
+
       // Criar ou abrir mutex nomeado
-      final mutexNamePtr = _mutexName.toNativeUtf16();
-      
+      final mutexNamePtr = mutexName.toNativeUtf16();
+
       // Limpar erro anterior
       SetLastError(0);
-      
+
       // CreateMutex retorna handle para o mutex
       // Se o mutex já existir, GetLastError retornará ERROR_ALREADY_EXISTS
       _mutexHandle = _createMutex(nullptr, 0, mutexNamePtr);
-      
+
       // CRÍTICO: GetLastError() deve ser chamado IMEDIATAMENTE após CreateMutex
       // antes de qualquer outra operação que possa alterar o código de erro
       final lastError = GetLastError();
-      
+
       // Verificar se o mutex já existia
       final mutexExists = (lastError == ERROR_ALREADY_EXISTS);
-      
+
       // Liberar memória após capturar o erro
       calloc.free(mutexNamePtr);
 
@@ -65,17 +73,17 @@ class SingleInstanceService {
 
       // Se o mutex já existir, outra instância está rodando
       if (mutexExists) {
-        LoggerService.info('Outra instância já está em execução (Mutex existe)');
+        LoggerService.info('Outra instância de $modeName já está em execução (Mutex existe)');
         _isFirstInstance = false;
-        
+
         // Fechar o handle do mutex (não precisamos dele)
         CloseHandle(_mutexHandle);
         _mutexHandle = 0;
-        
+
         return false;
       }
 
-      LoggerService.info('Primeira instância do aplicativo (Mutex criado) - Handle: $_mutexHandle');
+      LoggerService.info('Primeira instância de $modeName do aplicativo (Mutex criado) - Handle: $_mutexHandle');
       _isFirstInstance = true;
       return true;
     } catch (e, stackTrace) {
