@@ -29,13 +29,16 @@ Future<void> main() async {
 
   _checkOsCompatibility();
 
-  final canContinue = await SingleInstanceChecker.checkAndHandleSecondInstance();
+  final canContinue =
+      await SingleInstanceChecker.checkAndHandleSecondInstance();
   if (!canContinue) return;
 
   final canContinueIpc = await SingleInstanceChecker.checkIpcServerAndHandle();
   if (!canContinueIpc) return;
 
-  LoggerService.info('✅ Primeira instância confirmada - continuando inicialização');
+  LoggerService.info(
+    '✅ Primeira instância confirmada - continuando inicialização',
+  );
 
   try {
     await AppInitializer.initialize();
@@ -49,10 +52,7 @@ Future<void> main() async {
 
     await _initializeAppServices(launchConfig);
 
-    runZonedGuarded(
-      () => runApp(const BackupDatabaseApp()),
-      _handleError,
-    );
+    runZonedGuarded(() => runApp(const BackupDatabaseApp()), _handleError);
 
     await _startScheduler();
   } catch (e, stackTrace) {
@@ -106,20 +106,14 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
           await WindowManagerService().show();
           LoggerService.info('Janela trazida para frente após comando IPC');
         } catch (e, stackTrace) {
-          LoggerService.error(
-            'Erro ao mostrar janela via IPC',
-            e,
-            stackTrace,
-          );
+          LoggerService.error('Erro ao mostrar janela via IPC', e, stackTrace);
         }
       },
     );
     LoggerService.info('IPC Server inicializado e pronto');
   } catch (e) {
     if (ServiceModeDetector.isServiceMode()) {
-      LoggerService.debug(
-        'IPC Server não disponível em modo serviço (normal)',
-      );
+      LoggerService.debug('IPC Server não disponível em modo serviço (normal)');
     } else {
       LoggerService.warning('Erro ao inicializar IPC Server: $e');
     }

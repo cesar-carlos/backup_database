@@ -1,7 +1,7 @@
 import '../../core/core.dart';
 import '../../core/di/service_locator.dart' as service_locator;
-import '../managers/managers.dart';
 import '../../application/services/scheduler_service.dart';
+import '../managers/managers.dart';
 
 class AppCleanup {
   static Future<void> cleanup() async {

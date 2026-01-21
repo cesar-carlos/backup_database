@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -15,12 +15,14 @@ class ServiceModeInitializer {
       LoggerService.info('Variáveis de ambiente carregadas');
 
       final singleInstanceService = SingleInstanceService();
-      final isFirstServiceInstance =
-          await singleInstanceService.checkAndLock(isServiceMode: true);
+      final isFirstServiceInstance = await singleInstanceService.checkAndLock(
+        isServiceMode: true,
+      );
 
       if (!isFirstServiceInstance) {
         LoggerService.warning(
-            '⚠️ Outra instância do SERVIÇO já está em execução. Encerrando.');
+          '⚠️ Outra instância do SERVIÇO já está em execução. Encerrando.',
+        );
         exit(0);
       }
 

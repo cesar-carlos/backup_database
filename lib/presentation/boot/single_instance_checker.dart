@@ -27,7 +27,8 @@ class SingleInstanceChecker {
   }
 
   static Future<void> _handleSecondInstance() async {
-    final currentUser = WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
+    final currentUser =
+        WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
 
     String? existingUser;
     try {
@@ -66,8 +67,8 @@ class SingleInstanceChecker {
     WindowsMessageBox.showWarning(
       'Backup Database - Já está em execução',
       'O aplicativo Backup Database já está aberto.\n\n'
-      'A janela existente foi trazida para frente.\n\n'
-      'Não é possível executar mais de uma instância do aplicativo ao mesmo tempo.',
+          'A janela existente foi trazida para frente.\n\n'
+          'Não é possível executar mais de uma instância do aplicativo ao mesmo tempo.',
     );
   }
 }
