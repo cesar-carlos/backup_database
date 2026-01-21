@@ -93,7 +93,6 @@ Future<void> main() async {
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
-    // Mostrar mensagem ao usuário antes de encerrar
     WindowsMessageBox.showWarning(
       'Backup Database - Já está em execução',
       'O aplicativo Backup Database já está aberto.\n\n'
@@ -144,7 +143,6 @@ Future<void> main() async {
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
-    // Mostrar mensagem ao usuário antes de encerrar
     WindowsMessageBox.showWarning(
       'Backup Database - Já está em execução',
       'O aplicativo Backup Database já está aberto.\n\n'
@@ -300,7 +298,6 @@ Future<void> _initializeServiceMode() async {
     await dotenv.load(fileName: '.env');
     LoggerService.info('Variáveis de ambiente carregadas');
 
-    // Serviço usa seu próprio mutex para não conflitar com a UI
     final singleInstanceService = SingleInstanceService();
     final isFirstServiceInstance = await singleInstanceService.checkAndLock(isServiceMode: true);
 
@@ -323,10 +320,8 @@ Future<void> _initializeServiceMode() async {
 
     LoggerService.info('✅ Aplicativo rodando como serviço do Windows');
 
-    // Manter o serviço rodando indefinidamente
     await Future.delayed(const Duration(days: 365));
 
-    // Libera o mutex do serviço ao encerrar
     await singleInstanceService.releaseLock();
   } catch (e, stackTrace) {
     LoggerService.error(
@@ -334,7 +329,6 @@ Future<void> _initializeServiceMode() async {
       e,
       stackTrace,
     );
-    // Tentar liberar o mutex em caso de erro
     try {
       await SingleInstanceService().releaseLock();
     } catch (_) {}
