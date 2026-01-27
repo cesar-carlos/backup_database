@@ -88,7 +88,10 @@ class TrayMenuHandler {
           );
         },
         (failure) async {
-          LoggerService.error('Erro ao buscar agendamentos habilitados', failure);
+          LoggerService.error(
+            'Erro ao buscar agendamentos habilitados',
+            failure,
+          );
         },
       );
     } catch (e, stackTrace) {
