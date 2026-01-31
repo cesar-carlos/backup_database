@@ -18,7 +18,6 @@ class ExecuteSqlServerBackup {
     bool enableChecksum = false,
     bool verifyAfterBackup = false,
   }) async {
-    // Validações
     if (config.server.trim().isEmpty) {
       return const rd.Failure(
         ValidationFailure(message: 'Servidor não pode ser vazio'),

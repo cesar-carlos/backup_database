@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/core/errors/failure.dart' as core;
+import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/domain/repositories/i_license_repository.dart';
@@ -64,7 +64,6 @@ class LicenseValidationService implements ILicenseValidationService {
           return rd.Success(hasFeature);
         },
         (failure) {
-          // Se não há licença ou está expirada, retorna false
           return const rd.Success(false);
         },
       );
@@ -105,7 +104,6 @@ class LicenseValidationService implements ILicenseValidationService {
           return const rd.Success(true);
         },
         (failure) {
-          // Se não encontrou licença, retorna false
           return const rd.Success(false);
         },
       );

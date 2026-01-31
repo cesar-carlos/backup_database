@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/application/services/license_generation_service.dart';
+import 'package:backup_database/application/services/license_generation_service.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/domain/repositories/i_license_repository.dart';
@@ -72,7 +72,6 @@ class LicenseProvider extends ChangeNotifier {
         },
         (failure) {
           _currentLicense = null;
-          // NotFoundFailure significa que não há licença, não é um erro
           if (failure is core.NotFoundFailure) {
             _error = null;
           } else if (failure is core.Failure) {

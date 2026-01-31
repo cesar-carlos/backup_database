@@ -1042,6 +1042,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  sort_pubspec_dependencies:
+    dependency: "direct dev"
+    description:
+      name: sort_pubspec_dependencies
+      sha256: "42a711c0d53e573b4b24386c227c67b33202f12dc2585797485f40b7d543a839"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.2"
   source_gen:
     dependency: transitive
     description:

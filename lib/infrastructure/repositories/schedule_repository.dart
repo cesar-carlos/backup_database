@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
@@ -67,7 +67,6 @@ class ScheduleRepository implements IScheduleRepository {
       final id = await _database.scheduleDao.insertSchedule(companion);
       LoggerService.info('[ScheduleRepository] Agendamento criado com ID: $id');
 
-      // Verificar se foi salvo corretamente
       final saved = await _database.scheduleDao.getById(schedule.id);
       if (saved == null) {
         LoggerService.error(

@@ -69,9 +69,7 @@ class DropboxAuthProvider extends ChangeNotifier {
           (authResult) {
             _currentEmail = authResult.email;
           },
-          (_) {
-            // Nenhuma sessão ativa
-          },
+          (_) {},
         );
       }
 

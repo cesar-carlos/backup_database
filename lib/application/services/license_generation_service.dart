@@ -53,7 +53,6 @@ class LicenseGenerationService {
     String licenseKey,
   ) async {
     try {
-      // Validar se a chave não está vazia
       final trimmedKey = licenseKey.trim();
       if (trimmedKey.isEmpty) {
         return const rd.Failure(
@@ -63,7 +62,6 @@ class LicenseGenerationService {
         );
       }
 
-      // Tentar decodificar base64
       List<int> licenseBytes;
       try {
         licenseBytes = base64.decode(trimmedKey);
@@ -75,7 +73,6 @@ class LicenseGenerationService {
         );
       }
 
-      // Validar se há bytes decodificados
       if (licenseBytes.isEmpty) {
         return const rd.Failure(
           core.ValidationFailure(
@@ -84,7 +81,6 @@ class LicenseGenerationService {
         );
       }
 
-      // Decodificar JSON
       final licenseJson = utf8.decode(licenseBytes);
       if (licenseJson.trim().isEmpty) {
         return const rd.Failure(

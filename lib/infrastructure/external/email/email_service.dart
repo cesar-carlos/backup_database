@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -35,7 +35,6 @@ class EmailService {
         ..text = isHtml ? null : body
         ..html = isHtml ? body : null;
 
-      // Adicionar anexos
       if (attachmentPaths != null && attachmentPaths.isNotEmpty) {
         for (final path in attachmentPaths) {
           final file = File(path);

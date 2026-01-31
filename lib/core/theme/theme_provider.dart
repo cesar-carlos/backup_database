@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeProvider extends ChangeNotifier {
@@ -17,7 +17,6 @@ class ThemeProvider extends ChangeNotifier {
       _isInitialized = true;
       notifyListeners();
     } on Object catch (e) {
-      // Se houver erro, usa o valor padrão
       _isDarkMode = false;
       _isInitialized = true;
     }
@@ -34,8 +33,6 @@ class ThemeProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_darkModeKey, value);
-    } on Object catch (e) {
-      // Log do erro mas não impede a mudança de tema
-    }
+    } on Object catch (_) {}
   }
 }

@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -83,7 +83,6 @@ class SchedulerProvider extends ChangeNotifier {
       final result = await _createSchedule(schedule);
       return await result.fold(
         (newSchedule) async {
-          // Recarregar do banco para garantir sincronização
           await loadSchedules();
           return true;
         },
@@ -112,7 +111,6 @@ class SchedulerProvider extends ChangeNotifier {
       final result = await _updateSchedule(schedule);
       return await result.fold(
         (updatedSchedule) async {
-          // Recarregar do banco para garantir sincronização
           await loadSchedules();
           return true;
         },
@@ -164,7 +162,6 @@ class SchedulerProvider extends ChangeNotifier {
   }
 
   Future<bool> duplicateSchedule(Schedule source) async {
-    // cria uma nova instância com novo id e timestamps
     final copy = Schedule(
       name: '${source.name} (cópia)',
       databaseConfigId: source.databaseConfigId,
@@ -192,7 +189,6 @@ class SchedulerProvider extends ChangeNotifier {
     final progressProvider = _progressProvider;
 
     try {
-      // Iniciar progresso
       if (progressProvider != null) {
         progressProvider.startBackup(scheduleName);
         progressProvider.updateProgress(

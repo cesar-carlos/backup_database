@@ -18,7 +18,6 @@ class ExecuteSybaseBackup {
     bool truncateLog = true,
     bool verifyAfterBackup = false,
   }) async {
-    // Validações
     if (config.serverName.trim().isEmpty) {
       return const rd.Failure(
         ValidationFailure(

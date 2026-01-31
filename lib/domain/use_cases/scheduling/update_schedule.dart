@@ -12,7 +12,6 @@ class UpdateSchedule {
   final ScheduleCalculator _calculator = ScheduleCalculator();
 
   Future<rd.Result<Schedule>> call(Schedule schedule) async {
-    // Validações
     if (schedule.id.isEmpty) {
       return const rd.Failure(
         ValidationFailure(message: 'ID não pode ser vazio'),
@@ -24,7 +23,6 @@ class UpdateSchedule {
       );
     }
 
-    // Recalcular próxima execução
     final nextRunAt = _calculator.getNextRunTime(schedule);
 
     final scheduleWithNextRun = schedule.copyWith(
@@ -33,7 +31,6 @@ class UpdateSchedule {
 
     final result = await _repository.update(scheduleWithNextRun);
 
-    // Se atualizado com sucesso, atualizar o serviço de agendamento
     result.fold(
       (updatedSchedule) async {
         await _schedulerService.refreshSchedule(updatedSchedule.id);

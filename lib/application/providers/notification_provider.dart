@@ -40,8 +40,6 @@ class NotificationProvider extends ChangeNotifier {
         },
         (failure) {
           final f = failure as Failure;
-          // Se não encontrou configuração, não é um erro - apenas não há
-          // dados salvos
           if (f is NotFoundFailure) {
             _emailConfig = null;
             _error = null;

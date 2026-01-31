@@ -82,7 +82,6 @@ class SqlServerConfigProvider extends ChangeNotifier {
       final result = await _repository.create(config);
       return result.fold(
         (_) async {
-          // Recarrega do banco para garantir dados corretos
           await loadConfigs();
           return true;
         },
@@ -128,7 +127,6 @@ class SqlServerConfigProvider extends ChangeNotifier {
       final result = await _repository.update(config);
       return result.fold(
         (_) async {
-          // Recarrega do banco para garantir dados corretos
           await loadConfigs();
           return true;
         },
@@ -149,7 +147,6 @@ class SqlServerConfigProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteConfig(String id) async {
-    // Bloqueia exclusão se houver agendamentos vinculados
     final schedulesResult = await _scheduleRepository.getByDatabaseConfig(id);
     if (schedulesResult.isSuccess() &&
         schedulesResult.getOrNull()!.isNotEmpty) {
@@ -190,8 +187,6 @@ class SqlServerConfigProvider extends ChangeNotifier {
   }
 
   Future<bool> duplicateConfig(SqlServerConfig source) async {
-    // Cria nova instância com novo ID (gerado no construtor) e nome
-    // indicando cópia
     final copy = SqlServerConfig(
       name: '${source.name} (cópia)',
       server: source.server,

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
@@ -447,7 +447,6 @@ class DropboxAuthService {
       await prefs.setString(_storageKey, encryptedData);
       await prefs.setString(_emailStorageKey, email);
     } on Object catch (e) {
-      // Ignore save errors
     }
   }
 
@@ -485,7 +484,6 @@ class DropboxAuthService {
       await prefs.remove(_storageKey);
       await prefs.remove(_emailStorageKey);
     } on Object catch (e) {
-      // Ignore clear errors
     }
   }
 

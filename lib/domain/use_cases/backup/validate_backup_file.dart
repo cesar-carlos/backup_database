@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -24,7 +24,6 @@ class ValidateBackupFile {
 
       final file = File(filePath);
 
-      // Verificar se existe
       if (!await file.exists()) {
         return rd.Success(
           BackupValidationResult(
@@ -40,9 +39,7 @@ class ValidateBackupFile {
       final fileSize = stat.size;
       final lastModified = stat.modified;
 
-      // Verificar tamanho mínimo
       if (fileSize < 1024) {
-        // Menos de 1KB
         return rd.Success(
           BackupValidationResult(
             isValid: false,
@@ -53,7 +50,6 @@ class ValidateBackupFile {
         );
       }
 
-      // Verificar se pode ser lido
       try {
         final randomAccess = await file.open();
         await randomAccess.close();

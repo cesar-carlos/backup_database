@@ -53,10 +53,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   bool _enableChecksum = false;
   bool _verifyAfterBackup = false;
 
-  // Schedule config
   int _hour = 0;
   int _minute = 0;
-  List<int> _selectedDaysOfWeek = [1]; // Segunda
+  List<int> _selectedDaysOfWeek = [1];
   List<int> _selectedDaysOfMonth = [1];
   int _intervalMinutes = 60;
 
@@ -140,9 +139,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           _intervalMinutes = (config['intervalMinutes'] as int?) ?? 60;
           _intervalMinutesController.text = _intervalMinutes.toString();
       }
-    } on Object catch (e) {
-      // Use defaults
-    }
+    } on Object catch (_) {}
   }
 
   Future<void> _loadData() async {
@@ -1511,7 +1508,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       }
     }
 
-    // Validar permissão de escrita
     final hasPermission = await _checkWritePermission(directory);
     if (!hasPermission) {
       if (mounted) {
@@ -1530,17 +1526,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   Future<bool> _checkWritePermission(Directory directory) async {
     try {
-      // Tentar criar um arquivo temporário para testar permissão
       final testFileName =
           '.backup_permission_test_${DateTime.now().millisecondsSinceEpoch}';
       final testFile = File(
         '${directory.path}${Platform.pathSeparator}$testFileName',
       );
 
-      // Tentar escrever no arquivo
       await testFile.writeAsString('test');
 
-      // Se conseguiu escrever, deletar o arquivo
       if (await testFile.exists()) {
         await testFile.delete();
         return true;

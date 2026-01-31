@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
@@ -31,7 +31,6 @@ class LogService {
       details: details,
     );
 
-    // Também logar no console
     switch (level) {
       case LogLevel.debug:
         LoggerService.debug(message);

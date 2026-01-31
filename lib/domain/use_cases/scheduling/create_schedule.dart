@@ -12,7 +12,6 @@ class CreateSchedule {
   final ScheduleCalculator _calculator = ScheduleCalculator();
 
   Future<rd.Result<Schedule>> call(Schedule schedule) async {
-    // Validações
     if (schedule.name.isEmpty) {
       return const rd.Failure(
         ValidationFailure(message: 'Nome não pode ser vazio'),
@@ -31,17 +30,13 @@ class CreateSchedule {
       );
     }
 
-    // Calcular próxima execução
     final nextRunAt = _calculator.getNextRunTime(schedule);
-
-    // Criar schedule com próxima execução calculada
     final scheduleWithNextRun = schedule.copyWith(
       nextRunAt: nextRunAt,
     );
 
     final result = await _repository.create(scheduleWithNextRun);
 
-    // Se criado com sucesso, atualizar o serviço de agendamento
     result.fold(
       (createdSchedule) async {
         await _schedulerService.refreshSchedule(createdSchedule.id);

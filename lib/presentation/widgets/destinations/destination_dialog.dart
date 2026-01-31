@@ -41,11 +41,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
   late DestinationType _selectedType;
   final _nameController = TextEditingController();
 
-  // Local
   final _localPathController = TextEditingController();
   bool _createSubfoldersByDate = true;
 
-  // FTP
   final _ftpHostController = TextEditingController();
   final _ftpPortController = TextEditingController(text: '21');
   final _ftpUsernameController = TextEditingController();
@@ -53,14 +51,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
   final _ftpRemotePathController = TextEditingController(text: '/backups');
   bool _useFtps = false;
 
-  // Google Drive
   final _googleFolderNameController = TextEditingController(text: 'Backups');
 
-  // Dropbox
   final _dropboxFolderPathController = TextEditingController();
   final _dropboxFolderNameController = TextEditingController(text: 'Backups');
 
-  // Nextcloud
   final _nextcloudServerUrlController = TextEditingController();
   final _nextcloudUsernameController = TextEditingController();
   final _nextcloudAppPasswordController = TextEditingController();
@@ -69,7 +64,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
   bool _nextcloudAllowInvalidCertificates = false;
   NextcloudAuthMode _nextcloudAuthMode = NextcloudAuthMode.appPassword;
 
-  // Common
   final _retentionDaysController = TextEditingController(text: '7');
   bool _isEnabled = true;
   bool _isTestingFtpConnection = false;
@@ -243,7 +237,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         child: const Text('Ver Licenciamento'),
                         onPressed: () {
                           Navigator.of(context).pop();
-                          // Navegação será feita pelo contexto pai após fechar o diálogo
                         },
                       ),
                     );

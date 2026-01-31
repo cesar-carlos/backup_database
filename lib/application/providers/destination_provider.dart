@@ -92,7 +92,6 @@ class DestinationProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteDestination(String id) async {
-    // Bloqueia exclusão se houver agendamentos usando este destino
     final schedulesResult = await _scheduleRepository.getAll();
     final hasLinked =
         schedulesResult.isSuccess() &&

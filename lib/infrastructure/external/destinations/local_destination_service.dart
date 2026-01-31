@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -48,14 +48,12 @@ class LocalDestinationService {
         );
       }
 
-      // Criar diretório de destino
       var destinationDir = config.path;
       if (config.createSubfoldersByDate) {
         final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
         destinationDir = p.join(config.path, dateFolder);
       }
 
-      // Verificar e criar diretório com tratamento de permissão
       final directory = Directory(destinationDir);
       try {
         if (!await directory.exists()) {
@@ -74,7 +72,6 @@ class LocalDestinationService {
         );
       }
 
-      // Verificar permissão de escrita
       final canWrite = await _checkWritePermission(destinationDir);
       if (!canWrite) {
         stopwatch.stop();
@@ -87,7 +84,6 @@ class LocalDestinationService {
         );
       }
 
-      // Copiar arquivo
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final destinationPath = p.join(destinationDir, fileName);
 
@@ -198,7 +194,6 @@ class LocalDestinationService {
         }
       }
 
-      // Remover diretórios vazios
       await for (final entity in directory.list()) {
         if (entity is Directory) {
           final contents = await entity.list().toList();

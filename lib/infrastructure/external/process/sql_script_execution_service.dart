@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -21,7 +21,6 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     required PostgresConfig? postgresConfig,
     required String script,
   }) async {
-    // Validar script não vazio
     final trimmedScript = script.trim();
     if (trimmedScript.isEmpty) {
       return const rd.Failure(
@@ -172,12 +171,10 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         'Executando script SQL no Sybase: ${config.serverName}',
       );
 
-      // Construir connection string (seguindo padrão do SybaseBackupService)
       final databaseName = config.databaseName.isNotEmpty
           ? config.databaseName
           : config.serverName;
 
-      // Tentar múltiplas variações de connection string
       final dbisqlConnections = <String>[
         'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
         'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',

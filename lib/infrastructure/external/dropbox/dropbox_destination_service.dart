@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
@@ -513,7 +513,6 @@ class DropboxDestinationService {
         }
       }
     } on Object catch (e) {
-      // Ignore errors when folder doesn't exist yet
     }
   }
 
@@ -565,7 +564,6 @@ class DropboxDestinationService {
             deletedCount++;
           }
         } on Object catch (e) {
-          // Ignore folders with invalid date format
         }
       }
 

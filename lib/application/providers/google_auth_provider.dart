@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
@@ -167,7 +167,6 @@ class GoogleAuthProvider extends ChangeNotifier {
         },
       );
     } finally {
-      // Restaurar comportamento normal de fechamento
       try {
         await windowManager.setPreventClose(false);
         LoggerService.debug('Proteção contra fechamento desativada');

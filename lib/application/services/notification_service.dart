@@ -27,7 +27,6 @@ class NotificationService {
   Future<rd.Result<bool>> notifyBackupComplete(
     BackupHistory history,
   ) async {
-    // Verificar licença para notificações por email
     try {
       final licenseValidationService = service_locator
           .getIt<ILicenseValidationService>();
@@ -44,7 +43,6 @@ class NotificationService {
       LoggerService.warning(
         'Erro ao verificar licença para notificação: $e',
       );
-      // Continuar mesmo se houver erro na verificação
     }
 
     final configResult = await _emailConfigRepository.get();
@@ -55,7 +53,6 @@ class NotificationService {
           return const rd.Success(false);
         }
 
-        // Exportar logs se necessário
         String? logPath;
         if (config.attachLog) {
           logPath = await _exportLogsForBackup(history.id);
@@ -148,7 +145,6 @@ Data/Hora do teste: ${DateTime.now()}
             }
           }
 
-          // Salvar em arquivo temporário
           final tempDir = await Directory.systemTemp.createTemp('backup_logs_');
           final logFile = File('${tempDir.path}/backup_log.txt');
           await logFile.writeAsString(buffer.toString());

@@ -22,8 +22,7 @@ class DiskSpaceInfo {
 class CheckDiskSpace {
   Future<rd.Result<DiskSpaceInfo>> call(String path) async {
     try {
-      // No Windows, usar WMIC para obter informações do disco
-      final drive = path.substring(0, 2); // Ex: "C:"
+      final drive = path.substring(0, 2);
 
       final result = await Process.run(
         'wmic',

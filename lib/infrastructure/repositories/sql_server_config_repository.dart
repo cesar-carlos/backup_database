@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/encryption/encryption.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
@@ -45,7 +45,6 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
     try {
       final companion = _toCompanion(config);
       await _database.sqlServerConfigDao.insertConfig(companion);
-      // Retorna a config original (não criptografada) para uso imediato
       return rd.Success(config);
     } on Object catch (e) {
       return rd.Failure(
@@ -59,7 +58,6 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
     try {
       final companion = _toCompanion(config);
       await _database.sqlServerConfigDao.updateConfig(companion);
-      // Retorna a config original (não criptografada) para uso imediato
       return rd.Success(config);
     } on Object catch (e) {
       return rd.Failure(

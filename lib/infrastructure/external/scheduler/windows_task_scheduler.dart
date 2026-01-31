@@ -27,20 +27,17 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
         'Criando tarefa no Windows Task Scheduler: ${schedule.name}',
       );
 
-      // Usar prefixo consistente para facilitar identificação e limpeza
       final taskName = 'BackupDatabase_${schedule.id}';
 
       LoggerService.info(
         'Preparando criação de tarefa: $taskName (Schedule ID: ${schedule.id})',
       );
 
-      // Deletar tarefa existente se houver (necessário para atualizar configuração)
       LoggerService.debug(
         'Verificando e removendo tarefa existente se houver...',
       );
       await _deleteTask(taskName);
 
-      // Construir comando schtasks
       final scheduleType = _getScheduleType(schedule);
       final scheduleArgs = _getScheduleArguments(schedule);
       final arguments = <String>[
@@ -130,7 +127,6 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
     ], runInShell: true);
 
     if (result.exitCode != 0) {
-      // Tarefa pode não existir, apenas logar como debug
       LoggerService.debug(
         'Tarefa não encontrada ou já removida: $taskName (Exit code: ${result.exitCode})',
       );

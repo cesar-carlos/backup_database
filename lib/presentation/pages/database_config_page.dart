@@ -326,13 +326,12 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _showPostgresConfigDialog(PostgresConfig? config) async {
-    // Converter PostgresConfig para SqlServerConfig temporariamente para usar o diálogo genérico
     SqlServerConfig? tempConfig;
     if (config != null) {
       tempConfig = SqlServerConfig(
         id: config.id,
         name: config.name,
-        server: config.host, // Usar host como server temporariamente
+        server: config.host,
         port: config.port,
         database: config.database,
         username: config.username,

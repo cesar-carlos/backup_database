@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/application/services/log_service.dart';
+import 'package:backup_database/application/services/log_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:flutter/foundation.dart';
@@ -11,14 +11,12 @@ class LogProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
-  // Filtros
   LogLevel? _filterLevel;
   LogCategory? _filterCategory;
   DateTime? _filterStartDate;
   DateTime? _filterEndDate;
   String _searchQuery = '';
 
-  // Paginação
   int _currentPage = 0;
   final int _pageSize = 50;
   bool _hasMore = true;
@@ -149,7 +147,6 @@ class LogProvider extends ChangeNotifier {
       final result = await _logService.cleanOldLogs();
       result.fold(
         (count) {
-          // Recarregar logs após limpeza
           refresh();
         },
         (failure) {
