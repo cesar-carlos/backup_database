@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
@@ -11,9 +13,10 @@ import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/repositories/repositories.dart';
 import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 final GetIt getIt = GetIt.instance;
 
@@ -88,15 +91,19 @@ Future<void> setupServiceLocator() async {
       deviceKeyService: getIt<IDeviceKeyService>(),
     ),
   );
+
+  final licenseSecretKeyResult = await _getOrCreateLicenseSecretKey();
+  if (licenseSecretKeyResult.isError()) {
+    final error = licenseSecretKeyResult.exceptionOrNull();
+    LoggerService.error(
+      'Failed to get license secret key: $error',
+    );
+  }
+
   getIt.registerLazySingleton<LicenseGenerationService>(() {
-    final secretKey =
-        dotenv.env['LICENSE_SECRET_KEY'] ??
-        'BACKUP_DATABASE_LICENSE_SECRET_2024';
-    if (secretKey.isEmpty) {
-      LoggerService.warning(
-        'LICENSE_SECRET_KEY não configurada no .env, usando fallback',
-      );
-    }
+    final secretKey = licenseSecretKeyResult.getOrElse(
+      (_) => 'BACKUP_DATABASE_LICENSE_SECRET_2024',
+    );
     return LicenseGenerationService(secretKey: secretKey);
   });
 
@@ -368,4 +375,51 @@ Future<void> setupServiceLocator() async {
   getIt.registerFactory<WindowsServiceProvider>(
     () => WindowsServiceProvider(getIt<IWindowsServiceService>()),
   );
+}
+
+Future<rd.Result<String>> _getOrCreateLicenseSecretKey() async {
+  const licenseSecretKey = 'license_secret_key';
+
+  final secureCredentialService = getIt<ISecureCredentialService>();
+  final deviceKeyService = getIt<IDeviceKeyService>();
+
+  final existingKeyResult = await secureCredentialService.getPassword(
+    key: licenseSecretKey,
+  );
+
+  if (existingKeyResult.isSuccess()) {
+    final existingKey = existingKeyResult.getOrNull()!;
+    if (existingKey.isNotEmpty) {
+      LoggerService.info(
+        'Using existing license secret key from secure storage',
+      );
+      return rd.Success(existingKey);
+    }
+  }
+
+  final deviceKeyResult = await deviceKeyService.getDeviceKey();
+  if (deviceKeyResult.isError()) {
+    return rd.Failure(deviceKeyResult.exceptionOrNull()!);
+  }
+
+  final deviceKey = deviceKeyResult.getOrNull()!;
+  final timestamp = DateTime.now().millisecondsSinceEpoch;
+  final randomBytes = List<int>.generate(32, (i) => (i + timestamp) % 256);
+  final combined = '$deviceKey:$timestamp:${randomBytes.join()}';
+
+  final keyBytes = utf8.encode(combined);
+  final digest = sha256.convert(keyBytes);
+  final generatedKey = digest.toString();
+
+  final storeResult = await secureCredentialService.storePassword(
+    key: licenseSecretKey,
+    password: generatedKey,
+  );
+
+  if (storeResult.isError()) {
+    return rd.Failure(storeResult.exceptionOrNull()!);
+  }
+
+  LoggerService.info('Generated and stored new license secret key');
+  return rd.Success(generatedKey);
 }
