@@ -1,6 +1,20 @@
 import 'package:uuid/uuid.dart';
 
 class SqlServerConfig {
+  SqlServerConfig({
+    required this.name,
+    required this.server,
+    required this.database,
+    required this.username,
+    required this.password,
+    String? id,
+    this.port = 1433,
+    this.enabled = true,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
   final String id;
   final String name;
   final String server;
@@ -11,21 +25,6 @@ class SqlServerConfig {
   final bool enabled;
   final DateTime createdAt;
   final DateTime updatedAt;
-
-  SqlServerConfig({
-    String? id,
-    required this.name,
-    required this.server,
-    required this.database,
-    required this.username,
-    required this.password,
-    this.port = 1433,
-    this.enabled = true,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
 
   SqlServerConfig copyWith({
     String? id,
@@ -63,4 +62,3 @@ class SqlServerConfig {
   @override
   int get hashCode => id.hashCode;
 }
-

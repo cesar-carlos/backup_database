@@ -1,6 +1,6 @@
-import '../../core/utils/logger_service.dart';
-import '../../core/utils/windows_user_service.dart';
-import '../managers/managers.dart';
+﻿import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/windows_user_service.dart';
+import 'package:backup_database/presentation/managers/managers.dart';
 
 class SingleInstanceChecker {
   static Future<bool> checkAndHandleSecondInstance() async {
@@ -33,7 +33,7 @@ class SingleInstanceChecker {
     String? existingUser;
     try {
       existingUser = await IpcService.getExistingInstanceUser();
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.debug(
         'Não foi possível obter usuário da instância existente: $e',
       );
@@ -55,7 +55,7 @@ class SingleInstanceChecker {
       );
     }
 
-    for (int i = 0; i < 5; i++) {
+    for (var i = 0; i < 5; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();
       if (notified) {
         LoggerService.info('Instância existente notificada via IPC');

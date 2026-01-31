@@ -1,12 +1,10 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/infrastructure/external/destinations/google_drive_destination_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../../infrastructure/external/destinations/google_drive_destination_service.dart';
-
 class SendToGoogleDrive {
-  final GoogleDriveDestinationService _service;
-
   SendToGoogleDrive(this._service);
+  final GoogleDriveDestinationService _service;
 
   Future<rd.Result<GoogleDriveUploadResult>> call({
     required String sourceFilePath,
@@ -26,11 +24,10 @@ class SendToGoogleDrive {
       );
     }
 
-    return await _service.upload(
+    return _service.upload(
       sourceFilePath: sourceFilePath,
       config: config,
       customFileName: customFileName,
     );
   }
 }
-

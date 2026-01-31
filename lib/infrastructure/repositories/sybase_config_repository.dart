@@ -1,16 +1,14 @@
+﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/encryption/encryption.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../core/encryption/encryption.dart';
-import '../../domain/entities/sybase_config.dart';
-import '../../domain/repositories/i_sybase_config_repository.dart';
-import '../datasources/local/database.dart';
-
 class SybaseConfigRepository implements ISybaseConfigRepository {
-  final AppDatabase _database;
-
   SybaseConfigRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<rd.Result<List<SybaseConfig>>> getAll() async {
@@ -19,10 +17,10 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         LoggerService.warning(
           'Tabela sybase_configs não existe, retornando lista vazia',
         );
-        return rd.Success(<SybaseConfig>[]);
+        return const rd.Success(<SybaseConfig>[]);
       }
 
-      final rows = await (_database
+      final rows = await _database
           .customSelect(
             '''
         SELECT 
@@ -37,14 +35,14 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         ''',
             readsFrom: {_database.sybaseConfigsTable},
           )
-          .get());
+          .get();
 
       final entities = <SybaseConfig>[];
       for (final row in rows) {
         try {
           final entity = _toEntityFromRow(row);
           entities.add(entity);
-        } catch (e, stackTrace) {
+        } on Object catch (e, stackTrace) {
           final id = row.read<String>('id');
           LoggerService.error(
             'Erro ao converter configuração Sybase: $id',
@@ -57,20 +55,20 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       }
 
       return rd.Success(entities);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       final errorStr = e.toString().toLowerCase();
       if (errorStr.contains('no such table') ||
           errorStr.contains('sybase_configs')) {
         LoggerService.warning(
           'Tabela sybase_configs não encontrada, retornando lista vazia',
         );
-        return rd.Success(<SybaseConfig>[]);
+        return const rd.Success(<SybaseConfig>[]);
       }
 
       LoggerService.error('Erro ao buscar configurações Sybase', e, stackTrace);
       return rd.Failure(
         DatabaseFailure(
-          message: 'Erro ao buscar configurações: ${e.toString()}',
+          message: 'Erro ao buscar configurações: $e',
           originalError: e,
         ),
       );
@@ -85,7 +83,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           )
           .getSingleOrNull();
       return result != null;
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         'Erro ao verificar se tabela sybase_configs existe: $e',
       );
@@ -100,7 +98,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         LoggerService.warning(
           'Tabela sybase_configs não existe ao buscar por ID: $id',
         );
-        return rd.Failure(
+        return const rd.Failure(
           NotFoundFailure(
             message: 'Configuração Sybase não encontrada (tabela não existe)',
           ),
@@ -109,7 +107,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
 
       LoggerService.debug('Buscando configuração Sybase por ID: $id');
 
-      final row = await (_database
+      final row = await _database
           .customSelect(
             '''
         SELECT 
@@ -126,7 +124,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
             readsFrom: {_database.sybaseConfigsTable},
             variables: [Variable<String>(id)],
           )
-          .getSingleOrNull());
+          .getSingleOrNull();
 
       if (row == null) {
         LoggerService.warning(
@@ -146,7 +144,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       try {
         final entity = _toEntityFromRow(row);
         return rd.Success(entity);
-      } catch (e, stackTrace) {
+      } on Object catch (e, stackTrace) {
         LoggerService.error(
           'Erro ao converter configuração Sybase: $id',
           e,
@@ -154,12 +152,12 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         );
         return rd.Failure(
           DatabaseFailure(
-            message: 'Erro ao processar configuração: ${e.toString()}',
+            message: 'Erro ao processar configuração: $e',
             originalError: e,
           ),
         );
       }
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao buscar configuração Sybase: $id',
         e,
@@ -167,7 +165,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       );
       return rd.Failure(
         DatabaseFailure(
-          message: 'Erro ao buscar configuração: ${e.toString()}',
+          message: 'Erro ao buscar configuração: $e',
           originalError: e,
         ),
       );
@@ -195,18 +193,18 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           config.port,
           config.username,
           encryptedPassword,
-          config.enabled ? 1 : 0,
+          if (config.enabled) 1 else 0,
           config.createdAt.millisecondsSinceEpoch,
           config.updatedAt.millisecondsSinceEpoch,
         ],
       );
 
       return rd.Success(config);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao criar configuração Sybase', e, stackTrace);
       return rd.Failure(
         DatabaseFailure(
-          message: 'Erro ao criar configuração: ${e.toString()}',
+          message: 'Erro ao criar configuração: $e',
           originalError: e,
         ),
       );
@@ -233,14 +231,14 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           config.port,
           config.username,
           encryptedPassword,
-          config.enabled ? 1 : 0,
+          if (config.enabled) 1 else 0,
           DateTime.now().millisecondsSinceEpoch,
           config.id,
         ],
       );
 
       return rd.Success(config);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao atualizar configuração Sybase',
         e,
@@ -248,7 +246,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       );
       return rd.Failure(
         DatabaseFailure(
-          message: 'Erro ao atualizar configuração: ${e.toString()}',
+          message: 'Erro ao atualizar configuração: $e',
           originalError: e,
         ),
       );
@@ -267,7 +265,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
 
       LoggerService.info('Configuração Sybase deletada com sucesso: $id');
       return const rd.Success(unit);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao deletar configuração Sybase: $id',
         e,
@@ -275,7 +273,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       );
       return rd.Failure(
         DatabaseFailure(
-          message: 'Erro ao deletar configuração: ${e.toString()}',
+          message: 'Erro ao deletar configuração: $e',
           originalError: e,
         ),
       );
@@ -286,10 +284,10 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
   Future<rd.Result<List<SybaseConfig>>> getEnabled() async {
     try {
       if (!await _tableExists()) {
-        return rd.Success(<SybaseConfig>[]);
+        return const rd.Success(<SybaseConfig>[]);
       }
 
-      final rows = await (_database
+      final rows = await _database
           .customSelect(
             '''
         SELECT 
@@ -305,14 +303,14 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         ''',
             readsFrom: {_database.sybaseConfigsTable},
           )
-          .get());
+          .get();
 
       final entities = <SybaseConfig>[];
       for (final row in rows) {
         try {
           final entity = _toEntityFromRow(row);
           entities.add(entity);
-        } catch (e, stackTrace) {
+        } on Object catch (e, stackTrace) {
           final id = row.read<String>('id');
           LoggerService.error(
             'Erro ao converter configuração Sybase ativa: $id',
@@ -325,11 +323,11 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       }
 
       return rd.Success(entities);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       final errorStr = e.toString().toLowerCase();
       if (errorStr.contains('no such table') ||
           errorStr.contains('sybase_configs')) {
-        return rd.Success(<SybaseConfig>[]);
+        return const rd.Success(<SybaseConfig>[]);
       }
 
       LoggerService.error(
@@ -339,7 +337,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       );
       return rd.Failure(
         DatabaseFailure(
-          message: 'Erro ao buscar configurações ativas: ${e.toString()}',
+          message: 'Erro ao buscar configurações ativas: $e',
           originalError: e,
         ),
       );
@@ -366,7 +364,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     String decryptedPassword;
     try {
       decryptedPassword = EncryptionService.decrypt(password);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao descriptografar senha da configuração: $id',
         e,

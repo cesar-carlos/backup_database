@@ -1,26 +1,25 @@
 import 'dart:convert';
 
+import 'package:backup_database/application/providers/dropbox_auth_provider.dart';
+import 'package:backup_database/application/providers/google_auth_provider.dart';
+import 'package:backup_database/application/providers/license_provider.dart';
+import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_ftp_service.dart';
+import 'package:backup_database/infrastructure/external/nextcloud/nextcloud.dart'
+    as nextcloud;
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/errors/failure.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/di/service_locator.dart';
-import '../../../core/constants/license_features.dart';
-import '../../../core/encryption/encryption_service.dart';
-import '../../../application/providers/google_auth_provider.dart';
-import '../../../application/providers/dropbox_auth_provider.dart';
-import '../../../application/providers/license_provider.dart';
-import '../../../domain/entities/backup_destination.dart';
-import '../../../domain/services/i_ftp_service.dart';
-import '../../../infrastructure/external/nextcloud/nextcloud.dart' as nextcloud;
-import '../common/common.dart';
-
 class DestinationDialog extends StatefulWidget {
-  final BackupDestination? destination;
-
   const DestinationDialog({super.key, this.destination});
+  final BackupDestination? destination;
 
   static Future<BackupDestination?> show(
     BuildContext context, {
@@ -92,50 +91,53 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
       switch (widget.destination!.type) {
         case DestinationType.local:
-          _localPathController.text = config['path'] ?? '';
-          _createSubfoldersByDate = config['createSubfoldersByDate'] ?? true;
-          _retentionDaysController.text = (config['retentionDays'] ?? 7)
-              .toString();
-          break;
+          _localPathController.text = (config['path'] as String?) ?? '';
+          _createSubfoldersByDate =
+              (config['createSubfoldersByDate'] as bool?) ?? true;
+          _retentionDaysController.text =
+              ((config['retentionDays'] as int?) ?? 7).toString();
         case DestinationType.ftp:
-          _ftpHostController.text = config['host'] ?? '';
-          _ftpPortController.text = (config['port'] ?? 21).toString();
-          _ftpUsernameController.text = config['username'] ?? '';
-          _ftpPasswordController.text = config['password'] ?? '';
-          _ftpRemotePathController.text = config['remotePath'] ?? '/backups';
-          _useFtps = config['useFtps'] ?? false;
-          _retentionDaysController.text = (config['retentionDays'] ?? 7)
-              .toString();
-          break;
+          _ftpHostController.text = (config['host'] as String?) ?? '';
+          _ftpPortController.text = ((config['port'] as int?) ?? 21).toString();
+          _ftpUsernameController.text = (config['username'] as String?) ?? '';
+          _ftpPasswordController.text = (config['password'] as String?) ?? '';
+          _ftpRemotePathController.text =
+              (config['remotePath'] as String?) ?? '/backups';
+          _useFtps = (config['useFtps'] as bool?) ?? false;
+          _retentionDaysController.text =
+              ((config['retentionDays'] as int?) ?? 7).toString();
         case DestinationType.googleDrive:
-          _googleFolderNameController.text = config['folderName'] ?? 'Backups';
-          _retentionDaysController.text = (config['retentionDays'] ?? 7)
-              .toString();
-          break;
+          _googleFolderNameController.text =
+              (config['folderName'] as String?) ?? 'Backups';
+          _retentionDaysController.text =
+              ((config['retentionDays'] as int?) ?? 7).toString();
         case DestinationType.dropbox:
-          _dropboxFolderPathController.text = config['folderPath'] ?? '';
-          _dropboxFolderNameController.text = config['folderName'] ?? 'Backups';
-          _retentionDaysController.text = (config['retentionDays'] ?? 7)
-              .toString();
-          break;
+          _dropboxFolderPathController.text =
+              (config['folderPath'] as String?) ?? '';
+          _dropboxFolderNameController.text =
+              (config['folderName'] as String?) ?? 'Backups';
+          _retentionDaysController.text =
+              ((config['retentionDays'] as int?) ?? 7).toString();
         case DestinationType.nextcloud:
-          _nextcloudServerUrlController.text = config['serverUrl'] ?? '';
-          _nextcloudUsernameController.text = config['username'] ?? '';
+          _nextcloudServerUrlController.text =
+              (config['serverUrl'] as String?) ?? '';
+          _nextcloudUsernameController.text =
+              (config['username'] as String?) ?? '';
           _nextcloudAppPasswordController.text = EncryptionService.decrypt(
-            config['appPassword'] ?? '',
+            (config['appPassword'] as String?) ?? '',
           );
           _nextcloudAuthMode = NextcloudAuthMode.values.firstWhere(
-            (e) => e.name == (config['authMode'] ?? ''),
+            (e) => e.name == ((config['authMode'] as String?) ?? ''),
             orElse: () => NextcloudAuthMode.appPassword,
           );
-          _nextcloudRemotePathController.text = config['remotePath'] ?? '/';
+          _nextcloudRemotePathController.text =
+              (config['remotePath'] as String?) ?? '/';
           _nextcloudFolderNameController.text =
-              config['folderName'] ?? 'Backups';
+              (config['folderName'] as String?) ?? 'Backups';
           _nextcloudAllowInvalidCertificates =
-              config['allowInvalidCertificates'] ?? false;
-          _retentionDaysController.text = (config['retentionDays'] ?? 7)
-              .toString();
-          break;
+              (config['allowInvalidCertificates'] as bool?) ?? false;
+          _retentionDaysController.text =
+              ((config['retentionDays'] as int?) ?? 7).toString();
       }
     }
   }
@@ -164,7 +166,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
   @override
   Widget build(BuildContext context) {
     return ContentDialog(
-      constraints: BoxConstraints(minWidth: 600, maxWidth: 600, maxHeight: 800),
+      constraints: const BoxConstraints(
+        minWidth: 600,
+        maxWidth: 600,
+        maxHeight: 800,
+      ),
       title: _buildTitle(),
       content: _buildContent(),
       actions: _buildActions(),
@@ -304,7 +310,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
               value: type,
               enabled: !isBlocked,
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Icon(
                     _getTypeIcon(type),
@@ -319,7 +324,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
                         Flexible(
                           child: Text(
@@ -570,7 +574,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if ((confirmed ?? false) && mounted) {
       setState(() => _nextcloudAllowInvalidCertificates = true);
     }
   }
@@ -602,7 +606,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(FluentIcons.info, size: 20, color: AppColors.primary),
+          const Icon(FluentIcons.info, size: 20, color: AppColors.primary),
           const SizedBox(width: 8),
           Expanded(
             child: ValueListenableBuilder<TextEditingValue>(
@@ -724,7 +728,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               child: AppTextField(
                 controller: _localPathController,
                 label: 'Caminho da Pasta',
-                hint: 'C:\\Backups',
+                hint: r'C:\Backups',
                 prefixIcon: const Icon(FluentIcons.folder),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -770,7 +774,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              flex: 1,
               child: NumericField(
                 controller: _ftpPortController,
                 label: 'Porta',
@@ -869,7 +872,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ),
       child: Row(
         children: [
-          Icon(FluentIcons.warning, color: AppColors.error),
+          const Icon(FluentIcons.warning, color: AppColors.error),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -938,12 +941,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
               if (isSignedIn)
                 Button(
                   onPressed: isLoading ? null : () => googleAuth.signOut(),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(FluentIcons.sign_out, size: 18),
-                      const SizedBox(width: 8),
-                      const Text('Desconectar'),
+                      Icon(FluentIcons.sign_out, size: 18),
+                      SizedBox(width: 8),
+                      Text('Desconectar'),
                     ],
                   ),
                 )
@@ -999,7 +1002,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
         children: [
           Row(
             children: [
-              Icon(FluentIcons.settings, color: AppColors.primary, size: 20),
+              const Icon(
+                FluentIcons.settings,
+                color: AppColors.primary,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Configuração OAuth',
@@ -1017,12 +1024,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(height: 12),
           Button(
             onPressed: () => _showOAuthConfigDialog(googleAuth),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(FluentIcons.lock, size: 18),
-                const SizedBox(width: 8),
-                const Text('Configurar Credenciais'),
+                Icon(FluentIcons.lock, size: 18),
+                SizedBox(width: 8),
+                Text('Configurar Credenciais'),
               ],
             ),
           ),
@@ -1048,7 +1055,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ),
     );
 
-    if (result == true && mounted) {
+    if ((result ?? false) && mounted) {
       _showSuccess('Credenciais OAuth configuradas!');
     }
   }
@@ -1116,7 +1123,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ),
       child: Row(
         children: [
-          Icon(FluentIcons.warning, color: AppColors.error),
+          const Icon(FluentIcons.warning, color: AppColors.error),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1185,12 +1192,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
               if (isSignedIn)
                 Button(
                   onPressed: isLoading ? null : () => dropboxAuth.signOut(),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(FluentIcons.sign_out, size: 18),
-                      const SizedBox(width: 8),
-                      const Text('Desconectar'),
+                      Icon(FluentIcons.sign_out, size: 18),
+                      SizedBox(width: 8),
+                      Text('Desconectar'),
                     ],
                   ),
                 )
@@ -1249,7 +1256,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
         children: [
           Row(
             children: [
-              Icon(FluentIcons.settings, color: AppColors.primary, size: 20),
+              const Icon(
+                FluentIcons.settings,
+                color: AppColors.primary,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Configuração OAuth',
@@ -1306,7 +1317,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ),
     );
 
-    if (result == true && mounted) {
+    if ((result ?? false) && mounted) {
       _showSuccess('Credenciais OAuth configuradas!');
     }
   }
@@ -1415,7 +1426,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           _showError('Erro ao testar conexão FTP:\n$message');
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _showError('Erro inesperado: $e');
     } finally {
       setState(() {
@@ -1477,7 +1488,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           _showError('Erro ao testar conexão Nextcloud:\n$message');
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _showError('Erro inesperado: $e');
     } finally {
       setState(() {
@@ -1540,7 +1551,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
           'createSubfoldersByDate': _createSubfoldersByDate,
           'retentionDays': retentionDays,
         });
-        break;
       case DestinationType.ftp:
         configJson = jsonEncode({
           'host': _ftpHostController.text.trim(),
@@ -1551,21 +1561,18 @@ class _DestinationDialogState extends State<DestinationDialog> {
           'useFtps': _useFtps,
           'retentionDays': retentionDays,
         });
-        break;
       case DestinationType.googleDrive:
         configJson = jsonEncode({
           'folderName': _googleFolderNameController.text.trim(),
           'folderId': 'root',
           'retentionDays': retentionDays,
         });
-        break;
       case DestinationType.dropbox:
         configJson = jsonEncode({
           'folderPath': _dropboxFolderPathController.text.trim(),
           'folderName': _dropboxFolderNameController.text.trim(),
           'retentionDays': retentionDays,
         });
-        break;
       case DestinationType.nextcloud:
         configJson = jsonEncode({
           'serverUrl': _nextcloudServerUrlController.text.trim(),
@@ -1579,7 +1586,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
           'allowInvalidCertificates': _nextcloudAllowInvalidCertificates,
           'retentionDays': retentionDays,
         });
-        break;
     }
 
     final destination = BackupDestination(
@@ -1596,15 +1602,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
 }
 
 class _OAuthConfigDialog extends StatefulWidget {
-  final GoogleAuthProvider googleAuth;
-  final String initialClientId;
-  final String initialClientSecret;
-
   const _OAuthConfigDialog({
     required this.googleAuth,
     required this.initialClientId,
     required this.initialClientSecret,
   });
+  final GoogleAuthProvider googleAuth;
+  final String initialClientId;
+  final String initialClientSecret;
 
   @override
   State<_OAuthConfigDialog> createState() => _OAuthConfigDialogState();
@@ -1771,15 +1776,14 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
 }
 
 class _DropboxOAuthConfigDialog extends StatefulWidget {
-  final DropboxAuthProvider dropboxAuth;
-  final String initialClientId;
-  final String initialClientSecret;
-
   const _DropboxOAuthConfigDialog({
     required this.dropboxAuth,
     required this.initialClientId,
     required this.initialClientSecret,
   });
+  final DropboxAuthProvider dropboxAuth;
+  final String initialClientId;
+  final String initialClientSecret;
 
   @override
   State<_DropboxOAuthConfigDialog> createState() =>

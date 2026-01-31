@@ -1,23 +1,21 @@
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../../domain/entities/sql_server_config.dart';
-import '../common/config_list_item.dart';
-
 class SqlServerConfigListItem extends StatelessWidget {
-  final SqlServerConfig config;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDuplicate;
-  final VoidCallback? onDelete;
-  final ValueChanged<bool>? onToggleEnabled;
-
   const SqlServerConfigListItem({
-    super.key,
     required this.config,
+    super.key,
     this.onEdit,
     this.onDuplicate,
     this.onDelete,
     this.onToggleEnabled,
   });
+  final SqlServerConfig config;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDuplicate;
+  final VoidCallback? onDelete;
+  final ValueChanged<bool>? onToggleEnabled;
 
   @override
   Widget build(BuildContext context) {

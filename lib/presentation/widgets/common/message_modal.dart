@@ -1,22 +1,20 @@
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-
-import '../../../core/theme/app_colors.dart';
 
 enum MessageType { success, info, warning, error }
 
 class MessageModal extends StatelessWidget {
+  const MessageModal({
+    required this.title,
+    required this.message,
+    super.key,
+    this.buttonLabel,
+    this.type = MessageType.success,
+  });
   final String title;
   final String message;
   final String? buttonLabel;
   final MessageType type;
-
-  const MessageModal({
-    super.key,
-    required this.title,
-    required this.message,
-    this.buttonLabel,
-    this.type = MessageType.success,
-  });
 
   static Future<void> show(
     BuildContext context, {
@@ -47,7 +45,6 @@ class MessageModal extends StatelessWidget {
       title: title,
       message: message,
       buttonLabel: buttonLabel,
-      type: MessageType.success,
     );
   }
 

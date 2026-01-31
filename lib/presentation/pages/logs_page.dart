@@ -1,14 +1,12 @@
-import 'package:intl/intl.dart';
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:backup_database/application/providers/log_provider.dart';
+import 'package:backup_database/application/services/log_service.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
-
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../application/providers/log_provider.dart';
-import '../../application/services/log_service.dart';
-import '../../domain/entities/backup_log.dart';
-import '../widgets/common/common.dart';
 
 class LogsPage extends StatefulWidget {
   const LogsPage({super.key});
@@ -68,7 +66,7 @@ class _LogsPageState extends State<LogsPage> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if ((confirmed ?? false) && mounted) {
       await context.read<LogProvider>().cleanOldLogs();
       if (!mounted) return;
 
@@ -171,7 +169,7 @@ class _LogsPageState extends State<LogsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
+                          const Icon(
                             FluentIcons.error,
                             size: 48,
                             color: AppColors.error,
@@ -263,7 +261,7 @@ class _LogsPageState extends State<LogsPage> {
                   value: provider.filterLevel,
                   placeholder: const Text('Nível'),
                   items: [
-                    ComboBoxItem(value: null, child: const Text('Todos')),
+                    const ComboBoxItem(child: Text('Todos')),
                     ...LogLevel.values.map(
                       (level) => ComboBoxItem<LogLevel?>(
                         value: level,
@@ -284,7 +282,7 @@ class _LogsPageState extends State<LogsPage> {
                   value: provider.filterCategory,
                   placeholder: const Text('Categoria'),
                   items: [
-                    ComboBoxItem(value: null, child: const Text('Todas')),
+                    const ComboBoxItem(child: Text('Todas')),
                     ...LogCategory.values.map(
                       (category) => ComboBoxItem<LogCategory?>(
                         value: category,
@@ -345,9 +343,8 @@ class _LogsPageState extends State<LogsPage> {
 }
 
 class _LogListItem extends StatelessWidget {
-  final BackupLog log;
-
   const _LogListItem({required this.log});
+  final BackupLog log;
 
   @override
   Widget build(BuildContext context) {
@@ -469,10 +466,9 @@ class _LogListItem extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
+  const _Chip({required this.label, required this.color});
   final String label;
   final Color color;
-
-  const _Chip({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {

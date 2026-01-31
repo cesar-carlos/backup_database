@@ -1,9 +1,24 @@
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/theme/app_colors.dart';
-
 class AppTextField extends StatelessWidget {
+  const AppTextField({
+    required this.label,
+    super.key,
+    this.hint,
+    this.controller,
+    this.initialValue,
+    this.validator,
+    this.onChanged,
+    this.obscureText = false,
+    this.keyboardType,
+    this.maxLines = 1,
+    this.suffixIcon,
+    this.prefixIcon,
+    this.enabled = true,
+    this.inputFormatters,
+  });
   final String label;
   final String? hint;
   final TextEditingController? controller;
@@ -18,28 +33,11 @@ class AppTextField extends StatelessWidget {
   final bool enabled;
   final List<TextInputFormatter>? inputFormatters;
 
-  const AppTextField({
-    super.key,
-    required this.label,
-    this.hint,
-    this.controller,
-    this.initialValue,
-    this.validator,
-    this.onChanged,
-    this.obscureText = false,
-    this.keyboardType,
-    this.maxLines = 1,
-    this.suffixIcon,
-    this.prefixIcon,
-    this.enabled = true,
-    this.inputFormatters,
-  });
-
   Widget? _buildPrefixIcon() {
     if (prefixIcon == null) return null;
 
     if (prefixIcon is Icon) {
-      final icon = prefixIcon as Icon;
+      final icon = prefixIcon! as Icon;
       return Padding(
         padding: const EdgeInsets.only(left: 8),
         child: Icon(icon.icon, size: 18, color: icon.color),

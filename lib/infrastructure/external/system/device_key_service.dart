@@ -1,15 +1,14 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
-import 'package:ffi/ffi.dart';
+import 'package:backup_database/core/errors/failure.dart' as core;
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/services/i_device_key_service.dart';
 import 'package:crypto/crypto.dart';
+import 'package:ffi/ffi.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:win32/win32.dart';
-
-import '../../../core/errors/failure.dart' as core;
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/services/i_device_key_service.dart';
 
 enum VirtualizationPlatform { none, vmware, virtualbox, hyperv, unknown }
 
@@ -19,7 +18,7 @@ class DeviceKeyService implements IDeviceKeyService {
   @override
   Future<rd.Result<String>> getDeviceKey() async {
     if (!Platform.isWindows) {
-      return rd.Failure(
+      return const rd.Failure(
         core.ValidationFailure(
           message: 'Device key generation is only supported on Windows',
         ),
@@ -68,12 +67,12 @@ class DeviceKeyService implements IDeviceKeyService {
       }, (_) {});
 
       try {
-        final serial = _getVolumeSerialNumber('C:\\');
+        final serial = _getVolumeSerialNumber(r'C:\');
         if (serial.isNotEmpty) {
           volumeSerial = serial;
           LoggerService.info('Volume Serial Number obtido: $volumeSerial');
         }
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.warning('Erro ao obter Volume Serial Number: $e');
       }
 
@@ -85,7 +84,7 @@ class DeviceKeyService implements IDeviceKeyService {
 
       if (identifiers.isEmpty) {
         LoggerService.warning('Nenhum identificador do sistema foi obtido');
-        return rd.Failure(
+        return const rd.Failure(
           core.NotFoundFailure(
             message:
                 'Não foi possível obter informações do sistema para gerar a chave do dispositivo',
@@ -111,7 +110,7 @@ class DeviceKeyService implements IDeviceKeyService {
         );
       }
       return rd.Success(deviceKey);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro inesperado ao obter chave do dispositivo',
         e,
@@ -128,11 +127,11 @@ class DeviceKeyService implements IDeviceKeyService {
 
   rd.Result<String> _getMachineGuidFromRegistry() {
     try {
-      final hKey = HKEY_LOCAL_MACHINE;
+      const hKey = HKEY_LOCAL_MACHINE;
       final subKey = TEXT(r'SOFTWARE\Microsoft\Cryptography');
       final valueName = TEXT('MachineGuid');
 
-      Pointer<HKEY> phkResult = calloc<HKEY>();
+      final phkResult = calloc<HKEY>();
       final result = RegOpenKeyEx(hKey, subKey, 0, KEY_READ, phkResult);
 
       if (result != ERROR_SUCCESS) {
@@ -162,7 +161,7 @@ class DeviceKeyService implements IDeviceKeyService {
           calloc.free(dataType);
           calloc.free(dataSize);
           calloc.free(data);
-          return rd.Failure(
+          return const rd.Failure(
             core.NotFoundFailure(
               message: 'Machine GUID não encontrado no registro',
             ),
@@ -175,7 +174,7 @@ class DeviceKeyService implements IDeviceKeyService {
         calloc.free(data);
 
         if (guid.isEmpty) {
-          return rd.Failure(
+          return const rd.Failure(
             core.NotFoundFailure(message: 'Machine GUID está vazio'),
           );
         }
@@ -185,7 +184,7 @@ class DeviceKeyService implements IDeviceKeyService {
         RegCloseKey(phkResult.value);
         calloc.free(phkResult);
       }
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao ler Machine GUID do registro',
         e,
@@ -234,10 +233,10 @@ class DeviceKeyService implements IDeviceKeyService {
         }
       }
 
-      return rd.Failure(
+      return const rd.Failure(
         core.NotFoundFailure(message: 'BIOS UUID não encontrado ou inválido'),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao obter BIOS UUID via WMI', e, stackTrace);
       return rd.Failure(
         core.ServerFailure(
@@ -284,10 +283,10 @@ class DeviceKeyService implements IDeviceKeyService {
         }
       }
 
-      return rd.Failure(
+      return const rd.Failure(
         core.NotFoundFailure(message: 'MAC Address não encontrado ou inválido'),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao obter MAC Address via WMI', e, stackTrace);
       return rd.Failure(
         core.ServerFailure(
@@ -311,7 +310,7 @@ class DeviceKeyService implements IDeviceKeyService {
       }
 
       return VirtualizationPlatform.none;
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao detectar virtualização: $e');
       return VirtualizationPlatform.none;
     }
@@ -320,7 +319,7 @@ class DeviceKeyService implements IDeviceKeyService {
   VirtualizationPlatform _checkVirtualizationRegistry() {
     try {
       final vmwareKey = TEXT(r'SOFTWARE\VMware, Inc.\VMware Tools');
-      Pointer<HKEY> phkResult = calloc<HKEY>();
+      var phkResult = calloc<HKEY>();
       final result = RegOpenKeyEx(
         HKEY_LOCAL_MACHINE,
         vmwareKey,
@@ -370,7 +369,7 @@ class DeviceKeyService implements IDeviceKeyService {
       calloc.free(phkResult);
 
       return VirtualizationPlatform.none;
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         'Erro ao verificar registro para virtualização: $e',
       );
@@ -408,7 +407,7 @@ class DeviceKeyService implements IDeviceKeyService {
       }
 
       return VirtualizationPlatform.none;
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao verificar WMI para virtualização: $e');
       return VirtualizationPlatform.none;
     }
@@ -454,7 +453,7 @@ class DeviceKeyService implements IDeviceKeyService {
         calloc.free(maxComponentLength);
         calloc.free(fileSystemFlags);
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao obter Volume Serial Number: $e');
       return '';
     }

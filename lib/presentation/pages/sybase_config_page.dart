@@ -1,13 +1,12 @@
+import 'package:backup_database/application/providers/sybase_config_provider.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/sybase/sybase.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
-
-import '../widgets/sybase/sybase.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../application/providers/sybase_config_provider.dart';
-import '../../domain/entities/sybase_config.dart';
-import '../../domain/services/i_sybase_backup_service.dart';
-import '../widgets/common/common.dart';
 
 class SybaseConfigPage extends StatefulWidget {
   const SybaseConfigPage({super.key});
@@ -56,7 +55,7 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
+                          const Icon(
                             FluentIcons.error,
                             size: 64,
                             color: AppColors.error,
@@ -90,9 +89,9 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
 
                   return SybaseConfigList(
                     configs: provider.configs,
-                    onEdit: (config) => _showConfigDialog(config),
-                    onDuplicate: (config) => _duplicateConfig(config),
-                    onDelete: (id) => _confirmDelete(id),
+                    onEdit: _showConfigDialog,
+                    onDuplicate: _duplicateConfig,
+                    onDelete: _confirmDelete,
                     onToggleEnabled: (id, enabled) =>
                         provider.toggleEnabled(id, enabled),
                   );
@@ -162,7 +161,7 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed ?? false) {
       if (!mounted) return;
 
       final success = await provider.deleteConfig(id);

@@ -1,19 +1,17 @@
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
+import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../domain/entities/backup_destination.dart';
-import '../../domain/repositories/i_backup_destination_repository.dart';
-import '../../domain/repositories/i_schedule_repository.dart';
-
 class DestinationProvider extends ChangeNotifier {
-  final IBackupDestinationRepository _repository;
-  final IScheduleRepository _scheduleRepository;
-
   DestinationProvider(
     this._repository,
     this._scheduleRepository,
   ) {
     loadDestinations();
   }
+  final IBackupDestinationRepository _repository;
+  final IScheduleRepository _scheduleRepository;
 
   List<BackupDestination> _destinations = [];
   bool _isLoading = false;
@@ -96,12 +94,13 @@ class DestinationProvider extends ChangeNotifier {
   Future<bool> deleteDestination(String id) async {
     // Bloqueia exclusão se houver agendamentos usando este destino
     final schedulesResult = await _scheduleRepository.getAll();
-    final hasLinked = schedulesResult.isSuccess() &&
-        schedulesResult.getOrNull()!
-            .any((s) => s.destinationIds.contains(id));
+    final hasLinked =
+        schedulesResult.isSuccess() &&
+        schedulesResult.getOrNull()!.any((s) => s.destinationIds.contains(id));
     if (hasLinked) {
       _error =
-          'Há agendamentos vinculados a este destino. Remova-os antes de excluir.';
+          'Há agendamentos vinculados a este destino. '
+          'Remova-os antes de excluir.';
       notifyListeners();
       return false;
     }
@@ -134,4 +133,3 @@ class DestinationProvider extends ChangeNotifier {
     return updateDestination(updated);
   }
 }
-

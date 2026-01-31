@@ -1,20 +1,19 @@
-import 'dart:io';
+﻿import 'dart:io';
 
-import 'package:result_dart/result_dart.dart' as rd;
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
+import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart'
+    as ps;
 import 'package:path/path.dart' as p;
-
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/backup_type.dart';
-import '../../../domain/entities/sybase_config.dart';
-import '../../../domain/services/backup_execution_result.dart';
-import '../../../domain/services/i_sybase_backup_service.dart';
-import 'process_service.dart' as ps;
+import 'package:result_dart/result_dart.dart' as rd;
 
 class SybaseBackupService implements ISybaseBackupService {
-  final ps.ProcessService _processService;
-
   SybaseBackupService(this._processService);
+  final ps.ProcessService _processService;
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
@@ -44,9 +43,9 @@ class SybaseBackupService implements ISybaseBackupService {
 
       final effectiveType =
           (backupType == BackupType.differential ||
-                  backupType == BackupType.fullSingle)
-              ? BackupType.full
-              : backupType;
+              backupType == BackupType.fullSingle)
+          ? BackupType.full
+          : backupType;
 
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final typeSlug = effectiveType.name;
@@ -69,7 +68,7 @@ class SybaseBackupService implements ISybaseBackupService {
 
       final stopwatch = Stopwatch()..start();
       rd.Result<ps.ProcessResult>? result;
-      String lastError = '';
+      var lastError = '';
 
       LoggerService.info('Tentando backup via comando SQL BACKUP DATABASE...');
 
@@ -78,7 +77,7 @@ class SybaseBackupService implements ISybaseBackupService {
         await backupDir.create(recursive: true);
       }
 
-      final escapedBackupPath = backupPath.replaceAll('\\', '\\\\');
+      final escapedBackupPath = backupPath.replaceAll(r'\', r'\\');
 
       final dbisqlConnections = <String>[
         'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
@@ -88,7 +87,7 @@ class SybaseBackupService implements ISybaseBackupService {
         'ENG=$databaseName;DBN=$databaseName;UID=${config.username};PWD=${config.password}',
       ];
 
-      bool sqlBackupSuccess = false;
+      var sqlBackupSuccess = false;
 
       for (final connStr in dbisqlConnections) {
         LoggerService.debug('Tentando dbisql com: $connStr');
@@ -98,17 +97,14 @@ class SybaseBackupService implements ISybaseBackupService {
           case BackupType.full:
           case BackupType.fullSingle:
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
-            break;
           case BackupType.log:
             final logClause = truncateLog
-                ? "TRANSACTION LOG TRUNCATE"
-                : "TRANSACTION LOG ONLY";
+                ? 'TRANSACTION LOG TRUNCATE'
+                : 'TRANSACTION LOG ONLY';
             backupSql =
                 "BACKUP DATABASE DIRECTORY '$escapedBackupPath' $logClause";
-            break;
           case BackupType.differential:
             backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
-            break;
         }
 
         final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
@@ -194,7 +190,7 @@ class SybaseBackupService implements ISybaseBackupService {
             timeout: const Duration(hours: 2),
           );
 
-          bool success = false;
+          var success = false;
           result.fold(
             (processResult) {
               if (processResult.isSuccess) {
@@ -244,7 +240,7 @@ class SybaseBackupService implements ISybaseBackupService {
             ),
           );
 
-          String errorMessage = 'Erro ao executar backup Sybase';
+          var errorMessage = 'Erro ao executar backup Sybase';
           final stderr = processResult.stderr.toLowerCase();
 
           if (stderr.contains('already in use')) {
@@ -276,14 +272,14 @@ class SybaseBackupService implements ISybaseBackupService {
 
         await Future.delayed(const Duration(milliseconds: 500));
 
-        int totalSize = 0;
-        String actualBackupPath = backupPath;
+        var totalSize = 0;
+        var actualBackupPath = backupPath;
 
         final backupDir = Directory(backupPath);
         final backupFile = File(backupPath);
 
-        bool backupFound = false;
-        for (int i = 0; i < 10; i++) {
+        var backupFound = false;
+        for (var i = 0; i < 10; i++) {
           if (await backupDir.exists()) {
             final files = await backupDir.list().toList();
             if (files.isNotEmpty) {
@@ -316,7 +312,7 @@ class SybaseBackupService implements ISybaseBackupService {
         }
 
         if (totalSize == 0) {
-          return rd.Failure(
+          return const rd.Failure(
             BackupFailure(message: 'Backup foi criado mas está vazio'),
           );
         }
@@ -332,23 +328,22 @@ class SybaseBackupService implements ISybaseBackupService {
 
         // Para backup de log, aguardar um pouco mais para garantir que o arquivo seja fechado pelo Sybase
         final resolvedBackupFile = File(actualBackupPath);
-        if (effectiveType == BackupType.log && await resolvedBackupFile.exists()) {
+        if (effectiveType == BackupType.log &&
+            await resolvedBackupFile.exists()) {
           LoggerService.debug(
             'Aguardando arquivo de log ser liberado pelo Sybase...',
           );
 
           // Tentar abrir o arquivo várias vezes para garantir que está acessível
-          bool fileAccessible = false;
-          for (int attempt = 0; attempt < 5; attempt++) {
+          var fileAccessible = false;
+          for (var attempt = 0; attempt < 5; attempt++) {
             try {
-              final randomAccessFile = await resolvedBackupFile.open(
-                mode: FileMode.read,
-              );
+              final randomAccessFile = await resolvedBackupFile.open();
               await randomAccessFile.close();
               fileAccessible = true;
               LoggerService.debug('Arquivo de log está acessível');
               break;
-            } catch (e) {
+            } on Object catch (e) {
               if (attempt < 4) {
                 LoggerService.debug(
                   'Arquivo de log ainda em uso, aguardando... (tentativa ${attempt + 1}/5)',
@@ -376,8 +371,8 @@ class SybaseBackupService implements ISybaseBackupService {
         if (verifyAfterBackup) {
           LoggerService.info('Verificando integridade do backup Sybase...');
 
-          bool verifySuccess = false;
-          String lastVerifyError = '';
+          var verifySuccess = false;
+          var lastVerifyError = '';
 
           // Preferir validar o ARQUIVO do backup (offline), quando houver.
           // Para backup full, o destino é um diretório com o .db copiado.
@@ -388,7 +383,9 @@ class SybaseBackupService implements ISybaseBackupService {
               if (backupDbFile != null) {
                 final connStr =
                     'UID=${config.username};PWD=${config.password};DBF=${backupDbFile.path}';
-                LoggerService.debug('Tentando dbvalid no arquivo: ${backupDbFile.path}');
+                LoggerService.debug(
+                  'Tentando dbvalid no arquivo: ${backupDbFile.path}',
+                );
 
                 final verifyResult = await _processService.run(
                   executable: 'dbvalid',
@@ -413,8 +410,9 @@ class SybaseBackupService implements ISybaseBackupService {
                     }
                   },
                   (failure) {
-                    lastVerifyError =
-                        failure is Failure ? failure.message : failure.toString();
+                    lastVerifyError = failure is Failure
+                        ? failure.message
+                        : failure.toString();
                   },
                 );
               } else {
@@ -456,12 +454,15 @@ class SybaseBackupService implements ISybaseBackupService {
                     );
                   } else {
                     lastVerifyError = processResult.stderr;
-                    LoggerService.debug('dbverify falhou: ${processResult.stderr}');
+                    LoggerService.debug(
+                      'dbverify falhou: ${processResult.stderr}',
+                    );
                   }
                 },
                 (failure) {
-                  lastVerifyError =
-                      failure is Failure ? failure.message : failure.toString();
+                  lastVerifyError = failure is Failure
+                      ? failure.message
+                      : failure.toString();
                 },
               );
 
@@ -485,8 +486,8 @@ class SybaseBackupService implements ISybaseBackupService {
             databaseName: config.databaseName,
           ),
         );
-      }, (failure) => rd.Failure(failure));
-    } catch (e, stackTrace) {
+      }, rd.Failure.new);
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao executar backup Sybase', e, stackTrace);
       return rd.Failure(
         BackupFailure(
@@ -514,7 +515,7 @@ class SybaseBackupService implements ISybaseBackupService {
 
       if (logCandidates.isNotEmpty) return logCandidates.first;
       return files.first;
-    } catch (_) {
+    } on Object catch (_) {
       return null;
     }
   }
@@ -524,12 +525,11 @@ class SybaseBackupService implements ISybaseBackupService {
       final entities = await backupDir.list().toList();
       final dbFiles = entities.whereType<File>().where((f) {
         return p.extension(f.path).toLowerCase() == '.db';
-      }).toList()
-        ..sort((a, b) => b.lengthSync().compareTo(a.lengthSync()));
+      }).toList()..sort((a, b) => b.lengthSync().compareTo(a.lengthSync()));
 
       if (dbFiles.isEmpty) return null;
       return dbFiles.first;
-    } catch (_) {
+    } on Object catch (_) {
       return null;
     }
   }
@@ -542,7 +542,7 @@ class SybaseBackupService implements ISybaseBackupService {
       );
 
       if (config.serverName.trim().isEmpty) {
-        return rd.Failure(
+        return const rd.Failure(
           BackupFailure(
             message: 'Nome do servidor (Engine Name) não pode estar vazio',
           ),
@@ -550,7 +550,7 @@ class SybaseBackupService implements ISybaseBackupService {
       }
 
       if (config.databaseName.trim().isEmpty) {
-        return rd.Failure(
+        return const rd.Failure(
           BackupFailure(
             message: 'Nome do banco de dados (DBN) não pode estar vazio',
           ),
@@ -558,7 +558,7 @@ class SybaseBackupService implements ISybaseBackupService {
       }
 
       if (config.username.trim().isEmpty) {
-        return rd.Failure(
+        return const rd.Failure(
           BackupFailure(message: 'Usuário não pode estar vazio'),
         );
       }
@@ -572,7 +572,7 @@ class SybaseBackupService implements ISybaseBackupService {
         'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
       ];
 
-      String lastError = '';
+      var lastError = '';
 
       for (final connStr in connectionStrategies) {
         try {
@@ -593,7 +593,7 @@ class SybaseBackupService implements ISybaseBackupService {
 
           if (success) {
             LoggerService.info('Teste de conexão Sybase bem-sucedido');
-            return rd.Success(true);
+            return const rd.Success(true);
           }
 
           result.fold(
@@ -612,14 +612,13 @@ class SybaseBackupService implements ISybaseBackupService {
               LoggerService.debug('Estratégia falhou: $lastError');
             },
           );
-        } catch (e) {
+        } on Object catch (e) {
           lastError = e.toString();
           LoggerService.debug('Erro ao testar estratégia: $lastError');
         }
       }
 
-      String errorMessage =
-          'Não foi possível conectar ao banco de dados Sybase';
+      var errorMessage = 'Não foi possível conectar ao banco de dados Sybase';
 
       if (lastError.isNotEmpty) {
         final errorLower = lastError.toLowerCase();
@@ -646,11 +645,11 @@ class SybaseBackupService implements ISybaseBackupService {
         'Todas as estratégias de teste de conexão falharam',
       );
       return rd.Failure(NetworkFailure(message: errorMessage));
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao testar conexão Sybase', e, stackTrace);
       return rd.Failure(
         NetworkFailure(
-          message: 'Erro ao testar conexão Sybase: ${e.toString()}',
+          message: 'Erro ao testar conexão Sybase: $e',
           originalError: e,
         ),
       );

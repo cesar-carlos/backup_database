@@ -1,13 +1,13 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/services/i_task_scheduler_service.dart';
+import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart'
+    as parser;
 import 'package:result_dart/result_dart.dart' as rd;
-
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/schedule.dart';
-import '../../../domain/services/i_task_scheduler_service.dart';
-import 'cron_parser.dart' as parser;
 
 /// Serviço para gerenciar tarefas agendadas no Windows Task Scheduler.
 ///
@@ -88,7 +88,7 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
           ServerFailure(message: 'Erro ao criar tarefa: ${result.stderr}'),
         );
       }
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao criar tarefa', e, stackTrace);
       return rd.Failure(
         ServerFailure(
@@ -110,7 +110,7 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
       await _deleteTask(taskName);
       LoggerService.info('Tarefa removida com sucesso: $taskName');
       return const rd.Success(true);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao remover tarefa do Windows Task Scheduler (Schedule ID: $scheduleId)',
         e,
@@ -162,7 +162,8 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
     final args = <String>[];
 
     try {
-      final configJson = jsonDecode(schedule.scheduleConfig);
+      final configJson =
+          jsonDecode(schedule.scheduleConfig) as Map<String, dynamic>;
 
       switch (schedule.scheduleType) {
         case ScheduleType.daily:
@@ -171,7 +172,6 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
             '/ST',
             '${config.hour.toString().padLeft(2, '0')}:${config.minute.toString().padLeft(2, '0')}',
           ]);
-          break;
 
         case ScheduleType.weekly:
           final config = parser.WeeklyScheduleConfig.fromJson(configJson);
@@ -181,7 +181,6 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
             '/ST',
             '${config.hour.toString().padLeft(2, '0')}:${config.minute.toString().padLeft(2, '0')}',
           ]);
-          break;
 
         case ScheduleType.monthly:
           final config = parser.MonthlyScheduleConfig.fromJson(configJson);
@@ -191,14 +190,12 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
             '/ST',
             '${config.hour.toString().padLeft(2, '0')}:${config.minute.toString().padLeft(2, '0')}',
           ]);
-          break;
 
         case ScheduleType.interval:
           final config = parser.IntervalScheduleConfig.fromJson(configJson);
           args.addAll(['/MO', config.intervalMinutes.toString()]);
-          break;
       }
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao parse de config de agendamento (Schedule ID: ${schedule.id}, Tipo: ${schedule.scheduleType}, Config: ${schedule.scheduleConfig})',
         e,

@@ -1,13 +1,12 @@
-import 'package:intl/intl.dart';
+﻿import 'package:backup_database/application/providers/auto_update_provider.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme_provider.dart';
+import 'package:backup_database/presentation/providers/providers.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
-
-import '../../../core/theme/theme_provider.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../application/providers/auto_update_provider.dart';
-import '../../widgets/common/common.dart';
-import '../../providers/providers.dart';
 
 class GeneralSettingsTab extends StatefulWidget {
   const GeneralSettingsTab({super.key});
@@ -35,7 +34,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
           _isLoadingVersion = false;
         });
       }
-    } catch (e) {
+    } on Object catch (e) {
       if (mounted) {
         setState(() {
           _isLoadingVersion = false;
@@ -68,9 +67,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   label: 'Tema Escuro',
                   child: ToggleSwitch(
                     checked: themeProvider.isDarkMode,
-                    onChanged: (value) {
-                      themeProvider.setDarkMode(value);
-                    },
+                    onChanged: themeProvider.setDarkMode,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -85,9 +82,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   label: 'Iniciar com o Windows',
                   child: ToggleSwitch(
                     checked: systemSettings.startWithWindows,
-                    onChanged: (value) {
-                      systemSettings.setStartWithWindows(value);
-                    },
+                    onChanged: systemSettings.setStartWithWindows,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -95,9 +90,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   label: 'Iniciar Minimizado',
                   child: ToggleSwitch(
                     checked: systemSettings.startMinimized,
-                    onChanged: (value) {
-                      systemSettings.setStartMinimized(value);
-                    },
+                    onChanged: systemSettings.setStartMinimized,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -105,9 +98,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   label: 'Minimizar para bandeja',
                   child: ToggleSwitch(
                     checked: systemSettings.minimizeToTray,
-                    onChanged: (value) {
-                      systemSettings.setMinimizeToTray(value);
-                    },
+                    onChanged: systemSettings.setMinimizeToTray,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -115,9 +106,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   label: 'Fechar para bandeja',
                   child: ToggleSwitch(
                     checked: systemSettings.closeToTray,
-                    onChanged: (value) {
-                      systemSettings.setCloseToTray(value);
-                    },
+                    onChanged: systemSettings.setCloseToTray,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -129,12 +118,12 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 ),
                 const SizedBox(height: 16),
                 if (!autoUpdateProvider.isInitialized)
-                  ListTile(
-                    title: const Text('Atualizações Automáticas'),
-                    subtitle: const Text(
+                  const ListTile(
+                    title: Text('Atualizações Automáticas'),
+                    subtitle: Text(
                       'Configure AUTO_UPDATE_FEED_URL no arquivo .env',
                     ),
-                    trailing: const Icon(FluentIcons.info),
+                    trailing: Icon(FluentIcons.info),
                   )
                 else ...[
                   ListTile(
@@ -154,7 +143,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                             icon: const Icon(FluentIcons.refresh),
                             onPressed: autoUpdateProvider.isChecking
                                 ? null
-                                : () => autoUpdateProvider.checkForUpdates(),
+                                : autoUpdateProvider.checkForUpdates,
                           ),
                   ),
                   if (autoUpdateProvider.error != null)
@@ -167,13 +156,13 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                       ),
                       trailing: IconButton(
                         icon: const Icon(FluentIcons.cancel),
-                        onPressed: () => autoUpdateProvider.clearError(),
+                        onPressed: autoUpdateProvider.clearError,
                       ),
                     ),
                   if (autoUpdateProvider.updateAvailable)
-                    ListTile(
-                      title: const Text('Atualização Disponível'),
-                      subtitle: const Text(
+                    const ListTile(
+                      title: Text('Atualização Disponível'),
+                      subtitle: Text(
                         'Uma nova versão está disponível para download',
                       ),
                       leading: Icon(
@@ -212,4 +201,3 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     );
   }
 }
-

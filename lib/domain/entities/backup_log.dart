@@ -5,6 +5,16 @@ enum LogLevel { debug, info, warning, error }
 enum LogCategory { execution, system, audit }
 
 class BackupLog {
+  BackupLog({
+    required this.level,
+    required this.category,
+    required this.message,
+    String? id,
+    this.backupHistoryId,
+    this.details,
+    DateTime? createdAt,
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now();
   final String id;
   final String? backupHistoryId;
   final LogLevel level;
@@ -12,17 +22,6 @@ class BackupLog {
   final String message;
   final String? details;
   final DateTime createdAt;
-
-  BackupLog({
-    String? id,
-    this.backupHistoryId,
-    required this.level,
-    required this.category,
-    required this.message,
-    this.details,
-    DateTime? createdAt,
-  }) : id = id ?? const Uuid().v4(),
-       createdAt = createdAt ?? DateTime.now();
 
   @override
   bool operator ==(Object other) =>

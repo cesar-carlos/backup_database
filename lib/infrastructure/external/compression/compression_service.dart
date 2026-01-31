@@ -1,17 +1,16 @@
-import 'dart:io';
+﻿import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-import 'package:result_dart/result_dart.dart' as rd;
 import 'package:archive/archive_io.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/compression_format.dart';
+import 'package:backup_database/domain/services/compression_result.dart';
+import 'package:backup_database/domain/services/i_compression_service.dart';
+import 'package:backup_database/infrastructure/external/compression/winrar_service.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/compression_format.dart';
-import '../../../domain/services/compression_result.dart';
-import '../../../domain/services/i_compression_service.dart';
-import '../process/process_service.dart';
-import 'winrar_service.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 Future<void> compressFileInIsolate(Map<String, String> params) async {
   final inputFilePath = params['inputFilePath']!;
@@ -25,7 +24,7 @@ Future<void> compressFileInIsolate(Map<String, String> params) async {
     try {
       await outputFileBeforeCreate.delete();
       await Future.delayed(const Duration(milliseconds: 200));
-    } catch (e) {
+    } on Object catch (e) {
       throw FileSystemException(
         'Não foi possível remover arquivo ZIP existente: $outputFilePath',
         outputFilePath,
@@ -47,23 +46,22 @@ Future<void> compressFileInIsolate(Map<String, String> params) async {
         if (await partialZip.exists()) {
           await partialZip.delete();
         }
-      } catch (_) {}
+      } on Object catch (_) {}
 
       rethrow;
     }
-  } catch (e) {
+  } on Object catch (e) {
     try {
       encoder.close();
-    } catch (_) {}
+    } on Object catch (_) {}
     rethrow;
   }
 }
 
 class CompressionService implements ICompressionService {
-  final WinRarService _winRarService;
-
   CompressionService(ProcessService processService)
     : _winRarService = WinRarService(processService);
+  final WinRarService _winRarService;
 
   @override
   Future<rd.Result<CompressionResult>> compress({
@@ -75,7 +73,7 @@ class CompressionService implements ICompressionService {
     final effectiveFormat = format ?? CompressionFormat.zip;
 
     if (effectiveFormat == CompressionFormat.none) {
-      return rd.Failure(
+      return const rd.Failure(
         FileSystemFailure(message: 'Compressão desabilitada (formato: none)'),
       );
     }
@@ -121,11 +119,11 @@ class CompressionService implements ICompressionService {
       final extension = format == CompressionFormat.rar ? '.rar' : '.zip';
       final outputFilePath = outputPath ?? '$directoryPath$extension';
 
-      int originalSize = 0;
-      bool useWinRar = await _winRarService.isAvailable();
+      var originalSize = 0;
+      var useWinRar = await _winRarService.isAvailable();
 
       if (format == CompressionFormat.rar && !useWinRar) {
-        return rd.Failure(
+        return const rd.Failure(
           FileSystemFailure(
             message:
                 'Formato RAR requer WinRAR instalado.\n'
@@ -205,10 +203,10 @@ class CompressionService implements ICompressionService {
         }
 
         encoder.close();
-      } catch (e) {
+      } on Object catch (e) {
         try {
           encoder.close();
-        } catch (_) {}
+        } on Object catch (_) {}
         rethrow;
       }
 
@@ -235,10 +233,9 @@ class CompressionService implements ICompressionService {
           originalSize: originalSize,
           duration: stopwatch.elapsed,
           compressionRatio: compressionRatio,
-          usedWinRar: false,
         ),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       stopwatch.stop();
       LoggerService.error('Erro ao comprimir diretório', e, stackTrace);
       return rd.Failure(
@@ -275,7 +272,7 @@ class CompressionService implements ICompressionService {
       final winRarAvailable = await _winRarService.isAvailable();
 
       if (format == CompressionFormat.rar && !winRarAvailable) {
-        return rd.Failure(
+        return const rd.Failure(
           FileSystemFailure(
             message:
                 'Formato RAR requer WinRAR instalado.\n'
@@ -373,7 +370,7 @@ class CompressionService implements ICompressionService {
               originalError: e,
             ),
           );
-        } catch (e) {
+        } on Object catch (e) {
           LoggerService.error('Erro ao remover arquivo ZIP existente', e);
           return rd.Failure(
             FileSystemFailure(
@@ -390,7 +387,7 @@ class CompressionService implements ICompressionService {
         try {
           await outputDir.create(recursive: true);
           LoggerService.info('Diretório criado: ${outputDir.path}');
-        } catch (e) {
+        } on Object catch (e) {
           LoggerService.error('Erro ao criar diretório de saída', e);
           return rd.Failure(
             FileSystemFailure(
@@ -407,7 +404,7 @@ class CompressionService implements ICompressionService {
         final testFile = File(p.join(outputDir.path, '.test_write_permission'));
         await testFile.writeAsString('test');
         await testFile.delete();
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.error('Sem permissão de escrita no diretório', e);
         return rd.Failure(
           FileSystemFailure(
@@ -441,9 +438,9 @@ class CompressionService implements ICompressionService {
             if (await outputFile.exists()) {
               await outputFile.delete();
             }
-          } catch (_) {}
+          } on Object catch (_) {}
 
-          String errorMessage = 'Erro ao comprimir arquivo: ${e.message}';
+          var errorMessage = 'Erro ao comprimir arquivo: ${e.message}';
           if (e.message.contains('writeFrom failed') ||
               e.message.contains('Acesso negado') ||
               e.osError?.errorCode == 5) {
@@ -460,7 +457,7 @@ class CompressionService implements ICompressionService {
           return rd.Failure(
             FileSystemFailure(message: errorMessage, originalError: e),
           );
-        } catch (e) {
+        } on Object catch (e) {
           LoggerService.error(
             'Erro inesperado ao comprimir arquivo no isolate',
             e,
@@ -470,7 +467,7 @@ class CompressionService implements ICompressionService {
             if (await outputFile.exists()) {
               await outputFile.delete();
             }
-          } catch (_) {}
+          } on Object catch (_) {}
 
           return rd.Failure(
             FileSystemFailure(
@@ -524,7 +521,7 @@ class CompressionService implements ICompressionService {
           if (await outputFile.exists()) {
             await outputFile.delete();
           }
-        } catch (_) {}
+        } on Object catch (_) {}
 
         final errorCode = e.osError?.errorCode;
         if (errorCode == 5) {
@@ -548,7 +545,7 @@ class CompressionService implements ICompressionService {
             originalError: e,
           ),
         );
-      } catch (e, stackTrace) {
+      } on Object catch (e, stackTrace) {
         LoggerService.error(
           'Erro inesperado durante compressão',
           e,
@@ -559,7 +556,7 @@ class CompressionService implements ICompressionService {
           if (await outputFile.exists()) {
             await outputFile.delete();
           }
-        } catch (_) {}
+        } on Object catch (_) {}
 
         return rd.Failure(
           FileSystemFailure(
@@ -592,7 +589,6 @@ class CompressionService implements ICompressionService {
           originalSize: originalSize,
           duration: stopwatch.elapsed,
           compressionRatio: compressionRatio,
-          usedWinRar: false,
         ),
       );
     } on FileSystemException catch (e) {
@@ -604,7 +600,7 @@ class CompressionService implements ICompressionService {
           originalError: e,
         ),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       stopwatch.stop();
       LoggerService.error('Erro ao comprimir arquivo', e, stackTrace);
       return rd.Failure(
@@ -690,7 +686,7 @@ class CompressionService implements ICompressionService {
 
       LoggerService.info('Descompressão concluída: $extractedFilePath');
       return rd.Success(extractedFilePath);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao descomprimir arquivo', e, stackTrace);
       return rd.Failure(
         FileSystemFailure(
@@ -702,14 +698,14 @@ class CompressionService implements ICompressionService {
   }
 
   Future<int> _calculateDirectorySize(Directory directory) async {
-    int totalSize = 0;
+    var totalSize = 0;
     try {
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File) {
           totalSize += await entity.length();
         }
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         'Erro ao calcular tamanho do diretório: ${directory.path}',
         e,
@@ -723,7 +719,7 @@ class CompressionService implements ICompressionService {
     const initialDelay = Duration(milliseconds: 500);
     const retryDelay = Duration(milliseconds: 1000);
 
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         if (attempt > 1) {
           await Future.delayed(retryDelay);
@@ -755,7 +751,7 @@ class CompressionService implements ICompressionService {
           );
           return;
         }
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.warning(
           'Erro inesperado ao deletar arquivo original: $e',
         );
@@ -772,7 +768,7 @@ class CompressionService implements ICompressionService {
     const initialDelay = Duration(milliseconds: 500);
     const retryDelay = Duration(milliseconds: 1000);
 
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         if (attempt > 1) {
           await Future.delayed(retryDelay);
@@ -804,7 +800,7 @@ class CompressionService implements ICompressionService {
           );
           return;
         }
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.warning(
           'Erro inesperado ao deletar diretório original: $e',
         );

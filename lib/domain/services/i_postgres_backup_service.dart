@@ -1,8 +1,7 @@
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:result_dart/result_dart.dart';
-
-import '../entities/postgres_config.dart';
-import '../entities/backup_type.dart';
-import 'backup_execution_result.dart';
 
 abstract class IPostgresBackupService {
   Future<Result<BackupExecutionResult>> executeBackup({
@@ -21,4 +20,3 @@ abstract class IPostgresBackupService {
     Duration? timeout,
   });
 }
-

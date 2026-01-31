@@ -1,15 +1,12 @@
+import 'package:backup_database/application/services/notification_service.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../domain/entities/backup_history.dart';
-import '../../../application/services/notification_service.dart';
-
 class SendEmailNotification {
+  SendEmailNotification(this._notificationService);
   final NotificationService _notificationService;
 
-  SendEmailNotification(this._notificationService);
-
   Future<rd.Result<bool>> call(BackupHistory history) async {
-    return await _notificationService.notifyBackupComplete(history);
+    return _notificationService.notifyBackupComplete(history);
   }
 }
-

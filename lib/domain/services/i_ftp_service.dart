@@ -1,17 +1,15 @@
+import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../entities/backup_destination.dart';
-
 class FtpUploadResult {
-  final String remotePath;
-  final int fileSize;
-  final Duration duration;
-
   const FtpUploadResult({
     required this.remotePath,
     required this.fileSize,
     required this.duration,
   });
+  final String remotePath;
+  final int fileSize;
+  final Duration duration;
 }
 
 abstract class IFtpService {

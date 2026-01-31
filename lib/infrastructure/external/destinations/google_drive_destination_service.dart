@@ -1,49 +1,45 @@
 import 'dart:io';
 
+import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/errors/failure.dart'
+    hide GoogleDriveFailure;
+import 'package:backup_database/core/errors/google_drive_failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/infrastructure/external/google/google_auth_service.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
-import 'package:path/path.dart' as p;
-import 'package:intl/intl.dart';
-import 'package:result_dart/result_dart.dart' as rd;
 import 'package:http/http.dart' as http;
-
-import '../../../core/errors/failure.dart' hide GoogleDriveFailure;
-import '../../../core/errors/google_drive_failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../core/constants/app_constants.dart';
-import '../google/google_auth_service.dart';
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:result_dart/result_dart.dart' as rd;
 
 class GoogleDriveDestinationConfig {
-  final String folderId;
-  final String folderName;
-  final int retentionDays;
-
   const GoogleDriveDestinationConfig({
     required this.folderId,
     this.folderName = 'Backups',
     this.retentionDays = 30,
   });
+  final String folderId;
+  final String folderName;
+  final int retentionDays;
 }
 
 class GoogleDriveUploadResult {
-  final String fileId;
-  final String fileName;
-  final int fileSize;
-  final Duration duration;
-
   const GoogleDriveUploadResult({
     required this.fileId,
     required this.fileName,
     required this.fileSize,
     required this.duration,
   });
+  final String fileId;
+  final String fileName;
+  final int fileSize;
+  final Duration duration;
 }
 
-// Cliente HTTP autenticado
 class AuthenticatedHttpClient extends http.BaseClient {
+  AuthenticatedHttpClient(this.accessToken);
   final String accessToken;
   final http.Client _client = http.Client();
-
-  AuthenticatedHttpClient(this.accessToken);
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
@@ -52,22 +48,19 @@ class AuthenticatedHttpClient extends http.BaseClient {
   }
 }
 
-// Helper para armazenar cliente autenticado
 class _AuthenticatedClientData {
-  final AuthenticatedHttpClient client;
-  final String accessToken;
-
   _AuthenticatedClientData({
     required this.client,
     required this.accessToken,
   });
+  final AuthenticatedHttpClient client;
+  final String accessToken;
 }
 
 class GoogleDriveDestinationService {
+  GoogleDriveDestinationService(this._authService);
   final GoogleAuthService _authService;
   _AuthenticatedClientData? _cachedClientData;
-
-  GoogleDriveDestinationService(this._authService);
 
   Future<rd.Result<GoogleDriveUploadResult>> upload({
     required String sourceFilePath,
@@ -89,14 +82,11 @@ class GoogleDriveDestinationService {
         );
       }
 
-      // Obter cliente autenticado
-      // Primeiro, criar ou obter a pasta principal "Backups"
       final mainFolderId = await _getOrCreateFolder(
         config.folderName,
         config.folderId,
       );
 
-      // Depois, criar pasta de data dentro da pasta principal
       final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final dateFolderId = await _getOrCreateFolder(
         dateFolder,
@@ -106,8 +96,7 @@ class GoogleDriveDestinationService {
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final fileSize = await sourceFile.length();
 
-      // Usar upload resumável para arquivos maiores que 5MB (recomendação do Google)
-      const largeFileThreshold = 5 * 1024 * 1024; // 5MB
+      const largeFileThreshold = 5 * 1024 * 1024;
       final useResumableUpload = fileSize > largeFileThreshold;
 
       if (useResumableUpload) {
@@ -116,9 +105,8 @@ class GoogleDriveDestinationService {
         );
       }
 
-      // Upload com retry
       Exception? lastError;
-      for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      for (var attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           LoggerService.debug('Tentativa $attempt de $maxRetries');
 
@@ -139,29 +127,30 @@ class GoogleDriveDestinationService {
               fileSize,
             );
 
-            // O googleapis usa upload resumável automaticamente para arquivos grandes
             final uploadedFile = await driveApi.files.create(
               driveFile,
               uploadMedia: media,
               $fields: 'id, name, size',
             );
-            
-            // Validação de integridade
+
             if (uploadedFile.size != null) {
               final remoteSize = int.parse(uploadedFile.size!);
               if (remoteSize != fileSize) {
-                 // Tentar apagar arquivo corrompido
-                 try {
-                   await driveApi.files.delete(uploadedFile.id!);
-                 } catch (_) {}
-                 
-                 throw Exception(
-                   'Arquivo corrompido no Google Drive. '
-                   'Local: $fileSize, Remoto: $remoteSize'
-                 );
+                try {
+                  await driveApi.files.delete(uploadedFile.id!);
+                } on Object catch (e) {
+                  LoggerService.warning(
+                    'Não foi possível remover arquivo corrompido: $e',
+                  );
+                }
+
+                throw Exception(
+                  'Arquivo corrompido no Google Drive. '
+                  'Local: $fileSize, Remoto: $remoteSize',
+                );
               }
             }
-            
+
             return uploadedFile;
           });
 
@@ -179,11 +168,10 @@ class GoogleDriveDestinationService {
               duration: stopwatch.elapsed,
             ),
           );
-        } catch (e) {
+        } on Object catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
           LoggerService.warning('Tentativa $attempt falhou: $e');
 
-          // Para arquivos grandes, aguardar mais tempo entre tentativas
           if (attempt < maxRetries) {
             final delay = useResumableUpload
                 ? AppConstants.retryDelay * 2
@@ -200,7 +188,7 @@ class GoogleDriveDestinationService {
           originalError: lastError,
         ),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       stopwatch.stop();
       LoggerService.error('Erro no upload Google Drive', e, stackTrace);
       return rd.Failure(
@@ -223,7 +211,7 @@ class GoogleDriveDestinationService {
 
   String _getGoogleDriveErrorMessage(dynamic e) {
     final errorStr = e.toString().toLowerCase();
-    
+
     if (errorStr.contains('401') || errorStr.contains('unauthorized')) {
       return 'Sessão do Google Drive expirada.\n'
           'Faça login novamente nas configurações.';
@@ -236,18 +224,20 @@ class GoogleDriveDestinationService {
     } else if (errorStr.contains('quota') || errorStr.contains('limit')) {
       return 'Limite de armazenamento do Google Drive atingido.\n'
           'Libere espaço ou faça upgrade do plano.';
-    } else if (errorStr.contains('network') || errorStr.contains('connection')) {
+    } else if (errorStr.contains('network') ||
+        errorStr.contains('connection')) {
       return 'Erro de conexão com o Google Drive.\n'
           'Verifique sua conexão com a internet.';
     } else if (errorStr.contains('timeout')) {
       return 'Tempo limite excedido ao enviar para o Google Drive.\n'
           'Para arquivos grandes, o upload pode levar vários minutos.\n'
           'Tente novamente ou verifique sua conexão.';
-    } else if (errorStr.contains('413') || errorStr.contains('request entity too large')) {
+    } else if (errorStr.contains('413') ||
+        errorStr.contains('request entity too large')) {
       return 'Arquivo muito grande para upload direto.\n'
           'O Google Drive suporta arquivos de até 5TB, mas o upload pode demorar.';
     }
-    
+
     return 'Erro no upload para o Google Drive após várias tentativas.\n'
         'Detalhes: $e';
   }
@@ -256,7 +246,7 @@ class GoogleDriveDestinationService {
     String folderName,
     String parentId,
   ) async {
-    return await _executeWithTokenRefresh(() async {
+    return _executeWithTokenRefresh(() async {
       final clientResult = await _getAuthenticatedClient();
       if (clientResult.isError()) {
         throw clientResult.exceptionOrNull()!;
@@ -264,8 +254,8 @@ class GoogleDriveDestinationService {
 
       final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
 
-      // Verificar se a pasta já existe
-      final query = "name = '$folderName' and '$parentId' in parents and "
+      final query =
+          "name = '$folderName' and '$parentId' in parents and "
           "mimeType = 'application/vnd.google-apps.folder' and trashed = false";
 
       final existing = await driveApi.files.list(
@@ -277,7 +267,6 @@ class GoogleDriveDestinationService {
         return existing.files!.first.id!;
       }
 
-      // Criar nova pasta
       final folder = drive.File()
         ..name = folderName
         ..mimeType = 'application/vnd.google-apps.folder'
@@ -299,7 +288,6 @@ class GoogleDriveDestinationService {
         return rd.Failure(authResult.exceptionOrNull()!);
       }
 
-      // Primeiro, obter a pasta principal "Backups"
       final mainFolderId = await _getOrCreateFolder(
         config.folderName,
         config.folderId,
@@ -309,7 +297,6 @@ class GoogleDriveDestinationService {
         Duration(days: config.retentionDays),
       );
 
-      // Listar subpastas (pastas de data) dentro da pasta principal
       final folders = await _executeWithTokenRefresh(() async {
         final clientResult = await _getAuthenticatedClient();
         if (clientResult.isError()) {
@@ -317,21 +304,26 @@ class GoogleDriveDestinationService {
         }
 
         final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
-        final query = "'$mainFolderId' in parents and "
+        final query =
+            "'$mainFolderId' in parents and "
             "mimeType = 'application/vnd.google-apps.folder' and trashed = false";
 
-        return await driveApi.files.list(
+        return driveApi.files.list(
           q: query,
           spaces: 'drive',
           $fields: 'files(id, name, createdTime)',
         );
       });
 
-      int deletedCount = 0;
+      var deletedCount = 0;
       for (final folder in folders.files ?? []) {
         try {
-          final folderDate = DateFormat('yyyy-MM-dd').parse(folder.name!);
+          final folderName = folder.name as String?;
+          if (folderName == null || folderName.isEmpty) continue;
+          final folderDate = DateFormat('yyyy-MM-dd').parse(folderName);
           if (folderDate.isBefore(cutoffDate)) {
+            final folderId = folder.id as String?;
+            if (folderId == null) continue;
             await _executeWithTokenRefresh(() async {
               final clientResult = await _getAuthenticatedClient();
               if (clientResult.isError()) {
@@ -339,13 +331,13 @@ class GoogleDriveDestinationService {
               }
 
               final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
-              await driveApi.files.delete(folder.id!);
+              await driveApi.files.delete(folderId);
             });
             deletedCount++;
             LoggerService.debug('Pasta deletada: ${folder.name}');
           }
-        } catch (e) {
-          // Nome não é uma data válida, ignorar
+        } on Object catch (e) {
+          LoggerService.debug('Erro ao deletar pasta vazia: $e');
         }
       }
 
@@ -353,7 +345,7 @@ class GoogleDriveDestinationService {
         '$deletedCount pastas antigas removidas do Google Drive',
       );
       return rd.Success(deletedCount);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao limpar backups Google Drive',
         e,
@@ -381,7 +373,7 @@ class GoogleDriveDestinationService {
         final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
         final query = "'$folderId' in parents and trashed = false";
 
-        return await driveApi.files.list(
+        return driveApi.files.list(
           q: query,
           spaces: 'drive',
           orderBy: 'modifiedTime desc',
@@ -390,7 +382,7 @@ class GoogleDriveDestinationService {
       });
 
       return rd.Success(result.files ?? []);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         GoogleDriveFailure(message: 'Erro ao listar backups: $e'),
       );
@@ -415,7 +407,7 @@ class GoogleDriveDestinationService {
       }
 
       final token = authResult.getOrNull()!.accessToken;
-      
+
       if (_cachedClientData?.accessToken != token) {
         _cachedClientData = _AuthenticatedClientData(
           client: AuthenticatedHttpClient(token),
@@ -424,7 +416,7 @@ class GoogleDriveDestinationService {
       }
 
       return rd.Success(_cachedClientData!);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         GoogleDriveFailure(
           message: 'Erro ao obter cliente autenticado: $e',
@@ -435,30 +427,28 @@ class GoogleDriveDestinationService {
   }
 
   Future<T> _executeWithTokenRefresh<T>(Future<T> Function() operation) async {
-    int attempts = 0;
+    var attempts = 0;
     const maxAttempts = 2;
 
     while (attempts < maxAttempts) {
       try {
         return await operation();
-      } catch (e) {
-        bool is401 = false;
-        
-        // Verificar se é DetailedApiRequestError com status 401
+      } on Object catch (e) {
+        var is401 = false;
+
         try {
           if (e.toString().contains('DetailedApiRequestError')) {
             final errorStr = e.toString();
-            if (errorStr.contains('status: 401') || errorStr.contains('status:401')) {
+            if (errorStr.contains('status: 401') ||
+                errorStr.contains('status:401')) {
               is401 = true;
             }
           }
-        } catch (_) {
-          // Ignorar erros na verificação
-        }
-        
-        // Verificar outras formas de erro 401
+        } on Object catch (_) {}
+
         final errorStr = e.toString().toLowerCase();
-        is401 = is401 ||
+        is401 =
+            is401 ||
             errorStr.contains('401') ||
             errorStr.contains('unauthorized') ||
             errorStr.contains('invalid authentication credentials');
@@ -469,7 +459,9 @@ class GoogleDriveDestinationService {
 
           final refreshResult = await _authService.signInSilently();
           if (refreshResult.isError()) {
-            LoggerService.debug('signInSilently falhou após 401, tentando signIn');
+            LoggerService.debug(
+              'signInSilently falhou após 401, tentando signIn',
+            );
             final newAuthResult = await _authService.signIn();
             if (newAuthResult.isError()) {
               throw GoogleDriveFailure(
@@ -492,4 +484,3 @@ class GoogleDriveDestinationService {
     throw Exception('Número máximo de tentativas excedido');
   }
 }
-

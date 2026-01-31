@@ -1,29 +1,15 @@
+﻿import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/domain/use_cases/scheduling/create_schedule.dart';
+import 'package:backup_database/domain/use_cases/scheduling/delete_schedule.dart';
+import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
+import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/errors/failure.dart';
-import '../../domain/entities/schedule.dart';
-import '../../domain/repositories/i_schedule_repository.dart';
-import '../../domain/use_cases/scheduling/create_schedule.dart';
-import '../../domain/use_cases/scheduling/update_schedule.dart';
-import '../../domain/use_cases/scheduling/delete_schedule.dart';
-import '../../domain/use_cases/scheduling/execute_scheduled_backup.dart';
-import '../services/scheduler_service.dart';
-import 'backup_progress_provider.dart';
-
 class SchedulerProvider extends ChangeNotifier {
-  final IScheduleRepository _repository;
-  final SchedulerService _schedulerService;
-  final CreateSchedule _createSchedule;
-  final UpdateSchedule _updateSchedule;
-  final DeleteSchedule _deleteSchedule;
-  final ExecuteScheduledBackup _executeBackup;
-  final BackupProgressProvider? _progressProvider;
-
-  List<Schedule> _schedules = [];
-  bool _isLoading = false;
-  String? _error;
-  bool _isSchedulerRunning = true;
-
   SchedulerProvider({
     required IScheduleRepository repository,
     required SchedulerService schedulerService,
@@ -39,6 +25,18 @@ class SchedulerProvider extends ChangeNotifier {
        _deleteSchedule = deleteSchedule,
        _executeBackup = executeBackup,
        _progressProvider = progressProvider;
+  final IScheduleRepository _repository;
+  final SchedulerService _schedulerService;
+  final CreateSchedule _createSchedule;
+  final UpdateSchedule _updateSchedule;
+  final DeleteSchedule _deleteSchedule;
+  final ExecuteScheduledBackup _executeBackup;
+  final BackupProgressProvider? _progressProvider;
+
+  List<Schedule> _schedules = [];
+  bool _isLoading = false;
+  String? _error;
+  bool _isSchedulerRunning = true;
 
   List<Schedule> get schedules => _schedules;
   bool get isLoading => _isLoading;
@@ -68,7 +66,7 @@ class SchedulerProvider extends ChangeNotifier {
           _error = f.message;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao carregar agendamentos: $e';
     } finally {
       _isLoading = false;
@@ -97,7 +95,7 @@ class SchedulerProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao criar agendamento: $e';
       _isLoading = false;
       notifyListeners();
@@ -126,7 +124,7 @@ class SchedulerProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao atualizar agendamento: $e';
       _isLoading = false;
       notifyListeners();
@@ -157,7 +155,7 @@ class SchedulerProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao deletar agendamento: $e';
       _isLoading = false;
       notifyListeners();
@@ -179,11 +177,9 @@ class SchedulerProvider extends ChangeNotifier {
       truncateLog: source.truncateLog,
       compressBackup: source.compressBackup,
       enabled: source.enabled,
-      lastRunAt: null,
-      nextRunAt: null,
     );
 
-    return await createSchedule(copy);
+    return createSchedule(copy);
   }
 
   Future<bool> executeNow(String scheduleId) async {
@@ -214,7 +210,7 @@ class SchedulerProvider extends ChangeNotifier {
             progressProvider.updateProgress(
               step: BackupStep.completed,
               message: 'Backup concluído com sucesso!',
-              progress: 1.0,
+              progress: 1,
             );
             progressProvider.completeBackup(
               message: 'Backup concluído com sucesso!',
@@ -236,7 +232,7 @@ class SchedulerProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       if (progressProvider != null) {
         progressProvider.failBackup(e.toString());
       }
@@ -249,7 +245,7 @@ class SchedulerProvider extends ChangeNotifier {
 
   Future<bool> toggleSchedule(String id, bool enabled) async {
     final schedule = _schedules.firstWhere((s) => s.id == id);
-    return await updateSchedule(schedule.copyWith(enabled: enabled));
+    return updateSchedule(schedule.copyWith(enabled: enabled));
   }
 
   void startScheduler() {
@@ -267,7 +263,7 @@ class SchedulerProvider extends ChangeNotifier {
   Schedule? getScheduleById(String id) {
     try {
       return _schedules.firstWhere((s) => s.id == id);
-    } catch (e) {
+    } on Object catch (e) {
       return null;
     }
   }

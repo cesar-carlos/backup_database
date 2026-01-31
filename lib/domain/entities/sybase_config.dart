@@ -1,6 +1,21 @@
 import 'package:uuid/uuid.dart';
 
 class SybaseConfig {
+  SybaseConfig({
+    required this.name,
+    required this.serverName,
+    required this.databaseName,
+    required this.username,
+    required this.password,
+    String? id,
+    this.databaseFile = '',
+    this.port = 2638,
+    this.enabled = true,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
   final String id;
   final String name;
   final String serverName;
@@ -12,22 +27,6 @@ class SybaseConfig {
   final bool enabled;
   final DateTime createdAt;
   final DateTime updatedAt;
-
-  SybaseConfig({
-    String? id,
-    required this.name,
-    required this.serverName,
-    required this.databaseName,
-    this.databaseFile = '',
-    this.port = 2638,
-    required this.username,
-    required this.password,
-    this.enabled = true,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
-       createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
 
   SybaseConfig copyWith({
     String? id,

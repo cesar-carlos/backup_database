@@ -1,16 +1,14 @@
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
-
 class AppErrorWidget extends StatelessWidget {
-  final String message;
-  final VoidCallback? onRetry;
-
   const AppErrorWidget({
-    super.key,
     required this.message,
+    super.key,
     this.onRetry,
   });
+  final String message;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -50,4 +48,3 @@ class AppErrorWidget extends StatelessWidget {
     );
   }
 }
-

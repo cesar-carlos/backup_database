@@ -1,7 +1,6 @@
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/datasources/local/tables/sql_server_configs_table.dart';
 import 'package:drift/drift.dart';
-
-import '../local/database.dart';
-import '../local/tables/sql_server_configs_table.dart';
 
 part 'sql_server_config_dao.g.dart';
 
@@ -13,9 +12,9 @@ class SqlServerConfigDao extends DatabaseAccessor<AppDatabase>
   Future<List<SqlServerConfigsTableData>> getAll() =>
       select(sqlServerConfigsTable).get();
 
-  Future<SqlServerConfigsTableData?> getById(String id) =>
-      (select(sqlServerConfigsTable)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+  Future<SqlServerConfigsTableData?> getById(String id) => (select(
+    sqlServerConfigsTable,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<int> insertConfig(SqlServerConfigsTableCompanion config) =>
       into(sqlServerConfigsTable).insert(config);
@@ -26,11 +25,10 @@ class SqlServerConfigDao extends DatabaseAccessor<AppDatabase>
   Future<int> deleteConfig(String id) =>
       (delete(sqlServerConfigsTable)..where((t) => t.id.equals(id))).go();
 
-  Future<List<SqlServerConfigsTableData>> getEnabled() =>
-      (select(sqlServerConfigsTable)..where((t) => t.enabled.equals(true)))
-          .get();
+  Future<List<SqlServerConfigsTableData>> getEnabled() => (select(
+    sqlServerConfigsTable,
+  )..where((t) => t.enabled.equals(true))).get();
 
   Stream<List<SqlServerConfigsTableData>> watchAll() =>
       select(sqlServerConfigsTable).watch();
 }
-

@@ -1,6 +1,17 @@
 import 'package:uuid/uuid.dart';
 
 class License {
+  License({
+    required this.deviceKey,
+    required this.licenseKey,
+    required this.allowedFeatures,
+    String? id,
+    this.expiresAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
   final String id;
   final String deviceKey;
   final String licenseKey;
@@ -8,18 +19,6 @@ class License {
   final List<String> allowedFeatures;
   final DateTime createdAt;
   final DateTime updatedAt;
-
-  License({
-    String? id,
-    required this.deviceKey,
-    required this.licenseKey,
-    this.expiresAt,
-    required this.allowedFeatures,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
-       createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
 
   License copyWith({
     String? id,

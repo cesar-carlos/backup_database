@@ -1,4 +1,4 @@
-import 'failure.dart';
+import 'package:backup_database/core/errors/failure.dart';
 
 class DropboxFailure extends Failure {
   const DropboxFailure({

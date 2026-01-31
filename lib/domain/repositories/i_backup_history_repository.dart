@@ -1,4 +1,4 @@
-import '../entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 abstract class IBackupHistoryRepository {

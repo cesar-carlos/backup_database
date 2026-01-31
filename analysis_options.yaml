@@ -4,25 +4,34 @@
 # The issues identified by the analyzer are surfaced in the UI of Dart-enabled
 # IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
 # invoked from the command line by running `flutter analyze`.
+#
+# Very Good Analysis: lint rules used at Very Good Ventures.
+# https://pub.dev/packages/very_good_analysis
 
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
-include: package:flutter_lints/flutter.yaml
+include: package:very_good_analysis/analysis_options.10.0.0.yaml
 
 linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at https://dart.dev/lints.
-  #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
   rules:
     avoid_print: true
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    public_member_api_docs: false
+    avoid_positional_boolean_parameters: false
+    avoid_slow_async_io: false
+    cascade_invocations: false
+    discarded_futures: false
+    sort_pub_dependencies: true
+    unawaited_futures: false
+    avoid_equals_and_hash_code_on_mutable_classes: false
+    matching_super_parameters: false
+    no_default_cases: false
+    one_member_abstracts: false
+    avoid_dynamic_calls: false
+    use_late_for_private_fields_and_variables: false
+    use_string_buffers: false
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+analyzer:
+  errors:
+    inference_failure_on_function_return_type: ignore
+    inference_failure_on_function_invocation: ignore
+    inference_failure_on_instance_creation: ignore
+    inference_failure_on_untyped_parameter: ignore
+    unused_catch_clause: ignore

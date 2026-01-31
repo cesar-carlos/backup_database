@@ -1,7 +1,6 @@
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/datasources/local/tables/sybase_configs_table.dart';
 import 'package:drift/drift.dart';
-
-import '../local/database.dart';
-import '../local/tables/sybase_configs_table.dart';
 
 part 'sybase_config_dao.g.dart';
 

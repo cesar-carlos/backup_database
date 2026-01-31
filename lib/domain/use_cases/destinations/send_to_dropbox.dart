@@ -1,12 +1,10 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_destination_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../../infrastructure/external/dropbox/dropbox_destination_service.dart';
-
 class SendToDropbox {
-  final DropboxDestinationService _service;
-
   SendToDropbox(this._service);
+  final DropboxDestinationService _service;
 
   Future<rd.Result<DropboxUploadResult>> call({
     required String sourceFilePath,
@@ -26,7 +24,7 @@ class SendToDropbox {
       );
     }
 
-    return await _service.upload(
+    return _service.upload(
       sourceFilePath: sourceFilePath,
       config: config,
       customFileName: customFileName,

@@ -1,16 +1,15 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
 class SaveButton extends StatelessWidget {
-  final VoidCallback? onPressed;
-  final bool isEditing;
-  final bool isLoading;
-
   const SaveButton({
-    super.key,
     required this.onPressed,
+    super.key,
     this.isEditing = false,
     this.isLoading = false,
   });
+  final VoidCallback? onPressed;
+  final bool isEditing;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -33,4 +32,3 @@ class SaveButton extends StatelessWidget {
     );
   }
 }
-

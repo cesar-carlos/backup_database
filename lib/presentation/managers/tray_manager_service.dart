@@ -1,11 +1,10 @@
-import 'dart:io';
+﻿import 'dart:io';
 
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
-
-import '../../core/utils/logger_service.dart';
 
 enum TrayMenuAction {
   show,
@@ -17,9 +16,9 @@ enum TrayMenuAction {
 }
 
 class TrayManagerService with TrayListener {
-  static final TrayManagerService _instance = TrayManagerService._();
   factory TrayManagerService() => _instance;
   TrayManagerService._();
+  static final TrayManagerService _instance = TrayManagerService._();
 
   Function(TrayMenuAction)? _onMenuAction;
   bool _isSchedulerPaused = false;
@@ -42,12 +41,12 @@ class TrayManagerService with TrayListener {
         final executablePath = Platform.resolvedExecutable;
         await trayManager.setIcon(executablePath);
       }
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao configurar ícone da bandeja', e, stackTrace);
       try {
         final executablePath = Platform.resolvedExecutable;
         await trayManager.setIcon(executablePath);
-      } catch (e2) {
+      } on Object catch (e2) {
         LoggerService.error('Erro crítico ao configurar ícone', e2);
       }
     }
@@ -74,13 +73,13 @@ class TrayManagerService with TrayListener {
       try {
         final tempDir = await getTemporaryDirectory();
         final iconFile = File('${tempDir.path}\\tray_icon.ico');
-        final ByteData data = await rootBundle.load('assets/icons/favicon.ico');
-        final Uint8List bytes = data.buffer.asUint8List();
+        final data = await rootBundle.load('assets/icons/favicon.ico');
+        final bytes = data.buffer.asUint8List();
 
         await iconFile.writeAsBytes(bytes);
         _cachedIconPath = iconFile.absolute.path;
         return _cachedIconPath!;
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.warning('Não foi possível copiar ícone dos assets: $e');
       }
 
@@ -102,7 +101,7 @@ class TrayManagerService with TrayListener {
       }
 
       var currentDir = Directory(executablePath).parent;
-      for (int i = 0; i < 6; i++) {
+      for (var i = 0; i < 6; i++) {
         final iconPath = '${currentDir.path}\\assets\\icons\\favicon.ico';
         final iconFile = File(iconPath);
         if (iconFile.existsSync()) {
@@ -129,7 +128,7 @@ class TrayManagerService with TrayListener {
       );
 
       await trayManager.setContextMenu(menu);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao configurar menu de contexto', e, stackTrace);
       rethrow;
     }
@@ -203,7 +202,7 @@ class TrayManagerService with TrayListener {
 
       await windowManager.focus();
       await Future.delayed(const Duration(milliseconds: 100));
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao restaurar janela', e, stackTrace);
       try {
         await windowManager.setSkipTaskbar(false);
@@ -213,7 +212,7 @@ class TrayManagerService with TrayListener {
         await windowManager.show();
         await Future.delayed(const Duration(milliseconds: 200));
         await windowManager.focus();
-      } catch (e2) {
+      } on Object catch (e2) {
         LoggerService.error('Erro crítico ao restaurar janela', e2);
       }
     }
@@ -237,7 +236,7 @@ class TrayManagerService with TrayListener {
       await _updateMenu();
       await Future.delayed(const Duration(milliseconds: 50));
       await trayManager.popUpContextMenu();
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao exibir menu de contexto', e, stackTrace);
     }
   }
@@ -253,11 +252,9 @@ class TrayManagerService with TrayListener {
             .catchError((e) {
               LoggerService.error('Erro ao restaurar janela do menu', e);
             });
-        break;
 
       case 'exit':
         _onMenuAction?.call(TrayMenuAction.exit);
-        break;
 
       default:
         LoggerService.warning('Item de menu desconhecido: ${menuItem.key}');

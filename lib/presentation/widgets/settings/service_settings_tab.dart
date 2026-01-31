@@ -1,7 +1,6 @@
+import 'package:backup_database/application/providers/windows_service_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
-
-import '../../../application/providers/windows_service_provider.dart';
 
 class ServiceSettingsTab extends StatefulWidget {
   const ServiceSettingsTab({super.key});
@@ -24,7 +23,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     return Consumer<WindowsServiceProvider>(
       builder: (context, provider, _) {
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -63,7 +62,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   ) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -111,7 +110,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   ) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             Icon(FluentIcons.error_badge, color: Colors.red, size: 20),
@@ -131,7 +130,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   ) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -225,7 +224,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   Widget _buildInfoCard(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -249,7 +248,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             _buildInfoItem(
               context,
               'Logs',
-              'Os logs são salvos em: C:\\ProgramData\\BackupDatabase\\logs\\',
+              r'Os logs são salvos em: C:\ProgramData\BackupDatabase\logs\',
             ),
           ],
         ),
@@ -327,7 +326,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       ),
     );
 
-    if (confirmed == true && context.mounted) {
+    if ((confirmed ?? false) && context.mounted) {
       final success = await provider.installService();
 
       if (context.mounted) {
@@ -378,7 +377,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       ),
     );
 
-    if (confirmed == true && context.mounted) {
+    if ((confirmed ?? false) && context.mounted) {
       final success = await provider.uninstallService();
 
       if (context.mounted) {
@@ -455,7 +454,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       ),
     );
 
-    if (confirmed == true && context.mounted) {
+    if ((confirmed ?? false) && context.mounted) {
       final success = await provider.stopService();
 
       if (context.mounted) {

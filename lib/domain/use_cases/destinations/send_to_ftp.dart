@@ -1,13 +1,11 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../entities/backup_destination.dart';
-import '../../services/i_ftp_service.dart';
-
 class SendToFtp {
-  final IFtpService _service;
-
   SendToFtp(this._service);
+  final IFtpService _service;
 
   Future<rd.Result<FtpUploadResult>> call({
     required String sourceFilePath,
@@ -25,7 +23,7 @@ class SendToFtp {
       );
     }
 
-    return await _service.upload(
+    return _service.upload(
       sourceFilePath: sourceFilePath,
       config: config,
       customFileName: customFileName,

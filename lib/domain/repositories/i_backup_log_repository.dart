@@ -1,4 +1,4 @@
-import '../entities/backup_log.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 abstract class IBackupLogRepository {

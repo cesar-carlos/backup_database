@@ -1,27 +1,20 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_ftp_service.dart';
+import 'package:backup_database/infrastructure/external/destinations/google_drive_destination_service.dart'
+    as gd;
+import 'package:backup_database/infrastructure/external/destinations/local_destination_service.dart'
+    as local;
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_destination_service.dart'
+    as dropbox;
+import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_destination_service.dart'
+    as nextcloud;
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/utils/logger_service.dart';
-import '../../../core/errors/failure.dart';
-import '../../entities/backup_destination.dart';
-import '../../services/i_ftp_service.dart';
-import '../../../infrastructure/external/destinations/local_destination_service.dart'
-    as local;
-import '../../../infrastructure/external/destinations/google_drive_destination_service.dart'
-    as gd;
-import '../../../infrastructure/external/dropbox/dropbox_destination_service.dart'
-    as dropbox;
-import '../../../infrastructure/external/nextcloud/nextcloud_destination_service.dart'
-    as nextcloud;
-
 class CleanOldBackupsResult {
-  final int localDeleted;
-  final int ftpDeleted;
-  final int googleDriveDeleted;
-  final int dropboxDeleted;
-  final int nextcloudDeleted;
-
   const CleanOldBackupsResult({
     this.localDeleted = 0,
     this.ftpDeleted = 0,
@@ -29,6 +22,11 @@ class CleanOldBackupsResult {
     this.dropboxDeleted = 0,
     this.nextcloudDeleted = 0,
   });
+  final int localDeleted;
+  final int ftpDeleted;
+  final int googleDriveDeleted;
+  final int dropboxDeleted;
+  final int nextcloudDeleted;
 
   int get total =>
       localDeleted +
@@ -39,12 +37,6 @@ class CleanOldBackupsResult {
 }
 
 class CleanOldBackups {
-  final local.LocalDestinationService _localService;
-  final IFtpService _ftpService;
-  final gd.GoogleDriveDestinationService _googleDriveService;
-  final dropbox.DropboxDestinationService _dropboxService;
-  final nextcloud.NextcloudDestinationService _nextcloudService;
-
   CleanOldBackups({
     required local.LocalDestinationService localService,
     required IFtpService ftpService,
@@ -56,17 +48,22 @@ class CleanOldBackups {
        _googleDriveService = googleDriveService,
        _dropboxService = dropboxService,
        _nextcloudService = nextcloudService;
+  final local.LocalDestinationService _localService;
+  final IFtpService _ftpService;
+  final gd.GoogleDriveDestinationService _googleDriveService;
+  final dropbox.DropboxDestinationService _dropboxService;
+  final nextcloud.NextcloudDestinationService _nextcloudService;
 
   Future<rd.Result<CleanOldBackupsResult>> call(
     List<BackupDestination> destinations,
   ) async {
     LoggerService.info('Iniciando limpeza de backups antigos');
 
-    int localDeleted = 0;
-    int ftpDeleted = 0;
-    int googleDriveDeleted = 0;
-    int dropboxDeleted = 0;
-    int nextcloudDeleted = 0;
+    var localDeleted = 0;
+    var ftpDeleted = 0;
+    var googleDriveDeleted = 0;
+    var dropboxDeleted = 0;
+    var nextcloudDeleted = 0;
 
     for (final destination in destinations) {
       if (!destination.enabled) continue;
@@ -88,7 +85,6 @@ class CleanOldBackups {
               final failure = exception as Failure;
               LoggerService.warning('Erro ao limpar local: ${failure.message}');
             });
-            break;
 
           case DestinationType.ftp:
             final config = FtpDestinationConfig(
@@ -105,7 +101,6 @@ class CleanOldBackups {
               final failure = exception as Failure;
               LoggerService.warning('Erro ao limpar FTP: ${failure.message}');
             });
-            break;
 
           case DestinationType.googleDrive:
             final config = gd.GoogleDriveDestinationConfig(
@@ -122,7 +117,6 @@ class CleanOldBackups {
                 'Erro ao limpar Google Drive: ${failure.message}',
               );
             });
-            break;
 
           case DestinationType.dropbox:
             final config = dropbox.DropboxDestinationConfig(
@@ -139,7 +133,6 @@ class CleanOldBackups {
                 'Erro ao limpar Dropbox: ${failure.message}',
               );
             });
-            break;
 
           case DestinationType.nextcloud:
             final config = NextcloudDestinationConfig.fromJson(configJson);
@@ -152,9 +145,8 @@ class CleanOldBackups {
                 'Erro ao limpar Nextcloud: ${failure.message}',
               );
             });
-            break;
         }
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.warning(
           'Erro ao processar destino ${destination.name}: $e',
         );

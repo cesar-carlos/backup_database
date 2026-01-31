@@ -1,16 +1,14 @@
-import 'package:flutter/foundation.dart';
-
-import 'package:intl/intl.dart';
+import 'package:backup_database/application/providers/license_provider.dart';
+import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/utils/clipboard_service.dart';
+import 'package:backup_database/domain/entities/license.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
-import '../../../application/providers/license_provider.dart';
-import '../../../core/constants/license_features.dart';
-import '../../../core/di/service_locator.dart';
-import '../../../core/utils/clipboard_service.dart';
-import '../../../domain/entities/license.dart';
-import '../../widgets/common/common.dart';
 
 class LicenseSettingsTab extends StatefulWidget {
   const LicenseSettingsTab({super.key});
@@ -178,10 +176,10 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
 
   Widget _buildLicenseStatus(License? license) {
     if (license == null) {
-      return ListTile(
-        leading: const Icon(FluentIcons.cancel, color: Color(0xFFF44336)),
-        title: const Text('Sem Licença'),
-        subtitle: const Text('Nenhuma licença válida encontrada'),
+      return const ListTile(
+        leading: Icon(FluentIcons.cancel, color: Color(0xFFF44336)),
+        title: Text('Sem Licença'),
+        subtitle: Text('Nenhuma licença válida encontrada'),
       );
     }
 
@@ -298,7 +296,6 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
               const SizedBox(height: 16),
               PasswordField(
                 controller: passwordController,
-                label: 'Senha',
                 hint: 'Digite a senha',
               ),
               if (errorMessage != null) ...[
@@ -360,12 +357,11 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
     final expiresAtController = TextEditingController();
     DateTime? selectedExpiresAt;
     final selectedFeatures = <String>{};
-    bool isLoading = false;
+    var isLoading = false;
     String? errorMessage;
 
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) => ContentDialog(
@@ -425,7 +421,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                 ? null
                                 : (value) {
                                     setDialogState(() {
-                                      if (value == true) {
+                                      if (value ?? false) {
                                         selectedFeatures.add(feature);
                                       } else {
                                         selectedFeatures.remove(feature);

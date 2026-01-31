@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
@@ -25,7 +26,8 @@ class WindowsMessageBox {
 
       calloc.free(messagePtr);
       calloc.free(titlePtr);
-    } catch (_) {
+    } on Object catch (e) {
+      LoggerService.debug('Windows MessageBox (warning): $e');
     }
   }
 
@@ -45,7 +47,8 @@ class WindowsMessageBox {
 
       calloc.free(messagePtr);
       calloc.free(titlePtr);
-    } catch (_) {
+    } on Object catch (e) {
+      LoggerService.debug('Windows MessageBox (info): $e');
     }
   }
 
@@ -65,7 +68,8 @@ class WindowsMessageBox {
 
       calloc.free(messagePtr);
       calloc.free(titlePtr);
-    } catch (_) {
+    } on Object catch (e) {
+      LoggerService.debug('Windows MessageBox (error): $e');
     }
   }
 }

@@ -1,11 +1,17 @@
+import 'package:backup_database/application/services/notification_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/email_config.dart';
+import 'package:backup_database/domain/repositories/i_email_config_repository.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/errors/failure.dart';
-import '../../domain/entities/email_config.dart';
-import '../../domain/repositories/i_email_config_repository.dart';
-import '../services/notification_service.dart';
-
 class NotificationProvider extends ChangeNotifier {
+  NotificationProvider({
+    required IEmailConfigRepository emailConfigRepository,
+    required NotificationService notificationService,
+  }) : _emailConfigRepository = emailConfigRepository,
+       _notificationService = notificationService {
+    loadConfig();
+  }
   final IEmailConfigRepository _emailConfigRepository;
   final NotificationService _notificationService;
 
@@ -13,14 +19,6 @@ class NotificationProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   bool _isTesting = false;
-
-  NotificationProvider({
-    required IEmailConfigRepository emailConfigRepository,
-    required NotificationService notificationService,
-  })  : _emailConfigRepository = emailConfigRepository,
-        _notificationService = notificationService {
-    loadConfig();
-  }
 
   EmailConfig? get emailConfig => _emailConfig;
   bool get isLoading => _isLoading;
@@ -42,7 +40,8 @@ class NotificationProvider extends ChangeNotifier {
         },
         (failure) {
           final f = failure as Failure;
-          // Se não encontrou configuração, não é um erro - apenas não há dados salvos
+          // Se não encontrou configuração, não é um erro - apenas não há
+          // dados salvos
           if (f is NotFoundFailure) {
             _emailConfig = null;
             _error = null;
@@ -52,7 +51,7 @@ class NotificationProvider extends ChangeNotifier {
           }
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _emailConfig = null;
       _error = 'Erro ao carregar configuração de e-mail: $e';
     } finally {
@@ -84,7 +83,7 @@ class NotificationProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao salvar configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -104,8 +103,9 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result =
-          await _notificationService.testEmailConfiguration(_emailConfig!);
+      final result = await _notificationService.testEmailConfiguration(
+        _emailConfig!,
+      );
       return result.fold(
         (success) {
           _error = null;
@@ -121,7 +121,7 @@ class NotificationProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao testar configuração: $e';
       _isTesting = false;
       notifyListeners();
@@ -141,4 +141,3 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

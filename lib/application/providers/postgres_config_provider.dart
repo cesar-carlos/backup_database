@@ -1,24 +1,22 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
+import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/errors/failure.dart';
-import '../../domain/entities/postgres_config.dart';
-import '../../domain/repositories/i_postgres_config_repository.dart';
-import '../../domain/repositories/i_schedule_repository.dart';
-
 class PostgresConfigProvider extends ChangeNotifier {
-  final IPostgresConfigRepository _repository;
-  final IScheduleRepository _scheduleRepository;
-
-  List<PostgresConfig> _configs = [];
-  bool _isLoading = false;
-  String? _error;
-
   PostgresConfigProvider(
     this._repository,
     this._scheduleRepository,
   ) {
     loadConfigs();
   }
+  final IPostgresConfigRepository _repository;
+  final IScheduleRepository _scheduleRepository;
+
+  List<PostgresConfig> _configs = [];
+  bool _isLoading = false;
+  String? _error;
 
   List<PostgresConfig> get configs => _configs;
   bool get isLoading => _isLoading;
@@ -47,7 +45,7 @@ class PostgresConfigProvider extends ChangeNotifier {
           _error = f.message;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao carregar configurações: $e';
     } finally {
       _isLoading = false;
@@ -75,7 +73,7 @@ class PostgresConfigProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao criar configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -103,7 +101,7 @@ class PostgresConfigProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao atualizar configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -113,8 +111,11 @@ class PostgresConfigProvider extends ChangeNotifier {
 
   Future<bool> deleteConfig(String id) async {
     final schedulesResult = await _scheduleRepository.getByDatabaseConfig(id);
-    if (schedulesResult.isSuccess() && schedulesResult.getOrNull()!.isNotEmpty) {
-      _error = 'Há agendamentos vinculados a esta configuração. Remova-os antes de excluir.';
+    if (schedulesResult.isSuccess() &&
+        schedulesResult.getOrNull()!.isNotEmpty) {
+      _error =
+          'Há agendamentos vinculados a esta configuração. '
+          'Remova-os antes de excluir.';
       notifyListeners();
       return false;
     }
@@ -140,7 +141,7 @@ class PostgresConfigProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao deletar configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -160,18 +161,18 @@ class PostgresConfigProvider extends ChangeNotifier {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
-    return await createConfig(copy);
+    return createConfig(copy);
   }
 
   Future<bool> toggleEnabled(String id, bool enabled) async {
     final config = _configs.firstWhere((c) => c.id == id);
-    return await updateConfig(config.copyWith(enabled: enabled));
+    return updateConfig(config.copyWith(enabled: enabled));
   }
 
   PostgresConfig? getConfigById(String id) {
     try {
       return _configs.firstWhere((c) => c.id == id);
-    } catch (e) {
+    } on Object catch (e) {
       return null;
     }
   }
@@ -181,4 +182,3 @@ class PostgresConfigProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

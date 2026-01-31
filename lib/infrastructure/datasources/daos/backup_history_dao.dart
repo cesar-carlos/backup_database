@@ -1,7 +1,6 @@
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/datasources/local/tables/backup_history_table.dart';
 import 'package:drift/drift.dart';
-
-import '../local/database.dart';
-import '../local/tables/backup_history_table.dart';
 
 part 'backup_history_dao.g.dart';
 

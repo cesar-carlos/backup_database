@@ -1,27 +1,25 @@
+﻿import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../../core/constants/app_constants.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/sybase_config.dart';
-import '../../../domain/services/i_sybase_backup_service.dart';
-import '../common/common.dart';
-
 class SybaseConfigDialog extends StatefulWidget {
+  const SybaseConfigDialog({
+    required this.backupService,
+    super.key,
+    this.config,
+  });
   final SybaseConfig? config;
   final ISybaseBackupService backupService;
 
-  const SybaseConfigDialog({
-    super.key,
-    this.config,
-    required this.backupService,
-  });
-
   static Future<SybaseConfig?> show(
     BuildContext context, {
-    SybaseConfig? config,
     required ISybaseBackupService backupService,
+    SybaseConfig? config,
   }) async {
     return showDialog<SybaseConfig>(
       context: context,
@@ -102,7 +100,6 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
         name: _nameController.text.trim(),
         serverName: _serverNameController.text.trim(),
         databaseName: _databaseNameController.text.trim(),
-        databaseFile: '',
         port: port,
         username: _usernameController.text.trim(),
         password: _passwordController.text,
@@ -132,7 +129,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
           );
         },
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       if (!mounted) return;
 
       LoggerService.error('Erro ao testar conexão Sybase', e, stackTrace);
@@ -165,7 +162,6 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       name: _nameController.text.trim(),
       serverName: _serverNameController.text.trim(),
       databaseName: _databaseNameController.text.trim(),
-      databaseFile: '',
       port: port,
       username: _usernameController.text.trim(),
       password: _passwordController.text,
@@ -187,7 +183,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       ),
       title: Row(
         children: [
-          Icon(FluentIcons.server, color: AppColors.primary),
+          const Icon(FluentIcons.server, color: AppColors.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -240,7 +236,6 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      flex: 1,
                       child: NumericField(
                         controller: _portController,
                         label: 'Porta',
@@ -287,7 +282,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                   ),
                   child: Row(
                     children: [
-                      Icon(
+                      const Icon(
                         FluentIcons.info,
                         size: 18,
                         color: AppColors.primary,

@@ -1,9 +1,10 @@
-import 'dart:io';
+﻿import 'dart:io';
 
-import '../../core/core.dart';
-import '../../core/di/service_locator.dart' as service_locator;
-import 'app_cleanup.dart';
-import '../../application/services/scheduler_service.dart';
+import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
+import 'package:backup_database/presentation/boot/app_cleanup.dart';
 
 class ScheduledBackupExecutor {
   static Future<void> executeAndExit(String scheduleId) async {
@@ -13,7 +14,7 @@ class ScheduledBackupExecutor {
       final schedulerService = service_locator.getIt<SchedulerService>();
       await schedulerService.executeNow(scheduleId);
       LoggerService.info('Backup concluído');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro no backup agendado: $e');
     }
 

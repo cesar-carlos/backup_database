@@ -13,8 +13,6 @@ class NextcloudWebdavUtils {
 
     final davBase = base.replace(
       path: '$basePath/remote.php/dav/files/$username',
-      query: null,
-      fragment: null,
     );
 
     final normalizedPath = normalizeRemotePath(path);

@@ -2,57 +2,35 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/application/services/backup_orchestrator_service.dart';
+import 'package:backup_database/application/services/notification_service.dart';
+import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/domain/services/i_ftp_service.dart';
+import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
+import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
+import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
+import 'package:backup_database/infrastructure/external/destinations/google_drive_destination_service.dart'
+    as gd;
+import 'package:backup_database/infrastructure/external/destinations/local_destination_service.dart'
+    as local;
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_destination_service.dart'
+    as dropbox;
+import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_destination_service.dart'
+    as nextcloud;
+import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/constants/license_features.dart';
-import '../../core/errors/failure.dart';
-import '../../core/utils/logger_service.dart';
-import '../../domain/entities/schedule.dart';
-import '../../domain/entities/backup_destination.dart';
-import '../../domain/entities/backup_history.dart';
-import '../../domain/entities/backup_log.dart';
-import '../../domain/repositories/repositories.dart';
-import '../../domain/services/i_license_validation_service.dart';
-import '../../infrastructure/external/scheduler/cron_parser.dart';
-import '../../domain/use_cases/destinations/send_to_ftp.dart';
-import '../../infrastructure/external/destinations/local_destination_service.dart'
-    as local;
-import '../../domain/services/i_ftp_service.dart';
-import '../../infrastructure/external/destinations/google_drive_destination_service.dart'
-    as gd;
-import '../../infrastructure/external/dropbox/dropbox_destination_service.dart'
-    as dropbox;
-import '../../infrastructure/external/nextcloud/nextcloud_destination_service.dart'
-    as nextcloud;
-import '../../domain/use_cases/destinations/send_to_dropbox.dart';
-import '../../domain/use_cases/destinations/send_to_nextcloud.dart';
-import '../../core/di/service_locator.dart';
-import '../providers/backup_progress_provider.dart';
-import 'backup_orchestrator_service.dart';
-import 'notification_service.dart';
-
 class SchedulerService {
-  final IScheduleRepository _scheduleRepository;
-  final IBackupDestinationRepository _destinationRepository;
-  final IBackupHistoryRepository _backupHistoryRepository;
-  final IBackupLogRepository _backupLogRepository;
-  final BackupOrchestratorService _backupOrchestratorService;
-  final local.LocalDestinationService _localDestinationService;
-  final SendToFtp _sendToFtp;
-  final IFtpService _ftpDestinationService;
-  final gd.GoogleDriveDestinationService _googleDriveDestinationService;
-  final dropbox.DropboxDestinationService _dropboxDestinationService;
-  final SendToDropbox _sendToDropbox;
-  final nextcloud.NextcloudDestinationService _nextcloudDestinationService;
-  final SendToNextcloud _sendToNextcloud;
-  final NotificationService _notificationService;
-  final ILicenseValidationService _licenseValidationService;
-
-  final ScheduleCalculator _calculator = ScheduleCalculator();
-  Timer? _checkTimer;
-  bool _isRunning = false;
-  final Set<String> _executingSchedules = {};
-
   SchedulerService({
     required IScheduleRepository scheduleRepository,
     required IBackupDestinationRepository destinationRepository,
@@ -84,6 +62,26 @@ class SchedulerService {
        _sendToNextcloud = sendToNextcloud,
        _notificationService = notificationService,
        _licenseValidationService = licenseValidationService;
+  final IScheduleRepository _scheduleRepository;
+  final IBackupDestinationRepository _destinationRepository;
+  final IBackupHistoryRepository _backupHistoryRepository;
+  final IBackupLogRepository _backupLogRepository;
+  final BackupOrchestratorService _backupOrchestratorService;
+  final local.LocalDestinationService _localDestinationService;
+  final SendToFtp _sendToFtp;
+  final IFtpService _ftpDestinationService;
+  final gd.GoogleDriveDestinationService _googleDriveDestinationService;
+  final dropbox.DropboxDestinationService _dropboxDestinationService;
+  final SendToDropbox _sendToDropbox;
+  final nextcloud.NextcloudDestinationService _nextcloudDestinationService;
+  final SendToNextcloud _sendToNextcloud;
+  final NotificationService _notificationService;
+  final ILicenseValidationService _licenseValidationService;
+
+  final ScheduleCalculator _calculator = ScheduleCalculator();
+  Timer? _checkTimer;
+  bool _isRunning = false;
+  final Set<String> _executingSchedules = {};
 
   Future<rd.Result<void>> _ensureDestinationFeatureAllowed(
     BackupDestination destination,
@@ -92,21 +90,17 @@ class SchedulerService {
     switch (destination.type) {
       case DestinationType.googleDrive:
         requiredFeature = LicenseFeatures.googleDrive;
-        break;
       case DestinationType.dropbox:
         requiredFeature = LicenseFeatures.dropbox;
-        break;
       case DestinationType.nextcloud:
         requiredFeature = LicenseFeatures.nextcloud;
-        break;
       case DestinationType.local:
       case DestinationType.ftp:
         requiredFeature = null;
-        break;
     }
 
     if (requiredFeature == null) {
-      return rd.Success(());
+      return const rd.Success(());
     }
 
     final allowedResult = await _licenseValidationService.isFeatureAllowed(
@@ -117,12 +111,13 @@ class SchedulerService {
       return rd.Failure(
         ValidationFailure(
           message:
-              'Destino ${destination.name} requer licença (${destination.type.name}).',
+              'Destino ${destination.name} requer licença '
+              '(${destination.type.name}).',
         ),
       );
     }
 
-    return rd.Success(());
+    return const rd.Success(());
   }
 
   Future<void> start() async {
@@ -220,14 +215,15 @@ class SchedulerService {
     );
 
     late String tempBackupPath;
-    bool shouldDeleteTempFile = false;
+    var shouldDeleteTempFile = false;
 
     try {
       final destinations = await _getDestinations(schedule.destinationIds);
 
       if (schedule.backupFolder.isEmpty) {
         final errorMessage =
-            'Pasta de backup não configurada para o agendamento: ${schedule.name}';
+            'Pasta de backup não configurada para o agendamento: '
+            '${schedule.name}';
         LoggerService.error(errorMessage);
         return rd.Failure(ValidationFailure(message: errorMessage));
       }
@@ -236,7 +232,7 @@ class SchedulerService {
       if (!await backupDir.exists()) {
         try {
           await backupDir.create(recursive: true);
-        } catch (e) {
+        } on Object catch (e) {
           final errorMessage =
               'Erro ao criar pasta de backup: ${schedule.backupFolder}';
           LoggerService.error(errorMessage, e);
@@ -247,7 +243,8 @@ class SchedulerService {
       final hasPermission = await _checkWritePermission(backupDir);
       if (!hasPermission) {
         final errorMessage =
-            'Sem permissão de escrita na pasta de backup: ${schedule.backupFolder}';
+            'Sem permissão de escrita na pasta de backup: '
+            '${schedule.backupFolder}';
         LoggerService.error(errorMessage);
         return rd.Failure(ValidationFailure(message: errorMessage));
       }
@@ -260,7 +257,8 @@ class SchedulerService {
 
       if (outputDirectory.isEmpty) {
         final errorMessage =
-            'Caminho de saída do backup está vazio para o agendamento: ${schedule.name}';
+            'Caminho de saída do backup está vazio para o agendamento: '
+            '${schedule.name}';
         LoggerService.error(errorMessage);
         return rd.Failure(ValidationFailure(message: errorMessage));
       }
@@ -278,9 +276,7 @@ class SchedulerService {
               ? error.message
               : error.toString();
           progressProvider.failBackup(errorMessage);
-        } catch (_) {
-          // Ignorar se não estiver disponível
-        }
+        } on Object catch (_) {}
         return rd.Failure(backupResult.exceptionOrNull()!);
       }
 
@@ -306,9 +302,7 @@ class SchedulerService {
         try {
           final progressProvider = getIt<BackupProgressProvider>();
           progressProvider.failBackup(errorMessage);
-        } catch (_) {
-          // Ignorar se não estiver disponível
-        }
+        } on Object catch (_) {}
 
         return rd.Failure(BackupFailure(message: errorMessage));
       }
@@ -323,22 +317,21 @@ class SchedulerService {
             message: 'Enviando para destinos...',
             progress: 0.85,
           );
-        } catch (_) {
-          // Ignorar se não estiver disponível
-        }
+        } on Object catch (_) {}
       }
 
-      final List<String> uploadErrors = [];
-      bool hasCriticalUploadError = false;
+      final uploadErrors = <String>[];
+      var hasCriticalUploadError = false;
 
       final totalDestinations = destinations.length;
 
-      for (int index = 0; index < destinations.length; index++) {
+      for (var index = 0; index < destinations.length; index++) {
         final destination = destinations[index];
 
         if (!await backupFile.exists()) {
           final errorMessage =
-              'Arquivo de backup foi deletado antes de enviar para ${destination.name}: ${backupHistory.backupPath}';
+              'Arquivo de backup foi deletado antes de enviar para '
+              '${destination.name}: ${backupHistory.backupPath}';
           uploadErrors.add(errorMessage);
           LoggerService.error(errorMessage);
           hasCriticalUploadError = true;
@@ -353,9 +346,7 @@ class SchedulerService {
             message: 'Enviando para ${destination.name}...',
             progress: progress,
           );
-        } catch (_) {
-          // Ignorar se não estiver disponível
-        }
+        } on Object catch (_) {}
 
         final sendResult = await _sendToDestination(
           sourceFilePath: backupHistory.backupPath,
@@ -380,7 +371,8 @@ class SchedulerService {
         final failedHistory = backupHistory.copyWith(
           status: BackupStatus.error,
           errorMessage:
-              'Backup concluído na pasta temporária, mas falhou ao enviar para destinos:\n$errorMessage',
+              'Backup concluído na pasta temporária, mas falhou ao enviar '
+              'para destinos:\n$errorMessage',
           finishedAt: finishedAt,
           durationSeconds: finishedAt
               .difference(backupHistory.startedAt)
@@ -403,7 +395,8 @@ class SchedulerService {
               LoggerService.info('Notificação de erro enviada por email');
             } else {
               LoggerService.warning(
-                'Notificação de erro não foi enviada (email desabilitado ou configuração inválida)',
+                'Notificação de erro não foi enviada '
+                '(email desabilitado ou configuração inválida)',
               );
             }
           },
@@ -416,8 +409,7 @@ class SchedulerService {
         );
 
         final failure = BackupFailure(
-          message:
-              'Falha ao enviar backup para destinos:\n$errorMessage',
+          message: 'Falha ao enviar backup para destinos:\n$errorMessage',
         );
         LoggerService.error(
           'Backup marcado como erro devido a falhas no upload',
@@ -427,9 +419,7 @@ class SchedulerService {
         try {
           final progressProvider = getIt<BackupProgressProvider>();
           progressProvider.failBackup(errorMessage);
-        } catch (_) {
-          // Ignorar se não estiver disponível
-        }
+        } on Object catch (_) {}
 
         return rd.Failure(failure);
       }
@@ -457,9 +447,7 @@ class SchedulerService {
         progressProvider.completeBackup(
           message: 'Backup concluído com sucesso!',
         );
-      } catch (_) {
-        // Ignorar se não estiver disponível
-      }
+      } on Object catch (_) {}
 
       if (shouldDeleteTempFile) {
         try {
@@ -474,7 +462,6 @@ class SchedulerService {
                   'Arquivo temporário deletado: $tempBackupPath',
                 );
               }
-              break;
             case FileSystemEntityType.directory:
               final tempDir = Directory(tempBackupPath);
               if (tempDir.existsSync()) {
@@ -483,13 +470,13 @@ class SchedulerService {
                   'Diretório temporário deletado: $tempBackupPath',
                 );
               }
-              break;
             default:
               LoggerService.debug(
-                'Arquivo temporário não encontrado para exclusão: $tempBackupPath',
+                'Arquivo temporário não encontrado para exclusão: '
+                '$tempBackupPath',
               );
           }
-        } catch (e) {
+        } on Object catch (e) {
           LoggerService.warning('Erro ao deletar arquivo temporário: $e');
         }
       }
@@ -510,8 +497,8 @@ class SchedulerService {
       await _cleanOldBackups(destinations, backupHistory.id);
 
       LoggerService.info('Backup agendado concluído: ${schedule.name}');
-      return rd.Success(());
-    } catch (e, stackTrace) {
+      return const rd.Success(());
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro no backup agendado', e, stackTrace);
       return rd.Failure(
         BackupFailure(message: 'Erro no backup agendado: $e', originalError: e),
@@ -525,7 +512,7 @@ class SchedulerService {
     for (final id in ids) {
       final result = await _destinationRepository.getById(id);
       result.fold(
-        (destination) => destinations.add(destination),
+        destinations.add,
         (failure) => null,
       );
     }
@@ -561,13 +548,15 @@ class SchedulerService {
 
           if (config.path.isEmpty) {
             final errorMessage =
-                'Caminho do destino local está vazio para o destino: ${destination.name}';
+                'Caminho do destino local está vazio para o destino: '
+                '${destination.name}';
             LoggerService.error(errorMessage);
             return rd.Failure(ValidationFailure(message: errorMessage));
           }
 
           LoggerService.info(
-            'Copiando backup para destino local: ${destination.name} (${config.path})',
+            'Copiando backup para destino local: ${destination.name} '
+            '(${config.path})',
           );
 
           final uploadResult = await _localDestinationService.upload(
@@ -578,10 +567,12 @@ class SchedulerService {
           return uploadResult.fold(
             (result) {
               LoggerService.info(
-                'Upload local concluído com sucesso: ${result.destinationPath} '
-                '(${_formatBytes(result.fileSize)} em ${result.duration.inSeconds}s)',
+                'Upload local concluído com sucesso: '
+                '${result.destinationPath} '
+                '(${_formatBytes(result.fileSize)} em '
+                '${result.duration.inSeconds}s)',
               );
-              return rd.Success(());
+              return const rd.Success(());
             },
             (failure) {
               LoggerService.error(
@@ -615,9 +606,10 @@ class SchedulerService {
             (result) {
               LoggerService.info(
                 'Upload FTP concluído com sucesso: ${result.remotePath} '
-                '(${_formatBytes(result.fileSize)} em ${result.duration.inSeconds}s)',
+                '(${_formatBytes(result.fileSize)} em '
+                '${result.duration.inSeconds}s)',
               );
-              return rd.Success(());
+              return const rd.Success(());
             },
             (failure) {
               LoggerService.error(
@@ -638,8 +630,8 @@ class SchedulerService {
             config: config,
           );
           return result.fold(
-            (_) => rd.Success(()),
-            (failure) => rd.Failure(failure),
+            (_) => const rd.Success(()),
+            rd.Failure.new,
           );
 
         case DestinationType.dropbox:
@@ -652,8 +644,8 @@ class SchedulerService {
             config: config,
           );
           return result.fold(
-            (_) => rd.Success(()),
-            (failure) => rd.Failure(failure),
+            (_) => const rd.Success(()),
+            rd.Failure.new,
           );
 
         case DestinationType.nextcloud:
@@ -663,11 +655,11 @@ class SchedulerService {
             config: config,
           );
           return result.fold(
-            (_) => rd.Success(()),
-            (failure) => rd.Failure(failure),
+            (_) => const rd.Success(()),
+            rd.Failure.new,
           );
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao enviar para ${destination.name}: $e', e);
       return rd.Failure(
         BackupFailure(
@@ -705,7 +697,6 @@ class SchedulerService {
               retentionDays: configJson['retentionDays'] as int? ?? 30,
             );
             await _localDestinationService.cleanOldBackups(config: config);
-            break;
 
           case DestinationType.ftp:
             final config = FtpDestinationConfig(
@@ -732,16 +723,17 @@ class SchedulerService {
               await _log(
                 backupHistoryId,
                 'error',
-                'Erro ao limpar backups antigos no FTP ${destination.name}: $failureMessage',
+                'Erro ao limpar backups antigos no FTP ${destination.name}: '
+                    '$failureMessage',
               );
 
               await _notificationService.sendWarning(
                 databaseName: destination.name,
                 message:
-                    'Erro ao limpar backups antigos no FTP ${destination.name}: $failureMessage',
+                    'Erro ao limpar backups antigos no FTP '
+                    '${destination.name}: $failureMessage',
               );
             });
-            break;
 
           case DestinationType.googleDrive:
             final config = gd.GoogleDriveDestinationConfig(
@@ -763,16 +755,17 @@ class SchedulerService {
               await _log(
                 backupHistoryId,
                 'error',
-                'Erro ao limpar backups antigos no Google Drive ${destination.name}: $failureMessage',
+                'Erro ao limpar backups antigos no Google Drive '
+                    '${destination.name}: $failureMessage',
               );
 
               await _notificationService.sendWarning(
                 databaseName: destination.name,
                 message:
-                    'Erro ao limpar backups antigos no Google Drive ${destination.name}: $failureMessage',
+                    'Erro ao limpar backups antigos no Google Drive '
+                    '${destination.name}: $failureMessage',
               );
             });
-            break;
 
           case DestinationType.dropbox:
             final config = dropbox.DropboxDestinationConfig(
@@ -794,16 +787,17 @@ class SchedulerService {
               await _log(
                 backupHistoryId,
                 'error',
-                'Erro ao limpar backups antigos no Dropbox ${destination.name}: $failureMessage',
+                'Erro ao limpar backups antigos no Dropbox '
+                    '${destination.name}: $failureMessage',
               );
 
               await _notificationService.sendWarning(
                 databaseName: destination.name,
                 message:
-                    'Erro ao limpar backups antigos no Dropbox ${destination.name}: $failureMessage',
+                    'Erro ao limpar backups antigos no Dropbox '
+                    '${destination.name}: $failureMessage',
               );
             });
-            break;
 
           case DestinationType.nextcloud:
             final config = NextcloudDestinationConfig.fromJson(configJson);
@@ -821,18 +815,19 @@ class SchedulerService {
               await _log(
                 backupHistoryId,
                 'error',
-                'Erro ao limpar backups antigos no Nextcloud ${destination.name}: $failureMessage',
+                'Erro ao limpar backups antigos no Nextcloud '
+                    '${destination.name}: $failureMessage',
               );
 
               await _notificationService.sendWarning(
                 databaseName: destination.name,
                 message:
-                    'Erro ao limpar backups antigos no Nextcloud ${destination.name}: $failureMessage',
+                    'Erro ao limpar backups antigos no Nextcloud '
+                    '${destination.name}: $failureMessage',
               );
             });
-            break;
         }
-      } catch (e, stackTrace) {
+      } on Object catch (e, stackTrace) {
         LoggerService.error(
           'Erro ao limpar backups em ${destination.name}',
           e,
@@ -868,8 +863,8 @@ class SchedulerService {
     final result = await _scheduleRepository.getById(scheduleId);
 
     return result.fold(
-      (schedule) async => await _executeScheduledBackup(schedule),
-      (failure) => rd.Failure(failure),
+      (schedule) async => _executeScheduledBackup(schedule),
+      rd.Failure.new,
     );
   }
 
@@ -883,8 +878,8 @@ class SchedulerService {
           schedule.copyWith(nextRunAt: nextRunAt),
         );
       }
-      return rd.Success(());
-    }, (failure) => rd.Failure(failure));
+      return const rd.Success(());
+    }, rd.Failure.new);
   }
 
   bool get isRunning => _isRunning;
@@ -905,7 +900,7 @@ class SchedulerService {
       }
 
       return false;
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         'Erro ao verificar permissão de escrita na pasta ${directory.path}: $e',
       );
@@ -919,13 +914,10 @@ class SchedulerService {
       switch (levelStr) {
         case 'info':
           level = LogLevel.info;
-          break;
         case 'warning':
           level = LogLevel.warning;
-          break;
         case 'error':
           level = LogLevel.error;
-          break;
         default:
           level = LogLevel.info;
       }
@@ -937,7 +929,7 @@ class SchedulerService {
         message: message,
       );
       await _backupLogRepository.create(log);
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao gravar log no banco: $e');
     }
   }

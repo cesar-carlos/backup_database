@@ -15,4 +15,3 @@ class SqlServerConfigsTable extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
-

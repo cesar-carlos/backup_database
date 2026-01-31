@@ -1,19 +1,17 @@
+﻿import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/services/i_sql_script_execution_service.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:result_dart/result_dart.dart' show unit;
 
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/schedule.dart';
-import '../../../domain/entities/sql_server_config.dart';
-import '../../../domain/entities/sybase_config.dart';
-import '../../../domain/entities/postgres_config.dart';
-import '../../../domain/services/i_sql_script_execution_service.dart';
-import 'process_service.dart';
-
 class SqlScriptExecutionService implements ISqlScriptExecutionService {
-  final ProcessService _processService;
-
   SqlScriptExecutionService(this._processService);
+  final ProcessService _processService;
 
   @override
   Future<rd.Result<void>> executeScript({
@@ -26,7 +24,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     // Validar script não vazio
     final trimmedScript = script.trim();
     if (trimmedScript.isEmpty) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Script SQL não pode estar vazio'),
       );
     }
@@ -54,7 +52,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
           ),
         );
       }
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro inesperado ao executar script SQL',
         e,
@@ -74,7 +72,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     required String script,
   }) async {
     if (config == null) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Configuração SQL Server não fornecida'),
       );
     }
@@ -144,7 +142,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
           );
         },
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao executar script SQL no SQL Server',
         e,
@@ -164,7 +162,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     required String script,
   }) async {
     if (config == null) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Configuração Sybase não fornecida'),
       );
     }
@@ -187,7 +185,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
       ];
 
       rd.Result<void>? result;
-      String lastError = '';
+      var lastError = '';
 
       for (final connStr in dbisqlConnections) {
         LoggerService.debug('Tentando executar script com: $connStr');
@@ -234,7 +232,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
       }
 
       return result!;
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao executar script SQL no Sybase',
         e,
@@ -254,7 +252,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     required String script,
   }) async {
     if (config == null) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Configuração PostgreSQL não fornecida'),
       );
     }
@@ -322,7 +320,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
           );
         },
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao executar script SQL no PostgreSQL',
         e,

@@ -1,19 +1,12 @@
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../../../core/theme/app_colors.dart';
-
 class StatsCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData? icon;
-  final String? iconSvg;
-  final Color? color;
-
   const StatsCard({
-    super.key,
     required this.title,
     required this.value,
+    super.key,
     this.icon,
     this.iconSvg,
     this.color,
@@ -21,6 +14,11 @@ class StatsCard extends StatelessWidget {
          icon != null || iconSvg != null,
          'Either icon or iconSvg must be provided',
        );
+  final String title;
+  final String value;
+  final IconData? icon;
+  final String? iconSvg;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {

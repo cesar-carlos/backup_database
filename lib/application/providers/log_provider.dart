@@ -1,10 +1,10 @@
+﻿import 'package:backup_database/application/services/log_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/errors/failure.dart';
-import '../../domain/entities/backup_log.dart';
-import '../services/log_service.dart';
-
 class LogProvider extends ChangeNotifier {
+  LogProvider(this._logService);
   final LogService _logService;
 
   List<BackupLog> _logs = [];
@@ -22,8 +22,6 @@ class LogProvider extends ChangeNotifier {
   int _currentPage = 0;
   final int _pageSize = 50;
   bool _hasMore = true;
-
-  LogProvider(this._logService);
 
   List<BackupLog> get logs => _logs;
   bool get isLoading => _isLoading;
@@ -71,7 +69,7 @@ class LogProvider extends ChangeNotifier {
           _error = f.message;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao carregar logs: $e';
     } finally {
       _isLoading = false;
@@ -88,7 +86,7 @@ class LogProvider extends ChangeNotifier {
   Future<void> refresh() async {
     _currentPage = 0;
     _hasMore = true;
-    await loadLogs(append: false);
+    await loadLogs();
   }
 
   void setFilterLevel(LogLevel? level) {
@@ -139,7 +137,7 @@ class LogProvider extends ChangeNotifier {
         notifyListeners();
         return null;
       });
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao exportar logs: $e';
       notifyListeners();
       return null;
@@ -160,7 +158,7 @@ class LogProvider extends ChangeNotifier {
           notifyListeners();
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao limpar logs: $e';
       notifyListeners();
     }

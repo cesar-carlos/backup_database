@@ -1,16 +1,16 @@
-import 'dart:io';
+﻿import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/services/i_windows_service_service.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:result_dart/result_dart.dart'
     as rd
-    show Result, Success, Failure;
+    show Failure, Result, Success;
 import 'package:result_dart/result_dart.dart' show unit;
 
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/services/i_windows_service_service.dart';
-import '../process/process_service.dart';
-
 class WindowsServiceService implements IWindowsServiceService {
+  WindowsServiceService(this._processService);
   final ProcessService _processService;
   static const String _serviceName = 'BackupDatabaseService';
   static const String _displayName = 'Backup Database Service';
@@ -27,16 +27,14 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _toolsSubdir = 'tools';
   static const String _logSubdir = 'logs';
   static const String _programDataEnv = 'ProgramData';
-  static const String _defaultProgramData = 'C:\\ProgramData';
+  static const String _defaultProgramData = r'C:\ProgramData';
   static const String _runningState = 'RUNNING';
   static const String _localSystemAccount = 'LocalSystem';
-
-  WindowsServiceService(this._processService);
 
   @override
   Future<rd.Result<WindowsServiceStatus>> getStatus() async {
     if (!Platform.isWindows) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
@@ -52,8 +50,8 @@ class WindowsServiceService implements IWindowsServiceService {
         final isInstalled = processResult.exitCode == _successExitCode;
 
         if (!isInstalled) {
-          return rd.Success(
-            const WindowsServiceStatus(isInstalled: false, isRunning: false),
+          return const rd.Success(
+            WindowsServiceStatus(isInstalled: false, isRunning: false),
           );
         }
 
@@ -67,8 +65,8 @@ class WindowsServiceService implements IWindowsServiceService {
             displayName: _displayName,
           ),
         );
-      }, (failure) => rd.Failure(failure));
-    } catch (e, stackTrace) {
+      }, rd.Failure.new);
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar status do serviço', e, stackTrace);
       return rd.Failure(
         ServerFailure(message: 'Erro ao verificar status do serviço: $e'),
@@ -82,7 +80,7 @@ class WindowsServiceService implements IWindowsServiceService {
     String? servicePassword,
   }) async {
     if (!Platform.isWindows) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
@@ -93,7 +91,7 @@ class WindowsServiceService implements IWindowsServiceService {
       final nssmPath = '$appDir\\$_toolsSubdir\\$_nssmExeName';
 
       if (!File(nssmPath).existsSync()) {
-        return rd.Failure(
+        return const rd.Failure(
           ValidationFailure(
             message:
                 'NSSM não encontrado. Verifique se o aplicativo foi instalado corretamente.',
@@ -106,7 +104,7 @@ class WindowsServiceService implements IWindowsServiceService {
       final statusResult = await getStatus();
       final existingStatus = statusResult.getOrNull();
 
-      if (existingStatus?.isInstalled == true) {
+      if (existingStatus?.isInstalled ?? false) {
         LoggerService.info('Serviço já existe. Removendo versão anterior...');
         await uninstallService();
         await Future.delayed(_serviceDelay);
@@ -131,7 +129,7 @@ class WindowsServiceService implements IWindowsServiceService {
               errorMessage.contains('FAILURE 5');
 
           if (isAccessDenied) {
-            return rd.Failure(
+            return const rd.Failure(
               ServerFailure(
                 message:
                     'Acesso negado. É necessário executar o aplicativo como Administrador para instalar o serviço.\n\n'
@@ -152,9 +150,9 @@ class WindowsServiceService implements IWindowsServiceService {
         await _configureService(nssmPath, serviceUser, servicePassword);
 
         LoggerService.info('Serviço instalado com sucesso');
-        return rd.Success(unit);
-      }, (failure) => rd.Failure(failure));
-    } catch (e, stackTrace) {
+        return const rd.Success(unit);
+      }, rd.Failure.new);
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao instalar serviço', e, stackTrace);
       return rd.Failure(ServerFailure(message: 'Erro ao instalar serviço: $e'));
     }
@@ -174,7 +172,7 @@ class WindowsServiceService implements IWindowsServiceService {
     if (!logDir.existsSync()) {
       try {
         logDir.createSync(recursive: true);
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.warning('Erro ao criar diretório de logs: $e');
       }
     }
@@ -238,7 +236,7 @@ class WindowsServiceService implements IWindowsServiceService {
   @override
   Future<rd.Result<void>> uninstallService() async {
     if (!Platform.isWindows) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
@@ -248,7 +246,9 @@ class WindowsServiceService implements IWindowsServiceService {
       final nssmPath = '$appDir\\$_toolsSubdir\\$_nssmExeName';
 
       if (!File(nssmPath).existsSync()) {
-        return rd.Failure(ValidationFailure(message: 'NSSM não encontrado'));
+        return const rd.Failure(
+          ValidationFailure(message: 'NSSM não encontrado'),
+        );
       }
 
       await _processService.run(
@@ -279,7 +279,7 @@ class WindowsServiceService implements IWindowsServiceService {
               errorMessage.contains('FAILURE 5');
 
           if (isAccessDenied) {
-            return rd.Failure(
+            return const rd.Failure(
               ServerFailure(
                 message:
                     'Acesso negado. É necessário executar o aplicativo como Administrador para remover o serviço.\n\n'
@@ -297,9 +297,9 @@ class WindowsServiceService implements IWindowsServiceService {
           );
         }
         LoggerService.info('Serviço removido com sucesso');
-        return rd.Success(unit);
-      }, (failure) => rd.Failure(failure));
-    } catch (e, stackTrace) {
+        return const rd.Success(unit);
+      }, rd.Failure.new);
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao remover serviço', e, stackTrace);
       return rd.Failure(ServerFailure(message: 'Erro ao remover serviço: $e'));
     }
@@ -308,7 +308,7 @@ class WindowsServiceService implements IWindowsServiceService {
   @override
   Future<rd.Result<void>> startService() async {
     if (!Platform.isWindows) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
@@ -317,9 +317,9 @@ class WindowsServiceService implements IWindowsServiceService {
       final statusResult = await getStatus();
       final status = statusResult.getOrNull();
 
-      if (status?.isRunning == true) {
+      if (status?.isRunning ?? false) {
         LoggerService.info('Serviço já está em execução');
-        return rd.Success(unit);
+        return const rd.Success(unit);
       }
 
       final result = await _processService.run(
@@ -334,9 +334,9 @@ class WindowsServiceService implements IWindowsServiceService {
         final statusAfterResult = await getStatus();
         final statusAfter = statusAfterResult.getOrNull();
 
-        if (statusAfter?.isRunning == true) {
+        if (statusAfter?.isRunning ?? false) {
           LoggerService.info('Serviço iniciado com sucesso');
-          return rd.Success(unit);
+          return const rd.Success(unit);
         }
 
         final errorMessage = processResult.stderr.isNotEmpty
@@ -352,9 +352,9 @@ class WindowsServiceService implements IWindowsServiceService {
           final finalStatusResult = await getStatus();
           final finalStatus = finalStatusResult.getOrNull();
 
-          if (finalStatus?.isRunning == true) {
+          if (finalStatus?.isRunning ?? false) {
             LoggerService.info('Serviço iniciado com sucesso');
-            return rd.Success(unit);
+            return const rd.Success(unit);
           }
         }
 
@@ -365,7 +365,7 @@ class WindowsServiceService implements IWindowsServiceService {
             errorMessage.contains('FAILURE 5');
 
         if (isAccessDenied) {
-          return rd.Failure(
+          return const rd.Failure(
             ServerFailure(
               message:
                   'Acesso negado. É necessário executar o aplicativo como Administrador para iniciar o serviço.\n\n'
@@ -381,8 +381,8 @@ class WindowsServiceService implements IWindowsServiceService {
         return rd.Failure(
           ServerFailure(message: 'Erro ao iniciar serviço: $errorMessage'),
         );
-      }, (failure) => rd.Failure(failure));
-    } catch (e, stackTrace) {
+      }, rd.Failure.new);
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao iniciar serviço', e, stackTrace);
       return rd.Failure(ServerFailure(message: 'Erro ao iniciar serviço: $e'));
     }
@@ -391,7 +391,7 @@ class WindowsServiceService implements IWindowsServiceService {
   @override
   Future<rd.Result<void>> stopService() async {
     if (!Platform.isWindows) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
@@ -402,7 +402,7 @@ class WindowsServiceService implements IWindowsServiceService {
 
       if (status?.isRunning != true) {
         LoggerService.info('Serviço já está parado');
-        return rd.Success(unit);
+        return const rd.Success(unit);
       }
 
       final result = await _processService.run(
@@ -419,7 +419,7 @@ class WindowsServiceService implements IWindowsServiceService {
 
         if (statusAfter?.isRunning != true) {
           LoggerService.info('Serviço parado com sucesso');
-          return rd.Success(unit);
+          return const rd.Success(unit);
         }
 
         final errorMessage = processResult.stderr.isNotEmpty
@@ -433,7 +433,7 @@ class WindowsServiceService implements IWindowsServiceService {
             errorMessage.contains('FAILURE 5');
 
         if (isAccessDenied) {
-          return rd.Failure(
+          return const rd.Failure(
             ServerFailure(
               message:
                   'Acesso negado. É necessário executar o aplicativo como Administrador para parar o serviço.\n\n'
@@ -453,15 +453,15 @@ class WindowsServiceService implements IWindowsServiceService {
 
           if (finalStatus?.isRunning != true) {
             LoggerService.info('Serviço parado com sucesso');
-            return rd.Success(unit);
+            return const rd.Success(unit);
           }
         }
 
         return rd.Failure(
           ServerFailure(message: 'Erro ao parar serviço: $errorMessage'),
         );
-      }, (failure) => rd.Failure(failure));
-    } catch (e, stackTrace) {
+      }, rd.Failure.new);
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao parar serviço', e, stackTrace);
       return rd.Failure(ServerFailure(message: 'Erro ao parar serviço: $e'));
     }
@@ -470,7 +470,7 @@ class WindowsServiceService implements IWindowsServiceService {
   @override
   Future<rd.Result<void>> restartService() async {
     if (!Platform.isWindows) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Windows Service só é suportado no Windows'),
       );
     }
@@ -478,7 +478,7 @@ class WindowsServiceService implements IWindowsServiceService {
     final stopResult = await stopService();
     return stopResult.fold((_) async {
       await Future.delayed(_serviceDelay);
-      return await startService();
-    }, (failure) => rd.Failure(failure));
+      return startService();
+    }, rd.Failure.new);
   }
 }

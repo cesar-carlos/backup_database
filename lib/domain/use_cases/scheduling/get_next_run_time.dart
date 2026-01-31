@@ -1,5 +1,5 @@
-import '../../entities/schedule.dart';
-import '../../../infrastructure/external/scheduler/cron_parser.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
 
 class GetNextRunTime {
   final ScheduleCalculator _calculator = ScheduleCalculator();
@@ -8,4 +8,3 @@ class GetNextRunTime {
     return _calculator.getNextRunTime(schedule);
   }
 }
-

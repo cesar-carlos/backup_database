@@ -1,7 +1,6 @@
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/datasources/local/tables/schedules_table.dart';
 import 'package:drift/drift.dart';
-
-import '../local/database.dart';
-import '../local/tables/schedules_table.dart';
 
 part 'schedule_dao.g.dart';
 
@@ -28,13 +27,16 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
       (select(schedulesTable)..where((t) => t.enabled.equals(true))).get();
 
   Future<List<SchedulesTableData>> getByDatabaseConfig(
-          String databaseConfigId) =>
-      (select(schedulesTable)
-            ..where((t) => t.databaseConfigId.equals(databaseConfigId)))
-          .get();
+    String databaseConfigId,
+  ) => (select(
+    schedulesTable,
+  )..where((t) => t.databaseConfigId.equals(databaseConfigId))).get();
 
   Future<int> updateLastRun(
-      String id, DateTime lastRunAt, DateTime? nextRunAt) {
+    String id,
+    DateTime lastRunAt,
+    DateTime? nextRunAt,
+  ) {
     return (update(schedulesTable)..where((t) => t.id.equals(id))).write(
       SchedulesTableCompanion(
         lastRunAt: Value(lastRunAt),
@@ -44,7 +46,5 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
-  Stream<List<SchedulesTableData>> watchAll() =>
-      select(schedulesTable).watch();
+  Stream<List<SchedulesTableData>> watchAll() => select(schedulesTable).watch();
 }
-

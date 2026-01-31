@@ -2,7 +2,8 @@ enum BackupType {
   full,
   fullSingle,
   differential,
-  log;
+  log
+  ;
 
   String get displayName {
     switch (this) {

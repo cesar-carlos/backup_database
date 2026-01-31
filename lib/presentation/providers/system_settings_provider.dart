@@ -1,12 +1,13 @@
-import 'dart:io';
+﻿import 'dart:io';
 
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/presentation/managers/window_manager_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../managers/window_manager_service.dart';
-import '../../core/utils/logger_service.dart';
-
 class SystemSettingsProvider extends ChangeNotifier {
+  SystemSettingsProvider({WindowManagerService? windowManager})
+    : _windowManager = windowManager ?? WindowManagerService();
   final WindowManagerService _windowManager;
 
   static const String _minimizeToTrayKey = 'minimize_to_tray';
@@ -19,9 +20,6 @@ class SystemSettingsProvider extends ChangeNotifier {
   bool _startMinimized = true;
   bool _startWithWindows = true;
   bool _isInitialized = false;
-
-  SystemSettingsProvider({WindowManagerService? windowManager})
-    : _windowManager = windowManager ?? WindowManagerService();
 
   bool get minimizeToTray => _minimizeToTray;
   bool get closeToTray => _closeToTray;
@@ -68,7 +66,7 @@ class SystemSettingsProvider extends ChangeNotifier {
 
       notifyListeners();
       LoggerService.info('Configurações do sistema carregadas');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao carregar configurações do sistema', e);
       _isInitialized = true;
     }
@@ -83,7 +81,7 @@ class SystemSettingsProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_minimizeToTrayKey, value);
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração minimizeToTray', e);
     }
   }
@@ -97,7 +95,7 @@ class SystemSettingsProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_closeToTrayKey, value);
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração closeToTray', e);
     }
   }
@@ -114,7 +112,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       if (_startWithWindows) {
         await _updateStartWithWindows(true);
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração startMinimized', e);
     }
   }
@@ -128,7 +126,7 @@ class SystemSettingsProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_startWithWindowsKey, value);
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração startWithWindows', e);
     }
   }
@@ -147,7 +145,7 @@ class SystemSettingsProvider extends ChangeNotifier {
 
         final result = await Process.run('reg', [
           'add',
-          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+          r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run',
           '/v',
           'BackupDatabase',
           '/t',
@@ -170,7 +168,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       } else {
         final result = await Process.run('reg', [
           'delete',
-          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+          r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run',
           '/v',
           'BackupDatabase',
           '/f',
@@ -189,7 +187,7 @@ class SystemSettingsProvider extends ChangeNotifier {
           }
         }
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao atualizar início automático do Windows', e);
     }
   }
@@ -206,7 +204,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       await prefs.setBool(_startMinimizedKey, _startMinimized);
       await prefs.setBool(_startWithWindowsKey, _startWithWindows);
       LoggerService.info('Configurações salvas com sucesso');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao salvar configurações', e);
     }
   }

@@ -1,15 +1,14 @@
-import 'dart:io';
+﻿import 'dart:io';
 
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/compression_format.dart';
-import '../process/process_service.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/compression_format.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 
 class WinRarService {
+  WinRarService(this._processService);
   final ProcessService _processService;
   String? _winRarPath;
   bool? _isAvailable;
-
-  WinRarService(this._processService);
 
   Future<bool> isAvailable() async {
     if (_isAvailable != null) {
@@ -95,7 +94,7 @@ class WinRarService {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao comprimir com WinRAR', e);
       return false;
     }
@@ -111,7 +110,9 @@ class WinRarService {
     }
 
     try {
-      LoggerService.info('Comprimindo diretório com WinRAR: $directoryPath → $outputPath');
+      LoggerService.info(
+        'Comprimindo diretório com WinRAR: $directoryPath → $outputPath',
+      );
 
       final arguments = <String>[
         'a',
@@ -139,7 +140,9 @@ class WinRarService {
       return result.fold(
         (processResult) {
           if (processResult.exitCode == 0) {
-            LoggerService.info('Compressão WinRAR de diretório concluída com sucesso');
+            LoggerService.info(
+              'Compressão WinRAR de diretório concluída com sucesso',
+            );
             return true;
           } else {
             LoggerService.warning(
@@ -155,7 +158,7 @@ class WinRarService {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao comprimir diretório com WinRAR', e);
       return false;
     }

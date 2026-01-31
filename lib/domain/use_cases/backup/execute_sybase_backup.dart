@@ -1,15 +1,13 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
+import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../entities/backup_type.dart';
-import '../../entities/sybase_config.dart';
-import '../../services/backup_execution_result.dart';
-import '../../services/i_sybase_backup_service.dart';
-
 class ExecuteSybaseBackup {
-  final ISybaseBackupService _backupService;
-
   ExecuteSybaseBackup(this._backupService);
+  final ISybaseBackupService _backupService;
 
   Future<rd.Result<BackupExecutionResult>> call({
     required SybaseConfig config,
@@ -22,27 +20,35 @@ class ExecuteSybaseBackup {
   }) async {
     // Validações
     if (config.serverName.trim().isEmpty) {
-      return const rd.Failure(ValidationFailure(
-        message: 'Nome do servidor não pode ser vazio',
-      ));
+      return const rd.Failure(
+        ValidationFailure(
+          message: 'Nome do servidor não pode ser vazio',
+        ),
+      );
     }
     if (config.databaseName.trim().isEmpty) {
-      return const rd.Failure(ValidationFailure(
-        message: 'Nome do banco (DBN) não pode ser vazio',
-      ));
+      return const rd.Failure(
+        ValidationFailure(
+          message: 'Nome do banco (DBN) não pode ser vazio',
+        ),
+      );
     }
     if (config.username.trim().isEmpty) {
-      return const rd.Failure(ValidationFailure(
-        message: 'Usuário não pode ser vazio',
-      ));
+      return const rd.Failure(
+        ValidationFailure(
+          message: 'Usuário não pode ser vazio',
+        ),
+      );
     }
     if (outputDirectory.isEmpty) {
-      return const rd.Failure(ValidationFailure(
-        message: 'Diretório de saída não pode ser vazio',
-      ));
+      return const rd.Failure(
+        ValidationFailure(
+          message: 'Diretório de saída não pode ser vazio',
+        ),
+      );
     }
 
-    return await _backupService.executeBackup(
+    return _backupService.executeBackup(
       config: config,
       outputDirectory: outputDirectory,
       backupType: backupType,
@@ -53,4 +59,3 @@ class ExecuteSybaseBackup {
     );
   }
 }
-

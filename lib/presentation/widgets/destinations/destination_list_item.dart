@@ -1,22 +1,20 @@
+﻿import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../domain/entities/backup_destination.dart';
-import '../common/config_list_item.dart';
-
 class DestinationListItem extends StatelessWidget {
-  final BackupDestination destination;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
-  final ValueChanged<bool>? onToggleEnabled;
-
   const DestinationListItem({
-    super.key,
     required this.destination,
+    super.key,
     this.onEdit,
     this.onDelete,
     this.onToggleEnabled,
   });
+  final BackupDestination destination;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final ValueChanged<bool>? onToggleEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -176,7 +174,7 @@ class DestinationListItem extends StatelessWidget {
           }
           return '$serverUrl $fullPath';
       }
-    } catch (e) {
+    } on Object catch (e) {
       return '';
     }
   }

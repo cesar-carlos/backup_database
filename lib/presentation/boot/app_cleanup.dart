@@ -1,7 +1,8 @@
-import '../../core/core.dart';
-import '../../core/di/service_locator.dart' as service_locator;
-import '../../application/services/scheduler_service.dart';
-import '../managers/managers.dart';
+﻿import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
+import 'package:backup_database/presentation/managers/managers.dart';
 
 class AppCleanup {
   static Future<void> cleanup() async {
@@ -9,7 +10,7 @@ class AppCleanup {
 
     try {
       service_locator.getIt<SchedulerService>().stop();
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao parar scheduler: $e');
     }
 
@@ -17,13 +18,13 @@ class AppCleanup {
 
     try {
       TrayManagerService().dispose();
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao destruir tray: $e');
     }
 
     try {
       WindowManagerService().dispose();
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao destruir window manager: $e');
     }
 

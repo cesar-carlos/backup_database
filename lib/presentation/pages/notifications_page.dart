@@ -1,13 +1,12 @@
+import 'package:backup_database/application/providers/license_provider.dart';
+import 'package:backup_database/application/providers/notification_provider.dart';
+import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/constants/route_names.dart';
+import 'package:backup_database/domain/entities/email_config.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-
-import '../../application/providers/license_provider.dart';
-import '../../application/providers/notification_provider.dart';
-import '../../core/constants/license_features.dart';
-import '../../core/constants/route_names.dart';
-import '../../domain/entities/email_config.dart';
-import '../widgets/common/common.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -235,7 +234,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         const SizedBox(height: 16),
                         PasswordField(
                           controller: _passwordController,
-                          label: 'Senha',
                           hint: 'Senha do e-mail',
                           enabled: hasEmailNotification,
                         ),

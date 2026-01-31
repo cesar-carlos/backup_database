@@ -1,21 +1,20 @@
-import 'dart:io';
+﻿import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
+import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart'
+    as ps;
+import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:result_dart/result_dart.dart' show unit;
-import 'package:path/path.dart' as p;
-
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/backup_type.dart';
-import '../../../domain/entities/postgres_config.dart';
-import '../../../domain/services/backup_execution_result.dart';
-import '../../../domain/services/i_postgres_backup_service.dart';
-import 'process_service.dart' as ps;
 
 class PostgresBackupService implements IPostgresBackupService {
-  final ps.ProcessService _processService;
-
   PostgresBackupService(this._processService);
+  final ps.ProcessService _processService;
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
@@ -132,7 +131,7 @@ class PostgresBackupService implements IPostgresBackupService {
               databaseName: config.database,
             ),
           );
-        }, (failure) => rd.Failure(failure));
+        }, rd.Failure.new);
       },
       (failure) async {
         final errorMessage = failure is Failure
@@ -158,14 +157,14 @@ class PostgresBackupService implements IPostgresBackupService {
   }) async {
     switch (backupType) {
       case BackupType.full:
-        return await _executeFullBackup(
+        return _executeFullBackup(
           config: config,
           backupPath: backupPath,
           pgBasebackupPath: pgBasebackupPath,
         );
 
       case BackupType.fullSingle:
-        return await _executeFullSingleBackup(
+        return _executeFullSingleBackup(
           config: config,
           backupPath: backupPath,
         );
@@ -178,7 +177,7 @@ class PostgresBackupService implements IPostgresBackupService {
 
         return previousBackupResult.fold(
           (previousBackupPath) async {
-            return await _executeIncrementalBackup(
+            return _executeIncrementalBackup(
               config: config,
               backupPath: backupPath,
               previousBackupPath: previousBackupPath,
@@ -192,7 +191,7 @@ class PostgresBackupService implements IPostgresBackupService {
             LoggerService.warning(
               'Backup incremental requer backup FULL anterior. Executando FULL: $errorMessage',
             );
-            return await _executeFullBackup(
+            return _executeFullBackup(
               config: config,
               backupPath: backupPath,
               pgBasebackupPath: pgBasebackupPath,
@@ -201,7 +200,7 @@ class PostgresBackupService implements IPostgresBackupService {
         );
 
       case BackupType.log:
-        return await _executeLogBackup(
+        return _executeLogBackup(
           config: config,
           backupPath: backupPath,
           pgBasebackupPath: pgBasebackupPath,
@@ -232,7 +231,7 @@ class PostgresBackupService implements IPostgresBackupService {
 
     final environment = <String, String>{'PGPASSWORD': config.password};
 
-    return await _processService.run(
+    return _processService.run(
       executable: executable,
       arguments: arguments,
       environment: environment,
@@ -244,7 +243,7 @@ class PostgresBackupService implements IPostgresBackupService {
     required PostgresConfig config,
     required String backupPath,
   }) async {
-    final executable = 'pg_dump';
+    const executable = 'pg_dump';
 
     final arguments = [
       '-h',
@@ -266,7 +265,7 @@ class PostgresBackupService implements IPostgresBackupService {
 
     final environment = <String, String>{'PGPASSWORD': config.password};
 
-    return await _processService.run(
+    return _processService.run(
       executable: executable,
       arguments: arguments,
       environment: environment,
@@ -313,7 +312,7 @@ class PostgresBackupService implements IPostgresBackupService {
 
     final environment = <String, String>{'PGPASSWORD': config.password};
 
-    return await _processService.run(
+    return _processService.run(
       executable: executable,
       arguments: arguments,
       environment: environment,
@@ -343,7 +342,7 @@ class PostgresBackupService implements IPostgresBackupService {
 
     final environment = <String, String>{'PGPASSWORD': config.password};
 
-    return await _processService.run(
+    return _processService.run(
       executable: executable,
       arguments: arguments,
       environment: environment,
@@ -398,7 +397,7 @@ class PostgresBackupService implements IPostgresBackupService {
       });
 
       return rd.Success(fullBackups.first.path);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao buscar backup anterior', e, stackTrace);
       return rd.Failure(
         BackupFailure(
@@ -421,7 +420,7 @@ class PostgresBackupService implements IPostgresBackupService {
         );
       }
 
-      int totalSize = 0;
+      var totalSize = 0;
       await for (final entity in backupDir.list(recursive: true)) {
         if (entity is File) {
           totalSize += await entity.length();
@@ -429,7 +428,7 @@ class PostgresBackupService implements IPostgresBackupService {
       }
 
       return rd.Success(totalSize);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao calcular tamanho do backup', e, stackTrace);
       return rd.Failure(
         BackupFailure(
@@ -454,7 +453,7 @@ class PostgresBackupService implements IPostgresBackupService {
 
       final fileSize = await backupFile.length();
       return rd.Success(fileSize);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao calcular tamanho do arquivo', e, stackTrace);
       return rd.Failure(
         BackupFailure(
@@ -486,7 +485,7 @@ class PostgresBackupService implements IPostgresBackupService {
           ),
         );
       }
-    }, (failure) => rd.Failure(failure));
+    }, rd.Failure.new);
   }
 
   Future<rd.Result<void>> _verifyFullSingleBackup(String backupPath) async {
@@ -517,7 +516,7 @@ class PostgresBackupService implements IPostgresBackupService {
           ),
         );
       }
-    }, (failure) => rd.Failure(failure));
+    }, rd.Failure.new);
   }
 
   rd.Result<BackupExecutionResult> _handleBackupError({
@@ -548,7 +547,7 @@ class PostgresBackupService implements IPostgresBackupService {
             errorLower.contains(toolName) ||
             errorLower.contains('command not found')) &&
         (errorLower.contains('não é reconhecido') ||
-            errorLower.contains("não reconhecido") ||
+            errorLower.contains('não reconhecido') ||
             errorLower.contains('não reconhecido como um comando interno') ||
             errorLower.contains('não reconhecido como') ||
             errorLower.contains('command not found') ||
@@ -579,7 +578,7 @@ class PostgresBackupService implements IPostgresBackupService {
           '   - Clique em "Novo" e adicione o caminho completo da pasta bin\n'
           '   - Clique em "OK" em todas as janelas\n\n'
           '3. Reinicie o aplicativo de backup\n\n'
-          'Consulte: docs\\path_setup.md para mais detalhes.',
+          r'Consulte: docs\path_setup.md para mais detalhes.',
       originalError: Exception('$toolName não encontrado'),
     );
   }
@@ -616,7 +615,7 @@ class PostgresBackupService implements IPostgresBackupService {
       (processResult) {
         if (processResult.isSuccess) {
           LoggerService.info('Conexão PostgreSQL bem-sucedida');
-          return rd.Success(true);
+          return const rd.Success(true);
         } else {
           final errorOutput = '${processResult.stderr}\n${processResult.stdout}'
               .trim();
@@ -632,7 +631,7 @@ class PostgresBackupService implements IPostgresBackupService {
             );
           }
 
-          String errorMessage = 'Falha na conexão';
+          var errorMessage = 'Falha na conexão';
 
           if (errorLower.contains('password authentication failed') ||
               errorLower.contains('autenticação de senha falhou')) {
@@ -736,7 +735,7 @@ class PostgresBackupService implements IPostgresBackupService {
           ),
         );
       }
-    }, (failure) => rd.Failure(failure));
+    }, rd.Failure.new);
   }
 
   String _formatBytes(int bytes) {

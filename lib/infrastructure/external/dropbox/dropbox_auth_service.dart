@@ -1,34 +1,21 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:dio/dio.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/constants/app_constants.dart';
-import '../../../core/encryption/encryption_service.dart';
-import '../../../core/errors/dropbox_failure.dart';
-
 class DropboxAuthResult {
-  final String accessToken;
-  final String? refreshToken;
-  final String email;
-  final DateTime? expirationDate;
-
   const DropboxAuthResult({
     required this.accessToken,
-    this.refreshToken,
     required this.email,
+    this.refreshToken,
     this.expirationDate,
   });
-
-  Map<String, dynamic> toJson() => {
-    'accessToken': accessToken,
-    'refreshToken': refreshToken,
-    'email': email,
-    'expirationDate': expirationDate?.toIso8601String(),
-  };
 
   factory DropboxAuthResult.fromJson(Map<String, dynamic> json) {
     return DropboxAuthResult(
@@ -40,6 +27,17 @@ class DropboxAuthResult {
           : null,
     );
   }
+  final String accessToken;
+  final String? refreshToken;
+  final String email;
+  final DateTime? expirationDate;
+
+  Map<String, dynamic> toJson() => {
+    'accessToken': accessToken,
+    'refreshToken': refreshToken,
+    'email': email,
+    'expirationDate': expirationDate?.toIso8601String(),
+  };
 }
 
 class DropboxAuthService {
@@ -122,7 +120,7 @@ class DropboxAuthService {
           expirationDate: _tokenExpiration,
         ),
       );
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DropboxFailure(message: _parseAuthError(e), originalError: e),
       );
@@ -185,7 +183,7 @@ class DropboxAuthService {
   }
 
   String _buildAuthUrl() {
-    final redirectUri = AppConstants.oauthRedirectUri;
+    const redirectUri = AppConstants.oauthRedirectUri;
 
     final params = {
       'client_id': _clientId!,
@@ -208,7 +206,7 @@ class DropboxAuthService {
 
   Future<Map<String, dynamic>?> _exchangeCodeForToken(String code) async {
     try {
-      final redirectUri = AppConstants.oauthRedirectUri;
+      const redirectUri = AppConstants.oauthRedirectUri;
 
       final tokenData = {
         'code': code,
@@ -233,7 +231,7 @@ class DropboxAuthService {
       }
 
       return response.data as Map<String, dynamic>;
-    } catch (e) {
+    } on Object catch (e) {
       rethrow;
     }
   }
@@ -308,7 +306,7 @@ class DropboxAuthService {
       return const rd.Failure(
         DropboxFailure(message: 'Nenhuma conta Dropbox autenticada.'),
       );
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DropboxFailure(
           message: 'Erro ao restaurar sessão: $e',
@@ -331,7 +329,7 @@ class DropboxAuthService {
         data: {
           'grant_type': 'refresh_token',
           'refresh_token': _cachedRefreshToken,
-          'client_id': _clientId!,
+          'client_id': _clientId,
           'client_secret': _clientSecret ?? '',
         },
         options: Options(
@@ -366,7 +364,7 @@ class DropboxAuthService {
           expirationDate: _tokenExpiration,
         ),
       );
-    } catch (e) {
+    } on Object catch (e) {
       await _clearStoredCredentials();
       return rd.Failure(
         DropboxFailure(
@@ -422,7 +420,7 @@ class DropboxAuthService {
       return rd.Failure(
         DropboxFailure(message: 'Erro ao obter email: ${response.statusCode}'),
       );
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DropboxFailure(
           message: 'Erro ao obter informações do usuário: $e',
@@ -448,7 +446,7 @@ class DropboxAuthService {
       final encryptedData = EncryptionService.encrypt(jsonEncode(credentials));
       await prefs.setString(_storageKey, encryptedData);
       await prefs.setString(_emailStorageKey, email);
-    } catch (e) {
+    } on Object catch (e) {
       // Ignore save errors
     }
   }
@@ -476,7 +474,7 @@ class DropboxAuthService {
           credentials['expirationDate'] as String,
         );
       }
-    } catch (e) {
+    } on Object catch (e) {
       await _clearStoredCredentials();
     }
   }
@@ -486,7 +484,7 @@ class DropboxAuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKey);
       await prefs.remove(_emailStorageKey);
-    } catch (e) {
+    } on Object catch (e) {
       // Ignore clear errors
     }
   }

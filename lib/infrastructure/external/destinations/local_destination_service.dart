@@ -1,34 +1,31 @@
-import 'dart:io';
+﻿import 'dart:io';
 
-import 'package:path/path.dart' as p;
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-
 class LocalDestinationConfig {
-  final String path;
-  final bool createSubfoldersByDate;
-  final int retentionDays;
-
   const LocalDestinationConfig({
     required this.path,
     this.createSubfoldersByDate = true,
     this.retentionDays = 30,
   });
+  final String path;
+  final bool createSubfoldersByDate;
+  final int retentionDays;
 }
 
 class LocalUploadResult {
-  final String destinationPath;
-  final int fileSize;
-  final Duration duration;
-
   const LocalUploadResult({
     required this.destinationPath,
     required this.fileSize,
     required this.duration,
   });
+  final String destinationPath;
+  final int fileSize;
+  final Duration duration;
 }
 
 class LocalDestinationService {
@@ -52,7 +49,7 @@ class LocalDestinationService {
       }
 
       // Criar diretório de destino
-      String destinationDir = config.path;
+      var destinationDir = config.path;
       if (config.createSubfoldersByDate) {
         final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
         destinationDir = p.join(config.path, dateFolder);
@@ -67,7 +64,7 @@ class LocalDestinationService {
         }
       } on FileSystemException catch (e) {
         stopwatch.stop();
-        String errorMessage = _getPermissionErrorMessage(e, destinationDir);
+        final errorMessage = _getPermissionErrorMessage(e, destinationDir);
         LoggerService.error('Erro ao criar diretório', e);
         return rd.Failure(
           FileSystemFailure(
@@ -83,7 +80,8 @@ class LocalDestinationService {
         stopwatch.stop();
         return rd.Failure(
           FileSystemFailure(
-            message: 'Sem permissão de escrita no diretório: $destinationDir\n'
+            message:
+                'Sem permissão de escrita no diretório: $destinationDir\n'
                 'Verifique as permissões ou escolha outro diretório.',
           ),
         );
@@ -92,7 +90,7 @@ class LocalDestinationService {
       // Copiar arquivo
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final destinationPath = p.join(destinationDir, fileName);
-      
+
       try {
         final destinationFile = await sourceFile.copy(destinationPath);
         stopwatch.stop();
@@ -104,8 +102,10 @@ class LocalDestinationService {
             'Tamanho do arquivo de destino difere do arquivo de origem (cópia corrompida)',
           );
         }
-        
-        LoggerService.info('Arquivo copiado com sucesso: $destinationPath ($fileSize bytes)');
+
+        LoggerService.info(
+          'Arquivo copiado com sucesso: $destinationPath ($fileSize bytes)',
+        );
 
         return rd.Success(
           LocalUploadResult(
@@ -116,7 +116,7 @@ class LocalDestinationService {
         );
       } on FileSystemException catch (e) {
         stopwatch.stop();
-        String errorMessage = _getPermissionErrorMessage(e, destinationPath);
+        final errorMessage = _getPermissionErrorMessage(e, destinationPath);
         LoggerService.error('Erro ao copiar arquivo', e);
         return rd.Failure(
           FileSystemFailure(
@@ -125,12 +125,13 @@ class LocalDestinationService {
           ),
         );
       }
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       stopwatch.stop();
       LoggerService.error('Erro ao copiar para destino local', e, stackTrace);
       return rd.Failure(
         FileSystemFailure(
-          message: 'Erro ao copiar arquivo para destino local: ${_getUserFriendlyError(e)}',
+          message:
+              'Erro ao copiar arquivo para destino local: ${_getUserFriendlyError(e)}',
           originalError: e,
         ),
       );
@@ -139,11 +140,13 @@ class LocalDestinationService {
 
   Future<bool> _checkWritePermission(String path) async {
     try {
-      final testFile = File(p.join(path, '.write_test_${DateTime.now().millisecondsSinceEpoch}'));
+      final testFile = File(
+        p.join(path, '.write_test_${DateTime.now().millisecondsSinceEpoch}'),
+      );
       await testFile.writeAsString('test');
       await testFile.delete();
       return true;
-    } catch (e) {
+    } on Object catch (e) {
       return false;
     }
   }
@@ -183,7 +186,7 @@ class LocalDestinationService {
         Duration(days: config.retentionDays),
       );
 
-      int deletedCount = 0;
+      var deletedCount = 0;
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File) {
           final stat = await entity.stat();
@@ -208,7 +211,7 @@ class LocalDestinationService {
 
       LoggerService.info('$deletedCount arquivo(s) antigo(s) removido(s)');
       return rd.Success(deletedCount);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao limpar backups antigos', e, stackTrace);
       return rd.Failure(
         FileSystemFailure(
@@ -219,4 +222,3 @@ class LocalDestinationService {
     }
   }
 }
-

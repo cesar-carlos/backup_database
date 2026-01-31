@@ -1,13 +1,12 @@
+import 'package:backup_database/application/providers/sql_server_config_provider.dart';
+import 'package:backup_database/application/providers/sybase_config_provider.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/sql_server/sql_server.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../application/providers/sql_server_config_provider.dart';
-import '../../application/providers/sybase_config_provider.dart';
-import '../../domain/entities/sql_server_config.dart';
-import '../../domain/entities/sybase_config.dart';
-import '../widgets/sql_server/sql_server.dart';
-import '../widgets/common/common.dart';
 
 class SqlServerConfigPage extends StatefulWidget {
   const SqlServerConfigPage({super.key});
@@ -56,7 +55,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
+                          const Icon(
                             FluentIcons.error,
                             size: 64,
                             color: AppColors.error,
@@ -91,9 +90,9 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
 
                   return SqlServerConfigList(
                     configs: provider.configs,
-                    onEdit: (config) => _showConfigDialog(config),
-                    onDuplicate: (config) => _duplicateConfig(config),
-                    onDelete: (id) => _confirmDelete(id),
+                    onEdit: _showConfigDialog,
+                    onDuplicate: _duplicateConfig,
+                    onDelete: _confirmDelete,
                     onToggleEnabled: (id, enabled) =>
                         provider.toggleEnabled(id, enabled),
                   );
@@ -110,7 +109,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
     final result = await SqlServerConfigDialog.show(context, config: config);
 
     if (result != null && mounted) {
-      bool success = false;
+      var success = false;
       String? errorMessage;
 
       if (result is SybaseConfig) {
@@ -169,7 +168,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed ?? false) {
       if (!mounted) return;
 
       final success = await provider.deleteConfig(id);

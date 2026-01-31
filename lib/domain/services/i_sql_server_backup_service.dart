@@ -1,8 +1,7 @@
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:result_dart/result_dart.dart';
-
-import '../entities/sql_server_config.dart';
-import '../entities/backup_type.dart';
-import 'backup_execution_result.dart';
 
 abstract class ISqlServerBackupService {
   Future<Result<BackupExecutionResult>> executeBackup({
@@ -22,4 +21,3 @@ abstract class ISqlServerBackupService {
     Duration? timeout,
   });
 }
-

@@ -1,12 +1,11 @@
+import 'package:backup_database/application/providers/scheduler_provider.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/presentation/widgets/backup/backup_progress_dialog.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedules.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../application/providers/scheduler_provider.dart';
-import '../../domain/entities/schedule.dart';
-import '../widgets/common/common.dart';
-import '../widgets/schedules/schedules.dart';
-import '../widgets/backup/backup_progress_dialog.dart';
 
 class SchedulesPage extends StatefulWidget {
   const SchedulesPage({super.key});
@@ -67,7 +66,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
+                              const Icon(
                                 FluentIcons.error,
                                 size: 64,
                                 color: AppColors.error,
@@ -112,7 +111,8 @@ class _SchedulesPageState extends State<SchedulesPage> {
                       return ScheduleListItem(
                         schedule: schedule,
                         onEdit: () => _showScheduleDialog(context, schedule),
-                        onDuplicate: () => _duplicateSchedule(context, schedule),
+                        onDuplicate: () =>
+                            _duplicateSchedule(context, schedule),
                         onDelete: () => _confirmDelete(context, schedule.id),
                         onRunNow: () => _runNow(context, schedule.id),
                         onToggleEnabled: (enabled) =>
@@ -176,7 +176,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
       ),
     );
 
-    if (confirmed == true && context.mounted) {
+    if ((confirmed ?? false) && context.mounted) {
       final provider = context.read<SchedulerProvider>();
       final success = await provider.deleteSchedule(id);
 
@@ -207,12 +207,12 @@ class _SchedulesPageState extends State<SchedulesPage> {
           ),
           Button(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(FluentIcons.play),
-                const SizedBox(width: 8),
-                const Text('Executar'),
+                Icon(FluentIcons.play),
+                SizedBox(width: 8),
+                Text('Executar'),
               ],
             ),
           ),
@@ -220,7 +220,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
       ),
     );
 
-    if (confirmed == true && context.mounted) {
+    if ((confirmed ?? false) && context.mounted) {
       final schedulerProvider = context.read<SchedulerProvider>();
 
       BackupProgressDialog.show(context);

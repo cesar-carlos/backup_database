@@ -10,13 +10,6 @@ enum BackupStep {
 }
 
 class BackupProgress {
-  final BackupStep step;
-  final String message;
-  final double? progress;
-  final String? error;
-  final DateTime? startedAt;
-  final Duration? elapsed;
-
   const BackupProgress({
     required this.step,
     required this.message,
@@ -25,6 +18,12 @@ class BackupProgress {
     this.startedAt,
     this.elapsed,
   });
+  final BackupStep step;
+  final String message;
+  final double? progress;
+  final String? error;
+  final DateTime? startedAt;
+  final Duration? elapsed;
 
   BackupProgress copyWith({
     BackupStep? step,
@@ -58,7 +57,7 @@ class BackupProgressProvider extends ChangeNotifier {
       step: BackupStep.initializing,
       message: 'Iniciando backup: $scheduleName',
       startedAt: DateTime.now(),
-      progress: 0.0,
+      progress: 0,
     );
     notifyListeners();
   }
@@ -99,7 +98,7 @@ class BackupProgressProvider extends ChangeNotifier {
     _currentProgress = _currentProgress?.copyWith(
       step: BackupStep.completed,
       message: message ?? 'Backup concluído com sucesso!',
-      progress: 1.0,
+      progress: 1,
       elapsed: elapsed,
     );
     notifyListeners();

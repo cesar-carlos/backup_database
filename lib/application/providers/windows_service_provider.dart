@@ -1,17 +1,15 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/errors/failure.dart';
-import '../../core/utils/logger_service.dart';
-import '../../domain/services/i_windows_service_service.dart';
-
 class WindowsServiceProvider extends ChangeNotifier {
+  WindowsServiceProvider(this._service);
   final IWindowsServiceService _service;
 
   WindowsServiceStatus? _status;
   bool _isLoading = false;
   String? _error;
-
-  WindowsServiceProvider(this._service);
 
   WindowsServiceStatus? get status => _status;
   bool get isLoading => _isLoading;
@@ -152,4 +150,3 @@ class WindowsServiceProvider extends ChangeNotifier {
     return success;
   }
 }
-

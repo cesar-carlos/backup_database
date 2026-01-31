@@ -1,40 +1,35 @@
-import 'dart:io';
+﻿import 'dart:io';
 
-import '../../core/core.dart';
-import '../../core/di/service_locator.dart' as service_locator;
-import '../managers/managers.dart';
-import '../boot/app_cleanup.dart';
-import '../../application/services/scheduler_service.dart';
-import '../../domain/repositories/repositories.dart';
+import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
+import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/presentation/boot/app_cleanup.dart';
+import 'package:backup_database/presentation/managers/managers.dart';
 
 class TrayMenuHandler {
   static void handleAction(TrayMenuAction action) {
     switch (action) {
       case TrayMenuAction.show:
         WindowManagerService().show();
-        break;
 
       case TrayMenuAction.executeBackup:
         _executeManualBackup();
-        break;
 
       case TrayMenuAction.pauseScheduler:
         service_locator.getIt<SchedulerService>().stop();
         TrayManagerService().setSchedulerPaused(true);
-        break;
 
       case TrayMenuAction.resumeScheduler:
         service_locator.getIt<SchedulerService>().start();
         TrayManagerService().setSchedulerPaused(false);
-        break;
 
       case TrayMenuAction.settings:
         _navigateToSettings();
-        break;
 
       case TrayMenuAction.exit:
         _exitApp();
-        break;
     }
   }
 
@@ -58,8 +53,8 @@ class TrayMenuHandler {
             'Encontrados ${schedules.length} agendamento(s) habilitado(s). Executando...',
           );
 
-          int successCount = 0;
-          int failureCount = 0;
+          var successCount = 0;
+          var failureCount = 0;
 
           for (final schedule in schedules) {
             LoggerService.info('Executando backup: ${schedule.name}');
@@ -94,7 +89,7 @@ class TrayMenuHandler {
           );
         },
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao executar backup manual', e, stackTrace);
     }
   }

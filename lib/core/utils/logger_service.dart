@@ -6,11 +6,6 @@ class LoggerService {
   static Logger get _instance {
     _logger ??= Logger(
       printer: PrettyPrinter(
-        methodCount: 2,
-        errorMethodCount: 8,
-        lineLength: 120,
-        colors: true,
-        printEmojis: true,
         dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
       ),
     );
@@ -20,11 +15,6 @@ class LoggerService {
   static void init() {
     _logger ??= Logger(
       printer: PrettyPrinter(
-        methodCount: 2,
-        errorMethodCount: 8,
-        lineLength: 120,
-        colors: true,
-        printEmojis: true,
         dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
       ),
     );

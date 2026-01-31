@@ -1,11 +1,10 @@
+import 'package:backup_database/application/providers/destination_provider.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/destinations/destinations.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../application/providers/destination_provider.dart';
-import '../../domain/entities/backup_destination.dart';
-import '../widgets/destinations/destinations.dart';
-import '../widgets/common/common.dart';
 
 class DestinationsPage extends StatelessWidget {
   const DestinationsPage({super.key});
@@ -51,7 +50,7 @@ class DestinationsPage extends StatelessWidget {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
+                            const Icon(
                               FluentIcons.error,
                               size: 64,
                               color: AppColors.error,
@@ -161,7 +160,7 @@ class DestinationsPage extends StatelessWidget {
       ),
     );
 
-    if (confirmed == true && context.mounted) {
+    if ((confirmed ?? false) && context.mounted) {
       final provider = context.read<DestinationProvider>();
       final success = await provider.deleteDestination(id);
 

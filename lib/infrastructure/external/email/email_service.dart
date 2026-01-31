@@ -1,13 +1,12 @@
-import 'dart:io';
+﻿import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'package:result_dart/result_dart.dart' as rd;
-
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/email_config.dart';
-import '../../../domain/entities/backup_history.dart';
 
 class EmailService {
   Future<rd.Result<bool>> sendEmail({
@@ -31,7 +30,7 @@ class EmailService {
 
       final message = Message()
         ..from = Address(config.fromEmail, config.fromName)
-        ..recipients.addAll(config.recipients.map((e) => Address(e)))
+        ..recipients.addAll(config.recipients.map(Address.new))
         ..subject = subject
         ..text = isHtml ? null : body
         ..html = isHtml ? body : null;
@@ -50,7 +49,7 @@ class EmailService {
 
       LoggerService.info('E-mail enviado com sucesso');
       return const rd.Success(true);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao enviar e-mail', e, stackTrace);
       return rd.Failure(ServerFailure(message: 'Erro ao enviar e-mail: $e'));
     }
@@ -68,7 +67,7 @@ class EmailService {
     final subject = '✅ Backup Concluído - ${history.databaseName}';
     final body = _buildSuccessEmailBody(history);
 
-    return await sendEmail(
+    return sendEmail(
       config: config,
       subject: subject,
       body: body,
@@ -88,7 +87,7 @@ class EmailService {
     final subject = '❌ Erro no Backup - ${history.databaseName}';
     final body = _buildErrorEmailBody(history);
 
-    return await sendEmail(
+    return sendEmail(
       config: config,
       subject: subject,
       body: body,
@@ -118,7 +117,7 @@ Data/Hora: ${DateTime.now()}
 Este é um e-mail automático do Sistema de Backup.
 ''';
 
-    return await sendEmail(
+    return sendEmail(
       config: config,
       subject: subject,
       body: body,

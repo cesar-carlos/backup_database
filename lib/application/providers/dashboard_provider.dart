@@ -1,16 +1,14 @@
+﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
+import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/core.dart';
-import '../../domain/entities/backup_history.dart';
-import '../../domain/entities/schedule.dart';
-import '../../domain/repositories/i_backup_history_repository.dart';
-import '../../domain/repositories/i_schedule_repository.dart';
-
 class DashboardProvider extends ChangeNotifier {
+  DashboardProvider(this._backupHistoryRepository, this._scheduleRepository);
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;
-
-  DashboardProvider(this._backupHistoryRepository, this._scheduleRepository);
 
   int _totalBackups = 0;
   int _backupsToday = 0;
@@ -43,7 +41,7 @@ class DashboardProvider extends ChangeNotifier {
         _loadActiveSchedules(),
         _loadRecentBackups(),
       ]);
-    } catch (e) {
+    } on Object catch (e) {
       _error = e.toString();
     } finally {
       _isLoading = false;

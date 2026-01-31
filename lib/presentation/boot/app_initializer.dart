@@ -1,12 +1,12 @@
-import 'dart:io';
+﻿import 'dart:io';
 
+import 'package:backup_database/application/providers/providers.dart';
+import 'package:backup_database/application/services/auto_update_service.dart';
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../core/core.dart';
-import '../../core/di/service_locator.dart' as service_locator;
-import '../../application/providers/providers.dart';
-import '../../application/services/auto_update_service.dart';
 
 class AppInitializer {
   static Future<void> initialize() async {
@@ -17,7 +17,7 @@ class AppInitializer {
   }
 
   static Future<void> _loadEnvironment() async {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load();
     LoggerService.info('Variáveis de ambiente carregadas');
   }
 
@@ -31,14 +31,14 @@ class AppInitializer {
       final googleAuthProvider = service_locator.getIt<GoogleAuthProvider>();
       await googleAuthProvider.initialize();
       LoggerService.info('GoogleAuthProvider inicializado');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao inicializar GoogleAuthProvider: $e');
     }
 
     try {
       final dropboxAuthProvider = service_locator.getIt<DropboxAuthProvider>();
       await dropboxAuthProvider.initialize();
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.debug('Erro ao inicializar DropboxAuthProvider: $e');
     }
   }
@@ -49,7 +49,7 @@ class AppInitializer {
       final feedUrl = dotenv.env['AUTO_UPDATE_FEED_URL'];
       await autoUpdateService.initialize(feedUrl);
       LoggerService.info('AutoUpdateService inicializado');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao inicializar AutoUpdateService: $e');
     }
   }
@@ -92,13 +92,12 @@ class AppInitializer {
 }
 
 class LaunchConfig {
-  final String? scheduleId;
-  final bool startMinimized;
-  final List<String> args;
-
   const LaunchConfig({
     required this.scheduleId,
     required this.startMinimized,
     required this.args,
   });
+  final String? scheduleId;
+  final bool startMinimized;
+  final List<String> args;
 }

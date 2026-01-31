@@ -1,9 +1,8 @@
-import 'dart:io';
+﻿import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
-
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
 
 class OsVersionChecker {
   static bool isCompatible() {
@@ -54,7 +53,7 @@ class OsVersionChecker {
       }
 
       return isCompatible;
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       // Retornar true em caso de erro para não bloquear execução
       // Alguns ambientes podem funcionar mesmo sem detecção precisa da versão
       LoggerService.error(
@@ -68,7 +67,7 @@ class OsVersionChecker {
 
   static rd.Result<OsVersionInfo> getVersionInfo() {
     if (!Platform.isWindows) {
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(message: 'Sistema operacional não é Windows'),
       );
     }
@@ -102,7 +101,7 @@ class OsVersionChecker {
           rawVersion: osVersion,
         ),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao obter informações detalhadas da versão do SO',
         e,
@@ -186,12 +185,6 @@ class OsVersionChecker {
 }
 
 class OsVersionInfo {
-  final int majorVersion;
-  final int minorVersion;
-  final String versionName;
-  final bool isCompatible;
-  final String rawVersion;
-
   const OsVersionInfo({
     required this.majorVersion,
     required this.minorVersion,
@@ -199,6 +192,11 @@ class OsVersionInfo {
     required this.isCompatible,
     required this.rawVersion,
   });
+  final int majorVersion;
+  final int minorVersion;
+  final String versionName;
+  final bool isCompatible;
+  final String rawVersion;
 
   String get minimumRequired => 'Windows 8.1 (6.3) / Server 2012 R2';
 

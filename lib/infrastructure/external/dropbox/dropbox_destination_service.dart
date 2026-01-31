@@ -1,47 +1,43 @@
-import 'dart:io';
+﻿import 'dart:io';
 
+import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/errors/dropbox_failure.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_service.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/constants/app_constants.dart';
-import '../../../core/errors/failure.dart';
-import '../../../core/errors/dropbox_failure.dart';
-import '../dropbox/dropbox_auth_service.dart';
-
 class DropboxDestinationConfig {
-  final String folderPath;
-  final String folderName;
-  final int retentionDays;
-
   const DropboxDestinationConfig({
     required this.folderPath,
     this.folderName = 'Backups',
     this.retentionDays = 30,
   });
+  final String folderPath;
+  final String folderName;
+  final int retentionDays;
 }
 
 class DropboxUploadResult {
-  final String fileId;
-  final String fileName;
-  final int fileSize;
-  final Duration duration;
-
   const DropboxUploadResult({
     required this.fileId,
     required this.fileName,
     required this.fileSize,
     required this.duration,
   });
+  final String fileId;
+  final String fileName;
+  final int fileSize;
+  final Duration duration;
 }
 
 class DropboxDestinationService {
+  DropboxDestinationService(this._authService);
   final DropboxAuthService _authService;
   Dio? _cachedDio;
   String? _cachedAccessToken;
-
-  DropboxDestinationService(this._authService);
 
   Future<rd.Result<DropboxUploadResult>> upload({
     required String sourceFilePath,
@@ -87,7 +83,7 @@ class DropboxDestinationService {
           fileSize >= AppConstants.dropboxSimpleUploadLimit;
 
       Exception? lastError;
-      for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      for (var attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           final result = await _executeWithTokenRefresh(() async {
             final dioResult = await _getAuthenticatedDio();
@@ -97,23 +93,24 @@ class DropboxDestinationService {
 
             final dio = dioResult.getOrNull()!;
 
-            final uploadResult = useResumableUpload 
+            final uploadResult = useResumableUpload
                 ? await _uploadResumable(dio, sourceFile, filePath, fileSize)
                 : await _uploadSimple(dio, sourceFile, filePath, fileSize);
 
-            // Validação de Integridade
             if (uploadResult.containsKey('size')) {
               final remoteSize = uploadResult['size'] as int;
               if (remoteSize != fileSize) {
-                 // Tentar apagar arquivo
-                 try {
-                    await dio.post('/2/files/delete_v2', data: {'path': filePath});
-                 } catch(_) {}
+                try {
+                  await dio.post(
+                    '/2/files/delete_v2',
+                    data: {'path': filePath},
+                  );
+                } on Object catch (_) {}
 
-                 throw Exception(
-                   'Arquivo corrompido no Dropbox. '
-                   'Local: $fileSize, Remoto: $remoteSize'
-                 );
+                throw Exception(
+                  'Arquivo corrompido no Dropbox. '
+                  'Local: $fileSize, Remoto: $remoteSize',
+                );
               }
             }
 
@@ -130,7 +127,7 @@ class DropboxDestinationService {
               duration: stopwatch.elapsed,
             ),
           );
-        } catch (e) {
+        } on Object catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
 
           if (attempt < maxRetries) {
@@ -149,7 +146,7 @@ class DropboxDestinationService {
           originalError: lastError,
         ),
       );
-    } catch (e) {
+    } on Object catch (e) {
       stopwatch.stop();
       return rd.Failure(
         DropboxFailure(message: _getDropboxErrorMessage(e), originalError: e),
@@ -217,7 +214,7 @@ class DropboxDestinationService {
     String filePath,
     int fileSize,
   ) async {
-    const chunkSize = 4 * 1024 * 1024; // 4MB chunks
+    const chunkSize = 4 * 1024 * 1024;
     final totalChunks = (fileSize / chunkSize).ceil();
 
     final contentDio = Dio(
@@ -230,11 +227,11 @@ class DropboxDestinationService {
     );
 
     String? sessionId;
-    int offset = 0;
+    var offset = 0;
 
     final fileStream = sourceFile.openRead();
 
-    for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    for (var chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
       final chunk = await fileStream.take(chunkSize).toList();
       final chunkData = chunk.expand((list) => list).toList();
 
@@ -361,7 +358,7 @@ class DropboxDestinationService {
         final tag = metadata?['.tag'] as String?;
 
         if (tag == 'folder') {
-          return rd.Success(());
+          return const rd.Success(());
         } else if (tag == 'file') {
           return rd.Failure(
             DropboxFailure(
@@ -386,7 +383,7 @@ class DropboxDestinationService {
 
           if (errorTag == 'path/conflict' ||
               errorTag == 'path/conflict/folder') {
-            return rd.Success(());
+            return const rd.Success(());
           } else if (errorTag == 'path/conflict/file') {
             return rd.Failure(
               DropboxFailure(
@@ -395,7 +392,7 @@ class DropboxDestinationService {
               ),
             );
           } else {
-            return rd.Success(());
+            return const rd.Success(());
           }
         } else if (e.response?.statusCode == 401) {
           _cachedDio = null;
@@ -426,7 +423,7 @@ class DropboxDestinationService {
           '/2/files/create_folder_v2',
           data: {'path': folderPath, 'autorename': false},
         );
-        return rd.Success(());
+        return const rd.Success(());
       } on DioException catch (e) {
         if (e.response?.statusCode == 409) {
           final errorData = e.response?.data as Map<String, dynamic>?;
@@ -436,7 +433,7 @@ class DropboxDestinationService {
           if (errorTag == 'path/conflict' ||
               errorTag == 'path/conflict/folder' ||
               errorTag == 'path/conflict/file') {
-            return rd.Success(());
+            return const rd.Success(());
           }
         }
 
@@ -463,14 +460,14 @@ class DropboxDestinationService {
           ),
         );
       }
-    } catch (e) {
+    } on Object catch (e) {
       if (e is DropboxFailure) {
         return rd.Failure(e);
       }
 
       final errorStr = e.toString().toLowerCase();
       if (errorStr.contains('409') || errorStr.contains('conflict')) {
-        return rd.Success(());
+        return const rd.Success(());
       }
 
       return rd.Failure(
@@ -515,8 +512,8 @@ class DropboxDestinationService {
           }
         }
       }
-    } catch (e) {
-      // Ignore errors when checking if file exists
+    } on Object catch (e) {
+      // Ignore errors when folder doesn't exist yet
     }
   }
 
@@ -549,7 +546,7 @@ class DropboxDestinationService {
         return data['entries'] as List<dynamic>? ?? [];
       });
 
-      int deletedCount = 0;
+      var deletedCount = 0;
       for (final folder in folders) {
         final folderData = folder as Map<String, dynamic>;
         final folderName = folderData['name'] as String?;
@@ -567,13 +564,13 @@ class DropboxDestinationService {
             });
             deletedCount++;
           }
-        } catch (e) {
-          // Nome não é uma data válida, ignorar
+        } on Object catch (e) {
+          // Ignore folders with invalid date format
         }
       }
 
       return rd.Success(deletedCount);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DropboxFailure(
           message: 'Erro ao limpar backups Dropbox: $e',
@@ -605,7 +602,7 @@ class DropboxDestinationService {
       }
 
       return rd.Success(_cachedDio!);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DropboxFailure(
           message: 'Erro ao obter cliente autenticado: $e',
@@ -627,14 +624,14 @@ class DropboxDestinationService {
   }
 
   Future<T> _executeWithTokenRefresh<T>(Future<T> Function() operation) async {
-    int attempts = 0;
+    var attempts = 0;
     const maxAttempts = 2;
 
     while (attempts < maxAttempts) {
       try {
         return await operation();
-      } catch (e) {
-        bool is401 = false;
+      } on Object catch (e) {
+        var is401 = false;
 
         if (e is DioException) {
           final statusCode = e.response?.statusCode;

@@ -1,19 +1,17 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/compression_format.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../domain/entities/backup_type.dart';
-import '../../domain/entities/compression_format.dart';
-import '../../domain/entities/schedule.dart';
-import '../../domain/repositories/i_schedule_repository.dart';
-import '../datasources/local/database.dart';
-
 class ScheduleRepository implements IScheduleRepository {
-  final AppDatabase _database;
-
   ScheduleRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<rd.Result<List<Schedule>>> getAll() async {
@@ -25,12 +23,12 @@ class ScheduleRepository implements IScheduleRepository {
       LoggerService.info(
         '[ScheduleRepository] Encontrados ${schedules.length} agendamentos no banco',
       );
-      final entities = schedules.map((data) => _toEntity(data)).toList();
+      final entities = schedules.map(_toEntity).toList();
       LoggerService.info(
         '[ScheduleRepository] Convertidos ${entities.length} agendamentos para entidades',
       );
       return rd.Success(entities);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         '[ScheduleRepository] Erro ao buscar agendamentos',
         e,
@@ -47,12 +45,12 @@ class ScheduleRepository implements IScheduleRepository {
     try {
       final schedule = await _database.scheduleDao.getById(id);
       if (schedule == null) {
-        return rd.Failure(
+        return const rd.Failure(
           NotFoundFailure(message: 'Agendamento não encontrado'),
         );
       }
       return rd.Success(_toEntity(schedule));
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar agendamento: $e'),
       );
@@ -75,7 +73,7 @@ class ScheduleRepository implements IScheduleRepository {
         LoggerService.error(
           '[ScheduleRepository] Agendamento não foi encontrado após inserção!',
         );
-        return rd.Failure(
+        return const rd.Failure(
           DatabaseFailure(message: 'Agendamento não foi salvo corretamente'),
         );
       }
@@ -84,7 +82,7 @@ class ScheduleRepository implements IScheduleRepository {
         '[ScheduleRepository] Agendamento verificado no banco: ${saved.name}',
       );
       return rd.Success(schedule);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         '[ScheduleRepository] Erro ao criar agendamento',
         e,
@@ -102,7 +100,7 @@ class ScheduleRepository implements IScheduleRepository {
       final companion = _toCompanion(schedule);
       await _database.scheduleDao.updateSchedule(companion);
       return rd.Success(schedule);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao atualizar agendamento: $e'),
       );
@@ -114,7 +112,7 @@ class ScheduleRepository implements IScheduleRepository {
     try {
       await _database.scheduleDao.deleteSchedule(id);
       return const rd.Success(unit);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao deletar agendamento: $e'),
       );
@@ -125,9 +123,9 @@ class ScheduleRepository implements IScheduleRepository {
   Future<rd.Result<List<Schedule>>> getEnabled() async {
     try {
       final schedules = await _database.scheduleDao.getEnabled();
-      final entities = schedules.map((data) => _toEntity(data)).toList();
+      final entities = schedules.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar agendamentos ativos: $e'),
       );
@@ -142,9 +140,9 @@ class ScheduleRepository implements IScheduleRepository {
       final schedules = await _database.scheduleDao.getByDatabaseConfig(
         databaseConfigId,
       );
-      final entities = schedules.map((data) => _toEntity(data)).toList();
+      final entities = schedules.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(
           message: 'Erro ao buscar agendamentos por configuração: $e',
@@ -162,7 +160,7 @@ class ScheduleRepository implements IScheduleRepository {
     try {
       await _database.scheduleDao.updateLastRun(id, lastRunAt, nextRunAt);
       return const rd.Success(unit);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao atualizar última execução: $e'),
       );
@@ -173,7 +171,7 @@ class ScheduleRepository implements IScheduleRepository {
     List<String> destinationIds;
     try {
       destinationIds = (jsonDecode(data.destinationIds) as List).cast<String>();
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         '[ScheduleRepository] Erro ao decodificar destinationIds para schedule ${data.id}: $e',
       );

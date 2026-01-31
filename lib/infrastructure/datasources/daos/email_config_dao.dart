@@ -1,7 +1,6 @@
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/datasources/local/tables/email_configs_table.dart';
 import 'package:drift/drift.dart';
-
-import '../local/database.dart';
-import '../local/tables/email_configs_table.dart';
 
 part 'email_config_dao.g.dart';
 
@@ -20,13 +19,15 @@ class EmailConfigDao extends DatabaseAccessor<AppDatabase>
     if (!config.id.present) {
       return false;
     }
-    
+
     final existing = await get();
     if (existing == null) {
       return false;
     }
-    
-    final updated = await (update(emailConfigsTable)..where((tbl) => tbl.id.equals(config.id.value))).write(config);
+
+    final updated = await (update(
+      emailConfigsTable,
+    )..where((tbl) => tbl.id.equals(config.id.value))).write(config);
     return updated > 0;
   }
 
@@ -35,4 +36,3 @@ class EmailConfigDao extends DatabaseAccessor<AppDatabase>
   Stream<EmailConfigsTableData?> watch() =>
       select(emailConfigsTable).watchSingleOrNull();
 }
-

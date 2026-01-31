@@ -1,12 +1,10 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/infrastructure/external/destinations/local_destination_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../../infrastructure/external/destinations/local_destination_service.dart';
-
 class SendToLocal {
-  final LocalDestinationService _service;
-
   SendToLocal(this._service);
+  final LocalDestinationService _service;
 
   Future<rd.Result<LocalUploadResult>> call({
     required String sourceFilePath,
@@ -24,11 +22,10 @@ class SendToLocal {
       );
     }
 
-    return await _service.upload(
+    return _service.upload(
       sourceFilePath: sourceFilePath,
       config: config,
       customFileName: customFileName,
     );
   }
 }
-

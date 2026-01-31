@@ -1,12 +1,10 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../repositories/repositories.dart';
-
 class DeleteSchedule {
-  final IScheduleRepository _repository;
-
   DeleteSchedule(this._repository);
+  final IScheduleRepository _repository;
 
   Future<rd.Result<void>> call(String id) async {
     if (id.isEmpty) {
@@ -15,7 +13,6 @@ class DeleteSchedule {
       );
     }
 
-    return await _repository.delete(id);
+    return _repository.delete(id);
   }
 }
-

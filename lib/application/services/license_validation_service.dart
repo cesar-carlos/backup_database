@@ -1,21 +1,19 @@
+﻿import 'package:backup_database/core/errors/failure.dart' as core;
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/license.dart';
+import 'package:backup_database/domain/repositories/i_license_repository.dart';
+import 'package:backup_database/domain/services/i_device_key_service.dart';
+import 'package:backup_database/domain/services/i_license_validation_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/errors/failure.dart' as core;
-import '../../core/utils/logger_service.dart';
-import '../../domain/entities/license.dart';
-import '../../domain/repositories/i_license_repository.dart';
-import '../../domain/services/i_device_key_service.dart';
-import '../../domain/services/i_license_validation_service.dart';
-
 class LicenseValidationService implements ILicenseValidationService {
-  final ILicenseRepository _licenseRepository;
-  final IDeviceKeyService _deviceKeyService;
-
   LicenseValidationService({
     required ILicenseRepository licenseRepository,
     required IDeviceKeyService deviceKeyService,
-  })  : _licenseRepository = licenseRepository,
-        _deviceKeyService = deviceKeyService;
+  }) : _licenseRepository = licenseRepository,
+       _deviceKeyService = deviceKeyService;
+  final ILicenseRepository _licenseRepository;
+  final IDeviceKeyService _deviceKeyService;
 
   @override
   Future<rd.Result<License>> getCurrentLicense() async {
@@ -23,23 +21,25 @@ class LicenseValidationService implements ILicenseValidationService {
       final deviceKeyResult = await _deviceKeyService.getDeviceKey();
       return deviceKeyResult.fold(
         (deviceKey) async {
-          final licenseResult = await _licenseRepository.getByDeviceKey(deviceKey);
+          final licenseResult = await _licenseRepository.getByDeviceKey(
+            deviceKey,
+          );
           return licenseResult.fold(
             (license) {
               if (license.isExpired) {
                 LoggerService.warning('Licença encontrada mas expirada');
-                return rd.Failure(
+                return const rd.Failure(
                   core.ValidationFailure(message: 'Licença expirada'),
                 );
               }
               return rd.Success(license);
             },
-            (failure) => rd.Failure(failure),
+            rd.Failure.new,
           );
         },
-        (failure) => rd.Failure(failure),
+        rd.Failure.new,
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao obter licença atual',
         e,
@@ -68,7 +68,7 @@ class LicenseValidationService implements ILicenseValidationService {
           return const rd.Success(false);
         },
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao verificar permissão de recurso: $feature',
         e,
@@ -109,7 +109,7 @@ class LicenseValidationService implements ILicenseValidationService {
           return const rd.Success(false);
         },
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao validar licença',
         e,
@@ -124,4 +124,3 @@ class LicenseValidationService implements ILicenseValidationService {
     }
   }
 }
-

@@ -1,13 +1,12 @@
 abstract class Failure implements Exception {
-  final String message;
-  final String? code;
-  final dynamic originalError;
-
   const Failure({
     required this.message,
     this.code,
     this.originalError,
   });
+  final String message;
+  final String? code;
+  final dynamic originalError;
 
   @override
   String toString() => 'Failure(message: $message, code: $code)';
@@ -84,4 +83,3 @@ class NotFoundFailure extends Failure {
     super.originalError,
   });
 }
-

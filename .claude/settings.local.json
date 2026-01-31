@@ -4,7 +4,10 @@
       "Bash(flutter analyze:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(dart fix:*)",
+      "Bash(dart format:*)",
+      "Bash(dart pub:*)"
     ]
   }
 }

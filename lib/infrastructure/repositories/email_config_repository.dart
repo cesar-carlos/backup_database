@@ -1,29 +1,27 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/domain/entities/email_config.dart';
+import 'package:backup_database/domain/repositories/i_email_config_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../domain/entities/email_config.dart';
-import '../../domain/repositories/i_email_config_repository.dart';
-import '../datasources/local/database.dart';
-
 class EmailConfigRepository implements IEmailConfigRepository {
-  final AppDatabase _database;
-
   EmailConfigRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<rd.Result<EmailConfig>> get() async {
     try {
       final config = await _database.emailConfigDao.get();
       if (config == null) {
-        return rd.Failure(
+        return const rd.Failure(
           NotFoundFailure(message: 'Configuração de e-mail não encontrada'),
         );
       }
       return rd.Success(_toEntity(config));
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar configuração de e-mail: $e'),
       );
@@ -43,7 +41,7 @@ class EmailConfigRepository implements IEmailConfigRepository {
       }
 
       return rd.Success(config);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao salvar configuração de e-mail',
         e,
@@ -62,7 +60,7 @@ class EmailConfigRepository implements IEmailConfigRepository {
     try {
       await _database.emailConfigDao.deleteAll();
       return const rd.Success(unit);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao deletar configuração de e-mail: $e'),
       );
@@ -73,7 +71,7 @@ class EmailConfigRepository implements IEmailConfigRepository {
     List<String> recipients;
     try {
       recipients = (jsonDecode(data.recipients) as List).cast<String>();
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         '[EmailConfigRepository] Erro ao decodificar recipients para config ${data.id}: $e',
       );

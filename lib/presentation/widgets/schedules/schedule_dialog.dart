@@ -1,26 +1,24 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:backup_database/application/providers/providers.dart';
+import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/compression_format.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/core.dart';
-import '../../../core/constants/license_features.dart';
-import '../../../application/providers/providers.dart';
-import '../../../domain/entities/backup_type.dart';
-import '../../../domain/entities/compression_format.dart';
-import '../../../domain/entities/schedule.dart';
-import '../../../domain/entities/sql_server_config.dart';
-import '../../../domain/entities/sybase_config.dart';
-import '../../../domain/entities/postgres_config.dart';
-import '../../../domain/entities/backup_destination.dart';
-import '../common/common.dart';
-
 class ScheduleDialog extends StatefulWidget {
-  final Schedule? schedule;
-
   const ScheduleDialog({super.key, this.schedule});
+  final Schedule? schedule;
 
   static Future<Schedule?> show(BuildContext context, {Schedule? schedule}) {
     return showDialog<Schedule>(
@@ -116,7 +114,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     final systemTemp =
         Platform.environment['TEMP'] ??
         Platform.environment['TMP'] ??
-        'C:\\Temp';
+        r'C:\Temp';
     return '$systemTemp\\BackupDatabase';
   }
 
@@ -126,27 +124,23 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
       switch (_scheduleType) {
         case ScheduleType.daily:
-          _hour = config['hour'] ?? 0;
-          _minute = config['minute'] ?? 0;
-          break;
+          _hour = (config['hour'] as int?) ?? 0;
+          _minute = (config['minute'] as int?) ?? 0;
         case ScheduleType.weekly:
           _selectedDaysOfWeek =
               (config['daysOfWeek'] as List?)?.cast<int>() ?? [1];
-          _hour = config['hour'] ?? 0;
-          _minute = config['minute'] ?? 0;
-          break;
+          _hour = (config['hour'] as int?) ?? 0;
+          _minute = (config['minute'] as int?) ?? 0;
         case ScheduleType.monthly:
           _selectedDaysOfMonth =
               (config['daysOfMonth'] as List?)?.cast<int>() ?? [1];
-          _hour = config['hour'] ?? 0;
-          _minute = config['minute'] ?? 0;
-          break;
+          _hour = (config['hour'] as int?) ?? 0;
+          _minute = (config['minute'] as int?) ?? 0;
         case ScheduleType.interval:
-          _intervalMinutes = config['intervalMinutes'] ?? 60;
+          _intervalMinutes = (config['intervalMinutes'] as int?) ?? 60;
           _intervalMinutesController.text = _intervalMinutes.toString();
-          break;
       }
-    } catch (e) {
+    } on Object catch (e) {
       // Use defaults
     }
   }
@@ -216,7 +210,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       ),
       title: Row(
         children: [
-          Icon(FluentIcons.calendar, color: AppColors.primary),
+          const Icon(FluentIcons.calendar, color: AppColors.primary),
           const SizedBox(width: 12),
           Text(
             isEditing ? 'Editar Agendamento' : 'Novo Agendamento',
@@ -371,11 +365,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     value: type,
                     enabled: !isBlocked,
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
                             children: [
                               Flexible(
                                 child: Text(
@@ -476,11 +468,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     value: type,
                     enabled: !isIntervalBlocked,
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
                             children: [
                               Flexible(
                                 child: Text(
@@ -588,7 +578,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 child: AppTextField(
                   controller: _backupFolderController,
                   label: 'Pasta para Armazenar Backup',
-                  hint: 'C:\\Backups',
+                  hint: r'C:\Backups',
                   prefixIcon: const Icon(FluentIcons.folder),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -638,14 +628,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               label: 'Formato de compressão',
               value: _compressionFormat,
               placeholder: const Text('Formato de compressão'),
-              items: [
+              items: const [
                 ComboBoxItem<CompressionFormat>(
                   value: CompressionFormat.zip,
-                  child: const Text('ZIP (compressão rápida, menor taxa)'),
+                  child: Text('ZIP (compressão rápida, menor taxa)'),
                 ),
                 ComboBoxItem<CompressionFormat>(
                   value: CompressionFormat.rar,
-                  child: const Text(
+                  child: Text(
                     'RAR (compressão maior, mais processamento)',
                   ),
                 ),
@@ -799,8 +789,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   Widget _buildCheckboxWithInfo({
     required String label,
     required bool value,
-    ValueChanged<bool>? onChanged,
     required String infoText,
+    ValueChanged<bool>? onChanged,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -848,10 +838,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               _buildSectionTitle('Script SQL Pós-Backup (Opcional)'),
               const SizedBox(height: 16),
               if (!hasPostScript)
-                InfoBar(
+                const InfoBar(
                   severity: InfoBarSeverity.warning,
-                  title: const Text('Recurso Bloqueado'),
-                  content: const Text(
+                  title: Text('Recurso Bloqueado'),
+                  content: Text(
                     'Este recurso requer uma licença válida com permissão para scripts SQL pós-backup.',
                   ),
                 ),
@@ -861,21 +851,20 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 child: TextBox(
                   controller: _postBackupScriptController,
                   placeholder:
-                      'Ex: UPDATE tabela SET status = \'backup_completo\' WHERE id = 1;',
+                      "Ex: UPDATE tabela SET status = 'backup_completo' WHERE id = 1;",
                   maxLines: 15,
                   minLines: 10,
                   readOnly: !hasPostScript,
                 ),
               ),
               const SizedBox(height: 16),
-              InfoBar(
-                title: const Text('Informação'),
-                content: const Text(
+              const InfoBar(
+                title: Text('Informação'),
+                content: Text(
                   'O script será executado na mesma conexão do backup, '
                   'após o backup ser concluído com sucesso. '
                   'Erros no script não impedem o backup de ser considerado bem-sucedido.',
                 ),
-                severity: InfoBarSeverity.info,
               ),
             ],
           ),
@@ -945,7 +934,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             items: sqlServerItems.isEmpty
                 ? [
                     ComboBoxItem<String>(
-                      value: null,
                       child: Text(
                         'Nenhuma configuração disponível',
                         style: FluentTheme.of(context).typography.caption
@@ -1016,7 +1004,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             items: postgresItems.isEmpty
                 ? [
                     ComboBoxItem<String>(
-                      value: null,
                       child: Text(
                         'Nenhuma configuração disponível',
                         style: FluentTheme.of(context).typography.caption
@@ -1084,7 +1071,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           items: sybaseItems.isEmpty
               ? [
                   ComboBoxItem<String>(
-                    value: null,
                     child: Text(
                       'Nenhuma configuração disponível',
                       style: FluentTheme.of(context).typography.caption
@@ -1193,7 +1179,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             checked: isSelected,
             onChanged: (value) {
               setState(() {
-                if (value == true) {
+                if (value ?? false) {
                   _selectedDaysOfWeek.add(dayNumber);
                 } else if (_selectedDaysOfWeek.length > 1) {
                   _selectedDaysOfWeek.remove(dayNumber);
@@ -1222,7 +1208,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             checked: isSelected,
             onChanged: (value) {
               setState(() {
-                if (value == true) {
+                if (value ?? false) {
                   _selectedDaysOfMonth.add(day);
                 } else if (_selectedDaysOfMonth.length > 1) {
                   _selectedDaysOfMonth.remove(day);
@@ -1264,7 +1250,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         ),
         child: Row(
           children: [
-            Icon(FluentIcons.warning, color: AppColors.error),
+            const Icon(FluentIcons.warning, color: AppColors.error),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -1363,7 +1349,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                   Checkbox(
                     checked: selected,
                     onChanged: (value) {
-                      if (value == true && blocked) {
+                      if ((value ?? false) && blocked) {
                         MessageModal.showWarning(
                           context,
                           message:
@@ -1373,7 +1359,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                         return;
                       }
                       setState(() {
-                        if (value == true) {
+                        if (value ?? false) {
                           _selectedDestinationIds.add(destination.id);
                         } else {
                           _selectedDestinationIds.remove(destination.id);
@@ -1511,10 +1497,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         ),
       );
 
-      if (shouldCreate == true) {
+      if (shouldCreate ?? false) {
         try {
           await directory.create(recursive: true);
-        } catch (e) {
+        } on Object catch (e) {
           if (mounted) {
             MessageModal.showError(context, message: 'Erro ao criar pasta: $e');
           }
@@ -1561,7 +1547,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       }
 
       return false;
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         'Erro ao verificar permissão de escrita na pasta ${directory.path}: $e',
       );
@@ -1585,7 +1571,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     return false;
   }
 
-  void _save() async {
+  Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       setState(() {
@@ -1658,32 +1644,28 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         licenseProvider.hasValidLicense &&
         licenseProvider.currentLicense!.hasFeature(LicenseFeatures.checksum);
 
-    final effectiveEnableChecksum = _databaseType == DatabaseType.sqlServer
-        ? (hasChecksum ? _enableChecksum : false)
-        : false;
+    final effectiveEnableChecksum =
+        _databaseType == DatabaseType.sqlServer &&
+        (hasChecksum && _enableChecksum);
 
     String scheduleConfigJson;
     switch (_scheduleType) {
       case ScheduleType.daily:
         scheduleConfigJson = jsonEncode({'hour': _hour, 'minute': _minute});
-        break;
       case ScheduleType.weekly:
         scheduleConfigJson = jsonEncode({
           'daysOfWeek': _selectedDaysOfWeek,
           'hour': _hour,
           'minute': _minute,
         });
-        break;
       case ScheduleType.monthly:
         scheduleConfigJson = jsonEncode({
           'daysOfMonth': _selectedDaysOfMonth,
           'hour': _hour,
           'minute': _minute,
         });
-        break;
       case ScheduleType.interval:
         scheduleConfigJson = jsonEncode({'intervalMinutes': _intervalMinutes});
-        break;
     }
 
     final schedule = Schedule(

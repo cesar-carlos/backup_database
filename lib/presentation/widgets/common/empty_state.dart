@@ -1,20 +1,18 @@
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../../core/theme/app_colors.dart';
-
 class EmptyState extends StatelessWidget {
+  const EmptyState({
+    required this.message,
+    required this.icon,
+    super.key,
+    this.actionLabel,
+    this.onAction,
+  });
   final String message;
   final IconData icon;
   final String? actionLabel;
   final VoidCallback? onAction;
-
-  const EmptyState({
-    super.key,
-    required this.message,
-    required this.icon,
-    this.actionLabel,
-    this.onAction,
-  });
 
   @override
   Widget build(BuildContext context) {

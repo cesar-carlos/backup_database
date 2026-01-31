@@ -1,20 +1,19 @@
-import 'dart:io';
+﻿import 'dart:io';
 
-import 'package:result_dart/result_dart.dart' as rd;
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
+import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart'
+    as ps;
 import 'package:path/path.dart' as p;
-
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/backup_type.dart';
-import '../../../domain/entities/sql_server_config.dart';
-import '../../../domain/services/backup_execution_result.dart';
-import '../../../domain/services/i_sql_server_backup_service.dart';
-import 'process_service.dart' as ps;
+import 'package:result_dart/result_dart.dart' as rd;
 
 class SqlServerBackupService implements ISqlServerBackupService {
-  final ps.ProcessService _processService;
-
   SqlServerBackupService(this._processService);
+  final ps.ProcessService _processService;
 
   List<String> _baseSqlcmdArgs(SqlServerConfig config) {
     final args = <String>[
@@ -82,40 +81,37 @@ class SqlServerBackupService implements ISqlServerBackupService {
           '${config.database}_${typeSlug}_$timestamp$extension';
       final backupPath = p.join(outputDirectory, fileName);
 
-      final normalizedPath = backupPath.replaceAll('\\', '/');
+      final normalizedPath = backupPath.replaceAll(r'\', '/');
 
       final escapedBackupPath = normalizedPath.replaceAll("'", "''");
 
-      String checksumClause = enableChecksum ? 'CHECKSUM, ' : '';
+      final checksumClause = enableChecksum ? 'CHECKSUM, ' : '';
       String query;
 
       switch (backupType) {
         case BackupType.full:
         case BackupType.fullSingle:
           query =
-              "BACKUP DATABASE [${config.database}] "
+              'BACKUP DATABASE [${config.database}] '
               "TO DISK = N'$escapedBackupPath' "
-              "WITH $checksumClause NOFORMAT, INIT, "
+              'WITH $checksumClause NOFORMAT, INIT, '
               "NAME = N'${config.database}-Full Database Backup', "
-              "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
-          break;
+              'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
         case BackupType.differential:
           query =
-              "BACKUP DATABASE [${config.database}] "
+              'BACKUP DATABASE [${config.database}] '
               "TO DISK = N'$escapedBackupPath' "
-              "WITH DIFFERENTIAL, $checksumClause NOFORMAT, INIT, "
+              'WITH DIFFERENTIAL, $checksumClause NOFORMAT, INIT, '
               "NAME = N'${config.database}-Differential Database Backup', "
-              "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
-          break;
+              'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
         case BackupType.log:
           final copyOnlyClause = truncateLog ? '' : 'COPY_ONLY, ';
           query =
-              "BACKUP LOG [${config.database}] "
+              'BACKUP LOG [${config.database}] '
               "TO DISK = N'$escapedBackupPath' "
-              "WITH $copyOnlyClause$checksumClause NOFORMAT, INIT, "
+              'WITH $copyOnlyClause$checksumClause NOFORMAT, INIT, '
               "NAME = N'${config.database}-Transaction Log Backup', "
-              "SKIP, NOREWIND, NOUNLOAD, STATS = 10";
-          break;
+              'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
       }
 
       final arguments = [..._baseSqlcmdArgs(config), '-Q', query];
@@ -175,8 +171,8 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
         final backupFile = File(backupPath);
 
-        bool fileExists = false;
-        for (int i = 0; i < 20; i++) {
+        var fileExists = false;
+        for (var i = 0; i < 20; i++) {
           if (await backupFile.exists()) {
             fileExists = true;
             break;
@@ -195,7 +191,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
         final fileSize = await backupFile.length();
 
         if (fileSize == 0) {
-          return rd.Failure(
+          return const rd.Failure(
             BackupFailure(
               message: 'Arquivo de backup foi criado mas está vazio',
             ),
@@ -255,8 +251,8 @@ class SqlServerBackupService implements ISqlServerBackupService {
             databaseName: config.database,
           ),
         );
-      }, (failure) => rd.Failure(failure));
-    } catch (e, stackTrace) {
+      }, rd.Failure.new);
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao executar backup SQL Server', e, stackTrace);
       return rd.Failure(
         BackupFailure(
@@ -270,7 +266,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
   @override
   Future<rd.Result<bool>> testConnection(SqlServerConfig config) async {
     try {
-      final query = 'SELECT @@VERSION';
+      const query = 'SELECT @@VERSION';
 
       final arguments = [..._baseSqlcmdArgs(config), '-Q', query, '-t', '5'];
 
@@ -282,9 +278,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
       return result.fold(
         (processResult) => rd.Success(processResult.isSuccess),
-        (failure) => rd.Failure(failure),
+        rd.Failure.new,
       );
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         NetworkFailure(message: 'Erro ao testar conexão SQL Server: $e'),
       );
@@ -297,7 +293,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
     Duration? timeout,
   }) async {
     try {
-      final query =
+      const query =
           "SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb') ORDER BY name";
 
       final arguments = [
@@ -340,8 +336,8 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
         LoggerService.debug('Bancos de dados encontrados: ${databases.length}');
         return rd.Success(databases);
-      }, (failure) => rd.Failure(failure));
-    } catch (e) {
+      }, rd.Failure.new);
+    } on Object catch (e) {
       LoggerService.error('Erro ao listar bancos de dados', e);
       return rd.Failure(
         NetworkFailure(message: 'Erro ao listar bancos de dados: $e'),

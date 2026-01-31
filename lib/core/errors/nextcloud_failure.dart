@@ -1,4 +1,4 @@
-import 'failure.dart';
+import 'package:backup_database/core/errors/failure.dart';
 
 class NextcloudFailure extends Failure {
   const NextcloudFailure({
@@ -7,5 +7,3 @@ class NextcloudFailure extends Failure {
     super.originalError,
   });
 }
-
-

@@ -1,24 +1,30 @@
+﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../domain/entities/backup_history.dart';
-import '../../domain/repositories/i_backup_history_repository.dart';
-import '../datasources/local/database.dart';
-
 class BackupHistoryRepository implements IBackupHistoryRepository {
+  BackupHistoryRepository(this._database);
   final AppDatabase _database;
 
-  BackupHistoryRepository(this._database);
-
   @override
-  Future<rd.Result<List<BackupHistory>>> getAll({int? limit, int? offset}) async {
+  Future<rd.Result<List<BackupHistory>>> getAll({
+    int? limit,
+    int? offset,
+  }) async {
     try {
-      final histories = await _database.backupHistoryDao.getAll(limit: limit, offset: offset);
-      final entities = histories.map((data) => _toEntity(data)).toList();
+      final histories = await _database.backupHistoryDao.getAll(
+        limit: limit,
+        offset: offset,
+      );
+      final entities = histories.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao buscar histórico: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao buscar histórico: $e'),
+      );
     }
   }
 
@@ -27,13 +33,15 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     try {
       final history = await _database.backupHistoryDao.getById(id);
       if (history == null) {
-        return rd.Failure(
+        return const rd.Failure(
           NotFoundFailure(message: 'Histórico não encontrado'),
         );
       }
       return rd.Success(_toEntity(history));
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao buscar histórico: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao buscar histórico: $e'),
+      );
     }
   }
 
@@ -43,8 +51,10 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       final companion = _toCompanion(history);
       await _database.backupHistoryDao.insertHistory(companion);
       return rd.Success(history);
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao criar histórico: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao criar histórico: $e'),
+      );
     }
   }
 
@@ -54,8 +64,10 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       final companion = _toCompanion(history);
       await _database.backupHistoryDao.updateHistory(companion);
       return rd.Success(history);
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao atualizar histórico: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao atualizar histórico: $e'),
+      );
     }
   }
 
@@ -64,56 +76,86 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     try {
       await _database.backupHistoryDao.deleteHistory(id);
       return const rd.Success(unit);
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao deletar histórico: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao deletar histórico: $e'),
+      );
     }
   }
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getBySchedule(String scheduleId) async {
+  Future<rd.Result<List<BackupHistory>>> getBySchedule(
+    String scheduleId,
+  ) async {
     try {
-      final histories = await _database.backupHistoryDao.getBySchedule(scheduleId);
-      final entities = histories.map((data) => _toEntity(data)).toList();
+      final histories = await _database.backupHistoryDao.getBySchedule(
+        scheduleId,
+      );
+      final entities = histories.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao buscar histórico por agendamento: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(
+          message: 'Erro ao buscar histórico por agendamento: $e',
+        ),
+      );
     }
   }
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getByStatus(BackupStatus status) async {
+  Future<rd.Result<List<BackupHistory>>> getByStatus(
+    BackupStatus status,
+  ) async {
     try {
-      final histories = await _database.backupHistoryDao.getByStatus(status.name);
-      final entities = histories.map((data) => _toEntity(data)).toList();
+      final histories = await _database.backupHistoryDao.getByStatus(
+        status.name,
+      );
+      final entities = histories.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao buscar histórico por status: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao buscar histórico por status: $e'),
+      );
     }
   }
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getByDateRange(DateTime start, DateTime end) async {
+  Future<rd.Result<List<BackupHistory>>> getByDateRange(
+    DateTime start,
+    DateTime end,
+  ) async {
     try {
-      final histories = await _database.backupHistoryDao.getByDateRange(start, end);
-      final entities = histories.map((data) => _toEntity(data)).toList();
+      final histories = await _database.backupHistoryDao.getByDateRange(
+        start,
+        end,
+      );
+      final entities = histories.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao buscar histórico por período: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao buscar histórico por período: $e'),
+      );
     }
   }
 
   @override
   Future<rd.Result<BackupHistory>> getLastBySchedule(String scheduleId) async {
     try {
-      final history = await _database.backupHistoryDao.getLastBySchedule(scheduleId);
+      final history = await _database.backupHistoryDao.getLastBySchedule(
+        scheduleId,
+      );
       if (history == null) {
-        return rd.Failure(
-          NotFoundFailure(message: 'Nenhum histórico encontrado para este agendamento'),
+        return const rd.Failure(
+          NotFoundFailure(
+            message: 'Nenhum histórico encontrado para este agendamento',
+          ),
         );
       }
       return rd.Success(_toEntity(history));
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao buscar último histórico: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao buscar último histórico: $e'),
+      );
     }
   }
 
@@ -122,8 +164,10 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     try {
       final count = await _database.backupHistoryDao.deleteOlderThan(date);
       return rd.Success(count);
-    } catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao deletar históricos antigos: $e'));
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao deletar históricos antigos: $e'),
+      );
     }
   }
 

@@ -1,13 +1,12 @@
 import 'dart:convert';
 
+import 'package:backup_database/application/providers/dashboard_provider.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/dashboard/dashboard.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../application/providers/dashboard_provider.dart';
-import '../../domain/entities/schedule.dart';
-import '../widgets/dashboard/dashboard.dart';
-import '../widgets/common/common.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -39,7 +38,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 if (provider.isLoading && provider.totalBackups == 0) {
                   return const Center(
                     child: Padding(
-                      padding: EdgeInsets.all(48.0),
+                      padding: EdgeInsets.all(48),
                       child: ProgressRing(),
                     ),
                   );

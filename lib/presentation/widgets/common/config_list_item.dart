@@ -1,9 +1,21 @@
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' as material;
 
-import '../../../core/theme/app_colors.dart';
-
 class ConfigListItem extends StatelessWidget {
+  const ConfigListItem({
+    required this.name,
+    required this.subtitle,
+    required this.icon,
+    required this.enabled,
+    super.key,
+    this.iconColor,
+    this.onToggleEnabled,
+    this.onEdit,
+    this.onDuplicate,
+    this.onDelete,
+    this.trailingAction,
+  });
   final String name;
   final Widget subtitle;
   final IconData icon;
@@ -14,20 +26,6 @@ class ConfigListItem extends StatelessWidget {
   final VoidCallback? onDuplicate;
   final VoidCallback? onDelete;
   final Widget? trailingAction;
-
-  const ConfigListItem({
-    super.key,
-    required this.name,
-    required this.subtitle,
-    required this.icon,
-    this.iconColor,
-    required this.enabled,
-    this.onToggleEnabled,
-    this.onEdit,
-    this.onDuplicate,
-    this.onDelete,
-    this.trailingAction,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -75,9 +73,9 @@ class ConfigListItem extends StatelessWidget {
 
     if (onEdit != null) {
       items.add(
-        material.PopupMenuItem(
+        const material.PopupMenuItem(
           value: 'edit',
-          child: const Row(
+          child: Row(
             children: [
               Icon(FluentIcons.edit, size: 16),
               SizedBox(width: 8),
@@ -90,9 +88,9 @@ class ConfigListItem extends StatelessWidget {
 
     if (onDuplicate != null) {
       items.add(
-        material.PopupMenuItem(
+        const material.PopupMenuItem(
           value: 'duplicate',
-          child: const Row(
+          child: Row(
             children: [
               Icon(FluentIcons.copy, size: 16),
               SizedBox(width: 8),
@@ -105,12 +103,12 @@ class ConfigListItem extends StatelessWidget {
 
     if (onDelete != null) {
       items.add(
-        material.PopupMenuItem(
+        const material.PopupMenuItem(
           value: 'delete',
           child: Row(
             children: [
               Icon(FluentIcons.delete, size: 16, color: AppColors.delete),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text('Excluir', style: TextStyle(color: AppColors.delete)),
             ],
           ),
@@ -132,20 +130,16 @@ class ConfigListItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           side: BorderSide(
             color: FluentTheme.of(context).resources.controlStrokeColorDefault,
-            width: 1,
           ),
         ),
         onSelected: (value) {
           switch (value) {
             case 'edit':
               onEdit?.call();
-              break;
             case 'duplicate':
               onDuplicate?.call();
-              break;
             case 'delete':
               onDelete?.call();
-              break;
           }
         },
         itemBuilder: (context) => items,

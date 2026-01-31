@@ -1,27 +1,25 @@
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../domain/entities/schedule.dart';
-import '../common/config_list_item.dart';
-
 class ScheduleListItem extends StatelessWidget {
-  final Schedule schedule;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDuplicate;
-  final VoidCallback? onDelete;
-  final VoidCallback? onRunNow;
-  final ValueChanged<bool>? onToggleEnabled;
-
   const ScheduleListItem({
-    super.key,
     required this.schedule,
+    super.key,
     this.onEdit,
     this.onDuplicate,
     this.onDelete,
     this.onRunNow,
     this.onToggleEnabled,
   });
+  final Schedule schedule;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDuplicate;
+  final VoidCallback? onDelete;
+  final VoidCallback? onRunNow;
+  final ValueChanged<bool>? onToggleEnabled;
 
   @override
   Widget build(BuildContext context) {

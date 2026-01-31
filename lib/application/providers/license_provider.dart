@@ -1,23 +1,12 @@
+﻿import 'package:backup_database/application/services/license_generation_service.dart';
+import 'package:backup_database/core/errors/failure.dart' as core;
+import 'package:backup_database/domain/entities/license.dart';
+import 'package:backup_database/domain/repositories/i_license_repository.dart';
+import 'package:backup_database/domain/services/i_device_key_service.dart';
+import 'package:backup_database/domain/services/i_license_validation_service.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/errors/failure.dart' as core;
-import '../../domain/entities/license.dart';
-import '../../domain/repositories/i_license_repository.dart';
-import '../../domain/services/i_device_key_service.dart';
-import '../../domain/services/i_license_validation_service.dart';
-import '../services/license_generation_service.dart';
-
 class LicenseProvider extends ChangeNotifier {
-  final ILicenseValidationService _validationService;
-  final LicenseGenerationService _generationService;
-  final ILicenseRepository _licenseRepository;
-  final IDeviceKeyService _deviceKeyService;
-
-  License? _currentLicense;
-  bool _isLoading = false;
-  String? _error;
-  String? _deviceKey;
-
   LicenseProvider({
     required ILicenseValidationService validationService,
     required LicenseGenerationService generationService,
@@ -30,6 +19,15 @@ class LicenseProvider extends ChangeNotifier {
     loadDeviceKey();
     loadLicense();
   }
+  final ILicenseValidationService _validationService;
+  final LicenseGenerationService _generationService;
+  final ILicenseRepository _licenseRepository;
+  final IDeviceKeyService _deviceKeyService;
+
+  License? _currentLicense;
+  bool _isLoading = false;
+  String? _error;
+  String? _deviceKey;
 
   License? get currentLicense => _currentLicense;
   bool get isLoading => _isLoading;
@@ -54,7 +52,7 @@ class LicenseProvider extends ChangeNotifier {
         },
       );
       notifyListeners();
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao obter chave do dispositivo: $e';
       notifyListeners();
     }
@@ -84,7 +82,7 @@ class LicenseProvider extends ChangeNotifier {
           }
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _currentLicense = null;
       _error = 'Erro ao carregar licença: $e';
     } finally {
@@ -145,7 +143,7 @@ class LicenseProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao validar licença: $e';
       _isLoading = false;
       notifyListeners();
@@ -157,7 +155,7 @@ class LicenseProvider extends ChangeNotifier {
     try {
       final result = await _validationService.isFeatureAllowed(feature);
       return result.fold((allowed) => allowed, (_) => false);
-    } catch (e) {
+    } on Object catch (e) {
       return false;
     }
   }
@@ -174,8 +172,8 @@ class LicenseProvider extends ChangeNotifier {
 
   Future<String?> generateLicense({
     required String deviceKey,
-    DateTime? expiresAt,
     required List<String> allowedFeatures,
+    DateTime? expiresAt,
   }) async {
     _isLoading = true;
     _error = null;
@@ -206,7 +204,7 @@ class LicenseProvider extends ChangeNotifier {
           return null;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao gerar licença: $e';
       _isLoading = false;
       notifyListeners();

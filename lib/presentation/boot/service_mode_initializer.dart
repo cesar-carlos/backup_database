@@ -1,17 +1,17 @@
+﻿import 'dart:async';
 import 'dart:io';
-import 'dart:async';
 
+import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
+import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
-import '../../core/core.dart';
-import '../../core/di/service_locator.dart' as service_locator;
-import '../managers/managers.dart';
-import '../../application/services/scheduler_service.dart';
 
 class ServiceModeInitializer {
   static Future<void> initialize() async {
     try {
-      await dotenv.load(fileName: '.env');
+      await dotenv.load();
       LoggerService.info('Variáveis de ambiente carregadas');
 
       final singleInstanceService = SingleInstanceService();
@@ -38,7 +38,7 @@ class ServiceModeInitializer {
       await Future.delayed(const Duration(days: 365));
 
       await singleInstanceService.releaseLock();
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro fatal na inicialização do modo serviço',
         e,
@@ -46,7 +46,7 @@ class ServiceModeInitializer {
       );
       try {
         await SingleInstanceService().releaseLock();
-      } catch (_) {}
+      } on Object catch (_) {}
       exit(1);
     }
   }

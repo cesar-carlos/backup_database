@@ -1,18 +1,16 @@
 import 'dart:io';
 
+import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/errors/failure.dart' hide FtpFailure;
+import 'package:backup_database/core/errors/ftp_failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:ftpconnect/ftpconnect.dart';
-import 'package:result_dart/result_dart.dart' as rd;
 import 'package:path/path.dart' as p;
-
-import '../../../core/errors/failure.dart' hide FtpFailure;
-import '../../../core/errors/ftp_failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../domain/entities/backup_destination.dart';
-import '../../../domain/services/i_ftp_service.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 class FtpDestinationService implements IFtpService {
-
   @override
   Future<rd.Result<FtpUploadResult>> upload({
     required String sourceFilePath,
@@ -37,10 +35,9 @@ class FtpDestinationService implements IFtpService {
       final fileSize = await sourceFile.length();
       final fileName = customFileName ?? p.basename(sourceFilePath);
 
-      // Tentar upload com retry
       Exception? lastError;
-      final List<String> failedAttempts = [];
-      for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      final failedAttempts = <String>[];
+      for (var attempt = 1; attempt <= maxRetries; attempt++) {
         FTPConnect? ftp;
         try {
           LoggerService.debug('Tentativa $attempt de $maxRetries');
@@ -52,54 +49,51 @@ class FtpDestinationService implements IFtpService {
             pass: config.password,
             timeout: AppConstants.ftpTimeout.inSeconds,
             securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
-            showLog: true, 
+            showLog: true,
           );
 
-          // Conectar
           final connected = await ftp.connect();
           if (!connected) {
             throw Exception('Falha ao conectar ao servidor FTP');
           }
 
-          // Forçar modo binário se possível
           try {
-             await ftp.sendCustomCommand('TYPE I');
-          } catch(e) {
-             LoggerService.warning('Não foi possível setar TYPE I (Binary): $e');
+            await ftp.sendCustomCommand('TYPE I');
+          } on Object catch (e) {
+            LoggerService.warning('Não foi possível setar TYPE I (Binary): $e');
           }
 
-          // Navegar para diretório remoto
           if (config.remotePath.isNotEmpty && config.remotePath != '/') {
             await _createRemoteDirectories(ftp, config.remotePath);
             await ftp.changeDirectory(config.remotePath);
           }
 
-          // Upload diretamente na pasta indicada
           final uploaded = await ftp.uploadFile(
             sourceFile,
             sRemoteName: fileName,
           );
-          
+
           if (!uploaded) {
             throw Exception('Falha no upload do arquivo (retorno falso)');
           }
 
-          // Validar integridade verificando tamanho do arquivo remoto
           await Future.delayed(const Duration(seconds: 2));
           final remoteSize = await ftp.sizeFile(fileName);
           if (remoteSize != -1 && remoteSize != fileSize) {
-            // Tentar deletar arquivo corrompido
             try {
               await ftp.deleteFile(fileName);
-            } catch (_) {}
-            
+            } on Object catch (e) {
+              LoggerService.warning(
+                'Não foi possível remover arquivo corrompido: $e',
+              );
+            }
+
             throw Exception(
               'Arquivo corrompido no destino. '
-              'Tamanho local: $fileSize, Remoto: $remoteSize'
+              'Tamanho local: $fileSize, Remoto: $remoteSize',
             );
           }
 
-          // Desconectar
           await ftp.disconnect();
           ftp = null;
 
@@ -118,13 +112,14 @@ class FtpDestinationService implements IFtpService {
               duration: stopwatch.elapsed,
             ),
           );
-        } catch (e) {
-          // Garantir desconexão em caso de erro
+        } on Object catch (e) {
           if (ftp != null) {
             try {
               await ftp.disconnect();
-            } catch (disconnectError) {
-              LoggerService.debug('Erro ao desconectar FTP após falha: $disconnectError');
+            } on Object catch (disconnectError) {
+              LoggerService.debug(
+                'Erro ao desconectar FTP após falha: $disconnectError',
+              );
             }
           }
 
@@ -150,7 +145,7 @@ class FtpDestinationService implements IFtpService {
           originalError: lastError,
         ),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       stopwatch.stop();
       LoggerService.error('Erro no upload FTP', e, stackTrace);
       return rd.Failure(
@@ -191,31 +186,29 @@ class FtpDestinationService implements IFtpService {
 
   Future<void> _createRemoteDirectories(FTPConnect ftp, String path) async {
     final parts = path.split('/').where((p) => p.isNotEmpty).toList();
-    String currentPath = '';
+    var currentPath = '';
 
     for (final part in parts) {
       currentPath = '$currentPath/$part';
       await _createRemoteDirectory(ftp, part);
-      try {
-        await ftp.changeDirectory(part);
-      } catch (e) {
-        // Ignorar erro se não conseguir mudar de diretório
-      }
+      await ftp.changeDirectory(part);
     }
 
-    // Voltar para raiz
-    try {
-      await ftp.changeDirectory('/');
-    } catch (e) {
-      // Ignorar erro
-    }
+    await ftp.changeDirectory('/');
   }
 
   Future<void> _createRemoteDirectory(FTPConnect ftp, String dirName) async {
     try {
       await ftp.makeDirectory(dirName);
-    } catch (e) {
-      // Diretório pode já existir, ignorar erro
+    } on Object catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('exists') ||
+          msg.contains('550') ||
+          msg.contains('already')) {
+        LoggerService.debug('Diretório já existe: $dirName');
+        return;
+      }
+      rethrow;
     }
   }
 
@@ -227,7 +220,6 @@ class FtpDestinationService implements IFtpService {
         port: config.port,
         user: config.username,
         pass: config.password,
-        timeout: 30,
         securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
       );
 
@@ -237,7 +229,7 @@ class FtpDestinationService implements IFtpService {
         return const rd.Success(true);
       }
       return const rd.Success(false);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(FtpFailure(message: 'Erro ao testar conexão FTP: $e'));
     }
   }
@@ -268,8 +260,10 @@ class FtpDestinationService implements IFtpService {
       if (config.remotePath.isNotEmpty) {
         try {
           await ftp.changeDirectory(config.remotePath);
-        } catch (e) {
-          // Diretório não existe, sem backups para limpar
+        } on Object catch (e) {
+          LoggerService.debug(
+            'Diretório remoto não existe, sem backups para limpar: ${config.remotePath} — $e',
+          );
           await ftp.disconnect();
           return const rd.Success(0);
         }
@@ -279,15 +273,14 @@ class FtpDestinationService implements IFtpService {
         Duration(days: config.retentionDays),
       );
 
-      int deletedCount = 0;
+      var deletedCount = 0;
       final items = await ftp.listDirectoryContent();
 
       for (final item in items) {
         if (item.type == FTPEntryType.file) {
-          // Tentar extrair data do nome do arquivo (formato: NOME_YYYY-MM-DDTHH-MM-SS.bak)
           try {
             final fileName = item.name;
-            // Procurar padrão de data no nome do arquivo
+
             final datePattern = RegExp(r'(\d{4}-\d{2}-\d{2})');
             final match = datePattern.firstMatch(fileName);
 
@@ -301,8 +294,7 @@ class FtpDestinationService implements IFtpService {
                 LoggerService.debug('Arquivo FTP removido: $fileName');
               }
             }
-          } catch (e) {
-            // Se não conseguir extrair data do nome, ignorar arquivo
+          } on Object catch (e) {
             LoggerService.debug(
               'Não foi possível extrair data do arquivo ${item.name}: $e',
             );
@@ -313,7 +305,7 @@ class FtpDestinationService implements IFtpService {
       await ftp.disconnect();
       LoggerService.info('$deletedCount arquivos antigos removidos do FTP');
       return rd.Success(deletedCount);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao limpar backups FTP', e, stackTrace);
       return rd.Failure(
         FtpFailure(message: 'Erro ao limpar backups FTP: $e', originalError: e),

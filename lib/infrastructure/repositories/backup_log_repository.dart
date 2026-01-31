@@ -1,15 +1,13 @@
+﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../domain/entities/backup_log.dart';
-import '../../domain/repositories/i_backup_log_repository.dart';
-import '../datasources/local/database.dart';
-
 class BackupLogRepository implements IBackupLogRepository {
-  final AppDatabase _database;
-
   BackupLogRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<rd.Result<List<BackupLog>>> getAll({int? limit, int? offset}) async {
@@ -18,9 +16,9 @@ class BackupLogRepository implements IBackupLogRepository {
         limit: limit,
         offset: offset,
       );
-      final entities = logs.map((data) => _toEntity(data)).toList();
+      final entities = logs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(DatabaseFailure(message: 'Erro ao buscar logs: $e'));
     }
   }
@@ -31,7 +29,7 @@ class BackupLogRepository implements IBackupLogRepository {
       final companion = _toCompanion(log);
       await _database.backupLogDao.insertLog(companion);
       return rd.Success(log);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(DatabaseFailure(message: 'Erro ao criar log: $e'));
     }
   }
@@ -44,9 +42,9 @@ class BackupLogRepository implements IBackupLogRepository {
       final logs = await _database.backupLogDao.getByBackupHistory(
         backupHistoryId,
       );
-      final entities = logs.map((data) => _toEntity(data)).toList();
+      final entities = logs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar logs por histórico: $e'),
       );
@@ -57,9 +55,9 @@ class BackupLogRepository implements IBackupLogRepository {
   Future<rd.Result<List<BackupLog>>> getByLevel(LogLevel level) async {
     try {
       final logs = await _database.backupLogDao.getByLevel(level.name);
-      final entities = logs.map((data) => _toEntity(data)).toList();
+      final entities = logs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar logs por nível: $e'),
       );
@@ -70,9 +68,9 @@ class BackupLogRepository implements IBackupLogRepository {
   Future<rd.Result<List<BackupLog>>> getByCategory(LogCategory category) async {
     try {
       final logs = await _database.backupLogDao.getByCategory(category.name);
-      final entities = logs.map((data) => _toEntity(data)).toList();
+      final entities = logs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar logs por categoria: $e'),
       );
@@ -86,9 +84,9 @@ class BackupLogRepository implements IBackupLogRepository {
   ) async {
     try {
       final logs = await _database.backupLogDao.getByDateRange(start, end);
-      final entities = logs.map((data) => _toEntity(data)).toList();
+      final entities = logs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar logs por período: $e'),
       );
@@ -99,9 +97,9 @@ class BackupLogRepository implements IBackupLogRepository {
   Future<rd.Result<List<BackupLog>>> search(String query) async {
     try {
       final logs = await _database.backupLogDao.search(query);
-      final entities = logs.map((data) => _toEntity(data)).toList();
+      final entities = logs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(DatabaseFailure(message: 'Erro ao buscar logs: $e'));
     }
   }
@@ -111,7 +109,7 @@ class BackupLogRepository implements IBackupLogRepository {
     try {
       final count = await _database.backupLogDao.deleteOlderThan(date);
       return rd.Success(count);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao deletar logs antigos: $e'),
       );

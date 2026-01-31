@@ -1,20 +1,19 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
 class ActionButton extends StatelessWidget {
+  const ActionButton({
+    required this.label,
+    required this.onPressed,
+    super.key,
+    this.icon,
+    this.isLoading = false,
+    this.iconSize,
+  });
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
   final bool isLoading;
   final double? iconSize;
-
-  const ActionButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.icon,
-    this.isLoading = false,
-    this.iconSize,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -42,4 +41,3 @@ class ActionButton extends StatelessWidget {
     );
   }
 }
-

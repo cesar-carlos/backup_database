@@ -1,10 +1,7 @@
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:dio/dio.dart';
 
-import '../../core/utils/logger_service.dart';
-
 class ApiClient {
-  final Dio _dio;
-
   ApiClient(this._dio) {
     _dio.options = BaseOptions(
       connectTimeout: const Duration(seconds: 30),
@@ -33,6 +30,7 @@ class ApiClient {
       ),
     );
   }
+  final Dio _dio;
 
   Future<Response<T>> get<T>(
     String path, {

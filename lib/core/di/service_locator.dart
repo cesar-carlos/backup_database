@@ -1,34 +1,29 @@
+import 'package:backup_database/application/providers/providers.dart';
+import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/utils/clipboard_service.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/domain/services/services.dart';
+import 'package:backup_database/domain/use_cases/use_cases.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/external/external.dart';
+import 'package:backup_database/infrastructure/http/api_client.dart';
+import 'package:backup_database/infrastructure/repositories/repositories.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
 
-import '../utils/logger_service.dart';
-import '../utils/clipboard_service.dart';
-import '../../infrastructure/http/api_client.dart';
-import '../../infrastructure/datasources/local/database.dart';
-import '../../domain/repositories/repositories.dart';
-import '../../domain/services/services.dart';
-import '../../infrastructure/repositories/repositories.dart';
-import '../../infrastructure/external/external.dart';
-import '../../domain/use_cases/use_cases.dart';
-import '../../application/services/services.dart';
-import '../../application/providers/providers.dart';
-
-final getIt = GetIt.instance;
+final GetIt getIt = GetIt.instance;
 
 Future<void> setupServiceLocator() async {
-  // Core
-  getIt.registerLazySingleton<LoggerService>(() => LoggerService());
-  getIt.registerLazySingleton<ClipboardService>(() => ClipboardService());
+  getIt.registerLazySingleton<LoggerService>(LoggerService.new);
+  getIt.registerLazySingleton<ClipboardService>(ClipboardService.new);
 
-  // HTTP Client
-  getIt.registerLazySingleton<Dio>(() => Dio());
+  getIt.registerLazySingleton<Dio>(Dio.new);
   getIt.registerLazySingleton<ApiClient>(() => ApiClient(getIt<Dio>()));
 
-  // Database
-  getIt.registerLazySingleton<AppDatabase>(() => AppDatabase());
+  getIt.registerLazySingleton<AppDatabase>(AppDatabase.new);
 
-  // Repositories
   getIt.registerLazySingleton<ISqlServerConfigRepository>(
     () => SqlServerConfigRepository(getIt<AppDatabase>()),
   );
@@ -57,10 +52,8 @@ Future<void> setupServiceLocator() async {
     () => LicenseRepository(getIt<AppDatabase>()),
   );
 
-  // System Services
-  getIt.registerLazySingleton<IDeviceKeyService>(() => DeviceKeyService());
+  getIt.registerLazySingleton<IDeviceKeyService>(DeviceKeyService.new);
 
-  // License Services
   getIt.registerLazySingleton<ILicenseValidationService>(
     () => LicenseValidationService(
       licenseRepository: getIt<ILicenseRepository>(),
@@ -79,14 +72,12 @@ Future<void> setupServiceLocator() async {
     return LicenseGenerationService(secretKey: secretKey);
   });
 
-  // Process Services
-  getIt.registerLazySingleton<ProcessService>(() => ProcessService());
+  getIt.registerLazySingleton<ProcessService>(ProcessService.new);
 
   getIt.registerLazySingleton<ToolVerificationService>(
     () => ToolVerificationService(getIt<ProcessService>()),
   );
 
-  // Windows Service
   getIt.registerLazySingleton<IWindowsServiceService>(
     () => WindowsServiceService(getIt<ProcessService>()),
   );
@@ -111,32 +102,30 @@ Future<void> setupServiceLocator() async {
     () => SqlScriptExecutionService(getIt<ProcessService>()),
   );
 
-  // Destination Services
   getIt.registerLazySingleton<LocalDestinationService>(
-    () => LocalDestinationService(),
+    LocalDestinationService.new,
   );
 
   getIt.registerLazySingleton<IFtpService>(
-    () => FtpDestinationService(),
+    FtpDestinationService.new,
   );
 
-  getIt.registerLazySingleton<GoogleAuthService>(() => GoogleAuthService());
+  getIt.registerLazySingleton<GoogleAuthService>(GoogleAuthService.new);
 
   getIt.registerLazySingleton<GoogleDriveDestinationService>(
     () => GoogleDriveDestinationService(getIt<GoogleAuthService>()),
   );
 
-  getIt.registerLazySingleton<DropboxAuthService>(() => DropboxAuthService());
+  getIt.registerLazySingleton<DropboxAuthService>(DropboxAuthService.new);
 
   getIt.registerLazySingleton<DropboxDestinationService>(
     () => DropboxDestinationService(getIt<DropboxAuthService>()),
   );
 
   getIt.registerLazySingleton<NextcloudDestinationService>(
-    () => NextcloudDestinationService(),
+    NextcloudDestinationService.new,
   );
 
-  // Use Cases - Backup
   getIt.registerLazySingleton<ExecuteSqlServerBackup>(
     () => ExecuteSqlServerBackup(getIt<ISqlServerBackupService>()),
   );
@@ -145,7 +134,6 @@ Future<void> setupServiceLocator() async {
     () => ExecuteSybaseBackup(getIt<ISybaseBackupService>()),
   );
 
-  // Use Cases - Destinations
   getIt.registerLazySingleton<SendToLocal>(
     () => SendToLocal(getIt<LocalDestinationService>()),
   );
@@ -176,12 +164,8 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  // Note: CheckDiskSpace and ValidateBackupFile are instantiated directly as they have no dependencies
+  getIt.registerLazySingleton<EmailService>(EmailService.new);
 
-  // Email Service
-  getIt.registerLazySingleton<EmailService>(() => EmailService());
-
-  // Notification Service
   getIt.registerLazySingleton<NotificationService>(
     () => NotificationService(
       emailConfigRepository: getIt<IEmailConfigRepository>(),
@@ -190,12 +174,10 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  // Log Service
   getIt.registerLazySingleton<LogService>(
     () => LogService(getIt<IBackupLogRepository>()),
   );
 
-  // Use Cases - Notifications
   getIt.registerLazySingleton<SendEmailNotification>(
     () => SendEmailNotification(getIt<NotificationService>()),
   );
@@ -208,7 +190,6 @@ Future<void> setupServiceLocator() async {
     () => TestEmailConfiguration(getIt<NotificationService>()),
   );
 
-  // Orchestrator
   getIt.registerLazySingleton<BackupOrchestratorService>(
     () => BackupOrchestratorService(
       sqlServerConfigRepository: getIt<ISqlServerConfigRepository>(),
@@ -225,7 +206,6 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  // Scheduler
   getIt.registerLazySingleton<SchedulerService>(
     () => SchedulerService(
       scheduleRepository: getIt<IScheduleRepository>(),
@@ -246,15 +226,12 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
-  // Windows Task Scheduler
   getIt.registerLazySingleton<ITaskSchedulerService>(
-    () => WindowsTaskSchedulerService(),
+    WindowsTaskSchedulerService.new,
   );
 
-  // Auto Update Service
-  getIt.registerLazySingleton<AutoUpdateService>(() => AutoUpdateService());
+  getIt.registerLazySingleton<AutoUpdateService>(AutoUpdateService.new);
 
-  // Use Cases - Scheduling
   getIt.registerLazySingleton<CreateSchedule>(
     () =>
         CreateSchedule(getIt<IScheduleRepository>(), getIt<SchedulerService>()),
@@ -273,9 +250,8 @@ Future<void> setupServiceLocator() async {
     () => ExecuteScheduledBackup(getIt<SchedulerService>()),
   );
 
-  // Providers
   getIt.registerLazySingleton<BackupProgressProvider>(
-    () => BackupProgressProvider(),
+    BackupProgressProvider.new,
   );
 
   getIt.registerFactory<SchedulerProvider>(

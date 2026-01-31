@@ -1,24 +1,22 @@
+﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/encryption/encryption.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../core/encryption/encryption.dart';
-import '../../domain/entities/postgres_config.dart';
-import '../../domain/repositories/i_postgres_config_repository.dart';
-import '../datasources/local/database.dart';
-
 class PostgresConfigRepository implements IPostgresConfigRepository {
-  final AppDatabase _database;
-
   PostgresConfigRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<rd.Result<List<PostgresConfig>>> getAll() async {
     try {
       final configs = await _database.postgresConfigDao.getAll();
-      final entities = configs.map((data) => _toEntity(data)).toList();
+      final entities = configs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar configurações: $e'),
       );
@@ -30,12 +28,12 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
     try {
       final config = await _database.postgresConfigDao.getById(id);
       if (config == null) {
-        return rd.Failure(
+        return const rd.Failure(
           NotFoundFailure(message: 'Configuração não encontrada'),
         );
       }
       return rd.Success(_toEntity(config));
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar configuração: $e'),
       );
@@ -48,7 +46,7 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
       final companion = _toCompanion(config);
       await _database.postgresConfigDao.insertConfig(companion);
       return rd.Success(config);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao criar configuração: $e'),
       );
@@ -61,7 +59,7 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
       final companion = _toCompanion(config);
       await _database.postgresConfigDao.updateConfig(companion);
       return rd.Success(config);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao atualizar configuração: $e'),
       );
@@ -73,7 +71,7 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
     try {
       await _database.postgresConfigDao.deleteConfig(id);
       return const rd.Success(unit);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao deletar configuração: $e'),
       );
@@ -84,9 +82,9 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
   Future<rd.Result<List<PostgresConfig>>> getEnabled() async {
     try {
       final configs = await _database.postgresConfigDao.getEnabled();
-      final entities = configs.map((data) => _toEntity(data)).toList();
+      final entities = configs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar configurações ativas: $e'),
       );

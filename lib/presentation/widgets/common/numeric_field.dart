@@ -1,21 +1,11 @@
+import 'package:backup_database/presentation/widgets/common/app_text_field.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
-import 'app_text_field.dart';
 
 class NumericField extends StatelessWidget {
-  final String label;
-  final String? hint;
-  final TextEditingController? controller;
-  final String? Function(String?)? validator;
-  final ValueChanged<String>? onChanged;
-  final bool enabled;
-  final IconData? prefixIcon;
-  final int? minValue;
-  final int? maxValue;
-
   const NumericField({
-    super.key,
     required this.label,
+    super.key,
     this.hint,
     this.controller,
     this.validator,
@@ -25,6 +15,15 @@ class NumericField extends StatelessWidget {
     this.minValue,
     this.maxValue,
   });
+  final String label;
+  final String? hint;
+  final TextEditingController? controller;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
+  final bool enabled;
+  final IconData? prefixIcon;
+  final int? minValue;
+  final int? maxValue;
 
   @override
   Widget build(BuildContext context) {

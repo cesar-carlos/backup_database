@@ -1,14 +1,13 @@
-import 'dart:ui' as ui;
+﻿import 'dart:ui' as ui;
 
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../core/utils/logger_service.dart';
-
 class WindowManagerService with WindowListener {
-  static final WindowManagerService _instance = WindowManagerService._();
   factory WindowManagerService() => _instance;
   WindowManagerService._();
+  static final WindowManagerService _instance = WindowManagerService._();
 
   VoidCallback? _onMinimize;
   VoidCallback? _onClose;
@@ -120,7 +119,7 @@ class WindowManagerService with WindowListener {
           'PreventClose desativado - fechar irá encerrar aplicativo',
         );
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao configurar preventClose: $e');
     }
   }
@@ -191,7 +190,7 @@ class WindowManagerService with WindowListener {
         await windowManager.show();
         await windowManager.focus();
       }
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('❌ Erro ao mostrar janela', e, stackTrace);
       // Tentar método alternativo
       try {
@@ -200,7 +199,7 @@ class WindowManagerService with WindowListener {
         await Future.delayed(const Duration(milliseconds: 200));
         await windowManager.show();
         await windowManager.focus();
-      } catch (e2) {
+      } on Object catch (e2) {
         LoggerService.error('❌ Erro crítico ao mostrar janela', e2);
         rethrow;
       }
@@ -238,15 +237,15 @@ class WindowManagerService with WindowListener {
   }
 
   Future<bool> isVisible() async {
-    return await windowManager.isVisible();
+    return windowManager.isVisible();
   }
 
   Future<bool> isMinimized() async {
-    return await windowManager.isMinimized();
+    return windowManager.isMinimized();
   }
 
   Future<bool> isFocused() async {
-    return await windowManager.isFocused();
+    return windowManager.isFocused();
   }
 
   // WindowListener callbacks
@@ -261,7 +260,7 @@ class WindowManagerService with WindowListener {
   }
 
   @override
-  void onWindowClose() async {
+  Future<void> onWindowClose() async {
     LoggerService.info(
       'Tentativa de fechar janela - closeToTray: $_closeToTray',
     );
@@ -276,7 +275,7 @@ class WindowManagerService with WindowListener {
         );
         return;
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao verificar preventClose: $e');
     }
 
@@ -292,13 +291,13 @@ class WindowManagerService with WindowListener {
         LoggerService.info(
           '✅ Janela ocultada para a bandeja (fechamento prevenido)',
         );
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.error('Erro ao ocultar janela para bandeja', e);
         // Se falhar, tentar apenas ocultar
         try {
           await hide();
           await windowManager.setSkipTaskbar(true);
-        } catch (e2) {
+        } on Object catch (e2) {
           LoggerService.error('Erro crítico ao ocultar janela', e2);
         }
       }
@@ -309,7 +308,7 @@ class WindowManagerService with WindowListener {
         await windowManager.setPreventClose(false);
         LoggerService.info('Fechamento permitido - encerrando aplicativo');
         _onClose?.call();
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.error('Erro ao configurar preventClose para fechar', e);
         // Mesmo com erro, tentar fechar
         _onClose?.call();

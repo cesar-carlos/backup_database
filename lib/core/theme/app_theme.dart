@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart' hide Typography;
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart' hide Typography;
 import 'package:google_fonts/google_fonts.dart';
-import 'app_colors.dart';
 
 class AppTheme {
   AppTheme._();
@@ -10,7 +10,7 @@ class AppTheme {
     final montserratTextTheme = GoogleFonts.montserratTextTheme();
     final theme = FluentThemeData.light();
     return theme.copyWith(
-      accentColor: AccentColor('normal', {
+      accentColor: AccentColor('normal', const {
         'normal': AppColors.primary,
         'dark': AppColors.primaryDark,
         'light': AppColors.primaryLight,
@@ -29,10 +29,12 @@ class AppTheme {
   }
 
   static FluentThemeData get darkFluentTheme {
-    final montserratTextTheme = GoogleFonts.montserratTextTheme(ThemeData.dark().textTheme);
+    final montserratTextTheme = GoogleFonts.montserratTextTheme(
+      ThemeData.dark().textTheme,
+    );
     final theme = FluentThemeData.dark();
     return theme.copyWith(
-      accentColor: AccentColor('normal', {
+      accentColor: AccentColor('normal', const {
         'normal': AppColors.primary,
         'dark': AppColors.primaryDark,
         'light': AppColors.primaryLight,
@@ -56,7 +58,6 @@ class AppTheme {
       brightness: Brightness.light,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
-        brightness: Brightness.light,
       ),
       textTheme: GoogleFonts.montserratTextTheme(),
       appBarTheme: AppBarTheme(
@@ -145,4 +146,3 @@ class AppTheme {
     );
   }
 }
-

@@ -1,4 +1,4 @@
-import 'failure.dart';
+import 'package:backup_database/core/errors/failure.dart';
 
 class FtpFailure extends Failure {
   const FtpFailure({
@@ -7,4 +7,3 @@ class FtpFailure extends Failure {
     super.originalError,
   });
 }
-

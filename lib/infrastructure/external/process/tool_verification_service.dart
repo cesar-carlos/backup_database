@@ -1,13 +1,11 @@
+﻿import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import 'process_service.dart';
-
 class ToolVerificationService {
-  final ProcessService _processService;
-
   ToolVerificationService(this._processService);
+  final ProcessService _processService;
 
   Future<rd.Result<bool>> verifySqlCmd() async {
     try {
@@ -23,19 +21,19 @@ class ToolVerificationService {
         (processResult) {
           if (processResult.isSuccess) {
             LoggerService.info('sqlcmd encontrado e disponível');
-            return rd.Success(true);
+            return const rd.Success(true);
           } else {
             LoggerService.warning(
               'sqlcmd não encontrado (exit code: ${processResult.exitCode})',
             );
-            return rd.Failure(
+            return const rd.Failure(
               ValidationFailure(
                 message:
                     'sqlcmd não está disponível no PATH do sistema.\n\n'
                     'Para fazer backup de SQL Server, você precisa:\n'
                     '1. Instalar SQL Server Command Line Tools\n'
                     '2. Adicionar o caminho ao PATH do Windows\n\n'
-                    'Consulte: docs\\path_setup.md',
+                    r'Consulte: docs\path_setup.md',
               ),
             );
           }
@@ -45,19 +43,19 @@ class ToolVerificationService {
               ? failure.message
               : failure.toString();
           LoggerService.warning('Erro ao verificar sqlcmd: $errorMessage');
-          return rd.Failure(
+          return const rd.Failure(
             ValidationFailure(
               message:
                   'sqlcmd não está disponível no PATH do sistema.\n\n'
                   'Para fazer backup de SQL Server, você precisa:\n'
                   '1. Instalar SQL Server Command Line Tools\n'
                   '2. Adicionar o caminho ao PATH do Windows\n\n'
-                  'Consulte: docs\\path_setup.md',
+                  r'Consulte: docs\path_setup.md',
             ),
           );
         },
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar sqlcmd', e, stackTrace);
       return rd.Failure(
         ValidationFailure(
@@ -66,7 +64,7 @@ class ToolVerificationService {
               'Para fazer backup de SQL Server, você precisa:\n'
               '1. Instalar SQL Server Command Line Tools\n'
               '2. Adicionar o caminho ao PATH do Windows\n\n'
-              'Consulte: docs\\path_setup.md',
+              r'Consulte: docs\path_setup.md',
         ),
       );
     }
@@ -78,8 +76,8 @@ class ToolVerificationService {
         'Verificando se ferramentas Sybase estão disponíveis...',
       );
 
-      bool dbisqlFound = false;
-      bool dbbackupFound = false;
+      var dbisqlFound = false;
+      var dbbackupFound = false;
 
       final dbisqlResult = await _processService.run(
         executable: 'dbisql',
@@ -111,11 +109,11 @@ class ToolVerificationService {
         LoggerService.info(
           'Ferramentas Sybase encontradas: dbisql=$dbisqlFound, dbbackup=$dbbackupFound',
         );
-        return rd.Success(true);
+        return const rd.Success(true);
       }
 
       LoggerService.warning('Ferramentas Sybase não encontradas');
-      return rd.Failure(
+      return const rd.Failure(
         ValidationFailure(
           message:
               'Ferramentas Sybase não estão disponíveis no PATH do sistema.\n\n'
@@ -123,10 +121,10 @@ class ToolVerificationService {
               '1. Instalar Sybase SQL Anywhere\n'
               '2. Adicionar o caminho Bin64 ao PATH do Windows\n'
               '   (ex: C:\\Program Files\\SQL Anywhere 16\\Bin64)\n\n'
-              'Consulte: docs\\path_setup.md',
+              r'Consulte: docs\path_setup.md',
         ),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao verificar ferramentas Sybase',
         e,
@@ -139,7 +137,7 @@ class ToolVerificationService {
               'Para fazer backup de Sybase SQL Anywhere, você precisa:\n'
               '1. Instalar Sybase SQL Anywhere\n'
               '2. Adicionar o caminho Bin64 ao PATH do Windows\n\n'
-              'Consulte: docs\\path_setup.md',
+              r'Consulte: docs\path_setup.md',
         ),
       );
     }
@@ -159,12 +157,12 @@ class ToolVerificationService {
         (processResult) {
           if (processResult.isSuccess) {
             LoggerService.info('psql encontrado e disponível');
-            return rd.Success(true);
+            return const rd.Success(true);
           } else {
             LoggerService.warning(
               'psql não encontrado (exit code: ${processResult.exitCode})',
             );
-            return rd.Failure(
+            return const rd.Failure(
               ValidationFailure(
                 message:
                     'psql não está disponível no PATH do sistema.\n\n'
@@ -172,7 +170,7 @@ class ToolVerificationService {
                     '1. Instalar PostgreSQL (inclui psql)\n'
                     '2. Adicionar o caminho bin ao PATH do Windows\n'
                     '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-                    'Consulte: docs\\path_setup.md',
+                    r'Consulte: docs\path_setup.md',
               ),
             );
           }
@@ -182,7 +180,7 @@ class ToolVerificationService {
               ? failure.message
               : failure.toString();
           LoggerService.warning('Erro ao verificar psql: $errorMessage');
-          return rd.Failure(
+          return const rd.Failure(
             ValidationFailure(
               message:
                   'psql não está disponível no PATH do sistema.\n\n'
@@ -190,12 +188,12 @@ class ToolVerificationService {
                   '1. Instalar PostgreSQL (inclui psql)\n'
                   '2. Adicionar o caminho bin ao PATH do Windows\n'
                   '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-                  'Consulte: docs\\path_setup.md',
+                  r'Consulte: docs\path_setup.md',
             ),
           );
         },
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar psql', e, stackTrace);
       return rd.Failure(
         ValidationFailure(
@@ -204,7 +202,7 @@ class ToolVerificationService {
               'Para fazer backup de PostgreSQL, você precisa:\n'
               '1. Instalar PostgreSQL (inclui psql)\n'
               '2. Adicionar o caminho bin ao PATH do Windows\n\n'
-              'Consulte: docs\\path_setup.md',
+              r'Consulte: docs\path_setup.md',
         ),
       );
     }
@@ -223,12 +221,12 @@ class ToolVerificationService {
       (processResult) {
         if (processResult.isSuccess) {
           LoggerService.info('pg_basebackup encontrado e disponível');
-          return rd.Success(true);
+          return const rd.Success(true);
         } else {
           LoggerService.warning(
             'pg_basebackup não encontrado (exit code: ${processResult.exitCode})',
           );
-          return rd.Failure(
+          return const rd.Failure(
             ValidationFailure(
               message:
                   'pg_basebackup não está disponível no PATH do sistema.\n\n'
@@ -236,16 +234,17 @@ class ToolVerificationService {
                   '1. Instalar PostgreSQL (inclui pg_basebackup)\n'
                   '2. Adicionar o caminho bin ao PATH do Windows\n'
                   '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-                  'Consulte: docs\\path_setup.md',
+                  r'Consulte: docs\path_setup.md',
             ),
           );
         }
       },
       (failure) {
-        final errorMessage =
-            failure is Failure ? failure.message : failure.toString();
+        final errorMessage = failure is Failure
+            ? failure.message
+            : failure.toString();
         LoggerService.warning('Erro ao verificar pg_basebackup: $errorMessage');
-        return rd.Failure(
+        return const rd.Failure(
           ValidationFailure(
             message:
                 'pg_basebackup não está disponível no PATH do sistema.\n\n'
@@ -253,7 +252,7 @@ class ToolVerificationService {
                 '1. Instalar PostgreSQL (inclui pg_basebackup)\n'
                 '2. Adicionar o caminho bin ao PATH do Windows\n'
                 '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-                'Consulte: docs\\path_setup.md',
+                r'Consulte: docs\path_setup.md',
           ),
         );
       },
@@ -273,12 +272,12 @@ class ToolVerificationService {
       (processResult) {
         if (processResult.isSuccess) {
           LoggerService.info('pg_verifybackup encontrado e disponível');
-          return rd.Success(true);
+          return const rd.Success(true);
         } else {
           LoggerService.warning(
             'pg_verifybackup não encontrado (exit code: ${processResult.exitCode})',
           );
-          return rd.Failure(
+          return const rd.Failure(
             ValidationFailure(
               message:
                   'pg_verifybackup não está disponível no PATH do sistema.\n\n'
@@ -286,18 +285,19 @@ class ToolVerificationService {
                   '1. Instalar PostgreSQL (inclui pg_verifybackup)\n'
                   '2. Adicionar o caminho bin ao PATH do Windows\n'
                   '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-                  'Consulte: docs\\path_setup.md',
+                  r'Consulte: docs\path_setup.md',
             ),
           );
         }
       },
       (failure) {
-        final errorMessage =
-            failure is Failure ? failure.message : failure.toString();
+        final errorMessage = failure is Failure
+            ? failure.message
+            : failure.toString();
         LoggerService.warning(
           'Erro ao verificar pg_verifybackup: $errorMessage',
         );
-        return rd.Failure(
+        return const rd.Failure(
           ValidationFailure(
             message:
                 'pg_verifybackup não está disponível no PATH do sistema.\n\n'
@@ -305,7 +305,7 @@ class ToolVerificationService {
                 '1. Instalar PostgreSQL (inclui pg_verifybackup)\n'
                 '2. Adicionar o caminho bin ao PATH do Windows\n'
                 '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-                'Consulte: docs\\path_setup.md',
+                r'Consulte: docs\path_setup.md',
           ),
         );
       },

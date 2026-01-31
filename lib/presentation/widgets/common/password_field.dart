@@ -1,14 +1,7 @@
+import 'package:backup_database/presentation/widgets/common/app_text_field.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'app_text_field.dart';
 
 class PasswordField extends StatefulWidget {
-  final String label;
-  final String? hint;
-  final TextEditingController? controller;
-  final String? Function(String?)? validator;
-  final ValueChanged<String>? onChanged;
-  final bool enabled;
-
   const PasswordField({
     super.key,
     this.label = 'Senha',
@@ -18,6 +11,12 @@ class PasswordField extends StatefulWidget {
     this.onChanged,
     this.enabled = true,
   });
+  final String label;
+  final String? hint;
+  final TextEditingController? controller;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
+  final bool enabled;
 
   @override
   State<PasswordField> createState() => _PasswordFieldState();
@@ -33,7 +32,8 @@ class _PasswordFieldState extends State<PasswordField> {
       label: widget.label,
       hint: widget.hint ?? 'Digite a senha',
       obscureText: _obscureText,
-      validator: widget.validator ??
+      validator:
+          widget.validator ??
           (value) {
             if (value == null || value.trim().isEmpty) {
               return '${widget.label} é obrigatória';
@@ -56,4 +56,3 @@ class _PasswordFieldState extends State<PasswordField> {
     );
   }
 }
-

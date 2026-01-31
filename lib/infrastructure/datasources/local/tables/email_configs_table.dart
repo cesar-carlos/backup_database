@@ -2,15 +2,20 @@ import 'package:drift/drift.dart';
 
 class EmailConfigsTable extends Table {
   TextColumn get id => text()();
-  TextColumn get senderName => text().withDefault(const Constant('Sistema de Backup'))();
-  TextColumn get fromEmail => text().withDefault(const Constant('backup@example.com'))();
-  TextColumn get fromName => text().withDefault(const Constant('Sistema de Backup'))();
-  TextColumn get smtpServer => text().withDefault(const Constant('smtp.gmail.com'))();
+  TextColumn get senderName =>
+      text().withDefault(const Constant('Sistema de Backup'))();
+  TextColumn get fromEmail =>
+      text().withDefault(const Constant('backup@example.com'))();
+  TextColumn get fromName =>
+      text().withDefault(const Constant('Sistema de Backup'))();
+  TextColumn get smtpServer =>
+      text().withDefault(const Constant('smtp.gmail.com'))();
   IntColumn get smtpPort => integer().withDefault(const Constant(587))();
   TextColumn get username => text().withDefault(const Constant(''))();
   TextColumn get password => text().withDefault(const Constant(''))();
   BoolColumn get useSsl => boolean().withDefault(const Constant(true))();
-  TextColumn get recipients => text().withDefault(const Constant('[]'))(); // JSON array
+  TextColumn get recipients =>
+      text().withDefault(const Constant('[]'))(); // JSON array
   BoolColumn get notifyOnSuccess =>
       boolean().withDefault(const Constant(true))();
   BoolColumn get notifyOnError => boolean().withDefault(const Constant(true))();
@@ -24,4 +29,3 @@ class EmailConfigsTable extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
-

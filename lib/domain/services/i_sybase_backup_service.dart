@@ -1,8 +1,7 @@
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:result_dart/result_dart.dart';
-
-import '../entities/backup_type.dart';
-import '../entities/sybase_config.dart';
-import 'backup_execution_result.dart';
 
 abstract class ISybaseBackupService {
   Future<Result<BackupExecutionResult>> executeBackup({
@@ -17,4 +16,3 @@ abstract class ISybaseBackupService {
 
   Future<Result<bool>> testConnection(SybaseConfig config);
 }
-

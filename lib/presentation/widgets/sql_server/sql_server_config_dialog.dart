@@ -1,28 +1,26 @@
+﻿import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
+import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
+import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../../core/di/service_locator.dart';
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../domain/entities/sql_server_config.dart';
-import '../../../domain/entities/sybase_config.dart';
-import '../../../domain/entities/postgres_config.dart';
-import '../../../domain/services/i_sql_server_backup_service.dart';
-import '../../../domain/services/i_sybase_backup_service.dart';
-import '../../../domain/services/i_postgres_backup_service.dart';
-import '../common/common.dart';
 
 enum DatabaseType { sqlServer, sybase, postgresql }
 
 class SqlServerConfigDialog extends StatefulWidget {
-  final SqlServerConfig? config;
-  final DatabaseType initialType;
-
   const SqlServerConfigDialog({
     super.key,
     this.config,
     this.initialType = DatabaseType.sqlServer,
   });
+  final SqlServerConfig? config;
+  final DatabaseType initialType;
 
   static Future<Object?> show(
     BuildContext context, {
@@ -300,7 +298,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
               child: AppTextField(
                 controller: _serverController,
                 label: 'Servidor',
-                hint: 'localhost ou IP\\INSTANCIA',
+                hint: r'localhost ou IP\INSTANCIA',
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Servidor é obrigatório';
@@ -312,7 +310,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              flex: 1,
               child: NumericField(
                 controller: _portController,
                 label: 'Porta',
@@ -326,98 +323,99 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         ),
         const SizedBox(height: 16),
 
-        _databases.isEmpty && !_isLoadingDatabases
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppTextField(
-                    controller: _databaseController,
-                    label: 'Nome do Banco de Dados',
-                    hint: 'Digite ou clique em "Testar Conexão" para carregar',
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Nome do banco é obrigatório';
-                      }
-                      return null;
-                    },
-                    prefixIcon: const Icon(FluentIcons.database),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          FluentIcons.info,
-                          size: 18,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Preencha servidor, porta, usuário e senha, depois clique em "Testar Conexão" para carregar os bancos no dropdown',
-                            style: FluentTheme.of(context).typography.caption,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: AppDropdown<String>(
-                      label: 'Banco de Dados',
-                      value: _selectedDatabase,
-                      placeholder: Text(
-                        _isLoadingDatabases
-                            ? 'Carregando bancos...'
-                            : _databases.isEmpty
-                            ? 'Nenhum banco encontrado'
-                            : 'Selecione o banco',
-                      ),
-                      items: _databases.map((db) {
-                        return ComboBoxItem<String>(value: db, child: Text(db));
-                      }).toList(),
-                      onChanged: _isLoadingDatabases || _databases.isEmpty
-                          ? null
-                          : (value) {
-                              setState(() {
-                                _selectedDatabase = value;
-                                _databaseController.text = value ?? '';
-                              });
-                            },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_isLoadingDatabases)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 24),
-                      child: const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: ProgressRing(strokeWidth: 2),
-                      ),
-                    )
-                  else if (_databases.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 24),
-                      child: IconButton(
-                        icon: const Icon(FluentIcons.refresh),
-                        onPressed: _testConnection,
-                      ),
-                    ),
-                ],
+        if (_databases.isEmpty && !_isLoadingDatabases)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppTextField(
+                controller: _databaseController,
+                label: 'Nome do Banco de Dados',
+                hint: 'Digite ou clique em "Testar Conexão" para carregar',
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Nome do banco é obrigatório';
+                  }
+                  return null;
+                },
+                prefixIcon: const Icon(FluentIcons.database),
               ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      FluentIcons.info,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Preencha servidor, porta, usuário e senha, depois clique em "Testar Conexão" para carregar os bancos no dropdown',
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AppDropdown<String>(
+                  label: 'Banco de Dados',
+                  value: _selectedDatabase,
+                  placeholder: Text(
+                    _isLoadingDatabases
+                        ? 'Carregando bancos...'
+                        : _databases.isEmpty
+                        ? 'Nenhum banco encontrado'
+                        : 'Selecione o banco',
+                  ),
+                  items: _databases.map((db) {
+                    return ComboBoxItem<String>(value: db, child: Text(db));
+                  }).toList(),
+                  onChanged: _isLoadingDatabases || _databases.isEmpty
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedDatabase = value;
+                            _databaseController.text = value ?? '';
+                          });
+                        },
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_isLoadingDatabases)
+                const Padding(
+                  padding: EdgeInsets.only(top: 24),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: ProgressRing(strokeWidth: 2),
+                  ),
+                )
+              else if (_databases.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 24),
+                  child: IconButton(
+                    icon: const Icon(FluentIcons.refresh),
+                    onPressed: _testConnection,
+                  ),
+                ),
+            ],
+          ),
       ],
     );
   }
@@ -445,7 +443,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              flex: 1,
               child: NumericField(
                 controller: _portController,
                 label: 'Porta',
@@ -481,7 +478,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           ),
           child: Row(
             children: [
-              Icon(FluentIcons.info, size: 18, color: AppColors.primary),
+              const Icon(FluentIcons.info, size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -519,7 +516,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              flex: 1,
               child: NumericField(
                 controller: _portController,
                 label: 'Porta',
@@ -533,95 +529,95 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         ),
         const SizedBox(height: 16),
 
-        _databases.isEmpty && !_isLoadingDatabases
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppTextField(
-                    controller: _databaseController,
-                    label: 'Nome do Banco de Dados',
-                    hint:
-                        'Digite ou clique em \'Testar Conexão\' para carregar',
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Nome do banco de dados é obrigatório';
-                      }
-                      return null;
-                    },
-                    prefixIcon: const Icon(FluentIcons.database),
+        if (_databases.isEmpty && !_isLoadingDatabases)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppTextField(
+                controller: _databaseController,
+                label: 'Nome do Banco de Dados',
+                hint: "Digite ou clique em 'Testar Conexão' para carregar",
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Nome do banco de dados é obrigatório';
+                  }
+                  return null;
+                },
+                prefixIcon: const Icon(FluentIcons.database),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      FluentIcons.info,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Preencha host, porta, usuário e senha, depois clique em 'Testar Conexão' para carregar os bancos no dropdown",
+                        style: FluentTheme.of(context).typography.caption,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          FluentIcons.info,
-                          size: 18,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Preencha host, porta, usuário e senha, depois clique em \'Testar Conexão\' para carregar os bancos no dropdown',
-                            style: FluentTheme.of(context).typography.caption,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            : _isLoadingDatabases
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: ProgressRing(),
+                  ],
                 ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppDropdown<String>(
-                    label: 'Nome do Banco de Dados',
-                    value: _selectedDatabase,
-                    placeholder: const Text('Selecione um banco de dados'),
-                    items: _databases.map((db) {
-                      return ComboBoxItem<String>(value: db, child: Text(db));
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedDatabase = value;
-                        if (value != null) {
-                          _databaseController.text = value;
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  AppTextField(
-                    controller: _databaseController,
-                    label: 'Nome do Banco de Dados (Manual)',
-                    hint: 'Digite o nome do banco de dados',
-                    validator: (value) {
-                      if ((_selectedDatabase == null ||
-                              _selectedDatabase!.isEmpty) &&
-                          (value == null || value.trim().isEmpty)) {
-                        return 'Selecione ou digite um nome de banco de dados';
-                      }
-                      return null;
-                    },
-                    prefixIcon: const Icon(FluentIcons.database),
-                  ),
-                ],
               ),
+            ],
+          )
+        else
+          _isLoadingDatabases
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: ProgressRing(),
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppDropdown<String>(
+                      label: 'Nome do Banco de Dados',
+                      value: _selectedDatabase,
+                      placeholder: const Text('Selecione um banco de dados'),
+                      items: _databases.map((db) {
+                        return ComboBoxItem<String>(value: db, child: Text(db));
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedDatabase = value;
+                          if (value != null) {
+                            _databaseController.text = value;
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    AppTextField(
+                      controller: _databaseController,
+                      label: 'Nome do Banco de Dados (Manual)',
+                      hint: 'Digite o nome do banco de dados',
+                      validator: (value) {
+                        if ((_selectedDatabase == null ||
+                                _selectedDatabase!.isEmpty) &&
+                            (value == null || value.trim().isEmpty)) {
+                          return 'Selecione ou digite um nome de banco de dados';
+                        }
+                        return null;
+                      },
+                      prefixIcon: const Icon(FluentIcons.database),
+                    ),
+                  ],
+                ),
       ],
     );
   }
@@ -655,7 +651,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           name: 'temp',
           serverName: _serverController.text.trim(),
           databaseName: _databaseNameController.text.trim(),
-          databaseFile: '',
           port: port,
           username: _usernameController.text.trim(),
           password: _passwordController.text,
@@ -687,7 +682,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             );
           },
         );
-      } catch (e, stackTrace) {
+      } on Object catch (e, stackTrace) {
         if (!mounted) return;
 
         LoggerService.error('Erro ao testar conexão Sybase', e, stackTrace);
@@ -798,7 +793,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 _isLoadingDatabases = false;
                 _isTestingConnection = false;
               });
-              String message = failure is Failure
+              var message = failure is Failure
                   ? failure.message
                   : failure.toString();
 
@@ -806,7 +801,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
               if ((messageLower.contains('psql') ||
                       messageLower.contains("'psql'")) &&
                   (messageLower.contains('não é reconhecido') ||
-                      messageLower.contains("não reconhecido") ||
+                      messageLower.contains('não reconhecido') ||
                       messageLower.contains('não reconhecido como') ||
                       messageLower.contains('command not found') ||
                       messageLower.contains('não encontrado'))) {
@@ -823,7 +818,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                     '   - Clique em "Novo" e adicione o caminho completo da pasta bin\n'
                     '   - Clique em "OK" em todas as janelas\n\n'
                     '3. Reinicie o aplicativo de backup\n\n'
-                    'Consulte: docs\\path_setup.md para mais detalhes.';
+                    r'Consulte: docs\path_setup.md para mais detalhes.';
               }
 
               MessageModal.showError(
@@ -834,13 +829,13 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             }
           },
         );
-      } catch (e) {
+      } on Object catch (e) {
         if (mounted) {
           setState(() {
             _isLoadingDatabases = false;
             _isTestingConnection = false;
           });
-          MessageModal.showError(context, title: 'Erro', message: e.toString());
+          MessageModal.showError(context, message: e.toString());
         }
       }
       return;
@@ -947,13 +942,13 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           }
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       if (mounted) {
         setState(() {
           _isLoadingDatabases = false;
           _isTestingConnection = false;
         });
-        MessageModal.showError(context, title: 'Erro', message: e.toString());
+        MessageModal.showError(context, message: e.toString());
       }
     }
   }
@@ -1015,7 +1010,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         name: _nameController.text.trim(),
         serverName: _serverController.text.trim(),
         databaseName: _databaseNameController.text.trim(),
-        databaseFile: '',
         port: port,
         username: _usernameController.text.trim(),
         password: _passwordController.text,

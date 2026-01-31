@@ -1,25 +1,28 @@
-import 'dart:ffi';
+﻿import 'dart:ffi';
 import 'dart:io';
 
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/presentation/managers/ipc_service.dart';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
-import '../../core/utils/logger_service.dart';
-import 'ipc_service.dart';
-
 final _kernel32 = DynamicLibrary.open('kernel32.dll');
 
-final _createMutex = _kernel32.lookupFunction<
-    IntPtr Function(Pointer, Int32, Pointer<Utf16>),
-    int Function(Pointer, int, Pointer<Utf16>)>('CreateMutexW');
+final int Function(Pointer<NativeType>, int, Pointer<Utf16>) _createMutex =
+    _kernel32.lookupFunction<
+      IntPtr Function(Pointer, Int32, Pointer<Utf16>),
+      int Function(Pointer, int, Pointer<Utf16>)
+    >('CreateMutexW');
 
 class SingleInstanceService {
-  static final SingleInstanceService _instance = SingleInstanceService._();
   factory SingleInstanceService() => _instance;
   SingleInstanceService._();
+  static final SingleInstanceService _instance = SingleInstanceService._();
 
-  static const String _uiMutexName = 'Global\\BackupDatabase_UIMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
-  static const String _serviceMutexName = 'Global\\BackupDatabase_ServiceMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
+  static const String _uiMutexName =
+      r'Global\BackupDatabase_UIMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
+  static const String _serviceMutexName =
+      r'Global\BackupDatabase_ServiceMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
 
   int _mutexHandle = 0;
   bool _isFirstInstance = false;
@@ -28,7 +31,9 @@ class SingleInstanceService {
   Future<bool> checkAndLock({bool isServiceMode = false}) async {
     try {
       if (!Platform.isWindows) {
-        LoggerService.warning('Single instance check não suportado nesta plataforma');
+        LoggerService.warning(
+          'Single instance check não suportado nesta plataforma',
+        );
         _isFirstInstance = true;
         return true;
       }
@@ -46,13 +51,17 @@ class SingleInstanceService {
       calloc.free(mutexNamePtr);
 
       if (_mutexHandle == 0 || _mutexHandle == -1) {
-        LoggerService.error('Erro ao criar mutex: handle=$_mutexHandle, código=$lastError');
+        LoggerService.error(
+          'Erro ao criar mutex: handle=$_mutexHandle, código=$lastError',
+        );
         _isFirstInstance = true;
         return true;
       }
 
       if (lastError == ERROR_ALREADY_EXISTS) {
-        LoggerService.info('Outra instância de $modeName já está em execução (Mutex existe)');
+        LoggerService.info(
+          'Outra instância de $modeName já está em execução (Mutex existe)',
+        );
         _isFirstInstance = false;
 
         CloseHandle(_mutexHandle);
@@ -61,10 +70,12 @@ class SingleInstanceService {
         return false;
       }
 
-      LoggerService.info('Primeira instância de $modeName do aplicativo (Mutex criado) - Handle: $_mutexHandle');
+      LoggerService.info(
+        'Primeira instância de $modeName do aplicativo (Mutex criado) - Handle: $_mutexHandle',
+      );
       _isFirstInstance = true;
       return true;
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar instância única', e, stackTrace);
       _isFirstInstance = true;
       return true;
@@ -74,14 +85,14 @@ class SingleInstanceService {
   Future<bool> startIpcServer({Function()? onShowWindow}) async {
     try {
       return await _ipcService.startServer(onShowWindow: onShowWindow);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao iniciar IPC Server', e, stackTrace);
       return false;
     }
   }
 
   static Future<bool> notifyExistingInstance() async {
-    return await IpcService.sendShowWindow();
+    return IpcService.sendShowWindow();
   }
 
   Future<void> releaseLock() async {
@@ -93,7 +104,7 @@ class SingleInstanceService {
         _mutexHandle = 0;
         LoggerService.debug('Mutex liberado');
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao liberar lock: $e');
     }
   }
@@ -101,4 +112,3 @@ class SingleInstanceService {
   bool get isFirstInstance => _isFirstInstance;
   bool get isIpcRunning => _ipcService.isRunning;
 }
-

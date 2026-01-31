@@ -1,13 +1,39 @@
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:uuid/uuid.dart';
-
-import 'backup_type.dart';
-import 'compression_format.dart';
 
 enum ScheduleType { daily, weekly, monthly, interval }
 
 enum DatabaseType { sqlServer, sybase, postgresql }
 
 class Schedule {
+  Schedule({
+    required this.name,
+    required this.databaseConfigId,
+    required this.databaseType,
+    required this.scheduleType,
+    required this.scheduleConfig,
+    required this.destinationIds,
+    required this.backupFolder,
+    String? id,
+    this.backupType = BackupType.full,
+    this.truncateLog = true,
+    this.compressBackup = true,
+    CompressionFormat? compressionFormat,
+    this.enabled = true,
+    this.enableChecksum = false,
+    this.verifyAfterBackup = false,
+    this.postBackupScript,
+    this.lastRunAt,
+    this.nextRunAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : id = id ?? const Uuid().v4(),
+       compressionFormat =
+           compressionFormat ??
+           (compressBackup ? CompressionFormat.zip : CompressionFormat.none),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
   final String id;
   final String name;
   final String databaseConfigId;
@@ -28,34 +54,6 @@ class Schedule {
   final DateTime? nextRunAt;
   final DateTime createdAt;
   final DateTime updatedAt;
-
-  Schedule({
-    String? id,
-    required this.name,
-    required this.databaseConfigId,
-    required this.databaseType,
-    required this.scheduleType,
-    required this.scheduleConfig,
-    required this.destinationIds,
-    required this.backupFolder,
-    this.backupType = BackupType.full,
-    this.truncateLog = true,
-    this.compressBackup = true,
-    CompressionFormat? compressionFormat,
-    this.enabled = true,
-    this.enableChecksum = false,
-    this.verifyAfterBackup = false,
-    this.postBackupScript,
-    this.lastRunAt,
-    this.nextRunAt,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
-       compressionFormat =
-           compressionFormat ??
-           (compressBackup ? CompressionFormat.zip : CompressionFormat.none),
-       createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
 
   Schedule copyWith({
     String? id,
@@ -125,12 +123,7 @@ class Schedule {
 }
 
 class DailyScheduleConfig {
-  final int hour;
-  final int minute;
-
   const DailyScheduleConfig({required this.hour, required this.minute});
-
-  Map<String, dynamic> toJson() => {'hour': hour, 'minute': minute};
 
   factory DailyScheduleConfig.fromJson(Map<String, dynamic> json) {
     return DailyScheduleConfig(
@@ -138,24 +131,18 @@ class DailyScheduleConfig {
       minute: json['minute'] as int,
     );
   }
-}
-
-class WeeklyScheduleConfig {
-  final List<int> daysOfWeek;
   final int hour;
   final int minute;
 
+  Map<String, dynamic> toJson() => {'hour': hour, 'minute': minute};
+}
+
+class WeeklyScheduleConfig {
   const WeeklyScheduleConfig({
     required this.daysOfWeek,
     required this.hour,
     required this.minute,
   });
-
-  Map<String, dynamic> toJson() => {
-    'daysOfWeek': daysOfWeek,
-    'hour': hour,
-    'minute': minute,
-  };
 
   factory WeeklyScheduleConfig.fromJson(Map<String, dynamic> json) {
     return WeeklyScheduleConfig(
@@ -164,24 +151,23 @@ class WeeklyScheduleConfig {
       minute: json['minute'] as int,
     );
   }
-}
-
-class MonthlyScheduleConfig {
-  final List<int> daysOfMonth;
+  final List<int> daysOfWeek;
   final int hour;
   final int minute;
 
+  Map<String, dynamic> toJson() => {
+    'daysOfWeek': daysOfWeek,
+    'hour': hour,
+    'minute': minute,
+  };
+}
+
+class MonthlyScheduleConfig {
   const MonthlyScheduleConfig({
     required this.daysOfMonth,
     required this.hour,
     required this.minute,
   });
-
-  Map<String, dynamic> toJson() => {
-    'daysOfMonth': daysOfMonth,
-    'hour': hour,
-    'minute': minute,
-  };
 
   factory MonthlyScheduleConfig.fromJson(Map<String, dynamic> json) {
     return MonthlyScheduleConfig(
@@ -190,18 +176,26 @@ class MonthlyScheduleConfig {
       minute: json['minute'] as int,
     );
   }
+  final List<int> daysOfMonth;
+  final int hour;
+  final int minute;
+
+  Map<String, dynamic> toJson() => {
+    'daysOfMonth': daysOfMonth,
+    'hour': hour,
+    'minute': minute,
+  };
 }
 
 class IntervalScheduleConfig {
-  final int intervalMinutes;
-
   const IntervalScheduleConfig({required this.intervalMinutes});
-
-  Map<String, dynamic> toJson() => {'intervalMinutes': intervalMinutes};
 
   factory IntervalScheduleConfig.fromJson(Map<String, dynamic> json) {
     return IntervalScheduleConfig(
       intervalMinutes: json['intervalMinutes'] as int,
     );
   }
+  final int intervalMinutes;
+
+  Map<String, dynamic> toJson() => {'intervalMinutes': intervalMinutes};
 }

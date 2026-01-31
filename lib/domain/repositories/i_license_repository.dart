@@ -1,6 +1,5 @@
+import 'package:backup_database/domain/entities/license.dart';
 import 'package:result_dart/result_dart.dart' as rd;
-
-import '../entities/license.dart';
 
 abstract class ILicenseRepository {
   Future<rd.Result<License>> getByDeviceKey(String deviceKey);
@@ -9,4 +8,3 @@ abstract class ILicenseRepository {
   Future<rd.Result<void>> delete(String id);
   Future<rd.Result<List<License>>> getAll();
 }
-

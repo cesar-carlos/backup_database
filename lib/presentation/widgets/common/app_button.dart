@@ -1,27 +1,26 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
 class AppButton extends StatelessWidget {
+  const AppButton({
+    required this.label,
+    super.key,
+    this.onPressed,
+    this.icon,
+    this.isLoading = false,
+    this.isPrimary = true,
+  });
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
   final bool isLoading;
   final bool isPrimary;
 
-  const AppButton({
-    super.key,
-    required this.label,
-    this.onPressed,
-    this.icon,
-    this.isLoading = false,
-    this.isPrimary = true,
-  });
-
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return Button(
+      return const Button(
         onPressed: null,
-        child: const SizedBox(
+        child: SizedBox(
           width: 20,
           height: 20,
           child: ProgressRing(strokeWidth: 2),

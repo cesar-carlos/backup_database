@@ -1,14 +1,12 @@
-import 'package:intl/intl.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../../domain/entities/backup_history.dart';
-import '../../../domain/entities/backup_type.dart';
+import 'package:intl/intl.dart';
 
 class RecentBackupsList extends StatelessWidget {
+  const RecentBackupsList({required this.backups, super.key});
   final List<BackupHistory> backups;
-
-  const RecentBackupsList({super.key, required this.backups});
 
   @override
   Widget build(BuildContext context) {

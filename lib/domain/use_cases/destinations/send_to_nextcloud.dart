@@ -1,13 +1,11 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_destination_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../../domain/entities/backup_destination.dart';
-import '../../../infrastructure/external/nextcloud/nextcloud_destination_service.dart';
-
 class SendToNextcloud {
-  final NextcloudDestinationService _service;
-
   SendToNextcloud(this._service);
+  final NextcloudDestinationService _service;
 
   Future<rd.Result<NextcloudUploadResult>> call({
     required String sourceFilePath,
@@ -31,21 +29,23 @@ class SendToNextcloud {
     }
     if (config.appPassword.isEmpty) {
       return const rd.Failure(
-        ValidationFailure(message: 'App Password do Nextcloud não pode ser vazio'),
+        ValidationFailure(
+          message: 'App Password do Nextcloud não pode ser vazio',
+        ),
       );
     }
     if (config.folderName.trim().isEmpty) {
       return const rd.Failure(
-        ValidationFailure(message: 'Nome da pasta do Nextcloud não pode ser vazio'),
+        ValidationFailure(
+          message: 'Nome da pasta do Nextcloud não pode ser vazio',
+        ),
       );
     }
 
-    return await _service.upload(
+    return _service.upload(
       sourceFilePath: sourceFilePath,
       config: config,
       customFileName: customFileName,
     );
   }
 }
-
-

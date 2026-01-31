@@ -1,29 +1,27 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/nextcloud_failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_webdav_utils.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../../core/utils/logger_service.dart';
-import '../../../core/errors/nextcloud_failure.dart';
-import '../../../core/encryption/encryption_service.dart';
-import '../../../domain/entities/backup_destination.dart';
-import 'nextcloud_webdav_utils.dart';
-
 class NextcloudUploadResult {
-  final String fileName;
-  final int fileSize;
-  final Duration duration;
-
   const NextcloudUploadResult({
     required this.fileName,
     required this.fileSize,
     required this.duration,
   });
+  final String fileName;
+  final int fileSize;
+  final Duration duration;
 }
 
 class NextcloudDestinationService {
@@ -62,7 +60,7 @@ class NextcloudDestinationService {
       final remoteFilePath = _joinRemote(dateFolderPath, fileName);
 
       Exception? lastError;
-      for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      for (var attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           await _ensureFolderExists(
             dio: dio,
@@ -95,32 +93,36 @@ class NextcloudDestinationService {
           if (response.statusCode != null &&
               response.statusCode! >= 200 &&
               response.statusCode! < 300) {
-
             // Validação de Integridade via HEAD
             try {
               final headResponse = await dio.headUri(uploadUrl);
-              final contentLengthStr = headResponse.headers.value('content-length');
+              final contentLengthStr = headResponse.headers.value(
+                'content-length',
+              );
               if (contentLengthStr != null) {
                 final remoteSize = int.tryParse(contentLengthStr);
                 if (remoteSize != null && remoteSize != fileSize) {
-                   // Tentar apagar
-                   try {
-                     await dio.deleteUri(uploadUrl);
-                   } catch(_) {}
+                  // Tentar apagar
+                  try {
+                    await dio.deleteUri(uploadUrl);
+                  } on Object catch (_) {}
 
-                   throw Exception(
-                     'Arquivo corrompido no Nextcloud. '
-                     'Local: $fileSize, Remoto: $remoteSize'
-                   );
+                  throw Exception(
+                    'Arquivo corrompido no Nextcloud. '
+                    'Local: $fileSize, Remoto: $remoteSize',
+                  );
                 }
               }
-            } catch(e) {
-              LoggerService.warning('Não foi possível validar integridade no Nextcloud: $e');
+            } on Object catch (e) {
+              LoggerService.warning(
+                'Não foi possível validar integridade no Nextcloud: $e',
+              );
               // Se falhar o HEAD, assumimos que pode ser problema de permissão ou rede
               // mas não necessariamente arquivo corrompido, então seguimos.
               // O ideal seria falhar, mas Nextcloud as vezes bloqueia HEAD/PROPFIND.
               // Mas aqui como acabamos de enviar, devemos ter acesso.
-              if (e is Exception && e.toString().contains('Arquivo corrompido')) {
+              if (e is Exception &&
+                  e.toString().contains('Arquivo corrompido')) {
                 rethrow;
               }
             }
@@ -140,7 +142,7 @@ class NextcloudDestinationService {
             response: response,
             type: DioExceptionType.badResponse,
           );
-        } catch (e) {
+        } on Object catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
           if (attempt < maxRetries) {
             await Future.delayed(const Duration(seconds: 5));
@@ -155,7 +157,7 @@ class NextcloudDestinationService {
           originalError: lastError,
         ),
       );
-    } catch (e) {
+    } on Object catch (e) {
       stopwatch.stop();
       return rd.Failure(
         NextcloudFailure(
@@ -190,7 +192,7 @@ class NextcloudDestinationService {
       }
 
       return const rd.Success(false);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         NextcloudFailure(
           message:
@@ -223,7 +225,7 @@ class NextcloudDestinationService {
         path: baseFolderPath,
       );
 
-      int deletedCount = 0;
+      var deletedCount = 0;
       for (final folderName in folders) {
         try {
           final folderDate = DateFormat('yyyy-MM-dd').parse(folderName);
@@ -238,13 +240,13 @@ class NextcloudDestinationService {
             await dio.deleteUri(deleteUrl);
             deletedCount++;
           }
-        } catch (_) {
+        } on Object catch (_) {
           // Nome não é uma data válida, ignorar
         }
       }
 
       return rd.Success(deletedCount);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         NextcloudFailure(
           message: 'Erro ao limpar backups Nextcloud: $e',
@@ -356,7 +358,7 @@ class NextcloudDestinationService {
       path: path,
     );
 
-    final propfindBody = '''
+    const propfindBody = '''
 <?xml version="1.0" encoding="utf-8" ?>
 <d:propfind xmlns:d="DAV:">
   <d:prop>

@@ -1,14 +1,12 @@
-import 'package:intl/intl.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:flutter/material.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../../domain/entities/schedule.dart';
+import 'package:intl/intl.dart';
 
 class ScheduleStatusCard extends StatelessWidget {
+  const ScheduleStatusCard({required this.schedule, super.key, this.onExecute});
   final Schedule schedule;
   final VoidCallback? onExecute;
-
-  const ScheduleStatusCard({super.key, required this.schedule, this.onExecute});
 
   @override
   Widget build(BuildContext context) {

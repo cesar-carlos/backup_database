@@ -1,20 +1,20 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 
+import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
+import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
+import 'package:backup_database/presentation/app_widget.dart';
+import 'package:backup_database/presentation/boot/app_cleanup.dart';
+import 'package:backup_database/presentation/boot/app_initializer.dart';
+import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
+import 'package:backup_database/presentation/boot/service_mode_initializer.dart';
+import 'package:backup_database/presentation/boot/single_instance_checker.dart';
+import 'package:backup_database/presentation/handlers/tray_menu_handler.dart';
+import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-
-import 'core/core.dart';
-import 'infrastructure/external/system/os_version_checker.dart';
-import 'presentation/boot/app_initializer.dart';
-import 'presentation/boot/app_cleanup.dart';
-import 'presentation/boot/service_mode_initializer.dart';
-import 'presentation/boot/single_instance_checker.dart';
-import 'presentation/boot/scheduled_backup_executor.dart';
-import 'presentation/managers/managers.dart';
-import 'presentation/handlers/tray_menu_handler.dart';
-import 'presentation/app_widget.dart';
-import 'application/services/scheduler_service.dart';
-import 'core/di/service_locator.dart' as service_locator;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +55,7 @@ Future<void> main() async {
     runZonedGuarded(() => runApp(const BackupDatabaseApp()), _handleError);
 
     await _startScheduler();
-  } catch (e, stackTrace) {
+  } on Object catch (e, stackTrace) {
     LoggerService.error('Erro fatal na inicialização', e, stackTrace);
     await AppCleanup.cleanup();
     exit(1);
@@ -89,7 +89,7 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   final windowManager = WindowManagerService();
   try {
     await windowManager.initialize(startMinimized: launchConfig.startMinimized);
-  } catch (e) {
+  } on Object catch (e) {
     LoggerService.warning(
       'Erro ao inicializar window manager (continuando sem UI): $e',
     );
@@ -105,13 +105,13 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
         try {
           await WindowManagerService().show();
           LoggerService.info('Janela trazida para frente após comando IPC');
-        } catch (e, stackTrace) {
+        } on Object catch (e, stackTrace) {
           LoggerService.error('Erro ao mostrar janela via IPC', e, stackTrace);
         }
       },
     );
     LoggerService.info('IPC Server inicializado e pronto');
-  } catch (e) {
+  } on Object catch (e) {
     if (ServiceModeDetector.isServiceMode()) {
       LoggerService.debug('IPC Server não disponível em modo serviço (normal)');
     } else {
@@ -122,7 +122,7 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   final trayManager = TrayManagerService();
   try {
     await trayManager.initialize(onMenuAction: TrayMenuHandler.handleAction);
-  } catch (e) {
+  } on Object catch (e) {
     if (ServiceModeDetector.isServiceMode()) {
       LoggerService.debug(
         'Tray Manager não disponível em modo serviço (normal)',
@@ -145,7 +145,7 @@ Future<void> _startScheduler() async {
     final schedulerService = service_locator.getIt<SchedulerService>();
     await schedulerService.start();
     LoggerService.info('Serviço de agendamento iniciado');
-  } catch (e) {
+  } on Object catch (e) {
     LoggerService.error('Erro ao iniciar scheduler', e);
   }
 }

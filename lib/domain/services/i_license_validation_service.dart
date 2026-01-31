@@ -1,6 +1,5 @@
+import 'package:backup_database/domain/entities/license.dart';
 import 'package:result_dart/result_dart.dart' as rd;
-
-import '../entities/license.dart';
 
 abstract class ILicenseValidationService {
   Future<rd.Result<License>> getCurrentLicense();

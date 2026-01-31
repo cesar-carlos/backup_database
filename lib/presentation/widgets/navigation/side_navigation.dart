@@ -1,18 +1,16 @@
+import 'package:backup_database/presentation/widgets/navigation/navigation_item.dart';
 import 'package:flutter/material.dart';
 
-import 'navigation_item.dart';
-
 class SideNavigation extends StatelessWidget {
-  final List<NavigationItem> items;
-  final int selectedIndex;
-  final ValueChanged<int> onDestinationSelected;
-
   const SideNavigation({
-    super.key,
     required this.items,
     required this.selectedIndex,
     required this.onDestinationSelected,
+    super.key,
   });
+  final List<NavigationItem> items;
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -32,4 +30,3 @@ class SideNavigation extends StatelessWidget {
     );
   }
 }
-

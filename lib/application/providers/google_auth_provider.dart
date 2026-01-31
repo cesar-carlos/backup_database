@@ -1,27 +1,18 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
+import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/infrastructure/external/google/google_auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../core/encryption/encryption_service.dart';
-import '../../core/errors/failure.dart';
-import '../../core/utils/logger_service.dart';
-import '../../infrastructure/external/google/google_auth_service.dart';
-
 class GoogleOAuthConfig {
-  final String clientId;
-  final String? clientSecret;
-
   const GoogleOAuthConfig({
     required this.clientId,
     this.clientSecret,
   });
-
-  Map<String, dynamic> toJson() => {
-        'clientId': clientId,
-        'clientSecret': clientSecret,
-      };
 
   factory GoogleOAuthConfig.fromJson(Map<String, dynamic> json) {
     return GoogleOAuthConfig(
@@ -29,14 +20,20 @@ class GoogleOAuthConfig {
       clientSecret: json['clientSecret'] as String?,
     );
   }
+  final String clientId;
+  final String? clientSecret;
+
+  Map<String, dynamic> toJson() => {
+    'clientId': clientId,
+    'clientSecret': clientSecret,
+  };
 }
 
 class GoogleAuthProvider extends ChangeNotifier {
+  GoogleAuthProvider(this._authService);
   final GoogleAuthService _authService;
 
   static const _oauthConfigKey = 'google_oauth_config';
-
-  GoogleAuthProvider(this._authService);
 
   bool _isLoading = false;
   bool _isInitialized = false;
@@ -84,7 +81,7 @@ class GoogleAuthProvider extends ChangeNotifier {
 
       _isInitialized = true;
       _isLoading = false;
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao inicializar: $e';
       _isLoading = false;
       LoggerService.error('Erro ao inicializar GoogleAuthProvider', e);
@@ -120,7 +117,7 @@ class GoogleAuthProvider extends ChangeNotifier {
 
       LoggerService.info('Configuração OAuth Google salva');
       return true;
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao configurar OAuth: $e';
       _isLoading = false;
       notifyListeners();
@@ -145,7 +142,7 @@ class GoogleAuthProvider extends ChangeNotifier {
     try {
       await windowManager.setPreventClose(true);
       LoggerService.debug('Proteção contra fechamento ativada para OAuth');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao ativar proteção contra fechamento: $e');
     }
 
@@ -161,7 +158,9 @@ class GoogleAuthProvider extends ChangeNotifier {
           return true;
         },
         (exception) {
-          _error = exception is Failure ? exception.message : exception.toString();
+          _error = exception is Failure
+              ? exception.message
+              : exception.toString();
           _isLoading = false;
           notifyListeners();
           return false;
@@ -172,8 +171,10 @@ class GoogleAuthProvider extends ChangeNotifier {
       try {
         await windowManager.setPreventClose(false);
         LoggerService.debug('Proteção contra fechamento desativada');
-      } catch (e) {
-        LoggerService.warning('Erro ao desativar proteção contra fechamento: $e');
+      } on Object catch (e) {
+        LoggerService.warning(
+          'Erro ao desativar proteção contra fechamento: $e',
+        );
       }
     }
   }
@@ -210,7 +211,7 @@ class GoogleAuthProvider extends ChangeNotifier {
 
       LoggerService.info('Configuração OAuth Google removida');
       return true;
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao remover configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -223,7 +224,6 @@ class GoogleAuthProvider extends ChangeNotifier {
 
     return GoogleAuthResult(
       accessToken: _authService.accessToken!,
-      refreshToken: null,
       email: _authService.currentUserEmail!,
     );
   }
@@ -240,7 +240,7 @@ class GoogleAuthProvider extends ChangeNotifier {
       _oauthConfig = GoogleOAuthConfig.fromJson(json);
 
       LoggerService.debug('Configuração OAuth carregada');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao carregar configuração OAuth: $e');
     }
   }
@@ -253,7 +253,7 @@ class GoogleAuthProvider extends ChangeNotifier {
       final json = jsonEncode(_oauthConfig!.toJson());
       final encryptedConfig = EncryptionService.encrypt(json);
       await prefs.setString(_oauthConfigKey, encryptedConfig);
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração OAuth', e);
       rethrow;
     }
@@ -264,4 +264,3 @@ class GoogleAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

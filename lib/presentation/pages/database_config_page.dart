@@ -1,18 +1,17 @@
+import 'package:backup_database/application/providers/postgres_config_provider.dart';
+import 'package:backup_database/application/providers/sql_server_config_provider.dart';
+import 'package:backup_database/application/providers/sybase_config_provider.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/sql_server/sql_server.dart';
+import 'package:backup_database/presentation/widgets/sybase/sybase.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../application/providers/sql_server_config_provider.dart';
-import '../../application/providers/sybase_config_provider.dart';
-import '../../application/providers/postgres_config_provider.dart';
-import '../../domain/services/i_sybase_backup_service.dart';
-import '../../domain/entities/sql_server_config.dart';
-import '../../domain/entities/sybase_config.dart';
-import '../../domain/entities/postgres_config.dart';
-import '../widgets/sql_server/sql_server.dart';
-import '../widgets/sybase/sybase.dart';
-import '../widgets/common/common.dart';
 
 class DatabaseConfigPage extends StatefulWidget {
   const DatabaseConfigPage({super.key});
@@ -97,7 +96,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     FluentIcons.error,
                                     size: 64,
                                     color: AppColors.error,
@@ -151,10 +150,9 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                               const SizedBox(height: 12),
                               SqlServerConfigList(
                                 configs: sqlProvider.configs,
-                                onEdit: (config) => _showConfigDialog(config),
-                                onDuplicate: (config) =>
-                                    _duplicateSqlServerConfig(config),
-                                onDelete: (id) => _confirmDeleteSqlServer(id),
+                                onEdit: _showConfigDialog,
+                                onDuplicate: _duplicateSqlServerConfig,
+                                onDelete: _confirmDeleteSqlServer,
                                 onToggleEnabled: (id, enabled) =>
                                     sqlProvider.toggleEnabled(id, enabled),
                               ),
@@ -172,11 +170,9 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                               const SizedBox(height: 12),
                               SybaseConfigList(
                                 configs: sybaseProvider.configs,
-                                onEdit: (config) =>
-                                    _showSybaseConfigDialog(config),
-                                onDuplicate: (config) =>
-                                    _duplicateSybaseConfig(config),
-                                onDelete: (id) => _confirmDeleteSybase(id),
+                                onEdit: _showSybaseConfigDialog,
+                                onDuplicate: _duplicateSybaseConfig,
+                                onDelete: _confirmDeleteSybase,
                                 onToggleEnabled: (id, enabled) =>
                                     sybaseProvider.toggleEnabled(id, enabled),
                               ),
@@ -194,11 +190,9 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                               const SizedBox(height: 12),
                               _buildPostgresConfigList(
                                 postgresProvider.configs,
-                                onEdit: (config) =>
-                                    _showPostgresConfigDialog(config),
-                                onDuplicate: (config) =>
-                                    _duplicatePostgresConfig(config),
-                                onDelete: (id) => _confirmDeletePostgres(id),
+                                onEdit: _showPostgresConfigDialog,
+                                onDuplicate: _duplicatePostgresConfig,
+                                onDelete: _confirmDeletePostgres,
                                 onToggleEnabled: (id, enabled) =>
                                     postgresProvider.toggleEnabled(id, enabled),
                               ),
@@ -259,7 +253,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     final result = await SqlServerConfigDialog.show(context, config: config);
 
     if (result != null && mounted) {
-      bool success = false;
+      var success = false;
       String? errorMessage;
 
       if (result is SybaseConfig) {
@@ -426,7 +420,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if ((confirmed ?? false) && mounted) {
       final provider = context.read<PostgresConfigProvider>();
       final success = await provider.deleteConfig(id);
 
@@ -467,7 +461,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if ((confirmed ?? false) && mounted) {
       final provider = context.read<SqlServerConfigProvider>();
       final success = await provider.deleteConfig(id);
 
@@ -508,7 +502,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if ((confirmed ?? false) && mounted) {
       final provider = context.read<SybaseConfigProvider>();
       final success = await provider.deleteConfig(id);
 

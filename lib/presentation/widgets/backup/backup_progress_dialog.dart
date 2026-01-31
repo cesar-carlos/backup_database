@@ -1,8 +1,7 @@
+import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
-
-import '../../../core/theme/app_colors.dart';
-import '../../../application/providers/backup_progress_provider.dart';
 
 class BackupProgressDialog extends StatelessWidget {
   const BackupProgressDialog({super.key});
@@ -10,7 +9,6 @@ class BackupProgressDialog extends StatelessWidget {
   static Future<void> show(BuildContext context) {
     return showDialog<void>(
       context: context,
-      barrierDismissible: false,
       builder: (context) => const BackupProgressDialog(),
     );
   }
@@ -135,9 +133,8 @@ class BackupProgressDialog extends StatelessWidget {
 }
 
 class _CustomProgressBar extends StatelessWidget {
-  final double value;
-
   const _CustomProgressBar({required this.value});
+  final double value;
 
   @override
   Widget build(BuildContext context) {

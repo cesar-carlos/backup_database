@@ -1,7 +1,6 @@
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/datasources/local/tables/postgres_configs_table.dart';
 import 'package:drift/drift.dart';
-
-import '../local/database.dart';
-import '../local/tables/postgres_configs_table.dart';
 
 part 'postgres_config_dao.g.dart';
 
@@ -13,9 +12,9 @@ class PostgresConfigDao extends DatabaseAccessor<AppDatabase>
   Future<List<PostgresConfigsTableData>> getAll() =>
       select(postgresConfigsTable).get();
 
-  Future<PostgresConfigsTableData?> getById(String id) =>
-      (select(postgresConfigsTable)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+  Future<PostgresConfigsTableData?> getById(String id) => (select(
+    postgresConfigsTable,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<int> insertConfig(PostgresConfigsTableCompanion config) =>
       into(postgresConfigsTable).insert(config);
@@ -26,11 +25,10 @@ class PostgresConfigDao extends DatabaseAccessor<AppDatabase>
   Future<int> deleteConfig(String id) =>
       (delete(postgresConfigsTable)..where((t) => t.id.equals(id))).go();
 
-  Future<List<PostgresConfigsTableData>> getEnabled() =>
-      (select(postgresConfigsTable)..where((t) => t.enabled.equals(true)))
-          .get();
+  Future<List<PostgresConfigsTableData>> getEnabled() => (select(
+    postgresConfigsTable,
+  )..where((t) => t.enabled.equals(true))).get();
 
   Stream<List<PostgresConfigsTableData>> watchAll() =>
       select(postgresConfigsTable).watch();
 }
-

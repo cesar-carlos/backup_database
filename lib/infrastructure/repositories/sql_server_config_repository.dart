@@ -1,24 +1,22 @@
+﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/encryption/encryption.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../core/encryption/encryption.dart';
-import '../../domain/entities/sql_server_config.dart';
-import '../../domain/repositories/i_sql_server_config_repository.dart';
-import '../datasources/local/database.dart';
-
 class SqlServerConfigRepository implements ISqlServerConfigRepository {
-  final AppDatabase _database;
-
   SqlServerConfigRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<rd.Result<List<SqlServerConfig>>> getAll() async {
     try {
       final configs = await _database.sqlServerConfigDao.getAll();
-      final entities = configs.map((data) => _toEntity(data)).toList();
+      final entities = configs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar configurações: $e'),
       );
@@ -30,12 +28,12 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
     try {
       final config = await _database.sqlServerConfigDao.getById(id);
       if (config == null) {
-        return rd.Failure(
+        return const rd.Failure(
           NotFoundFailure(message: 'Configuração não encontrada'),
         );
       }
       return rd.Success(_toEntity(config));
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar configuração: $e'),
       );
@@ -49,7 +47,7 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
       await _database.sqlServerConfigDao.insertConfig(companion);
       // Retorna a config original (não criptografada) para uso imediato
       return rd.Success(config);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao criar configuração: $e'),
       );
@@ -63,7 +61,7 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
       await _database.sqlServerConfigDao.updateConfig(companion);
       // Retorna a config original (não criptografada) para uso imediato
       return rd.Success(config);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao atualizar configuração: $e'),
       );
@@ -75,7 +73,7 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
     try {
       await _database.sqlServerConfigDao.deleteConfig(id);
       return const rd.Success(unit);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao deletar configuração: $e'),
       );
@@ -86,9 +84,9 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
   Future<rd.Result<List<SqlServerConfig>>> getEnabled() async {
     try {
       final configs = await _database.sqlServerConfigDao.getEnabled();
-      final entities = configs.map((data) => _toEntity(data)).toList();
+      final entities = configs.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar configurações ativas: $e'),
       );
@@ -97,7 +95,7 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
 
   SqlServerConfig _toEntity(SqlServerConfigsTableData data) {
     final decryptedPassword = EncryptionService.decrypt(data.password);
-    
+
     return SqlServerConfig(
       id: data.id,
       name: data.name,
@@ -114,7 +112,7 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
 
   SqlServerConfigsTableCompanion _toCompanion(SqlServerConfig config) {
     final encryptedPassword = EncryptionService.encrypt(config.password);
-    
+
     return SqlServerConfigsTableCompanion(
       id: Value(config.id),
       name: Value(config.name),

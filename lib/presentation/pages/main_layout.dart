@@ -1,21 +1,19 @@
+import 'package:backup_database/application/providers/dashboard_provider.dart';
+import 'package:backup_database/application/providers/destination_provider.dart';
+import 'package:backup_database/application/providers/log_provider.dart';
+import 'package:backup_database/application/providers/scheduler_provider.dart';
+import 'package:backup_database/application/providers/sql_server_config_provider.dart';
+import 'package:backup_database/core/constants/route_names.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme_provider.dart';
+import 'package:backup_database/presentation/widgets/navigation/navigation_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../application/providers/dashboard_provider.dart';
-import '../../application/providers/destination_provider.dart';
-import '../../application/providers/log_provider.dart';
-import '../../application/providers/scheduler_provider.dart';
-import '../../application/providers/sql_server_config_provider.dart';
-import '../../core/constants/route_names.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/theme_provider.dart';
-import '../widgets/navigation/navigation_item.dart';
-
 class MainLayout extends StatefulWidget {
+  const MainLayout({required this.child, super.key});
   final Widget child;
-
-  const MainLayout({super.key, required this.child});
 
   @override
   State<MainLayout> createState() => _MainLayoutState();
@@ -25,43 +23,43 @@ class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
   final List<NavigationItem> _navigationItems = [
-    NavigationItem(
+    const NavigationItem(
       icon: FluentIcons.view_dashboard,
       selectedIcon: FluentIcons.view_dashboard,
       label: 'Dashboard',
       route: RouteNames.dashboard,
     ),
-    NavigationItem(
+    const NavigationItem(
       icon: FluentIcons.database,
       selectedIcon: FluentIcons.database,
       label: 'Bancos de Dados',
       route: RouteNames.sqlServerConfig,
     ),
-    NavigationItem(
+    const NavigationItem(
       icon: FluentIcons.folder,
       selectedIcon: FluentIcons.folder,
       label: 'Destinos',
       route: RouteNames.destinations,
     ),
-    NavigationItem(
+    const NavigationItem(
       icon: FluentIcons.calendar,
       selectedIcon: FluentIcons.calendar,
       label: 'Agendamentos',
       route: RouteNames.schedules,
     ),
-    NavigationItem(
+    const NavigationItem(
       icon: FluentIcons.document,
       selectedIcon: FluentIcons.document,
       label: 'Logs',
       route: RouteNames.logs,
     ),
-    NavigationItem(
+    const NavigationItem(
       icon: FluentIcons.megaphone,
       selectedIcon: FluentIcons.megaphone,
       label: 'Notificações',
       route: RouteNames.notifications,
     ),
-    NavigationItem(
+    const NavigationItem(
       icon: FluentIcons.settings,
       selectedIcon: FluentIcons.settings,
       label: 'Configurações',
@@ -89,20 +87,15 @@ class _MainLayoutState extends State<MainLayout> {
     switch (location) {
       case RouteNames.dashboard:
         context.read<DashboardProvider>().refresh();
-        break;
       case RouteNames.sqlServerConfig:
       case RouteNames.sybaseConfig:
         context.read<SqlServerConfigProvider>().loadConfigs();
-        break;
       case RouteNames.destinations:
         context.read<DestinationProvider>().loadDestinations();
-        break;
       case RouteNames.schedules:
         context.read<SchedulerProvider>().loadSchedules();
-        break;
       case RouteNames.logs:
         context.read<LogProvider>().refresh();
-        break;
       case RouteNames.notifications:
       case RouteNames.settings:
         break;
@@ -138,27 +131,23 @@ class _MainLayoutState extends State<MainLayout> {
       width: 200,
       color: FluentTheme.of(context).scaffoldBackgroundColor,
       child: ListView(
-        children: _navigationItems
-            .asMap()
-            .entries
-            .map(
-              (entry) {
-                final index = entry.key;
-                final item = entry.value;
-                final isSelected = index == _selectedIndex;
-                return ListTile(
-                  leading: Icon(
-                    item.icon,
-                    color: isSelected
-                        ? AppColors.primary
-                        : FluentTheme.of(context).resources.textFillColorSecondary,
-                  ),
-                  title: Text(item.label),
-                  onPressed: () => _onDestinationSelected(index),
-                );
-              },
-            )
-            .toList(),
+        children: _navigationItems.asMap().entries.map(
+          (entry) {
+            final index = entry.key;
+            final item = entry.value;
+            final isSelected = index == _selectedIndex;
+            return ListTile(
+              leading: Icon(
+                item.icon,
+                color: isSelected
+                    ? AppColors.primary
+                    : FluentTheme.of(context).resources.textFillColorSecondary,
+              ),
+              title: Text(item.label),
+              onPressed: () => _onDestinationSelected(index),
+            );
+          },
+        ).toList(),
       ),
     );
   }
@@ -200,9 +189,7 @@ class _MainLayoutState extends State<MainLayout> {
                     ? FluentIcons.brightness
                     : FluentIcons.brightness,
               ),
-              onPressed: () {
-                themeProvider.toggleTheme();
-              },
+              onPressed: themeProvider.toggleTheme,
             ),
           ),
         ],

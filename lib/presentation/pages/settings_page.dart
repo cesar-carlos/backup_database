@@ -1,8 +1,7 @@
+import 'package:backup_database/presentation/widgets/settings/general_settings_tab.dart';
+import 'package:backup_database/presentation/widgets/settings/license_settings_tab.dart';
+import 'package:backup_database/presentation/widgets/settings/service_settings_tab.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-
-import '../widgets/settings/general_settings_tab.dart';
-import '../widgets/settings/license_settings_tab.dart';
-import '../widgets/settings/service_settings_tab.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});

@@ -18,15 +18,14 @@ abstract class IWindowsServiceService {
 }
 
 class WindowsServiceStatus {
-  final bool isInstalled;
-  final bool isRunning;
-  final String? serviceName;
-  final String? displayName;
-
   const WindowsServiceStatus({
     required this.isInstalled,
     required this.isRunning,
     this.serviceName,
     this.displayName,
   });
+  final bool isInstalled;
+  final bool isRunning;
+  final String? serviceName;
+  final String? displayName;
 }

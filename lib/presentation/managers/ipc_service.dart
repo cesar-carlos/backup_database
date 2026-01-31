@@ -1,12 +1,18 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 
-import '../../core/utils/logger_service.dart';
-import '../../core/utils/windows_user_service.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/windows_user_service.dart';
 
 class IpcService {
   static const int _defaultPort = 58724;
-  static const List<int> _alternativePorts = [58725, 58726, 58727, 58728, 58729];
+  static const List<int> _alternativePorts = [
+    58725,
+    58726,
+    58727,
+    58728,
+    58729,
+  ];
   static const String _showWindowCommand = 'SHOW_WINDOW';
   static const String _getUserInfoCommand = 'GET_USER_INFO';
   static const String _userInfoResponsePrefix = 'USER_INFO:';
@@ -66,7 +72,7 @@ class IpcService {
           );
           continue;
         }
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.warning(
           'Erro inesperado ao tentar porta $port: $e',
         );
@@ -102,7 +108,7 @@ class IpcService {
             await socket.flush();
             LoggerService.debug('Resposta USER_INFO enviada: $username');
           }
-        } catch (e) {
+        } on Object catch (e) {
           LoggerService.error('Erro ao processar mensagem IPC', e);
         }
       },
@@ -120,7 +126,9 @@ class IpcService {
 
     for (final port in portsToTry) {
       try {
-        LoggerService.debug('Tentando enviar comando SHOW_WINDOW na porta $port...');
+        LoggerService.debug(
+          'Tentando enviar comando SHOW_WINDOW na porta $port...',
+        );
 
         final socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
@@ -134,9 +142,11 @@ class IpcService {
         await Future.delayed(_socketCloseDelay);
         await socket.close();
 
-        LoggerService.info('Comando SHOW_WINDOW enviado com sucesso na porta $port');
+        LoggerService.info(
+          'Comando SHOW_WINDOW enviado com sucesso na porta $port',
+        );
         return true;
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.debug('Porta $port não disponível, tentando próxima...');
         continue;
       }
@@ -161,7 +171,7 @@ class IpcService {
 
         await socket.close();
         return true;
-      } catch (e) {
+      } on Object catch (e) {
         continue;
       }
     }
@@ -189,7 +199,9 @@ class IpcService {
           (data) {
             final message = String.fromCharCodes(data).trim();
             if (message.startsWith(_userInfoResponsePrefix)) {
-              final username = message.substring(_userInfoResponsePrefix.length);
+              final username = message.substring(
+                _userInfoResponsePrefix.length,
+              );
               if (!completer.isCompleted) {
                 completer.complete(username);
               }
@@ -216,12 +228,14 @@ class IpcService {
         if (result != null) {
           return result;
         }
-      } catch (e) {
+      } on Object catch (e) {
         continue;
       }
     }
 
-    LoggerService.debug('Não foi possível obter usuário da instância existente');
+    LoggerService.debug(
+      'Não foi possível obter usuário da instância existente',
+    );
     return null;
   }
 
@@ -231,7 +245,7 @@ class IpcService {
         await _server!.close();
         _isRunning = false;
         LoggerService.info('IPC Server parado');
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.error('Erro ao parar IPC Server', e);
       }
     }

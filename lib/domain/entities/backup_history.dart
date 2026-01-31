@@ -3,6 +3,20 @@ import 'package:uuid/uuid.dart';
 enum BackupStatus { success, error, warning, running }
 
 class BackupHistory {
+  BackupHistory({
+    required this.databaseName,
+    required this.databaseType,
+    required this.backupPath,
+    required this.fileSize,
+    required this.status,
+    required this.startedAt,
+    String? id,
+    this.scheduleId,
+    this.backupType = 'full',
+    this.errorMessage,
+    this.finishedAt,
+    this.durationSeconds,
+  }) : id = id ?? const Uuid().v4();
   final String id;
   final String? scheduleId;
   final String databaseName;
@@ -15,21 +29,6 @@ class BackupHistory {
   final DateTime startedAt;
   final DateTime? finishedAt;
   final int? durationSeconds;
-
-  BackupHistory({
-    String? id,
-    this.scheduleId,
-    required this.databaseName,
-    required this.databaseType,
-    required this.backupPath,
-    required this.fileSize,
-    this.backupType = 'full',
-    required this.status,
-    this.errorMessage,
-    required this.startedAt,
-    this.finishedAt,
-    this.durationSeconds,
-  }) : id = id ?? const Uuid().v4();
 
   BackupHistory copyWith({
     String? id,

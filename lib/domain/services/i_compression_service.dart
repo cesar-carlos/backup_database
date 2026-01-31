@@ -1,7 +1,6 @@
+import 'package:backup_database/domain/entities/compression_format.dart';
+import 'package:backup_database/domain/services/compression_result.dart';
 import 'package:result_dart/result_dart.dart';
-
-import '../entities/compression_format.dart';
-import 'compression_result.dart';
 
 abstract class ICompressionService {
   Future<Result<CompressionResult>> compress({
@@ -11,4 +10,3 @@ abstract class ICompressionService {
     CompressionFormat? format,
   });
 }
-

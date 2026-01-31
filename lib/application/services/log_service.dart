@@ -1,28 +1,26 @@
+﻿import 'dart:convert';
 import 'dart:io';
-import 'dart:convert';
 
-import 'package:path/path.dart' as p;
+import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
-
-import '../../core/errors/failure.dart';
-import '../../core/utils/logger_service.dart';
-import '../../core/constants/app_constants.dart';
-import '../../domain/entities/backup_log.dart';
-import '../../domain/repositories/i_backup_log_repository.dart';
 
 enum ExportFormat { txt, json, csv }
 
 class LogService {
+  LogService(this._logRepository);
   final IBackupLogRepository _logRepository;
 
-  LogService(this._logRepository);
-
   Future<rd.Result<BackupLog>> log({
-    String? backupHistoryId,
     required LogLevel level,
     required LogCategory category,
     required String message,
+    String? backupHistoryId,
     String? details,
   }) async {
     final log = BackupLog(
@@ -37,19 +35,15 @@ class LogService {
     switch (level) {
       case LogLevel.debug:
         LoggerService.debug(message);
-        break;
       case LogLevel.info:
         LoggerService.info(message);
-        break;
       case LogLevel.warning:
         LoggerService.warning(message);
-        break;
       case LogLevel.error:
         LoggerService.error(message);
-        break;
     }
 
-    return await _logRepository.create(log);
+    return _logRepository.create(log);
   }
 
   Future<rd.Result<List<BackupLog>>> getLogs({
@@ -62,22 +56,22 @@ class LogService {
     String? searchQuery,
   }) async {
     if (level != null) {
-      return await _logRepository.getByLevel(level);
+      return _logRepository.getByLevel(level);
     }
 
     if (category != null) {
-      return await _logRepository.getByCategory(category);
+      return _logRepository.getByCategory(category);
     }
 
     if (startDate != null && endDate != null) {
-      return await _logRepository.getByDateRange(startDate, endDate);
+      return _logRepository.getByDateRange(startDate, endDate);
     }
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
-      return await _logRepository.search(searchQuery);
+      return _logRepository.search(searchQuery);
     }
 
-    return await _logRepository.getAll(limit: limit, offset: offset);
+    return _logRepository.getAll(limit: limit, offset: offset);
   }
 
   Future<rd.Result<String>> exportLogs({
@@ -92,13 +86,13 @@ class LogService {
       if (startDate != null && endDate != null) {
         final result = await _logRepository.getByDateRange(startDate, endDate);
         if (result.isError()) {
-          return rd.Failure(result.exceptionOrNull() as Exception);
+          return rd.Failure(result.exceptionOrNull()!);
         }
         logs = result.getOrNull()!;
       } else {
         final result = await _logRepository.getAll();
         if (result.isError()) {
-          return rd.Failure(result.exceptionOrNull() as Exception);
+          return rd.Failure(result.exceptionOrNull()!);
         }
         logs = result.getOrNull()!;
       }
@@ -110,15 +104,12 @@ class LogService {
         case ExportFormat.txt:
           content = _formatLogsAsTxt(logs);
           extension = 'txt';
-          break;
         case ExportFormat.json:
           content = _formatLogsAsJson(logs);
           extension = 'json';
-          break;
         case ExportFormat.csv:
           content = _formatLogsAsCsv(logs);
           extension = 'csv';
-          break;
       }
 
       final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
@@ -126,11 +117,11 @@ class LogService {
       final filePath = p.join(outputPath, fileName);
 
       final file = File(filePath);
-      await file.writeAsString(content, encoding: utf8);
+      await file.writeAsString(content);
 
       LoggerService.info('Logs exportados: $filePath');
       return rd.Success(filePath);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao exportar logs', e, stackTrace);
       return rd.Failure(
         FileSystemFailure(message: 'Erro ao exportar logs: $e'),
@@ -166,15 +157,17 @@ class LogService {
       'exportedAt': DateTime.now().toIso8601String(),
       'totalRecords': logs.length,
       'logs': logs
-          .map((log) => {
-                'id': log.id,
-                'backupHistoryId': log.backupHistoryId,
-                'level': log.level.name,
-                'category': log.category.name,
-                'message': log.message,
-                'details': log.details,
-                'createdAt': log.createdAt.toIso8601String(),
-              })
+          .map(
+            (log) => {
+              'id': log.id,
+              'backupHistoryId': log.backupHistoryId,
+              'level': log.level.name,
+              'category': log.category.name,
+              'message': log.message,
+              'details': log.details,
+              'createdAt': log.createdAt.toIso8601String(),
+            },
+          )
           .toList(),
     };
 
@@ -206,7 +199,7 @@ class LogService {
 
   Future<rd.Result<int>> cleanOldLogs() async {
     final cutoffDate = DateTime.now().subtract(
-      Duration(days: AppConstants.logRotationDays),
+      const Duration(days: AppConstants.logRotationDays),
     );
 
     final result = await _logRepository.deleteOlderThan(cutoffDate);
@@ -222,4 +215,3 @@ class LogService {
     return result;
   }
 }
-

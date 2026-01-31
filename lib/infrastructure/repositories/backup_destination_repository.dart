@@ -1,23 +1,21 @@
+﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../domain/entities/backup_destination.dart';
-import '../../domain/repositories/i_backup_destination_repository.dart';
-import '../datasources/local/database.dart';
-
 class BackupDestinationRepository implements IBackupDestinationRepository {
-  final AppDatabase _database;
-
   BackupDestinationRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<rd.Result<List<BackupDestination>>> getAll() async {
     try {
       final destinations = await _database.backupDestinationDao.getAll();
-      final entities = destinations.map((data) => _toEntity(data)).toList();
+      final entities = destinations.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar destinos: $e'),
       );
@@ -29,10 +27,12 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
     try {
       final destination = await _database.backupDestinationDao.getById(id);
       if (destination == null) {
-        return rd.Failure(NotFoundFailure(message: 'Destino não encontrado'));
+        return const rd.Failure(
+          NotFoundFailure(message: 'Destino não encontrado'),
+        );
       }
       return rd.Success(_toEntity(destination));
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(DatabaseFailure(message: 'Erro ao buscar destino: $e'));
     }
   }
@@ -45,7 +45,7 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
       final companion = _toCompanion(destination);
       await _database.backupDestinationDao.insertDestination(companion);
       return rd.Success(destination);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(DatabaseFailure(message: 'Erro ao criar destino: $e'));
     }
   }
@@ -58,7 +58,7 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
       final companion = _toCompanion(destination);
       await _database.backupDestinationDao.updateDestination(companion);
       return rd.Success(destination);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao atualizar destino: $e'),
       );
@@ -70,7 +70,7 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
     try {
       await _database.backupDestinationDao.deleteDestination(id);
       return const rd.Success(unit);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao deletar destino: $e'),
       );
@@ -86,9 +86,9 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
       final destinations = await _database.backupDestinationDao.getByType(
         typeStr,
       );
-      final entities = destinations.map((data) => _toEntity(data)).toList();
+      final entities = destinations.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar destinos por tipo: $e'),
       );
@@ -99,9 +99,9 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
   Future<rd.Result<List<BackupDestination>>> getEnabled() async {
     try {
       final destinations = await _database.backupDestinationDao.getEnabled();
-      final entities = destinations.map((data) => _toEntity(data)).toList();
+      final entities = destinations.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar destinos ativos: $e'),
       );
@@ -114,7 +114,7 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
       parsedType = DestinationType.values.firstWhere(
         (e) => e.name == data.type,
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.warning(
         'Tipo de destino desconhecido no banco: ${data.type} '
         '(id: ${data.id}, name: ${data.name}). '

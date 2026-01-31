@@ -1,20 +1,11 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
+import 'package:backup_database/infrastructure/external/process/tool_verification_service.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/errors/failure.dart';
-import '../../domain/entities/sybase_config.dart';
-import '../../domain/repositories/i_sybase_config_repository.dart';
-import '../../domain/repositories/i_schedule_repository.dart';
-import '../../infrastructure/external/process/tool_verification_service.dart';
-
 class SybaseConfigProvider extends ChangeNotifier {
-  final ISybaseConfigRepository _repository;
-  final IScheduleRepository _scheduleRepository;
-  final ToolVerificationService _toolVerificationService;
-
-  List<SybaseConfig> _configs = [];
-  bool _isLoading = false;
-  String? _error;
-
   SybaseConfigProvider(
     this._repository,
     this._scheduleRepository,
@@ -22,6 +13,13 @@ class SybaseConfigProvider extends ChangeNotifier {
   ) {
     loadConfigs();
   }
+  final ISybaseConfigRepository _repository;
+  final IScheduleRepository _scheduleRepository;
+  final ToolVerificationService _toolVerificationService;
+
+  List<SybaseConfig> _configs = [];
+  bool _isLoading = false;
+  String? _error;
 
   List<SybaseConfig> get configs => _configs;
   bool get isLoading => _isLoading;
@@ -50,7 +48,7 @@ class SybaseConfigProvider extends ChangeNotifier {
           _error = f.message;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao carregar configurações: $e';
     } finally {
       _isLoading = false;
@@ -64,8 +62,8 @@ class SybaseConfigProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final toolVerificationResult =
-          await _toolVerificationService.verifySybaseTools();
+      final toolVerificationResult = await _toolVerificationService
+          .verifySybaseTools();
       final toolVerification = toolVerificationResult.fold(
         (_) => true,
         (failure) {
@@ -95,7 +93,7 @@ class SybaseConfigProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao criar configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -109,8 +107,8 @@ class SybaseConfigProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final toolVerificationResult =
-          await _toolVerificationService.verifySybaseTools();
+      final toolVerificationResult = await _toolVerificationService
+          .verifySybaseTools();
       final toolVerification = toolVerificationResult.fold(
         (_) => true,
         (failure) {
@@ -140,7 +138,7 @@ class SybaseConfigProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao atualizar configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -150,9 +148,11 @@ class SybaseConfigProvider extends ChangeNotifier {
 
   Future<bool> deleteConfig(String id) async {
     final schedulesResult = await _scheduleRepository.getByDatabaseConfig(id);
-    if (schedulesResult.isSuccess() && schedulesResult.getOrNull()!.isNotEmpty) {
+    if (schedulesResult.isSuccess() &&
+        schedulesResult.getOrNull()!.isNotEmpty) {
       _error =
-          'Há agendamentos vinculados a esta configuração Sybase. Remova-os antes de excluir.';
+          'Há agendamentos vinculados a esta configuração Sybase. '
+          'Remova-os antes de excluir.';
       notifyListeners();
       return false;
     }
@@ -178,7 +178,7 @@ class SybaseConfigProvider extends ChangeNotifier {
           return false;
         },
       );
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao deletar configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -199,18 +199,18 @@ class SybaseConfigProvider extends ChangeNotifier {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
-    return await createConfig(copy);
+    return createConfig(copy);
   }
 
   Future<bool> toggleEnabled(String id, bool enabled) async {
     final config = _configs.firstWhere((c) => c.id == id);
-    return await updateConfig(config.copyWith(enabled: enabled));
+    return updateConfig(config.copyWith(enabled: enabled));
   }
 
   SybaseConfig? getConfigById(String id) {
     try {
       return _configs.firstWhere((c) => c.id == id);
-    } catch (e) {
+    } on Object catch (e) {
       return null;
     }
   }
@@ -220,4 +220,3 @@ class SybaseConfigProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-

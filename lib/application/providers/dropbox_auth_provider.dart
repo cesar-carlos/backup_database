@@ -1,23 +1,15 @@
 import 'dart:convert';
 
+import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../core/encryption/encryption_service.dart';
-import '../../core/errors/failure.dart';
-import '../../infrastructure/external/dropbox/dropbox_auth_service.dart';
-
 class DropboxOAuthConfig {
-  final String clientId;
-  final String? clientSecret;
-
   const DropboxOAuthConfig({required this.clientId, this.clientSecret});
-
-  Map<String, dynamic> toJson() => {
-    'clientId': clientId,
-    'clientSecret': clientSecret,
-  };
 
   factory DropboxOAuthConfig.fromJson(Map<String, dynamic> json) {
     return DropboxOAuthConfig(
@@ -25,14 +17,20 @@ class DropboxOAuthConfig {
       clientSecret: json['clientSecret'] as String?,
     );
   }
+  final String clientId;
+  final String? clientSecret;
+
+  Map<String, dynamic> toJson() => {
+    'clientId': clientId,
+    'clientSecret': clientSecret,
+  };
 }
 
 class DropboxAuthProvider extends ChangeNotifier {
+  DropboxAuthProvider(this._authService);
   final DropboxAuthService _authService;
 
   static const _oauthConfigKey = 'dropbox_oauth_config';
-
-  DropboxAuthProvider(this._authService);
 
   bool _isLoading = false;
   bool _isInitialized = false;
@@ -79,7 +77,7 @@ class DropboxAuthProvider extends ChangeNotifier {
 
       _isInitialized = true;
       _isLoading = false;
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao inicializar: $e';
       _isLoading = false;
     }
@@ -113,7 +111,7 @@ class DropboxAuthProvider extends ChangeNotifier {
       notifyListeners();
 
       return true;
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao configurar OAuth: $e';
       _isLoading = false;
       notifyListeners();
@@ -134,8 +132,8 @@ class DropboxAuthProvider extends ChangeNotifier {
 
     try {
       await windowManager.setPreventClose(true);
-    } catch (e) {
-      // Ignore window manager errors
+    } on Object catch (e) {
+      LoggerService.debug('Window manager setPreventClose: $e');
     }
 
     try {
@@ -160,8 +158,8 @@ class DropboxAuthProvider extends ChangeNotifier {
     } finally {
       try {
         await windowManager.setPreventClose(false);
-      } catch (e) {
-        // Ignore window manager errors
+      } on Object catch (e) {
+        LoggerService.debug('Window manager setPreventClose: $e');
       }
     }
   }
@@ -195,7 +193,7 @@ class DropboxAuthProvider extends ChangeNotifier {
       notifyListeners();
 
       return true;
-    } catch (e) {
+    } on Object catch (e) {
       _error = 'Erro ao remover configuração: $e';
       _isLoading = false;
       notifyListeners();
@@ -208,7 +206,6 @@ class DropboxAuthProvider extends ChangeNotifier {
 
     return DropboxAuthResult(
       accessToken: _authService.accessToken!,
-      refreshToken: null,
       email: _authService.currentUserEmail!,
     );
   }
@@ -223,8 +220,8 @@ class DropboxAuthProvider extends ChangeNotifier {
       final decryptedConfig = EncryptionService.decrypt(encryptedConfig);
       final json = jsonDecode(decryptedConfig) as Map<String, dynamic>;
       _oauthConfig = DropboxOAuthConfig.fromJson(json);
-    } catch (e) {
-      // Ignore load errors
+    } on Object catch (e) {
+      LoggerService.debug('Erro ao carregar config OAuth Dropbox: $e');
     }
   }
 
@@ -236,7 +233,7 @@ class DropboxAuthProvider extends ChangeNotifier {
       final json = jsonEncode(_oauthConfig!.toJson());
       final encryptedConfig = EncryptionService.encrypt(json);
       await prefs.setString(_oauthConfigKey, encryptedConfig);
-    } catch (e) {
+    } on Object catch (e) {
       rethrow;
     }
   }

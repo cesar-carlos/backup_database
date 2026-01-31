@@ -1,4 +1,4 @@
-import '../entities/email_config.dart';
+import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 abstract class IEmailConfigRepository {

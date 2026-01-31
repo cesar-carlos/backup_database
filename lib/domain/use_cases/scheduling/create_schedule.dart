@@ -1,17 +1,15 @@
+import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../entities/schedule.dart';
-import '../../repositories/repositories.dart';
-import '../../../infrastructure/external/scheduler/cron_parser.dart';
-import '../../../application/services/scheduler_service.dart';
-
 class CreateSchedule {
+  CreateSchedule(this._repository, this._schedulerService);
   final IScheduleRepository _repository;
   final SchedulerService _schedulerService;
   final ScheduleCalculator _calculator = ScheduleCalculator();
-
-  CreateSchedule(this._repository, this._schedulerService);
 
   Future<rd.Result<Schedule>> call(Schedule schedule) async {
     // Validações
@@ -54,4 +52,3 @@ class CreateSchedule {
     return result;
   }
 }
-

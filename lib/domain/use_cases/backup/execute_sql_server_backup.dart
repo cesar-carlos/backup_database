@@ -1,15 +1,13 @@
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
+import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../../core/errors/failure.dart';
-import '../../entities/backup_type.dart';
-import '../../entities/sql_server_config.dart';
-import '../../services/backup_execution_result.dart';
-import '../../services/i_sql_server_backup_service.dart';
-
 class ExecuteSqlServerBackup {
-  final ISqlServerBackupService _backupService;
-
   ExecuteSqlServerBackup(this._backupService);
+  final ISqlServerBackupService _backupService;
 
   Future<rd.Result<BackupExecutionResult>> call({
     required SqlServerConfig config,
@@ -37,7 +35,7 @@ class ExecuteSqlServerBackup {
       );
     }
 
-    return await _backupService.executeBackup(
+    return _backupService.executeBackup(
       config: config,
       outputDirectory: outputDirectory,
       backupType: backupType,

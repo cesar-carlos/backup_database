@@ -1,6 +1,27 @@
 import 'package:uuid/uuid.dart';
 
 class EmailConfig {
+  EmailConfig({
+    required this.recipients,
+    String? id,
+    this.senderName = 'Sistema de Backup',
+    this.fromEmail = 'backup@example.com',
+    this.fromName = 'Sistema de Backup',
+    this.smtpServer = 'smtp.gmail.com',
+    this.smtpPort = 587,
+    this.username = '',
+    this.password = '',
+    this.useSsl = true,
+    this.notifyOnSuccess = true,
+    this.notifyOnError = true,
+    this.notifyOnWarning = true,
+    this.attachLog = false,
+    this.enabled = true,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
   final String id;
   final String senderName;
   final String fromEmail;
@@ -18,28 +39,6 @@ class EmailConfig {
   final bool enabled;
   final DateTime createdAt;
   final DateTime updatedAt;
-
-  EmailConfig({
-    String? id,
-    this.senderName = 'Sistema de Backup',
-    this.fromEmail = 'backup@example.com',
-    this.fromName = 'Sistema de Backup',
-    this.smtpServer = 'smtp.gmail.com',
-    this.smtpPort = 587,
-    this.username = '',
-    this.password = '',
-    this.useSsl = true,
-    required this.recipients,
-    this.notifyOnSuccess = true,
-    this.notifyOnError = true,
-    this.notifyOnWarning = true,
-    this.attachLog = false,
-    this.enabled = true,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
-       createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
 
   EmailConfig copyWith({
     String? id,

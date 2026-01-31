@@ -1,10 +1,11 @@
+﻿import 'package:backup_database/application/services/auto_update_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../core/errors/failure.dart';
-import '../../core/utils/logger_service.dart';
-import '../services/auto_update_service.dart';
-
 class AutoUpdateProvider extends ChangeNotifier {
+  AutoUpdateProvider({required AutoUpdateService autoUpdateService})
+    : _autoUpdateService = autoUpdateService;
   final AutoUpdateService _autoUpdateService;
 
   final bool _isLoading = false;
@@ -12,9 +13,6 @@ class AutoUpdateProvider extends ChangeNotifier {
   String? _error;
   bool _updateAvailable = false;
   DateTime? _lastCheckDate;
-
-  AutoUpdateProvider({required AutoUpdateService autoUpdateService})
-    : _autoUpdateService = autoUpdateService;
 
   bool get isLoading => _isLoading;
   bool get isChecking => _isChecking;
@@ -41,7 +39,7 @@ class AutoUpdateProvider extends ChangeNotifier {
       _isChecking = false;
       notifyListeners();
       LoggerService.info('Verificação de atualizações concluída');
-    } catch (e) {
+    } on Object catch (e) {
       final failure = e is Failure ? e : NetworkFailure(message: e.toString());
       _error = failure.message;
       _isChecking = false;

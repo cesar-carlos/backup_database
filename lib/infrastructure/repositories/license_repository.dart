@@ -1,31 +1,29 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/domain/entities/license.dart';
+import 'package:backup_database/domain/repositories/i_license_repository.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/core.dart';
-import '../../domain/entities/license.dart';
-import '../../domain/repositories/i_license_repository.dart';
-import '../datasources/local/database.dart';
-
 class LicenseRepository implements ILicenseRepository {
-  final AppDatabase _database;
-
   LicenseRepository(this._database);
+  final AppDatabase _database;
 
   @override
   Future<rd.Result<License>> getByDeviceKey(String deviceKey) async {
     try {
       final license = await _database.licenseDao.getByDeviceKey(deviceKey);
       if (license == null) {
-        return rd.Failure(
+        return const rd.Failure(
           NotFoundFailure(
             message: 'Licença não encontrada para este dispositivo',
           ),
         );
       }
       return rd.Success(_toEntity(license));
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(DatabaseFailure(message: 'Erro ao buscar licença: $e'));
     }
   }
@@ -36,7 +34,7 @@ class LicenseRepository implements ILicenseRepository {
       final companion = _toCompanion(license);
       await _database.licenseDao.insertLicense(companion);
       return rd.Success(license);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao criar licença', e, stackTrace);
       return rd.Failure(DatabaseFailure(message: 'Erro ao criar licença: $e'));
     }
@@ -48,10 +46,12 @@ class LicenseRepository implements ILicenseRepository {
       final companion = _toCompanion(license);
       final updated = await _database.licenseDao.updateLicense(companion);
       if (!updated) {
-        return rd.Failure(NotFoundFailure(message: 'Licença não encontrada'));
+        return const rd.Failure(
+          NotFoundFailure(message: 'Licença não encontrada'),
+        );
       }
       return rd.Success(license);
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao atualizar licença', e, stackTrace);
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao atualizar licença: $e'),
@@ -64,7 +64,7 @@ class LicenseRepository implements ILicenseRepository {
     try {
       await _database.licenseDao.deleteLicense(id);
       return const rd.Success(unit);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao deletar licença: $e'),
       );
@@ -75,9 +75,9 @@ class LicenseRepository implements ILicenseRepository {
   Future<rd.Result<List<License>>> getAll() async {
     try {
       final licenses = await _database.licenseDao.getAll();
-      final entities = licenses.map((data) => _toEntity(data)).toList();
+      final entities = licenses.map(_toEntity).toList();
       return rd.Success(entities);
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar licenças: $e'),
       );
@@ -89,7 +89,7 @@ class LicenseRepository implements ILicenseRepository {
     try {
       allowedFeatures = (jsonDecode(data.allowedFeatures) as List)
           .cast<String>();
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         '[LicenseRepository] Erro ao decodificar allowedFeatures para licença ${data.id}: $e',
       );

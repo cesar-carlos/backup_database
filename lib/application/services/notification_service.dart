@@ -1,46 +1,46 @@
 import 'dart:io';
 
+import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/email_config.dart';
+import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
+import 'package:backup_database/domain/repositories/i_email_config_repository.dart';
+import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/infrastructure/external/email/email_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-import '../../core/utils/logger_service.dart';
-import '../../core/constants/license_features.dart';
-import '../../core/di/service_locator.dart' as service_locator;
-import '../../domain/entities/email_config.dart';
-import '../../domain/entities/backup_history.dart';
-import '../../domain/repositories/i_email_config_repository.dart';
-import '../../domain/repositories/i_backup_log_repository.dart';
-import '../../domain/services/i_license_validation_service.dart';
-import '../../infrastructure/external/email/email_service.dart';
-
 class NotificationService {
-  final IEmailConfigRepository _emailConfigRepository;
-  final IBackupLogRepository _backupLogRepository;
-  final EmailService _emailService;
-
   NotificationService({
     required IEmailConfigRepository emailConfigRepository,
     required IBackupLogRepository backupLogRepository,
     required EmailService emailService,
-  })  : _emailConfigRepository = emailConfigRepository,
-        _backupLogRepository = backupLogRepository,
-        _emailService = emailService;
+  }) : _emailConfigRepository = emailConfigRepository,
+       _backupLogRepository = backupLogRepository,
+       _emailService = emailService;
+  final IEmailConfigRepository _emailConfigRepository;
+  final IBackupLogRepository _backupLogRepository;
+  final EmailService _emailService;
 
   Future<rd.Result<bool>> notifyBackupComplete(
     BackupHistory history,
   ) async {
     // Verificar licença para notificações por email
     try {
-      final licenseValidationService = service_locator.getIt<ILicenseValidationService>();
+      final licenseValidationService = service_locator
+          .getIt<ILicenseValidationService>();
       final hasEmailNotification = await licenseValidationService
           .isFeatureAllowed(LicenseFeatures.emailNotification);
-      
+
       if (!hasEmailNotification.getOrElse((_) => false)) {
         LoggerService.info(
           'Notificação por email bloqueada - licença não possui permissão',
         );
         return const rd.Success(false);
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning(
         'Erro ao verificar licença para notificação: $e',
       );
@@ -62,13 +62,13 @@ class NotificationService {
         }
 
         if (history.status == BackupStatus.success) {
-          return await _emailService.sendBackupSuccessNotification(
+          return _emailService.sendBackupSuccessNotification(
             config: config,
             history: history,
             logPath: logPath,
           );
         } else if (history.status == BackupStatus.error) {
-          return await _emailService.sendBackupErrorNotification(
+          return _emailService.sendBackupErrorNotification(
             config: config,
             history: history,
             logPath: logPath,
@@ -77,7 +77,7 @@ class NotificationService {
 
         return const rd.Success(false);
       },
-      (failure) => rd.Failure(failure),
+      rd.Failure.new,
     );
   }
 
@@ -93,21 +93,22 @@ class NotificationService {
           return const rd.Success(false);
         }
 
-        return await _emailService.sendBackupWarningNotification(
+        return _emailService.sendBackupWarningNotification(
           config: config,
           databaseName: databaseName,
           warningMessage: message,
         );
       },
-      (failure) => rd.Failure(failure),
+      rd.Failure.new,
     );
   }
 
   Future<rd.Result<bool>> testEmailConfiguration(
     EmailConfig config,
   ) async {
-    final subject = '🔧 Teste de Configuração - Backup Database';
-    final body = '''
+    const subject = '🔧 Teste de Configuração - Backup Database';
+    final body =
+        '''
 Este é um e-mail de teste do Sistema de Backup.
 
 Se você recebeu este e-mail, a configuração está funcionando corretamente.
@@ -115,7 +116,7 @@ Se você recebeu este e-mail, a configuração está funcionando corretamente.
 Data/Hora do teste: ${DateTime.now()}
 ''';
 
-    return await _emailService.sendEmail(
+    return _emailService.sendEmail(
       config: config,
       subject: subject,
       body: body,
@@ -124,8 +125,9 @@ Data/Hora do teste: ${DateTime.now()}
 
   Future<String?> _exportLogsForBackup(String backupHistoryId) async {
     try {
-      final logsResult =
-          await _backupLogRepository.getByBackupHistory(backupHistoryId);
+      final logsResult = await _backupLogRepository.getByBackupHistory(
+        backupHistoryId,
+      );
 
       return logsResult.fold(
         (logs) async {
@@ -138,7 +140,9 @@ Data/Hora do teste: ${DateTime.now()}
 
           for (final log in logs) {
             buffer.writeln(
-                '[${log.createdAt}] [${log.level.name.toUpperCase()}] ${log.message}');
+              '[${log.createdAt}] [${log.level.name.toUpperCase()}] '
+              '${log.message}',
+            );
             if (log.details != null) {
               buffer.writeln('  Detalhes: ${log.details}');
             }
@@ -153,10 +157,9 @@ Data/Hora do teste: ${DateTime.now()}
         },
         (failure) => null,
       );
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao exportar logs: $e');
       return null;
     }
   }
 }
-

@@ -1,4 +1,4 @@
-import 'failure.dart';
+import 'package:backup_database/core/errors/failure.dart';
 
 class GoogleDriveFailure extends Failure {
   const GoogleDriveFailure({
@@ -7,4 +7,3 @@ class GoogleDriveFailure extends Failure {
     super.originalError,
   });
 }
-

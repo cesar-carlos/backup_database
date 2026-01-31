@@ -1,6 +1,5 @@
+﻿import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/services.dart';
-
-import 'logger_service.dart';
 
 class ClipboardService {
   ClipboardService();
@@ -10,7 +9,7 @@ class ClipboardService {
       await Clipboard.setData(ClipboardData(text: text));
       LoggerService.info('Texto copiado para clipboard');
       return true;
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao copiar para clipboard', e, stackTrace);
       return false;
     }

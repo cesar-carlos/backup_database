@@ -1,6 +1,20 @@
 import 'package:uuid/uuid.dart';
 
 class PostgresConfig {
+  PostgresConfig({
+    required this.name,
+    required this.host,
+    required this.database,
+    required this.username,
+    required this.password,
+    String? id,
+    this.port = 5432,
+    this.enabled = true,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
   final String id;
   final String name;
   final String host;
@@ -11,21 +25,6 @@ class PostgresConfig {
   final bool enabled;
   final DateTime createdAt;
   final DateTime updatedAt;
-
-  PostgresConfig({
-    String? id,
-    required this.name,
-    required this.host,
-    this.port = 5432,
-    required this.database,
-    required this.username,
-    required this.password,
-    this.enabled = true,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
 
   PostgresConfig copyWith({
     String? id,
@@ -63,4 +62,3 @@ class PostgresConfig {
   @override
   int get hashCode => id.hashCode;
 }
-

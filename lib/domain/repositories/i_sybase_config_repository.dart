@@ -1,4 +1,4 @@
-import '../entities/sybase_config.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 abstract class ISybaseConfigRepository {
@@ -9,4 +9,3 @@ abstract class ISybaseConfigRepository {
   Future<rd.Result<void>> delete(String id);
   Future<rd.Result<List<SybaseConfig>>> getEnabled();
 }
-

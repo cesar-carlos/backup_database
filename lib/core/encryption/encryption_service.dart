@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart';
 
@@ -25,7 +25,7 @@ class EncryptionService {
     try {
       if (!_looksLikeBase64(encryptedText)) return encryptedText;
       return _encrypter.decrypt64(encryptedText, iv: _iv);
-    } catch (_) {
+    } on Object catch (_) {
       return encryptedText;
     }
   }
@@ -35,7 +35,7 @@ class EncryptionService {
     try {
       _encrypter.decrypt64(text, iv: _iv);
       return true;
-    } catch (_) {
+    } on Object catch (_) {
       return false;
     }
   }
@@ -51,7 +51,7 @@ class EncryptionService {
     try {
       base64Decode(text);
       return true;
-    } catch (_) {
+    } on Object catch (_) {
       return false;
     }
   }

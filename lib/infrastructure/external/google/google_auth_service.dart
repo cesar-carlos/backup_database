@@ -1,38 +1,25 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/errors/google_drive_failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:http/http.dart' as http;
+import 'package:oauth2_client/access_token_response.dart';
 import 'package:oauth2_client/google_oauth2_client.dart';
 import 'package:oauth2_client/oauth2_helper.dart';
-import 'package:oauth2_client/access_token_response.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/constants/app_constants.dart';
-import '../../../core/encryption/encryption_service.dart';
-import '../../../core/errors/google_drive_failure.dart';
-import '../../../core/utils/logger_service.dart';
-
 class GoogleAuthResult {
-  final String accessToken;
-  final String? refreshToken;
-  final String email;
-  final DateTime? expirationDate;
-
   const GoogleAuthResult({
     required this.accessToken,
-    this.refreshToken,
     required this.email,
+    this.refreshToken,
     this.expirationDate,
   });
-
-  Map<String, dynamic> toJson() => {
-    'accessToken': accessToken,
-    'refreshToken': refreshToken,
-    'email': email,
-    'expirationDate': expirationDate?.toIso8601String(),
-  };
 
   factory GoogleAuthResult.fromJson(Map<String, dynamic> json) {
     return GoogleAuthResult(
@@ -44,6 +31,17 @@ class GoogleAuthResult {
           : null,
     );
   }
+  final String accessToken;
+  final String? refreshToken;
+  final String email;
+  final DateTime? expirationDate;
+
+  Map<String, dynamic> toJson() => {
+    'accessToken': accessToken,
+    'refreshToken': refreshToken,
+    'email': email,
+    'expirationDate': expirationDate?.toIso8601String(),
+  };
 }
 
 class GoogleAuthService {
@@ -77,7 +75,6 @@ class GoogleAuthService {
 
     _helper = OAuth2Helper(
       _client!,
-      grantType: OAuth2Helper.authorizationCode,
       clientId: _clientId!,
       clientSecret: _clientSecret,
       scopes: AppConstants.googleDriveScopes,
@@ -101,7 +98,9 @@ class GoogleAuthService {
     }
 
     try {
-      LoggerService.info('Iniciando autenticação Google OAuth2 (navegador externo)');
+      LoggerService.info(
+        'Iniciando autenticação Google OAuth2 (navegador externo)',
+      );
 
       // Usar fluxo manual com navegador externo para evitar problemas com webview
       final tokenResponse = await _getTokenWithExternalBrowser();
@@ -137,7 +136,7 @@ class GoogleAuthService {
           expirationDate: _tokenExpiration,
         ),
       );
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       LoggerService.error('Erro na autenticação Google', e, stackTrace);
       return rd.Failure(
         GoogleDriveFailure(message: _parseAuthError(e), originalError: e),
@@ -147,15 +146,17 @@ class GoogleAuthService {
 
   Future<AccessTokenResponse?> _getTokenWithExternalBrowser() async {
     HttpServer? server;
-    
+
     try {
       // Criar servidor HTTP local para receber o callback
       server = await HttpServer.bind(
         InternetAddress.loopbackIPv4,
         AppConstants.oauthLoopbackPort,
       );
-      
-      LoggerService.debug('Servidor OAuth iniciado na porta ${AppConstants.oauthLoopbackPort}');
+
+      LoggerService.debug(
+        'Servidor OAuth iniciado na porta ${AppConstants.oauthLoopbackPort}',
+      );
 
       // Gerar URL de autenticação
       final authUrl = _client!.getAuthorizeUrl(
@@ -229,13 +230,15 @@ class GoogleAuthService {
 
       if (response.statusCode != 200) {
         LoggerService.error('Erro ao trocar código: ${response.body}');
-        throw Exception('Falha ao trocar código por token: ${response.statusCode}');
+        throw Exception(
+          'Falha ao trocar código por token: ${response.statusCode}',
+        );
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      
+
       return AccessTokenResponse.fromMap(data);
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao trocar código por token', e);
       rethrow;
     }
@@ -312,7 +315,7 @@ class GoogleAuthService {
       return const rd.Failure(
         GoogleDriveFailure(message: 'Nenhuma conta Google autenticada.'),
       );
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao autenticar silenciosamente', e);
       return rd.Failure(
         GoogleDriveFailure(
@@ -358,7 +361,7 @@ class GoogleAuthService {
           expirationDate: _tokenExpiration,
         ),
       );
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao atualizar token', e);
       await _clearStoredCredentials();
       return rd.Failure(
@@ -375,7 +378,7 @@ class GoogleAuthService {
       if (_helper != null) {
         await _helper!.removeAllTokens();
       }
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao revogar tokens: $e');
     }
 
@@ -427,7 +430,7 @@ class GoogleAuthService {
           message: 'Erro ao obter email: ${response.statusCode}',
         ),
       );
-    } catch (e) {
+    } on Object catch (e) {
       return rd.Failure(
         GoogleDriveFailure(
           message: 'Erro ao obter informações do usuário: $e',
@@ -455,7 +458,7 @@ class GoogleAuthService {
       await prefs.setString(_emailStorageKey, email);
 
       LoggerService.debug('Credenciais Google salvas');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao salvar credenciais', e);
     }
   }
@@ -485,7 +488,7 @@ class GoogleAuthService {
       }
 
       LoggerService.debug('Credenciais Google carregadas: $_cachedEmail');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.warning('Erro ao carregar credenciais: $e');
       await _clearStoredCredentials();
     }
@@ -497,7 +500,7 @@ class GoogleAuthService {
       await prefs.remove(_storageKey);
       await prefs.remove(_emailStorageKey);
       LoggerService.debug('Credenciais Google removidas');
-    } catch (e) {
+    } on Object catch (e) {
       LoggerService.error('Erro ao limpar credenciais', e);
     }
   }
