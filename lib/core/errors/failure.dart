@@ -83,3 +83,11 @@ class NotFoundFailure extends Failure {
     super.originalError,
   });
 }
+
+class StorageFailure extends Failure {
+  const StorageFailure({
+    required super.message,
+    super.code,
+    super.originalError,
+  });
+}

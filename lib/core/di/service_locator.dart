@@ -9,6 +9,7 @@ import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/repositories/repositories.dart';
+import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get_it/get_it.dart';
@@ -53,6 +54,10 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerLazySingleton<IDeviceKeyService>(DeviceKeyService.new);
+
+  getIt.registerLazySingleton<ISecureCredentialService>(
+    SecureCredentialService.new,
+  );
 
   getIt.registerLazySingleton<ILicenseValidationService>(
     () => LicenseValidationService(

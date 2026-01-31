@@ -9,6 +9,7 @@ export 'i_license_validation_service.dart';
 export 'i_local_destination_service.dart';
 export 'i_nextcloud_destination_service.dart';
 export 'i_postgres_backup_service.dart';
+export 'i_secure_credential_service.dart';
 export 'i_sql_script_execution_service.dart';
 export 'i_sql_server_backup_service.dart';
 export 'i_sybase_backup_service.dart';
