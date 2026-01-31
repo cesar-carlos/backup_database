@@ -26,13 +26,22 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<AppDatabase>(AppDatabase.new);
 
   getIt.registerLazySingleton<ISqlServerConfigRepository>(
-    () => SqlServerConfigRepository(getIt<AppDatabase>()),
+    () => SqlServerConfigRepository(
+      getIt<AppDatabase>(),
+      getIt<ISecureCredentialService>(),
+    ),
   );
   getIt.registerLazySingleton<ISybaseConfigRepository>(
-    () => SybaseConfigRepository(getIt<AppDatabase>()),
+    () => SybaseConfigRepository(
+      getIt<AppDatabase>(),
+      getIt<ISecureCredentialService>(),
+    ),
   );
   getIt.registerLazySingleton<IPostgresConfigRepository>(
-    () => PostgresConfigRepository(getIt<AppDatabase>()),
+    () => PostgresConfigRepository(
+      getIt<AppDatabase>(),
+      getIt<ISecureCredentialService>(),
+    ),
   );
   getIt.registerLazySingleton<IBackupDestinationRepository>(
     () => BackupDestinationRepository(getIt<AppDatabase>()),

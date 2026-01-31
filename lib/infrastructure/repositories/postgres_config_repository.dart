@@ -1,20 +1,31 @@
 ﻿import 'package:backup_database/core/core.dart';
-import 'package:backup_database/core/encryption/encryption.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
+import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class PostgresConfigRepository implements IPostgresConfigRepository {
-  PostgresConfigRepository(this._database);
+  PostgresConfigRepository(
+    this._database,
+    this._secureCredentialService,
+  );
+
   final AppDatabase _database;
+  final ISecureCredentialService _secureCredentialService;
+
+  static const String _passwordKeyPrefix = 'postgres_password_';
 
   @override
   Future<rd.Result<List<PostgresConfig>>> getAll() async {
     try {
       final configs = await _database.postgresConfigDao.getAll();
-      final entities = configs.map(_toEntity).toList();
+      final entities = <PostgresConfig>[];
+      for (final config in configs) {
+        final entity = await _toEntity(config);
+        entities.add(entity);
+      }
       return rd.Success(entities);
     } on Object catch (e) {
       return rd.Failure(
@@ -32,7 +43,8 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
           NotFoundFailure(message: 'Configuração não encontrada'),
         );
       }
-      return rd.Success(_toEntity(config));
+      final entity = await _toEntity(config);
+      return rd.Success(entity);
     } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar configuração: $e'),
@@ -43,6 +55,16 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
   @override
   Future<rd.Result<PostgresConfig>> create(PostgresConfig config) async {
     try {
+      final passwordKey = '$_passwordKeyPrefix${config.id}';
+      final storeResult = await _secureCredentialService.storePassword(
+        key: passwordKey,
+        password: config.password,
+      );
+
+      if (storeResult.isError()) {
+        return rd.Failure(storeResult.exceptionOrNull()!);
+      }
+
       final companion = _toCompanion(config);
       await _database.postgresConfigDao.insertConfig(companion);
       return rd.Success(config);
@@ -56,6 +78,16 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
   @override
   Future<rd.Result<PostgresConfig>> update(PostgresConfig config) async {
     try {
+      final passwordKey = '$_passwordKeyPrefix${config.id}';
+      final storeResult = await _secureCredentialService.storePassword(
+        key: passwordKey,
+        password: config.password,
+      );
+
+      if (storeResult.isError()) {
+        return rd.Failure(storeResult.exceptionOrNull()!);
+      }
+
       final companion = _toCompanion(config);
       await _database.postgresConfigDao.updateConfig(companion);
       return rd.Success(config);
@@ -69,6 +101,8 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
   @override
   Future<rd.Result<void>> delete(String id) async {
     try {
+      final passwordKey = '$_passwordKeyPrefix$id';
+      await _secureCredentialService.deletePassword(key: passwordKey);
       await _database.postgresConfigDao.deleteConfig(id);
       return const rd.Success(unit);
     } on Object catch (e) {
@@ -82,7 +116,11 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
   Future<rd.Result<List<PostgresConfig>>> getEnabled() async {
     try {
       final configs = await _database.postgresConfigDao.getEnabled();
-      final entities = configs.map(_toEntity).toList();
+      final entities = <PostgresConfig>[];
+      for (final config in configs) {
+        final entity = await _toEntity(config);
+        entities.add(entity);
+      }
       return rd.Success(entities);
     } on Object catch (e) {
       return rd.Failure(
@@ -91,8 +129,13 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
     }
   }
 
-  PostgresConfig _toEntity(PostgresConfigsTableData data) {
-    final decryptedPassword = EncryptionService.decrypt(data.password);
+  Future<PostgresConfig> _toEntity(PostgresConfigsTableData data) async {
+    final passwordKey = '$_passwordKeyPrefix${data.id}';
+    final passwordResult = await _secureCredentialService.getPassword(
+      key: passwordKey,
+    );
+
+    final password = passwordResult.getOrElse((_) => '');
 
     return PostgresConfig(
       id: data.id,
@@ -101,7 +144,7 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
       port: data.port,
       database: data.database,
       username: data.username,
-      password: decryptedPassword,
+      password: password,
       enabled: data.enabled,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
@@ -109,8 +152,6 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
   }
 
   PostgresConfigsTableCompanion _toCompanion(PostgresConfig config) {
-    final encryptedPassword = EncryptionService.encrypt(config.password);
-
     return PostgresConfigsTableCompanion(
       id: Value(config.id),
       name: Value(config.name),
@@ -118,7 +159,7 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
       port: Value(config.port),
       database: Value(config.database),
       username: Value(config.username),
-      password: Value(encryptedPassword),
+      password: const Value(''),
       enabled: Value(config.enabled),
       createdAt: Value(config.createdAt),
       updatedAt: Value(config.updatedAt),

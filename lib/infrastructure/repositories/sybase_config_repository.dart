@@ -1,14 +1,21 @@
 ﻿import 'package:backup_database/core/core.dart';
-import 'package:backup_database/core/encryption/encryption.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
+import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SybaseConfigRepository implements ISybaseConfigRepository {
-  SybaseConfigRepository(this._database);
+  SybaseConfigRepository(
+    this._database,
+    this._secureCredentialService,
+  );
+
   final AppDatabase _database;
+  final ISecureCredentialService _secureCredentialService;
+
+  static const String _passwordKeyPrefix = 'sybase_password_';
 
   @override
   Future<rd.Result<List<SybaseConfig>>> getAll() async {
@@ -40,7 +47,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       final entities = <SybaseConfig>[];
       for (final row in rows) {
         try {
-          final entity = _toEntityFromRow(row);
+          final entity = await _toEntityFromRow(row);
           entities.add(entity);
         } on Object catch (e, stackTrace) {
           final id = row.read<String>('id');
@@ -142,7 +149,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       );
 
       try {
-        final entity = _toEntityFromRow(row);
+        final entity = await _toEntityFromRow(row);
         return rd.Success(entity);
       } on Object catch (e, stackTrace) {
         LoggerService.error(
@@ -175,7 +182,15 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
   @override
   Future<rd.Result<SybaseConfig>> create(SybaseConfig config) async {
     try {
-      final encryptedPassword = EncryptionService.encrypt(config.password);
+      final passwordKey = '$_passwordKeyPrefix${config.id}';
+      final storeResult = await _secureCredentialService.storePassword(
+        key: passwordKey,
+        password: config.password,
+      );
+
+      if (storeResult.isError()) {
+        return rd.Failure(storeResult.exceptionOrNull()!);
+      }
 
       await _database.customStatement(
         '''
@@ -192,7 +207,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           config.databaseFile,
           config.port,
           config.username,
-          encryptedPassword,
+          '',
           if (config.enabled) 1 else 0,
           config.createdAt.millisecondsSinceEpoch,
           config.updatedAt.millisecondsSinceEpoch,
@@ -214,7 +229,15 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
   @override
   Future<rd.Result<SybaseConfig>> update(SybaseConfig config) async {
     try {
-      final encryptedPassword = EncryptionService.encrypt(config.password);
+      final passwordKey = '$_passwordKeyPrefix${config.id}';
+      final storeResult = await _secureCredentialService.storePassword(
+        key: passwordKey,
+        password: config.password,
+      );
+
+      if (storeResult.isError()) {
+        return rd.Failure(storeResult.exceptionOrNull()!);
+      }
 
       await _database.customStatement(
         '''
@@ -230,7 +253,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           config.databaseFile,
           config.port,
           config.username,
-          encryptedPassword,
+          '',
           if (config.enabled) 1 else 0,
           DateTime.now().millisecondsSinceEpoch,
           config.id,
@@ -257,6 +280,9 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
   Future<rd.Result<void>> delete(String id) async {
     try {
       LoggerService.info('Deletando configuração Sybase: $id');
+
+      final passwordKey = '$_passwordKeyPrefix$id';
+      await _secureCredentialService.deletePassword(key: passwordKey);
 
       await _database.customStatement(
         'DELETE FROM sybase_configs WHERE id = ?',
@@ -308,7 +334,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       final entities = <SybaseConfig>[];
       for (final row in rows) {
         try {
-          final entity = _toEntityFromRow(row);
+          final entity = await _toEntityFromRow(row);
           entities.add(entity);
         } on Object catch (e, stackTrace) {
           final id = row.read<String>('id');
@@ -344,7 +370,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     }
   }
 
-  SybaseConfig _toEntityFromRow(QueryRow row) {
+  Future<SybaseConfig> _toEntityFromRow(QueryRow row) async {
     final id = row.read<String>('id');
     final name = row.read<String>('name');
     final serverName = row.read<String>('server_name');
@@ -352,7 +378,6 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     final databaseFile = row.read<String>('database_file');
     final port = row.read<int>('port');
     final username = row.read<String>('username');
-    final password = row.read<String>('password');
     final enabledInt = row.read<int>('enabled');
     final createdAtInt = row.read<int>('created_at');
     final updatedAtInt = row.read<int>('updated_at');
@@ -361,17 +386,12 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     final createdAt = DateTime.fromMillisecondsSinceEpoch(createdAtInt);
     final updatedAt = DateTime.fromMillisecondsSinceEpoch(updatedAtInt);
 
-    String decryptedPassword;
-    try {
-      decryptedPassword = EncryptionService.decrypt(password);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao descriptografar senha da configuração: $id',
-        e,
-        stackTrace,
-      );
-      decryptedPassword = '';
-    }
+    final passwordKey = '$_passwordKeyPrefix$id';
+    final passwordResult = await _secureCredentialService.getPassword(
+      key: passwordKey,
+    );
+
+    final password = passwordResult.getOrElse((_) => '');
 
     return SybaseConfig(
       id: id,
@@ -381,7 +401,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       databaseFile: databaseFile,
       port: port,
       username: username,
-      password: decryptedPassword,
+      password: password,
       enabled: enabled,
       createdAt: createdAt,
       updatedAt: updatedAt,
