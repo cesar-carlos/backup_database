@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
@@ -63,6 +64,19 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerLazySingleton<IDeviceKeyService>(DeviceKeyService.new);
+
+  final deviceKeyResult = await getIt<IDeviceKeyService>().getDeviceKey();
+  if (deviceKeyResult.isSuccess()) {
+    final deviceKey = deviceKeyResult.getOrNull()!;
+    EncryptionService.initializeWithDeviceKey(deviceKey);
+    LoggerService.info(
+      'EncryptionService initialized with device-specific key',
+    );
+  } else {
+    LoggerService.warning(
+      'Failed to get device key, EncryptionService using legacy key',
+    );
+  }
 
   getIt.registerLazySingleton<ISecureCredentialService>(
     SecureCredentialService.new,
