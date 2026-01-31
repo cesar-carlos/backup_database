@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/core/encryption/encryption_service.dart';
@@ -105,7 +105,13 @@ class NextcloudDestinationService {
                   // Tentar apagar
                   try {
                     await dio.deleteUri(uploadUrl);
-                  } on Object catch (_) {}
+                  } on Object catch (delErr, s) {
+                    LoggerService.warning(
+                      'Erro ao deletar arquivo corrompido do Nextcloud',
+                      delErr,
+                      s,
+                    );
+                  }
 
                   throw Exception(
                     'Arquivo corrompido no Nextcloud. '

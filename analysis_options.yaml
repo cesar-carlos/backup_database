@@ -14,7 +14,7 @@ linter:
   rules:
     avoid_print: true
     lines_longer_than_80_chars: false
-    public_member_api_docs: true
+    public_member_api_docs: false
     avoid_positional_boolean_parameters: false
     avoid_slow_async_io: false
     cascade_invocations: false

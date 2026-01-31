@@ -232,7 +232,9 @@ class BackupOrchestratorService {
           message: 'Backup do banco concluído',
           progress: 0.5,
         );
-      } on Object catch (_) {}
+      } on Object catch (e, s) {
+        LoggerService.warning('Erro ao atualizar progresso', e, s);
+      }
 
       if (schedule.compressionFormat != CompressionFormat.none) {
         await _log(history.id, 'info', 'Iniciando compressão');
@@ -244,7 +246,9 @@ class BackupOrchestratorService {
             message: 'Comprimindo arquivo de backup...',
             progress: 0.6,
           );
-        } on Object catch (_) {}
+        } on Object catch (e, s) {
+          LoggerService.warning('Erro ao atualizar progresso', e, s);
+        }
 
         try {
           String? compressionOutputPath;
@@ -282,7 +286,9 @@ class BackupOrchestratorService {
                 message: 'Compressão concluída',
                 progress: 0.8,
               );
-            } on Object catch (_) {}
+            } on Object catch (e, s) {
+              LoggerService.warning('Erro ao atualizar progresso', e, s);
+            }
           } else {
             final failure = compressionResult.exceptionOrNull()!;
             final failureMessage = failure is Failure

@@ -1,3 +1,4 @@
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,7 +17,8 @@ class ThemeProvider extends ChangeNotifier {
       _isDarkMode = prefs.getBool(_darkModeKey) ?? false;
       _isInitialized = true;
       notifyListeners();
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao carregar preferência de tema', e, s);
       _isDarkMode = false;
       _isInitialized = true;
     }
@@ -33,6 +35,8 @@ class ThemeProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_darkModeKey, value);
-    } on Object catch (_) {}
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao salvar preferência de tema', e, s);
+    }
   }
 }

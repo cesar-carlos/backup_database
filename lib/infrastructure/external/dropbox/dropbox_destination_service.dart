@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_service.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
@@ -105,7 +106,13 @@ class DropboxDestinationService {
                     '/2/files/delete_v2',
                     data: {'path': filePath},
                   );
-                } on Object catch (_) {}
+                } on Object catch (e, s) {
+                  LoggerService.error(
+                    'Failed to delete corrupted file from Dropbox: $filePath',
+                    e,
+                    s,
+                  );
+                }
 
                 throw Exception(
                   'Arquivo corrompido no Dropbox. '
@@ -512,7 +519,8 @@ class DropboxDestinationService {
           }
         }
       }
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.error('Failed to delete file if exists: $filePath', e, s);
     }
   }
 
@@ -563,7 +571,12 @@ class DropboxDestinationService {
             });
             deletedCount++;
           }
-        } on Object catch (e) {
+        } on Object catch (e, s) {
+          LoggerService.error(
+            'Failed to delete old backup folder: $folderPath',
+            e,
+            s,
+          );
         }
       }
 

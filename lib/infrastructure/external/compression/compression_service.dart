@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:backup_database/core/errors/failure.dart';
@@ -46,14 +46,22 @@ Future<void> compressFileInIsolate(Map<String, String> params) async {
         if (await partialZip.exists()) {
           await partialZip.delete();
         }
-      } on Object catch (_) {}
+      } on Object catch (e, s) {
+        LoggerService.warning(
+          'Erro ao remover ZIP parcial: $outputFilePath',
+          e,
+          s,
+        );
+      }
 
       rethrow;
     }
   } on Object catch (e) {
     try {
       encoder.close();
-    } on Object catch (_) {}
+    } on Object catch (closeErr, s) {
+      LoggerService.warning('Erro ao fechar encoder em fallback', closeErr, s);
+    }
     rethrow;
   }
 }
@@ -206,7 +214,13 @@ class CompressionService implements ICompressionService {
       } on Object catch (e) {
         try {
           encoder.close();
-        } on Object catch (_) {}
+        } on Object catch (closeErr, s) {
+          LoggerService.warning(
+            'Erro ao fechar encoder em fallback',
+            closeErr,
+            s,
+          );
+        }
         rethrow;
       }
 
@@ -438,7 +452,13 @@ class CompressionService implements ICompressionService {
             if (await outputFile.exists()) {
               await outputFile.delete();
             }
-          } on Object catch (_) {}
+          } on Object catch (delErr, s) {
+            LoggerService.warning(
+              'Erro ao remover arquivo de saída após falha: $outputFilePath',
+              delErr,
+              s,
+            );
+          }
 
           var errorMessage = 'Erro ao comprimir arquivo: ${e.message}';
           if (e.message.contains('writeFrom failed') ||
@@ -467,7 +487,13 @@ class CompressionService implements ICompressionService {
             if (await outputFile.exists()) {
               await outputFile.delete();
             }
-          } on Object catch (_) {}
+          } on Object catch (delErr, s) {
+            LoggerService.warning(
+              'Erro ao remover arquivo de saída após falha: $outputFilePath',
+              delErr,
+              s,
+            );
+          }
 
           return rd.Failure(
             FileSystemFailure(
@@ -521,7 +547,13 @@ class CompressionService implements ICompressionService {
           if (await outputFile.exists()) {
             await outputFile.delete();
           }
-        } on Object catch (_) {}
+        } on Object catch (delErr, s) {
+          LoggerService.warning(
+            'Erro ao remover arquivo de saída após falha: $outputFilePath',
+            delErr,
+            s,
+          );
+        }
 
         final errorCode = e.osError?.errorCode;
         if (errorCode == 5) {
@@ -556,7 +588,13 @@ class CompressionService implements ICompressionService {
           if (await outputFile.exists()) {
             await outputFile.delete();
           }
-        } on Object catch (_) {}
+        } on Object catch (delErr, s) {
+          LoggerService.warning(
+            'Erro ao remover arquivo de saída após falha: $outputFilePath',
+            delErr,
+            s,
+          );
+        }
 
         return rd.Failure(
           FileSystemFailure(

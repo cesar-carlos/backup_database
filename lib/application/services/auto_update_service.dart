@@ -139,7 +139,9 @@ class AutoUpdateService with UpdaterListener {
     if (_isInitialized) {
       try {
         AutoUpdater.instance.removeListener(this);
-      } on Object catch (_) {}
+      } on Object catch (e, s) {
+        LoggerService.warning('Erro ao remover listener do AutoUpdater', e, s);
+      }
     }
 
     _isInitialized = false;

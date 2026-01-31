@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:dio/dio.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -446,7 +447,9 @@ class DropboxAuthService {
       final encryptedData = EncryptionService.encrypt(jsonEncode(credentials));
       await prefs.setString(_storageKey, encryptedData);
       await prefs.setString(_emailStorageKey, email);
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.error('Failed to save Dropbox credentials', e, s);
+      rethrow;
     }
   }
 
@@ -473,7 +476,8 @@ class DropboxAuthService {
           credentials['expirationDate'] as String,
         );
       }
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.error('Failed to load stored Dropbox credentials', e, s);
       await _clearStoredCredentials();
     }
   }
@@ -483,7 +487,9 @@ class DropboxAuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKey);
       await prefs.remove(_emailStorageKey);
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.error('Failed to clear stored Dropbox credentials', e, s);
+      rethrow;
     }
   }
 

@@ -139,7 +139,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           _intervalMinutes = (config['intervalMinutes'] as int?) ?? 60;
           _intervalMinutesController.text = _intervalMinutes.toString();
       }
-    } on Object catch (_) {}
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao carregar config de agendamento', e, s);
+    }
   }
 
   Future<void> _loadData() async {

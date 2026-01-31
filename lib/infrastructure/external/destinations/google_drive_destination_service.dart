@@ -444,7 +444,13 @@ class GoogleDriveDestinationService {
               is401 = true;
             }
           }
-        } on Object catch (_) {}
+        } on Object catch (parseErr, s) {
+          LoggerService.warning(
+            'Erro ao parsear erro 401 do Google Drive',
+            parseErr,
+            s,
+          );
+        }
 
         final errorStr = e.toString().toLowerCase();
         is401 =

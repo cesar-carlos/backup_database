@@ -276,7 +276,9 @@ class SchedulerService {
               ? error.message
               : error.toString();
           progressProvider.failBackup(errorMessage);
-        } on Object catch (_) {}
+        } on Object catch (e, s) {
+          LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
+        }
         return rd.Failure(backupResult.exceptionOrNull()!);
       }
 
@@ -302,7 +304,9 @@ class SchedulerService {
         try {
           final progressProvider = getIt<BackupProgressProvider>();
           progressProvider.failBackup(errorMessage);
-        } on Object catch (_) {}
+        } on Object catch (e, s) {
+          LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
+        }
 
         return rd.Failure(BackupFailure(message: errorMessage));
       }
@@ -317,7 +321,9 @@ class SchedulerService {
             message: 'Enviando para destinos...',
             progress: 0.85,
           );
-        } on Object catch (_) {}
+        } on Object catch (e, s) {
+          LoggerService.warning('Erro ao atualizar progresso', e, s);
+        }
       }
 
       final uploadErrors = <String>[];
@@ -346,7 +352,9 @@ class SchedulerService {
             message: 'Enviando para ${destination.name}...',
             progress: progress,
           );
-        } on Object catch (_) {}
+        } on Object catch (e, s) {
+          LoggerService.warning('Erro ao atualizar progresso', e, s);
+        }
 
         final sendResult = await _sendToDestination(
           sourceFilePath: backupHistory.backupPath,
@@ -419,7 +427,9 @@ class SchedulerService {
         try {
           final progressProvider = getIt<BackupProgressProvider>();
           progressProvider.failBackup(errorMessage);
-        } on Object catch (_) {}
+        } on Object catch (e, s) {
+          LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
+        }
 
         return rd.Failure(failure);
       }
@@ -447,7 +457,9 @@ class SchedulerService {
         progressProvider.completeBackup(
           message: 'Backup concluído com sucesso!',
         );
-      } on Object catch (_) {}
+      } on Object catch (e, s) {
+        LoggerService.warning('Erro ao atualizar progresso completeBackup', e, s);
+      }
 
       if (shouldDeleteTempFile) {
         try {

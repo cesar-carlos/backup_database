@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/application/services/scheduler_service.dart';
@@ -46,7 +46,13 @@ class ServiceModeInitializer {
       );
       try {
         await SingleInstanceService().releaseLock();
-      } on Object catch (_) {}
+      } on Object catch (e, s) {
+        LoggerService.warning(
+          'Erro ao liberar lock antes de encerrar modo serviço',
+          e,
+          s,
+        );
+      }
       exit(1);
     }
   }
