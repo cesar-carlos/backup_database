@@ -124,13 +124,17 @@ Future<void> setupServiceLocator() async {
     FtpDestinationService.new,
   );
 
-  getIt.registerLazySingleton<GoogleAuthService>(GoogleAuthService.new);
+  getIt.registerLazySingleton<GoogleAuthService>(
+    () => GoogleAuthService(getIt<ISecureCredentialService>()),
+  );
 
   getIt.registerLazySingleton<IGoogleDriveDestinationService>(
     () => GoogleDriveDestinationService(getIt<GoogleAuthService>()),
   );
 
-  getIt.registerLazySingleton<DropboxAuthService>(DropboxAuthService.new);
+  getIt.registerLazySingleton<DropboxAuthService>(
+    () => DropboxAuthService(getIt<ISecureCredentialService>()),
+  );
 
   getIt.registerLazySingleton<IDropboxDestinationService>(
     () => DropboxDestinationService(getIt<DropboxAuthService>()),

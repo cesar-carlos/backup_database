@@ -1,13 +1,11 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
-import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:dio/dio.dart';
 import 'package:result_dart/result_dart.dart' as rd;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DropboxAuthResult {
@@ -42,13 +40,15 @@ class DropboxAuthResult {
 }
 
 class DropboxAuthService {
-  static const _storageKey = 'dropbox_oauth_credentials';
-  static const _emailStorageKey = 'dropbox_oauth_email';
+  DropboxAuthService(this._secureCredentialService);
+
+  static const _tokenKey = 'dropbox_oauth_token';
 
   String? _clientId;
   String? _clientSecret;
 
   Dio? _dio;
+  final ISecureCredentialService _secureCredentialService;
 
   String? _cachedAccessToken;
   String? _cachedRefreshToken;
@@ -436,62 +436,47 @@ class DropboxAuthService {
     Map<String, dynamic> tokenResponse,
     String email,
   ) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
+    final credentials = {
+      'accessToken': tokenResponse['access_token'],
+      'refreshToken': tokenResponse['refresh_token'],
+      'expirationDate': _tokenExpiration?.toIso8601String(),
+      'email': email,
+    };
 
-      final credentials = {
-        'accessToken': tokenResponse['access_token'],
-        'refreshToken': tokenResponse['refresh_token'],
-        'expirationDate': _tokenExpiration?.toIso8601String(),
-      };
+    final result = await _secureCredentialService.storeToken(
+      key: _tokenKey,
+      tokenData: credentials,
+    );
 
-      final encryptedData = EncryptionService.encrypt(jsonEncode(credentials));
-      await prefs.setString(_storageKey, encryptedData);
-      await prefs.setString(_emailStorageKey, email);
-    } on Object catch (e, s) {
-      LoggerService.error('Failed to save Dropbox credentials', e, s);
-      rethrow;
+    if (result.isError()) {
+      final error = result.exceptionOrNull();
+      LoggerService.error('Failed to save Dropbox credentials: $error');
+      throw Exception('Falha ao salvar credenciais Dropbox');
     }
   }
 
   Future<void> _loadStoredCredentials() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
+    final result = await _secureCredentialService.getToken(key: _tokenKey);
 
-      final encryptedData = prefs.getString(_storageKey);
-      final storedEmail = prefs.getString(_emailStorageKey);
+    if (result.isError()) {
+      return;
+    }
 
-      if (encryptedData == null || storedEmail == null) {
-        return;
-      }
+    final credentials = result.getOrElse((_) => <String, dynamic>{});
 
-      final decryptedData = EncryptionService.decrypt(encryptedData);
-      final credentials = jsonDecode(decryptedData) as Map<String, dynamic>;
+    _cachedAccessToken = credentials['accessToken'] as String?;
+    _cachedRefreshToken = credentials['refreshToken'] as String?;
+    _cachedEmail = credentials['email'] as String?;
 
-      _cachedAccessToken = credentials['accessToken'] as String?;
-      _cachedRefreshToken = credentials['refreshToken'] as String?;
-      _cachedEmail = storedEmail;
-
-      if (credentials['expirationDate'] != null) {
-        _tokenExpiration = DateTime.parse(
-          credentials['expirationDate'] as String,
-        );
-      }
-    } on Object catch (e, s) {
-      LoggerService.error('Failed to load stored Dropbox credentials', e, s);
-      await _clearStoredCredentials();
+    if (credentials['expirationDate'] != null) {
+      _tokenExpiration = DateTime.parse(
+        credentials['expirationDate'] as String,
+      );
     }
   }
 
   Future<void> _clearStoredCredentials() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_storageKey);
-      await prefs.remove(_emailStorageKey);
-    } on Object catch (e, s) {
-      LoggerService.error('Failed to clear stored Dropbox credentials', e, s);
-      rethrow;
-    }
+    await _secureCredentialService.deleteToken(key: _tokenKey);
   }
 
   String _parseAuthError(dynamic e) {
