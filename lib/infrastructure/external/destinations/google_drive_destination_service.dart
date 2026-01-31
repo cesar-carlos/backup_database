@@ -5,36 +5,14 @@ import 'package:backup_database/core/errors/failure.dart'
     hide GoogleDriveFailure;
 import 'package:backup_database/core/errors/google_drive_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
 import 'package:backup_database/infrastructure/external/google/google_auth_service.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
-
-class GoogleDriveDestinationConfig {
-  const GoogleDriveDestinationConfig({
-    required this.folderId,
-    this.folderName = 'Backups',
-    this.retentionDays = 30,
-  });
-  final String folderId;
-  final String folderName;
-  final int retentionDays;
-}
-
-class GoogleDriveUploadResult {
-  const GoogleDriveUploadResult({
-    required this.fileId,
-    required this.fileName,
-    required this.fileSize,
-    required this.duration,
-  });
-  final String fileId;
-  final String fileName;
-  final int fileSize;
-  final Duration duration;
-}
 
 class AuthenticatedHttpClient extends http.BaseClient {
   AuthenticatedHttpClient(this.accessToken);
@@ -57,11 +35,12 @@ class _AuthenticatedClientData {
   final String accessToken;
 }
 
-class GoogleDriveDestinationService {
+class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
   GoogleDriveDestinationService(this._authService);
   final GoogleAuthService _authService;
   _AuthenticatedClientData? _cachedClientData;
 
+  @override
   Future<rd.Result<GoogleDriveUploadResult>> upload({
     required String sourceFilePath,
     required GoogleDriveDestinationConfig config,
@@ -277,6 +256,42 @@ class GoogleDriveDestinationService {
     });
   }
 
+  @override
+  Future<rd.Result<bool>> testConnection(
+    GoogleDriveDestinationConfig config,
+  ) async {
+    try {
+      final authResult = await _getAuthenticatedClient();
+      if (authResult.isError()) {
+        return rd.Failure(authResult.exceptionOrNull()!);
+      }
+
+      final clientResult = await _getAuthenticatedClient();
+      if (clientResult.isError()) {
+        return rd.Failure(clientResult.exceptionOrNull()!);
+      }
+
+      final clientData = clientResult.getOrNull()!;
+      final driveApi = drive.DriveApi(clientData.client);
+
+      await driveApi.files.get(
+        config.folderId,
+        $fields: 'id,name',
+      );
+
+      return const rd.Success(true);
+    } on Object catch (e, s) {
+      LoggerService.error('Erro ao testar conexão com Google Drive', e, s);
+      return rd.Failure(
+        GoogleDriveFailure(
+          message: 'Erro ao conectar ao Google Drive: $e',
+          originalError: e,
+        ),
+      );
+    }
+  }
+
+  @override
   Future<rd.Result<int>> cleanOldBackups({
     required GoogleDriveDestinationConfig config,
   }) async {

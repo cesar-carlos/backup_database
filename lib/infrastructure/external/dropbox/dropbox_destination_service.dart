@@ -4,42 +4,21 @@ import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_service.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
-class DropboxDestinationConfig {
-  const DropboxDestinationConfig({
-    required this.folderPath,
-    this.folderName = 'Backups',
-    this.retentionDays = 30,
-  });
-  final String folderPath;
-  final String folderName;
-  final int retentionDays;
-}
-
-class DropboxUploadResult {
-  const DropboxUploadResult({
-    required this.fileId,
-    required this.fileName,
-    required this.fileSize,
-    required this.duration,
-  });
-  final String fileId;
-  final String fileName;
-  final int fileSize;
-  final Duration duration;
-}
-
-class DropboxDestinationService {
+class DropboxDestinationService implements IDropboxDestinationService {
   DropboxDestinationService(this._authService);
   final DropboxAuthService _authService;
   Dio? _cachedDio;
   String? _cachedAccessToken;
 
+  @override
   Future<rd.Result<DropboxUploadResult>> upload({
     required String sourceFilePath,
     required DropboxDestinationConfig config,
@@ -524,6 +503,42 @@ class DropboxDestinationService {
     }
   }
 
+  @override
+  Future<rd.Result<bool>> testConnection(
+    DropboxDestinationConfig config,
+  ) async {
+    try {
+      final dioResult = await _getAuthenticatedDio();
+      if (dioResult.isError()) {
+        return rd.Failure(dioResult.exceptionOrNull()!);
+      }
+
+      final dio = dioResult.getOrNull()!;
+      final mainFolderPath = config.folderPath.isEmpty
+          ? '/${config.folderName}'
+          : '${config.folderPath}/${config.folderName}';
+
+      await _executeWithTokenRefresh(() async {
+        final response = await dio.post(
+          '/2/files/get_metadata',
+          data: {'path': mainFolderPath},
+        );
+        return response.data;
+      });
+
+      return const rd.Success(true);
+    } on Object catch (e, s) {
+      LoggerService.error('Erro ao testar conexão com Dropbox', e, s);
+      return rd.Failure(
+        DropboxFailure(
+          message: _getDropboxErrorMessage(e),
+          originalError: e,
+        ),
+      );
+    }
+  }
+
+  @override
   Future<rd.Result<int>> cleanOldBackups({
     required DropboxDestinationConfig config,
   }) async {

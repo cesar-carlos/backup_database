@@ -102,7 +102,7 @@ Future<void> setupServiceLocator() async {
     () => SqlScriptExecutionService(getIt<ProcessService>()),
   );
 
-  getIt.registerLazySingleton<LocalDestinationService>(
+  getIt.registerLazySingleton<ILocalDestinationService>(
     LocalDestinationService.new,
   );
 
@@ -112,17 +112,17 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerLazySingleton<GoogleAuthService>(GoogleAuthService.new);
 
-  getIt.registerLazySingleton<GoogleDriveDestinationService>(
+  getIt.registerLazySingleton<IGoogleDriveDestinationService>(
     () => GoogleDriveDestinationService(getIt<GoogleAuthService>()),
   );
 
   getIt.registerLazySingleton<DropboxAuthService>(DropboxAuthService.new);
 
-  getIt.registerLazySingleton<DropboxDestinationService>(
+  getIt.registerLazySingleton<IDropboxDestinationService>(
     () => DropboxDestinationService(getIt<DropboxAuthService>()),
   );
 
-  getIt.registerLazySingleton<NextcloudDestinationService>(
+  getIt.registerLazySingleton<INextcloudDestinationService>(
     NextcloudDestinationService.new,
   );
 
@@ -135,7 +135,7 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerLazySingleton<SendToLocal>(
-    () => SendToLocal(getIt<LocalDestinationService>()),
+    () => SendToLocal(getIt<ILocalDestinationService>()),
   );
 
   getIt.registerLazySingleton<SendToFtp>(
@@ -143,24 +143,24 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerLazySingleton<SendToGoogleDrive>(
-    () => SendToGoogleDrive(getIt<GoogleDriveDestinationService>()),
+    () => SendToGoogleDrive(getIt<IGoogleDriveDestinationService>()),
   );
 
   getIt.registerLazySingleton<SendToDropbox>(
-    () => SendToDropbox(getIt<DropboxDestinationService>()),
+    () => SendToDropbox(getIt<IDropboxDestinationService>()),
   );
 
   getIt.registerLazySingleton<SendToNextcloud>(
-    () => SendToNextcloud(getIt<NextcloudDestinationService>()),
+    () => SendToNextcloud(getIt<INextcloudDestinationService>()),
   );
 
   getIt.registerLazySingleton<CleanOldBackups>(
     () => CleanOldBackups(
-      localService: getIt<LocalDestinationService>(),
+      localService: getIt<ILocalDestinationService>(),
       ftpService: getIt<IFtpService>(),
-      googleDriveService: getIt<GoogleDriveDestinationService>(),
-      dropboxService: getIt<DropboxDestinationService>(),
-      nextcloudService: getIt<NextcloudDestinationService>(),
+      googleDriveService: getIt<IGoogleDriveDestinationService>(),
+      dropboxService: getIt<IDropboxDestinationService>(),
+      nextcloudService: getIt<INextcloudDestinationService>(),
     ),
   );
 
@@ -213,13 +213,13 @@ Future<void> setupServiceLocator() async {
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
       backupOrchestratorService: getIt<BackupOrchestratorService>(),
-      localDestinationService: getIt<LocalDestinationService>(),
+      localDestinationService: getIt<ILocalDestinationService>(),
       sendToFtp: getIt<SendToFtp>(),
       ftpDestinationService: getIt<IFtpService>(),
-      googleDriveDestinationService: getIt<GoogleDriveDestinationService>(),
-      dropboxDestinationService: getIt<DropboxDestinationService>(),
+      googleDriveDestinationService: getIt<IGoogleDriveDestinationService>(),
+      dropboxDestinationService: getIt<IDropboxDestinationService>(),
       sendToDropbox: getIt<SendToDropbox>(),
-      nextcloudDestinationService: getIt<NextcloudDestinationService>(),
+      nextcloudDestinationService: getIt<INextcloudDestinationService>(),
       sendToNextcloud: getIt<SendToNextcloud>(),
       notificationService: getIt<NotificationService>(),
       licenseValidationService: getIt<ILicenseValidationService>(),

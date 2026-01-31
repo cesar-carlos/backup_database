@@ -14,19 +14,15 @@ import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
+import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/domain/services/i_local_destination_service.dart';
+import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
-import 'package:backup_database/infrastructure/external/destinations/google_drive_destination_service.dart'
-    as gd;
-import 'package:backup_database/infrastructure/external/destinations/local_destination_service.dart'
-    as local;
-import 'package:backup_database/infrastructure/external/dropbox/dropbox_destination_service.dart'
-    as dropbox;
-import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_destination_service.dart'
-    as nextcloud;
 import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -37,13 +33,13 @@ class SchedulerService {
     required IBackupHistoryRepository backupHistoryRepository,
     required IBackupLogRepository backupLogRepository,
     required BackupOrchestratorService backupOrchestratorService,
-    required local.LocalDestinationService localDestinationService,
+    required ILocalDestinationService localDestinationService,
     required SendToFtp sendToFtp,
     required IFtpService ftpDestinationService,
-    required gd.GoogleDriveDestinationService googleDriveDestinationService,
-    required dropbox.DropboxDestinationService dropboxDestinationService,
+    required IGoogleDriveDestinationService googleDriveDestinationService,
+    required IDropboxDestinationService dropboxDestinationService,
     required SendToDropbox sendToDropbox,
-    required nextcloud.NextcloudDestinationService nextcloudDestinationService,
+    required INextcloudDestinationService nextcloudDestinationService,
     required SendToNextcloud sendToNextcloud,
     required NotificationService notificationService,
     required ILicenseValidationService licenseValidationService,
@@ -67,13 +63,13 @@ class SchedulerService {
   final IBackupHistoryRepository _backupHistoryRepository;
   final IBackupLogRepository _backupLogRepository;
   final BackupOrchestratorService _backupOrchestratorService;
-  final local.LocalDestinationService _localDestinationService;
+  final ILocalDestinationService _localDestinationService;
   final SendToFtp _sendToFtp;
   final IFtpService _ftpDestinationService;
-  final gd.GoogleDriveDestinationService _googleDriveDestinationService;
-  final dropbox.DropboxDestinationService _dropboxDestinationService;
+  final IGoogleDriveDestinationService _googleDriveDestinationService;
+  final IDropboxDestinationService _dropboxDestinationService;
   final SendToDropbox _sendToDropbox;
-  final nextcloud.NextcloudDestinationService _nextcloudDestinationService;
+  final INextcloudDestinationService _nextcloudDestinationService;
   final SendToNextcloud _sendToNextcloud;
   final NotificationService _notificationService;
   final ILicenseValidationService _licenseValidationService;
@@ -458,7 +454,11 @@ class SchedulerService {
           message: 'Backup concluído com sucesso!',
         );
       } on Object catch (e, s) {
-        LoggerService.warning('Erro ao atualizar progresso completeBackup', e, s);
+        LoggerService.warning(
+          'Erro ao atualizar progresso completeBackup',
+          e,
+          s,
+        );
       }
 
       if (shouldDeleteTempFile) {
@@ -551,7 +551,7 @@ class SchedulerService {
 
       switch (destination.type) {
         case DestinationType.local:
-          final config = local.LocalDestinationConfig(
+          final config = LocalDestinationConfig(
             path: configJson['path'] as String,
             createSubfoldersByDate:
                 configJson['createSubfoldersByDate'] as bool? ?? true,
@@ -633,9 +633,11 @@ class SchedulerService {
           );
 
         case DestinationType.googleDrive:
-          final config = gd.GoogleDriveDestinationConfig(
+          final config = GoogleDriveDestinationConfig(
             folderId: configJson['folderId'] as String,
             folderName: configJson['folderName'] as String? ?? 'Backups',
+            accessToken: configJson['accessToken'] as String? ?? '',
+            refreshToken: configJson['refreshToken'] as String? ?? '',
           );
           final result = await _googleDriveDestinationService.upload(
             sourceFilePath: sourceFilePath,
@@ -647,7 +649,7 @@ class SchedulerService {
           );
 
         case DestinationType.dropbox:
-          final config = dropbox.DropboxDestinationConfig(
+          final config = DropboxDestinationConfig(
             folderPath: configJson['folderPath'] as String? ?? '',
             folderName: configJson['folderName'] as String? ?? 'Backups',
           );
@@ -704,7 +706,7 @@ class SchedulerService {
 
         switch (destination.type) {
           case DestinationType.local:
-            final config = local.LocalDestinationConfig(
+            final config = LocalDestinationConfig(
               path: configJson['path'] as String,
               retentionDays: configJson['retentionDays'] as int? ?? 30,
             );
@@ -748,9 +750,11 @@ class SchedulerService {
             });
 
           case DestinationType.googleDrive:
-            final config = gd.GoogleDriveDestinationConfig(
+            final config = GoogleDriveDestinationConfig(
               folderId: configJson['folderId'] as String,
               folderName: configJson['folderName'] as String? ?? 'Backups',
+              accessToken: configJson['accessToken'] as String? ?? '',
+              refreshToken: configJson['refreshToken'] as String? ?? '',
               retentionDays: configJson['retentionDays'] as int? ?? 30,
             );
             final cleanResult = await _googleDriveDestinationService
@@ -780,7 +784,7 @@ class SchedulerService {
             });
 
           case DestinationType.dropbox:
-            final config = dropbox.DropboxDestinationConfig(
+            final config = DropboxDestinationConfig(
               folderPath: configJson['folderPath'] as String? ?? '',
               folderName: configJson['folderName'] as String? ?? 'Backups',
               retentionDays: configJson['retentionDays'] as int? ?? 30,

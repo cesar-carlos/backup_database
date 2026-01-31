@@ -1,11 +1,11 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
-import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_destination_service.dart';
+import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SendToNextcloud {
   SendToNextcloud(this._service);
-  final NextcloudDestinationService _service;
+  final INextcloudDestinationService _service;
 
   Future<rd.Result<NextcloudUploadResult>> call({
     required String sourceFilePath,

@@ -2,33 +2,14 @@ import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
-class LocalDestinationConfig {
-  const LocalDestinationConfig({
-    required this.path,
-    this.createSubfoldersByDate = true,
-    this.retentionDays = 30,
-  });
-  final String path;
-  final bool createSubfoldersByDate;
-  final int retentionDays;
-}
-
-class LocalUploadResult {
-  const LocalUploadResult({
-    required this.destinationPath,
-    required this.fileSize,
-    required this.duration,
-  });
-  final String destinationPath;
-  final int fileSize;
-  final Duration duration;
-}
-
-class LocalDestinationService {
+class LocalDestinationService implements ILocalDestinationService {
+  @override
   Future<rd.Result<LocalUploadResult>> upload({
     required String sourceFilePath,
     required LocalDestinationConfig config,
@@ -167,6 +148,40 @@ class LocalDestinationService {
     return e.toString();
   }
 
+  @override
+  Future<rd.Result<bool>> testConnection(LocalDestinationConfig config) async {
+    try {
+      final directory = Directory(config.path);
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      final canWrite = await _checkWritePermission(config.path);
+      if (!canWrite) {
+        return rd.Failure(
+          FileSystemFailure(
+            message:
+                'Sem permissão de escrita no diretório: ${config.path}\n'
+                'Verifique as permissões ou escolha outro diretório.',
+          ),
+        );
+      }
+      return const rd.Success(true);
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao testar conexão com diretório local',
+        e,
+        stackTrace,
+      );
+      return rd.Failure(
+        FileSystemFailure(
+          message: 'Erro ao acessar diretório: ${_getUserFriendlyError(e)}',
+          originalError: e,
+        ),
+      );
+    }
+  }
+
+  @override
   Future<rd.Result<int>> cleanOldBackups({
     required LocalDestinationConfig config,
   }) async {

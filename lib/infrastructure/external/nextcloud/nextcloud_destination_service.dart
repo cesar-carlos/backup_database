@@ -6,6 +6,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/nextcloud_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_webdav_utils.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -13,18 +14,8 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
-class NextcloudUploadResult {
-  const NextcloudUploadResult({
-    required this.fileName,
-    required this.fileSize,
-    required this.duration,
-  });
-  final String fileName;
-  final int fileSize;
-  final Duration duration;
-}
-
-class NextcloudDestinationService {
+class NextcloudDestinationService implements INextcloudDestinationService {
+  @override
   Future<rd.Result<NextcloudUploadResult>> upload({
     required String sourceFilePath,
     required NextcloudDestinationConfig config,
@@ -136,7 +127,7 @@ class NextcloudDestinationService {
             stopwatch.stop();
             return rd.Success(
               NextcloudUploadResult(
-                fileName: fileName,
+                remotePath: remoteFilePath,
                 fileSize: fileSize,
                 duration: stopwatch.elapsed,
               ),
@@ -174,6 +165,7 @@ class NextcloudDestinationService {
     }
   }
 
+  @override
   Future<rd.Result<bool>> testConnection(
     NextcloudDestinationConfig config,
   ) async {
@@ -209,6 +201,7 @@ class NextcloudDestinationService {
     }
   }
 
+  @override
   Future<rd.Result<int>> cleanOldBackups({
     required NextcloudDestinationConfig config,
   }) async {

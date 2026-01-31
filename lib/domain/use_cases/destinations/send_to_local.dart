@@ -1,10 +1,11 @@
 import 'package:backup_database/core/errors/failure.dart';
-import 'package:backup_database/infrastructure/external/destinations/local_destination_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SendToLocal {
   SendToLocal(this._service);
-  final LocalDestinationService _service;
+  final ILocalDestinationService _service;
 
   Future<rd.Result<LocalUploadResult>> call({
     required String sourceFilePath,

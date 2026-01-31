@@ -3,15 +3,11 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
-import 'package:backup_database/infrastructure/external/destinations/google_drive_destination_service.dart'
-    as gd;
-import 'package:backup_database/infrastructure/external/destinations/local_destination_service.dart'
-    as local;
-import 'package:backup_database/infrastructure/external/dropbox/dropbox_destination_service.dart'
-    as dropbox;
-import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_destination_service.dart'
-    as nextcloud;
+import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
+import 'package:backup_database/domain/services/i_local_destination_service.dart';
+import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class CleanOldBackupsResult {
@@ -38,21 +34,21 @@ class CleanOldBackupsResult {
 
 class CleanOldBackups {
   CleanOldBackups({
-    required local.LocalDestinationService localService,
+    required ILocalDestinationService localService,
     required IFtpService ftpService,
-    required gd.GoogleDriveDestinationService googleDriveService,
-    required dropbox.DropboxDestinationService dropboxService,
-    required nextcloud.NextcloudDestinationService nextcloudService,
+    required IGoogleDriveDestinationService googleDriveService,
+    required IDropboxDestinationService dropboxService,
+    required INextcloudDestinationService nextcloudService,
   }) : _localService = localService,
        _ftpService = ftpService,
        _googleDriveService = googleDriveService,
        _dropboxService = dropboxService,
        _nextcloudService = nextcloudService;
-  final local.LocalDestinationService _localService;
+  final ILocalDestinationService _localService;
   final IFtpService _ftpService;
-  final gd.GoogleDriveDestinationService _googleDriveService;
-  final dropbox.DropboxDestinationService _dropboxService;
-  final nextcloud.NextcloudDestinationService _nextcloudService;
+  final IGoogleDriveDestinationService _googleDriveService;
+  final IDropboxDestinationService _dropboxService;
+  final INextcloudDestinationService _nextcloudService;
 
   Future<rd.Result<CleanOldBackupsResult>> call(
     List<BackupDestination> destinations,
@@ -74,7 +70,7 @@ class CleanOldBackups {
 
         switch (destination.type) {
           case DestinationType.local:
-            final config = local.LocalDestinationConfig(
+            final config = LocalDestinationConfig(
               path: configJson['path'] as String,
               createSubfoldersByDate:
                   configJson['createSubfoldersByDate'] as bool? ?? true,
@@ -103,9 +99,11 @@ class CleanOldBackups {
             });
 
           case DestinationType.googleDrive:
-            final config = gd.GoogleDriveDestinationConfig(
+            final config = GoogleDriveDestinationConfig(
               folderId: configJson['folderId'] as String,
               folderName: configJson['folderName'] as String? ?? 'Backups',
+              accessToken: configJson['accessToken'] as String? ?? '',
+              refreshToken: configJson['refreshToken'] as String? ?? '',
               retentionDays: configJson['retentionDays'] as int? ?? 30,
             );
             final result = await _googleDriveService.cleanOldBackups(
@@ -119,7 +117,7 @@ class CleanOldBackups {
             });
 
           case DestinationType.dropbox:
-            final config = dropbox.DropboxDestinationConfig(
+            final config = DropboxDestinationConfig(
               folderPath: configJson['folderPath'] as String? ?? '',
               folderName: configJson['folderName'] as String? ?? 'Backups',
               retentionDays: configJson['retentionDays'] as int? ?? 30,
