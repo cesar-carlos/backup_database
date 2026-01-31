@@ -232,7 +232,8 @@ class DropboxAuthService {
       }
 
       return response.data as Map<String, dynamic>;
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.error('Falha ao trocar código por token OAuth', e, s);
       rethrow;
     }
   }

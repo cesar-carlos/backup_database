@@ -1499,9 +1499,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       if (shouldCreate ?? false) {
         try {
           await directory.create(recursive: true);
-        } on Object catch (e) {
+        } on Object catch (e, s) {
+          LoggerService.warning('Erro ao criar pasta: ${directory.path}', e, s);
           if (mounted) {
-            MessageModal.showError(context, message: 'Erro ao criar pasta: $e');
+            MessageModal.showError(
+              context,
+              message: 'Erro ao criar pasta: $e',
+            );
           }
           return false;
         }

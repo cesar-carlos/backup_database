@@ -75,7 +75,8 @@ class DropboxAuthProvider extends ChangeNotifier {
 
       _isInitialized = true;
       _isLoading = false;
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.error('Erro ao inicializar DropboxAuthProvider', e, s);
       _error = 'Erro ao inicializar: $e';
       _isLoading = false;
     }
@@ -109,7 +110,8 @@ class DropboxAuthProvider extends ChangeNotifier {
       notifyListeners();
 
       return true;
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.error('Erro ao configurar OAuth Dropbox', e, s);
       _error = 'Erro ao configurar OAuth: $e';
       _isLoading = false;
       notifyListeners();
@@ -191,7 +193,8 @@ class DropboxAuthProvider extends ChangeNotifier {
       notifyListeners();
 
       return true;
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.error('Erro ao remover configuração OAuth Dropbox', e, s);
       _error = 'Erro ao remover configuração: $e';
       _isLoading = false;
       notifyListeners();

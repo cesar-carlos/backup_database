@@ -1,6 +1,7 @@
-﻿import 'package:backup_database/application/providers/auto_update_provider.dart';
+import 'package:backup_database/application/providers/auto_update_provider.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/core/theme/theme_provider.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -34,7 +35,8 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
           _isLoadingVersion = false;
         });
       }
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao carregar informações do pacote', e, s);
       if (mounted) {
         setState(() {
           _isLoadingVersion = false;
