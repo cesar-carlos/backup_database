@@ -1,11 +1,11 @@
 # Resultados dos Testes - FASE 0: Cliente-Servidor Implementation
 
-**Data/Hora**: 2026-02-01 16:13 (UTC-3)
+**Data/Hora**: 2026-02-01 17:32 (UTC-3)
 
 **Ambiente:**
 - **OS**: Windows 10 Pro (Build 26200)
-- **Flutter**: 3.19+
-- **Dart**: 3.0+
+- **Flutter**: 3.24.0
+- **Dart**: 3.6.0
 - **Branch**: `feature/client-server-architecture`
 
 ---
@@ -156,7 +156,7 @@
 
 **Todos os testes passaram:**
 ```
-00:14 +122: All tests passed!
+00:11 +122: All tests passed!
 ```
 
 ---
@@ -165,7 +165,7 @@
 
 **Comando:** `flutter analyze`
 
-**Resultado:** ✅ **No issues found! (ran in 4.1s)**
+**Resultado:** ✅ **No issues found! (ran in 3.0s)**
 
 **Validações:**
 - Zero warnings
