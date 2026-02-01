@@ -46,10 +46,11 @@ class ServiceModeInitializer {
       await eventLog.logServiceStarted();
 
       // Inicializa graceful shutdown handler
-      await ServiceShutdownHandler.instance.initialize();
+      final shutdownHandler = ServiceShutdownHandler();
+      await shutdownHandler.initialize();
 
       // Registra callback de shutdown
-      ServiceShutdownHandler.instance.registerCallback((timeout) async {
+      shutdownHandler.registerCallback((timeout) async {
         LoggerService.info('🛑 Shutdown callback: Parando serviços');
 
         // Para health checker primeiro

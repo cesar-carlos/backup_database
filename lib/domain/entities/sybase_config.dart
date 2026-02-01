@@ -6,7 +6,7 @@ class SybaseConfig {
   SybaseConfig({
     required this.name,
     required this.serverName,
-    required DatabaseName databaseName,
+    required this.databaseName,
     required this.username,
     required this.password,
     String? id,
@@ -15,8 +15,7 @@ class SybaseConfig {
     this.enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
-       databaseName = databaseName,
+  })  : id = id ?? const Uuid().v4(),
        port = port ?? PortNumber(2638),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();

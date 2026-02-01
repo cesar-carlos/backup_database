@@ -32,7 +32,7 @@ class WindowsEventLogService {
   final ps.ProcessService _processService;
   final String sourceName;
 
-  bool _isEnabled = true;
+  bool isEnabled = true;
   bool _isAvailable = false;
 
   /// Inicializa o serviço verificando se eventcreate está disponível.
@@ -42,7 +42,7 @@ class WindowsEventLogService {
         'WindowsEventLogService: não é Windows, desabilitado',
       );
       _isAvailable = false;
-      _isEnabled = false;
+      isEnabled = false;
       return;
     }
 
@@ -91,7 +91,7 @@ class WindowsEventLogService {
     required int eventId,
     required String message,
   }) async {
-    if (!_isEnabled || !_isAvailable) {
+    if (!isEnabled || !_isAvailable) {
       return false;
     }
 
@@ -273,14 +273,6 @@ class WindowsEventLogService {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
-  /// Habilita ou desabilita o serviço de log.
-  set isEnabled(bool value) {
-    _isEnabled = value;
-  }
-
   /// Verifica se o serviço está disponível.
   bool get isAvailable => _isAvailable;
-
-  /// Verifica se o serviço está habilitado.
-  bool get isEnabled => _isEnabled;
 }

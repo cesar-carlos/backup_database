@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:path/path.dart' as p;
 
-/// Performs health checks for the backup system
 class HealthCheckService {
-  /// Check if there's enough disk space for backups
   Future<HealthCheckResult> checkDiskSpace({
     required String path,
     required int requiredSpaceMB,
@@ -19,7 +17,6 @@ class HealthCheckService {
         );
       }
 
-      // Try to check available space (platform-specific)
       try {
         final stat = await directory.stat();
         final modified = stat.modified;
@@ -47,7 +44,6 @@ class HealthCheckService {
     }
   }
 
-  /// Check if a file path is writable
   Future<HealthCheckResult> checkWritePermission(String path) async {
     try {
       final directory = Directory(path);
@@ -82,14 +78,13 @@ class HealthCheckService {
     }
   }
 
-  /// Run all health checks
   Future<List<HealthCheckResult>> runHealthChecks({
     List<String>? pathsToCheck,
   }) async {
     final results = <HealthCheckResult>[];
 
-    // Check common backup directories
-    final paths = pathsToCheck ??
+    final paths =
+        pathsToCheck ??
         [
           if (Platform.isWindows) r'C:\Backups',
           if (!Platform.isWindows) '/var/backups',
@@ -109,7 +104,6 @@ class HealthCheckService {
     return results;
   }
 
-  /// Get overall health status from results
   HealthStatus getOverallStatus(List<HealthCheckResult> results) {
     if (results.any((r) => r.status == HealthStatus.unhealthy)) {
       return HealthStatus.unhealthy;

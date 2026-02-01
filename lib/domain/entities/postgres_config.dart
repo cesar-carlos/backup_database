@@ -6,7 +6,7 @@ class PostgresConfig {
   PostgresConfig({
     required this.name,
     required this.host,
-    required DatabaseName database,
+    required this.database,
     required this.username,
     required this.password,
     String? id,
@@ -14,8 +14,7 @@ class PostgresConfig {
     this.enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
-       database = database,
+  })  : id = id ?? const Uuid().v4(),
        port = port ?? PortNumber(5432),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();

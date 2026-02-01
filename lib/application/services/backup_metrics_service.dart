@@ -1,10 +1,8 @@
 import 'package:backup_database/domain/entities/backup_history.dart';
 
-/// Tracks backup metrics for monitoring and analysis
 class BackupMetricsService {
   final _metrics = <String, _DatabaseMetrics>{};
 
-  /// Record a backup completion
   void recordBackup(BackupHistory history) {
     final key = '${history.databaseType}_${history.backupType}';
     final metrics = _metrics.putIfAbsent(
@@ -23,7 +21,6 @@ class BackupMetricsService {
     );
   }
 
-  /// Get metrics for a specific database type and backup type
   Map<String, dynamic>? getMetrics({
     required String databaseType,
     String? backupType,
@@ -45,7 +42,6 @@ class BackupMetricsService {
     };
   }
 
-  /// Get all recorded metrics
   Map<String, Map<String, dynamic>> getAllMetrics() {
     return _metrics.map(
       (key, value) => MapEntry(
@@ -64,12 +60,10 @@ class BackupMetricsService {
     );
   }
 
-  /// Clear all metrics
   void clear() {
     _metrics.clear();
   }
 
-  /// Calculate success rate for all backups
   double getOverallSuccessRate() {
     if (_metrics.isEmpty) return 0;
 
@@ -85,7 +79,6 @@ class BackupMetricsService {
     return successfulBackups / totalBackups;
   }
 
-  /// Get average backup size in bytes
   int getAverageBackupSize() {
     if (_metrics.isEmpty) return 0;
 
@@ -134,7 +127,6 @@ class _DatabaseMetrics {
     }
   }
 
-  /// Get average duration in milliseconds
   double getAverageDuration() {
     if (durations.isEmpty) return 0;
 
@@ -146,13 +138,11 @@ class _DatabaseMetrics {
     return totalMs / durations.length;
   }
 
-  /// Get success rate (0.0 to 1.0)
   double getSuccessRate() {
     if (totalCount == 0) return 0;
     return successCount / totalCount;
   }
 
-  /// Get average file size in bytes
   int getAverageFileSize() {
     if (totalCount == 0) return 0;
     return totalSize ~/ totalCount;

@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:crypto/crypto.dart';
 
-/// Service for verifying backup file integrity
 class BackupIntegrityService {
-  /// Calculate SHA-256 checksum of a file
   Future<String> calculateChecksum(String filePath) async {
     try {
       final file = File(filePath);
@@ -22,7 +20,6 @@ class BackupIntegrityService {
     }
   }
 
-  /// Verify backup integrity by comparing checksums
   Future<IntegrityResult> verifyBackup({
     required String filePath,
     required String expectedChecksum,
@@ -53,7 +50,6 @@ class BackupIntegrityService {
     }
   }
 
-  /// Verify file size is within expected range
   IntegrityResult verifyFileSize({
     required String filePath,
     required int minExpectedSize,
@@ -75,7 +71,8 @@ class BackupIntegrityService {
         return IntegrityResult(
           isValid: false,
           checksum: '',
-          message: 'Arquivo muito pequeno ($size bytes < $minExpectedSize bytes)',
+          message:
+              'Arquivo muito pequeno ($size bytes < $minExpectedSize bytes)',
         );
       }
 
@@ -83,7 +80,8 @@ class BackupIntegrityService {
         return IntegrityResult(
           isValid: false,
           checksum: '',
-          message: 'Arquivo muito grande ($size bytes > $maxExpectedSize bytes)',
+          message:
+              'Arquivo muito grande ($size bytes > $maxExpectedSize bytes)',
         );
       }
 

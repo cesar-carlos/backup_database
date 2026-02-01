@@ -28,6 +28,8 @@ linter:
     avoid_dynamic_calls: false
     use_late_for_private_fields_and_variables: false
     use_string_buffers: false
+    sort_constructors_first: false
+    sort_unnamed_constructors_first: false
 
 analyzer:
   errors:

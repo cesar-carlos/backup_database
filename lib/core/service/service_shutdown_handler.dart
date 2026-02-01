@@ -13,10 +13,12 @@ typedef ShutdownCallback = Future<void> Function(Duration timeout);
 /// Escuta sinais de shutdown (SIGTERM, SIGINT) e executa
 /// limpeza apropriada antes de encerrar o processo.
 class ServiceShutdownHandler {
+  static ServiceShutdownHandler? _instance;
+
   ServiceShutdownHandler._();
 
-  static ServiceShutdownHandler? _instance;
-  static ServiceShutdownHandler get instance =>
+  /// Retorna a instância singleton do ServiceShutdownHandler.
+  factory ServiceShutdownHandler() =>
       _instance ??= ServiceShutdownHandler._();
 
   final List<ShutdownCallback> _shutdownCallbacks = [];
