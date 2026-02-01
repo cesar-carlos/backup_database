@@ -1,6 +1,6 @@
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/presentation/widgets/sybase/sybase_config_list_item.dart';
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 class SybaseConfigList extends StatelessWidget {
   const SybaseConfigList({

@@ -1,6 +1,6 @@
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/presentation/widgets/sql_server/sql_server_config_list_item.dart';
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 class SqlServerConfigList extends StatelessWidget {
   const SqlServerConfigList({

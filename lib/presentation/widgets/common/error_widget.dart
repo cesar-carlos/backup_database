@@ -1,5 +1,5 @@
 import 'package:backup_database/core/theme/app_colors.dart';
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 class AppErrorWidget extends StatelessWidget {
   const AppErrorWidget({
@@ -19,27 +19,33 @@ class AppErrorWidget extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(
-              Icons.error_outline,
+              FluentIcons.error_badge,
               size: 64,
               color: AppColors.error,
             ),
             const SizedBox(height: 16),
             Text(
               'Erro',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: FluentTheme.of(context).typography.title,
             ),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: FluentTheme.of(context).typography.body,
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 24),
-              ElevatedButton.icon(
+              FilledButton(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Tentar novamente'),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(FluentIcons.refresh, size: 16),
+                    SizedBox(width: 8),
+                    Text('Tentar novamente'),
+                  ],
+                ),
               ),
             ],
           ],

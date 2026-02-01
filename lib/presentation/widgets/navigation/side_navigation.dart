@@ -1,5 +1,5 @@
 import 'package:backup_database/presentation/widgets/navigation/navigation_item.dart';
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 
 class SideNavigation extends StatelessWidget {
   const SideNavigation({
@@ -14,19 +14,21 @@ class SideNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationRail(
-      selectedIndex: selectedIndex,
-      onDestinationSelected: onDestinationSelected,
-      labelType: NavigationRailLabelType.all,
-      destinations: items
-          .map(
-            (item) => NavigationRailDestination(
-              icon: Icon(item.icon),
-              selectedIcon: Icon(item.selectedIcon),
-              label: Text(item.label),
-            ),
-          )
-          .toList(),
+    return NavigationView(
+      pane: NavigationPane(
+        selected: selectedIndex,
+        items: items
+            .asMap()
+            .entries
+            .map(
+              (entry) => PaneItem(
+                icon: Icon(entry.value.icon),
+                body: Text(entry.value.label),
+                onTap: () => onDestinationSelected(entry.key),
+              ),
+            )
+            .toList(),
+      ),
     );
   }
 }
