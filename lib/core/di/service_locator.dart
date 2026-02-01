@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:backup_database/application/providers/providers.dart';
+import 'package:backup_database/application/services/service_health_checker.dart';
 import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
@@ -267,6 +268,18 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
+  getIt.registerLazySingleton<ServiceHealthChecker>(
+    () => ServiceHealthChecker(
+      backupHistoryRepository: getIt<IBackupHistoryRepository>(),
+    ),
+  );
+
+  getIt.registerLazySingleton<WindowsEventLogService>(
+    () => WindowsEventLogService(
+      processService: getIt<ProcessService>(),
+    ),
+  );
+
   getIt.registerLazySingleton<ITaskSchedulerService>(
     WindowsTaskSchedulerService.new,
   );
@@ -274,13 +287,17 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<AutoUpdateService>(AutoUpdateService.new);
 
   getIt.registerLazySingleton<CreateSchedule>(
-    () =>
-        CreateSchedule(getIt<IScheduleRepository>(), getIt<ISchedulerService>()),
+    () => CreateSchedule(
+      getIt<IScheduleRepository>(),
+      getIt<ISchedulerService>(),
+    ),
   );
 
   getIt.registerLazySingleton<UpdateSchedule>(
-    () =>
-        UpdateSchedule(getIt<IScheduleRepository>(), getIt<ISchedulerService>()),
+    () => UpdateSchedule(
+      getIt<IScheduleRepository>(),
+      getIt<ISchedulerService>(),
+    ),
   );
 
   getIt.registerLazySingleton<DeleteSchedule>(

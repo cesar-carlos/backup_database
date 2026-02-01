@@ -955,4 +955,60 @@ class SchedulerService implements ISchedulerService {
       LoggerService.warning('Erro ao gravar log no banco: $e');
     }
   }
+
+  /// Aguarda todos os backups em execução terminarem.
+  ///
+  /// Útil para graceful shutdown - garante que backups em andamento
+  /// tenham chance de completar antes do serviço encerrar.
+  ///
+  /// [timeout] Tempo máximo para aguardar (padrão: 5 minutos).
+  /// Retorna `true` se todos os backups terminaram, `false` se timeout.
+  Future<bool> waitForRunningBackups({
+    Duration timeout = const Duration(minutes: 5),
+  }) async {
+    if (_executingSchedules.isEmpty) {
+      LoggerService.info('✅ Nenhum backup em execução');
+      return true;
+    }
+
+    LoggerService.info(
+      '⏳ Aguardando ${_executingSchedules.length} backup(s) em execução '
+      '(timeout: ${timeout.inSeconds}s)',
+    );
+    LoggerService.info(
+      'Schedules em execução: ${_executingSchedules.join(', ')}',
+    );
+
+    final startTime = DateTime.now();
+    const checkInterval = Duration(seconds: 2);
+
+    while (_executingSchedules.isNotEmpty) {
+      final elapsed = DateTime.now().difference(startTime);
+
+      if (elapsed >= timeout) {
+        final remaining = _executingSchedules.toList();
+        LoggerService.warning(
+          '⚠️ Timeout atingido aguardando backups. '
+          '${remaining.length} schedule(s) ainda em execução: ${remaining.join(', ')}',
+        );
+        return false;
+      }
+
+      // Loga progresso a cada 10 segundos
+      if (elapsed.inSeconds % 10 == 0 && elapsed.inSeconds > 0) {
+        LoggerService.info(
+          '⏳ Aguardando... ${_executingSchedules.length} restante '
+          '(${elapsed.inSeconds}s / ${timeout.inSeconds}s)',
+        );
+      }
+
+      await Future.delayed(checkInterval);
+    }
+
+    final totalElapsed = DateTime.now().difference(startTime);
+    LoggerService.info(
+      '✅ Todos os backups concluídos em ${totalElapsed.inSeconds}s',
+    );
+    return true;
+  }
 }
