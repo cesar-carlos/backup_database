@@ -11,7 +11,9 @@
       "Bash(tree:*)",
       "WebSearch",
       "Bash(flutter pub get:*)",
-      "Bash(flutter test:*)"
+      "Bash(flutter test:*)",
+      "Bash(git restore:*)",
+      "Bash(grep:*)"
     ]
   }
 }

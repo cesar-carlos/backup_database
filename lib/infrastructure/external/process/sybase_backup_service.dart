@@ -104,7 +104,14 @@ class SybaseBackupService implements ISybaseBackupService {
             backupSql =
                 "BACKUP DATABASE DIRECTORY '$escapedBackupPath' $logClause";
           case BackupType.differential:
-            backupSql = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
+            // Sybase SQL Anywhere não tem differential nativo
+            // Usa backup incremental de transaction log
+            LoggerService.info(
+              'Sybase não suporta differential nativo. '
+              'Usando backup incremental de transaction log.',
+            );
+            backupSql =
+                "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
         }
 
         final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
@@ -174,10 +181,12 @@ class SybaseBackupService implements ISybaseBackupService {
 
           final arguments = <String>[];
 
-          if (effectiveType == BackupType.log) {
+          if (effectiveType == BackupType.log ||
+              effectiveType == BackupType.differential) {
             // Referência (ASA/SQL Anywhere): -t = transaction log only;
             // -r renomeia backups anteriores e cria um novo; -x remove backups
             // anteriores e cria um novo.
+            // Para differential, usamos incremental de transaction log
             arguments.add('-t');
             arguments.add(truncateLog ? '-x' : '-r');
           }

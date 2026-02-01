@@ -84,11 +84,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           _backupType == BackupType.fullSingle) {
         _backupType = BackupType.full;
       }
-      if (_databaseType == DatabaseType.sybase &&
-          _backupType == BackupType.differential) {
-        _backupType = BackupType.full;
-        _truncateLog = true;
-      }
+      // Sybase differential usa backup incremental de transaction log
+      // Mantém o tipo selecionado pois o serviço trata corretamente
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
       _compressionFormat = widget.schedule!.compressionFormat;
@@ -334,7 +331,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
               List<BackupType> allTypes;
               if (_databaseType == DatabaseType.sybase) {
-                allTypes = [BackupType.full, BackupType.log];
+                allTypes = [
+                  BackupType.full,
+                  BackupType.differential,
+                  BackupType.log,
+                ];
               } else if (_databaseType == DatabaseType.postgresql) {
                 allTypes = [
                   BackupType.full,
