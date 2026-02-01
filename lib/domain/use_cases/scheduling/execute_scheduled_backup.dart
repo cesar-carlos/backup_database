@@ -1,10 +1,10 @@
-import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class ExecuteScheduledBackup {
   ExecuteScheduledBackup(this._schedulerService);
-  final SchedulerService _schedulerService;
+  final ISchedulerService _schedulerService;
 
   Future<rd.Result<void>> call(String scheduleId) async {
     if (scheduleId.isEmpty) {

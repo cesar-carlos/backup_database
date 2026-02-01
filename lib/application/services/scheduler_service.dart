@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
-import 'package:backup_database/application/services/notification_service.dart';
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/errors/failure.dart';
@@ -20,13 +19,15 @@ import 'package:backup_database/domain/services/i_google_drive_destination_servi
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
+import 'package:backup_database/domain/services/i_notification_service.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
 import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-class SchedulerService {
+class SchedulerService implements ISchedulerService {
   SchedulerService({
     required IScheduleRepository scheduleRepository,
     required IBackupDestinationRepository destinationRepository,
@@ -41,7 +42,7 @@ class SchedulerService {
     required SendToDropbox sendToDropbox,
     required INextcloudDestinationService nextcloudDestinationService,
     required SendToNextcloud sendToNextcloud,
-    required NotificationService notificationService,
+    required INotificationService notificationService,
     required ILicenseValidationService licenseValidationService,
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
@@ -71,7 +72,7 @@ class SchedulerService {
   final SendToDropbox _sendToDropbox;
   final INextcloudDestinationService _nextcloudDestinationService;
   final SendToNextcloud _sendToNextcloud;
-  final NotificationService _notificationService;
+  final INotificationService _notificationService;
   final ILicenseValidationService _licenseValidationService;
 
   final ScheduleCalculator _calculator = ScheduleCalculator();
@@ -116,6 +117,7 @@ class SchedulerService {
     return const rd.Success(());
   }
 
+  @override
   Future<void> start() async {
     if (_isRunning) return;
 
@@ -132,6 +134,7 @@ class SchedulerService {
     LoggerService.info('Serviço de agendamento iniciado');
   }
 
+  @override
   void stop() {
     LoggerService.info('Parando serviço de agendamento');
     _isRunning = false;
@@ -875,6 +878,7 @@ class SchedulerService {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
+  @override
   Future<rd.Result<void>> executeNow(String scheduleId) async {
     final result = await _scheduleRepository.getById(scheduleId);
 
@@ -884,6 +888,7 @@ class SchedulerService {
     );
   }
 
+  @override
   Future<rd.Result<void>> refreshSchedule(String scheduleId) async {
     final result = await _scheduleRepository.getById(scheduleId);
 
@@ -898,6 +903,7 @@ class SchedulerService {
     }, rd.Failure.new);
   }
 
+  @override
   bool get isRunning => _isRunning;
 
   Future<bool> _checkWritePermission(Directory directory) async {

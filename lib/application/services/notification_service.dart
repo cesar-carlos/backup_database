@@ -9,10 +9,11 @@ import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
 import 'package:backup_database/domain/repositories/i_email_config_repository.dart';
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/infrastructure/external/email/email_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-class NotificationService {
+class NotificationService implements INotificationService {
   NotificationService({
     required IEmailConfigRepository emailConfigRepository,
     required IBackupLogRepository backupLogRepository,
@@ -24,6 +25,7 @@ class NotificationService {
   final IBackupLogRepository _backupLogRepository;
   final EmailService _emailService;
 
+  @override
   Future<rd.Result<bool>> notifyBackupComplete(
     BackupHistory history,
   ) async {
@@ -78,6 +80,7 @@ class NotificationService {
     );
   }
 
+  @override
   Future<rd.Result<bool>> sendWarning({
     required String databaseName,
     required String message,
@@ -117,6 +120,37 @@ Data/Hora do teste: ${DateTime.now()}
       config: config,
       subject: subject,
       body: body,
+    );
+  }
+
+  @override
+  Future<rd.Result<void>> sendTestEmail(
+    String recipient,
+    String subject,
+  ) async {
+    final configResult = await _emailConfigRepository.get();
+
+    return configResult.fold(
+      (config) async {
+        final body =
+            '''
+Este é um e-mail de teste do Sistema de Backup.
+
+Data/Hora do teste: ${DateTime.now()}
+''';
+
+        final result = await _emailService.sendEmail(
+          config: config,
+          subject: subject,
+          body: body,
+        );
+
+        return result.fold(
+          (success) => const rd.Success(()),
+          rd.Failure.new,
+        );
+      },
+      rd.Failure.new,
     );
   }
 

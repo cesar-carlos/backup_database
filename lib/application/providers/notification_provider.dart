@@ -1,19 +1,19 @@
-import 'package:backup_database/application/services/notification_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/repositories/i_email_config_repository.dart';
+import 'package:backup_database/domain/use_cases/notifications/test_email_configuration.dart';
 import 'package:flutter/foundation.dart';
 
 class NotificationProvider extends ChangeNotifier {
   NotificationProvider({
     required IEmailConfigRepository emailConfigRepository,
-    required NotificationService notificationService,
+    required TestEmailConfiguration testEmailConfiguration,
   }) : _emailConfigRepository = emailConfigRepository,
-       _notificationService = notificationService {
+       _testEmailConfiguration = testEmailConfiguration {
     loadConfig();
   }
   final IEmailConfigRepository _emailConfigRepository;
-  final NotificationService _notificationService;
+  final TestEmailConfiguration _testEmailConfiguration;
 
   EmailConfig? _emailConfig;
   bool _isLoading = false;
@@ -101,7 +101,7 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _notificationService.testEmailConfiguration(
+      final result = await _testEmailConfiguration(
         _emailConfig!,
       );
       return result.fold(

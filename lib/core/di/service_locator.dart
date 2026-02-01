@@ -205,7 +205,7 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerLazySingleton<EmailService>(EmailService.new);
 
-  getIt.registerLazySingleton<NotificationService>(
+  getIt.registerLazySingleton<INotificationService>(
     () => NotificationService(
       emailConfigRepository: getIt<IEmailConfigRepository>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
@@ -218,7 +218,7 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerLazySingleton<SendEmailNotification>(
-    () => SendEmailNotification(getIt<NotificationService>()),
+    () => SendEmailNotification(getIt<INotificationService>()),
   );
 
   getIt.registerLazySingleton<ConfigureEmail>(
@@ -226,7 +226,7 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerLazySingleton<TestEmailConfiguration>(
-    () => TestEmailConfiguration(getIt<NotificationService>()),
+    () => TestEmailConfiguration(getIt<INotificationService>()),
   );
 
   getIt.registerLazySingleton<BackupOrchestratorService>(
@@ -241,11 +241,11 @@ Future<void> setupServiceLocator() async {
       postgresBackupService: getIt<IPostgresBackupService>(),
       compressionService: getIt<ICompressionService>(),
       sqlScriptExecutionService: getIt<ISqlScriptExecutionService>(),
-      notificationService: getIt<NotificationService>(),
+      notificationService: getIt<INotificationService>(),
     ),
   );
 
-  getIt.registerLazySingleton<SchedulerService>(
+  getIt.registerLazySingleton<ISchedulerService>(
     () => SchedulerService(
       scheduleRepository: getIt<IScheduleRepository>(),
       destinationRepository: getIt<IBackupDestinationRepository>(),
@@ -260,7 +260,7 @@ Future<void> setupServiceLocator() async {
       sendToDropbox: getIt<SendToDropbox>(),
       nextcloudDestinationService: getIt<INextcloudDestinationService>(),
       sendToNextcloud: getIt<SendToNextcloud>(),
-      notificationService: getIt<NotificationService>(),
+      notificationService: getIt<INotificationService>(),
       licenseValidationService: getIt<ILicenseValidationService>(),
     ),
   );
@@ -273,12 +273,12 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerLazySingleton<CreateSchedule>(
     () =>
-        CreateSchedule(getIt<IScheduleRepository>(), getIt<SchedulerService>()),
+        CreateSchedule(getIt<IScheduleRepository>(), getIt<ISchedulerService>()),
   );
 
   getIt.registerLazySingleton<UpdateSchedule>(
     () =>
-        UpdateSchedule(getIt<IScheduleRepository>(), getIt<SchedulerService>()),
+        UpdateSchedule(getIt<IScheduleRepository>(), getIt<ISchedulerService>()),
   );
 
   getIt.registerLazySingleton<DeleteSchedule>(
@@ -286,7 +286,7 @@ Future<void> setupServiceLocator() async {
   );
 
   getIt.registerLazySingleton<ExecuteScheduledBackup>(
-    () => ExecuteScheduledBackup(getIt<SchedulerService>()),
+    () => ExecuteScheduledBackup(getIt<ISchedulerService>()),
   );
 
   getIt.registerLazySingleton<BackupProgressProvider>(
@@ -296,7 +296,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerFactory<SchedulerProvider>(
     () => SchedulerProvider(
       repository: getIt<IScheduleRepository>(),
-      schedulerService: getIt<SchedulerService>(),
+      schedulerService: getIt<ISchedulerService>(),
       createSchedule: getIt<CreateSchedule>(),
       updateSchedule: getIt<UpdateSchedule>(),
       deleteSchedule: getIt<DeleteSchedule>(),
@@ -310,7 +310,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerFactory<NotificationProvider>(
     () => NotificationProvider(
       emailConfigRepository: getIt<IEmailConfigRepository>(),
-      notificationService: getIt<NotificationService>(),
+      testEmailConfiguration: getIt<TestEmailConfiguration>(),
     ),
   );
 

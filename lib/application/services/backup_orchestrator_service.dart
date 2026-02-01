@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
-import 'package:backup_database/application/services/notification_service.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -15,6 +14,7 @@ import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/i_compression_service.dart';
+import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_script_execution_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
@@ -34,7 +34,7 @@ class BackupOrchestratorService {
     required IPostgresBackupService postgresBackupService,
     required ICompressionService compressionService,
     required ISqlScriptExecutionService sqlScriptExecutionService,
-    required NotificationService notificationService,
+    required INotificationService notificationService,
   }) : _sqlServerConfigRepository = sqlServerConfigRepository,
        _sybaseConfigRepository = sybaseConfigRepository,
        _postgresConfigRepository = postgresConfigRepository,
@@ -56,7 +56,7 @@ class BackupOrchestratorService {
   final IPostgresBackupService _postgresBackupService;
   final ICompressionService _compressionService;
   final ISqlScriptExecutionService _sqlScriptExecutionService;
-  final NotificationService _notificationService;
+  final INotificationService _notificationService;
 
   Future<rd.Result<BackupHistory>> executeBackup({
     required Schedule schedule,

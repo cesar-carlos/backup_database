@@ -1,8 +1,8 @@
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
-import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/use_cases/scheduling/create_schedule.dart';
 import 'package:backup_database/domain/use_cases/scheduling/delete_schedule.dart';
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
@@ -12,7 +12,7 @@ import 'package:flutter/foundation.dart';
 class SchedulerProvider extends ChangeNotifier {
   SchedulerProvider({
     required IScheduleRepository repository,
-    required SchedulerService schedulerService,
+    required ISchedulerService schedulerService,
     required CreateSchedule createSchedule,
     required UpdateSchedule updateSchedule,
     required DeleteSchedule deleteSchedule,
@@ -26,7 +26,7 @@ class SchedulerProvider extends ChangeNotifier {
        _executeBackup = executeBackup,
        _progressProvider = progressProvider;
   final IScheduleRepository _repository;
-  final SchedulerService _schedulerService;
+  final ISchedulerService _schedulerService;
   final CreateSchedule _createSchedule;
   final UpdateSchedule _updateSchedule;
   final DeleteSchedule _deleteSchedule;
