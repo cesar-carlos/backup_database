@@ -1,5 +1,7 @@
 # Service Control Handlers - Notas Técnicas
 
+> **Nota técnica**: Para análise completa da implementação do Windows Service, consulte [analise_implementacao_windows_service.md](analise_implementacao_windows_service.md).
+
 ## Status da Implementação
 
 ### ✅ Já Implementado (via ServiceShutdownHandler)

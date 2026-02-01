@@ -14,9 +14,29 @@
 - Subtipos: `ServerFailure`, `DatabaseFailure`, `NetworkFailure`, `ValidationFailure`, `BackupFailure`, `FileSystemFailure`, `FtpFailure`, `GoogleDriveFailure`, `NotFoundFailure`, `DropboxFailure` (dropbox_failure.dart), `NextcloudFailure` (nextcloud_failure.dart).
 - **`Exceptions`** (exceptions.dart): `ServerException`, `DatabaseException`, etc. — usadas onde se lança exceção; podem ser convertidas em `Failure` no catch.
 
-### 3. Padrão esperado
+### 3. LoggerService
+
+O projeto possui um serviço de logging centralizado (`lib/core/utils/logger_service.dart`) que fornece métodos para registrar diferentes níveis de log:
+
+- `LoggerService.debug()`: Mensagens de debug (desenvolvimento)
+- `LoggerService.info()`: Mensagens informativas
+- `LoggerService.warning()`: Alertas que não impedem a execução
+- `LoggerService.error()`: Erros com exceção e stack trace
+
+**Uso recomendado em catch blocks:**
+
+```dart
+} on Object catch (e, s) {
+  LoggerService.error('Descrição do erro', e, s);
+  return rd.Failure(AlgumFailure(message: '...', originalError: e));
+}
+```
+
+### 4. Padrão esperado
 
 - Em métodos que retornam `Future<Result<T>>`: em `catch`, converter a exceção em `Failure` e retornar `rd.Failure(AlgumFailure(message: '...', originalError: e))`.
+- Sempre usar `LoggerService.error()` em catch blocks para registrar o erro.
+- Nunca usar catch vazio sem pelo menos logar o erro.
 - Não engolir exceção: nem catch vazio nem só log sem retornar `Failure` (ou repassar o erro de outra forma).
 
 ---
@@ -69,23 +89,46 @@
 
 ## Recomendações
 
-1. **Infrastructure / Services que retornam `Result`**: Em todo `catch`, retornar `rd.Failure(AlgumFailure(message: ..., originalError: e))` em vez de ignorar ou só logar.
-2. **Catch vazio em rollback** (ex.: delete após falha de upload): Avaliar se faz sentido logar em nível debug e continuar, ou se o rollback deve falhar de forma visível (ex.: retornar Failure com mensagem “upload falhou e rollback também”).
-3. **“Diretório pode já existir” / “Nome não é data válida”**: São casos de “não é erro” ou “pular item”; manter comentário e, se possível, log em debug.
-4. **Providers (UI)**: Manter `_error` + `notifyListeners()` em catch quando o método não retorna Result; evitar catch que não altera estado nem notifica usuário.
-5. **window_manager / tray / single instance**: Para erros de configuração, preferir tratar (ex.: desabilitar recurso) ou propagar até uma camada que possa retornar Result ou mostrar erro ao usuário.
+1. **Infrastructure / Services que retornam `Result`**:
+   - Em todo `catch`, retornar `rd.Failure(AlgumFailure(message: ..., originalError: e))`
+   - Sempre usar `LoggerService.error()` antes de retornar o Failure
+   - Nunca ignorar erros ou usar catch vazio
+
+2. **Catch vazio em rollback** (ex.: delete após falha de upload):
+   - Avaliar se faz sentido logar em nível debug e continuar
+   - Usar `LoggerService.warning()` para rollback que falha
+   - Não usar catch vazio: pelo menos `LoggerService.debug()` ou `LoggerService.warning()`
+
+3. **"Diretório pode já existir" / "Nome não é data válida"**:
+   - São casos de "não é erro" ou "pular item"
+   - Manter comentário explicativo
+   - Usar `LoggerService.debug()` para registrar esses casos
+
+4. **Providers (UI)**:
+   - Manter `_error` + `notifyListeners()` em catch
+   - Usar `LoggerService.error()` para registrar o erro
+   - Evitar catch que não altera estado nem notifica usuário
+
+5. **window_manager / tray / single instance**:
+   - Preferir tratar erros de configuração (desabilitar recurso)
+   - Propagar até uma camada que possa retornar Result ou mostrar erro
+   - Sempre usar `LoggerService.error()` para registrar erros
 
 ---
 
 ## Correções já aplicadas
 
-- **ftp_destination_service**: `_createRemoteDirectories` / `_createRemoteDirectory` — erros de `changeDirectory` e `makeDirectory` passam a propagar (rethrow); apenas “diretório já existe” continua ignorado com log em debug. Rollback (delete arquivo corrompido) passou a logar em warning em vez de catch vazio.
-- **dropbox_auth_provider**: `setPreventClose` e `_loadOAuthConfig` — catch passou a logar em debug em vez de ignorar em silêncio.
-- **google_drive_destination_service**: rollback (delete arquivo corrompido) passou a logar em warning em vez de catch vazio.
-- **windows_message_box**: catch em `showWarning`/`showInfo`/`showError` passou a logar em debug em vez de catch vazio.
+- **LoggerService implementado**: Serviço centralizado de logging com métodos para debug, info, warning e error
+- **ftp_destination_service**: `_createRemoteDirectories` / `_createRemoteDirectory` — erros de `changeDirectory` e `makeDirectory` passam a propagar; apenas "diretório já existe" continua ignorado com log em debug. Rollback (delete arquivo corrompido) usa `LoggerService.warning()`.
+- **dropbox_auth_provider**: `setPreventClose` e `_loadOAuthConfig` — catch usa `LoggerService.debug()`.
+- **google_drive_destination_service**: rollback (delete arquivo corrompido) usa `LoggerService.warning()`.
+- **windows_message_box**: catch em `showWarning`/`showInfo`/`showError` usa `LoggerService.debug()`.
+- **service_mode_initializer**: Todos os catch blocks usam `LoggerService.error()`.
+- **service_health_checker**: Usa `LoggerService` para registrar health status com diferentes níveis de severidade.
 
 ## Próximos passos
 
-- Substituir supressões restantes em métodos que retornam `Result` por `rd.Failure(...)`.
-- Reduzir catch vazios restantes: onde for rollback/cleanup, pelo menos log; onde for operação principal, retornar Failure.
-- Revisar providers e presentation: garantir que todo catch que representa “erro para o usuário” sete `_error` (ou equivalente) e notifique.
+- Substituir supressões restantes em métodos que retornam `Result` por `rd.Failure(...)` + `LoggerService.error()`
+- Reduzir catch vazios restantes: onde for rollback/cleanup, usar `LoggerService.debug()` ou `LoggerService.warning()`
+- Onde for operação principal, retornar Failure com LoggerService.error()
+- Revisar providers e presentation: garantir que todo catch que representa "erro para o usuário" sete `_error`, use `LoggerService.error()` e notifique

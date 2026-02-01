@@ -1,5 +1,7 @@
 # Revisão da Implementação - Serviço Windows
 
+> **Nota técnica**: Para detalhes sobre Service Control Handlers e decisões arquiteturais, consulte [service_control_handlers.md](service_control_handlers.md).
+
 ## 🔍 Análise da Implementação
 
 ### ✅ Pontos Positivos

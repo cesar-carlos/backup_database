@@ -1,10 +1,13 @@
 # Configuração de Atualização Automática
 
-Este documento explica como configurar o sistema de atualização automática do aplicativo usando `auto_updater`.
+Este documento explica como configurar e testar o sistema de atualização automática.
+
+> **Nota**: Para instruções de como testar o auto-update, consulte [testing_auto_update.md](testing_auto_update.md).
+> **Nota**: Para instruções de como criar releases, consulte [release_guide.md](release_guide.md).
 
 ## Visão Geral
 
-O sistema de atualização automática permite que o aplicativo verifique e instale atualizações automaticamente. Ele utiliza o pacote `auto_updater` que é baseado nas bibliotecas Sparkle (macOS) e WinSparkle (Windows).
+O sistema de atualização automática permite que o aplicativo verifique e instale atualizações automaticamente. Ele utiliza o pacote `auto_updater` baseado nas bibliotecas Sparkle (macOS) e WinSparkle (Windows).
 
 ## Opção Recomendada: GitHub Releases + GitHub Pages
 
@@ -50,25 +53,22 @@ AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_datab
    flutter build windows --release
    ```
 
-2. **Criar um release no GitHub:**
+2. **Criar instalador:**
 
-   - Acesse: https://github.com/cesar-carlos/backup_database/releases
-   - Clique em "Create a new release"
-   - Crie uma tag: `v1.0.1` (use o prefixo `v` seguido da versão)
-   - Título: "Version 1.0.1"
-   - Descrição: Adicione notas da versão
-   - Faça upload do arquivo `.exe` (ex: `backup_database-1.0.1.exe`)
-   - Marque como "Set as the latest release"
-   - Clique em "Publish release"
+   Consulte [installer_guide.md](installer_guide.md) para instruções completas.
 
-3. **GitHub Actions executa automaticamente:**
+3. **Criar um release no GitHub:**
+
+   Consulte [release_guide.md](release_guide.md) para instruções detalhadas.
+
+4. **GitHub Actions executa automaticamente:**
 
    - O workflow `.github/workflows/update-appcast.yml` detecta o release
    - Obtém informações do asset (URL, tamanho)
    - Atualiza o `appcast.xml` com a nova versão
    - Faz commit e push do arquivo atualizado
 
-4. **Clientes recebem atualização:**
+5. **Clientes recebem atualização:**
    - Na próxima verificação automática (a cada 1 hora)
    - Ou quando o usuário verificar manualmente
 
@@ -114,65 +114,21 @@ O arquivo `appcast.xml` é mantido automaticamente pelo GitHub Actions. Ele segu
 
 ## Configuração Básica (Método Manual)
 
-Se preferir usar um servidor próprio ao invés do GitHub, siga as instruções abaixo:
+Se preferir usar um servidor próprio ao invés do GitHub, siga as instruções abaixo.
 
 ### 1. Variável de Ambiente
 
-Adicione a seguinte variável no arquivo `.env`:
+Adicione no arquivo `.env`:
 
 ```env
 AUTO_UPDATE_FEED_URL=https://seu-servidor.com/updates/appcast.xml
 ```
 
-Substitua `https://seu-servidor.com/updates/appcast.xml` pela URL do seu feed de atualização.
-
 ### 2. Estrutura do Feed (appcast.xml)
 
-O feed de atualização deve seguir o formato Sparkle/WinSparkle. Exemplo:
+O feed de atualização deve seguir o formato Sparkle/WinSparkle.
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>Backup Database Updates</title>
-    <link>https://seu-servidor.com/updates</link>
-    <description>Atualizações do Backup Database</description>
-
-    <item>
-      <title>Version 1.0.1</title>
-      <pubDate>Mon, 01 Jan 2024 00:00:00 +0000</pubDate>
-      <description>
-        <![CDATA[
-          <h2>Nova Versão 1.0.1</h2>
-          <ul>
-            <li>Correção de bugs</li>
-            <li>Melhorias de performance</li>
-          </ul>
-        ]]>
-      </description>
-      <enclosure
-        url="https://seu-servidor.com/updates/backup_database-1.0.1.exe"
-        sparkle:version="1.0.1"
-        sparkle:os="windows"
-        length="52428800"
-        type="application/octet-stream" />
-    </item>
-
-    <item>
-      <title>Version 1.0.0</title>
-      <pubDate>Mon, 01 Dec 2023 00:00:00 +0000</pubDate>
-      <enclosure
-        url="https://seu-servidor.com/updates/backup_database-1.0.0.exe"
-        sparkle:version="1.0.0"
-        sparkle:os="windows"
-        length="51200000"
-        type="application/octet-stream" />
-    </item>
-  </channel>
-</rss>
-```
-
-### Elementos Importantes
+**Elementos Importantes:**
 
 - **`sparkle:version`**: Versão da atualização (deve ser maior que a versão atual)
 - **`sparkle:os`**: Sistema operacional (`windows` para Windows)
@@ -180,45 +136,23 @@ O feed de atualização deve seguir o formato Sparkle/WinSparkle. Exemplo:
 - **`length`**: Tamanho do arquivo em bytes
 - **`pubDate`**: Data de publicação no formato RFC 822
 
-## Hospedagem dos Arquivos (Método Manual)
+### 3. Hospedagem dos Arquivos
 
-### Requisitos
+**Requisitos:**
 
 1. **Servidor Web**: O feed XML e os arquivos executáveis devem estar acessíveis via HTTP/HTTPS
-2. **CORS**: Se necessário, configure CORS no servidor para permitir requisições do aplicativo
-3. **HTTPS Recomendado**: Use HTTPS para garantir a segurança das atualizações
+2. **CORS**: Se necessário, configure CORS no servidor
+3. **HTTPS Recomendado**: Use HTTPS para garantir segurança
 
-### Estrutura de Diretórios Recomendada
+**Estrutura de Diretórios Recomendada:**
 
 ```
 servidor/
 ├── updates/
 │   ├── appcast.xml
 │   ├── backup_database-1.0.0.exe
-│   ├── backup_database-1.0.1.exe
-│   └── backup_database-1.0.2.exe
+│   └── backup_database-1.0.1.exe
 ```
-
-### Atualização Manual do appcast.xml
-
-Quando usar um servidor próprio, você precisa atualizar o `appcast.xml` manualmente a cada nova versão:
-
-1. Adicione um novo `<item>` no início do arquivo
-2. Atualize a versão, URL, tamanho e data
-3. Faça upload do novo executável
-4. Faça upload do `appcast.xml` atualizado
-
-## Assinatura de Atualizações (Opcional)
-
-Para maior segurança, você pode assinar os arquivos de atualização. Isso requer:
-
-1. **OpenSSL instalado** no Windows
-2. **Chaves geradas** usando o comando:
-   ```bash
-   dart run auto_updater:generate_keys
-   ```
-
-As chaves geradas devem ser mantidas em segurança e usadas para assinar cada atualização.
 
 ## Funcionamento
 
@@ -235,7 +169,7 @@ As chaves geradas devem ser mantidas em segurança e usadas para assinar cada at
 
 - O aplicativo verifica atualizações automaticamente na inicialização
 - Verificações periódicas a cada 1 hora (3600 segundos)
-- As verificações ocorrem em background e não bloqueiam a interface
+- As verificações ocorrem em background
 - **Quando uma atualização é encontrada, ela é baixada e instalada automaticamente**
 
 ### Verificação Manual
@@ -254,20 +188,18 @@ As chaves geradas devem ser mantidas em segurança e usadas para assinar cada at
    - **Executa o instalador** em modo silencioso (`/SILENT`)
    - **Desinstala a versão anterior** automaticamente
    - **Instala a nova versão** automaticamente
-   - **Reinicia o aplicativo** (opcional)
 4. Todo o processo ocorre **SEM interação do usuário**
 
 ### Comportamento do Instalador em Modo Silencioso
 
-Quando executado em modo `/SILENT` (atualização automática):
+**Modo `/SILENT` (atualização automática):**
 
-- ✅ Fecha o aplicativo automaticamente se estiver rodando
+- ✅ Fecha o aplicativo automaticamente
 - ✅ Desinstala a versão anterior automaticamente
 - ✅ Instala a nova versão sem mostrar diálogos
 - ✅ Não solicita permissões ou confirmações
-- ✅ Não mostra tela de conclusão
 
-Quando executado manualmente (duplo clique):
+**Modo manual (duplo clique):**
 
 - ℹ️ Pergunta ao usuário se deseja fechar o aplicativo
 - ℹ️ Mostra progresso da instalação
@@ -280,7 +212,7 @@ Quando executado manualmente (duplo clique):
 
 1. Verifique se a URL do feed está correta no arquivo `.env`
 2. Verifique se o servidor está acessível
-3. Verifique os logs do aplicativo para erros de rede
+3. Verifique os logs do aplicativo
 4. Confirme que o formato do XML está correto
 
 ### Erro ao baixar atualização
@@ -288,83 +220,34 @@ Quando executado manualmente (duplo clique):
 1. Verifique se a URL do arquivo executável está correta
 2. Confirme que o arquivo existe no servidor
 3. Verifique permissões de acesso ao servidor
-4. Confirme que o tamanho do arquivo (`length`) está correto
-
-### Verificação não funciona
-
-1. Verifique se `AUTO_UPDATE_FEED_URL` está configurada
-2. Verifique os logs do aplicativo
-3. Confirme que o formato do XML está válido
-4. Teste a URL do feed em um navegador
-
-## Exemplo Completo (Método Manual)
-
-### Arquivo .env
-
-```env
-AUTO_UPDATE_FEED_URL=https://exemplo.com/updates/appcast.xml
-```
-
-### Arquivo appcast.xml no servidor
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>Backup Database Updates</title>
-    <link>https://exemplo.com/updates</link>
-    <description>Atualizações do Backup Database</description>
-
-    <item>
-      <title>Version 1.0.1</title>
-      <pubDate>Mon, 15 Jan 2024 10:00:00 +0000</pubDate>
-      <enclosure
-        url="https://exemplo.com/updates/backup_database-1.0.1.exe"
-        sparkle:version="1.0.1"
-        sparkle:os="windows"
-        length="52428800"
-        type="application/octet-stream" />
-    </item>
-  </channel>
-</rss>
-```
-
-### Estrutura no servidor
-
-```
-https://exemplo.com/
-└── updates/
-    ├── appcast.xml
-    └── backup_database-1.0.1.exe
-```
-
-## Solução de Problemas Específicos do GitHub
+4. Confirme que o tamanho do arquivo está correto
 
 ### GitHub Actions não executa
 
-1. Verifique se as permissões do workflow estão configuradas corretamente
-2. Verifique os logs do GitHub Actions em: https://github.com/cesar-carlos/backup_database/actions
-3. Confirme que o release foi publicado (não apenas criado como draft)
+1. Verifique se as permissões do workflow estão configuradas
+2. Verifique os logs do GitHub Actions
+3. Confirme que o release foi publicado (não draft)
 
 ### appcast.xml não atualiza
 
 1. Verifique se o asset do release tem extensão `.exe`
-2. Verifique os logs do GitHub Actions para erros
-3. Confirme que o workflow tem permissão de escrita no repositório
+2. Verifique os logs do GitHub Actions
+3. Confirme que o workflow tem permissão de escrita
 
-### GitHub Pages não atualiza
+## Documentação Relacionada
 
-1. GitHub Pages pode levar alguns minutos para atualizar após o commit
-2. Verifique se o GitHub Pages está ativado nas configurações
-3. Teste a URL diretamente no navegador: `https://cesar-carlos.github.io/backup_database/appcast.xml`
+- **[testing_auto_update.md](testing_auto_update.md)**: Como testar o sistema de atualização
+- **[release_guide.md](release_guide.md)**: Como criar releases no GitHub
+- **[installer_guide.md](installer_guide.md)**: Como criar o instalador
+- **[tag_creation_guide.md](tag_creation_guide.md)**: Como criar tags para releases
 
 ## Notas Importantes
 
 - A versão no `appcast.xml` deve seguir o formato semântico (ex: `1.0.1`)
 - O aplicativo compara versões automaticamente
 - Apenas versões mais recentes serão oferecidas para atualização
-- O processo de atualização pode requerer privilégios de administrador no Windows
 - Recomenda-se testar o feed antes de disponibilizar para usuários
-- **GitHub**: A tag do release deve ter o prefixo `v` (ex: `v1.0.1`), mas a versão no `appcast.xml` será sem o prefixo (ex: `1.0.1`)
-- **GitHub**: O workflow obtém automaticamente o tamanho do arquivo do asset do release
+- **GitHub**: A tag do release deve ter o prefixo `v` (ex: `v1.0.1`)
+- **GitHub**: A versão no `appcast.xml` será sem o prefixo (ex: `1.0.1`)
+- **GitHub**: O workflow obtém automaticamente o tamanho do arquivo
 - **GitHub**: O `appcast.xml` é atualizado na branch `main` automaticamente
