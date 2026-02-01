@@ -54,7 +54,9 @@ Future<void> setupServiceLocator() async {
     () => ScheduleRepository(getIt<AppDatabase>()),
   );
   getIt.registerLazySingleton<IBackupHistoryRepository>(
-    () => BackupHistoryRepository(getIt<AppDatabase>()),
+    () => CachedBackupHistoryRepository(
+      repository: BackupHistoryRepository(getIt<AppDatabase>()),
+    ),
   );
   getIt.registerLazySingleton<IBackupLogRepository>(
     () => BackupLogRepository(getIt<AppDatabase>()),

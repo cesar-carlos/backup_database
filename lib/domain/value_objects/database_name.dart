@@ -11,9 +11,22 @@ class DatabaseName {
         'Database name too long (max 128 characters)',
       );
     }
-    final invalidChars = ['/', '\\', '*', '?', '"', '<', '>', '|', '\x00', '\n', '\r', '\t'];
+    final invalidChars = [
+      '/',
+      r'\',
+      '*',
+      '?',
+      '"',
+      '<',
+      '>',
+      '|',
+      '\x00',
+      '\n',
+      '\r',
+      '\t',
+    ];
     if (invalidChars.any(name.contains)) {
-      throw DatabaseNameException(
+      throw const DatabaseNameException(
         'Database name contains invalid characters',
       );
     }

@@ -14,7 +14,7 @@ class SqlServerConfig {
     this.enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
+  }) : id = id ?? const Uuid().v4(),
        database = database,
        port = port ?? PortNumber(1433),
        createdAt = createdAt ?? DateTime.now(),
