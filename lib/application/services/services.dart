@@ -1,5 +1,8 @@
 export 'auto_update_service.dart';
+export 'backup_config_loader.dart';
+export 'backup_notifier.dart';
 export 'backup_orchestrator_service.dart';
+export 'backup_persistence.dart';
 export 'license_generation_service.dart';
 export 'license_validation_service.dart';
 export 'log_service.dart';
