@@ -7,7 +7,10 @@
       "Bash(git push:*)",
       "Bash(dart fix:*)",
       "Bash(dart format:*)",
-      "Bash(dart pub:*)"
+      "Bash(dart pub:*)",
+      "Bash(tree:*)",
+      "WebSearch",
+      "Bash(flutter pub get:*)"
     ]
   }
 }

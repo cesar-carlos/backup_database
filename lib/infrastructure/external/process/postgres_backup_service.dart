@@ -26,7 +26,7 @@ class PostgresBackupService implements IPostgresBackupService {
     String? pgBasebackupPath,
   }) async {
     LoggerService.info(
-      'Iniciando backup PostgreSQL: ${config.database} (Tipo: ${backupType.displayName})',
+      'Iniciando backup PostgreSQL: ${config.databaseValue} (Tipo: ${backupType.displayName})',
     );
 
     final outputDir = Directory(outputDirectory);
@@ -46,11 +46,11 @@ class PostgresBackupService implements IPostgresBackupService {
     final String backupPath;
     if (backupType == BackupType.fullSingle) {
       final backupFileName =
-          customFileName ?? '${config.database}_${typeSlug}_$timestamp.backup';
+          customFileName ?? '${config.databaseValue}_${typeSlug}_$timestamp.backup';
       backupPath = p.join(outputDirectory, backupFileName);
     } else {
       final backupDirName =
-          customFileName ?? '${config.database}_${typeSlug}_$timestamp';
+          customFileName ?? '${config.databaseValue}_${typeSlug}_$timestamp';
       backupPath = p.join(outputDirectory, backupDirName);
       final backupDir = Directory(backupPath);
       if (!await backupDir.exists()) {
@@ -128,7 +128,7 @@ class PostgresBackupService implements IPostgresBackupService {
               backupPath: backupPath,
               fileSize: totalSize,
               duration: stopwatch.elapsed,
-              databaseName: config.database,
+              databaseName: config.databaseValue,
             ),
           );
         }, rd.Failure.new);
@@ -172,7 +172,7 @@ class PostgresBackupService implements IPostgresBackupService {
       case BackupType.differential:
         final previousBackupResult = await _findPreviousFullBackup(
           outputDirectory: outputDirectory,
-          databaseName: config.database,
+          databaseName: config.databaseValue,
         );
 
         return previousBackupResult.fold(
@@ -215,11 +215,11 @@ class PostgresBackupService implements IPostgresBackupService {
   }) async {
     final executable = pgBasebackupPath ?? 'pg_basebackup';
 
-    final arguments = [
+    final arguments = <String>[
       '-h',
       config.host,
       '-p',
-      config.port.toString(),
+      config.portValue.toString(),
       '-U',
       config.username,
       '-D',
@@ -245,15 +245,15 @@ class PostgresBackupService implements IPostgresBackupService {
   }) async {
     const executable = 'pg_dump';
 
-    final arguments = [
+    final arguments = <String>[
       '-h',
       config.host,
       '-p',
-      config.port.toString(),
+      config.portValue.toString(),
       '-U',
       config.username,
       '-d',
-      config.database,
+      config.databaseValue,
       '-F',
       'c',
       '-f',
@@ -295,11 +295,11 @@ class PostgresBackupService implements IPostgresBackupService {
       );
     }
 
-    final arguments = [
+    final arguments = <String>[
       '-h',
       config.host,
       '-p',
-      config.port.toString(),
+      config.portValue.toString(),
       '-U',
       config.username,
       '--incremental=$manifestPath',
@@ -327,11 +327,11 @@ class PostgresBackupService implements IPostgresBackupService {
   }) async {
     final executable = pgBasebackupPath ?? 'pg_basebackup';
 
-    final arguments = [
+    final arguments = <String>[
       '-h',
       config.host,
       '-p',
-      config.port.toString(),
+      config.portValue.toString(),
       '-U',
       config.username,
       '-D',
@@ -589,15 +589,15 @@ class PostgresBackupService implements IPostgresBackupService {
       'Testando conexão PostgreSQL: ${config.host}:${config.port}/${config.database}',
     );
 
-    final arguments = [
+    final arguments = <String>[
       '-h',
       config.host,
       '-p',
-      config.port.toString(),
+      config.portValue.toString(),
       '-U',
       config.username,
       '-d',
-      config.database,
+      config.databaseValue,
       '-c',
       'SELECT 1',
     ];
@@ -691,11 +691,11 @@ class PostgresBackupService implements IPostgresBackupService {
   }) async {
     LoggerService.info('Listando bancos de dados PostgreSQL');
 
-    final arguments = [
+    final arguments = <String>[
       '-h',
       config.host,
       '-p',
-      config.port.toString(),
+      config.portValue.toString(),
       '-U',
       config.username,
       '-d',

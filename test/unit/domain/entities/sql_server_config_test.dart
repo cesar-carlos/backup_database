@@ -1,4 +1,6 @@
 import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -7,14 +9,14 @@ void main() {
       final config = SqlServerConfig(
         name: 'Test',
         server: 'localhost',
-        database: 'TestDB',
+        database: DatabaseName('TestDB'),
         username: 'sa',
         password: 'password',
       );
 
       expect(config.name, 'Test');
       expect(config.server, 'localhost');
-      expect(config.port, 1433);
+      expect(config.portValue, 1433);
       expect(config.enabled, true);
       expect(config.id, isNotEmpty);
     });
@@ -23,15 +25,15 @@ void main() {
       final config = SqlServerConfig(
         name: 'Test',
         server: 'localhost',
-        database: 'TestDB',
+        database: DatabaseName('TestDB'),
         username: 'sa',
         password: 'password',
       );
 
-      final copy = config.copyWith(name: 'New Name', port: 1434);
+      final copy = config.copyWith(name: 'New Name', port: PortNumber(1434));
 
       expect(copy.name, 'New Name');
-      expect(copy.port, 1434);
+      expect(copy.portValue, 1434);
       expect(copy.server, 'localhost');
       expect(copy.id, config.id);
     });
@@ -41,7 +43,7 @@ void main() {
         id: 'same-id',
         name: 'Test1',
         server: 'localhost',
-        database: 'TestDB',
+        database: DatabaseName('TestDB'),
         username: 'sa',
         password: 'password',
       );
@@ -50,7 +52,7 @@ void main() {
         id: 'same-id',
         name: 'Test2',
         server: 'other',
-        database: 'OtherDB',
+        database: DatabaseName('OtherDB'),
         username: 'user',
         password: 'other',
       );

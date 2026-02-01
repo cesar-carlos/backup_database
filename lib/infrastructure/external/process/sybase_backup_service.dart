@@ -52,19 +52,19 @@ class SybaseBackupService implements ISybaseBackupService {
 
       String backupPath;
       if (effectiveType == BackupType.full) {
-        backupPath = p.join(outputDirectory, config.databaseName);
+        backupPath = p.join(outputDirectory, config.databaseNameValue);
       } else {
         // Para backup de log, as ferramentas do SQL Anywhere costumam receber um
         // diretório destino. Criamos uma pasta única por execução para evitar
         // sobrescrita e facilitar a descoberta do arquivo gerado (quando existir).
         final folderName =
-            customFileName ?? '${config.databaseName}_${typeSlug}_$timestamp';
+            customFileName ?? '${config.databaseNameValue}_${typeSlug}_$timestamp';
         backupPath = p.join(outputDirectory, folderName);
       }
 
       final executable = dbbackupPath ?? 'dbbackup';
 
-      final databaseName = config.databaseName;
+      final databaseName = config.databaseNameValue;
 
       final stopwatch = Stopwatch()..start();
       rd.Result<ps.ProcessResult>? result;
@@ -426,8 +426,8 @@ class SybaseBackupService implements ISybaseBackupService {
           // tenta dbverify por conexão (melhor que nada, mas valida o banco acessível via conexão).
           if (!verifySuccess) {
             final connectionStrategies = <String>[
-              'ENG=${config.serverName};DBN=${config.databaseName};UID=${config.username};PWD=${config.password}',
-              'ENG=${config.databaseName};DBN=${config.databaseName};UID=${config.username};PWD=${config.password}',
+              'ENG=${config.serverName};DBN=${config.databaseNameValue};UID=${config.username};PWD=${config.password}',
+              'ENG=${config.databaseNameValue};DBN=${config.databaseNameValue};UID=${config.username};PWD=${config.password}',
               'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
             ];
 
@@ -440,7 +440,7 @@ class SybaseBackupService implements ISybaseBackupService {
                   '-c',
                   connStr,
                   '-d',
-                  config.databaseName,
+                  config.databaseNameValue,
                 ],
                 timeout: const Duration(minutes: 30),
               );
@@ -483,7 +483,7 @@ class SybaseBackupService implements ISybaseBackupService {
             backupPath: actualBackupPath,
             fileSize: totalSize,
             duration: stopwatch.elapsed,
-            databaseName: config.databaseName,
+            databaseName: config.databaseNameValue,
           ),
         );
       }, rd.Failure.new);
@@ -538,7 +538,7 @@ class SybaseBackupService implements ISybaseBackupService {
   Future<rd.Result<bool>> testConnection(SybaseConfig config) async {
     try {
       LoggerService.info(
-        'Testando conexão Sybase: Engine=${config.serverName}, DBN=${config.databaseName}',
+        'Testando conexão Sybase: Engine=${config.serverName}, DBN=${config.databaseNameValue}',
       );
 
       if (config.serverName.trim().isEmpty) {
@@ -549,7 +549,7 @@ class SybaseBackupService implements ISybaseBackupService {
         );
       }
 
-      if (config.databaseName.trim().isEmpty) {
+      if (config.databaseNameValue.trim().isEmpty) {
         return const rd.Failure(
           BackupFailure(
             message: 'Nome do banco de dados (DBN) não pode estar vazio',
@@ -563,7 +563,7 @@ class SybaseBackupService implements ISybaseBackupService {
         );
       }
 
-      final databaseName = config.databaseName;
+      final databaseName = config.databaseNameValue;
       final connectionStrategies = <String>[
         'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
 
@@ -628,8 +628,8 @@ class SybaseBackupService implements ISybaseBackupService {
               'Não foi possível conectar ao servidor Sybase. Verifique:\n'
               '1. Se o servidor está rodando\n'
               '2. Se o Engine Name (${config.serverName}) está correto\n'
-              '3. Se o DBN (${config.databaseName}) está correto\n'
-              '4. Se a porta (${config.port}) está correta';
+              '3. Se o DBN (${config.databaseNameValue}) está correto\n'
+              '4. Se a porta (${config.portValue}) está correta';
         } else if (errorLower.contains('invalid user') ||
             errorLower.contains('login failed')) {
           errorMessage = 'Usuário ou senha inválidos.';

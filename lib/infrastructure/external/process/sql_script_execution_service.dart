@@ -78,14 +78,14 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
 
     try {
       LoggerService.info(
-        'Executando script SQL no SQL Server: ${config.database}',
+        'Executando script SQL no SQL Server: ${config.databaseValue}',
       );
 
-      final arguments = [
+      final arguments = <String>[
         '-S',
-        '${config.server},${config.port}',
+        '${config.server},${config.portValue}',
         '-d',
-        config.database,
+        config.databaseValue,
         '-b',
         '-r',
         '1',
@@ -171,8 +171,8 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         'Executando script SQL no Sybase: ${config.serverName}',
       );
 
-      final databaseName = config.databaseName.isNotEmpty
-          ? config.databaseName
+      final databaseName = config.databaseNameValue.isNotEmpty
+          ? config.databaseNameValue
           : config.serverName;
 
       final dbisqlConnections = <String>[
@@ -256,18 +256,18 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
 
     try {
       LoggerService.info(
-        'Executando script SQL no PostgreSQL: ${config.database}',
+        'Executando script SQL no PostgreSQL: ${config.databaseValue}',
       );
 
-      final arguments = [
+      final arguments = <String>[
         '-h',
         config.host,
         '-p',
-        config.port.toString(),
+        config.portValue.toString(),
         '-U',
         config.username,
         '-d',
-        config.database,
+        config.databaseValue,
         '-c',
         script,
       ];

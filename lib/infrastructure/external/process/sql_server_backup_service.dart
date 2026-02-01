@@ -18,9 +18,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
   List<String> _baseSqlcmdArgs(SqlServerConfig config) {
     final args = <String>[
       '-S',
-      '${config.server},${config.port}',
+      '${config.server},${config.portValue}',
       '-d',
-      config.database,
+      config.databaseValue,
       // Fail fast for automation: return non-zero exit code on error.
       '-b',
       // Send error messages to STDERR (helps logging and parsing).
@@ -65,7 +65,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
   }) async {
     try {
       LoggerService.info(
-        'Iniciando backup SQL Server: ${config.database} (Tipo: ${backupType.displayName})',
+        'Iniciando backup SQL Server: ${config.databaseValue} (Tipo: ${backupType.displayName})',
       );
 
       final outputDir = Directory(outputDirectory);
@@ -78,7 +78,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
       final typeSlug = backupType.name;
       final fileName =
           customFileName ??
-          '${config.database}_${typeSlug}_$timestamp$extension';
+          '${config.databaseValue}_${typeSlug}_$timestamp$extension';
       final backupPath = p.join(outputDirectory, fileName);
 
       final normalizedPath = backupPath.replaceAll(r'\', '/');
@@ -92,25 +92,25 @@ class SqlServerBackupService implements ISqlServerBackupService {
         case BackupType.full:
         case BackupType.fullSingle:
           query =
-              'BACKUP DATABASE [${config.database}] '
+              'BACKUP DATABASE [${config.databaseValue}] '
               "TO DISK = N'$escapedBackupPath' "
               'WITH $checksumClause NOFORMAT, INIT, '
-              "NAME = N'${config.database}-Full Database Backup', "
+              "NAME = N'${config.databaseValue}-Full Database Backup', "
               'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
         case BackupType.differential:
           query =
-              'BACKUP DATABASE [${config.database}] '
+              'BACKUP DATABASE [${config.databaseValue}] '
               "TO DISK = N'$escapedBackupPath' "
               'WITH DIFFERENTIAL, $checksumClause NOFORMAT, INIT, '
-              "NAME = N'${config.database}-Differential Database Backup', "
+              "NAME = N'${config.databaseValue}-Differential Database Backup', "
               'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
         case BackupType.log:
           final copyOnlyClause = truncateLog ? '' : 'COPY_ONLY, ';
           query =
-              'BACKUP LOG [${config.database}] '
+              'BACKUP LOG [${config.databaseValue}] '
               "TO DISK = N'$escapedBackupPath' "
               'WITH $copyOnlyClause$checksumClause NOFORMAT, INIT, '
-              "NAME = N'${config.database}-Transaction Log Backup', "
+              "NAME = N'${config.databaseValue}-Transaction Log Backup', "
               'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
       }
 
@@ -248,7 +248,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
             backupPath: backupPath,
             fileSize: fileSize,
             duration: stopwatch.elapsed,
-            databaseName: config.database,
+            databaseName: config.databaseValue,
           ),
         );
       }, rd.Failure.new);

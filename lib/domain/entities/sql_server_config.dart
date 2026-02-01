@@ -1,39 +1,47 @@
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:uuid/uuid.dart';
 
 class SqlServerConfig {
   SqlServerConfig({
     required this.name,
     required this.server,
-    required this.database,
+    required DatabaseName database,
     required this.username,
     required this.password,
     String? id,
-    this.port = 1433,
+    PortNumber? port,
     this.enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
+  })  : id = id ?? const Uuid().v4(),
+       database = database,
+       port = port ?? PortNumber(1433),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
+
   final String id;
   final String name;
   final String server;
-  final String database;
+  final DatabaseName database;
   final String username;
   final String password;
-  final int port;
+  final PortNumber port;
   final bool enabled;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  String get databaseValue => database.value;
+  int get portValue => port.value;
 
   SqlServerConfig copyWith({
     String? id,
     String? name,
     String? server,
-    String? database,
+    DatabaseName? database,
     String? username,
     String? password,
-    int? port,
+    PortNumber? port,
     bool? enabled,
     DateTime? createdAt,
     DateTime? updatedAt,

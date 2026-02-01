@@ -23,7 +23,7 @@ class ExecuteSqlServerBackup {
         ValidationFailure(message: 'Servidor não pode ser vazio'),
       );
     }
-    if (config.database.trim().isEmpty) {
+    if (config.databaseValue.trim().isEmpty) {
       return const rd.Failure(
         ValidationFailure(message: 'Nome do banco não pode ser vazio'),
       );

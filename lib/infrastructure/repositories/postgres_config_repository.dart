@@ -2,6 +2,8 @@
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -141,8 +143,8 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
       id: data.id,
       name: data.name,
       host: data.host,
-      port: data.port,
-      database: data.database,
+      port: PortNumber(data.port),
+      database: DatabaseName(data.database),
       username: data.username,
       password: password,
       enabled: data.enabled,
@@ -156,8 +158,8 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
       id: Value(config.id),
       name: Value(config.name),
       host: Value(config.host),
-      port: Value(config.port),
-      database: Value(config.database),
+      port: Value(config.portValue),
+      database: Value(config.databaseValue),
       username: Value(config.username),
       password: const Value(''),
       enabled: Value(config.enabled),

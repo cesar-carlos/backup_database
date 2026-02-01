@@ -8,6 +8,8 @@ import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -72,8 +74,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     if (widget.initialType != DatabaseType.sqlServer) {
       _selectedType = widget.initialType;
     } else if (widget.config != null) {
-      if (widget.config!.port == 2638 ||
-          widget.config!.database.toLowerCase().endsWith('.db')) {
+      if (widget.config!.portValue == 2638 ||
+          widget.config!.databaseValue.toLowerCase().endsWith('.db')) {
         _selectedType = DatabaseType.sybase;
       } else {
         _selectedType = DatabaseType.sqlServer;
@@ -91,15 +93,15 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         _serverController.text = widget.config!.server;
       }
 
-      _databaseController.text = widget.config!.database;
+      _databaseController.text = widget.config!.databaseValue;
       _usernameController.text = widget.config!.username;
       _passwordController.text = widget.config!.password;
-      _portController.text = widget.config!.port.toString();
+      _portController.text = widget.config!.portValue.toString();
       _isEnabled = widget.config!.enabled;
-      _selectedDatabase = widget.config!.database;
+      _selectedDatabase = widget.config!.databaseValue;
 
       if (_selectedType == DatabaseType.sybase) {
-        _databaseNameController.text = widget.config!.database;
+        _databaseNameController.text = widget.config!.databaseValue;
       }
     }
   }
@@ -650,8 +652,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         final testConfig = SybaseConfig(
           name: 'temp',
           serverName: _serverController.text.trim(),
-          databaseName: _databaseNameController.text.trim(),
-          port: port,
+          databaseName: DatabaseName(_databaseNameController.text.trim()),
+          port: PortNumber(port),
           username: _usernameController.text.trim(),
           password: _passwordController.text,
         );
@@ -732,8 +734,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         final tempConfig = PostgresConfig(
           name: 'temp',
           host: _hostController.text.trim(),
-          port: port,
-          database: 'postgres',
+          port: PortNumber(port),
+          database: DatabaseName('postgres'),
           username: _usernameController.text.trim(),
           password: _passwordController.text,
         );
@@ -868,8 +870,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       final tempConfig = SqlServerConfig(
         name: 'temp',
         server: _serverController.text.trim(),
-        port: port,
-        database: 'master',
+        port: PortNumber(port),
+        database: DatabaseName('master'),
         username: _usernameController.text.trim(),
         password: _passwordController.text,
       );
@@ -992,8 +994,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         id: widget.config?.id,
         name: _nameController.text.trim(),
         host: _hostController.text.trim(),
-        port: port,
-        database: database,
+        port: PortNumber(port),
+        database: DatabaseName(database),
         username: _usernameController.text.trim(),
         password: _passwordController.text,
         enabled: _isEnabled,
@@ -1009,8 +1011,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         id: widget.config?.id,
         name: _nameController.text.trim(),
         serverName: _serverController.text.trim(),
-        databaseName: _databaseNameController.text.trim(),
-        port: port,
+        databaseName: DatabaseName(_databaseNameController.text.trim()),
+        port: PortNumber(port),
         username: _usernameController.text.trim(),
         password: _passwordController.text,
         enabled: _isEnabled,
@@ -1023,10 +1025,10 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         id: widget.config?.id,
         name: _nameController.text.trim(),
         server: _serverController.text.trim(),
-        database: database,
+        database: DatabaseName(database),
         username: _usernameController.text.trim(),
         password: _passwordController.text,
-        port: port,
+        port: PortNumber(port),
         enabled: _isEnabled,
         createdAt: widget.config?.createdAt,
         updatedAt: widget.config?.updatedAt,

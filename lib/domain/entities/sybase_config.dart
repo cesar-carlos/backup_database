@@ -1,40 +1,48 @@
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:uuid/uuid.dart';
 
 class SybaseConfig {
   SybaseConfig({
     required this.name,
     required this.serverName,
-    required this.databaseName,
+    required DatabaseName databaseName,
     required this.username,
     required this.password,
     String? id,
     this.databaseFile = '',
-    this.port = 2638,
+    PortNumber? port,
     this.enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
+  })  : id = id ?? const Uuid().v4(),
+       databaseName = databaseName,
+       port = port ?? PortNumber(2638),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
+
   final String id;
   final String name;
   final String serverName;
-  final String databaseName;
+  final DatabaseName databaseName;
   final String databaseFile;
-  final int port;
+  final PortNumber port;
   final String username;
   final String password;
   final bool enabled;
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  String get databaseNameValue => databaseName.value;
+  int get portValue => port.value;
+
   SybaseConfig copyWith({
     String? id,
     String? name,
     String? serverName,
-    String? databaseName,
+    DatabaseName? databaseName,
     String? databaseFile,
-    int? port,
+    PortNumber? port,
     String? username,
     String? password,
     bool? enabled,

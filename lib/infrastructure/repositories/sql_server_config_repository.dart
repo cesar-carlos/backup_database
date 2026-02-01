@@ -2,6 +2,8 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -141,10 +143,10 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
       id: data.id,
       name: data.name,
       server: data.server,
-      database: data.database,
+      database: DatabaseName(data.database),
       username: data.username,
       password: password,
-      port: data.port,
+      port: PortNumber(data.port),
       enabled: data.enabled,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
@@ -156,10 +158,10 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
       id: Value(config.id),
       name: Value(config.name),
       server: Value(config.server),
-      database: Value(config.database),
+      database: Value(config.databaseValue),
       username: Value(config.username),
       password: const Value(''),
-      port: Value(config.port),
+      port: Value(config.portValue),
       enabled: Value(config.enabled),
       createdAt: Value(config.createdAt),
       updatedAt: Value(config.updatedAt),

@@ -4,6 +4,8 @@ import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -58,8 +60,8 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
     if (widget.config != null) {
       _nameController.text = widget.config!.name;
       _serverNameController.text = widget.config!.serverName;
-      _databaseNameController.text = widget.config!.databaseName;
-      _portController.text = widget.config!.port.toString();
+      _databaseNameController.text = widget.config!.databaseNameValue;
+      _portController.text = widget.config!.portValue.toString();
       _usernameController.text = widget.config!.username;
       _passwordController.text = widget.config!.password;
       _isEnabled = widget.config!.enabled;
@@ -99,8 +101,8 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       final testConfig = SybaseConfig(
         name: _nameController.text.trim(),
         serverName: _serverNameController.text.trim(),
-        databaseName: _databaseNameController.text.trim(),
-        port: port,
+        databaseName: DatabaseName(_databaseNameController.text.trim()),
+        port: PortNumber(port),
         username: _usernameController.text.trim(),
         password: _passwordController.text,
       );
@@ -161,8 +163,8 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       id: widget.config?.id,
       name: _nameController.text.trim(),
       serverName: _serverNameController.text.trim(),
-      databaseName: _databaseNameController.text.trim(),
-      port: port,
+      databaseName: DatabaseName(_databaseNameController.text.trim()),
+      port: PortNumber(port),
       username: _usernameController.text.trim(),
       password: _passwordController.text,
       enabled: _isEnabled,

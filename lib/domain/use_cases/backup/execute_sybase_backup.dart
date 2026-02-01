@@ -25,7 +25,7 @@ class ExecuteSybaseBackup {
         ),
       );
     }
-    if (config.databaseName.trim().isEmpty) {
+    if (config.databaseNameValue.trim().isEmpty) {
       return const rd.Failure(
         ValidationFailure(
           message: 'Nome do banco (DBN) não pode ser vazio',

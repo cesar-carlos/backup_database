@@ -2,6 +2,8 @@
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -203,9 +205,9 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           config.id,
           config.name,
           config.serverName,
-          config.databaseName,
+          config.databaseNameValue,
           config.databaseFile,
-          config.port,
+          config.portValue,
           config.username,
           '',
           if (config.enabled) 1 else 0,
@@ -249,9 +251,9 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         [
           config.name,
           config.serverName,
-          config.databaseName,
+          config.databaseNameValue,
           config.databaseFile,
-          config.port,
+          config.portValue,
           config.username,
           '',
           if (config.enabled) 1 else 0,
@@ -393,13 +395,16 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
 
     final password = passwordResult.getOrElse((_) => '');
 
+    final effectiveDatabaseName =
+        databaseName.isNotEmpty ? databaseName : serverName;
+
     return SybaseConfig(
       id: id,
       name: name,
       serverName: serverName,
-      databaseName: databaseName.isNotEmpty ? databaseName : serverName,
+      databaseName: DatabaseName(effectiveDatabaseName),
       databaseFile: databaseFile,
-      port: port,
+      port: PortNumber(port),
       username: username,
       password: password,
       enabled: enabled,
