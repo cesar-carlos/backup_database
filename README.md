@@ -403,10 +403,61 @@ Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICE
 
 O projeto segue **Clean Architecture** com **Domain-Driven Design (DDD)**:
 
-- **Domain**: Entidades, use cases, interfaces
-- **Application**: Serviços, providers
-- **Infrastructure**: Repositórios, data sources, external services
-- **Presentation**: UI, páginas, widgets
+```
+lib/
+├── domain/              # Domain Layer (regras de negócio puras)
+│   ├── entities/        # Entidades de domínio
+│   ├── value_objects/   # Value Objects (self-validating)
+│   ├── repositories/    # Interfaces de repositórios
+│   ├── services/        # Interfaces de serviços de domínio
+│   └── use_cases/       # Use cases (lógica de aplicação)
+│
+├── application/         # Application Layer (orquestração)
+│   ├── services/        # Serviços de aplicação
+│   ├── providers/       # State management (Provider)
+│   └── dto/             # Data Transfer Objects
+│
+├── infrastructure/      # Infrastructure Layer (implementações)
+│   ├── datasources/     # Fontes de dados (Drift, APIs)
+│   ├── repositories/    # Implementações de repositórios
+│   ├── external/        # Serviços externos
+│   └── cache/           # Cache de queries
+│
+├── presentation/        # Presentation Layer (UI)
+│   ├── pages/          # Páginas/telas
+│   ├── widgets/        # Widgets reutilizáveis
+│   └── providers/      # Providers de UI
+│
+└── core/               # Componentes compartilhados
+    ├── constants/      # Constantes da aplicação
+    ├── utils/          # Utilitários
+    ├── health/         # Health checks
+    ├── encryption/     # Criptografia
+    └── di/             # Dependency Injection
+```
+
+### Princípios Arquiteturais
+
+- **Dependency Inversion**: Domain Layer independe de outras camadas
+- **Single Responsibility**: Cada classe tem uma única responsabilidade
+- **Interface Segregation**: Interfaces pequenas e focadas
+- **Open/Closed**: Aberto para extensão, fechado para modificação
+
+### Padrões Utilizados
+
+- **Repository Pattern**: Abstração de acesso a dados
+- **Factory Pattern**: Criação de objetos complexos
+- **Strategy Pattern**: Algoritmos de backup intercambiáveis
+- **Observer Pattern**: Reactividade com Provider
+- **Result Pattern**: Tratamento funcional de erros
+
+### Funcionalidades Recentes
+
+- ✅ **Value Objects**: Validações de domínio self-validating
+- ✅ **Query Cache**: Cache de queries com TTL para performance
+- ✅ **Health Checks**: Verificação proativa de saúde do sistema
+- ✅ **Métricas**: Monitoramento de performance de backups
+- ✅ **Alertas Proativos**: Detecção automática de problemas
 
 ### Tecnologias Utilizadas
 

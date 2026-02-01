@@ -24,16 +24,45 @@ class BackupMetricsService {
   }
 
   /// Get metrics for a specific database type and backup type
-  _DatabaseMetrics? getMetrics({
+  Map<String, dynamic>? getMetrics({
     required String databaseType,
     String? backupType,
   }) {
-    final key = backupType != null ? '${databaseType}_$backupType' : databaseType;
-    return _metrics[key];
+    final key = backupType != null
+        ? '${databaseType}_$backupType'
+        : databaseType;
+    final metrics = _metrics[key];
+    if (metrics == null) return null;
+    return {
+      'databaseType': metrics.databaseType,
+      'totalCount': metrics.totalCount,
+      'successCount': metrics.successCount,
+      'errorCount': metrics.errorCount,
+      'totalSize': metrics.totalSize,
+      'averageDuration': metrics.getAverageDuration(),
+      'successRate': metrics.getSuccessRate(),
+      'averageFileSize': metrics.getAverageFileSize(),
+    };
   }
 
   /// Get all recorded metrics
-  Map<String, _DatabaseMetrics> getAllMetrics() => Map.from(_metrics);
+  Map<String, Map<String, dynamic>> getAllMetrics() {
+    return _metrics.map(
+      (key, value) => MapEntry(
+        key,
+        {
+          'databaseType': value.databaseType,
+          'totalCount': value.totalCount,
+          'successCount': value.successCount,
+          'errorCount': value.errorCount,
+          'totalSize': value.totalSize,
+          'averageDuration': value.getAverageDuration(),
+          'successRate': value.getSuccessRate(),
+          'averageFileSize': value.getAverageFileSize(),
+        },
+      ),
+    );
+  }
 
   /// Clear all metrics
   void clear() {
