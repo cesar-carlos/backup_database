@@ -1,3 +1,4 @@
+export 'config/app_mode.dart';
 export 'constants/constants.dart';
 export 'di/di.dart';
 export 'errors/errors.dart';

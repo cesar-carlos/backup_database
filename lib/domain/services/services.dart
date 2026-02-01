@@ -12,6 +12,7 @@ export 'i_notification_service.dart';
 export 'i_postgres_backup_service.dart';
 export 'i_scheduler_service.dart';
 export 'i_secure_credential_service.dart';
+export 'i_send_file_to_destination_service.dart';
 export 'i_sql_script_execution_service.dart';
 export 'i_sql_server_backup_service.dart';
 export 'i_sybase_backup_service.dart';

@@ -1,25 +1,26 @@
 # Contexto Atual - Continuidade do Desenvolvimento
 
 > **Última Atualização**: 01/02/2026
-> **Branch**: `feature/client-server-architecture`
-> **Commit Mais Recente**: `9138ebd`
-> **Status**: FASE 0 completada (85%), pronto para iniciar FASE 1
+> **Branch**: `feature/client-server-architecture` > **Status**: FASE 0 (85% – plano + teste auto ✅; testes manuais pendentes), FASE 1 (26/31), **FASE 2.1–2.4 ✅**, **FASE 3 ✅**, **FASE 4 ✅**, **FASE 5.1–5.3 ✅** (pasta padrão, destinos remotos, vinculação agendamento↔destino), **FASE 6 ✅** (Dashboard métricas), **FASE 7 ✅** (AppMode, instalador atalhos)
 
 ## 🚀 Para Outra IA: Como Continuar Este Projeto
 
 ### 1. Leia Primeiro (Ordem Importante)
 
 1. **Este arquivo** (README_CONTEXT_ATUAL.md) - 5 min
+
    - Contexto imediato do estado atual
    - O que já foi feito
    - Próximos passos
 
 2. **plano_cliente_servidor.md** - 15 min
+
    - Arquitetura completa do sistema
    - Decisões técnicas (TCP Socket, protocolo binário)
    - Diagramas e especificações
 
 3. **analise_tecnica_ui_banco_pacotes.md** - 10 min
+
    - Análise de componentes existentes (reutilizar!)
    - Database schema (já implementado v14)
    - Pacotes necessários (qr_flutter já adicionado)
@@ -27,13 +28,18 @@
 4. **implementacao_cliente_servidor.md** - 20 min
    - Checklist detalhado de TODAS as tarefas
    - FASE 0: 11/13 completados (banco de dados pronto)
-   - FASE 1: Pronta para iniciar (0/31 tarefas)
+   - FASE 1: Em andamento (26/31 tarefas)
+   - FASE 2: 2.1–2.4 completados (credenciais, conexões salvas, clientes conectados, credencial default, log de conexões)
+   - FASE 3: Concluída (listSchedules, updateSchedule, executeSchedule, UI Agendamentos Remotos)
+   - FASE 4: Concluída (protocolo, handler, requestFile, listFiles, UI Transferir Backups, progresso, FileTransferDao, histórico). FASE 5.1 parcial (pasta padrão).
+5. **plano_implementacao_fase1_fase2.md** – plano para completar FASE 1 e FASE 2 (arquivos a criar, ordem sugerida, checklist)
 
 ### 2. Estado Atual do Projeto
 
 #### ✅ JÁ IMPLEMENTADO (FASE 0 - 85%)
 
 **Banco de Dados v14** (Commit: `2dbc725`):
+
 - 4 tabelas criadas: `ServerCredentialsTable`, `ConnectionLogsTable`, `ServerConnectionsTable`, `FileTransfersTable`
 - 4 DAOs criados com métodos CRUD completos
 - Schema version atualizado: 13 → 14
@@ -41,44 +47,140 @@
 - Índices de performance criados
 - Código gerado com `build_runner` sem erros
 
+**FASE 1 - Protocolo e Socket (26/31)**:
+
+- `lib/core/constants/socket_config.dart` criado (porta 9527, chunk 128KB, timeouts)
+- `lib/infrastructure/protocol/message_types.dart` criado (enum MessageType, 19 tipos)
+- `lib/infrastructure/protocol/message.dart` criado (MessageHeader + Message, toJson/fromJson)
+- `lib/core/utils/crc32.dart` criado (CRC32 puro Dart)
+- `lib/infrastructure/protocol/binary_protocol.dart` criado (serializeMessage/deserializeMessage)
+- `lib/infrastructure/protocol/compression.dart` criado (PayloadCompression zlib, flag no header)
+- `lib/infrastructure/protocol/file_chunker.dart` criado (FileChunk + FileChunker, 128KB, CRC32)
+- `lib/infrastructure/protocol/auth_messages.dart` criado (createAuthRequest, createAuthResponse)
+- `lib/core/security/password_hasher.dart` criado (hash, verify, constantTimeEquals)
+- `lib/domain/entities/connection/connected_client.dart` criado
+- `lib/infrastructure/socket/server/socket_server_service.dart` (interface)
+- `lib/infrastructure/socket/server/tcp_socket_server.dart` (ServerSocket, handlers, ClientManager opcional)
+- `lib/infrastructure/socket/server/client_handler.dart` (buffer, parse, send, auth)
+- `lib/infrastructure/socket/server/server_authentication.dart` (validateAuthRequest com ServerCredentialDao)
+- `lib/infrastructure/socket/server/client_manager.dart` (register, unregister, getConnectedClients, disconnectClient)
+- `lib/infrastructure/socket/client/socket_client_service.dart` (interface + ConnectionStatus, connect com serverId/password opcionais)
+- `lib/infrastructure/socket/client/tcp_socket_client.dart` (connect com auth: authRequest → authResponse → connected/authenticationFailed)
+- `lib/infrastructure/socket/client/connection_manager.dart` (connect com serverId/password opcionais; getSavedConnections, connectToSavedConnection com ServerConnectionDao opcional)
+- `lib/infrastructure/socket/heartbeat.dart` (createHeartbeatMessage, HeartbeatManager, isHeartbeatMessage)
+- Heartbeat integrado em ClientHandler e TcpSocketClient (interval 30s, timeout 60s)
+- Auto-reconnect no TcpSocketClient (enableAutoReconnect, backoff 2^attempts, max 5)
+- Testes unitários: `message_test`, `binary_protocol_test`, `compression_test`, `file_chunker_test`, `heartbeat_test`, `server_authentication_test`, `tcp_socket_server_test` (45+ testes)
+- Testes de integração: `test/integration/socket_integration_test.dart` (Server → Client → sendToClient → broadcastToAll; auth: credencial correta → connected, senha errada → authenticationFailed/disconnected; usa `AppDatabase.inMemory()` para evitar path_provider em testes)
+- Testes: `tcp_socket_client_test.dart` (status, disconnect, send, connect/disconnect, messageStream)
+- Testes: `connection_manager_test.dart` (connect/disconnect, send, getSavedConnections, connectToSavedConnection)
+
+**FASE 2 - Autenticação e Conexões (2.1–2.4 concluídas)**:
+
+- **2.1 Server Credentials**: Entity `ServerCredential`, `IServerCredentialRepository` + `ServerCredentialRepository`, DI, `ServerCredentialProvider`, `ServerCredentialDialog`, `ServerCredentialListItem`, `ServerSettingsPage` (tab Credenciais de Acesso), testes unitários.
+- **2.2 Client Conexões salvas**: Entity `ServerConnection`, `IServerConnectionRepository` + `ServerConnectionRepository`, DI, `ConnectionManager` com `ServerConnectionDao`, `ServerConnectionProvider`, `ConnectionDialog`, `ServerListItem`, `ServerLoginPage`, rota `/server-login`, testes unitários.
+- **2.3 Clientes conectados**: `ClientManager`, `TcpSocketServer` (com `ConnectionLogDao` opcional), `SocketServerService` no DI, `ConnectedClientProvider`, `ConnectedClientsList` (tab Clientes Conectados em Server Settings), Iniciar/Parar servidor, polling 5s, Desconectar cliente.
+  - **2.4 Credencial default e log de conexões**:
+  - Entity `ConnectionLog`, `IConnectionLogRepository` + `ConnectionLogRepository`, DI.
+  - `InitialSetupService.createDefaultCredentialIfNotExists()` (Server ID + senha aleatórios), chamado em `AppInitializer._initializeDefaultCredential()` após `_setupDependencies()`.
+  - `ConnectionLogDao.insertConnectionAttempt()`; `ClientHandler` registra tentativas de auth (sucesso/falha) no `ConnectionLogDao`.
+  - `ConnectionLogProvider`, `ConnectionLogsList` (filtro Todos/Sucesso/Falha, refresh), aba **Log de Conexões** em Server Settings.
+
+**FASE 3 - Protocolo de Controle Remoto (Agendamentos)**:
+
+- **Protocolo compartilhado**: `schedule_serialization.dart` (scheduleToMap/scheduleFromMap), `schedule_messages.dart` (listSchedules, scheduleList, updateSchedule, scheduleUpdated, executeSchedule, error com requestId).
+- **Servidor**: `ScheduleMessageHandler` (processa listSchedules, updateSchedule, executeSchedule via IScheduleRepository, UpdateSchedule, ExecuteScheduledBackup); integrado em `TcpSocketServer` com `sendToClient`.
+- **Cliente**: `ConnectionManager` com `listSchedules()`, `updateSchedule(Schedule)`, `executeSchedule(String scheduleId)` (requestId + Completer para parear requisição/resposta, timeout).
+- **UI**: `RemoteSchedulesProvider`, `RemoteSchedulesPage` (lista agendamentos do servidor, atualizar, ativar/desativar, executar agora); rota `/remote-schedules`, item "Agendamentos Remotos" no `MainLayout`.
+
+**FASE 4 - Transferência de Arquivos (concluída)**:
+
+- **Protocolo**: `file_transfer_messages.dart` (fileTransferStart request/metadata, fileChunk, fileTransferProgress, fileTransferComplete, fileTransferError, fileAck; listFiles/fileList com `RemoteFileEntry`; create/parse).
+- **Servidor**: `FileTransferMessageHandler` (allowedBasePath; listFiles → lista recursiva → fileList; requestFile com path relativo a allowedBasePath; envia metadata → chunks → progress → complete); integrado em `TcpSocketServer` e DI.
+- **Cliente**: `ConnectionManager.requestFile(filePath, outputPath, { scheduleId, onProgress })` e `listAvailableFiles()` → `Result<List<RemoteFileEntry>>`; timeout e disconnect tratados.
+- **UI**: `RemoteFileTransferProvider`, página "Transferir Backups" (lista remota, seleção, pasta destino, transferir, barra de progresso em tempo real); rota `/transfer-backups`, item no MainLayout.
+- **FileTransferDao**: cada transferência (sucesso/falha) é registrada em `file_transfers_table`; histórico exibido na seção "Histórico de transferências" (últimas 50).
+- **Testes**: `file_transfer_integration_test.dart` (transferência sucesso/erro, listAvailableFiles).
+
+**FASE 5.1–5.3 – Destinos do Client**:
+
+- **5.1** Preferência `received_backups_default_path`; checkbox "Salvar como pasta padrão" na página Transferir Backups.
+- **5.2** `ISendFileToDestinationService` / `SendFileToDestinationService`; UI "Enviar também para" (checkboxes destinos remotos) na TransferBackupsPage.
+- **5.3** Vinculação agendamento ↔ destino (SharedPreferences); dropdown Agendamento na TransferBackupsPage; ContentDialog em RemoteSchedulesPage para configurar destinos por agendamento.
+
+**FASE 6 – Dashboard de Métricas**:
+
+- Protocolo `metricsRequest` / `metricsResponse`; servidor: `MetricsMessageHandler`; cliente: `ConnectionManager.getServerMetrics()`, `DashboardProvider`; UI: seções "Local" e "Servidor" na DashboardPage.
+
+**FASE 7 – Installer e Integração**:
+
+- `AppMode` (server, client, unified), `getAppMode(args/env/config)`, `getWindowTitleForMode`, título da janela; instalador: atalhos "Backup Database (Servidor)" e "(Cliente)" no menu Iniciar.
+
 **Pacotes**:
+
 - `qr_flutter: ^4.1.0` adicionado (geração de QR codes)
 
 **Qualidade**:
+
 - `flutter analyze`: No issues found
 - Clean Architecture mantida
 - Todos os arquivos commitados no GitHub
 
 #### ⏳ PENDENTE (FASE 0 - 15%)
 
-- Testar migration manualmente com backup do banco
-- Testar migration com dados existentes
+- [x] Plano de testes: [fase0_migration_v14_test_plan.md](fase0_migration_v14_test_plan.md)
+- [x] Teste de integração automatizado: `test/integration/database_migration_v14_test.dart`
+- [ ] Testar migration manualmente com backup do banco
+- [ ] Testar migration com dados existentes
 
 ### 3. Próximo Passo Imediato
 
-#### **Tarefa: Criar Constants de Socket**
+#### **FASE 2.1–2.4 concluídas**
 
-**Arquivo**: `lib/core/constants/socket_config.dart`
+- **2.1** Server Credentials (entity, repository, UI, Provider, Dialog, Server Settings tab).
+- **2.2** Client: ServerConnection (entity, repository, UI), ServerLoginPage, ConnectionDialog, ServerListItem, ConnectionManager com saved connections.
+- **2.3** Clientes conectados: ConnectedClientProvider, ConnectedClientsList, Iniciar/Parar servidor, Desconectar cliente.
+- **2.4** Credencial default (`InitialSetupService` no bootstrap), log de conexões (ConnectionLog entity/repository, ClientHandler grava tentativas, aba Log de Conexões na Server Settings).
 
-**Conteúdo**:
-```dart
-// lib/core/constants/socket_config.dart
-class SocketConfig {
-  static const int defaultPort = 9527;
-  static const int chunkSize = 131072; // 128KB
-  static const Duration heartbeatInterval = Duration(seconds: 30);
-  static const Duration heartbeatTimeout = Duration(seconds: 60);
-  static const Duration connectionTimeout = Duration(seconds: 10);
-  static const int maxRetries = 3;
-}
-```
+#### **Próximos passos recomendados (escolher ordem)**
 
-**Por que começar aqui?**
-- Constantes serão usadas por TODO o código de Socket
-- Define os valores acordados no planejamento
-- Prepara o terreno para FASE 1
+1. **FASE 0 (15% restante)**  
+   - [ ] Testar migration manualmente com backup do banco  
+   - [ ] Testar migration com dados existentes  
 
-### 4. FASE 1: Fundamentos Socket (0/31 tarefas)
+2. **FASE 1 (opcional)**  
+   - [x] `client_handler_test.dart` (testes unitários do ClientHandler)  
+   - [x] Revisar cancelamento de timers/streams (zero memory leaks)  
+
+3. **FASE 3 – Protocolo de Controle Remoto** ✅ **Concluída**  
+   - [x] Mensagens e fluxos: listSchedules / scheduleList, updateSchedule / scheduleUpdated, executeSchedule  
+   - [x] Implementar no servidor (ScheduleMessageHandler) e no cliente (ConnectionManager)  
+   - [x] UI no cliente: `RemoteSchedulesPage`, rota `/remote-schedules`, item no MainLayout  
+
+4. **FASE 4 – Transferência de Arquivos** ✅ **Concluída**  
+   - [x] Protocolo e mensagens: fileTransferStart (request/metadata), fileChunk, fileTransferProgress, fileTransferComplete, fileTransferError, fileAck; listFiles/fileList  
+   - [x] Servidor: FileTransferMessageHandler (allowedBasePath, listFiles, requestFile com path relativo), integrado em TcpSocketServer e DI  
+   - [x] Cliente: ConnectionManager.requestFile(filePath, outputPath, onProgress), listAvailableFiles()  
+   - [x] UI: página "Transferir Backups" (lista remota, seleção, destino, transferir, barra de progresso); rota `/transfer-backups`  
+   - [x] Testes de integração (transferência + listAvailableFiles)  
+   - [x] **Opcional:** progresso em tempo real na UI (onProgress, barra de progresso)  
+   - [x] **Opcional:** FileTransferDao para registrar transferências concluídas  
+   - [x] **Opcional:** histórico de transferências na UI (seção na página Transferir Backups)
+
+5. **FASE 5 – Destinos do Client** ✅ **Concluída**  
+   - [x] Configurar pasta local padrão para backups recebidos (preferência + checkbox "Salvar como pasta padrão")  
+   - [x] Reutilizar destinos existentes (FTP, Google Drive, etc.) para envio após receber do servidor ("Enviar também para")  
+   - [x] Vincular agendamento remoto a destino do client; upload automático após transferência  
+
+6. **FASE 6 – Dashboard de Métricas** ✅ **Concluída**  
+   - [x] metricsRequest / metricsResponse no servidor (MetricsMessageHandler)  
+   - [x] Dashboard no client com métricas locais + servidor (seções Local e Servidor)  
+
+7. **FASE 7 – Installer e Integração** ✅ **Concluída**  
+   - [x] AppMode (server, client, unified), detecção (args, env, config/mode.ini), título da janela  
+   - [x] Instalador: atalhos "Backup Database (Servidor)" e "(Cliente)" no menu Iniciar  
+
+### 4. FASE 1: Fundamentos Socket (26/31 tarefas)
 
 #### Objetivo da FASE 1
 
@@ -96,24 +198,25 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
 
 #### Primeiras 5 Tarefas da FASE 1
 
-1. **Criar `lib/core/constants/socket_config.dart`** (5 min)
+1. ~~**Criar `lib/core/constants/socket_config.dart`**~~ ✅
+
    - Definir constantes: porta 9527, chunk 128KB, timeouts
 
-2. **Criar `lib/infrastructure/protocol/message_types.dart`** (15 min)
-   - Enum MessageType com 18 tipos (AUTH, HEARTBEAT, FILE_CHUNK, etc.)
-   - Veja especificação completa em `implementacao_cliente_servidor.md`
+2. ~~**Criar `lib/infrastructure/protocol/message_types.dart`**~~ ✅
 
-3. **Criar `lib/infrastructure/protocol/message.dart`** (30 min)
-   - Class Message (header + payload + checksum)
-   - Métodos: serialize(), deserialize()
+   - Enum MessageType com 19 tipos (authRequest, heartbeat, fileChunk, etc.)
 
-4. **Criar `lib/core/utils/crc32.dart`** (20 min)
-   - Implementar calculateChecksum(List<int> data)
-   - Usar crypto package (já existe no projeto)
+3. ~~**Criar `lib/infrastructure/protocol/message.dart`**~~ ✅
 
-5. **Criar `lib/infrastructure/protocol/binary_protocol.dart`** (45 min)
-   - Serialização/deserialização de mensagens
-   - Ler/escrever bytes no Socket
+   - Class MessageHeader + Message (header + payload + checksum)
+   - toJson() / fromJson(), validateChecksum()
+
+4. ~~**Criar `lib/core/utils/crc32.dart`**~~ ✅
+
+   - Crc32.calculate(List<int>) – implementação pura Dart
+
+5. ~~**Criar `lib/infrastructure/protocol/binary_protocol.dart`**~~ ✅
+   - serializeMessage / deserializeMessage, calculateChecksum, validateChecksum
 
 ### 5. Estrutura de Pastas (Já Existente)
 
@@ -121,12 +224,12 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
 lib/
 ├── core/
 │   ├── constants/
-│   │   └── 📝 socket_config.dart (CRIAR EM BREVE)
+│   │   └── socket_config.dart (✅ CRIADO)
 │   ├── security/
-│   │   └── 📝 password_hasher.dart (criar na FASE 2)
+│   │   └── password_hasher.dart (✅ CRIADO)
 │   └── utils/
 │       ├── logger_service.dart (✅ EXISTE - reutilizar)
-│       └── 📝 crc32.dart (CRIAR NA FASE 1)
+│       └── crc32.dart (✅ CRIADO)
 │
 ├── domain/
 │   ├── entities/
@@ -135,22 +238,34 @@ lib/
 │   │   │   ├── 📝 file_chunk.dart (CRIAR NA FASE 1)
 │   │   │   └── 📝 file_transfer_progress.dart (CRIAR NA FASE 1)
 │   │   └── connection/
-│   │       ├── 📝 server_connection.dart (CRIAR NA FASE 2)
-│   │       └── 📝 connected_client.dart (CRIAR NA FASE 2)
+│   │       ├── server_connection.dart (✅ CRIADO)
+│   │       ├── connection_log.dart (✅ CRIADO)
+│   │       └── connected_client.dart (✅ CRIADO)
 │   └── value_objects/
 │       └── 📝 server_id.dart (CRIAR NA FASE 2)
 │
 ├── infrastructure/
 │   ├── protocol/
-│   │   ├── 📝 binary_protocol.dart (CRIAR NA FASE 1)
-│   │   ├── 📝 compression.dart (CRIAR NA FASE 1)
-│   │   └── 📝 file_chunker.dart (CRIAR NA FASE 4)
+│   │   ├── binary_protocol.dart (✅ CRIADO)
+│   │   ├── message.dart (✅ CRIADO)
+│   │   ├── message_types.dart (✅ CRIADO)
+│   │   ├── compression.dart (✅ CRIADO)
+│   │   ├── file_chunker.dart (✅ CRIADO)
+│   │   ├── file_transfer_messages.dart (✅ CRIADO – FASE 4)
+│   │   ├── schedule_serialization.dart (✅ CRIADO – FASE 3)
+│   │   └── schedule_messages.dart (✅ CRIADO – FASE 3)
 │   ├── socket/
 │   │   ├── server/
-│   │   │   ├── 📝 tcp_socket_server.dart (CRIAR NA FASE 1)
-│   │   │   └── 📝 client_handler.dart (CRIAR NA FASE 1)
-│   │   └── client/
-│   │       └── 📝 tcp_socket_client.dart (CRIAR NA FASE 1)
+│   │   │   ├── socket_server_service.dart (✅ CRIADO)
+│   │   │   ├── tcp_socket_server.dart (✅ CRIADO)
+│   │   │   ├── client_handler.dart (✅ CRIADO)
+│   │   │   ├── file_transfer_message_handler.dart (✅ CRIADO – FASE 4)
+│   │   │   └── schedule_message_handler.dart (✅ CRIADO – FASE 3)
+│   │   ├── client/
+│   │   │   ├── socket_client_service.dart (✅ CRIADO)
+│   │   │   ├── tcp_socket_client.dart (✅ CRIADO)
+│   │   │   └── connection_manager.dart (✅ CRIADO)
+│   │   └── heartbeat.dart (✅ CRIADO)
 │   └── datasources/
 │       ├── local/
 │       │   ├── database.dart (✅ v14 JÁ ATUALIZADO)
@@ -167,12 +282,9 @@ lib/
 │
 ├── presentation/
 │   ├── pages/
-│   │   ├── server/
-│   │   │   ├── 📝 connected_clients_page.dart (CRIAR NA FASE 2)
-│   │   │   └── 📝 server_settings_page.dart (CRIAR NA FASE 2)
-│   │   └── client/
-│   │       ├── 📝 server_login_page.dart (CRIAR NA FASE 2)
-│   │       └── 📝 remote_schedules_page.dart (CRIAR NA FASE 3)
+│   │   ├── server_settings_page.dart (✅ CRIADO – 3 tabs: Credenciais, Clientes Conectados, Log de Conexões)
+│   │   ├── server_login_page.dart (✅ CRIADO – lista de servidores salvos, Conectar/Adicionar)
+│   │   └── remote_schedules_page.dart (✅ CRIADO – FASE 3, Agendamentos Remotos)
 │   └── widgets/
 │       ├── common/
 │       │   ├── app_button.dart (✅ EXISTE - reutilizar)
@@ -206,22 +318,26 @@ git push origin feature/client-server-architecture
 ### 7. Regras do Projeto (MUITO IMPORTANTE)
 
 **Clean Architecture**:
+
 - Domain Layer NÃO pode importar Infrastructure/Application/Presentation
 - Application Layer NÃO pode importar Infrastructure/Presentation
 - Infrastructure Layer NÃO pode importar Application/Presentation
 - Presentation Layer NÃO pode importar Infrastructure
 
 **Protocolo Binário (CRÍTICO)**:
+
 - Código de protocolo DEVE ser 100% compartilhado entre Server e Client
 - NÃO criar arquivos separados para Server/Client do protocolo
 - Pasta `lib/infrastructure/protocol/` é compartilhada!
 
 **Reutilização**:
+
 - UI Components existentes em `lib/presentation/widgets/common/` devem ser reutilizados
 - Services existentes (LoggerService, EncryptionService) devem ser reutilizados
 - Destinos de backup (FTP, Google Drive, etc.) JÁ EXISTEM e funcionam
 
 **Qualidade**:
+
 - Sempre rodar `flutter analyze` antes de commitar
 - Seguir padrões de código existentes (naming, estrutura)
 - Usar `const` constructors wherever possible
@@ -240,13 +356,13 @@ git push origin feature/client-server-architecture
 
 ### 9. Arquivos de Referência
 
-| Arquivo | Para Que Serve |
-|---------|----------------|
-| `plano_cliente_servidor.md` | Arquitetura completa, decisões técnicas |
-| `implementacao_cliente_servidor.md` | Checklist DETALHADO de todas as tarefas |
-| `analise_tecnica_ui_banco_pacotes.md` | Análise técnica, componentes existentes |
-| `ui_instalacao_cliente_servidor.md` | Wireframes de UI, instalador Inno Setup |
-| `.claude/rules/` | Regras de código (Clean Architecture, estilo) |
+| Arquivo                               | Para Que Serve                                |
+| ------------------------------------- | --------------------------------------------- |
+| `plano_cliente_servidor.md`           | Arquitetura completa, decisões técnicas       |
+| `implementacao_cliente_servidor.md`   | Checklist DETALHADO de todas as tarefas       |
+| `analise_tecnica_ui_banco_pacotes.md` | Análise técnica, componentes existentes       |
+| `ui_instalacao_cliente_servidor.md`   | Wireframes de UI, instalador Inno Setup       |
+| `.claude/rules/`                      | Regras de código (Clean Architecture, estilo) |
 
 ### 10. Comandos Rápidos Para Começar
 
@@ -295,6 +411,7 @@ A: NÃO! Eles JÁ EXISTEM em `lib/infrastructure/external/destinations/` e funci
 
 **Q: Como testar a migration v14?**
 A:
+
 1. Backup do banco atual
 2. Rodar o app (migration acontece automaticamente)
 3. Verificar se as 4 novas tabelas foram criadas
@@ -305,24 +422,29 @@ A:
 
 Após ler este documento, você deveria ser capaz de:
 
-- [ ] Saber EXATAMENTE o que já foi implementado (banco v14)
-- [ ] Saber EXATAMENTE o que fazer a seguir (FASE 1 - Socket)
-- [ ] Conhecer todas as decisões técnicas já tomadas
-- [ ] Saber quais arquivos reutilizar vs quais criar
-- [ ] Entender a arquitetura e regras do projeto
-- [ ] Ter os primeiros arquivos da FASE 1 criados
+- [x] Saber EXATAMENTE o que já foi implementado (banco v14, FASE 1 protocolo/socket, FASE 2.1–2.4)
+- [x] Saber EXATAMENTE o que fazer a seguir (FASE 0 migration tests, FASE 1 opcional, ou FASE 3 Controle Remoto)
+- [x] Conhecer todas as decisões técnicas já tomadas
+- [x] Saber quais arquivos reutilizar vs quais criar
+- [x] Entender a arquitetura e regras do projeto
+- [x] (FASE 3 concluída) listSchedules/scheduleList, updateSchedule, executeSchedule e UI remote_schedules_page implementados
+- [x] (FASE 4 em andamento) Protocolo file transfer, FileTransferMessageHandler, ConnectionManager.requestFile implementados
+- [ ] (Próximo) FASE 4: UI para solicitar arquivo ao servidor, listagem de backups, testes de integração de transferência
 
 ### 13. Suporte e Referências
 
 **Documentos do Projeto**:
+
 - Todos em `docs/dev/`
 - Leitura obrigatória antes de codificar
 
 **Regras de Código**:
+
 - `.claude/rules/` - Clean Architecture, estilo Dart, UI patterns
 - LEIA antes de escrever código!
 
 **Commits Recentes** (entender o que foi feito):
+
 - `2dbc725` - Banco de dados v14 implementado
 - `9138ebd` - Documentação atualizada
 

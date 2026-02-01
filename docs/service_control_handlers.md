@@ -51,12 +51,14 @@ Para implementar handlers nativos do Windows Service Control, precisaríamos:
 ### Abordagem NSSM (Atual)
 
 **Vantagens:**
+
 - ✅ **Simples** - Usa `eventcreate` e `Process.run`
 - ✅ **Robusto** - NSSM é testado e usado por milhares de serviços Windows
 - ✅ **Manutenível** - Código Dart puro, sem C++
 - ✅ **Suficiente** - SIGTERM cobre 95% dos casos de uso
 
 **Desvantagens:**
+
 - ❌ Sem controle granular sobre cada tipo de evento
 - ❌ Dependência de NSSM como executável externo
 
@@ -91,6 +93,7 @@ Se no futuro for necessário implementar handlers nativos, a arquitetura seria:
 ## Conclusão
 
 A implementação atual via **NSSM + ServiceShutdownHandler** é:
+
 - ✅ **Suficiente** para os requisitos de backup automático
 - ✅ **Robusta** para produção
 - ✅ **Manutenível** pela equipe atual

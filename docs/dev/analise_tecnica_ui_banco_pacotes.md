@@ -806,6 +806,8 @@ dependencies:
 - [x] Atualizar `AppDatabase` (adicionar tabelas e DAOs) - **COMPLETO**
 - [x] Atualizar schemaVersion: 13 → 14 - **COMPLETO**
 - [x] Criar migration script (v14) - **COMPLETO**
+- [x] Plano de testes: [fase0_migration_v14_test_plan.md](fase0_migration_v14_test_plan.md) - **COMPLETO**
+- [x] Teste de integração automatizado: `test/integration/database_migration_v14_test.dart` - **COMPLETO**
 - [ ] Testar migration manualmente - **PENDENTE**
 - [ ] Testar migration com dados existentes - **PENDENTE**
 
@@ -831,16 +833,16 @@ dependencies:
 
 ### 6.4 Constants
 
-- [ ] Criar `lib/core/constants/socket_config.dart`
-- [ ] Definir porta default: 9527
-- [ ] Definir chunk size: 131072 (128KB)
-- [ ] Definir heartbeat interval: 30s
-- [ ] Definir heartbeat timeout: 60s
+- [x] Criar `lib/core/constants/socket_config.dart`
+- [x] Definir porta default: 9527
+- [x] Definir chunk size: 131072 (128KB)
+- [x] Definir heartbeat interval: 30s
+- [x] Definir heartbeat timeout: 60s
 
 ### 6.5 Utils
 
-- [ ] Criar `lib/core/utils/crc32.dart`
-- [ ] Implementar `calculateChecksum(List<int> data)`
+- [x] Criar `lib/core/utils/crc32.dart`
+- [x] Implementar `Crc32.calculate(List<int> data)` / `Crc32.calculateUint8List(Uint8List data)`
 - [ ] Criar testes unitários para CRC32
 - [ ] Criar `lib/core/security/password_hasher.dart`
 - [ ] Implementar `hashPassword(String password, String salt)`
@@ -918,15 +920,15 @@ dependencies:
 
 ### ⏳ Pendente (2/13 itens - 15%)
 
-- [ ] Testar migration manualmente
+- [ ] Testar migration manualmente (seguir [fase0_migration_v14_test_plan.md](fase0_migration_v14_test_plan.md))
 - [ ] Testar migration com dados existentes
 
 ### 🚀 Próximos Passos
 
 1. **Testar migration** (FASE 0 - Pré-requisitos)
-   - Backup do banco de dados atual
-   - Testar upgrade v13 → v14
-   - Verificar integridade dos dados
+   - Plano e teste automatizado já criados (ver acima)
+   - Executar testes manuais conforme [fase0_migration_v14_test_plan.md](fase0_migration_v14_test_plan.md)
+   - Backup do banco de dados atual; testar upgrade v13 → v14; verificar integridade dos dados
 
 2. **Iniciar FASE 1** - Fundamentos Socket
    - Criar protocolo binário compartilhado

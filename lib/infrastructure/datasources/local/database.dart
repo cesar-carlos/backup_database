@@ -45,6 +45,8 @@ part 'database.g.dart';
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  AppDatabase.inMemory() : super(LazyDatabase(() async => NativeDatabase.memory()));
+
   @override
   int get schemaVersion => 14;
 

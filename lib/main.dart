@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/application/services/scheduler_service.dart';
@@ -42,6 +42,9 @@ Future<void> main() async {
 
   try {
     await AppInitializer.initialize();
+
+    setAppMode(getAppMode(Platform.executableArguments));
+    LoggerService.info('Modo do aplicativo: ${currentAppMode.name}');
 
     final launchConfig = await AppInitializer.getLaunchConfig();
 
@@ -88,7 +91,10 @@ void _checkOsCompatibility() {
 Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   final windowManager = WindowManagerService();
   try {
-    await windowManager.initialize(startMinimized: launchConfig.startMinimized);
+    await windowManager.initialize(
+      title: getWindowTitleForMode(currentAppMode),
+      startMinimized: launchConfig.startMinimized,
+    );
   } on Object catch (e) {
     LoggerService.warning(
       'Erro ao inicializar window manager (continuando sem UI): $e',

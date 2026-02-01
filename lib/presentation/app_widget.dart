@@ -68,6 +68,24 @@ class BackupDatabaseApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => service_locator.getIt<WindowsServiceProvider>(),
         ),
+        ChangeNotifierProvider(
+          create: (_) => service_locator.getIt<ConnectedClientProvider>(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => service_locator.getIt<ConnectionLogProvider>(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => service_locator.getIt<ServerCredentialProvider>(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => service_locator.getIt<RemoteSchedulesProvider>(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => service_locator.getIt<RemoteFileTransferProvider>(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => service_locator.getIt<ServerConnectionProvider>(),
+        ),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {

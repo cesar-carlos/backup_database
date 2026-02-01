@@ -1,7 +1,11 @@
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
+import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
+import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
+import 'package:backup_database/application/providers/server_connection_provider.dart';
+import 'package:backup_database/application/providers/server_credential_provider.dart';
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
@@ -65,6 +69,30 @@ class _MainLayoutState extends State<MainLayout> {
       label: 'Configurações',
       route: RouteNames.settings,
     ),
+    const NavigationItem(
+      icon: FluentIcons.server,
+      selectedIcon: FluentIcons.server,
+      label: 'Servidor',
+      route: RouteNames.serverSettings,
+    ),
+    const NavigationItem(
+      icon: FluentIcons.plug,
+      selectedIcon: FluentIcons.plug,
+      label: 'Conectar',
+      route: RouteNames.serverLogin,
+    ),
+    const NavigationItem(
+      icon: FluentIcons.calendar_agenda,
+      selectedIcon: FluentIcons.calendar_agenda,
+      label: 'Agendamentos Remotos',
+      route: RouteNames.remoteSchedules,
+    ),
+    const NavigationItem(
+      icon: FluentIcons.download,
+      selectedIcon: FluentIcons.download,
+      label: 'Transferir Backups',
+      route: RouteNames.transferBackups,
+    ),
   ];
 
   @override
@@ -99,6 +127,18 @@ class _MainLayoutState extends State<MainLayout> {
       case RouteNames.notifications:
       case RouteNames.settings:
         break;
+      case RouteNames.serverSettings:
+        context.read<ServerCredentialProvider>().loadCredentials();
+      case RouteNames.serverLogin:
+        context.read<ServerConnectionProvider>().loadConnections();
+      case RouteNames.remoteSchedules:
+        if (context.read<ServerConnectionProvider>().isConnected) {
+          context.read<RemoteSchedulesProvider>().loadSchedules();
+        }
+      case RouteNames.transferBackups:
+        if (context.read<ServerConnectionProvider>().isConnected) {
+          context.read<RemoteFileTransferProvider>().loadAvailableFiles();
+        }
     }
   }
 

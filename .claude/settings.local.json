@@ -13,7 +13,19 @@
       "Bash(flutter pub get:*)",
       "Bash(flutter test:*)",
       "Bash(git restore:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(flutter build:*)",
+      "Bash(start \"\" \"build\\\\windows\\\\x64\\\\runner\\\\Release\\\\backup_database.exe\")",
+      "Bash(start \"\" \"D:\\\\Developer\\\\Flutter\\\\backup_database\\\\build\\\\windows\\\\x64\\\\runner\\\\Release\\\\backup_database.exe\")",
+      "Bash(timeout:*)",
+      "Bash(exit:*)",
+      "Bash(ping:*)",
+      "Bash(git checkout:*)",
+      "Bash(wc:*)",
+      "Bash(dart run build_runner build:*)",
+      "Bash(cloc:*)",
+      "Bash(find:*)",
+      "Bash(del:*)"
     ]
   }
 }

@@ -13,6 +13,7 @@ class ScheduleListItem extends StatelessWidget {
     this.onDelete,
     this.onRunNow,
     this.onToggleEnabled,
+    this.onTransferDestinations,
   });
   final Schedule schedule;
   final VoidCallback? onEdit;
@@ -20,6 +21,7 @@ class ScheduleListItem extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onRunNow;
   final ValueChanged<bool>? onToggleEnabled;
+  final VoidCallback? onTransferDestinations;
 
   @override
   Widget build(BuildContext context) {
@@ -31,10 +33,21 @@ class ScheduleListItem extends StatelessWidget {
       onEdit: onEdit,
       onDuplicate: onDuplicate,
       onDelete: onDelete,
-      trailingAction: onRunNow != null
-          ? IconButton(
-              icon: const Icon(FluentIcons.play),
-              onPressed: schedule.enabled ? onRunNow : null,
+      trailingAction: onRunNow != null || onTransferDestinations != null
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onTransferDestinations != null)
+                  IconButton(
+                    icon: const Icon(FluentIcons.fabric_folder),
+                    onPressed: onTransferDestinations,
+                  ),
+                if (onRunNow != null)
+                  IconButton(
+                    icon: const Icon(FluentIcons.play),
+                    onPressed: schedule.enabled ? onRunNow : null,
+                  ),
+              ],
             )
           : null,
       subtitle: Column(

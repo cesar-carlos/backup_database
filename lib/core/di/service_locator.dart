@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:backup_database/application/providers/providers.dart';
+import 'package:backup_database/application/services/initial_setup_service.dart';
 import 'package:backup_database/application/services/service_health_checker.dart';
 import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
@@ -14,9 +15,18 @@ import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/repositories/repositories.dart';
 import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
+import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
+import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
+import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
+import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 final GetIt getIt = GetIt.instance;
@@ -68,6 +78,53 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<ILicenseRepository>(
     () => LicenseRepository(getIt<AppDatabase>()),
   );
+  getIt.registerLazySingleton<IServerCredentialRepository>(
+    () => ServerCredentialRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<InitialSetupService>(
+    () => InitialSetupService(getIt<IServerCredentialRepository>()),
+  );
+  getIt.registerLazySingleton<IConnectionLogRepository>(
+    () => ConnectionLogRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IServerConnectionRepository>(
+    () => ServerConnectionRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<ConnectionManager>(
+    () => ConnectionManager(
+      serverConnectionDao: getIt<AppDatabase>().serverConnectionDao,
+    ),
+  );
+  getIt.registerLazySingleton<ClientManager>(ClientManager.new);
+  getIt.registerLazySingleton<ScheduleMessageHandler>(
+    () => ScheduleMessageHandler(
+      scheduleRepository: getIt<IScheduleRepository>(),
+      updateSchedule: getIt<UpdateSchedule>(),
+      executeBackup: getIt<ExecuteScheduledBackup>(),
+    ),
+  );
+  final appDir = await getApplicationDocumentsDirectory();
+  final transferBasePath = p.join(appDir.path, 'backups');
+  getIt.registerLazySingleton<FileTransferMessageHandler>(
+    () => FileTransferMessageHandler(allowedBasePath: transferBasePath),
+  );
+  getIt.registerLazySingleton<MetricsMessageHandler>(
+    () => MetricsMessageHandler(
+      backupHistoryRepository: getIt<IBackupHistoryRepository>(),
+      scheduleRepository: getIt<IScheduleRepository>(),
+    ),
+  );
+  getIt.registerLazySingleton<TcpSocketServer>(
+    () => TcpSocketServer(
+      serverCredentialDao: getIt<AppDatabase>().serverCredentialDao,
+      clientManager: getIt<ClientManager>(),
+      connectionLogDao: getIt<AppDatabase>().connectionLogDao,
+      scheduleHandler: getIt<ScheduleMessageHandler>(),
+      fileTransferHandler: getIt<FileTransferMessageHandler>(),
+      metricsHandler: getIt<MetricsMessageHandler>(),
+    ),
+  );
+  getIt.registerLazySingleton<SocketServerService>(getIt.get<TcpSocketServer>);
 
   getIt.registerLazySingleton<IDeviceKeyService>(DeviceKeyService.new);
 
@@ -268,6 +325,17 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
+  getIt.registerLazySingleton<ISendFileToDestinationService>(
+    () => SendFileToDestinationService(
+      localDestinationService: getIt<ILocalDestinationService>(),
+      sendToFtp: getIt<SendToFtp>(),
+      googleDriveDestinationService: getIt<IGoogleDriveDestinationService>(),
+      sendToDropbox: getIt<SendToDropbox>(),
+      sendToNextcloud: getIt<SendToNextcloud>(),
+      licenseValidationService: getIt<ILicenseValidationService>(),
+    ),
+  );
+
   getIt.registerLazySingleton<ServiceHealthChecker>(
     () => ServiceHealthChecker(
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
@@ -367,6 +435,7 @@ Future<void> setupServiceLocator() async {
     () => DashboardProvider(
       getIt<IBackupHistoryRepository>(),
       getIt<IScheduleRepository>(),
+      connectionManager: getIt<ConnectionManager>(),
     ),
   );
 
@@ -393,6 +462,32 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerFactory<WindowsServiceProvider>(
     () => WindowsServiceProvider(getIt<IWindowsServiceService>()),
+  );
+  getIt.registerFactory<ServerCredentialProvider>(
+    () => ServerCredentialProvider(getIt<IServerCredentialRepository>()),
+  );
+  getIt.registerFactory<ConnectedClientProvider>(
+    () => ConnectedClientProvider(getIt<SocketServerService>()),
+  );
+  getIt.registerFactory<ConnectionLogProvider>(
+    () => ConnectionLogProvider(getIt<IConnectionLogRepository>()),
+  );
+  getIt.registerFactory<RemoteSchedulesProvider>(
+    () => RemoteSchedulesProvider(getIt<ConnectionManager>()),
+  );
+  getIt.registerFactory<RemoteFileTransferProvider>(
+    () => RemoteFileTransferProvider(
+      getIt<ConnectionManager>(),
+      getIt<IBackupDestinationRepository>(),
+      getIt<ISendFileToDestinationService>(),
+      fileTransferDao: getIt<AppDatabase>().fileTransferDao,
+    ),
+  );
+  getIt.registerFactory<ServerConnectionProvider>(
+    () => ServerConnectionProvider(
+      getIt<IServerConnectionRepository>(),
+      getIt<ConnectionManager>(),
+    ),
   );
 }
 

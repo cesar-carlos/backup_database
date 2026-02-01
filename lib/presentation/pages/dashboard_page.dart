@@ -47,6 +47,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      'Local',
+                      style: FluentTheme.of(context).typography.subtitle,
+                    ),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Expanded(
@@ -86,6 +91,65 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                       ],
                     ),
+                    if (provider.serverMetrics != null) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        'Servidor',
+                        style: FluentTheme.of(context).typography.subtitle,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: StatsCard(
+                              title: 'Total de Backups (Servidor)',
+                              value: _serverMetric(
+                                provider.serverMetrics!,
+                                'totalBackups',
+                              ),
+                              icon: FluentIcons.server,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: StatsCard(
+                              title: 'Backups Hoje (Servidor)',
+                              value: _serverMetric(
+                                provider.serverMetrics!,
+                                'backupsToday',
+                              ),
+                              icon: FluentIcons.calendar_day,
+                              color: AppColors.statsBackups,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: StatsCard(
+                              title: 'Falharam Hoje (Servidor)',
+                              value: _serverMetric(
+                                provider.serverMetrics!,
+                                'failedToday',
+                              ),
+                              icon: FluentIcons.error,
+                              color: AppColors.statsFailed,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: StatsCard(
+                              title: 'Agendamentos Ativos (Servidor)',
+                              value: _serverMetric(
+                                provider.serverMetrics!,
+                                'activeSchedules',
+                              ),
+                              icon: FluentIcons.calendar,
+                              color: AppColors.statsActive,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 32),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -152,6 +216,13 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
     );
+  }
+
+  String _serverMetric(Map<String, dynamic> metrics, String key) {
+    final value = metrics[key];
+    if (value == null) return '0';
+    if (value is int) return value.toString();
+    return value.toString();
   }
 
   String _getScheduleDescription(Schedule schedule) {

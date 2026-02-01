@@ -1,4 +1,4 @@
-﻿#define MyAppName "Backup Database"
+#define MyAppName "Backup Database"
 #define MyAppVersion "2.1.3"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
@@ -50,6 +50,8 @@ Source: "uninstall_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName} (Servidor)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"
+Name: "{group}\{#MyAppName} (Cliente)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"
 Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"

@@ -1,7 +1,8 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
+import 'package:backup_database/application/services/initial_setup_service.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
@@ -12,8 +13,25 @@ class AppInitializer {
   static Future<void> initialize() async {
     await _loadEnvironment();
     await _setupDependencies();
+    await _initializeDefaultCredential();
     await _initializeAuthProviders();
     await _initializeAutoUpdate();
+  }
+
+  static Future<void> _initializeDefaultCredential() async {
+    try {
+      final initialSetup = service_locator.getIt<InitialSetupService>();
+      final result = await initialSetup.createDefaultCredentialIfNotExists();
+      if (result != null) {
+        LoggerService.info(
+          'Credencial padrão criada (Server ID: ${result.serverId})',
+        );
+      }
+    } on Object catch (e) {
+      LoggerService.warning(
+        'Erro ao criar credencial padrão: $e',
+      );
+    }
   }
 
   static Future<void> _loadEnvironment() async {

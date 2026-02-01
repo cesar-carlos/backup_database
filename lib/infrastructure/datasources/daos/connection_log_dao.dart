@@ -1,6 +1,7 @@
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/datasources/local/tables/connection_logs_table.dart';
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 part 'connection_log_dao.g.dart';
 
@@ -8,6 +9,26 @@ part 'connection_log_dao.g.dart';
 class ConnectionLogDao extends DatabaseAccessor<AppDatabase>
     with _$ConnectionLogDaoMixin {
   ConnectionLogDao(super.db);
+
+  Future<int> insertConnectionAttempt({
+    required String clientHost,
+    required bool success,
+    String? serverId,
+    String? errorMessage,
+    String? clientId,
+  }) {
+    final companion = ConnectionLogsTableCompanion.insert(
+      id: Uuid().v4(), // ignore: prefer_const_constructors - runtime id and timestamp
+      clientHost: clientHost,
+      serverId: serverId != null ? Value(serverId) : const Value.absent(),
+      success: success,
+      errorMessage:
+          errorMessage != null ? Value(errorMessage) : const Value.absent(),
+      timestamp: DateTime.now(),
+      clientId: clientId != null ? Value(clientId) : const Value.absent(),
+    );
+    return insertLog(companion);
+  }
 
   Future<List<ConnectionLogsTableData>> getAll() =>
       select(connectionLogsTable).get();
