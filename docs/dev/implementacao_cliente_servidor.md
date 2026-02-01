@@ -27,6 +27,7 @@
 
 | Fase | Descrição                    | Semanas | Progresso | Status          |
 | ---- | ---------------------------- | ------- | --------- | --------------- |
+| 0    | Pré-requisitos              | -       | [x] 11/13 | 🟡 Em Andamento  |
 | 1    | Fundamentos Socket           | 1-2     | [ ] 0/31  | ⏳ Não Iniciado |
 | 2    | Autenticação e Conexões      | 3       | [ ] 0/24  | ⏳ Não Iniciado |
 | 3    | Protocolo de Controle Remoto | 4       | [ ] 0/23  | ⏳ Não Iniciado |
@@ -36,7 +37,28 @@
 | 7    | Installer e Integração       | 9       | [ ] 0/21  | ⏳ Não Iniciado |
 | 8    | Testes e Documentação        | 10      | [ ] 0/27  | ⏳ Não Iniciado |
 
-**Total**: 201 tarefas
+**Total**: 201 tarefas + 13 pré-requisitos
+
+### ✅ FASE 0 - Pré-requisitos (11/13 completados - **85%**)
+
+**Completado em**: 01/02/2026
+**Commit**: `2dbc725`
+
+#### ✅ Banco de Dados (11/13 - 85%)
+- [x] Adicionar pacote `qr_flutter: ^4.1.0`
+- [x] Criar `ServerCredentialsTable` (Drift table class)
+- [x] Criar `ConnectionLogsTable` (Drift table class)
+- [x] Criar `ServerConnectionsTable` (Drift table class)
+- [x] Criar `FileTransfersTable` (Drift table class)
+- [x] Criar `ServerCredentialDao`
+- [x] Criar `ConnectionLogDao`
+- [x] Criar `ServerConnectionDao`
+- [x] Criar `FileTransferDao`
+- [x] Atualizar `AppDatabase` (adicionar tabelas e DAOs)
+- [x] Atualizar schemaVersion: 13 → 14
+- [x] Criar migration script (v14)
+- [ ] Testar migration manualmente
+- [ ] Testar migration com dados existentes
 
 ---
 
