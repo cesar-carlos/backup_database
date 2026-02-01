@@ -1,13 +1,17 @@
 # Implementação Cliente-Servidor - Checklist Detalhado
 
+> **⚠️ IMPORTANTE**: Leia primeiro [README_CONTEXT_ATUAL.md](README_CONTEXT_ATUAL.md) para entender onde estamos no projeto
+>
 > **Branch**: `feature/client-server-architecture` > **Data de Início**: 2026-01-XX
-> **Status**: 🔄 Em Andamento
+> **Status**: 🔄 Em Andamento (FASE 0: 85% completo)
 >
 > **Documentos Relacionados**:
 >
+> - [📖 Contexto Atual](README_CONTEXT_ATUAL.md) - **LEIA PRIMEIRO** - Onde estamos, o que fazer
 > - [Plano Detalhado](plano_cliente_servidor.md) - Arquitetura e decisões
 > - [Anotações Iniciais](anotacoes.txt) - Requisitos originais
 > - [UI/UX e Instalação](ui_instalacao_cliente_servidor.md) - Telas, instalador e código compartilhado
+> - [Análise Técnica](analise_tecnica_ui_banco_pacotes.md) - Componentes, banco, pacotes
 
 ---
 

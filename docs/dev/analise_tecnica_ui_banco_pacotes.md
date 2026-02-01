@@ -1,5 +1,7 @@
 # Análise Técnica - UI, Banco de Dados e Pacotes
 
+> **⚠️ IMPORTANTE**: Leia primeiro [README_CONTEXT_ATUAL.md](README_CONTEXT_ATUAL.md) para entender o estado atual do projeto
+>
 > **Branch**: `feature/client-server-architecture`
 > **Data**: 01/02/2026
 > **Status**: ✅ **Banco de Dados COMPLETO** (11/13 itens)

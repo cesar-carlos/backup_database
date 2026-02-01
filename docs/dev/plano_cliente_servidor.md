@@ -1,6 +1,8 @@
 # Plano Detalhado - Sistema Cliente-Servidor Backup Database
 
-> **Status**: Planejamento
+> **⚠️ IMPORTANTE**: Leia primeiro [README_CONTEXT_ATUAL.md](README_CONTEXT_ATUAL.md) para entender o estado atual do projeto
+>
+> **Status**: Planejamento (FASE 0: 85% implementado)
 > **Branch**: `feature/client-server-architecture` > **Data de Criação**: Janeiro 2026
 > **Prioridade**: Alta
 
