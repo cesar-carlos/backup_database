@@ -34,10 +34,10 @@ try {
         throw "sqlcmd não encontrado"
     }
 } catch {
-    Write-Host "  ✗ sqlcmd NÃO encontrado no PATH" -ForegroundColor Red
-    Write-Host "    Instale SQL Server Command Line Tools ou adicione ao PATH" -ForegroundColor Yellow
+    Write-Host "  ⚠ sqlcmd NÃO encontrado no PATH" -ForegroundColor Yellow
+    Write-Host "    Necessário apenas se você usar SQL Server" -ForegroundColor Gray
+    Write-Host "    Se você usar apenas Sybase, pode ignorar este aviso." -ForegroundColor Gray
     Write-Host "    Consulte: docs\path_setup.md" -ForegroundColor Yellow
-    $allOk = $false
 }
 Write-Host ""
 

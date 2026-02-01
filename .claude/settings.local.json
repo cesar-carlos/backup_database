@@ -25,7 +25,12 @@
       "Bash(dart run build_runner build:*)",
       "Bash(cloc:*)",
       "Bash(find:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(flutter run:*)",
+      "Bash(cat:*)",
+      "Bash(nc:*)",
+      "Bash(taskkill:*)",
+      "Bash(curl:*)"
     ]
   }
 }
