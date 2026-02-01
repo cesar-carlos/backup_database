@@ -1,7 +1,6 @@
 # UI/UX e Instalação - Sistema Cliente-Servidor
 
-> **Branch**: `feature/client-server-architecture`
-> **Relacionado**: [Implementação Checklist](implementacao_cliente_servidor.md) | [Plano Detalhado](plano_cliente_servidor.md)
+> **Branch**: `feature/client-server-architecture` > **Relacionado**: [Implementação Checklist](implementacao_cliente_servidor.md) | [Plano Detalhado](plano_cliente_servidor.md)
 
 ---
 
@@ -230,6 +229,7 @@ AutoReconnect=true
 **Arquivo**: `lib/presentation/pages/dashboard_page.dart`
 
 **Modificações**:
+
 - [ ] Adicionar card de status do Socket Server
 - [ ] Adicionar card de clientes conectados
 - [ ] Adicionar indicador de modo (Server no título)
@@ -285,6 +285,7 @@ AutoReconnect=true
 ```
 
 **Implementação**:
+
 - [ ] Criar página `ConnectedClientsPage`
 - [ ] DataTable FluentUI com colunas
 - [ ] Auto-refresh a cada 5s
@@ -335,6 +336,7 @@ AutoReconnect=true
 **Arquivo**: `lib/presentation/pages/server_settings_page.dart`
 
 **Abas**:
+
 1. **Geral** (existente)
 2. **Credenciais de Acesso** (NOVA)
 3. **Clientes Conectados** (NOVA - link para página)
@@ -815,6 +817,7 @@ AutoReconnect=true
 **Arquivo**: `lib/presentation/pages/client_settings_page.dart`
 
 **Abas**:
+
 1. **Geral** - Theme, language, auto-start
 2. **My Destinations** - Local, FTP, Google Drive, etc. (reutilizar)
 3. **Servers** - Gerenciar conexões salvas
@@ -874,6 +877,7 @@ AutoReconnect=true
 **Pasta**: `lib/infrastructure/protocol/`
 
 **Arquivos**:
+
 - `message_types.dart` - Enum MessageType
 - `message.dart` - Class Message
 - `binary_protocol.dart` - Serialização/deserialização
@@ -882,6 +886,7 @@ AutoReconnect=true
 - `checksum.dart` - CRC32 calculation
 
 **Usado por**:
+
 - ✅ Server (envia/recebe mensagens)
 - ✅ Client (envia/recebe mensagens)
 
@@ -980,7 +985,7 @@ class LoggerService {
 // lib/core/constants/socket_config.dart
 class SocketConfig {
   static const int defaultPort = 9527;
-  static const int chunkSize = 1048576; // 1MB
+  static const int chunkSize = 131072; // 128KB
   static const Duration heartbeatInterval = Duration(seconds: 30);
   static const Duration heartbeatTimeout = Duration(seconds: 60);
   static const int maxRetries = 3;
@@ -993,6 +998,7 @@ class SocketConfig {
 **Pasta**: `lib/infrastructure/external/destinations/`
 
 **Serviços**:
+
 - `local_destination_service.dart` ✅
 - `ftp_destination_service.dart` ✅
 - `google_drive_destination_service.dart` ✅
@@ -1000,6 +1006,7 @@ class SocketConfig {
 - `nextcloud_destination_service.dart` ✅
 
 **Usado por**:
+
 - ✅ Server (backups executados localmente)
 - ✅ Client (backups recebidos do servidor)
 
@@ -1314,6 +1321,7 @@ class AppTheme {
 ## ✅ Checklist Final - UI/UX e Instalação
 
 ### Instalador
+
 - [ ] Script Inno Setup com seleção Server/Client
 - [ ] Configuração de ícones diferentes
 - [ ] Arquivo mode.ini criado na instalação
@@ -1323,6 +1331,7 @@ class AppTheme {
 - [ ] Teste desinstalação
 
 ### UI - Server
+
 - [ ] Dashboard com card de Socket Server
 - [ ] Connected Clients Page
 - [ ] Client Details Dialog
@@ -1332,6 +1341,7 @@ class AppTheme {
 - [ ] Connection Logs Page
 
 ### UI - Client
+
 - [ ] Server Login Page
 - [ ] Add Server Connection Dialog
 - [ ] Connection Progress Dialog
@@ -1344,6 +1354,7 @@ class AppTheme {
 - [ ] Client Settings Page
 
 ### Código Compartilhado
+
 - [ ] Protocol binário (100% compartilhado)
 - [ ] Entities de protocolo
 - [ ] Value objects
@@ -1353,6 +1364,7 @@ class AppTheme {
 - [ ] Widgets reutilizáveis
 
 ### Detecção de Modo
+
 - [ ] DetectAppMode function
 - [ ] DI condicional
 - [ ] Routes diferentes
@@ -1364,15 +1376,18 @@ class AppTheme {
 ## 📚 Referências
 
 ### Design
+
 - [Fluent UI Flutter Package](https://pub.dev/packages/fluent_ui)
 - [Material 3 Guidelines](https://m3.material.io/)
 - [Windows 11 Design Principles](https://learn.microsoft.com/en-us/windows/apps/design/)
 
 ### Instalação
+
 - [Inno Setup Documentation](https://jrsoftware.org/isdl.php)
 - [Inno Setup Scripting](https://www.example-code.com/innosetup/)
 
 ### Código Compartilhado
+
 - [DRY Principle](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)
 - [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 

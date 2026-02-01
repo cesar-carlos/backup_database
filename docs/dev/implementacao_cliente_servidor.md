@@ -1,10 +1,10 @@
 # Implementação Cliente-Servidor - Checklist Detalhado
 
-> **Branch**: `feature/client-server-architecture`
-> **Data de Início**: 2026-01-XX
+> **Branch**: `feature/client-server-architecture` > **Data de Início**: 2026-01-XX
 > **Status**: 🔄 Em Andamento
 >
 > **Documentos Relacionados**:
+>
 > - [Plano Detalhado](plano_cliente_servidor.md) - Arquitetura e decisões
 > - [Anotações Iniciais](anotacoes.txt) - Requisitos originais
 > - [UI/UX e Instalação](ui_instalacao_cliente_servidor.md) - Telas, instalador e código compartilhado
@@ -14,7 +14,7 @@
 ## 📋 Decisões Definidas
 
 ✅ **Porta default**: 9527
-✅ **Tamanho de chunk**: 1MB (1048576 bytes)
+✅ **Tamanho de chunk**: 128KB (131072 bytes)
 ✅ **Compressão durante transferência**: Sim (zlib)
 ✅ **TLS/SSL**: Depois (v2)
 ✅ **Limite de clientes**: Ilimitado
@@ -25,16 +25,16 @@
 
 ### Fases de Implementação
 
-| Fase | Descrição | Semanas | Progresso | Status |
-|------|-----------|---------|-----------|--------|
-| 1 | Fundamentos Socket | 1-2 | [ ] 0/31 | ⏳ Não Iniciado |
-| 2 | Autenticação e Conexões | 3 | [ ] 0/24 | ⏳ Não Iniciado |
-| 3 | Protocolo de Controle Remoto | 4 | [ ] 0/23 | ⏳ Não Iniciado |
-| 4 | Transferência de Arquivos | 5-6 | [ ] 0/42 | ⏳ Não Iniciado |
-| 5 | Destinos do Client | 7 | [ ] 0/18 | ⏳ Não Iniciado |
-| 6 | Dashboard de Métricas | 8 | [ ] 0/15 | ⏳ Não Iniciado |
-| 7 | Installer e Integração | 9 | [ ] 0/21 | ⏳ Não Iniciado |
-| 8 | Testes e Documentação | 10 | [ ] 0/27 | ⏳ Não Iniciado |
+| Fase | Descrição                    | Semanas | Progresso | Status          |
+| ---- | ---------------------------- | ------- | --------- | --------------- |
+| 1    | Fundamentos Socket           | 1-2     | [ ] 0/31  | ⏳ Não Iniciado |
+| 2    | Autenticação e Conexões      | 3       | [ ] 0/24  | ⏳ Não Iniciado |
+| 3    | Protocolo de Controle Remoto | 4       | [ ] 0/23  | ⏳ Não Iniciado |
+| 4    | Transferência de Arquivos    | 5-6     | [ ] 0/42  | ⏳ Não Iniciado |
+| 5    | Destinos do Client           | 7       | [ ] 0/18  | ⏳ Não Iniciado |
+| 6    | Dashboard de Métricas        | 8       | [ ] 0/15  | ⏳ Não Iniciado |
+| 7    | Installer e Integração       | 9       | [ ] 0/21  | ⏳ Não Iniciado |
+| 8    | Testes e Documentação        | 10      | [ ] 0/27  | ⏳ Não Iniciado |
 
 **Total**: 201 tarefas
 
@@ -56,7 +56,7 @@ Muito código será usado tanto pelo Server quanto pelo Client. Vamos seguir o p
 - `message.dart` - Class Message (header + payload + checksum)
 - `binary_protocol.dart` - Serialização/deserialização
 - `compression.dart` - Compressão zlib
-- `file_chunker.dart` - Chunking de arquivos (1MB)
+- `file_chunker.dart` - Chunking de arquivos (128KB)
 - `checksum.dart` - CRC32 calculation
 
 **✅ Server envia e recebe usando os mesmos protocolos**
@@ -75,6 +75,7 @@ Serviços existentes que **NÃO precisam ser recriados**:
 - `nextcloud_destination_service.dart` ✅
 
 **Uso**:
+
 - **Server**: Envia backups executados localmente
 - **Client**: Envia backups recebidos do servidor
 
@@ -102,7 +103,7 @@ Serviços existentes que **NÃO precisam ser recriados**:
 ✅ LoggerService              // Logging estruturado (EXISTENTE)
 
 // lib/core/constants/
-✅ SocketConfig               // Porta 9527, chunk 1MB, timeouts
+✅ SocketConfig               // Porta 9527, chunk 128KB, timeouts
 ```
 
 ### 5. UI Components Compartilhados
@@ -152,6 +153,7 @@ Serviços existentes que **NÃO precisam ser recriados**:
 ### 7. Checklist Código Compartilhado
 
 **Antes de iniciar FASE 1**:
+
 - [ ] Criar pasta `lib/domain/entities/protocol/`
 - [ ] Criar `lib/core/constants/socket_config.dart` com configurações
 - [ ] Documentar serviços que podem ser reutilizados
@@ -159,11 +161,13 @@ Serviços existentes que **NÃO precisam ser recriados**:
 - [ ] Atualizar imports em código existente
 
 **Durante FASE 1**:
+
 - [ ] Implementar protocol binário como código compartilhado
 - [ ] Testar protocolo com testes unitários isolados
 - [ ] Não criar código duplicado Server/Client
 
 **Validação**:
+
 - [ ] Server usa protocolo de `lib/infrastructure/protocol/`
 - [ ] Client usa protocolo de `lib/infrastructure/protocol/` (mesmo!)
 - [ ] Zero duplicação de código de protocolo
@@ -173,9 +177,11 @@ Serviços existentes que **NÃO precisam ser recriados**:
 ## 🎯 FASE 1: Fundamentos Socket (Semanas 1-2)
 
 ### Objetivo
+
 Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
 
 ### Critérios de Aceitação
+
 - [ ] Server pode aceitar conexões TCP na porta 9527
 - [ ] Client pode conectar ao Server via Socket
 - [ ] Autenticação básica funciona (Server ID + Password)
@@ -189,6 +195,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
 ### 1.1 Protocolo Binário
 
 #### 1.1.1 Estrutura da Mensagem
+
 - [ ] Criar arquivo `lib/infrastructure/protocol/message_types.dart`
   - [ ] Enum `MessageType` com 15 tipos:
     - [ ] authRequest
@@ -232,6 +239,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Teste boundary conditions
 
 #### 1.1.2 Serialização Binária
+
 - [ ] Criar arquivo `lib/infrastructure/protocol/binary_protocol.dart`
   - [ ] Class `BinaryProtocol`
   - [ ] Method `serializeMessage(Message message)`: Uint8List
@@ -256,6 +264,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Performance test (serializar 1000 mensagens)
 
 #### 1.1.3 Compressão de Payload
+
 - [ ] Criar arquivo `lib/infrastructure/protocol/compression.dart`
   - [ ] Class `PayloadCompression`
   - [ ] Method `compress(Uint8List data)`: Uint8List
@@ -274,6 +283,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Performance test
 
 #### 1.1.4 File Chunking
+
 - [ ] Criar arquivo `lib/infrastructure/protocol/file_chunker.dart`
   - [ ] Class `FileChunk`
     - [ ] chunkIndex: int
@@ -285,7 +295,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Class `FileChunker`
     - [ ] Method `chunkFile(String filePath, int chunkSize)`: List<FileChunk>
       - [ ] Abrir arquivo
-      - [ ] Ler em chunks de 1MB
+      - [ ] Ler em chunks de 128KB
       - [ ] Calcular checksum de cada chunk
       - [ ] Retornar lista de FileChunk
     - [ ] Method `assembleChunks(List<FileChunk> chunks, String outputPath)`: Future<void>
@@ -294,7 +304,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
       - [ ] Validar checksum final do arquivo
       - [ ] Fechar arquivo
 - [ ] Criar testes unitários `test/infrastructure/protocol/file_chunker_test.dart`
-  - [ ] Teste chunking de arquivo pequeno (<1MB)
+  - [ ] Teste chunking de arquivo pequeno (<128KB)
   - [ ] Teste chunking de arquivo grande (>10MB)
   - [ ] Teste assembly de chunks
   - [ ] Teste validação de checksum
@@ -305,6 +315,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
 ### 1.2 Socket Server
 
 #### 1.2.1 Implementação Base do Server
+
 - [ ] Criar pasta `lib/infrastructure/socket/server/`
 - [ ] Criar interface `lib/domain/services/i_socket_server_service.dart`
   - [ ] Abstract class `ISocketServerService`
@@ -321,11 +332,11 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
     - [ ] `Future<bool> authenticateClient(String serverId, String password)`
 - [ ] Criar implementação `lib/infrastructure/socket/server/tcp_socket_server.dart`
   - [ ] Class `TcpSocketServer` implements `ISocketServerService`
-    - [ ] ServerSocket? _serverSocket
-    - [ ] int _port = 9527
-    - [ ] bool _isRunning = false
-    - [ ] final Map<String, Socket> _clients = {}
-    - [ ] final StreamController<Message> _messageController
+    - [ ] ServerSocket? \_serverSocket
+    - [ ] int \_port = 9527
+    - [ ] bool \_isRunning = false
+    - [ ] final Map<String, Socket> \_clients = {}
+    - [ ] final StreamController<Message> \_messageController
   - [ ] Method `start({int port = 9527})`
     - [ ] Validar se não está rodando
     - [ ] Criar ServerSocket.bind(host, port)
@@ -353,13 +364,14 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Teste envio de mensagem
 
 #### 1.2.2 Client Handler
+
 - [ ] Criar `lib/infrastructure/socket/server/client_handler.dart`
   - [ ] Class `ClientHandler`
-    - [ ] final Socket _socket
-    - [ ] final String _clientId
-    - [ ] final StreamController<Message> _messageController
-    - [ ] bool _isAuthenticated = false
-    - [ ] ConnectedClient? _clientInfo
+    - [ ] final Socket \_socket
+    - [ ] final String \_clientId
+    - [ ] final StreamController<Message> \_messageController
+    - [ ] bool \_isAuthenticated = false
+    - [ ] ConnectedClient? \_clientInfo
   - [ ] Constructor `ClientHandler(Socket socket)`
     - [ ] Gerar UUID único para clientId
     - [ ] Configurar streams
@@ -388,9 +400,10 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Teste desconexão
 
 #### 1.2.3 Autenticação de Clientes
+
 - [ ] Criar `lib/infrastructure/socket/server/server_authentication.dart`
   - [ ] Class `ServerAuthentication`
-    - [ ] final IServerCredentialRepository _repository
+    - [ ] final IServerCredentialRepository \_repository
   - [ ] Method `authenticateClient(String serverId, String password)`: Future<bool>
     - [ ] Buscar credenciais no repositório
     - [ ] Comparar hash SHA-256 da senha
@@ -406,9 +419,10 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Hash: SHA-256
 
 #### 1.2.4 Gerenciamento de Clientes
+
 - [ ] Criar `lib/infrastructure/socket/server/client_manager.dart`
   - [ ] Class `ClientManager`
-    - [ ] final Map<String, ClientHandler> _handlers = {}
+    - [ ] final Map<String, ClientHandler> \_handlers = {}
   - [ ] Method `registerClient(ClientHandler handler)`
     - [ ] Adicionar ao map
     - [ ] Log: "Client connected: ${handler.clientId}"
@@ -435,6 +449,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
 ### 1.3 Socket Client
 
 #### 1.3.1 Implementação Base do Client
+
 - [ ] Criar pasta `lib/infrastructure/socket/client/`
 - [ ] Criar interface `lib/domain/services/i_socket_client_service.dart`
   - [ ] Abstract class `ISocketClientService`
@@ -450,10 +465,10 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
     - [ ] `Stream<FileTransferProgress> receiveFile({...})`
 - [ ] Criar implementação `lib/infrastructure/socket/client/tcp_socket_client.dart`
   - [ ] Class `TcpSocketClient` implements `ISocketClientService`
-    - [ ] Socket? _socket
-    - [ ] ConnectionStatus _status = ConnectionStatus.disconnected
-    - [ ] final StreamController<Message> _messageController
-    - [ ] String? _currentServerId
+    - [ ] Socket? \_socket
+    - [ ] ConnectionStatus \_status = ConnectionStatus.disconnected
+    - [ ] final StreamController<Message> \_messageController
+    - [ ] String? \_currentServerId
   - [ ] Method `connect({required host, required port, required serverId, required password})`
     - [ ] Validar estado (desconectado)
     - [ ] Set `_status = ConnectionStatus.connecting`
@@ -481,11 +496,12 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Teste timeout de conexão
 
 #### 1.3.2 Connection Manager
+
 - [ ] Criar `lib/infrastructure/socket/client/connection_manager.dart`
   - [ ] Class `ConnectionManager`
-    - [ ] final List<ServerConnection> _savedConnections = []
-    - [ ] ServerConnection? _activeConnection
-    - [ ] TcpSocketClient? _client
+    - [ ] final List<ServerConnection> \_savedConnections = []
+    - [ ] ServerConnection? \_activeConnection
+    - [ ] TcpSocketClient? \_client
   - [ ] Method `connectToSavedConnection(String connectionId)`: Future<Result<void>>
     - [ ] Buscar conexão salva
     - [ ] Criar TcpSocketClient
@@ -496,7 +512,7 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
     - [ ] Salvar no repositório
     - [ ] Conectar
   - [ ] Method `disconnectActive()`: Future<void>
-    - [ ] Desconectar _client
+    - [ ] Desconectar \_client
     - [ ] Set `_activeConnection = null`
   - [ ] Method `getSavedConnections()`: List<ServerConnection>
     - [ ] Retornar do repositório
@@ -508,10 +524,11 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
   - [ ] Teste disconnect
 
 #### 1.3.3 Auto-Reconnect
+
 - [ ] Adicionar em `TcpSocketClient`
-  - [ ] Timer? _reconnectTimer
-  - [ ] int _reconnectAttempts = 0
-  - [ ] final int _maxReconnectAttempts = 5
+  - [ ] Timer? \_reconnectTimer
+  - [ ] int \_reconnectAttempts = 0
+  - [ ] final int \_maxReconnectAttempts = 5
   - [ ] Method `_scheduleReconnect()`
     - [ ] Calcular backoff exponencial: 2^attempts segundos
     - [ ] Agendar reconexão
@@ -532,12 +549,13 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
 ### 1.4 Heartbeat e Monitoramento
 
 #### 1.4.1 Heartbeat (Bidirectional)
+
 - [ ] Criar `lib/infrastructure/socket/heartbeat.dart`
   - [ ] Class `HeartbeatManager`
-    - [ ] Timer? _heartbeatTimer
-    - [ ] Duration _heartbeatInterval = 30 seconds
-    - [ ] Duration _heartbeatTimeout = 60 seconds
-    - [ ] DateTime? _lastHeartbeatReceived
+    - [ ] Timer? \_heartbeatTimer
+    - [ ] Duration \_heartbeatInterval = 30 seconds
+    - [ ] Duration \_heartbeatTimeout = 60 seconds
+    - [ ] DateTime? \_lastHeartbeatReceived
   - [ ] Method `startHeartbeat(Socket socket)`
     - [ ] Iniciar timer periódico
     - [ ] Enviar heartbeat message a cada 30s
@@ -611,9 +629,11 @@ Infraestrutura base para comunicação Socket TCP/IP entre Server e Client
 ## 🔑 FASE 2: Autenticação e Gerenciamento de Conexões (Semana 3)
 
 ### Objetivo
+
 Sistema robusto de autenticação e gerenciamento de conexões
 
 ### Critérios de Aceitação
+
 - [ ] Server tem credenciais configuráveis via UI
 - [ ] Client salva e gerencia múltiplas conexões
 - [ ] Server monitora clientes conectados em tempo real
@@ -625,6 +645,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 ### 2.1 Autenticação no Servidor
 
 #### 2.1.1 Entity e Repository - Server Credential
+
 - [ ] Criar entity `lib/domain/entities/server_credential.dart`
   - [ ] Class `ServerCredential`
     - [ ] id: String (UUID)
@@ -642,6 +663,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 - [ ] Criar testes unitários
 
 #### 2.1.2 Tela de Configuração de Credenciais (Server)
+
 - [ ] Criar `lib/presentation/pages/server_settings_page.dart`
   - [ ] FluentUI Page comtabs:
     - [ ] Tab 1: Credenciais de Acesso
@@ -667,6 +689,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 - [ ] Criar testes de widget
 
 #### 2.1.3 Validação e Hash de Senha
+
 - [ ] Criar `lib/core/security/password_hasher.dart`
   - [ ] Class `PasswordHasher`
   - [ ] Method `hashPassword(String password)`: String
@@ -677,6 +700,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 - [ ] Adicionar testes de segurança
 
 #### 2.1.4 Gerar Credencial Default na Instalação
+
 - [ ] Criar `lib/application/services/initial_setup_service.dart`
   - [ ] Method `createDefaultCredentialIfNotExists()`
     - [ ] Gerar Server ID aleatório
@@ -690,6 +714,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 ### 2.2 Gerenciamento de Conexões (Client)
 
 #### 2.2.1 Entity e Repository - Server Connection
+
 - [ ] Criar entity `lib/domain/entities/server_connection.dart`
   - [ ] Class `ServerConnection`
     - [ ] id: String (UUID local)
@@ -710,6 +735,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 - [ ] Criar testes unitários
 
 #### 2.2.2 Tela de Login do Client
+
 - [ ] Criar `lib/presentation/pages/server_login_page.dart`
   - [ ] Layout FluentUI:
     - [ ] Lista de servidores salvos (cards)
@@ -737,6 +763,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 - [ ] Criar testes de widget
 
 #### 2.2.3 Lista de Servidores Salvos
+
 - [ ] Widget `lib/presentation/widgets/server/server_list_item.dart`
   - [ ] Card com:
     - [ ] Nome da conexão
@@ -759,6 +786,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 ### 2.3 Monitoramento de Clientes (Server)
 
 #### 2.3.1 Entity - Connected Client
+
 - [ ] Criar entity `lib/domain/entities/connected_client.dart`
   - [ ] Class `ConnectedClient`
     - [ ] id: String (UUID)
@@ -772,6 +800,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
     - [ ] monitoredScheduleIds: List<String>
 
 #### 2.3.2 Repository - Connected Client (In-Memory)
+
 - [ ] Criar repository `lib/infrastructure/repositories/connected_client_repository.dart`
   - [ ] In-memory storage (Map<String, ConnectedClient>)
   - [ ] Methods:
@@ -785,6 +814,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 - [ ] Criar testes unitários
 
 #### 2.3.3 Tela de Clientes Conectados (Server)
+
 - [ ] Criar widget `lib/presentation/widgets/server/connected_clients_list.dart`
   - [ ] DataTable FluentUI com colunas:
     - [ ] Client Name
@@ -806,6 +836,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 - [ ] Criar testes de widget
 
 #### 2.3.4 Log de Tentativas de Conexão
+
 - [ ] Criar entity `lib/domain/entities/connection_log.dart`
   - [ ] Class `ConnectionLog`
     - [ ] id: String
@@ -839,7 +870,7 @@ Sistema robusto de autenticação e gerenciamento de conexões
 
 ---
 
-## *Continua nas próximas fases...*
+## _Continua nas próximas fases..._
 
 > **NOTA**: Este documento será atualizado conforme as fases são implementadas.
 > Cada fase será expandida com o mesmo nível de detalhe da Fase 1 e 2.

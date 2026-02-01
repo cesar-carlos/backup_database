@@ -1,8 +1,7 @@
 # Plano Detalhado - Sistema Cliente-Servidor Backup Database
 
 > **Status**: Planejamento
-> **Branch**: `feature/client-server-architecture`
-> **Data de Criação**: Janeiro 2026
+> **Branch**: `feature/client-server-architecture` > **Data de Criação**: Janeiro 2026
 > **Prioridade**: Alta
 
 ## Visão Geral
@@ -26,17 +25,18 @@ Transformar o projeto atual em um sistema **Cliente-Servidor** onde:
 
 Baseado em pesquisa de performance e casos de uso:
 
-| Aspecto | TCP Socket | gRPC |
-|---------|-----------|------|
-| **Velocidade** | ✅ Velocidade bruta para arquivos grandes | 3-5x mais rápido que REST |
-| **Overhead** | ✅ Mínimo | Protocol buffers + HTTP/2 |
-| **File Transfer** | ✅ Ideal para streaming de arquivos binários | Requer workarounds |
-| **Implementação** | Manual, mas controle total | Estruturado, mas mais abstrato |
-| **Performance Dart** | ✅ Nativo (dart:io) | ⚠️ Histórico de problemas (~40ms por RPC) |
+| Aspecto              | TCP Socket                                   | gRPC                                      |
+| -------------------- | -------------------------------------------- | ----------------------------------------- |
+| **Velocidade**       | ✅ Velocidade bruta para arquivos grandes    | 3-5x mais rápido que REST                 |
+| **Overhead**         | ✅ Mínimo                                    | Protocol buffers + HTTP/2                 |
+| **File Transfer**    | ✅ Ideal para streaming de arquivos binários | Requer workarounds                        |
+| **Implementação**    | Manual, mas controle total                   | Estruturado, mas mais abstrato            |
+| **Performance Dart** | ✅ Nativo (dart:io)                          | ⚠️ Histórico de problemas (~40ms por RPC) |
 
 ### Escolha: **TCP Socket (dart:io)**
 
 **Motivos:**
+
 1. **Arquivos Grandes**: Backups podem ter GBs - streaming raw TCP é mais eficiente
 2. **Controle Total**: Protocolo binário customizado para otimizar transferência
 3. **Performance Nativa**: Usa `dart:io` sem dependências externas
@@ -44,6 +44,7 @@ Baseado em pesquisa de performance e casos de uso:
 5. **Compatibilidade**: Funciona em Windows Desktop (Server e Client)
 
 **Fontes:**
+
 - [How to send file over a socket in Dart - Stack Overflow](https://stackoverflow.com/questions/53295342/how-to-send-file-over-a-socket-in-dart/53298013)
 - [Performance Test - gRPC vs Socket vs REST API](https://medium.com/@safvan.kothawala/performance-test-grpc-vs-socket-vs-rest-api-9b9ac25ca3e5)
 - [GitHub: flutter_tcp_example](https://github.com/JulianAssmann/flutter_tcp_example)
@@ -623,6 +624,7 @@ enum AppMode { server, client }
 **Objetivo**: Infraestrutura base para comunicação Socket
 
 #### 1.1 Protocolo Binário
+
 - [ ] Criar `MessageType` enum
 - [ ] Criar `Message` class com header/payload
 - [ ] Implementar `ProtocolService` (serialização/deserialização)
@@ -630,6 +632,7 @@ enum AppMode { server, client }
 - [ ] Implementar checksum (CRC32)
 
 #### 1.2 Socket Server Base
+
 - [ ] Criar `TcpSocketServer` (server)
 - [ ] Implementar `ClientHandler` (gerencia cada conexão)
 - [ ] Criar `ServerAuthentication` (valida credenciais)
@@ -637,6 +640,7 @@ enum AppMode { server, client }
 - [ ] Adicionar logging estruturado
 
 #### 1.3 Socket Client Base
+
 - [ ] Criar `TcpSocketClient` (client)
 - [ ] Implementar `ConnectionManager` (gerencia conexões)
 - [ ] Criar tela básica de conexão (Server ID + Password + Host)
@@ -644,6 +648,7 @@ enum AppMode { server, client }
 - [ ] Adicionar tratamento de erros de conexão
 
 **Entregáveis**:
+
 - Server pode aceitar conexões TCP
 - Client pode conectar e autenticar
 - Mensagens básicas funcionam (auth, heartbeat)
@@ -655,6 +660,7 @@ enum AppMode { server, client }
 **Objetivo**: Sistema robusto de autenticação e gerenciamento
 
 #### 2.1 Autenticação no Servidor
+
 - [ ] Entity `ServerCredential` (ID + senha hash)
 - [ ] Repository `ServerCredentialRepository` (SQLite)
 - [ ] Tela no Server para gerar/configurar credenciais
@@ -662,6 +668,7 @@ enum AppMode { server, client }
 - [ ] Log de tentativas de conexão
 
 #### 2.2 Gerenciamento de Conexões (Client)
+
 - [ ] Entity `ServerConnection` (servidores salvos)
 - [ ] Repository `ServerConnectionRepository` (SQLite)
 - [ ] Tela de login com lista de servidores salvos
@@ -669,6 +676,7 @@ enum AppMode { server, client }
 - [ ] Editar/Excluir conexões salvas
 
 #### 2.3 Monitoramento de Clientes (Server)
+
 - [ ] Entity `ConnectedClient`
 - [ ] Repository `ConnectedClientRepository`
 - [ ] Tela no Server para listar clientes conectados
@@ -676,6 +684,7 @@ enum AppMode { server, client }
 - [ ] Mostrar IP, nome, tempo conectado
 
 **Entregáveis**:
+
 - Server tem credenciais configuráveis
 - Client salva e gerencia múltiplas conexões
 - Server monitora clientes conectados
@@ -687,30 +696,35 @@ enum AppMode { server, client }
 **Objetivo**: Client pode listar e controlar agendamentos
 
 #### 3.1 Listar Agendamentos Remotos
+
 - [ ] Message type `listSchedules`
 - [ ] Server responde com `scheduleList`
 - [ ] Entity `RemoteScheduleControl`
 - [ ] Tela no Client com lista de agendamentos do servidor
 
 #### 3.2 Atualizar Agendamento Remoto
+
 - [ ] Message type `updateSchedule`
 - [ ] Server valida e atualiza agendamento
 - [ ] Client permite alterar: backupType, nextRunAt, postBackupScript
 - [ ] Server notifica outros clientes conectados
 
 #### 3.3 Executar Agendamento Remoto
+
 - [ ] Message type `executeSchedule`
 - [ ] Server inicia backup imediatamente
 - [ ] Client mostra progresso (via dashboard do server)
 - [ ] Confirmação de conclusão
 
 #### 3.4 Restrições de Segurança
+
 - [ ] Client NÃO pode alterar destinos do servidor
 - [ ] Client NÃO pode criar/excluir agendamentos
 - [ ] Client NÃO pode alterar configurações de database
 - [ ] Validação no Server para todas as operações
 
 **Entregáveis**:
+
 - Client lista agendamentos do servidor
 - Client altera campos permitidos
 - Client executa agendamentos remotamente
@@ -722,36 +736,42 @@ enum AppMode { server, client }
 **Objetivo**: Transmissão binária de backups do Server para Client
 
 #### 4.1 Preparação de Arquivo (Server)
+
 - [ ] Converter backup para binário
 - [ ] Calcular SHA-256 checksum
 - [ ] Dividir arquivo em chunks (64KB)
 - [ ] `FileTransferStart` message com metadados
 
 #### 4.2 Transmissão de Chunks
+
 - [ ] Loop de envio de chunks
 - [ ] Acknowledge do Client a cada chunk
 - [ ] Controle de congestionamento (se necessário)
 - [ ] Resume capability (reconectar e continuar)
 
 #### 4.3 Recebimento e Assembly (Client)
+
 - [ ] `FileTransferHandler` recebe chunks
 - [ ] Buffer temporário para chunks
 - [ ] Montar arquivo quando todos chunks recebidos
 - [ ] Validar checksum SHA-256
 
 #### 4.4 Progresso e UI
+
 - [ ] Entity `FileTransferProgress`
 - [ ] Provider `FileTransferProvider`
 - [ ] Widget de progresso de transferência
 - [ ] Cancelamento de transferência
 
 #### 4.5 Tratamento de Erros
+
 - [ ] Timeout de transferência
 - [ ] Reconexão automática
 - [ ] Reenvio de chunks perdidos
 - [ ] Limpeza de arquivos parciais
 
 **Entregáveis**:
+
 - Server transmite arquivo binário
 - Client recebe e monta arquivo
 - Progresso visível na UI
@@ -764,22 +784,26 @@ enum AppMode { server, client }
 **Objetivo**: Client salva backups recebidos em seus próprios destinos
 
 #### 5.1 Destino Local do Client
+
 - [ ] Configurar pasta local para backups recebidos
 - [ ] Salvar arquivo após transferência completa
 - [ ] Validação de espaço em disco
 
 #### 5.2 Destinos Remotos do Client
+
 - [ ] Reutilizar serviços existentes: FTP, Google Drive, etc.
 - [ ] Configurar destinos para backups recebidos
 - [ ] Vincular destino ao agendamento remoto
 - [ ] Upload automático após receber do servidor
 
 #### 5.3 Vinculação Agendamento ↔ Destino
+
 - [ ] `RemoteScheduleControl.clientDestinationId`
 - [ ] UI para selecionar destino do client
 - [ ] Upload automático para destino do client
 
 **Entregáveis**:
+
 - Client salva backups recebidos localmente
 - Client envia para seus próprios destinos remotos
 - Vinculação automática agendamento ↔ destino
@@ -791,22 +815,26 @@ enum AppMode { server, client }
 **Objetivo**: Client mostra métricas combinadas (local + servidor)
 
 #### 6.1 Endpoint de Métricas no Server
+
 - [ ] Message type `metricsRequest`
 - [ ] Server responde com `metricsResponse`
 - [ ] Incluir mesmas métricas do dashboard local
 
 #### 6.2 Dashboard do Client
+
 - [ ] Seletor de servidor conectado
 - [ ] Métricas locais (transferências, conexões)
 - [ ] Métricas do servidor selecionado
 - [ ] Combinar ambas em UI única
 
 #### 6.3 Tempo Real
+
 - [ ] Atualização periódica (via socket)
 - [ ] Server notifica clientes sobre mudanças
 - [ ] Client atualiza dashboard automaticamente
 
 **Entregáveis**:
+
 - Client dashboard com métricas do servidor
 - Atualização em tempo real
 - Seletor de servidor para múltiplas conexões
@@ -818,24 +846,28 @@ enum AppMode { server, client }
 **Objetivo**: Instalador com escolha Server/Client
 
 #### 7.1 Modificação do Inno Setup
+
 - [ ] Adicionar tipos de instalação (Server/Client)
 - [ ] Condicionar arquivos por tipo
 - [ ] Criar ícones diferentes
 - [ ] Passar parâmetros de modo via linha de comando
 
 #### 7.2 Detecção de Modo no App
+
 - [ ] `AppMode` enum (server/client)
 - [ ] Detectar modo via args/env
 - [ ] Iniciar UI apropriada
 - [ ] Registrar dependências corretas
 
 #### 7.3 Testes de Instalação
+
 - [ ] Instalar modo Server
 - [ ] Instalar modo Client
 - [ ] Testar ambos na mesma máquina
 - [ ] Testar desinstalação
 
 **Entregáveis**:
+
 - Instalador com escolha Server/Client
 - App inicia no modo correto
 - Instalação limpa de ambos modos
@@ -847,6 +879,7 @@ enum AppMode { server, client }
 **Objetivo**: Testes finais e documentação
 
 #### 8.1 Testes de Integração
+
 - [ ] Server + Client na mesma máquina
 - [ ] Server + Client em máquinas diferentes (LAN)
 - [ ] Múltiplos clientes conectados
@@ -855,12 +888,14 @@ enum AppMode { server, client }
 - [ ] Reconexão automática
 
 #### 8.2 Testes de Carga
+
 - [ ] 10 clientes simultâneos
 - [ ] Transferências concorrentes
 - [ ] Memória e CPU do server
 - [ ] Memory leaks
 
 #### 8.3 Documentação
+
 - [ ] Guia de instalação Server
 - [ ] Guia de instalação Client
 - [ ] Guia de configuração de rede/firewall
@@ -868,12 +903,14 @@ enum AppMode { server, client }
 - [ ] FAQ
 
 #### 8.4 Release
+
 - [ ] Tag da versão
 - [ ] Release notes
 - [ ] Instaladores (Server e Client)
 - [ ] GitHub Actions para build
 
 **Entregáveis**:
+
 - Testes completos passando
 - Documentação completa
 - Release publicado
@@ -887,6 +924,7 @@ enum AppMode { server, client }
 **Problema**: Arquivos de backup podem ter dezenas de GB; transferência pode ser lenta.
 
 **Mitigações**:
+
 - Chunk size otimizado (64KB-1MB)
 - Compressão durante transferência (zlib)
 - Parallel transfer (múltiplas conexões)
@@ -898,6 +936,7 @@ enum AppMode { server, client }
 **Problema**: Client pode perder conexão durante transferência.
 
 **Mitigações**:
+
 - Auto-reconnect com backoff exponencial
 - Checksum de cada chunk
 - Resume de transferência interrompida
@@ -909,6 +948,7 @@ enum AppMode { server, client }
 **Problema**: Senha em texto pode ser interceptada.
 
 **Mitigações**:
+
 - Hash SHA-256 da senha (não enviar em texto)
 - Challenge-response authentication
 - TLS/SSL wrapper (opcional, via OpenSSL)
@@ -920,6 +960,7 @@ enum AppMode { server, client }
 **Problema**: Muitos clientes conectados podem degradar performance.
 
 **Mitigações**:
+
 - Limite máximo de clientes conectados
 - Thread pool para handlers
 - Queue de transferências
@@ -931,6 +972,7 @@ enum AppMode { server, client }
 **Problema**: Firewall pode bloquear conexões de socket.
 
 **Mitigações**:
+
 - Porta configurável (default: 9527)
 - Documentar configuração de firewall
 - Testar com Windows Firewall ativo
@@ -939,22 +981,23 @@ enum AppMode { server, client }
 
 ## Cronograma Resumido
 
-| Fase | Descrição | Semanas | Status |
-|------|-----------|---------|--------|
-| 1 | Fundamentos Socket | 1-2 | ⏳ Pending |
-| 2 | Autenticação e Conexões | 3 | ⏳ Pending |
-| 3 | Protocolo de Controle Remoto | 4 | ⏳ Pending |
-| 4 | Transferência de Arquivos | 5-6 | ⏳ Pending |
-| 5 | Destinos do Client | 7 | ⏳ Pending |
-| 6 | Dashboard de Métricas | 8 | ⏳ Pending |
-| 7 | Installer e Integração | 9 | ⏳ Pending |
-| 8 | Testes e Documentação | 10 | ⏳ Pending |
+| Fase | Descrição                    | Semanas | Status     |
+| ---- | ---------------------------- | ------- | ---------- |
+| 1    | Fundamentos Socket           | 1-2     | ⏳ Pending |
+| 2    | Autenticação e Conexões      | 3       | ⏳ Pending |
+| 3    | Protocolo de Controle Remoto | 4       | ⏳ Pending |
+| 4    | Transferência de Arquivos    | 5-6     | ⏳ Pending |
+| 5    | Destinos do Client           | 7       | ⏳ Pending |
+| 6    | Dashboard de Métricas        | 8       | ⏳ Pending |
+| 7    | Installer e Integração       | 9       | ⏳ Pending |
+| 8    | Testes e Documentação        | 10      | ⏳ Pending |
 
 **Total**: 10 semanas (~2.5 meses)
 
 ## Critérios de Sucesso
 
 ### Funcionais
+
 - [ ] Server aceita conexões de múltiplos clientes
 - [ ] Client conecta e autentica em múltiplos servidores
 - [ ] Client lista e controla agendamentos remotos
@@ -964,6 +1007,7 @@ enum AppMode { server, client }
 - [ ] Instalador oferece escolha Server/Client
 
 ### Não-Funcionais
+
 - [ ] Transferência de 1GB completada em <5 minutos (LAN)
 - [ ] Auto-reconnect funciona após queda de conexão
 - [ ] Server suporta 10 clientes simultâneos
@@ -971,6 +1015,7 @@ enum AppMode { server, client }
 - [ ] Documentação completa cobrindo instalação e troubleshooting
 
 ### Qualidade
+
 - [ ] Testes unitários para protocolo binário
 - [ ] Testes de integração para fluxos críticos
 - [ ] Zero memory leaks em transferências longas
@@ -989,7 +1034,7 @@ enum AppMode { server, client }
 ### Decisões Pendentes
 
 1. **Porta default**: 9527 está ok? Alternativas: 8080, 9000, 9999
-2. **Tamanho de chunk**: 64KB, 256KB, ou 1MB?
+2. **Tamanho de chunk**: 64KB, 128KB, ou 256KB?
 3. **Compressão durante transferência**: Sim ou não?
 4. **TLS/SSL**: Implementar agora ou depois (v2)?
 5. **Limite de clientes**: 5, 10, ou ilimitado?
@@ -997,19 +1042,23 @@ enum AppMode { server, client }
 ## Referências
 
 ### Socket em Dart/Flutter
+
 - [How to send file over a socket in Dart - Stack Overflow](https://stackoverflow.com/questions/53295342/how-to-send-file-over-a-socket-in-dart/53298013)
 - [GitHub: flutter_tcp_example](https://github.com/JulianAssmann/flutter_tcp_example)
 - [Medium: TCP SOCKET in Flutter](https://medium.com/@arunthacharuthodi/tcp-socket-in-flutter-dart-io-library-cc50c65cb23c)
 
 ### Performance
+
 - [Performance Test - gRPC vs Socket vs REST API](https://medium.com/@safvan.kothawala/performance-test-grpc-vs-socket-vs-rest-api-9b9ac25ca3e5)
 - [gRPC Performance Best Practices](https://grpc.io/docs/guides/performance/)
 
 ### Protocolo Binário
+
 - [Protocol Buffers - Google](https://protobuf.dev/)
 - [Binary Protocol Design - Best Practices](https://blog.stephencleary.com/2022/05/binary-protocols.html)
 
 ### Instalação
+
 - [Inno Setup Documentation](https://jrsoftware.org/isdl.php)
 - [Inno Setup Script Examples](https://www.example-code.com/innosetup/)
 
