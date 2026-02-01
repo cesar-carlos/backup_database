@@ -12,6 +12,8 @@ import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ServiceModeInitializer {
+  static final Completer<void> _shutdownCompleter = Completer<void>();
+
   static Future<void> initialize() async {
     SchedulerService? schedulerService;
     ServiceHealthChecker? healthChecker;
@@ -74,6 +76,11 @@ class ServiceModeInitializer {
         await eventLog?.logServiceStopped();
 
         LoggerService.info('✅ Shutdown callback: Serviços parados');
+
+        // Completa o Future para encerrar o serviço
+        if (!_shutdownCompleter.isCompleted) {
+          _shutdownCompleter.complete();
+        }
       });
 
       await schedulerService.start();
@@ -85,8 +92,8 @@ class ServiceModeInitializer {
 
       LoggerService.info('✅ Aplicativo rodando como serviço do Windows');
 
-      // Aguarda indefinidamente (será interrompido por shutdown signal)
-      await Future.delayed(const Duration(days: 365));
+      // Aguarda indefinidamente (será interrompido por shutdown signal via Completer)
+      await _shutdownCompleter.future;
 
       await singleInstanceService.releaseLock();
     } on Object catch (e, stackTrace) {
@@ -131,6 +138,12 @@ class ServiceModeInitializer {
           s,
         );
       }
+
+      // Completa o Future em caso de erro fatal
+      if (!_shutdownCompleter.isCompleted) {
+        _shutdownCompleter.completeError(e);
+      }
+
       exit(1);
     }
   }

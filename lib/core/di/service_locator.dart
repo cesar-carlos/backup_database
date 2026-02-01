@@ -339,6 +339,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<ServiceHealthChecker>(
     () => ServiceHealthChecker(
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
+      processService: getIt<ProcessService>(),
     ),
   );
 

@@ -52,22 +52,10 @@ class _MainLayoutState extends State<MainLayout> {
       route: RouteNames.schedules,
     ),
     const NavigationItem(
-      icon: FluentIcons.document,
-      selectedIcon: FluentIcons.document,
-      label: 'Logs',
-      route: RouteNames.logs,
-    ),
-    const NavigationItem(
       icon: FluentIcons.megaphone,
       selectedIcon: FluentIcons.megaphone,
       label: 'Notificações',
       route: RouteNames.notifications,
-    ),
-    const NavigationItem(
-      icon: FluentIcons.settings,
-      selectedIcon: FluentIcons.settings,
-      label: 'Configurações',
-      route: RouteNames.settings,
     ),
     const NavigationItem(
       icon: FluentIcons.server,
@@ -92,6 +80,18 @@ class _MainLayoutState extends State<MainLayout> {
       selectedIcon: FluentIcons.download,
       label: 'Transferir Backups',
       route: RouteNames.transferBackups,
+    ),
+    const NavigationItem(
+      icon: FluentIcons.document,
+      selectedIcon: FluentIcons.document,
+      label: 'Logs',
+      route: RouteNames.logs,
+    ),
+    const NavigationItem(
+      icon: FluentIcons.settings,
+      selectedIcon: FluentIcons.settings,
+      label: 'Configurações',
+      route: RouteNames.settings,
     ),
   ];
 
