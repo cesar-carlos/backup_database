@@ -10,7 +10,8 @@
       "Bash(dart pub:*)",
       "Bash(tree:*)",
       "WebSearch",
-      "Bash(flutter pub get:*)"
+      "Bash(flutter pub get:*)",
+      "Bash(flutter test:*)"
     ]
   }
 }
