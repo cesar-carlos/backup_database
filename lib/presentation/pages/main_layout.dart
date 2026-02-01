@@ -102,10 +102,13 @@ class _MainLayoutState extends State<MainLayout> {
     // Filtrar itens baseado no modo
     switch (mode) {
       case AppMode.client:
-        // Cliente NÃO vê: Servidor, Logs
+        // Cliente NÃO vê: Bancos de Dados, Agendamentos, Servidor, Logs
+        // Cliente apenas se conecta ao servidor e executa ações remotas
         return allItems
             .where(
               (item) =>
+                  item.route != RouteNames.sqlServerConfig &&
+                  item.route != RouteNames.schedules &&
                   item.route != RouteNames.serverSettings &&
                   item.route != RouteNames.logs,
             )
