@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
 
 enum BackupStep {
   initializing,
@@ -123,5 +124,9 @@ class BackupProgressProvider extends ChangeNotifier {
     _isRunning = false;
     _currentProgress = null;
     notifyListeners();
+  }
+
+  static BackupProgressProvider of(BuildContext context) {
+    return Provider.of<BackupProgressProvider>(context, listen: false);
   }
 }

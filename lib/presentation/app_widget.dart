@@ -7,6 +7,7 @@ import 'package:backup_database/core/theme/app_theme.dart';
 import 'package:backup_database/core/theme/theme_provider.dart';
 import 'package:backup_database/presentation/managers/window_manager_service.dart';
 import 'package:backup_database/presentation/providers/system_settings_provider.dart';
+import 'package:backup_database/presentation/widgets/backup/global_backup_progress_listener.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -90,15 +91,17 @@ class BackupDatabaseApp extends StatelessWidget {
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
-          return FluentApp.router(
-            title: getWindowTitleForMode(currentAppMode),
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightFluentTheme,
-            darkTheme: AppTheme.darkFluentTheme,
-            themeMode: themeProvider.isDarkMode
-                ? ThemeMode.dark
-                : ThemeMode.light,
-            routerConfig: appRouter,
+          return GlobalBackupProgressListener(
+            child: FluentApp.router(
+              title: getWindowTitleForMode(currentAppMode),
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightFluentTheme,
+              darkTheme: AppTheme.darkFluentTheme,
+              themeMode: themeProvider.isDarkMode
+                  ? ThemeMode.dark
+                  : ThemeMode.light,
+              routerConfig: appRouter,
+            ),
           );
         },
       ),
