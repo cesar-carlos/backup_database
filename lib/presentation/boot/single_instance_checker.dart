@@ -1,8 +1,18 @@
-﻿import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
-import 'package:backup_database/presentation/managers/managers.dart';
+import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
+import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
+import 'package:backup_database/infrastructure/external/system/windows_message_box.dart';
 
+/// Utility class for checking and handling single instance enforcement.
 class SingleInstanceChecker {
+  SingleInstanceChecker._();
+
+  /// Checks if this is the first instance using mutex.
+  ///
+  /// Returns `true` if the application can continue (first instance),
+  /// `false` if another instance is already running.
   static Future<bool> checkAndHandleSecondInstance() async {
     final singleInstanceService = SingleInstanceService();
     final isFirstInstance = await singleInstanceService.checkAndLock();
@@ -11,10 +21,14 @@ class SingleInstanceChecker {
       return true;
     }
 
-    await _handleSecondInstance();
+    await handleSecondInstance();
     return false;
   }
 
+  /// Checks if an IPC server is already running.
+  ///
+  /// Returns `true` if no server is running (can continue),
+  /// `false` if another instance is already running.
   static Future<bool> checkIpcServerAndHandle() async {
     final isServerRunning = await IpcService.checkServerRunning();
 
@@ -22,11 +36,14 @@ class SingleInstanceChecker {
       return true;
     }
 
-    await _handleSecondInstance();
+    await handleSecondInstance();
     return false;
   }
 
-  static Future<void> _handleSecondInstance() async {
+  /// Handles the case when a second instance is detected.
+  ///
+  /// Notifies the existing instance and shows a warning dialog.
+  static Future<void> handleSecondInstance() async {
     final currentUser =
         WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
 
@@ -55,20 +72,20 @@ class SingleInstanceChecker {
       );
     }
 
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < SingleInstanceConfig.maxRetryAttempts; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();
       if (notified) {
         LoggerService.info('Instância existente notificada via IPC');
         break;
       }
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(SingleInstanceConfig.retryDelay);
     }
 
     WindowsMessageBox.showWarning(
-      'Backup Database - Já está em execução',
+      'Backup Database - Já em Execução',
       'O aplicativo Backup Database já está aberto.\n\n'
           'A janela existente foi trazida para frente.\n\n'
-          'Não é possível executar mais de uma instância do aplicativo ao mesmo tempo.',
+          'Não é possível executar mais de uma instância ao mesmo tempo.',
     );
   }
 }

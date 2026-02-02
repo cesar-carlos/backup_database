@@ -1,31 +1,21 @@
-﻿import 'dart:async';
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
 
+/// Service for inter-process communication between application instances.
+///
+/// Uses TCP sockets on localhost to communicate between instances.
 class IpcService {
-  static const int _defaultPort = 58724;
-  static const List<int> _alternativePorts = [
-    58725,
-    58726,
-    58727,
-    58728,
-    58729,
-  ];
-  static const String _showWindowCommand = 'SHOW_WINDOW';
-  static const String _getUserInfoCommand = 'GET_USER_INFO';
-  static const String _userInfoResponsePrefix = 'USER_INFO:';
-
-  static const Duration _connectionTimeout = Duration(seconds: 1);
-  static const Duration _socketCloseDelay = Duration(milliseconds: 100);
-  static const Duration _quickConnectionTimeout = Duration(milliseconds: 500);
-
   ServerSocket? _server;
   Function()? _onShowWindow;
   bool _isRunning = false;
-  int _currentPort = _defaultPort;
+  int _currentPort = SingleInstanceConfig.ipcBasePort;
 
+  /// Starts the IPC server to listen for commands from other instances.
   Future<bool> startServer({Function()? onShowWindow}) async {
     if (_isRunning) {
       LoggerService.debug('IPC Server já está rodando');
@@ -34,7 +24,10 @@ class IpcService {
 
     _onShowWindow = onShowWindow;
 
-    final portsToTry = [_defaultPort, ..._alternativePorts];
+    final portsToTry = [
+      SingleInstanceConfig.ipcBasePort,
+      ...SingleInstanceConfig.ipcAlternativePorts,
+    ];
 
     for (final port in portsToTry) {
       try {
@@ -94,17 +87,21 @@ class IpcService {
     socket.listen(
       (data) async {
         try {
-          final message = String.fromCharCodes(data).trim();
+          final message = utf8.decode(data).trim();
           LoggerService.debug('Mensagem IPC recebida: $message');
 
-          if (message == _showWindowCommand) {
+          if (message == SingleInstanceConfig.showWindowCommand) {
             LoggerService.info('Comando SHOW_WINDOW recebido via IPC');
             _onShowWindow?.call();
-          } else if (message == _getUserInfoCommand) {
+          } else if (message == SingleInstanceConfig.getUserInfoCommand) {
             LoggerService.debug('Comando GET_USER_INFO recebido via IPC');
             final username =
                 WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
-            socket.write('$_userInfoResponsePrefix$username');
+            socket.add(
+              utf8.encode(
+                '${SingleInstanceConfig.userInfoResponsePrefix}$username',
+              ),
+            );
             await socket.flush();
             LoggerService.debug('Resposta USER_INFO enviada: $username');
           }
@@ -121,8 +118,12 @@ class IpcService {
     );
   }
 
+  /// Sends a SHOW_WINDOW command to an existing instance.
   static Future<bool> sendShowWindow() async {
-    final portsToTry = [_defaultPort, ..._alternativePorts];
+    final portsToTry = [
+      SingleInstanceConfig.ipcBasePort,
+      ...SingleInstanceConfig.ipcAlternativePorts,
+    ];
 
     for (final port in portsToTry) {
       try {
@@ -133,13 +134,13 @@ class IpcService {
         final socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
           port,
-          timeout: _connectionTimeout,
+          timeout: SingleInstanceConfig.connectionTimeout,
         );
 
-        socket.write(_showWindowCommand);
+        socket.add(utf8.encode(SingleInstanceConfig.showWindowCommand));
         await socket.flush();
 
-        await Future.delayed(_socketCloseDelay);
+        await Future.delayed(SingleInstanceConfig.socketCloseDelay);
         await socket.close();
 
         LoggerService.info(
@@ -158,15 +159,19 @@ class IpcService {
     return false;
   }
 
+  /// Checks if an IPC server is already running.
   static Future<bool> checkServerRunning() async {
-    final portsToTry = [_defaultPort, ..._alternativePorts];
+    final portsToTry = [
+      SingleInstanceConfig.ipcBasePort,
+      ...SingleInstanceConfig.ipcAlternativePorts,
+    ];
 
     for (final port in portsToTry) {
       try {
         final socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
           port,
-          timeout: _quickConnectionTimeout,
+          timeout: SingleInstanceConfig.quickConnectionTimeout,
         );
 
         await socket.close();
@@ -179,28 +184,34 @@ class IpcService {
     return false;
   }
 
+  /// Gets the username of the user running the existing instance.
   static Future<String?> getExistingInstanceUser() async {
-    final portsToTry = [_defaultPort, ..._alternativePorts];
+    final portsToTry = [
+      SingleInstanceConfig.ipcBasePort,
+      ...SingleInstanceConfig.ipcAlternativePorts,
+    ];
 
     for (final port in portsToTry) {
       try {
         final socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
           port,
-          timeout: _connectionTimeout,
+          timeout: SingleInstanceConfig.connectionTimeout,
         );
 
-        socket.write(_getUserInfoCommand);
+        socket.add(utf8.encode(SingleInstanceConfig.getUserInfoCommand));
         await socket.flush();
 
         final completer = Completer<String?>();
 
         socket.listen(
           (data) {
-            final message = String.fromCharCodes(data).trim();
-            if (message.startsWith(_userInfoResponsePrefix)) {
+            final message = utf8.decode(data).trim();
+            if (message.startsWith(
+              SingleInstanceConfig.userInfoResponsePrefix,
+            )) {
               final username = message.substring(
-                _userInfoResponsePrefix.length,
+                SingleInstanceConfig.userInfoResponsePrefix.length,
               );
               if (!completer.isCompleted) {
                 completer.complete(username);
@@ -221,7 +232,7 @@ class IpcService {
         );
 
         final result = await completer.future.timeout(
-          _connectionTimeout,
+          SingleInstanceConfig.connectionTimeout,
           onTimeout: () => null,
         );
 
@@ -239,6 +250,7 @@ class IpcService {
     return null;
   }
 
+  /// Stops the IPC server.
   Future<void> stop() async {
     if (_server != null) {
       try {
@@ -251,5 +263,6 @@ class IpcService {
     }
   }
 
+  /// Whether the IPC server is currently running.
   bool get isRunning => _isRunning;
 }

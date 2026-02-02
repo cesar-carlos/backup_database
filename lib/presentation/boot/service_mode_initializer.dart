@@ -7,18 +7,20 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/service/service_shutdown_handler.dart';
+import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
-import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ServiceModeInitializer {
+  ServiceModeInitializer._();
+
   static final Completer<void> _shutdownCompleter = Completer<void>();
 
   static Future<void> initialize() async {
     SchedulerService? schedulerService;
     ServiceHealthChecker? healthChecker;
     WindowsEventLogService? eventLog;
-    SingleInstanceService? singleInstanceService;
+    ISingleInstanceService? singleInstanceService;
 
     try {
       await dotenv.load();
@@ -28,6 +30,7 @@ class ServiceModeInitializer {
       final isFirstServiceInstance = await singleInstanceService.checkAndLock(
         isServiceMode: true,
       );
+      LoggerService.info('Single instance check realizado para modo serviço');
 
       if (!isFirstServiceInstance) {
         LoggerService.warning(

@@ -1,4 +1,7 @@
 export 'device_key_service.dart';
+export 'ipc_service.dart';
 export 'os_version_checker.dart';
+export 'single_instance_service.dart';
 export 'windows_event_log_service.dart';
+export 'windows_message_box.dart';
 export 'windows_service_service.dart';

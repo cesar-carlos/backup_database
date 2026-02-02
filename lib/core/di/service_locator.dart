@@ -34,6 +34,9 @@ final GetIt getIt = GetIt.instance;
 Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<LoggerService>(LoggerService.new);
   getIt.registerLazySingleton<ClipboardService>(ClipboardService.new);
+  getIt.registerLazySingleton<ISingleInstanceService>(
+    SingleInstanceService.new,
+  );
 
   getIt.registerLazySingleton<Dio>(Dio.new);
   getIt.registerLazySingleton<ApiClient>(() => ApiClient(getIt<Dio>()));
@@ -82,7 +85,10 @@ Future<void> setupServiceLocator() async {
     () => ServerCredentialRepository(getIt<AppDatabase>()),
   );
   getIt.registerLazySingleton<InitialSetupService>(
-    () => InitialSetupService(getIt<IServerCredentialRepository>()),
+    () => InitialSetupService(
+      getIt<IServerCredentialRepository>(),
+      getIt<ISecureCredentialService>(),
+    ),
   );
   getIt.registerLazySingleton<IConnectionLogRepository>(
     () => ConnectionLogRepository(getIt<AppDatabase>()),
@@ -465,7 +471,10 @@ Future<void> setupServiceLocator() async {
     () => WindowsServiceProvider(getIt<IWindowsServiceService>()),
   );
   getIt.registerFactory<ServerCredentialProvider>(
-    () => ServerCredentialProvider(getIt<IServerCredentialRepository>()),
+    () => ServerCredentialProvider(
+      getIt<IServerCredentialRepository>(),
+      getIt<ISecureCredentialService>(),
+    ),
   );
   getIt.registerFactory<ConnectedClientProvider>(
     () => ConnectedClientProvider(getIt<SocketServerService>()),

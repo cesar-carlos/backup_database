@@ -25,6 +25,8 @@ class TcpSocketClient implements SocketClientService {
   ConnectionStatus _status = ConnectionStatus.disconnected;
   final StreamController<Message> _messageController =
       StreamController<Message>.broadcast();
+  final StreamController<ConnectionStatus> _statusController =
+      StreamController<ConnectionStatus>.broadcast();
   final List<int> _buffer = [];
   StreamSubscription<List<int>>? _subscription;
   HeartbeatManager? _heartbeatManager;
@@ -48,6 +50,18 @@ class TcpSocketClient implements SocketClientService {
 
   @override
   Stream<Message> get messageStream => _messageController.stream;
+
+  @override
+  Stream<ConnectionStatus> get statusStream => _statusController.stream;
+
+  void _setStatus(ConnectionStatus newStatus) {
+    if (_status != newStatus) {
+      _status = newStatus;
+      if (!_statusController.isClosed) {
+        _statusController.add(_status);
+      }
+    }
+  }
 
   @override
   Future<void> connect({
@@ -81,7 +95,7 @@ class TcpSocketClient implements SocketClientService {
     String? serverId,
     String? password,
   ]) async {
-    _status = ConnectionStatus.connecting;
+    _setStatus(ConnectionStatus.connecting);
     _waitingAuth = false;
     try {
       _socket = await Socket.connect(
@@ -101,6 +115,9 @@ class TcpSocketClient implements SocketClientService {
       final useAuth =
           serverId != null && serverId.isNotEmpty && password != null;
       if (useAuth) {
+        LoggerService.info(
+          'Enviando requisição de autenticação para serverId: $serverId',
+        );
         _waitingAuth = true;
         final passwordHash = PasswordHasher.hash(password, serverId);
         final authRequest = createAuthRequest(
@@ -108,13 +125,16 @@ class TcpSocketClient implements SocketClientService {
           passwordHash: passwordHash,
         );
         await send(authRequest);
+        LoggerService.info(
+          'Requisição de autenticação enviada, aguardando resposta...',
+        );
       } else {
-        _status = ConnectionStatus.connected;
+        _setStatus(ConnectionStatus.connected);
         _reconnectAttempts = 0;
         _startHeartbeat();
       }
     } on SocketException catch (e) {
-      _status = ConnectionStatus.error;
+      _setStatus(ConnectionStatus.error);
       LoggerService.warning('TcpSocketClient connect failed: ${e.message}');
       if (_reconnectEnabled &&
           _reconnectHost != null &&
@@ -124,7 +144,7 @@ class TcpSocketClient implements SocketClientService {
         rethrow;
       }
     } on Object catch (e) {
-      _status = ConnectionStatus.error;
+      _setStatus(ConnectionStatus.error);
       LoggerService.warning('TcpSocketClient connect failed: $e');
       if (_reconnectEnabled &&
           _reconnectHost != null &&
@@ -169,12 +189,16 @@ class TcpSocketClient implements SocketClientService {
           _waitingAuth = false;
           final success = message.payload['success'] == true;
           if (!success) {
-            _status = ConnectionStatus.authenticationFailed;
+            final error =
+                message.payload['error']?.toString() ?? 'Erro desconhecido';
+            LoggerService.error('Autenticação FALHOU: $error');
+            _setStatus(ConnectionStatus.authenticationFailed);
             _messageController.add(message);
             Future.microtask(() => _handleDisconnect(scheduleReconnect: false));
             return;
           }
-          _status = ConnectionStatus.connected;
+          LoggerService.info('✅ Autenticação bem-sucedida!');
+          _setStatus(ConnectionStatus.connected);
           _reconnectAttempts = 0;
           _startHeartbeat();
         }
@@ -199,7 +223,7 @@ class TcpSocketClient implements SocketClientService {
   }
 
   void _onDone() {
-    _status = ConnectionStatus.disconnected;
+    _setStatus(ConnectionStatus.disconnected);
     LoggerService.info('TcpSocketClient disconnected');
     _handleDisconnect(scheduleReconnect: true);
   }
@@ -238,6 +262,9 @@ class TcpSocketClient implements SocketClientService {
       if (!_messageController.isClosed) {
         _messageController.close();
       }
+      if (!_statusController.isClosed) {
+        _statusController.close();
+      }
       return;
     }
 
@@ -261,6 +288,9 @@ class TcpSocketClient implements SocketClientService {
       _reconnectPort = null;
       if (!_messageController.isClosed) {
         _messageController.close();
+      }
+      if (!_statusController.isClosed) {
+        _statusController.close();
       }
       return;
     }
@@ -293,7 +323,7 @@ class TcpSocketClient implements SocketClientService {
     _subscription = null;
     _socket?.destroy();
     _socket = null;
-    _status = ConnectionStatus.disconnected;
+    _setStatus(ConnectionStatus.disconnected);
 
     if (scheduleReconnect && _reconnectEnabled && _reconnectHost != null) {
       _scheduleReconnect();
@@ -302,6 +332,9 @@ class TcpSocketClient implements SocketClientService {
       _reconnectPort = null;
       if (!_messageController.isClosed) {
         _messageController.close();
+      }
+      if (!_statusController.isClosed) {
+        _statusController.close();
       }
     }
     LoggerService.info('TcpSocketClient disconnected');
@@ -323,7 +356,7 @@ class TcpSocketClient implements SocketClientService {
     _subscription = null;
     _socket?.destroy();
     _socket = null;
-    _status = ConnectionStatus.disconnected;
+    _setStatus(ConnectionStatus.disconnected);
     if (!_messageController.isClosed) {
       _messageController.close();
     }

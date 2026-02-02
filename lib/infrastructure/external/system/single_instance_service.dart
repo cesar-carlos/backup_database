@@ -1,8 +1,10 @@
-﻿import 'dart:ffi';
+import 'dart:ffi';
 import 'dart:io';
 
+import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
-import 'package:backup_database/presentation/managers/ipc_service.dart';
+import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
@@ -14,20 +16,20 @@ final int Function(Pointer<NativeType>, int, Pointer<Utf16>) _createMutex =
       int Function(Pointer, int, Pointer<Utf16>)
     >('CreateMutexW');
 
-class SingleInstanceService {
+/// Implementation of [ISingleInstanceService] for Windows.
+///
+/// Uses Windows mutexes to ensure only one instance runs at a time,
+/// and IPC to communicate between instances.
+class SingleInstanceService implements ISingleInstanceService {
   factory SingleInstanceService() => _instance;
   SingleInstanceService._();
   static final SingleInstanceService _instance = SingleInstanceService._();
-
-  static const String _uiMutexName =
-      r'Global\BackupDatabase_UIMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
-  static const String _serviceMutexName =
-      r'Global\BackupDatabase_ServiceMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
 
   int _mutexHandle = 0;
   bool _isFirstInstance = false;
   final IpcService _ipcService = IpcService();
 
+  @override
   Future<bool> checkAndLock({bool isServiceMode = false}) async {
     try {
       if (!Platform.isWindows) {
@@ -38,7 +40,9 @@ class SingleInstanceService {
         return true;
       }
 
-      final mutexName = isServiceMode ? _serviceMutexName : _uiMutexName;
+      final mutexName = isServiceMode
+          ? SingleInstanceConfig.serviceMutexName
+          : SingleInstanceConfig.uiMutexName;
       final modeName = isServiceMode ? 'Serviço' : 'UI';
       final mutexNamePtr = mutexName.toNativeUtf16();
 
@@ -82,6 +86,7 @@ class SingleInstanceService {
     }
   }
 
+  @override
   Future<bool> startIpcServer({Function()? onShowWindow}) async {
     try {
       return await _ipcService.startServer(onShowWindow: onShowWindow);
@@ -91,10 +96,12 @@ class SingleInstanceService {
     }
   }
 
+  /// Notifies an existing instance to show its window.
   static Future<bool> notifyExistingInstance() async {
     return IpcService.sendShowWindow();
   }
 
+  @override
   Future<void> releaseLock() async {
     try {
       await _ipcService.stop();
@@ -109,6 +116,9 @@ class SingleInstanceService {
     }
   }
 
+  @override
   bool get isFirstInstance => _isFirstInstance;
+
+  @override
   bool get isIpcRunning => _ipcService.isRunning;
 }

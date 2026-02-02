@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
@@ -29,16 +32,20 @@ Future<void> main() async {
 
   _checkOsCompatibility();
 
-  final canContinue =
-      await SingleInstanceChecker.checkAndHandleSecondInstance();
-  if (!canContinue) return;
+  // Single instance check (configurável via SINGLE_INSTANCE_ENABLED)
+  if (SingleInstanceConfig.isEnabled) {
+    final canContinue =
+        await SingleInstanceChecker.checkAndHandleSecondInstance();
+    if (!canContinue) return;
 
-  final canContinueIpc = await SingleInstanceChecker.checkIpcServerAndHandle();
-  if (!canContinueIpc) return;
-
-  LoggerService.info(
-    '✅ Primeira instância confirmada - continuando inicialização',
-  );
+    final canContinueIpc =
+        await SingleInstanceChecker.checkIpcServerAndHandle();
+    if (!canContinueIpc) return;
+  } else {
+    LoggerService.info(
+      '⚠️ Single instance check desabilitado via configuração',
+    );
+  }
 
   try {
     await AppInitializer.initialize();
@@ -58,6 +65,7 @@ Future<void> main() async {
     runZonedGuarded(() => runApp(const BackupDatabaseApp()), _handleError);
 
     await _startScheduler();
+    await _startSocketServer();
   } on Object catch (e, stackTrace) {
     LoggerService.error('Erro fatal na inicialização', e, stackTrace);
     await AppCleanup.cleanup();
@@ -102,7 +110,8 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   }
 
   try {
-    final singleInstanceService = SingleInstanceService();
+    final singleInstanceService = service_locator
+        .getIt<ISingleInstanceService>();
     await singleInstanceService.startIpcServer(
       onShowWindow: () async {
         LoggerService.info(
@@ -153,6 +162,33 @@ Future<void> _startScheduler() async {
     LoggerService.info('Serviço de agendamento iniciado');
   } on Object catch (e) {
     LoggerService.error('Erro ao iniciar scheduler', e);
+  }
+}
+
+Future<void> _startSocketServer() async {
+  if (currentAppMode != AppMode.server) {
+    LoggerService.info(
+      'Modo cliente detectado - socket server não será iniciado',
+    );
+    return;
+  }
+
+  try {
+    final socketServer = service_locator.getIt<SocketServerService>();
+
+    if (socketServer.isRunning) {
+      LoggerService.info(
+        'Socket server já está rodando na porta ${socketServer.port}',
+      );
+      return;
+    }
+
+    await socketServer.start();
+    LoggerService.info(
+      '✅ Socket server iniciado automaticamente na porta 9527',
+    );
+  } on Object catch (e, stackTrace) {
+    LoggerService.error('Erro ao iniciar socket server', e, stackTrace);
   }
 }
 
