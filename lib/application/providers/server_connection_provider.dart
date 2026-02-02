@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:backup_database/domain/repositories/i_server_connection_repository.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
@@ -11,16 +14,31 @@ class ServerConnectionProvider extends ChangeNotifier {
     this._connectionManager,
   ) {
     loadConnections();
+    _listenToConnectionStatus();
   }
 
   final IServerConnectionRepository _repository;
   final ConnectionManager _connectionManager;
+  StreamSubscription<ConnectionStatus>? _statusSubscription;
 
   List<ServerConnection> _connections = [];
   bool _isLoading = false;
   String? _error;
   bool _isConnecting = false;
   bool _isTestingConnection = false;
+
+  void _listenToConnectionStatus() {
+    _statusSubscription?.cancel();
+    _statusSubscription = _connectionManager.statusStream?.listen((_) {
+      notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _statusSubscription?.cancel();
+    super.dispose();
+  }
 
   List<ServerConnection> get connections => _connections;
   bool get isLoading => _isLoading;
@@ -160,18 +178,25 @@ class ServerConnectionProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> connectTo(String connectionId, {bool enableAutoReconnect = false}) async {
+  Future<void> connectTo(
+    String connectionId, {
+    bool enableAutoReconnect = false,
+  }) async {
     _isConnecting = true;
     _error = null;
     notifyListeners();
+
+    LoggerService.info('Tentando conectar à conexão: $connectionId');
 
     try {
       await _connectionManager.connectToSavedConnection(
         connectionId,
         enableAutoReconnect: enableAutoReconnect,
       );
+      LoggerService.info('Conexão estabelecida com sucesso');
     } on Object catch (e) {
       _error = e is StateError ? e.message : e.toString();
+      LoggerService.error('Erro ao conectar: $_error', e);
     } finally {
       _isConnecting = false;
       notifyListeners();
@@ -200,7 +225,10 @@ class ServerConnectionProvider extends ChangeNotifier {
       await _connectionManager.disconnect();
       return ok;
     } on Object catch (e) {
-      _error = e.toString();
+      final destination = '${connection.host}:${connection.port}';
+      _error =
+          'Não foi possível conectar a $destination. '
+          'O computador remoto recusou a conexão ou a porta está incorreta.';
       await _connectionManager.disconnect();
       return false;
     } finally {

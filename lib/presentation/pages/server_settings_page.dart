@@ -66,9 +66,17 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
     BuildContext context,
     ServerCredential? credential,
   ) async {
+    String? existingPassword;
+    if (credential != null) {
+      existingPassword = await context
+          .read<ServerCredentialProvider>()
+          .getPlainPassword(credential.id);
+    }
+    if (!context.mounted) return;
     final formResult = await ServerCredentialDialog.show(
       context,
       credential: credential,
+      existingPassword: existingPassword,
     );
 
     if (formResult == null || !context.mounted) return;

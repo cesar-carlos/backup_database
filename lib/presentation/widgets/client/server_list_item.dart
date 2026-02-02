@@ -43,7 +43,9 @@ class ServerListItem extends StatelessWidget {
                   FluentIcons.server,
                   color: _isConnectedToThis
                       ? FluentTheme.of(context).accentColor
-                      : FluentTheme.of(context).resources.textFillColorSecondary,
+                      : FluentTheme.of(
+                          context,
+                        ).resources.textFillColorSecondary,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -52,9 +54,10 @@ class ServerListItem extends StatelessWidget {
                     children: [
                       Text(
                         connection.name,
-                        style: FluentTheme.of(context).typography.subtitle?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: FluentTheme.of(context).typography.subtitle
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -83,12 +86,16 @@ class ServerListItem extends StatelessWidget {
                         message: 'Testar conexão',
                         child: IconButton(
                           icon: const Icon(FluentIcons.link),
-                          onPressed: isTestingConnection ? null : onTestConnection,
+                          onPressed: isTestingConnection
+                              ? null
+                              : onTestConnection,
                         ),
                       ),
                     if (onConnect != null)
                       Tooltip(
-                        message: _isConnectedToThis ? 'Desconectar' : 'Conectar',
+                        message: _isConnectedToThis
+                            ? 'Desconectar'
+                            : 'Conectar',
                         child: IconButton(
                           icon: Icon(
                             _isConnectedToThis
@@ -98,11 +105,20 @@ class ServerListItem extends StatelessWidget {
                           onPressed: isConnecting ? null : onConnect,
                         ),
                       ),
-                    if (onEdit != null)
-                      IconButton(
-                        icon: const Icon(FluentIcons.edit),
+                    if (onEdit != null) ...[
+                      Button(
                         onPressed: onEdit,
+                        child: const Text('Esta conexão'),
                       ),
+                      const SizedBox(width: 4),
+                      Tooltip(
+                        message: 'Editar conexão',
+                        child: IconButton(
+                          icon: const Icon(FluentIcons.edit),
+                          onPressed: onEdit,
+                        ),
+                      ),
+                    ],
                     if (onDelete != null)
                       IconButton(
                         icon: const Icon(FluentIcons.delete),
@@ -144,12 +160,24 @@ class ServerListItem extends StatelessWidget {
 
   (String, IconData, Color) _getStatusInfo(BuildContext context) {
     if (isConnecting) {
-      return ('Conectando...', FluentIcons.sync, FluentTheme.of(context).accentColor);
+      return (
+        'Conectando...',
+        FluentIcons.sync,
+        FluentTheme.of(context).accentColor,
+      );
     }
     if (_isConnectedToThis) {
-      return ('Conectado', FluentIcons.check_mark, FluentTheme.of(context).accentColor);
+      return (
+        'Conectado',
+        FluentIcons.check_mark,
+        FluentTheme.of(context).accentColor,
+      );
     }
-    return ('Offline', FluentIcons.circle_stop, FluentTheme.of(context).resources.textFillColorSecondary);
+    return (
+      'Offline',
+      FluentIcons.circle_stop,
+      FluentTheme.of(context).resources.textFillColorSecondary,
+    );
   }
 
   String _formatDate(DateTime date) {

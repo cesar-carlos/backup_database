@@ -4,20 +4,31 @@ import 'package:backup_database/domain/entities/server_credential.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/server/server_credential_form_result.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 
 const int _minPasswordLength = 8;
+const int _serverIdLength = 8;
 
 class ServerCredentialDialog extends StatefulWidget {
-  const ServerCredentialDialog({super.key, this.credential});
+  const ServerCredentialDialog({
+    super.key,
+    this.credential,
+    this.existingPassword,
+  });
   final ServerCredential? credential;
+  final String? existingPassword;
 
   static Future<ServerCredentialFormResult?> show(
     BuildContext context, {
     ServerCredential? credential,
+    String? existingPassword,
   }) {
     return showDialog<ServerCredentialFormResult>(
       context: context,
-      builder: (context) => ServerCredentialDialog(credential: credential),
+      builder: (context) => ServerCredentialDialog(
+        credential: credential,
+        existingPassword: existingPassword,
+      ),
     );
   }
 
@@ -45,11 +56,32 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
       _nameController.text = c.name;
       _isActive = c.isActive;
       _descriptionController.text = c.description ?? '';
+      if (widget.existingPassword != null &&
+          widget.existingPassword!.isNotEmpty) {
+        _passwordController.text = widget.existingPassword!;
+        _confirmPasswordController.text = widget.existingPassword!;
+      }
+    } else {
+      _serverIdController.text = _generateServerId();
     }
+    _passwordController.addListener(_onPasswordChanged);
   }
+
+  String _generateServerId() {
+    const chars =
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final r = Random.secure();
+    return List.generate(
+      _serverIdLength,
+      (_) => chars[r.nextInt(chars.length)],
+    ).join();
+  }
+
+  void _onPasswordChanged() => setState(() {});
 
   @override
   void dispose() {
+    _passwordController.removeListener(_onPasswordChanged);
     _serverIdController.dispose();
     _nameController.dispose();
     _passwordController.dispose();
@@ -62,7 +94,10 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
     const chars =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#%';
     final r = Random.secure();
-    return List.generate(_minPasswordLength + 4, (_) => chars[r.nextInt(chars.length)]).join();
+    return List.generate(
+      _minPasswordLength + 4,
+      (_) => chars[r.nextInt(chars.length)],
+    ).join();
   }
 
   void _fillGeneratedPassword() {
@@ -82,7 +117,9 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
   }
 
   String? _validateConfirm(String? value) {
-    if (_isEditing && _passwordController.text.isEmpty && (value == null || value.isEmpty)) {
+    if (_isEditing &&
+        _passwordController.text.isEmpty &&
+        (value == null || value.isEmpty)) {
       return null;
     }
     if (value != _passwordController.text) return 'As senhas não coincidem';
@@ -100,7 +137,10 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
       return;
     }
     if (name.isEmpty) {
-      MessageModal.showError(context, message: 'Informe um nome para a credencial.');
+      MessageModal.showError(
+        context,
+        message: 'Informe um nome para a credencial.',
+      );
       return;
     }
     if (!_isEditing) {
@@ -111,7 +151,8 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
       if (password.length < _minPasswordLength) {
         MessageModal.showError(
           context,
-          message: 'A senha deve ter pelo menos $_minPasswordLength caracteres.',
+          message:
+              'A senha deve ter pelo menos $_minPasswordLength caracteres.',
         );
         return;
       }
@@ -127,15 +168,17 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
       return;
     }
 
-    Navigator.of(context).pop(ServerCredentialFormResult(
-      serverId: serverId,
-      name: name,
-      plainPassword: password.isEmpty ? null : password,
-      isActive: _isActive,
-      description: _descriptionController.text.trim().isEmpty
-          ? null
-          : _descriptionController.text.trim(),
-    ));
+    Navigator.of(context).pop(
+      ServerCredentialFormResult(
+        serverId: serverId,
+        name: name,
+        plainPassword: password.isEmpty ? null : password,
+        isActive: _isActive,
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+      ),
+    );
   }
 
   @override
@@ -151,10 +194,35 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
             children: [
               InfoLabel(
                 label: 'Server ID',
-                child: TextBox(
-                  controller: _serverIdController,
-                  placeholder: 'Identificador único do servidor',
-                  enabled: !_isEditing,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextBox(
+                        controller: _serverIdController,
+                        placeholder: 'Identificador único do servidor',
+                        enabled: false,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: 'Copiar Server ID',
+                      child: IconButton(
+                        icon: const Icon(FluentIcons.copy),
+                        onPressed: () {
+                          final text = _serverIdController.text.trim();
+                          if (text.isNotEmpty) {
+                            Clipboard.setData(ClipboardData(text: text));
+                            MessageModal.showInfo(
+                              context,
+                              message:
+                                  'Server ID copiado para a área de transferência.',
+                              title: 'Copiado',
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
@@ -168,14 +236,51 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
               const SizedBox(height: 16),
               PasswordField(
                 controller: _passwordController,
-                hint: _isEditing ? 'Deixe em branco para manter' : 'Mínimo $_minPasswordLength caracteres',
+                hint: _isEditing
+                    ? 'Deixe em branco para manter'
+                    : 'Mínimo $_minPasswordLength caracteres',
                 validator: _validatePassword,
               ),
+              if (_isEditing && _passwordController.text.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Tooltip(
+                      message: 'Copiar senha para a área de transferência',
+                      child: Button(
+                        onPressed: () {
+                          final text = _passwordController.text;
+                          if (text.isNotEmpty) {
+                            Clipboard.setData(ClipboardData(text: text));
+                            MessageModal.showInfo(
+                              context,
+                              message:
+                                  'Senha copiada para a área de transferência.',
+                              title: 'Copiado',
+                            );
+                          }
+                        },
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(FluentIcons.copy, size: 16),
+                            SizedBox(width: 8),
+                            Text('Copiar senha'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               PasswordField(
                 label: 'Confirmar senha',
                 controller: _confirmPasswordController,
-                hint: _isEditing ? 'Deixe em branco para manter' : 'Repita a senha',
+                hint: _isEditing
+                    ? 'Deixe em branco para manter'
+                    : 'Repita a senha',
                 validator: _validateConfirm,
               ),
               const SizedBox(height: 16),

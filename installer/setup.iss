@@ -30,12 +30,11 @@ CloseApplications=yes
 CloseApplicationsFilter=*.exe
 
 [Languages]
-Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checked
-Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"; Flags: unchecked
+Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"; Flags: unchecked
+Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opcoes de Inicializacao"; Flags: unchecked
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -50,19 +49,21 @@ Source: "install_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "uninstall_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\{#MyAppName} (Servidor)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"
-Name: "{group}\{#MyAppName} (Cliente)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"
+; Main icons for each mode (all will be created)
+Name: "{group}\{#MyAppName} - Server Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Comment: "Run Backup Database as Server"
+Name: "{group}\{#MyAppName} - Client Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"; Comment: "Run Backup Database as Client"
+; Utility icons
 Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
+; Service icons (ONLY for Server mode)
+Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
+Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
 Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
+Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+; Desktop icon (default to server)
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Parameters: "--mode=server"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: startup
@@ -74,6 +75,11 @@ Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs
 var
   VCRedistPage: TOutputProgressWizardPage;
   VCRedistNeeded: Boolean;
+  ModePage: TInputOptionWizardPage;
+  SelectedMode: String;
+
+function IsServiceInstalled(const ServiceName: String): Boolean; forward;
+function StopService(const ServiceName: String): Boolean; forward;
 
 // Função auxiliar para encontrar o desinstalador em múltiplos caminhos
 function FindUninstaller(): String;
@@ -191,6 +197,20 @@ var
 begin
   Result := True;
   VCRedistNeeded := False;
+
+  // Parar o serviço do Windows primeiro para liberar nssm.exe e a pasta de instalação
+  if IsServiceInstalled('BackupDatabaseService') then
+  begin
+    StopService('BackupDatabaseService');
+    Sleep(2000);
+  end;
+
+  // Fechar nssm.exe se estiver em uso (ex.: script "Instalar como Serviço" ainda aberto)
+  if IsAppRunning('nssm.exe') then
+  begin
+    CloseApp('nssm.exe');
+    Sleep(1500);
+  end;
   
   // Verificar se existe uma instalação anterior e executar desinstalação silenciosa
   UninstallPath := FindUninstaller();
@@ -306,9 +326,23 @@ end;
 
 procedure InitializeWizard();
 begin
+  // Create mode selection page
+  ModePage := CreateInputOptionPage(wpLicense,
+    'Select Installation Mode',
+    'Choose how you want to use Backup Database',
+    'Select the installation mode that best fits your needs:',
+    True, False);
+
+  // Add options (only Server and Client)
+  ModePage.Add('(Recommended) Server Mode - Run as a dedicated backup server (allows remote connections)');
+  ModePage.Add('Client Mode - Connect to a remote server and manage backups remotely');
+
+  // Set default selection (Server mode - index 0)
+  ModePage.SelectedValueIndex := 0;
+
   if VCRedistNeeded then
   begin
-    VCRedistPage := CreateOutputProgressPage('Verificando Dependências', 'Instalando Visual C++ Redistributables...');
+    VCRedistPage := CreateOutputProgressPage('Checking Dependencies', 'Installing Visual C++ Redistributables...');
   end;
 end;
 
@@ -377,6 +411,45 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+
+  // Only store selected mode when leaving the mode page - do NOT use {app} here
+  // because the user has not yet chosen the install path (Select Dir comes after)
+  if CurPageID = ModePage.ID then
+  begin
+    case ModePage.SelectedValueIndex of
+      0: SelectedMode := 'server';
+      1: SelectedMode := 'client';
+    else
+      SelectedMode := 'server';
+    end;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ModeFile: TStringList;
+  ModeFilePath: String;
+begin
+  // Write .install_mode only after files are installed, when {app} is defined
+  if CurStep = ssPostInstall then
+  begin
+    if SelectedMode = '' then
+      SelectedMode := 'server';
+    ModeFilePath := ExpandConstant('{app}\.install_mode');
+    ModeFile := TStringList.Create;
+    try
+      ModeFile.Add(SelectedMode);
+      ModeFile.SaveToFile(ModeFilePath);
+    finally
+      ModeFile.Free;
+    end;
+  end;
+end;
+
+// Check if server mode was selected (used to conditionally create service icons)
+function IsServerMode(): Boolean;
+begin
+  Result := (SelectedMode = 'server');
 end;
 
 function IsServiceInstalled(const ServiceName: String): Boolean;

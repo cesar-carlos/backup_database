@@ -39,6 +39,7 @@ class ConnectionManager {
   ConnectionStatus get status =>
       _client?.status ?? ConnectionStatus.disconnected;
   Stream<Message>? get messageStream => _client?.messageStream;
+  Stream<ConnectionStatus>? get statusStream => _client?.statusStream;
 
   Future<void> connect({
     required String host,

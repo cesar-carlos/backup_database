@@ -4,15 +4,21 @@ import 'package:backup_database/core/security/password_hasher.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/server_credential.dart';
 import 'package:backup_database/domain/repositories/i_server_credential_repository.dart';
+import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:uuid/uuid.dart';
 
 const int _defaultPasswordLength = 12;
 const String _defaultCredentialName = 'Credencial padrão';
+const String _plainPasswordKeyPrefix = 'server_credential_plain_';
 
 class InitialSetupService {
-  InitialSetupService(this._credentialRepository);
+  InitialSetupService(
+    this._credentialRepository,
+    this._secureCredentialService,
+  );
 
   final IServerCredentialRepository _credentialRepository;
+  final ISecureCredentialService _secureCredentialService;
 
   Future<DefaultCredentialResult?> createDefaultCredentialIfNotExists() async {
     final result = await _credentialRepository.getAll();
@@ -49,6 +55,12 @@ class InitialSetupService {
       );
       return null;
     }
+
+    final saved = saveResult.getOrThrow();
+    await _secureCredentialService.storePassword(
+      key: '$_plainPasswordKeyPrefix${saved.id}',
+      password: plainPassword,
+    );
 
     LoggerService.info(
       'InitialSetupService: default credential created (serverId: $serverId)',

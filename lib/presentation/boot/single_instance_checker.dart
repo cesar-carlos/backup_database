@@ -77,8 +77,7 @@ class SingleInstanceChecker {
       );
     }
 
-    final isDifferentUser =
-        existingUser != null && existingUser != currentUser;
+    final isDifferentUser = existingUser != null && existingUser != currentUser;
     final couldNotDetermineUser = existingUser == null;
 
     if (isDifferentUser || couldNotDetermineUser) {

@@ -23,15 +23,33 @@ String getWindowTitleForMode(AppMode mode) {
 }
 
 AppMode getAppMode(List<String> args) {
+  // 1. Check command line arguments first
   for (final arg in args) {
     if (arg == '--mode=server') return AppMode.server;
     if (arg == '--mode=client') return AppMode.client;
   }
 
+  // 2. Check environment variable
   final modeFromEnv = dotenv.env['APP_MODE']?.toLowerCase();
   if (modeFromEnv == 'server') return AppMode.server;
   if (modeFromEnv == 'client') return AppMode.client;
 
+  // 3. Check .install_mode file created by installer
+  try {
+    final exeDir = File(Platform.resolvedExecutable).parent;
+    final installModeFile = File(
+      '${exeDir.path}${Platform.pathSeparator}.install_mode',
+    );
+    if (installModeFile.existsSync()) {
+      final content = installModeFile.readAsStringSync().trim().toLowerCase();
+      if (content == 'server') return AppMode.server;
+      if (content == 'client') return AppMode.client;
+    }
+  } on Object catch (_) {
+    // ignore; continue to next check
+  }
+
+  // 4. Check legacy config/mode.ini file
   try {
     final exeDir = File(Platform.resolvedExecutable).parent;
     final modeFile = File(
@@ -48,8 +66,9 @@ AppMode getAppMode(List<String> args) {
       }
     }
   } on Object catch (_) {
-    // ignore; fall back to unified
+    // ignore; fall back to server
   }
 
-  return AppMode.unified;
+  // 5. Default to server mode
+  return AppMode.server;
 }

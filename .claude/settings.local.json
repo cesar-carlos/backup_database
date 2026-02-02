@@ -30,7 +30,24 @@
       "Bash(cat:*)",
       "Bash(nc:*)",
       "Bash(taskkill:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(where ISCC.exe)",
+      "Bash(dir \"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\ISCC.exe\")",
+      "Bash(dir:*)",
+      "Bash(dir \"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 5\\\\ISCC.exe\")",
+      "Bash(\"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\ISCC.exe\":*)",
+      "Bash(findstr:*)",
+      "Bash(powershell:*)",
+      "Bash(explorer \"D:\\\\Developer\\\\Flutter\\\\backup_database\\\\installer\\\\dist\")",
+      "Bash(Start-Sleep -Seconds 3)",
+      "Bash(Select-String \"9527\")",
+      "Bash(Select-String:*)",
+      "Bash(cd:*)",
+      "Bash(Stop-Process -Name \"backup_database\" -Force -ErrorAction SilentlyContinue)",
+      "Bash(Start-Sleep -Seconds 2)",
+      "Bash(Get-Process backup_database -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object:*)",
+      "Bash(flutter clean:*)"
     ]
   }
 }

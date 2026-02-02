@@ -1,14 +1,21 @@
 import 'package:backup_database/core/security/password_hasher.dart';
 import 'package:backup_database/domain/entities/server_credential.dart';
 import 'package:backup_database/domain/repositories/i_server_credential_repository.dart';
+import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+const String _plainPasswordKeyPrefix = 'server_credential_plain_';
+
 class ServerCredentialProvider extends ChangeNotifier {
-  ServerCredentialProvider(this._repository) {
+  ServerCredentialProvider(
+    this._repository,
+    this._secureCredentialService,
+  ) {
     loadCredentials();
   }
   final IServerCredentialRepository _repository;
+  final ISecureCredentialService _secureCredentialService;
 
   List<ServerCredential> _credentials = [];
   bool _isLoading = false;
@@ -78,20 +85,22 @@ class ServerCredentialProvider extends ChangeNotifier {
 
     final result = await _repository.save(credential);
 
-    return result.fold(
-      (saved) {
-        _credentials.add(saved);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      },
-      (failure) {
-        _error = failure.toString();
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      },
+    if (result.isError()) {
+      result.fold((_) {}, (f) => _error = f.toString());
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+
+    final saved = result.getOrThrow();
+    await _secureCredentialService.storePassword(
+      key: '$_plainPasswordKeyPrefix${saved.id}',
+      password: plainPassword,
     );
+    _credentials.add(saved);
+    _isLoading = false;
+    notifyListeners();
+    return true;
   }
 
   Future<bool> updateCredential(
@@ -126,23 +135,34 @@ class ServerCredentialProvider extends ChangeNotifier {
 
     final result = await _repository.update(updated);
 
-    return result.fold(
-      (saved) {
-        final index = _credentials.indexWhere((c) => c.id == saved.id);
-        if (index != -1) {
-          _credentials[index] = saved;
-        }
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      },
-      (failure) {
-        _error = failure.toString();
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      },
+    if (result.isError()) {
+      result.fold((_) {}, (f) => _error = f.toString());
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+
+    final saved = result.getOrThrow();
+    if (plainPassword != null && plainPassword.isNotEmpty) {
+      await _secureCredentialService.storePassword(
+        key: '$_plainPasswordKeyPrefix${saved.id}',
+        password: plainPassword,
+      );
+    }
+    final index = _credentials.indexWhere((c) => c.id == saved.id);
+    if (index != -1) {
+      _credentials[index] = saved;
+    }
+    _isLoading = false;
+    notifyListeners();
+    return true;
+  }
+
+  Future<String?> getPlainPassword(String credentialId) async {
+    final result = await _secureCredentialService.getPassword(
+      key: '$_plainPasswordKeyPrefix$credentialId',
     );
+    return result.fold((pwd) => pwd, (_) => null);
   }
 
   Future<bool> deleteCredential(String id) async {
@@ -152,19 +172,19 @@ class ServerCredentialProvider extends ChangeNotifier {
 
     final result = await _repository.delete(id);
 
-    return result.fold(
-      (_) {
-        _credentials.removeWhere((c) => c.id == id);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      },
-      (failure) {
-        _error = failure.toString();
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      },
+    if (result.isError()) {
+      result.fold((_) {}, (f) => _error = f.toString());
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+
+    await _secureCredentialService.deletePassword(
+      key: '$_plainPasswordKeyPrefix$id',
     );
+    _credentials.removeWhere((c) => c.id == id);
+    _isLoading = false;
+    notifyListeners();
+    return true;
   }
 }

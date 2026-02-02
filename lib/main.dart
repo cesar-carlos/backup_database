@@ -18,6 +18,7 @@ import 'package:backup_database/presentation/boot/single_instance_checker.dart';
 import 'package:backup_database/presentation/handlers/tray_menu_handler.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,7 @@ Future<void> main() async {
     return;
   }
 
+  await _loadEnvironment();
   _checkOsCompatibility();
 
   // Single instance check (configurável via SINGLE_INSTANCE_ENABLED)
@@ -70,6 +72,15 @@ Future<void> main() async {
     LoggerService.error('Erro fatal na inicialização', e, stackTrace);
     await AppCleanup.cleanup();
     exit(1);
+  }
+}
+
+Future<void> _loadEnvironment() async {
+  try {
+    await dotenv.load();
+    LoggerService.info('Variaveis de ambiente carregadas');
+  } on Object catch (e) {
+    LoggerService.warning('Nao foi possivel carregar .env: $e');
   }
 }
 

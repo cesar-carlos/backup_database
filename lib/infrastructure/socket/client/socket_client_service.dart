@@ -21,5 +21,6 @@ abstract class SocketClientService {
   bool get isConnected;
   ConnectionStatus get status;
   Stream<Message> get messageStream;
+  Stream<ConnectionStatus> get statusStream;
   Future<void> send(Message message);
 }

@@ -56,12 +56,6 @@ class _MainLayoutState extends State<MainLayout> {
         route: RouteNames.schedules,
       ),
       const NavigationItem(
-        icon: FluentIcons.megaphone,
-        selectedIcon: FluentIcons.megaphone,
-        label: 'Notificações',
-        route: RouteNames.notifications,
-      ),
-      const NavigationItem(
         icon: FluentIcons.server,
         selectedIcon: FluentIcons.server,
         label: 'Servidor',
@@ -86,6 +80,12 @@ class _MainLayoutState extends State<MainLayout> {
         route: RouteNames.transferBackups,
       ),
       const NavigationItem(
+        icon: FluentIcons.megaphone,
+        selectedIcon: FluentIcons.megaphone,
+        label: 'Notificações',
+        route: RouteNames.notifications,
+      ),
+      const NavigationItem(
         icon: FluentIcons.document,
         selectedIcon: FluentIcons.document,
         label: 'Logs',
@@ -102,7 +102,7 @@ class _MainLayoutState extends State<MainLayout> {
     // Filtrar itens baseado no modo
     switch (mode) {
       case AppMode.client:
-        // Cliente NÃO vê: Bancos de Dados, Agendamentos, Servidor, Logs
+        // Cliente NÃO vê: Bancos de Dados, Agendamentos, Servidor, Logs, Notificações
         // Cliente apenas se conecta ao servidor e executa ações remotas
         return allItems
             .where(
@@ -110,7 +110,8 @@ class _MainLayoutState extends State<MainLayout> {
                   item.route != RouteNames.sqlServerConfig &&
                   item.route != RouteNames.schedules &&
                   item.route != RouteNames.serverSettings &&
-                  item.route != RouteNames.logs,
+                  item.route != RouteNames.logs &&
+                  item.route != RouteNames.notifications,
             )
             .toList();
 
@@ -126,7 +127,7 @@ class _MainLayoutState extends State<MainLayout> {
             .toList();
 
       case AppMode.unified:
-        // Unified vê todos
+        // Não usado mais (apenas server e client)
         return allItems;
     }
   }
