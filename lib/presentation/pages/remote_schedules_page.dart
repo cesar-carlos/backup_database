@@ -192,6 +192,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                     provider.isUpdating || provider.isExecuting;
                 return ScheduleListItem(
                   schedule: schedule,
+                  isOperating: isOperating,
                   onToggleEnabled: isOperating
                       ? null
                       : (enabled) => _onToggleEnabled(
