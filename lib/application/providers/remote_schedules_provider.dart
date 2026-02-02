@@ -13,6 +13,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   bool _isUpdating = false;
   bool _isExecuting = false;
   String? _error;
+  String? _updatingScheduleId;
+  String? _executingScheduleId;
 
   List<Schedule> get schedules => _schedules;
   bool get isLoading => _isLoading;
@@ -20,6 +22,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   bool get isExecuting => _isExecuting;
   String? get error => _error;
   bool get isConnected => _connectionManager.isConnected;
+  String? get updatingScheduleId => _updatingScheduleId;
+  String? get executingScheduleId => _executingScheduleId;
 
   Future<void> loadSchedules() async {
     if (!_connectionManager.isConnected) {
@@ -56,6 +60,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     }
 
     _isUpdating = true;
+    _updatingScheduleId = schedule.id;
     _error = null;
     notifyListeners();
 
@@ -69,12 +74,14 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         }
         _error = null;
         _isUpdating = false;
+        _updatingScheduleId = null;
         notifyListeners();
         return true;
       },
       (exception) {
         _error = mapExceptionToMessage(exception);
         _isUpdating = false;
+        _updatingScheduleId = null;
         notifyListeners();
         return false;
       },
@@ -89,6 +96,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     }
 
     _isExecuting = true;
+    _executingScheduleId = scheduleId;
     _error = null;
     notifyListeners();
 
@@ -98,12 +106,14 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       (_) {
         _error = null;
         _isExecuting = false;
+        _executingScheduleId = null;
         notifyListeners();
         return true;
       },
       (exception) {
         _error = mapExceptionToMessage(exception);
         _isExecuting = false;
+        _executingScheduleId = null;
         notifyListeners();
         return false;
       },

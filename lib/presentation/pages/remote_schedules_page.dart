@@ -188,12 +188,12 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final schedule = provider.schedules[index];
-                final isOperating =
-                    provider.isUpdating || provider.isExecuting;
+                final isOperating = schedule.id == provider.updatingScheduleId ||
+                    schedule.id == provider.executingScheduleId;
                 return ScheduleListItem(
                   schedule: schedule,
                   isOperating: isOperating,
-                  onToggleEnabled: isOperating
+                  onToggleEnabled: schedule.id == provider.updatingScheduleId
                       ? null
                       : (enabled) => _onToggleEnabled(
                             context,
@@ -201,15 +201,18 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                             schedule,
                             enabled,
                           ),
-                  onRunNow: isOperating || !schedule.enabled
+                  onRunNow: schedule.id == provider.executingScheduleId ||
+                          !schedule.enabled
                       ? null
                       : () => _onRunNow(context, provider, schedule.id),
-                  onTransferDestinations: isOperating
-                      ? null
-                      : () => _showTransferDestinationsDialog(
-                            context,
-                            schedule,
-                          ),
+                  onTransferDestinations:
+                      schedule.id == provider.updatingScheduleId ||
+                              schedule.id == provider.executingScheduleId
+                          ? null
+                          : () => _showTransferDestinationsDialog(
+                                context,
+                                schedule,
+                              ),
                 );
               },
             ),
@@ -225,7 +228,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     Schedule schedule,
     bool enabled,
   ) async {
-    if (provider.isUpdating) return;
+    if (provider.updatingScheduleId != null) return;
 
     final updated = schedule.copyWith(enabled: enabled);
     final success = await provider.updateSchedule(updated);
@@ -249,7 +252,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     RemoteSchedulesProvider provider,
     String scheduleId,
   ) async {
-    if (provider.isExecuting) return;
+    if (provider.executingScheduleId != null) return;
 
     final success = await provider.executeSchedule(scheduleId);
     if (context.mounted) {
