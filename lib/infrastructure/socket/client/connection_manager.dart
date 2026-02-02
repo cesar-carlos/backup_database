@@ -34,6 +34,7 @@ class ConnectionManager {
 
   static const Duration _scheduleRequestTimeout = Duration(seconds: 15);
   static const Duration _fileTransferTimeout = Duration(minutes: 5);
+  static const Duration _backupExecutionTimeout = Duration(minutes: 10);
 
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
@@ -338,7 +339,7 @@ class ConnectionManager {
       );
 
       if (onProgress == null) {
-        final message = await completer.future.timeout(_scheduleRequestTimeout);
+        final message = await completer.future.timeout(_backupExecutionTimeout);
         _activeBackups.remove(requestId);
         if (message is rd.Result) {
           return message as rd.Result<void>;
@@ -346,12 +347,17 @@ class ConnectionManager {
         return const rd.Success(rd.unit);
       }
 
-      final result = await completer.future.timeout(_scheduleRequestTimeout);
+      final result = await completer.future.timeout(_backupExecutionTimeout);
       _activeBackups.remove(requestId);
       return result;
     } on TimeoutException {
       _activeBackups.remove(requestId);
-      return rd.Failure(TimeoutException('executeSchedule timeout'));
+      return rd.Failure(
+        TimeoutException(
+          'Tempo esgotado ao aguardar conclusão do backup '
+          '(limite: ${_backupExecutionTimeout.inMinutes} minutos)',
+        ),
+      );
     } on Object catch (e) {
       _activeBackups.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
