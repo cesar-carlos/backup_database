@@ -229,18 +229,15 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
   ) async {
     final transferProvider = context.read<RemoteFileTransferProvider>();
     final destinationProvider = context.read<DestinationProvider>();
-    final remoteDestinations = destinationProvider.destinations
-        .where((d) => d.type != DestinationType.local)
-        .toList();
-    if (remoteDestinations.isEmpty) {
+    final destinations = destinationProvider.destinations;
+    if (destinations.isEmpty) {
       if (context.mounted) {
         await showDialog<void>(
           context: context,
           builder: (context) => ContentDialog(
             title: const Text('Destinos após transferir'),
             content: const Text(
-              'Cadastre destinos remotos (FTP, Google Drive, etc.) '
-              'em Destinos para vincular aqui.',
+              'Cadastre destinos em Destinos para vincular aqui.',
             ),
             actions: [
               Button(
@@ -262,7 +259,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
       context: context,
       builder: (context) => _TransferDestinationsDialog(
         scheduleName: schedule.name,
-        destinations: remoteDestinations,
+        destinations: destinations,
         initialSelectedIds: selectedIds,
       ),
     );
@@ -335,7 +332,13 @@ class _TransferDestinationsDialogState extends State<_TransferDestinationsDialog
                     }
                   });
                 },
-                content: Text(d.name),
+                content: Row(
+                  children: [
+                    Text(d.name),
+                    const SizedBox(width: 8),
+                    _DestinationTypeBadge(type: d.type),
+                  ],
+                ),
               ),
             ),
           ],
@@ -354,3 +357,65 @@ class _TransferDestinationsDialogState extends State<_TransferDestinationsDialog
     );
   }
 }
+
+class _DestinationTypeBadge extends StatelessWidget {
+  const _DestinationTypeBadge({required this.type});
+
+  final DestinationType type;
+
+  String get _label {
+    switch (type) {
+      case DestinationType.local:
+        return 'LOCAL';
+      case DestinationType.ftp:
+        return 'FTP';
+      case DestinationType.googleDrive:
+        return 'Google Drive';
+      case DestinationType.dropbox:
+        return 'Dropbox';
+      case DestinationType.nextcloud:
+        return 'Nextcloud';
+    }
+  }
+
+  Color _color(FluentThemeData theme) {
+    switch (type) {
+      case DestinationType.local:
+        return theme.resources.systemFillColorSuccessBackground;
+      case DestinationType.ftp:
+        return const Color(0xFF0066CC);
+      case DestinationType.googleDrive:
+        return const Color(0xFF4285F4);
+      case DestinationType.dropbox:
+        return const Color(0xFF0061FF);
+      case DestinationType.nextcloud:
+        return const Color(0xFF0082C9);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: _color(theme).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: _color(theme),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        _label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: _color(theme),
+        ),
+      ),
+    );
+  }
+}
+
+
