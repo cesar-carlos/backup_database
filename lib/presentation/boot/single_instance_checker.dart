@@ -22,6 +22,15 @@ class SingleInstanceChecker {
       SingleInstanceService();
   static const IWindowsMessageBox _messageBox = WindowsMessageBox();
 
+  // User-facing messages with Unicode escapes to guarantee correct encoding
+  // \u00E1=á \u00E3=ã \u00E7=ç \u00E9=é \u00ED=í \u00F3=ó \u00FA=ú \u00E2=â
+  static const String _dialogTitle =
+      'Backup Database - J\u00E1 em Execu\u00E7\u00E3o';
+  static const String _dialogMessage =
+      'O aplicativo Backup Database j\u00E1 est\u00E1 aberto.\n\n'
+      'A janela existente foi trazida para frente.\n\n'
+      'N\u00E3o \u00E9 poss\u00EDvel executar mais de uma inst\u00E2ncia ao mesmo tempo.';
+
   /// Checks if this is the first instance using mutex.
   ///
   /// Returns `true` if the application can continue (first instance),
@@ -64,40 +73,36 @@ class SingleInstanceChecker {
       existingUser = await IpcService.getExistingInstanceUser();
     } on Object catch (e) {
       LoggerService.debug(
-        'Não foi possível obter usuário da instância existente: $e',
+        'Nao foi possivel obter usuario da instancia existente: $e',
       );
     }
 
-    final isDifferentUser = existingUser != null && existingUser != currentUser;
+    final isDifferentUser =
+        existingUser != null && existingUser != currentUser;
     final couldNotDetermineUser = existingUser == null;
 
     if (isDifferentUser || couldNotDetermineUser) {
       LoggerService.warning(
-        '⚠️ SEGUNDA INSTÂNCIA DETECTADA. '
-        'Usuário atual: $currentUser. '
-        '${existingUser != null ? "Instância existente em: $existingUser" : "Não foi possível determinar usuário da instância existente"}',
+        'SEGUNDA INSTANCIA DETECTADA. '
+        'Usuario atual: $currentUser. '
+        '${existingUser != null ? "Instancia existente em: $existingUser" : "Nao foi possivel determinar usuario da instancia existente"}',
       );
     } else {
       LoggerService.info(
-        '⚠️ SEGUNDA INSTÂNCIA DETECTADA (mesmo usuário). '
-        'Usuário: $currentUser. Encerrando silenciosamente.',
+        'SEGUNDA INSTANCIA DETECTADA (mesmo usuario). '
+        'Usuario: $currentUser. Encerrando silenciosamente.',
       );
     }
 
     for (var i = 0; i < SingleInstanceConfig.maxRetryAttempts; i++) {
       final notified = await SingleInstanceService.notifyExistingInstance();
       if (notified) {
-        LoggerService.info('Instância existente notificada via IPC');
+        LoggerService.info('Instancia existente notificada via IPC');
         break;
       }
       await Future.delayed(SingleInstanceConfig.retryDelay);
     }
 
-    _messageBox.showWarning(
-      'Backup Database - Já em Execução',
-      'O aplicativo Backup Database já está aberto.\n\n'
-          'A janela existente foi trazida para frente.\n\n'
-          'Não é possível executar mais de uma instância ao mesmo tempo.',
-    );
+    _messageBox.showWarning(_dialogTitle, _dialogMessage);
   }
 }
