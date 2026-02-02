@@ -1,84 +1,47 @@
 import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/services/i_windows_message_box.dart';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
-/// Utility class for showing native Windows message boxes.
-///
-/// Uses the Win32 MessageBox API directly for displaying system-level
-/// notifications that work even without a Flutter UI context.
-class WindowsMessageBox {
-  WindowsMessageBox._();
+/// Implementation of [IWindowsMessageBox] using Win32 MessageBox API.
+class WindowsMessageBox implements IWindowsMessageBox {
+  const WindowsMessageBox();
 
   static const int _mbOk = 0x00000000;
   static const int _mbIconWarning = 0x00000030;
   static const int _mbIconInformation = 0x00000040;
   static const int _mbIconError = 0x00000010;
 
-  /// Shows a warning message box.
-  static void showWarning(String title, String message) {
-    if (!Platform.isWindows) return;
-
-    try {
-      final titlePtr = title.toNativeUtf16();
-      final messagePtr = message.toNativeUtf16();
-
-      MessageBox(
-        0,
-        messagePtr,
-        titlePtr,
-        _mbOk | _mbIconWarning,
-      );
-
-      calloc.free(messagePtr);
-      calloc.free(titlePtr);
-    } on Object catch (e) {
-      LoggerService.debug('Windows MessageBox (warning): $e');
-    }
+  @override
+  void showWarning(String title, String message) {
+    _showMessageBox(title, message, _mbOk | _mbIconWarning, 'warning');
   }
 
-  /// Shows an informational message box.
-  static void showInfo(String title, String message) {
-    if (!Platform.isWindows) return;
-
-    try {
-      final titlePtr = title.toNativeUtf16();
-      final messagePtr = message.toNativeUtf16();
-
-      MessageBox(
-        0,
-        messagePtr,
-        titlePtr,
-        _mbOk | _mbIconInformation,
-      );
-
-      calloc.free(messagePtr);
-      calloc.free(titlePtr);
-    } on Object catch (e) {
-      LoggerService.debug('Windows MessageBox (info): $e');
-    }
+  @override
+  void showInfo(String title, String message) {
+    _showMessageBox(title, message, _mbOk | _mbIconInformation, 'info');
   }
 
-  /// Shows an error message box.
-  static void showError(String title, String message) {
+  @override
+  void showError(String title, String message) {
+    _showMessageBox(title, message, _mbOk | _mbIconError, 'error');
+  }
+
+  void _showMessageBox(String title, String message, int flags, String type) {
     if (!Platform.isWindows) return;
 
     try {
       final titlePtr = title.toNativeUtf16();
       final messagePtr = message.toNativeUtf16();
 
-      MessageBox(
-        0,
-        messagePtr,
-        titlePtr,
-        _mbOk | _mbIconError,
-      );
+      MessageBox(0, messagePtr, titlePtr, flags);
 
       calloc.free(messagePtr);
       calloc.free(titlePtr);
     } on Object catch (e) {
-      LoggerService.debug('Windows MessageBox (error): $e');
+      LoggerService.debug('Windows MessageBox ($type): $e');
     }
   }
 }

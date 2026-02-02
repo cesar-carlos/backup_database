@@ -37,6 +37,8 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<ISingleInstanceService>(
     SingleInstanceService.new,
   );
+  getIt.registerLazySingleton<IIpcService>(IpcService.new);
+  getIt.registerLazySingleton<IWindowsMessageBox>(WindowsMessageBox.new);
 
   getIt.registerLazySingleton<Dio>(Dio.new);
   getIt.registerLazySingleton<ApiClient>(() => ApiClient(getIt<Dio>()));

@@ -5,17 +5,16 @@ import 'dart:io';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
+import 'package:backup_database/domain/services/i_ipc_service.dart';
 
-/// Service for inter-process communication between application instances.
-///
-/// Uses TCP sockets on localhost to communicate between instances.
-class IpcService {
+/// Implementation of [IIpcService] using TCP sockets on localhost.
+class IpcService implements IIpcService {
   ServerSocket? _server;
   Function()? _onShowWindow;
   bool _isRunning = false;
   int _currentPort = SingleInstanceConfig.ipcBasePort;
 
-  /// Starts the IPC server to listen for commands from other instances.
+  @override
   Future<bool> startServer({Function()? onShowWindow}) async {
     if (_isRunning) {
       LoggerService.debug('IPC Server já está rodando');
@@ -250,7 +249,7 @@ class IpcService {
     return null;
   }
 
-  /// Stops the IPC server.
+  @override
   Future<void> stop() async {
     if (_server != null) {
       try {
@@ -263,6 +262,6 @@ class IpcService {
     }
   }
 
-  /// Whether the IPC server is currently running.
+  @override
   bool get isRunning => _isRunning;
 }
