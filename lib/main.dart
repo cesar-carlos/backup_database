@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
@@ -20,7 +20,11 @@ import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-Future<void> main() async {
+void main() {
+  runZonedGuarded(_runApp, _handleError);
+}
+
+Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   LoggerService.init();
@@ -34,7 +38,6 @@ Future<void> main() async {
   await _loadEnvironment();
   _checkOsCompatibility();
 
-  // Single instance check (configurável via SINGLE_INSTANCE_ENABLED)
   if (SingleInstanceConfig.isEnabled) {
     final canContinue =
         await SingleInstanceChecker.checkAndHandleSecondInstance();
@@ -64,7 +67,7 @@ Future<void> main() async {
 
     await _initializeAppServices(launchConfig);
 
-    runZonedGuarded(() => runApp(const BackupDatabaseApp()), _handleError);
+    runApp(const BackupDatabaseApp());
 
     await _startScheduler();
     await _startSocketServer();
@@ -168,8 +171,8 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
 
 Future<void> _startScheduler() async {
   try {
-    final schedulerService = service_locator.getIt<SchedulerService>();
-    await schedulerService.start();
+    final schedulerService = service_locator.getIt<ISchedulerService>();
+    schedulerService.start();
     LoggerService.info('Serviço de agendamento iniciado');
   } on Object catch (e) {
     LoggerService.error('Erro ao iniciar scheduler', e);

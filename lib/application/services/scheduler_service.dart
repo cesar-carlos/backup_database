@@ -963,6 +963,7 @@ class SchedulerService implements ISchedulerService {
   ///
   /// [timeout] Tempo máximo para aguardar (padrão: 5 minutos).
   /// Retorna `true` se todos os backups terminaram, `false` se timeout.
+  @override
   Future<bool> waitForRunningBackups({
     Duration timeout = const Duration(minutes: 5),
   }) async {

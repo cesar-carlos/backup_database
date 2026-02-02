@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/application/services/service_health_checker.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/service/service_shutdown_handler.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -17,7 +17,7 @@ class ServiceModeInitializer {
   static final Completer<void> _shutdownCompleter = Completer<void>();
 
   static Future<void> initialize() async {
-    SchedulerService? schedulerService;
+    ISchedulerService? schedulerService;
     ServiceHealthChecker? healthChecker;
     WindowsEventLogService? eventLog;
     ISingleInstanceService? singleInstanceService;
@@ -42,7 +42,7 @@ class ServiceModeInitializer {
       await service_locator.setupServiceLocator();
       LoggerService.info('Dependências configuradas');
 
-      schedulerService = service_locator.getIt<SchedulerService>();
+      schedulerService = service_locator.getIt<ISchedulerService>();
       healthChecker = service_locator.getIt<ServiceHealthChecker>();
       eventLog = service_locator.getIt<WindowsEventLogService>();
 
@@ -86,7 +86,7 @@ class ServiceModeInitializer {
         }
       });
 
-      await schedulerService.start();
+      schedulerService.start();
       LoggerService.info('✅ Serviço de agendamento iniciado em modo serviço');
 
       // Inicia health checker

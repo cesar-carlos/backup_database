@@ -1,10 +1,10 @@
-﻿import 'dart:io';
+import 'dart:io';
 
-import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 
@@ -18,11 +18,11 @@ class TrayMenuHandler {
         _executeManualBackup();
 
       case TrayMenuAction.pauseScheduler:
-        service_locator.getIt<SchedulerService>().stop();
+        service_locator.getIt<ISchedulerService>().stop();
         TrayManagerService().setSchedulerPaused(true);
 
       case TrayMenuAction.resumeScheduler:
-        service_locator.getIt<SchedulerService>().start();
+        service_locator.getIt<ISchedulerService>().start();
         TrayManagerService().setSchedulerPaused(false);
 
       case TrayMenuAction.settings:
@@ -38,7 +38,7 @@ class TrayMenuHandler {
 
     try {
       final scheduleRepository = service_locator.getIt<IScheduleRepository>();
-      final schedulerService = service_locator.getIt<SchedulerService>();
+      final schedulerService = service_locator.getIt<ISchedulerService>();
 
       final schedulesResult = await scheduleRepository.getEnabled();
 

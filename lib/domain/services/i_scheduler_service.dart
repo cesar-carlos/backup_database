@@ -10,4 +10,8 @@ abstract class ISchedulerService {
   void stop();
 
   bool get isRunning;
+
+  Future<bool> waitForRunningBackups({
+    Duration timeout = const Duration(minutes: 5),
+  });
 }

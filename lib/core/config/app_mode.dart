@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 enum AppMode { server, client, unified }
@@ -23,18 +24,25 @@ String getWindowTitleForMode(AppMode mode) {
 }
 
 AppMode getAppMode(List<String> args) {
-  // 1. Check command line arguments first
+  // 1. Command line arguments
   for (final arg in args) {
     if (arg == '--mode=server') return AppMode.server;
     if (arg == '--mode=client') return AppMode.client;
   }
 
-  // 2. Check environment variable
+  // 2. Debug/development only: DEBUG_APP_MODE in .env (ignored in release)
+  if (kDebugMode) {
+    final debugMode = dotenv.env['DEBUG_APP_MODE']?.trim().toLowerCase();
+    if (debugMode == 'server') return AppMode.server;
+    if (debugMode == 'client') return AppMode.client;
+  }
+
+  // 3. Environment variable (any build)
   final modeFromEnv = dotenv.env['APP_MODE']?.toLowerCase();
   if (modeFromEnv == 'server') return AppMode.server;
   if (modeFromEnv == 'client') return AppMode.client;
 
-  // 3. Check .install_mode file created by installer
+  // 4. .install_mode file created by installer
   try {
     final exeDir = File(Platform.resolvedExecutable).parent;
     final installModeFile = File(
@@ -49,7 +57,7 @@ AppMode getAppMode(List<String> args) {
     // ignore; continue to next check
   }
 
-  // 4. Check legacy config/mode.ini file
+  // 5. Legacy config/mode.ini file
   try {
     final exeDir = File(Platform.resolvedExecutable).parent;
     final modeFile = File(
@@ -58,10 +66,16 @@ AppMode getAppMode(List<String> args) {
     );
     if (modeFile.existsSync()) {
       final content = modeFile.readAsStringSync();
-      if (RegExp(r'mode\s*=\s*server', caseSensitive: false).hasMatch(content)) {
+      if (RegExp(
+        r'mode\s*=\s*server',
+        caseSensitive: false,
+      ).hasMatch(content)) {
         return AppMode.server;
       }
-      if (RegExp(r'mode\s*=\s*client', caseSensitive: false).hasMatch(content)) {
+      if (RegExp(
+        r'mode\s*=\s*client',
+        caseSensitive: false,
+      ).hasMatch(content)) {
         return AppMode.client;
       }
     }
@@ -69,6 +83,6 @@ AppMode getAppMode(List<String> args) {
     // ignore; fall back to server
   }
 
-  // 5. Default to server mode
+  // 6. Default to server mode
   return AppMode.server;
 }
