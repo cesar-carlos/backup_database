@@ -23,6 +23,17 @@ String getWindowTitleForMode(AppMode mode) {
   };
 }
 
+/// Returns the database filename for the current app mode.
+/// Server uses the default database for backward compatibility.
+/// Client uses a separate database to avoid conflicts.
+String getDatabaseNameForMode(AppMode mode) {
+  return switch (mode) {
+    AppMode.client => 'backup_database_client',
+    AppMode.server => 'backup_database',
+    AppMode.unified => 'backup_database',
+  };
+}
+
 AppMode getAppMode(List<String> args) {
   // 1. Command line arguments
   for (final arg in args) {

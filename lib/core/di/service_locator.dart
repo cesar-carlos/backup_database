@@ -4,6 +4,7 @@ import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/initial_setup_service.dart';
 import 'package:backup_database/application/services/service_health_checker.dart';
 import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -43,7 +44,11 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<Dio>(Dio.new);
   getIt.registerLazySingleton<ApiClient>(() => ApiClient(getIt<Dio>()));
 
-  getIt.registerLazySingleton<AppDatabase>(AppDatabase.new);
+  // Use separate database for client mode to avoid conflicts
+  final databaseName = getDatabaseNameForMode(currentAppMode);
+  getIt.registerLazySingleton<AppDatabase>(
+    () => AppDatabase(databaseName: databaseName),
+  );
 
   getIt.registerLazySingleton<ISqlServerConfigRepository>(
     () => SqlServerConfigRepository(

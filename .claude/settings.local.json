@@ -47,7 +47,15 @@
       "Bash(Start-Sleep -Seconds 2)",
       "Bash(Get-Process backup_database -ErrorAction SilentlyContinue)",
       "Bash(Select-Object:*)",
-      "Bash(flutter clean:*)"
+      "Bash(flutter clean:*)",
+      "Bash(dart test:*)",
+      "Bash(Get-ChildItem -Path . -Filter *.ps1)",
+      "Bash(ls:*)",
+      "Bash(Get-Content 'TESTING_SERVER_CLIENT.md' -Raw)",
+      "Bash(ForEach-Object {)",
+      "Bash(})",
+      "Bash(Set-Content 'TESTING_SERVER_CLIENT.md' -NoNewline)",
+      "Bash(\")"
     ]
   }
 }

@@ -43,7 +43,8 @@ part 'database.g.dart';
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase({String databaseName = 'backup_database'})
+      : super(_openConnection(databaseName));
 
   AppDatabase.inMemory() : super(LazyDatabase(() async => NativeDatabase.memory()));
 
@@ -897,10 +898,10 @@ class AppDatabase extends _$AppDatabase {
   }
 }
 
-LazyDatabase _openConnection() {
+LazyDatabase _openConnection([String databaseName = 'backup_database']) {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'backup_database.db'));
+    final file = File(p.join(dbFolder.path, '$databaseName.db'));
     return NativeDatabase.createInBackground(file);
   });
 }
