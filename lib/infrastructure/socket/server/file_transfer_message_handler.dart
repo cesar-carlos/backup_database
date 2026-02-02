@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/file_chunker.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -43,6 +44,7 @@ class FileTransferMessageHandler {
           createFileTransferErrorMessage(
             requestId: requestId,
             errorMessage: 'Path not allowed',
+            errorCode: ErrorCode.pathNotAllowed,
           ),
         );
         return;
@@ -55,6 +57,7 @@ class FileTransferMessageHandler {
           createFileTransferErrorMessage(
             requestId: requestId,
             errorMessage: 'File not found',
+            errorCode: ErrorCode.fileNotFound,
           ),
         );
         return;
@@ -130,7 +133,12 @@ class FileTransferMessageHandler {
       if (!await dir.exists()) {
         await sendToClient(
           clientId,
-          createFileListMessage(requestId: requestId, files: []),
+          createFileListMessage(
+            requestId: requestId,
+            files: [],
+            error: 'Directory not found',
+            errorCode: ErrorCode.directoryNotFound,
+          ),
         );
         return;
       }
@@ -138,6 +146,21 @@ class FileTransferMessageHandler {
       await sendToClient(
         clientId,
         createFileListMessage(requestId: requestId, files: files),
+      );
+    } on FileSystemException catch (e, st) {
+      LoggerService.warning(
+        'FileTransferMessageHandler listFiles error for client $clientId',
+        e,
+        st,
+      );
+      await sendToClient(
+        clientId,
+        createFileListMessage(
+          requestId: requestId,
+          files: [],
+          error: 'Failed to list files: ${e.message}',
+          errorCode: ErrorCode.ioError,
+        ),
       );
     } on Object catch (e, st) {
       LoggerService.warning(
@@ -147,7 +170,12 @@ class FileTransferMessageHandler {
       );
       await sendToClient(
         clientId,
-        createFileListMessage(requestId: requestId, files: []),
+        createFileListMessage(
+          requestId: requestId,
+          files: [],
+          error: 'Failed to list files: $e',
+          errorCode: ErrorCode.unknown,
+        ),
       );
     }
   }

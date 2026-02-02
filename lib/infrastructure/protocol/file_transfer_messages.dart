@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/file_chunker.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
@@ -23,9 +24,13 @@ Message createListFilesMessage({required int requestId}) {
 Message createFileListMessage({
   required int requestId,
   required List<RemoteFileEntry> files,
+  String? error,
+  ErrorCode? errorCode,
 }) {
   final payload = <String, dynamic>{
     'files': files.map(_remoteFileEntryToMap).toList(),
+    ...? (error != null ? {'error': error} : null),
+    ...? (errorCode != null ? {'errorCode': errorCode.code} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -155,8 +160,12 @@ Message createFileTransferCompleteMessage({
 Message createFileTransferErrorMessage({
   required int requestId,
   required String errorMessage,
+  ErrorCode? errorCode,
 }) {
-  final payload = <String, dynamic>{'error': errorMessage};
+  final payload = <String, dynamic>{
+    'error': errorMessage,
+    ...? (errorCode != null ? {'errorCode': errorCode.code} : null),
+  };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
   return Message(
@@ -272,5 +281,18 @@ int? getChecksumFromComplete(Message message) =>
 String getErrorFromFileTransferError(Message message) =>
     message.payload['error'] as String? ?? '';
 
+ErrorCode? getErrorCodeFromFileTransferError(Message message) {
+  final code = message.payload['errorCode'] as String?;
+  return code != null ? ErrorCode.fromString(code) : null;
+}
+
 int getChunkIndexFromAck(Message message) =>
     message.payload['chunkIndex'] as int? ?? 0;
+
+String? getErrorFromFileList(Message message) =>
+    message.payload['error'] as String?;
+
+ErrorCode? getErrorCodeFromFileList(Message message) {
+  final code = message.payload['errorCode'] as String?;
+  return code != null ? ErrorCode.fromString(code) : null;
+}

@@ -7,6 +7,8 @@ import 'package:backup_database/domain/entities/connection/connected_client.dart
 import 'package:backup_database/infrastructure/datasources/daos/connection_log_dao.dart';
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
+import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/socket/heartbeat.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
@@ -139,7 +141,18 @@ class ClientHandler {
         }
         _messageController.add(message);
       } on ProtocolException catch (e) {
-        LoggerService.warning('ClientHandler parse error: ${e.message}');
+        LoggerService.warning(
+          'ClientHandler parse error for $_remoteAddress: ${e.message}',
+        );
+        unawaited(
+          send(
+            createErrorMessage(
+              requestId: 0,
+              errorMessage: 'Failed to parse message: ${e.message}',
+              errorCode: ErrorCode.parseError,
+            ),
+          ),
+        );
       }
     }
   }
