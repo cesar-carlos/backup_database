@@ -19,14 +19,40 @@ class RemoteSchedulesPage extends StatefulWidget {
 }
 
 class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
+  ServerConnectionProvider? _connectionProvider;
+  bool _hasLoadedInitialSchedules = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.read<ServerConnectionProvider>().isConnected) {
+      _connectionProvider = context.read<ServerConnectionProvider>();
+      _connectionProvider!.addListener(_onConnectionChanged);
+
+      if (_connectionProvider!.isConnected) {
         context.read<RemoteSchedulesProvider>().loadSchedules();
+        _hasLoadedInitialSchedules = true;
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _connectionProvider?.removeListener(_onConnectionChanged);
+    super.dispose();
+  }
+
+  void _onConnectionChanged() {
+    if (_connectionProvider == null) return;
+
+    if (_connectionProvider!.isConnected && !_hasLoadedInitialSchedules) {
+      context.read<RemoteSchedulesProvider>().loadSchedules();
+      _hasLoadedInitialSchedules = true;
+    }
+
+    if (!_connectionProvider!.isConnected) {
+      _hasLoadedInitialSchedules = false;
+    }
   }
 
   @override
@@ -159,17 +185,24 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
             separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final schedule = provider.schedules[index];
+              final isOperating = provider.isUpdating || provider.isExecuting;
               return ScheduleListItem(
                 schedule: schedule,
-                onToggleEnabled: (enabled) => _onToggleEnabled(
-                  context,
-                  provider,
-                  schedule,
-                  enabled,
-                ),
-                onRunNow: () => _onRunNow(context, provider, schedule.id),
-                onTransferDestinations: () =>
-                    _showTransferDestinationsDialog(context, schedule),
+                onToggleEnabled: isOperating
+                    ? null
+                    : (enabled) => _onToggleEnabled(
+                          context,
+                          provider,
+                          schedule,
+                          enabled,
+                        ),
+                onRunNow: isOperating || !schedule.enabled
+                    ? null
+                    : () => _onRunNow(context, provider, schedule.id),
+                onTransferDestinations: isOperating
+                    ? null
+                    : () =>
+                        _showTransferDestinationsDialog(context, schedule),
               );
             },
           ),
@@ -184,6 +217,8 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     Schedule schedule,
     bool enabled,
   ) async {
+    if (provider.isUpdating) return;
+
     final updated = schedule.copyWith(enabled: enabled);
     final success = await provider.updateSchedule(updated);
     if (context.mounted) {
@@ -206,6 +241,8 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     RemoteSchedulesProvider provider,
     String scheduleId,
   ) async {
+    if (provider.isExecuting) return;
+
     final success = await provider.executeSchedule(scheduleId);
     if (context.mounted) {
       if (success) {
@@ -251,7 +288,9 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
       return;
     }
 
-    final linkedIds = await transferProvider.getLinkedDestinationIds(schedule.id);
+    final linkedIds = await transferProvider.getLinkedDestinationIds(
+      schedule.id,
+    );
     final selectedIds = Set<String>.from(linkedIds);
 
     if (!context.mounted) return;
@@ -295,7 +334,8 @@ class _TransferDestinationsDialog extends StatefulWidget {
       _TransferDestinationsDialogState();
 }
 
-class _TransferDestinationsDialogState extends State<_TransferDestinationsDialog> {
+class _TransferDestinationsDialogState
+    extends State<_TransferDestinationsDialog> {
   late Set<String> _selectedIds;
 
   @override
@@ -336,7 +376,7 @@ class _TransferDestinationsDialogState extends State<_TransferDestinationsDialog
                   children: [
                     Text(d.name),
                     const SizedBox(width: 8),
-                    _DestinationTypeBadge(type: d.type),
+                    DestinationTypeBadge(type: d.type),
                   ],
                 ),
               ),
@@ -357,65 +397,3 @@ class _TransferDestinationsDialogState extends State<_TransferDestinationsDialog
     );
   }
 }
-
-class _DestinationTypeBadge extends StatelessWidget {
-  const _DestinationTypeBadge({required this.type});
-
-  final DestinationType type;
-
-  String get _label {
-    switch (type) {
-      case DestinationType.local:
-        return 'LOCAL';
-      case DestinationType.ftp:
-        return 'FTP';
-      case DestinationType.googleDrive:
-        return 'Google Drive';
-      case DestinationType.dropbox:
-        return 'Dropbox';
-      case DestinationType.nextcloud:
-        return 'Nextcloud';
-    }
-  }
-
-  Color _color(FluentThemeData theme) {
-    switch (type) {
-      case DestinationType.local:
-        return theme.resources.systemFillColorSuccessBackground;
-      case DestinationType.ftp:
-        return const Color(0xFF0066CC);
-      case DestinationType.googleDrive:
-        return const Color(0xFF4285F4);
-      case DestinationType.dropbox:
-        return const Color(0xFF0061FF);
-      case DestinationType.nextcloud:
-        return const Color(0xFF0082C9);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: _color(theme).withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: _color(theme),
-          width: 1,
-        ),
-      ),
-      child: Text(
-        _label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: _color(theme),
-        ),
-      ),
-    );
-  }
-}
-
-

@@ -4,6 +4,7 @@ export 'app_dropdown.dart';
 export 'app_text_field.dart';
 export 'cancel_button.dart';
 export 'config_list_item.dart';
+export 'destination_type_badge.dart';
 export 'empty_state.dart';
 export 'loading_indicator.dart';
 export 'message_modal.dart';

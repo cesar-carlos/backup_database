@@ -1,3 +1,4 @@
+import 'package:backup_database/core/utils/error_mapper.dart' show mapExceptionToMessage;
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
@@ -9,16 +10,20 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
   List<Schedule> _schedules = [];
   bool _isLoading = false;
+  bool _isUpdating = false;
+  bool _isExecuting = false;
   String? _error;
 
   List<Schedule> get schedules => _schedules;
   bool get isLoading => _isLoading;
+  bool get isUpdating => _isUpdating;
+  bool get isExecuting => _isExecuting;
   String? get error => _error;
   bool get isConnected => _connectionManager.isConnected;
 
   Future<void> loadSchedules() async {
     if (!_connectionManager.isConnected) {
-      _error = 'Não conectado ao servidor';
+      _error = 'Conecte-se a um servidor para ver os agendamentos.';
       notifyListeners();
       return;
     }
@@ -34,8 +39,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _schedules = list;
         _isLoading = false;
       },
-      (failure) {
-        _error = failure.toString();
+      (exception) {
+        _error = mapExceptionToMessage(exception);
         _isLoading = false;
       },
     );
@@ -45,12 +50,17 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
   Future<bool> updateSchedule(Schedule schedule) async {
     if (!_connectionManager.isConnected) {
-      _error = 'Não conectado ao servidor';
+      _error = 'Conecte-se a um servidor para atualizar agendamentos.';
       notifyListeners();
       return false;
     }
 
+    _isUpdating = true;
+    _error = null;
+    notifyListeners();
+
     final result = await _connectionManager.updateSchedule(schedule);
+
     return result.fold(
       (updated) {
         final index = _schedules.indexWhere((s) => s.id == updated.id);
@@ -58,11 +68,13 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           _schedules = List<Schedule>.from(_schedules)..[index] = updated;
         }
         _error = null;
+        _isUpdating = false;
         notifyListeners();
         return true;
       },
-      (failure) {
-        _error = failure.toString();
+      (exception) {
+        _error = mapExceptionToMessage(exception);
+        _isUpdating = false;
         notifyListeners();
         return false;
       },
@@ -71,20 +83,27 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
   Future<bool> executeSchedule(String scheduleId) async {
     if (!_connectionManager.isConnected) {
-      _error = 'Não conectado ao servidor';
+      _error = 'Conecte-se a um servidor para executar agendamentos.';
       notifyListeners();
       return false;
     }
 
+    _isExecuting = true;
+    _error = null;
+    notifyListeners();
+
     final result = await _connectionManager.executeSchedule(scheduleId);
+
     return result.fold(
       (_) {
         _error = null;
+        _isExecuting = false;
         notifyListeners();
         return true;
       },
-      (failure) {
-        _error = failure.toString();
+      (exception) {
+        _error = mapExceptionToMessage(exception);
+        _isExecuting = false;
         notifyListeners();
         return false;
       },
