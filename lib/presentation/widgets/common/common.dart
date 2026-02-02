@@ -9,5 +9,6 @@ export 'empty_state.dart';
 export 'loading_indicator.dart';
 export 'message_modal.dart';
 export 'numeric_field.dart';
+export 'page_content_layout.dart';
 export 'password_field.dart';
 export 'save_button.dart';

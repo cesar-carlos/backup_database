@@ -59,94 +59,96 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
   Widget build(BuildContext context) {
     return ScaffoldPage(
       header: const PageHeader(title: Text('Agendamentos do Servidor')),
-      content: Consumer<ServerConnectionProvider>(
-        builder: (context, connectionProvider, _) {
-          if (!connectionProvider.isConnected) {
-            return _buildNotConnected(context);
-          }
-          return Consumer<RemoteSchedulesProvider>(
-            builder: (context, provider, _) {
-              if (provider.isLoading && provider.schedules.isEmpty) {
-                return const Center(child: ProgressRing());
+      content: PageContentLayout(
+        children: [
+          Consumer<ServerConnectionProvider>(
+            builder: (context, connectionProvider, _) {
+              if (!connectionProvider.isConnected) {
+                return _buildNotConnected(context);
               }
-              if (provider.error != null && provider.schedules.isEmpty) {
-                return AppCard(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          FluentIcons.error,
-                          size: 64,
-                          color: AppColors.error,
+              return Consumer<RemoteSchedulesProvider>(
+                builder: (context, provider, _) {
+                  if (provider.isLoading && provider.schedules.isEmpty) {
+                    return const Center(child: ProgressRing());
+                  }
+                  if (provider.error != null && provider.schedules.isEmpty) {
+                    return AppCard(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              FluentIcons.error,
+                              size: 64,
+                              color: AppColors.error,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              provider.error!,
+                              style:
+                                  FluentTheme.of(context).typography.bodyLarge,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            Button(
+                              onPressed: () => provider.loadSchedules(),
+                              child: const Text('Tentar Novamente'),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          provider.error!,
-                          style: FluentTheme.of(context).typography.bodyLarge,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        Button(
-                          onPressed: () => provider.loadSchedules(),
-                          child: const Text('Tentar Novamente'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-              if (provider.schedules.isEmpty) {
-                return AppCard(
-                  child: EmptyState(
-                    icon: FluentIcons.calendar,
-                    message: 'Nenhum agendamento no servidor',
-                    actionLabel: 'Atualizar',
-                    onAction: () => provider.loadSchedules(),
-                  ),
-                );
-              }
-              return _buildScheduleList(context, provider);
+                      ),
+                    );
+                  }
+                  if (provider.schedules.isEmpty) {
+                    return AppCard(
+                      child: EmptyState(
+                        icon: FluentIcons.calendar,
+                        message: 'Nenhum agendamento no servidor',
+                        actionLabel: 'Atualizar',
+                        onAction: () => provider.loadSchedules(),
+                      ),
+                    );
+                  }
+                  return _buildScheduleList(context, provider);
+                },
+              );
             },
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildNotConnected(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.plug_disconnected,
-              size: 64,
-              color: FluentTheme.of(context).resources.textFillColorSecondary,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Conecte-se a um servidor',
-              style: FluentTheme.of(context).typography.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Vá em Conectar para adicionar e conectar a um servidor, '
-              'depois volte aqui para ver e controlar os agendamentos.',
-              style: FluentTheme.of(context).typography.body,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: () => context.go('/server-login'),
-              child: const Text('Ir para Conectar'),
-            ),
-          ],
-        ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            FluentIcons.plug_disconnected,
+            size: 64,
+            color: FluentTheme.of(context).resources.textFillColorSecondary,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Conecte-se a um servidor',
+            style: FluentTheme.of(context).typography.titleLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Vá em Conectar para adicionar e conectar a um servidor, '
+            'depois volte aqui para ver e controlar os agendamentos.',
+            style: FluentTheme.of(context).typography.body,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: () => context.go('/server-login'),
+            child: const Text('Ir para Conectar'),
+          ),
+        ],
       ),
     );
   }
@@ -155,59 +157,64 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     BuildContext context,
     RemoteSchedulesProvider provider,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (provider.error != null) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: InfoBar(
-              title: const Text('Aviso'),
-              content: Text(provider.error!),
-              severity: InfoBarSeverity.error,
-              onClose: () => provider.clearError(),
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (provider.error != null) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: InfoBar(
+                title: const Text('Aviso'),
+                content: Text(provider.error!),
+                severity: InfoBarSeverity.error,
+                onClose: () => provider.clearError(),
+              ),
+            ),
+          ],
+          CommandBar(
+            mainAxisAlignment: MainAxisAlignment.end,
+            primaryItems: [
+              CommandBarButton(
+                icon: const Icon(FluentIcons.refresh),
+                onPressed: () => provider.loadSchedules(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView.separated(
+              itemCount: provider.schedules.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final schedule = provider.schedules[index];
+                final isOperating =
+                    provider.isUpdating || provider.isExecuting;
+                return ScheduleListItem(
+                  schedule: schedule,
+                  onToggleEnabled: isOperating
+                      ? null
+                      : (enabled) => _onToggleEnabled(
+                            context,
+                            provider,
+                            schedule,
+                            enabled,
+                          ),
+                  onRunNow: isOperating || !schedule.enabled
+                      ? null
+                      : () => _onRunNow(context, provider, schedule.id),
+                  onTransferDestinations: isOperating
+                      ? null
+                      : () => _showTransferDestinationsDialog(
+                            context,
+                            schedule,
+                          ),
+                );
+              },
             ),
           ),
         ],
-        CommandBar(
-          mainAxisAlignment: MainAxisAlignment.end,
-          primaryItems: [
-            CommandBarButton(
-              icon: const Icon(FluentIcons.refresh),
-              onPressed: () => provider.loadSchedules(),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: ListView.separated(
-            itemCount: provider.schedules.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final schedule = provider.schedules[index];
-              final isOperating = provider.isUpdating || provider.isExecuting;
-              return ScheduleListItem(
-                schedule: schedule,
-                onToggleEnabled: isOperating
-                    ? null
-                    : (enabled) => _onToggleEnabled(
-                          context,
-                          provider,
-                          schedule,
-                          enabled,
-                        ),
-                onRunNow: isOperating || !schedule.enabled
-                    ? null
-                    : () => _onRunNow(context, provider, schedule.id),
-                onTransferDestinations: isOperating
-                    ? null
-                    : () =>
-                        _showTransferDestinationsDialog(context, schedule),
-              );
-            },
-          ),
-        ),
-      ],
+      ),
     );
   }
 
