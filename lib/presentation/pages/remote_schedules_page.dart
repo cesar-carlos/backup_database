@@ -61,6 +61,19 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
       header: const PageHeader(title: Text('Agendamentos do Servidor')),
       content: PageContentLayout(
         children: [
+          Consumer<RemoteSchedulesProvider>(
+            builder: (context, provider, _) {
+              if (provider.isExecuting &&
+                  provider.backupMessage != null &&
+                  provider.executingScheduleId != null) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _buildBackupProgressCard(context, provider),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           Consumer<ServerConnectionProvider>(
             builder: (context, connectionProvider, _) {
               if (!connectionProvider.isConnected) {
@@ -407,4 +420,68 @@ class _TransferDestinationsDialogState
       ],
     );
   }
+}
+
+Widget _buildBackupProgressCard(
+  BuildContext context,
+  RemoteSchedulesProvider provider,
+) {
+  final schedule = provider.schedules.firstWhere(
+    (s) => s.id == provider.executingScheduleId,
+    orElse: () => provider.schedules.first,
+  );
+
+  return AppCard(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const ProgressRing(strokeWidth: 2),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Executando backup no servidor',
+                      style: FluentTheme.of(context).typography.subtitle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      schedule.name,
+                      style:
+                          FluentTheme.of(context).typography.bodyStrong,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (provider.backupStep != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              provider.backupStep!,
+              style: FluentTheme.of(context).typography.caption,
+            ),
+          ],
+          if (provider.backupMessage != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              provider.backupMessage!,
+              style: FluentTheme.of(context).typography.body,
+            ),
+          ],
+          if (provider.backupProgress != null) ...[
+            const SizedBox(height: 8),
+            ProgressBar(
+              value: provider.backupProgress! * 100,
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
 }

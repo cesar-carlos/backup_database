@@ -14,6 +14,12 @@ import 'package:backup_database/infrastructure/socket/client/socket_client_servi
 import 'package:backup_database/infrastructure/socket/client/tcp_socket_client.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+typedef BackupProgressCallback = void Function(
+  String step,
+  String message,
+  double progress,
+);
+
 class ConnectionManager {
   ConnectionManager({ServerConnectionDao? serverConnectionDao})
     : _serverConnectionDao = serverConnectionDao;
@@ -30,6 +36,7 @@ class ConnectionManager {
   static const Duration _fileTransferTimeout = Duration(minutes: 5);
 
   final Map<int, _FileTransferState> _activeTransfers = {};
+  final Map<int, _BackupProgressState> _activeBackups = {};
   final FileChunker _chunker = FileChunker();
 
   TcpSocketClient? get activeClient => _client;
@@ -67,6 +74,11 @@ class ConnectionManager {
     final transferState = _activeTransfers[requestId];
     if (transferState != null) {
       _handleFileTransferMessage(requestId, message, transferState);
+      return;
+    }
+    final backupState = _activeBackups[requestId];
+    if (backupState != null) {
+      _handleBackupProgressMessage(message, backupState);
       return;
     }
     final completer = _pendingRequests.remove(requestId);
@@ -118,6 +130,28 @@ class ConnectionManager {
     }
   }
 
+  void _handleBackupProgressMessage(Message message, _BackupProgressState state) {
+    if (isBackupProgressMessage(message)) {
+      final step = getStepFromBackupProgress(message) ?? '';
+      final progressMessage = getMessageFromBackupProgress(message) ?? '';
+      final progress = getProgressFromBackupProgress(message) ?? 0.0;
+      state.onProgress?.call(step, progressMessage, progress);
+      return;
+    }
+    if (isBackupCompleteMessage(message)) {
+      _activeBackups.remove(message.header.requestId);
+      state.onProgress?.call('Concluído', 'Backup concluído com sucesso!', 1);
+      state.completer.complete(const rd.Success(rd.unit));
+      return;
+    }
+    if (isBackupFailedMessage(message)) {
+      _activeBackups.remove(message.header.requestId);
+      final error = getErrorFromBackupFailed(message) ?? 'Erro desconhecido';
+      state.completer.complete(rd.Failure(Exception(error)));
+      return;
+    }
+  }
+
   Future<void> disconnect() async {
     _messageSubscription?.cancel();
     _messageSubscription = null;
@@ -129,6 +163,14 @@ class ConnectionManager {
       }
     }
     _activeTransfers.clear();
+    for (final state in _activeBackups.values) {
+      if (!state.completer.isCompleted) {
+        state.completer.complete(
+          rd.Failure(Exception('Disconnected during backup')),
+        );
+      }
+    }
+    _activeBackups.clear();
     for (final completer in _pendingRequests.values) {
       if (!completer.isCompleted) {
         completer.completeError(StateError('Disconnected'));
@@ -270,13 +312,23 @@ class ConnectionManager {
     }
   }
 
-  Future<rd.Result<void>> executeSchedule(String scheduleId) async {
+  Future<rd.Result<void>> executeSchedule(
+    String scheduleId, {
+    BackupProgressCallback? onProgress,
+  }) async {
     if (!isConnected) {
       return rd.Failure(Exception('ConnectionManager not connected'));
     }
     final requestId = _nextRequestId++;
-    final completer = Completer<Message>();
-    _pendingRequests[requestId] = completer;
+    final completer = Completer<rd.Result<void>>();
+
+    if (onProgress != null) {
+      _activeBackups[requestId] = _BackupProgressState(
+        completer: completer,
+        onProgress: onProgress,
+      );
+    }
+
     try {
       await send(
         createExecuteScheduleMessage(
@@ -284,18 +336,24 @@ class ConnectionManager {
           scheduleId: scheduleId,
         ),
       );
-      final message = await completer.future.timeout(_scheduleRequestTimeout);
-      _pendingRequests.remove(requestId);
-      if (message.header.type == MessageType.error) {
-        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
-        return rd.Failure(Exception(error));
+
+      if (onProgress == null) {
+        final message = await completer.future.timeout(_scheduleRequestTimeout);
+        _activeBackups.remove(requestId);
+        if (message is rd.Result) {
+          return message as rd.Result<void>;
+        }
+        return const rd.Success(rd.unit);
       }
-      return const rd.Success(rd.unit);
+
+      final result = await completer.future.timeout(_scheduleRequestTimeout);
+      _activeBackups.remove(requestId);
+      return result;
     } on TimeoutException {
-      _pendingRequests.remove(requestId);
+      _activeBackups.remove(requestId);
       return rd.Failure(TimeoutException('executeSchedule timeout'));
     } on Object catch (e) {
-      _pendingRequests.remove(requestId);
+      _activeBackups.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
     }
   }
@@ -385,4 +443,14 @@ class _FileTransferState {
   final void Function(int currentChunk, int totalChunks)? onProgress;
   String fileName = '';
   int totalChunks = 0;
+}
+
+class _BackupProgressState {
+  _BackupProgressState({
+    required this.completer,
+    this.onProgress,
+  });
+
+  final Completer<rd.Result<void>> completer;
+  final BackupProgressCallback? onProgress;
 }

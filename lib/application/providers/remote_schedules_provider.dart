@@ -16,6 +16,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   String? _updatingScheduleId;
   String? _executingScheduleId;
 
+  String? _backupStep;
+  String? _backupMessage;
+  double? _backupProgress;
+
   List<Schedule> get schedules => _schedules;
   bool get isLoading => _isLoading;
   bool get isUpdating => _isUpdating;
@@ -24,6 +28,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   bool get isConnected => _connectionManager.isConnected;
   String? get updatingScheduleId => _updatingScheduleId;
   String? get executingScheduleId => _executingScheduleId;
+  String? get backupStep => _backupStep;
+  String? get backupMessage => _backupMessage;
+  double? get backupProgress => _backupProgress;
 
   Future<void> loadSchedules() async {
     if (!_connectionManager.isConnected) {
@@ -98,15 +105,29 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _isExecuting = true;
     _executingScheduleId = scheduleId;
     _error = null;
+    _backupStep = null;
+    _backupMessage = null;
+    _backupProgress = null;
     notifyListeners();
 
-    final result = await _connectionManager.executeSchedule(scheduleId);
+    final result = await _connectionManager.executeSchedule(
+      scheduleId,
+      onProgress: (step, message, progress) {
+        _backupStep = step;
+        _backupMessage = message;
+        _backupProgress = progress;
+        notifyListeners();
+      },
+    );
 
     return result.fold(
       (_) {
         _error = null;
         _isExecuting = false;
         _executingScheduleId = null;
+        _backupStep = null;
+        _backupMessage = null;
+        _backupProgress = null;
         notifyListeners();
         return true;
       },
@@ -114,6 +135,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _error = mapExceptionToMessage(exception);
         _isExecuting = false;
         _executingScheduleId = null;
+        _backupStep = null;
+        _backupMessage = null;
+        _backupProgress = null;
         notifyListeners();
         return false;
       },

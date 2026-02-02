@@ -3,7 +3,6 @@ import 'package:backup_database/application/providers/remote_file_transfer_provi
 import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
-import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';

@@ -109,11 +109,15 @@ Future<void> setupServiceLocator() async {
     ),
   );
   getIt.registerLazySingleton<ClientManager>(ClientManager.new);
+  getIt.registerLazySingleton<BackupProgressProvider>(
+    BackupProgressProvider.new,
+  );
   getIt.registerLazySingleton<ScheduleMessageHandler>(
     () => ScheduleMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
       updateSchedule: getIt<UpdateSchedule>(),
       executeBackup: getIt<ExecuteScheduledBackup>(),
+      progressProvider: getIt<BackupProgressProvider>(),
     ),
   );
   final appDir = await getApplicationDocumentsDirectory();
@@ -388,10 +392,6 @@ Future<void> setupServiceLocator() async {
 
   getIt.registerLazySingleton<ExecuteScheduledBackup>(
     () => ExecuteScheduledBackup(getIt<ISchedulerService>()),
-  );
-
-  getIt.registerLazySingleton<BackupProgressProvider>(
-    BackupProgressProvider.new,
   );
 
   getIt.registerFactory<SchedulerProvider>(

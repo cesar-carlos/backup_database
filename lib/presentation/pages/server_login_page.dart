@@ -57,7 +57,9 @@ class ServerLoginPage extends StatelessWidget {
                             const SizedBox(height: 16),
                             Text(
                               provider.error!,
-                              style: FluentTheme.of(context).typography.bodyLarge,
+                              style: FluentTheme.of(
+                                context,
+                              ).typography.bodyLarge,
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),
@@ -85,16 +87,17 @@ class ServerLoginPage extends StatelessWidget {
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final connection = provider.connections[index];
-                      final isActive = provider.activeHost == connection.host &&
+                      final isActive =
+                          provider.activeHost == connection.host &&
                           provider.activePort == connection.port;
                       return ServerListItem(
                         connection: connection,
                         isActiveConnection: isActive,
                         connectionStatus: provider.connectionStatus,
                         onConnect: () => _onConnectPressed(context, connection),
-                        onEdit: () => _showConnectionDialog(context, connection),
-                        onDelete: () =>
-                            _confirmDelete(context, connection.id),
+                        onEdit: () =>
+                            _showConnectionDialog(context, connection),
+                        onDelete: () => _confirmDelete(context, connection.id),
                         onTestConnection: () =>
                             _testConnection(context, connection),
                         isConnecting: provider.isConnecting,
@@ -116,7 +119,8 @@ class ServerLoginPage extends StatelessWidget {
     ServerConnection connection,
   ) async {
     final provider = context.read<ServerConnectionProvider>();
-    final isActive = provider.activeHost == connection.host &&
+    final isActive =
+        provider.activeHost == connection.host &&
         provider.activePort == connection.port;
     if (provider.isConnected && isActive) {
       await provider.disconnect();
@@ -194,7 +198,8 @@ class ServerLoginPage extends StatelessWidget {
     if (ok) {
       MessageModal.showSuccess(
         context,
-        message: 'Conexão bem-sucedida com ${connection.host}:${connection.port}',
+        message:
+            'Conexão bem-sucedida com ${connection.host}:${connection.port}',
       );
     } else {
       MessageModal.showError(
