@@ -64,11 +64,6 @@ final appRouter = GoRouter(
           builder: (context, state) => const RemoteSchedulesPage(),
         ),
         GoRoute(
-          path: RouteNames.transferBackups,
-          name: RouteNames.transferBackupsName,
-          builder: (context, state) => const TransferBackupsPage(),
-        ),
-        GoRoute(
           path: RouteNames.connectionLogs,
           name: RouteNames.connectionLogsName,
           builder: (context, state) => const ConnectionLogPage(),

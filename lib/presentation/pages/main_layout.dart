@@ -2,7 +2,6 @@ import 'package:backup_database/application/providers/connection_log_provider.da
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
-import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
@@ -75,12 +74,6 @@ class _MainLayoutState extends State<MainLayout> {
         route: RouteNames.remoteSchedules,
       ),
       const NavigationItem(
-        icon: FluentIcons.download,
-        selectedIcon: FluentIcons.download,
-        label: 'Transferir Backups',
-        route: RouteNames.transferBackups,
-      ),
-      const NavigationItem(
         icon: FluentIcons.history,
         selectedIcon: FluentIcons.history,
         label: 'Log de Conexões',
@@ -123,13 +116,12 @@ class _MainLayoutState extends State<MainLayout> {
             .toList();
 
       case AppMode.server:
-        // Servidor NÃO vê: Conectar, Agendamentos Remotos, Transferir Backups
+        // Servidor NÃO vê: Conectar, Agendamentos Remotos
         return allItems
             .where(
               (item) =>
                   item.route != RouteNames.serverLogin &&
-                  item.route != RouteNames.remoteSchedules &&
-                  item.route != RouteNames.transferBackups,
+                  item.route != RouteNames.remoteSchedules,
             )
             .toList();
 
@@ -178,10 +170,6 @@ class _MainLayoutState extends State<MainLayout> {
       case RouteNames.remoteSchedules:
         if (context.read<ServerConnectionProvider>().isConnected) {
           context.read<RemoteSchedulesProvider>().loadSchedules();
-        }
-      case RouteNames.transferBackups:
-        if (context.read<ServerConnectionProvider>().isConnected) {
-          context.read<RemoteFileTransferProvider>().loadAvailableFiles();
         }
       case RouteNames.connectionLogs:
         context.read<ConnectionLogProvider>().loadLogs();

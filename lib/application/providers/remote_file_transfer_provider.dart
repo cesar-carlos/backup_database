@@ -378,8 +378,10 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             LoggerService.info('Upload concluído: ${destination.name}');
           },
           (failure) {
-            LoggerService.warning('Erro ao enviar para ${destination.name}: $failure');
-            errors.add('${destination.name}: ${failure.toString()}');
+            LoggerService.warning(
+              'Erro ao enviar para ${destination.name}: $failure',
+            );
+            errors.add('${destination.name}: $failure');
           },
         );
       }
@@ -498,8 +500,10 @@ class RemoteFileTransferProvider extends ChangeNotifier {
               LoggerService.info('Upload concluído: ${destination.name}');
             },
             (failure) {
-              LoggerService.warning('Erro ao enviar para ${destination.name}: $failure');
-              errors.add('${destination.name}: ${failure.toString()}');
+              LoggerService.warning(
+                'Erro ao enviar para ${destination.name}: $failure',
+              );
+              errors.add('${destination.name}: $failure');
             },
           );
         }

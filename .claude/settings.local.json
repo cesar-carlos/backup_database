@@ -55,7 +55,9 @@
       "Bash(ForEach-Object {)",
       "Bash(})",
       "Bash(Set-Content 'TESTING_SERVER_CLIENT.md' -NoNewline)",
-      "Bash(\")"
+      "Bash(\")",
+      "Bash(dart analyze:*)",
+      "Bash(printf:*)"
     ]
   }
 }

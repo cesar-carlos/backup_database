@@ -12,4 +12,3 @@ export 'server_settings_page.dart';
 export 'settings_page.dart';
 export 'sql_server_config_page.dart';
 export 'sybase_config_page.dart';
-export 'transfer_backups_page.dart';
