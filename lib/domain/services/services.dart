@@ -1,8 +1,12 @@
 export 'backup_execution_result.dart';
 export 'compression_result.dart';
+export 'i_backup_cleanup_service.dart';
+export 'i_backup_compression_orchestrator.dart';
 export 'i_backup_progress_notifier.dart';
 export 'i_backup_running_state.dart';
+export 'i_backup_script_orchestrator.dart';
 export 'i_compression_service.dart';
+export 'i_destination_orchestrator.dart';
 export 'i_device_key_service.dart';
 export 'i_dropbox_destination_service.dart';
 export 'i_file_validator.dart';

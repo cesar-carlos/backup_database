@@ -91,3 +91,27 @@ class StorageFailure extends Failure {
     super.originalError,
   });
 }
+
+class ConfigNotFoundFailure extends Failure {
+  const ConfigNotFoundFailure({
+    required super.message,
+    super.code,
+    super.originalError,
+  });
+}
+
+class DirectoryCreationFailure extends Failure {
+  const DirectoryCreationFailure({
+    required super.message,
+    super.code,
+    super.originalError,
+  });
+}
+
+class BackupCompressionFailure extends Failure {
+  const BackupCompressionFailure({
+    required super.message,
+    super.code,
+    super.originalError,
+  });
+}
