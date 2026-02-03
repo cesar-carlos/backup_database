@@ -20,11 +20,12 @@ import 'package:backup_database/domain/services/i_license_validation_service.dar
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
+import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
+import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
-import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SchedulerService implements ISchedulerService {
@@ -44,6 +45,8 @@ class SchedulerService implements ISchedulerService {
     required SendToNextcloud sendToNextcloud,
     required INotificationService notificationService,
     required ILicenseValidationService licenseValidationService,
+    required IScheduleCalculator scheduleCalculator,
+    ITransferStagingService? transferStagingService,
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
        _backupHistoryRepository = backupHistoryRepository,
@@ -58,7 +61,9 @@ class SchedulerService implements ISchedulerService {
        _nextcloudDestinationService = nextcloudDestinationService,
        _sendToNextcloud = sendToNextcloud,
        _notificationService = notificationService,
-       _licenseValidationService = licenseValidationService;
+       _licenseValidationService = licenseValidationService,
+       _transferStagingService = transferStagingService,
+       _scheduleCalculator = scheduleCalculator;
   final IScheduleRepository _scheduleRepository;
   final IBackupDestinationRepository _destinationRepository;
   final IBackupHistoryRepository _backupHistoryRepository;
@@ -74,8 +79,9 @@ class SchedulerService implements ISchedulerService {
   final SendToNextcloud _sendToNextcloud;
   final INotificationService _notificationService;
   final ILicenseValidationService _licenseValidationService;
+  final ITransferStagingService? _transferStagingService;
+  final IScheduleCalculator _scheduleCalculator;
 
-  final ScheduleCalculator _calculator = ScheduleCalculator();
   Timer? _checkTimer;
   bool _isRunning = false;
   final Set<String> _executingSchedules = {};
@@ -148,7 +154,7 @@ class SchedulerService implements ISchedulerService {
     result.fold(
       (schedules) async {
         for (final schedule in schedules) {
-          final nextRunAt = _calculator.getNextRunTime(schedule);
+          final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
           if (nextRunAt != null) {
             LoggerService.info(
               'Atualizando schedule ${schedule.name}: '
@@ -177,7 +183,7 @@ class SchedulerService implements ISchedulerService {
     result.fold((schedules) async {
       for (final schedule in schedules) {
         final isExecuting = _executingSchedules.contains(schedule.id);
-        final shouldRun = _calculator.shouldRunNow(schedule);
+        final shouldRun = _scheduleCalculator.shouldRunNow(schedule);
 
         if (isExecuting) {
           continue;
@@ -186,7 +192,7 @@ class SchedulerService implements ISchedulerService {
         if (shouldRun) {
           _executingSchedules.add(schedule.id);
 
-          final nextRunAt = _calculator.getNextRunTime(schedule);
+          final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
           if (nextRunAt != null) {
             await _scheduleRepository.update(
               schedule.copyWith(nextRunAt: nextRunAt),
@@ -315,7 +321,7 @@ class SchedulerService implements ISchedulerService {
       if (hasDestinations) {
         try {
           final progressProvider = getIt<BackupProgressProvider>();
-          progressProvider.updateProgress(
+          progressProvider.updateProgressWithStep(
             step: BackupStep.uploading,
             message: 'Enviando para destinos...',
             progress: 0.85,
@@ -346,7 +352,7 @@ class SchedulerService implements ISchedulerService {
         try {
           final progressProvider = getIt<BackupProgressProvider>();
           final progress = 0.85 + (0.1 * (index + 1) / totalDestinations);
-          progressProvider.updateProgress(
+          progressProvider.updateProgressWithStep(
             step: BackupStep.uploading,
             message: 'Enviando para ${destination.name}...',
             progress: progress,
@@ -451,19 +457,6 @@ class SchedulerService implements ISchedulerService {
       }
       await _notificationService.notifyBackupComplete(backupHistory);
 
-      try {
-        final progressProvider = getIt<BackupProgressProvider>();
-        progressProvider.completeBackup(
-          message: 'Backup concluído com sucesso!',
-        );
-      } on Object catch (e, s) {
-        LoggerService.warning(
-          'Erro ao atualizar progresso completeBackup',
-          e,
-          s,
-        );
-      }
-
       if (shouldDeleteTempFile) {
         try {
           final entityType = FileSystemEntity.typeSync(tempBackupPath);
@@ -498,7 +491,7 @@ class SchedulerService implements ISchedulerService {
 
       final now = DateTime.now();
       final scheduleWithLastRun = schedule.copyWith(lastRunAt: now);
-      final nextRunAt = _calculator.getNextRunTime(scheduleWithLastRun);
+      final nextRunAt = _scheduleCalculator.getNextRunTime(scheduleWithLastRun);
       final updatedSchedule = scheduleWithLastRun.copyWith(
         nextRunAt: nextRunAt,
       );
@@ -512,6 +505,29 @@ class SchedulerService implements ISchedulerService {
       await _cleanOldBackups(destinations, backupHistory.id);
 
       LoggerService.info('Backup agendado concluído: ${schedule.name}');
+
+      String? stagingPath;
+      if (_transferStagingService != null) {
+        stagingPath = await _transferStagingService.copyToStaging(
+          backupHistory.backupPath,
+          schedule.id,
+        );
+      }
+
+      try {
+        final progressProvider = getIt<BackupProgressProvider>();
+        progressProvider.completeBackup(
+          message: 'Backup concluído com sucesso!',
+          backupPath: stagingPath,
+        );
+      } on Object catch (e, s) {
+        LoggerService.warning(
+          'Erro ao atualizar progresso completeBackup',
+          e,
+          s,
+        );
+      }
+
       return const rd.Success(());
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro no backup agendado', e, stackTrace);
@@ -896,7 +912,7 @@ class SchedulerService implements ISchedulerService {
     final result = await _scheduleRepository.getById(scheduleId);
 
     return result.fold((schedule) async {
-      final nextRunAt = _calculator.getNextRunTime(schedule);
+      final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
       if (nextRunAt != null) {
         await _scheduleRepository.update(
           schedule.copyWith(nextRunAt: nextRunAt),

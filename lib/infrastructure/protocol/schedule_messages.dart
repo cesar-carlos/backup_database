@@ -177,10 +177,12 @@ Message createBackupCompleteMessage({
   required int requestId,
   required String scheduleId,
   String? message,
+  String? backupPath,
 }) {
   final payload = <String, dynamic>{
     'scheduleId': scheduleId,
-    if (message != null) 'message': message else 'message': 'Backup concluído',
+    'message': message ?? 'Backup concluído',
+    ...?(backupPath != null ? {'backupPath': backupPath} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -219,6 +221,10 @@ Message createBackupFailedMessage({
 
 String? getScheduleIdFromBackupMessage(Message message) {
   return message.payload['scheduleId'] as String?;
+}
+
+String? getBackupPathFromBackupComplete(Message message) {
+  return message.payload['backupPath'] as String?;
 }
 
 String? getStepFromBackupProgress(Message message) {

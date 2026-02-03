@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -14,24 +14,24 @@ typedef SendToClient = Future<void> Function(String clientId, Message message);
 /// executeSchedule, the server runs the same backup flow as a local "Run now"
 /// (ExecuteScheduledBackup → SchedulerService.executeNow → _executeScheduledBackup).
 /// Progress (step, message, progress) is streamed to the client via
-/// BackupProgressProvider so the client has the same information as the server UI.
+/// IBackupProgressNotifier so the client has the same information as the server UI.
 class ScheduleMessageHandler {
   ScheduleMessageHandler({
     required IScheduleRepository scheduleRepository,
     required UpdateSchedule updateSchedule,
     required ExecuteScheduledBackup executeBackup,
-    required BackupProgressProvider progressProvider,
+    required IBackupProgressNotifier progressNotifier,
   }) : _scheduleRepository = scheduleRepository,
        _updateSchedule = updateSchedule,
        _executeBackup = executeBackup,
-       _progressProvider = progressProvider {
-    _progressProvider.addListener(_onProgressChanged);
+       _progressNotifier = progressNotifier {
+    _progressNotifier.addListener(_onProgressChanged);
   }
 
   final IScheduleRepository _scheduleRepository;
   final UpdateSchedule _updateSchedule;
   final ExecuteScheduledBackup _executeBackup;
-  final BackupProgressProvider _progressProvider;
+  final IBackupProgressNotifier _progressNotifier;
 
   String? _currentClientId;
   int? _currentRequestId;
@@ -39,7 +39,7 @@ class ScheduleMessageHandler {
   SendToClient? _sendToClient;
 
   void dispose() {
-    _progressProvider.removeListener(_onProgressChanged);
+    _progressNotifier.removeListener(_onProgressChanged);
   }
 
   void _onProgressChanged() {
@@ -50,11 +50,10 @@ class ScheduleMessageHandler {
       return;
     }
 
-    final progress = _progressProvider.currentProgress;
-    if (progress == null) return;
+    final snapshot = _progressNotifier.currentSnapshot;
+    if (snapshot == null) return;
 
-    final step = _stepToString(progress.step);
-    final progressValue = progress.progress ?? 0.0;
+    final progressValue = snapshot.progress ?? 0.0;
 
     unawaited(
       _sendToClient!(
@@ -62,33 +61,34 @@ class ScheduleMessageHandler {
         createBackupProgressMessage(
           requestId: _currentRequestId!,
           scheduleId: _currentScheduleId!,
-          step: step,
-          message: progress.message,
+          step: snapshot.step,
+          message: snapshot.message,
           progress: progressValue,
         ),
       ),
     );
 
-    if (progress.step == BackupStep.completed) {
+    if (snapshot.step == 'Concluído') {
       unawaited(
         _sendToClient!(
           _currentClientId!,
           createBackupCompleteMessage(
             requestId: _currentRequestId!,
             scheduleId: _currentScheduleId!,
-            message: progress.message,
+            message: snapshot.message,
+            backupPath: snapshot.backupPath,
           ),
         ),
       );
       _clearCurrentBackup();
-    } else if (progress.step == BackupStep.error) {
+    } else if (snapshot.step == 'Erro') {
       unawaited(
         _sendToClient!(
           _currentClientId!,
           createBackupFailedMessage(
             requestId: _currentRequestId!,
             scheduleId: _currentScheduleId!,
-            error: progress.error ?? 'Erro desconhecido',
+            error: snapshot.error ?? 'Erro desconhecido',
           ),
         ),
       );
@@ -101,23 +101,6 @@ class ScheduleMessageHandler {
     _currentRequestId = null;
     _currentScheduleId = null;
     _sendToClient = null;
-  }
-
-  String _stepToString(BackupStep step) {
-    switch (step) {
-      case BackupStep.initializing:
-        return 'Iniciando';
-      case BackupStep.executingBackup:
-        return 'Executando backup';
-      case BackupStep.compressing:
-        return 'Compactando';
-      case BackupStep.uploading:
-        return 'Enviando para destino';
-      case BackupStep.completed:
-        return 'Concluído';
-      case BackupStep.error:
-        return 'Erro';
-    }
   }
 
   Future<void> handle(
@@ -252,7 +235,7 @@ class ScheduleMessageHandler {
       return;
     }
 
-    if (!_progressProvider.tryStartBackup()) {
+    if (!_progressNotifier.tryStartBackup()) {
       LoggerService.infoWithContext(
         'Execute schedule rejected: backup already running',
         clientId: clientId,
@@ -282,7 +265,7 @@ class ScheduleMessageHandler {
       final scheduleResult = await _scheduleRepository.getById(scheduleId);
       if (scheduleResult.isError()) {
         final failure = scheduleResult.exceptionOrNull();
-        _progressProvider.failBackup(
+        _progressNotifier.failBackup(
           failure?.toString() ?? 'Agendamento não encontrado',
         );
         await sendToClient(
@@ -297,7 +280,7 @@ class ScheduleMessageHandler {
 
       final schedule = scheduleResult.getOrNull();
       if (schedule == null) {
-        _progressProvider.failBackup('Agendamento não encontrado');
+        _progressNotifier.failBackup('Agendamento não encontrado');
         await sendToClient(
           clientId,
           createScheduleErrorMessage(
@@ -313,14 +296,14 @@ class ScheduleMessageHandler {
       _currentScheduleId = scheduleId;
       _sendToClient = sendToClient;
 
-      _progressProvider.setCurrentBackupName(schedule.name);
-      _progressProvider.updateProgress(
-        step: BackupStep.initializing,
+      _progressNotifier.setCurrentBackupName(schedule.name);
+      _progressNotifier.updateProgress(
+        step: 'Iniciando',
         message: 'Iniciando backup: ${schedule.name}',
         progress: 0,
       );
-      _progressProvider.updateProgress(
-        step: BackupStep.executingBackup,
+      _progressNotifier.updateProgress(
+        step: 'Executando backup',
         message: 'Executando backup do banco de dados...',
         progress: 0.2,
       );
@@ -388,7 +371,7 @@ class ScheduleMessageHandler {
         error: e,
         stackTrace: st,
       );
-      _progressProvider.failBackup(e.toString());
+      _progressNotifier.failBackup(e.toString());
       await sendToClient(
         clientId,
         createBackupFailedMessage(

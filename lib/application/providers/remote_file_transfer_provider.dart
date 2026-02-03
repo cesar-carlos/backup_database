@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Directory;
 
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
@@ -10,6 +11,7 @@ import 'package:backup_database/infrastructure/socket/client/connection_manager.
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -309,6 +311,104 @@ class RemoteFileTransferProvider extends ChangeNotifier {
       _isUploadingToRemotes = false;
       _uploadError = errors.isEmpty ? null : errors.join('; ');
       notifyListeners();
+    }
+
+    notifyListeners();
+    return success;
+  }
+
+  static const String _receivedBackupsSubdir = 'ReceivedBackups';
+
+  Future<bool> transferCompletedBackupToClient(
+    String scheduleId,
+    String relativePath,
+  ) async {
+    if (!_connectionManager.isConnected) return false;
+
+    var destDir = _outputPath.trim();
+    if (destDir.isEmpty) {
+      final defaultPath = await getDefaultOutputPath();
+      if (defaultPath != null && defaultPath.isNotEmpty) {
+        destDir = defaultPath;
+      } else {
+        final appDir = await getApplicationDocumentsDirectory();
+        destDir = p.join(appDir.path, _receivedBackupsSubdir);
+      }
+    }
+
+    final dir = Directory(destDir);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    final outputFilePath = p.join(destDir, p.basename(relativePath));
+
+    _isTransferring = true;
+    _error = null;
+    _transferCurrentChunk = null;
+    _transferTotalChunks = null;
+    notifyListeners();
+
+    final result = await _connectionManager.requestFile(
+      filePath: relativePath,
+      outputPath: outputFilePath,
+      scheduleId: scheduleId,
+      onProgress: (currentChunk, totalChunks) {
+        _transferCurrentChunk = currentChunk;
+        _transferTotalChunks = totalChunks;
+        notifyListeners();
+      },
+    );
+
+    _isTransferring = false;
+    _transferCurrentChunk = null;
+    _transferTotalChunks = null;
+
+    final success = result.fold(
+      (_) {
+        _error = null;
+        return true;
+      },
+      (failure) {
+        _error = failure.toString();
+        return false;
+      },
+    );
+
+    if (success) {
+      final linkedIds = await getLinkedDestinationIds(scheduleId);
+      if (linkedIds.isNotEmpty) {
+        _isUploadingToRemotes = true;
+        _uploadError = null;
+        notifyListeners();
+
+        final errors = <String>[];
+        for (final id in linkedIds) {
+          final destResult = await _destinationRepository.getById(id);
+          await destResult.fold(
+            (destination) async {
+              final sendResult = await _sendFileToDestinationService.sendFile(
+                localFilePath: outputFilePath,
+                destination: destination,
+              );
+              sendResult.fold(
+                (_) {},
+                (e) {
+                  // ignore: noop_primitive_operations - add used for side effect
+                  errors.add('${destination.name}: ${e.toString()}');
+                },
+              );
+            },
+            (_) async {
+              errors.add('Destino $id não encontrado');
+            },
+          );
+        }
+
+        _isUploadingToRemotes = false;
+        _uploadError = errors.isEmpty ? null : errors.join('; ');
+        notifyListeners();
+      }
     }
 
     notifyListeners();

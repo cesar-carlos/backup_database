@@ -1,12 +1,17 @@
+import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/core/utils/error_mapper.dart' show mapExceptionToMessage;
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
 
 class RemoteSchedulesProvider extends ChangeNotifier {
-  RemoteSchedulesProvider(this._connectionManager);
+  RemoteSchedulesProvider(
+    this._connectionManager, {
+    RemoteFileTransferProvider? transferProvider,
+  }) : _transferProvider = transferProvider;
 
   final ConnectionManager _connectionManager;
+  final RemoteFileTransferProvider? _transferProvider;
 
   List<Schedule> _schedules = [];
   bool _isLoading = false;
@@ -121,7 +126,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     );
 
     return result.fold(
-      (_) {
+      (backupPath) {
         _error = null;
         _isExecuting = false;
         _executingScheduleId = null;
@@ -129,6 +134,12 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _backupMessage = null;
         _backupProgress = null;
         notifyListeners();
+        if (backupPath.isNotEmpty && _transferProvider != null) {
+          _transferProvider.transferCompletedBackupToClient(
+            scheduleId,
+            backupPath,
+          );
+        }
         return true;
       },
       (exception) {

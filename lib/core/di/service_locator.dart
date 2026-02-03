@@ -23,6 +23,7 @@ import 'package:backup_database/infrastructure/socket/server/metrics_message_han
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
+import 'package:backup_database/infrastructure/transfer_staging_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
@@ -112,18 +113,24 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<BackupProgressProvider>(
     BackupProgressProvider.new,
   );
+  getIt.registerLazySingleton<IBackupProgressNotifier>(
+    getIt.get<BackupProgressProvider>,
+  );
   getIt.registerLazySingleton<ScheduleMessageHandler>(
     () => ScheduleMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
       updateSchedule: getIt<UpdateSchedule>(),
       executeBackup: getIt<ExecuteScheduledBackup>(),
-      progressProvider: getIt<BackupProgressProvider>(),
+      progressNotifier: getIt<IBackupProgressNotifier>(),
     ),
   );
   final appDir = await getApplicationDocumentsDirectory();
   final transferBasePath = p.join(appDir.path, 'backups');
   getIt.registerLazySingleton<FileTransferMessageHandler>(
     () => FileTransferMessageHandler(allowedBasePath: transferBasePath),
+  );
+  getIt.registerLazySingleton<ITransferStagingService>(
+    () => TransferStagingService(transferBasePath: transferBasePath),
   );
   getIt.registerLazySingleton<IBackupRunningState>(
     getIt.get<BackupProgressProvider>,
@@ -343,6 +350,8 @@ Future<void> setupServiceLocator() async {
       sendToNextcloud: getIt<SendToNextcloud>(),
       notificationService: getIt<INotificationService>(),
       licenseValidationService: getIt<ILicenseValidationService>(),
+      transferStagingService: getIt<ITransferStagingService>(),
+      scheduleCalculator: getIt<IScheduleCalculator>(),
     ),
   );
 
@@ -374,12 +383,15 @@ Future<void> setupServiceLocator() async {
     WindowsTaskSchedulerService.new,
   );
 
+  getIt.registerLazySingleton<IScheduleCalculator>(ScheduleCalculator.new);
+
   getIt.registerLazySingleton<AutoUpdateService>(AutoUpdateService.new);
 
   getIt.registerLazySingleton<CreateSchedule>(
     () => CreateSchedule(
       getIt<IScheduleRepository>(),
       getIt<ISchedulerService>(),
+      getIt<IScheduleCalculator>(),
     ),
   );
 
@@ -387,7 +399,22 @@ Future<void> setupServiceLocator() async {
     () => UpdateSchedule(
       getIt<IScheduleRepository>(),
       getIt<ISchedulerService>(),
+      getIt<IScheduleCalculator>(),
     ),
+  );
+
+  getIt.registerLazySingleton<GetNextRunTime>(
+    () => GetNextRunTime(getIt<IScheduleCalculator>()),
+  );
+
+  getIt.registerLazySingleton<IStorageChecker>(StorageChecker.new);
+  getIt.registerLazySingleton<CheckDiskSpace>(
+    () => CheckDiskSpace(getIt<IStorageChecker>()),
+  );
+
+  getIt.registerLazySingleton<IFileValidator>(FileValidator.new);
+  getIt.registerLazySingleton<ValidateBackupFile>(
+    () => ValidateBackupFile(getIt<IFileValidator>()),
   );
 
   getIt.registerLazySingleton<DeleteSchedule>(
@@ -494,7 +521,10 @@ Future<void> setupServiceLocator() async {
     () => ConnectionLogProvider(getIt<IConnectionLogRepository>()),
   );
   getIt.registerFactory<RemoteSchedulesProvider>(
-    () => RemoteSchedulesProvider(getIt<ConnectionManager>()),
+    () => RemoteSchedulesProvider(
+      getIt<ConnectionManager>(),
+      transferProvider: getIt<RemoteFileTransferProvider>(),
+    ),
   );
   getIt.registerFactory<RemoteFileTransferProvider>(
     () => RemoteFileTransferProvider(

@@ -33,8 +33,8 @@ CloseApplicationsFilter=*.exe
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"; Flags: unchecked
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opcoes de Inicializacao"; Flags: unchecked
+Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"
+Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opcoes de Inicializacao"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

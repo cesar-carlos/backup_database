@@ -227,7 +227,7 @@ class BackupOrchestratorService {
 
       try {
         final progressProvider = getIt<BackupProgressProvider>();
-        progressProvider.updateProgress(
+        progressProvider.updateProgressWithStep(
           step: BackupStep.executingBackup,
           message: 'Backup do banco concluído',
           progress: 0.5,
@@ -241,7 +241,7 @@ class BackupOrchestratorService {
 
         try {
           final progressProvider = getIt<BackupProgressProvider>();
-          progressProvider.updateProgress(
+          progressProvider.updateProgressWithStep(
             step: BackupStep.compressing,
             message: 'Comprimindo arquivo de backup...',
             progress: 0.6,
@@ -281,7 +281,7 @@ class BackupOrchestratorService {
 
             try {
               final progressProvider = getIt<BackupProgressProvider>();
-              progressProvider.updateProgress(
+              progressProvider.updateProgressWithStep(
                 step: BackupStep.compressing,
                 message: 'Compressão concluída',
                 progress: 0.8,

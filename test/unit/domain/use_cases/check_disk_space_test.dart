@@ -1,53 +1,70 @@
-﻿import 'dart:io';
-
+import 'package:backup_database/domain/entities/disk_space_info.dart';
+import 'package:backup_database/domain/services/i_storage_checker.dart';
 import 'package:backup_database/domain/use_cases/storage/check_disk_space.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:result_dart/result_dart.dart' as rd;
+
+class MockIStorageChecker extends Mock implements IStorageChecker {}
 
 void main() {
   group('CheckDiskSpace', () {
     late CheckDiskSpace checkDiskSpace;
+    late MockIStorageChecker mockStorageChecker;
 
     setUp(() {
-      checkDiskSpace = CheckDiskSpace();
+      mockStorageChecker = MockIStorageChecker();
+      checkDiskSpace = CheckDiskSpace(mockStorageChecker);
     });
 
-    test('deve retornar informações do disco', () async {
-      if (!await _hasWmic()) {
-        return;
-      }
+    test(
+      'deve retornar informações do disco quando IStorageChecker retorna sucesso',
+      () async {
+        const info = DiskSpaceInfo(
+          totalBytes: 1000,
+          freeBytes: 600,
+          usedBytes: 400,
+          usedPercentage: 40,
+        );
+        when(
+          () => mockStorageChecker.checkSpace(any()),
+        ).thenAnswer((_) async => const rd.Success(info));
 
-      final result = await checkDiskSpace(r'C:\');
+        final result = await checkDiskSpace(r'C:\');
 
-      expect(result.isSuccess(), true);
-
-      result.fold((info) {
-        expect(info.totalBytes, greaterThan(0));
-        expect(info.freeBytes, greaterThanOrEqualTo(0));
-        expect(info.usedPercentage, greaterThanOrEqualTo(0));
-        expect(info.usedPercentage, lessThanOrEqualTo(100));
-      }, (failure) => fail('Não deveria falhar: $failure'));
-    });
+        expect(result.isSuccess(), true);
+        result.fold(
+          (resultInfo) {
+            expect(resultInfo.totalBytes, 1000);
+            expect(resultInfo.freeBytes, 600);
+            expect(resultInfo.usedPercentage, 40);
+          },
+          (failure) => fail('Não deveria falhar: $failure'),
+        );
+        verify(() => mockStorageChecker.checkSpace(r'C:\')).called(1);
+      },
+    );
 
     test('deve verificar se há espaço suficiente', () async {
-      if (!await _hasWmic()) {
-        return;
-      }
+      const info = DiskSpaceInfo(
+        totalBytes: 2000,
+        freeBytes: 1000,
+        usedBytes: 1000,
+        usedPercentage: 50,
+      );
+      when(
+        () => mockStorageChecker.checkSpace(any()),
+      ).thenAnswer((_) async => const rd.Success(info));
 
       final result = await checkDiskSpace(r'C:\');
 
-      result.fold((info) {
-        expect(info.hasEnoughSpace(1024), true);
-        expect(info.hasEnoughSpace(info.freeBytes + 1), false);
-      }, (failure) => fail('Não deveria falhar: $failure'));
+      result.fold(
+        (resultInfo) {
+          expect(resultInfo.hasEnoughSpace(1024), true);
+          expect(resultInfo.hasEnoughSpace(resultInfo.freeBytes + 1), false);
+        },
+        (failure) => fail('Não deveria falhar: $failure'),
+      );
     });
   });
-}
-
-Future<bool> _hasWmic() async {
-  try {
-    final result = await Process.run('wmic', ['os', 'get', 'caption']);
-    return result.exitCode == 0;
-  } on Object catch (_) {
-    return false;
-  }
 }

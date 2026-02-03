@@ -191,7 +191,7 @@ class SchedulerProvider extends ChangeNotifier {
     try {
       if (progressProvider != null) {
         progressProvider.startBackup(scheduleName);
-        progressProvider.updateProgress(
+        progressProvider.updateProgressWithStep(
           step: BackupStep.executingBackup,
           message: 'Executando backup do banco de dados...',
           progress: 0.2,
@@ -203,7 +203,7 @@ class SchedulerProvider extends ChangeNotifier {
       return result.fold(
         (_) {
           if (progressProvider != null) {
-            progressProvider.updateProgress(
+            progressProvider.updateProgressWithStep(
               step: BackupStep.completed,
               message: 'Backup concluído com sucesso!',
               progress: 1,

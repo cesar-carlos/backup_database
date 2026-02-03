@@ -15,11 +15,12 @@ import 'package:backup_database/infrastructure/socket/client/socket_client_servi
 import 'package:backup_database/infrastructure/socket/client/tcp_socket_client.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-typedef BackupProgressCallback = void Function(
-  String step,
-  String message,
-  double progress,
-);
+typedef BackupProgressCallback =
+    void Function(
+      String step,
+      String message,
+      double progress,
+    );
 
 class ConnectionManager {
   ConnectionManager({ServerConnectionDao? serverConnectionDao})
@@ -128,7 +129,10 @@ class ConnectionManager {
     }
   }
 
-  void _handleBackupProgressMessage(Message message, _BackupProgressState state) {
+  void _handleBackupProgressMessage(
+    Message message,
+    _BackupProgressState state,
+  ) {
     if (isBackupProgressMessage(message)) {
       final step = getStepFromBackupProgress(message) ?? '';
       final progressMessage = getMessageFromBackupProgress(message) ?? '';
@@ -139,7 +143,10 @@ class ConnectionManager {
     if (isBackupCompleteMessage(message)) {
       _activeBackups.remove(message.header.requestId);
       state.onProgress?.call('Concluído', 'Backup concluído com sucesso!', 1);
-      state.completer.complete(const rd.Success(rd.unit));
+      if (!state.completer.isCompleted) {
+        final path = getBackupPathFromBackupComplete(message) ?? '';
+        state.completer.complete(rd.Success(path));
+      }
       return;
     }
     if (isBackupFailedMessage(message)) {
@@ -192,7 +199,9 @@ class ConnectionManager {
     _pendingRequests[requestId] = completer;
     try {
       await send(createListSchedulesMessage(requestId: requestId));
-      final message = await completer.future.timeout(SocketConfig.scheduleRequestTimeout);
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
       _pendingRequests.remove(requestId);
       if (message.header.type == MessageType.error) {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
@@ -224,7 +233,9 @@ class ConnectionManager {
       await send(
         createUpdateScheduleMessage(requestId: requestId, schedule: schedule),
       );
-      final message = await completer.future.timeout(SocketConfig.scheduleRequestTimeout);
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
       _pendingRequests.remove(requestId);
       if (message.header.type == MessageType.error) {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
@@ -254,7 +265,9 @@ class ConnectionManager {
     _pendingRequests[requestId] = completer;
     try {
       await send(createListFilesMessage(requestId: requestId));
-      final message = await completer.future.timeout(SocketConfig.scheduleRequestTimeout);
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
       _pendingRequests.remove(requestId);
       if (message.header.type == MessageType.error) {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
@@ -310,7 +323,7 @@ class ConnectionManager {
     }
   }
 
-  Future<rd.Result<void>> executeSchedule(
+  Future<rd.Result<String>> executeSchedule(
     String scheduleId, {
     BackupProgressCallback? onProgress,
   }) async {
@@ -318,7 +331,7 @@ class ConnectionManager {
       return rd.Failure(Exception('ConnectionManager not connected'));
     }
     final requestId = _nextRequestId++;
-    final completer = Completer<rd.Result<void>>();
+    final completer = Completer<rd.Result<String>>();
 
     if (onProgress != null) {
       _activeBackups[requestId] = _BackupProgressState(
@@ -336,15 +349,16 @@ class ConnectionManager {
       );
 
       if (onProgress == null) {
-        final message = await completer.future.timeout(SocketConfig.backupExecutionTimeout);
+        final result = await completer.future.timeout(
+          SocketConfig.backupExecutionTimeout,
+        );
         _activeBackups.remove(requestId);
-        if (message is rd.Result) {
-          return message as rd.Result<void>;
-        }
-        return const rd.Success(rd.unit);
+        return result;
       }
 
-      final result = await completer.future.timeout(SocketConfig.backupExecutionTimeout);
+      final result = await completer.future.timeout(
+        SocketConfig.backupExecutionTimeout,
+      );
       _activeBackups.remove(requestId);
       return result;
     } on TimeoutException {
@@ -370,7 +384,9 @@ class ConnectionManager {
     _pendingRequests[requestId] = completer;
     try {
       await send(createMetricsRequestMessage(requestId: requestId));
-      final message = await completer.future.timeout(SocketConfig.scheduleRequestTimeout);
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
       _pendingRequests.remove(requestId);
       if (message.header.type == MessageType.error) {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
@@ -454,6 +470,6 @@ class _BackupProgressState {
     this.onProgress,
   });
 
-  final Completer<rd.Result<void>> completer;
+  final Completer<rd.Result<String>> completer;
   final BackupProgressCallback? onProgress;
 }
