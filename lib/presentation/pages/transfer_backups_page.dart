@@ -311,6 +311,9 @@ class _TransferPanelState extends State<_TransferPanel> {
               },
               content: const Text(
                 'Salvar como pasta padrão para backups recebidos',
+                maxLines: 2,
+                softWrap: true,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             _buildScheduleDropdown(context, provider),

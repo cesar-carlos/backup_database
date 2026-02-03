@@ -352,23 +352,34 @@ class RemoteFileTransferProvider extends ChangeNotifier {
 
       final errors = <String>[];
       for (final id in _selectedDestinationIds) {
+        // ❌ CORREÇÃO: Não usar fold com closures async
         final destResult = await _destinationRepository.getById(id);
-        await destResult.fold(
-          (destination) async {
-            final sendResult = await _sendFileToDestinationService.sendFile(
-              localFilePath: outputFilePath,
-              destination: destination,
-            );
-            sendResult.fold(
-              (_) {},
-              (failure) {
-                // ignore: noop_primitive_operations - add used for side effect
-                errors.add('${destination.name}: ${failure.toString()}');
-              },
-            );
-          },
-          (_) async {
+
+        // Usa fold síncrono para extrair o destino ou adicionar erro
+        final destination = destResult.fold(
+          (dest) => dest,
+          (failure) {
             errors.add('Destino $id não encontrado');
+            return null;
+          },
+        );
+
+        if (destination == null) continue;
+
+        LoggerService.info('Enviando para destino: ${destination.name}');
+
+        final sendResult = await _sendFileToDestinationService.sendFile(
+          localFilePath: outputFilePath,
+          destination: destination,
+        );
+
+        sendResult.fold(
+          (_) {
+            LoggerService.info('Upload concluído: ${destination.name}');
+          },
+          (failure) {
+            LoggerService.warning('Erro ao enviar para ${destination.name}: $failure');
+            errors.add('${destination.name}: ${failure.toString()}');
           },
         );
       }
@@ -461,23 +472,34 @@ class RemoteFileTransferProvider extends ChangeNotifier {
 
         final errors = <String>[];
         for (final id in linkedIds) {
+          // ❌ CORREÇÃO: Não usar fold com closures async
           final destResult = await _destinationRepository.getById(id);
-          await destResult.fold(
-            (destination) async {
-              final sendResult = await _sendFileToDestinationService.sendFile(
-                localFilePath: outputFilePath,
-                destination: destination,
-              );
-              sendResult.fold(
-                (_) {},
-                (e) {
-                  // ignore: noop_primitive_operations - add used for side effect
-                  errors.add('${destination.name}: ${e.toString()}');
-                },
-              );
-            },
-            (_) async {
+
+          // Usa fold síncrono para extrair o destino ou adicionar erro
+          final destination = destResult.fold(
+            (dest) => dest,
+            (failure) {
               errors.add('Destino $id não encontrado');
+              return null;
+            },
+          );
+
+          if (destination == null) continue;
+
+          LoggerService.info('Enviando para destino: ${destination.name}');
+
+          final sendResult = await _sendFileToDestinationService.sendFile(
+            localFilePath: outputFilePath,
+            destination: destination,
+          );
+
+          sendResult.fold(
+            (_) {
+              LoggerService.info('Upload concluído: ${destination.name}');
+            },
+            (failure) {
+              LoggerService.warning('Erro ao enviar para ${destination.name}: $failure');
+              errors.add('${destination.name}: ${failure.toString()}');
             },
           );
         }
