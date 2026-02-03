@@ -11,5 +11,6 @@ abstract class IBackupProgressNotifier {
     double? progress,
   });
   bool tryStartBackup([String? scheduleName]);
+  void completeBackup({String? message, String? backupPath});
   void failBackup(String error);
 }

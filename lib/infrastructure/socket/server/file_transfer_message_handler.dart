@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
+import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/file_chunker.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
@@ -13,11 +14,14 @@ typedef SendToClient = Future<void> Function(String clientId, Message message);
 class FileTransferMessageHandler {
   FileTransferMessageHandler({
     required String allowedBasePath,
+    required IFileTransferLockService lockService,
     FileChunker? chunker,
   })  : _allowedBasePath = p.normalize(p.absolute(allowedBasePath)),
+        _lockService = lockService,
         _chunker = chunker ?? FileChunker();
 
   final String _allowedBasePath;
+  final IFileTransferLockService _lockService;
   final FileChunker _chunker;
 
   Future<void> handle(
@@ -33,6 +37,23 @@ class FileTransferMessageHandler {
 
     final requestId = message.header.requestId;
     final filePath = getFilePathFromRequest(message);
+
+    // Adquire lock para evitar conflitos de download simultâneo
+    final lockAcquired = await _lockService.tryAcquireLock(filePath);
+    if (!lockAcquired) {
+      await sendToClient(
+        clientId,
+        createFileTransferErrorMessage(
+          requestId: requestId,
+          errorMessage: 'Arquivo está sendo baixado por outro cliente. Tente novamente em alguns minutos.',
+          errorCode: ErrorCode.fileBusy,
+        ),
+      );
+      LoggerService.info(
+        'File transfer rejected: file locked for $filePath by client $clientId',
+      );
+      return;
+    }
 
     try {
       final resolved = p.isAbsolute(filePath)
@@ -113,6 +134,9 @@ class FileTransferMessageHandler {
           errorMessage: e.toString(),
         ),
       );
+    } finally {
+      // Sempre libera o lock, mesmo em caso de erro
+      await _lockService.releaseLock(filePath);
     }
   }
 

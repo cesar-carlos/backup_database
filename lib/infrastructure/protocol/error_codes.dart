@@ -3,6 +3,7 @@ enum ErrorCode {
   invalidRequest('INVALID_REQUEST', 'Requisição inválida'),
   pathNotAllowed('PATH_NOT_ALLOWED', 'Caminho não permitido'),
   fileNotFound('FILE_NOT_FOUND', 'Arquivo não encontrado'),
+  fileBusy('FILE_BUSY', 'Arquivo em uso por outro cliente'),
   directoryNotFound('DIRECTORY_NOT_FOUND', 'Diretório não encontrado'),
   permissionDenied('PERMISSION_DENIED', 'Permissão negada'),
   parseError('PARSE_ERROR', 'Erro ao processar mensagem'),

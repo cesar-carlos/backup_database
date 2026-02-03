@@ -2,9 +2,13 @@ import 'dart:convert';
 import 'dart:io' show Directory;
 
 import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/constants/socket_config.dart';
+import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/services/i_send_file_to_destination_service.dart';
+import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/file_transfer_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
@@ -27,6 +31,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
   final IBackupDestinationRepository _destinationRepository;
   final ISendFileToDestinationService _sendFileToDestinationService;
   final FileTransferDao? _fileTransferDao;
+
+  ITransferStagingService? _stagingServiceCache;
 
   List<RemoteFileEntry> _files = [];
   RemoteFileEntry? _selectedFile;
@@ -51,16 +57,19 @@ class RemoteFileTransferProvider extends ChangeNotifier {
   int? get transferTotalChunks => _transferTotalChunks;
   double? get transferProgress =>
       _transferTotalChunks != null &&
-              _transferTotalChunks! > 0 &&
-              _transferCurrentChunk != null
-          ? (_transferCurrentChunk! / _transferTotalChunks!).clamp(0.0, 1.0)
-          : null;
+          _transferTotalChunks! > 0 &&
+          _transferCurrentChunk != null
+      ? (_transferCurrentChunk! / _transferTotalChunks!).clamp(0.0, 1.0)
+      : null;
   String? get error => _error;
   Set<String> get selectedDestinationIds =>
       Set<String>.unmodifiable(_selectedDestinationIds);
   bool get isUploadingToRemotes => _isUploadingToRemotes;
   String? get uploadError => _uploadError;
   bool get isConnected => _connectionManager.isConnected;
+
+  ITransferStagingService get _transferStagingService =>
+      _stagingServiceCache ??= getIt<ITransferStagingService>();
 
   void setSelectedFile(RemoteFileEntry? entry) {
     _selectedFile = entry;
@@ -135,7 +144,9 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     var map = <String, dynamic>{};
     if (json != null && json.isNotEmpty) {
       try {
-        map = Map<String, dynamic>.from(jsonDecode(json) as Map<String, dynamic>);
+        map = Map<String, dynamic>.from(
+          jsonDecode(json) as Map<String, dynamic>,
+        );
       } on Object catch (_) {
         map = {};
       }
@@ -187,11 +198,11 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     if (_fileTransferDao == null) return;
     final list = await _fileTransferDao.getAll();
     list.sort(
-      (a, b) =>
-          (b.completedAt ?? DateTime(0)).compareTo(a.completedAt ?? DateTime(0)),
+      (a, b) => (b.completedAt ?? DateTime(0)).compareTo(
+        a.completedAt ?? DateTime(0),
+      ),
     );
-    _transferHistory =
-        list.take(50).map(_toHistoryEntry).toList();
+    _transferHistory = list.take(50).map(_toHistoryEntry).toList();
     notifyListeners();
   }
 
@@ -206,6 +217,55 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         destinationPath: d.destinationPath,
         errorMessage: d.errorMessage,
       );
+
+  /// Executa uma operação com retentativa e exponential backoff
+  Future<T> _executeWithRetry<T>(
+    Future<T> Function() operation, {
+    int maxAttempts = SocketConfig.maxRetries,
+    Duration initialDelay = SocketConfig.downloadRetryInitialDelay,
+    Duration maxDelay = SocketConfig.downloadRetryMaxDelay,
+    int backoffMultiplier = SocketConfig.downloadRetryBackoffMultiplier,
+    String? operationName,
+  }) async {
+    var attempt = 0;
+    var delay = initialDelay;
+
+    while (true) {
+      attempt++;
+      final name = operationName ?? 'Operation';
+
+      try {
+        return await operation();
+      } on Object catch (e, st) {
+        final isLastAttempt = attempt >= maxAttempts;
+
+        LoggerService.warning(
+          '$name failed (attempt $attempt/$maxAttempts): $e',
+          e,
+          st,
+        );
+
+        if (isLastAttempt) {
+          LoggerService.error('$name failed after $maxAttempts attempts');
+          rethrow;
+        }
+
+        // Aguarda com exponential backoff antes da próxima tentativa
+        LoggerService.info(
+          'Retrying $name in ${delay.inSeconds}s '
+          '(attempt ${attempt + 1}/$maxAttempts)',
+        );
+
+        await Future.delayed(delay);
+
+        // Calcula próximo delay com exponential backoff
+        final nextDelayMs = delay.inMilliseconds * backoffMultiplier;
+        final nextDelay = Duration(milliseconds: nextDelayMs);
+        // Usa o delay menor entre o calculado e o máximo
+        delay = nextDelay < maxDelay ? nextDelay : maxDelay;
+      }
+    }
+  }
 
   Future<bool> requestFile() async {
     final selected = _selectedFile;
@@ -229,14 +289,18 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     final startedAt = DateTime.now();
     final destDir = _outputPath.trim();
     final outputFilePath = p.join(destDir, p.basename(selected.path));
-    final result = await _connectionManager.requestFile(
-      filePath: selected.path,
-      outputPath: outputFilePath,
-      onProgress: (currentChunk, totalChunks) {
-        _transferCurrentChunk = currentChunk;
-        _transferTotalChunks = totalChunks;
-        notifyListeners();
-      },
+
+    final result = await _executeWithRetry(
+      () => _connectionManager.requestFile(
+        filePath: selected.path,
+        outputPath: outputFilePath,
+        onProgress: (currentChunk, totalChunks) {
+          _transferCurrentChunk = currentChunk;
+          _transferTotalChunks = totalChunks;
+          notifyListeners();
+        },
+      ),
+      operationName: 'Download file ${selected.path}',
     );
 
     final totalChunks = _transferTotalChunks ?? 0;
@@ -250,7 +314,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         return true;
       },
       (failure) {
-        _error = failure.toString();
+        _error =
+            'Falha ao baixar arquivo após ${SocketConfig.maxRetries} tentativas: $failure';
         return false;
       },
     );
@@ -349,15 +414,18 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     _transferTotalChunks = null;
     notifyListeners();
 
-    final result = await _connectionManager.requestFile(
-      filePath: relativePath,
-      outputPath: outputFilePath,
-      scheduleId: scheduleId,
-      onProgress: (currentChunk, totalChunks) {
-        _transferCurrentChunk = currentChunk;
-        _transferTotalChunks = totalChunks;
-        notifyListeners();
-      },
+    final result = await _executeWithRetry(
+      () => _connectionManager.requestFile(
+        filePath: relativePath,
+        outputPath: outputFilePath,
+        scheduleId: scheduleId,
+        onProgress: (currentChunk, totalChunks) {
+          _transferCurrentChunk = currentChunk;
+          _transferTotalChunks = totalChunks;
+          notifyListeners();
+        },
+      ),
+      operationName: 'Download backup $scheduleId',
     );
 
     _isTransferring = false;
@@ -370,12 +438,21 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         return true;
       },
       (failure) {
-        _error = failure.toString();
+        _error =
+            'Falha ao baixar backup após ${SocketConfig.maxRetries} tentativas: $failure';
         return false;
       },
     );
 
     if (success) {
+      // Limpar arquivo do staging após download bem-sucedido
+      try {
+        await _transferStagingService.cleanupStaging(scheduleId);
+      } on Object catch (e) {
+        // Não falhar a operação se cleanup falhar, apenas logar
+        // O cleanupOldBackups irá limpar arquivos órfãos posteriormente
+      }
+
       final linkedIds = await getLinkedDestinationIds(scheduleId);
       if (linkedIds.isNotEmpty) {
         _isUploadingToRemotes = true;

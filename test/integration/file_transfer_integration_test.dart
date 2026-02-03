@@ -1,10 +1,27 @@
 import 'dart:io';
 
+import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+
+/// Mock do IFileTransferLockService para testes
+class MockFileTransferLockService implements IFileTransferLockService {
+  @override
+  Future<bool> tryAcquireLock(String filePath) async => true;
+
+  @override
+  Future<void> releaseLock(String filePath) async {}
+
+  @override
+  Future<bool> isLocked(String filePath) async => false;
+
+  @override
+  Future<void> cleanupExpiredLocks({Duration maxAge = const Duration(minutes: 30)}) async {}
+}
+
 
 int _nextPort = 29600;
 
@@ -26,8 +43,10 @@ void main() {
       const content = 'Hello file transfer integration test!';
       await testFile.writeAsString(content);
 
+      final mockLockService = MockFileTransferLockService();
       final fileTransferHandler = FileTransferMessageHandler(
         allowedBasePath: serverDir.path,
+        lockService: mockLockService,
       );
       final server = TcpSocketServer(fileTransferHandler: fileTransferHandler);
       final port = getTestPort();
@@ -64,8 +83,10 @@ void main() {
       final serverDir = await Directory.systemTemp.createTemp('ft_server_');
       addTearDown(() => serverDir.delete(recursive: true));
 
+      final mockLockService = MockFileTransferLockService();
       final fileTransferHandler = FileTransferMessageHandler(
         allowedBasePath: serverDir.path,
+        lockService: mockLockService,
       );
       final server = TcpSocketServer(fileTransferHandler: fileTransferHandler);
       final port = getTestPort();
@@ -98,8 +119,10 @@ void main() {
       final serverDir = await Directory.systemTemp.createTemp('ft_server_');
       addTearDown(() => serverDir.delete(recursive: true));
 
+      final mockLockService = MockFileTransferLockService();
       final fileTransferHandler = FileTransferMessageHandler(
         allowedBasePath: serverDir.path,
+        lockService: mockLockService,
       );
       final server = TcpSocketServer(fileTransferHandler: fileTransferHandler);
       final port = getTestPort();
@@ -139,8 +162,10 @@ void main() {
       final b = File(p.join(sub.path, 'b.bin'));
       await b.writeAsString('bb');
 
+      final mockLockService = MockFileTransferLockService();
       final fileTransferHandler = FileTransferMessageHandler(
         allowedBasePath: serverDir.path,
+        lockService: mockLockService,
       );
       final server = TcpSocketServer(fileTransferHandler: fileTransferHandler);
       final port = getTestPort();

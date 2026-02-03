@@ -409,6 +409,43 @@ class ConnectionManager {
     }
   }
 
+  Future<rd.Result<void>> cancelSchedule(String scheduleId) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(createCancelScheduleMessage(
+        requestId: requestId,
+        scheduleId: scheduleId,
+      ));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (message.header.type != MessageType.scheduleCancelled) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada: ${message.header.type.name}',
+          ),
+        );
+      }
+      return const rd.Success(rd.unit);
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('cancelSchedule timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
   Future<void> send(Message message) async {
     final client = _client;
     if (client == null || !client.isConnected) {

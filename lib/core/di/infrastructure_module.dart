@@ -8,6 +8,7 @@ import 'package:backup_database/infrastructure/compression/backup_compression_or
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/destination/destination_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
+import 'package:backup_database/infrastructure/file_transfer_lock_service.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
@@ -177,8 +178,16 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
 
   final appDir = await getApplicationDocumentsDirectory();
   final transferBasePath = p.join(appDir.path, 'backups');
+  final lockPath = p.join(appDir.path, 'locks');
+
+  getIt.registerLazySingleton<IFileTransferLockService>(
+    () => FileTransferLockService(lockBasePath: lockPath),
+  );
   getIt.registerLazySingleton<FileTransferMessageHandler>(
-    () => FileTransferMessageHandler(allowedBasePath: transferBasePath),
+    () => FileTransferMessageHandler(
+      allowedBasePath: transferBasePath,
+      lockService: getIt<IFileTransferLockService>(),
+    ),
   );
   getIt.registerLazySingleton<ITransferStagingService>(
     () => TransferStagingService(transferBasePath: transferBasePath),

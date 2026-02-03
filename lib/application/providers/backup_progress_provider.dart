@@ -201,6 +201,7 @@ class BackupProgressProvider extends ChangeNotifier
     _updateProgressWithStep(step: step, message: message, progress: progress);
   }
 
+  @override
   void completeBackup({String? message, String? backupPath}) {
     _isRunning = false;
     _currentScheduleName = null;

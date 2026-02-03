@@ -388,6 +388,19 @@ class SchedulerService implements ISchedulerService {
       }
       await _notificationService.notifyBackupComplete(backupHistory);
 
+      // Copiar para staging ANTES de deletar o arquivo temporário
+      // para que o cliente possa baixar o arquivo
+      String? stagingRelativePath;
+      if (_transferStagingService != null) {
+        stagingRelativePath = await _transferStagingService.copyToStaging(
+          backupHistory.backupPath,
+          schedule.id,
+        );
+        LoggerService.info(
+          'Backup copiado para staging: $stagingRelativePath',
+        );
+      }
+
       if (shouldDeleteTempFile) {
         try {
           final entityType = FileSystemEntity.typeSync(tempBackupPath);
@@ -440,18 +453,10 @@ class SchedulerService implements ISchedulerService {
 
       LoggerService.info('Backup agendado concluído: ${schedule.name}');
 
-      if (_transferStagingService != null) {
-        await _transferStagingService.copyToStaging(
-          backupHistory.backupPath,
-          schedule.id,
-        );
-      }
-
       try {
-        _progressNotifier.updateProgress(
-          step: 'Concluído',
+        _progressNotifier.completeBackup(
           message: 'Backup concluído com sucesso!',
-          progress: 1,
+          backupPath: stagingRelativePath,
         );
       } on Object catch (e, s) {
         LoggerService.warning(

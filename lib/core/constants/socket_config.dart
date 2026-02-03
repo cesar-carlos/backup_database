@@ -11,4 +11,9 @@ class SocketConfig {
   static const Duration backupExecutionTimeout = Duration(minutes: 10);
   static const int maxRetries = 3;
   static const int maxReconnectAttempts = 5;
+
+  // Retry configuration for downloads
+  static const Duration downloadRetryInitialDelay = Duration(seconds: 2);
+  static const Duration downloadRetryMaxDelay = Duration(seconds: 30);
+  static const int downloadRetryBackoffMultiplier = 2;
 }

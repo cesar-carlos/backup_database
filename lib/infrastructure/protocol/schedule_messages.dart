@@ -251,3 +251,59 @@ bool isBackupCompleteMessage(Message message) =>
 
 bool isBackupFailedMessage(Message message) =>
     message.header.type == MessageType.backupFailed;
+
+
+// ============================================================================
+// CANCEL SCHEDULE
+// ============================================================================
+
+Message createCancelScheduleMessage({
+  required int requestId,
+  required String scheduleId,
+}) {
+  final payload = <String, dynamic>{
+    'scheduleId': scheduleId,
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.cancelSchedule,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+Message createScheduleCancelledMessage({
+  required int requestId,
+  required String scheduleId,
+}) {
+  final payload = <String, dynamic>{
+    'scheduleId': scheduleId,
+    'message': 'Backup cancelado pelo usuário',
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.scheduleCancelled,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+String? getScheduleIdFromCancelRequest(Message message) {
+  return message.payload['scheduleId'] as String?;
+}
+
+bool isCancelScheduleMessage(Message message) =>
+    message.header.type == MessageType.cancelSchedule;
+
+bool isScheduleCancelledMessage(Message message) =>
+    message.header.type == MessageType.scheduleCancelled;

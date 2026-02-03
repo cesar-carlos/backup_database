@@ -69,7 +69,11 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                   provider.executingScheduleId != null) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: _buildBackupProgressCard(context, provider),
+                  child: _buildBackupProgressCard(
+                    context,
+                    provider,
+                    onCancel: () => _onCancelBackup(context, provider),
+                  ),
                 );
               }
               return const SizedBox.shrink();
@@ -285,6 +289,48 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     }
   }
 
+  Future<void> _onCancelBackup(
+    BuildContext context,
+    RemoteSchedulesProvider provider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => ContentDialog(
+        title: const Text('Cancelar backup'),
+        content: const Text(
+          'Deseja cancelar o backup em execução no servidor?',
+        ),
+        actions: [
+          Button(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Não'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sim, cancelar'),
+          ),
+        ],
+      ),
+    );
+
+    if ((confirmed ?? false) && context.mounted) {
+      final success = await provider.cancelSchedule();
+      if (context.mounted) {
+        if (success) {
+          MessageModal.showSuccess(
+            context,
+            message: 'Backup cancelado no servidor.',
+          );
+        } else {
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao cancelar backup.',
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _showTransferDestinationsDialog(
     BuildContext context,
     Schedule schedule,
@@ -425,8 +471,9 @@ class _TransferDestinationsDialogState
 
 Widget _buildBackupProgressCard(
   BuildContext context,
-  RemoteSchedulesProvider provider,
-) {
+  RemoteSchedulesProvider provider, {
+  required VoidCallback onCancel,
+}) {
   final schedule = provider.schedules.firstWhere(
     (s) => s.id == provider.executingScheduleId,
     orElse: () => provider.schedules.first,
@@ -481,6 +528,18 @@ Widget _buildBackupProgressCard(
               value: provider.backupProgress! * 100,
             ),
           ],
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: onCancel,
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(FluentIcons.cancel, size: 16),
+                SizedBox(width: 8),
+                Text('Cancelar backup'),
+              ],
+            ),
+          ),
         ],
       ),
     ),

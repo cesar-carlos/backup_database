@@ -126,7 +126,28 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     );
 
     return result.fold(
-      (backupPath) {
+      (backupPath) async {
+        if (backupPath.isEmpty || _transferProvider == null) {
+          _error = null;
+          _isExecuting = false;
+          _executingScheduleId = null;
+          _backupStep = null;
+          _backupMessage = null;
+          _backupProgress = null;
+          notifyListeners();
+          return true;
+        }
+
+        // Backup concluído no servidor, agora baixar o arquivo
+        _backupStep = 'Baixando arquivo';
+        _backupMessage = 'Transferindo backup do servidor...';
+        notifyListeners();
+
+        final downloadSuccess = await _transferProvider.transferCompletedBackupToClient(
+          scheduleId,
+          backupPath,
+        );
+
         _error = null;
         _isExecuting = false;
         _executingScheduleId = null;
@@ -134,13 +155,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _backupMessage = null;
         _backupProgress = null;
         notifyListeners();
-        if (backupPath.isNotEmpty && _transferProvider != null) {
-          _transferProvider.transferCompletedBackupToClient(
-            scheduleId,
-            backupPath,
-          );
-        }
-        return true;
+
+        return downloadSuccess;
       },
       (exception) {
         _error = mapExceptionToMessage(exception);
@@ -149,6 +165,40 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _backupStep = null;
         _backupMessage = null;
         _backupProgress = null;
+        notifyListeners();
+        return false;
+      },
+    );
+  }
+
+  Future<bool> cancelSchedule() async {
+    if (!_connectionManager.isConnected) {
+      _error = 'Conecte-se a um servidor para cancelar agendamentos.';
+      notifyListeners();
+      return false;
+    }
+
+    if (_executingScheduleId == null) {
+      _error = 'Nenhum backup em execução para cancelar.';
+      notifyListeners();
+      return false;
+    }
+
+    final result = await _connectionManager.cancelSchedule(_executingScheduleId!);
+
+    return result.fold(
+      (_) {
+        _isExecuting = false;
+        _executingScheduleId = null;
+        _backupStep = null;
+        _backupMessage = null;
+        _backupProgress = null;
+        _error = null;
+        notifyListeners();
+        return true;
+      },
+      (exception) {
+        _error = mapExceptionToMessage(exception);
         notifyListeners();
         return false;
       },

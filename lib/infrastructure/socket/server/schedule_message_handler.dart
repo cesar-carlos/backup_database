@@ -110,7 +110,8 @@ class ScheduleMessageHandler {
   ) async {
     if (!isListSchedulesMessage(message) &&
         !isUpdateScheduleMessage(message) &&
-        !isExecuteScheduleMessage(message)) {
+        !isExecuteScheduleMessage(message) &&
+        !isCancelScheduleMessage(message)) {
       return;
     }
 
@@ -128,6 +129,13 @@ class ScheduleMessageHandler {
         );
       } else if (isExecuteScheduleMessage(message)) {
         await _handleExecuteSchedule(
+          clientId,
+          requestId,
+          message,
+          sendToClient,
+        );
+      } else if (isCancelScheduleMessage(message)) {
+        await _handleCancelSchedule(
           clientId,
           requestId,
           message,
@@ -382,5 +390,55 @@ class ScheduleMessageHandler {
       );
       _clearCurrentBackup();
     }
+  }
+
+  Future<void> _handleCancelSchedule(
+    String clientId,
+    int requestId,
+    Message message,
+    SendToClient sendToClient,
+  ) async {
+    final scheduleId = getScheduleIdFromCancelRequest(message);
+    if (scheduleId == null || scheduleId.isEmpty) {
+      await sendToClient(
+        clientId,
+        createScheduleErrorMessage(
+          requestId: requestId,
+          error: 'scheduleId vazio ou inválido',
+        ),
+      );
+      return;
+    }
+
+    // Só pode cancelar o backup do cliente atual
+    if (scheduleId != _currentScheduleId) {
+      await sendToClient(
+        clientId,
+        createScheduleErrorMessage(
+          requestId: requestId,
+          error: 'Não há backup em execução para este schedule',
+        ),
+      );
+      return;
+    }
+
+    LoggerService.infoWithContext(
+      'Cancel schedule requested',
+      clientId: clientId,
+      requestId: requestId.toString(),
+      scheduleId: scheduleId,
+    );
+
+    // Notifica falha para sinalizar cancelamento
+    _progressNotifier.failBackup('Backup cancelado pelo usuário');
+    _clearCurrentBackup();
+
+    await sendToClient(
+      clientId,
+      createScheduleCancelledMessage(
+        requestId: requestId,
+        scheduleId: scheduleId,
+      ),
+    );
   }
 }

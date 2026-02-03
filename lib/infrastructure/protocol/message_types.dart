@@ -7,6 +7,8 @@ enum MessageType {
   updateSchedule,
   executeSchedule,
   scheduleUpdated,
+  cancelSchedule,
+  scheduleCancelled,
   backupProgress,
   backupStep,
   backupComplete,
