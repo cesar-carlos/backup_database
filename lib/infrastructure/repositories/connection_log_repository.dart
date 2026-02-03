@@ -36,8 +36,32 @@ class ConnectionLogRepository implements IConnectionLogRepository {
   @override
   Stream<List<ConnectionLog>> watchAll() {
     return _database.connectionLogDao.watchAll().map(
-          (list) => list.map(_toEntity).toList(),
-        );
+      (list) => list.map(_toEntity).toList(),
+    );
+  }
+
+  @override
+  Future<rd.Result<void>> insertAttempt({
+    required String clientHost,
+    required bool success,
+    String? serverId,
+    String? errorMessage,
+    String? clientId,
+  }) async {
+    try {
+      await _database.connectionLogDao.insertConnectionAttempt(
+        clientHost: clientHost,
+        success: success,
+        serverId: serverId,
+        errorMessage: errorMessage,
+        clientId: clientId,
+      );
+      return const rd.Success(rd.unit);
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao registrar log de conexão: $e'),
+      );
+    }
   }
 
   ConnectionLog _toEntity(ConnectionLogsTableData data) {

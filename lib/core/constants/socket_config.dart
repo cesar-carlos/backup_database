@@ -6,6 +6,9 @@ class SocketConfig {
   static const Duration heartbeatInterval = Duration(seconds: 30);
   static const Duration heartbeatTimeout = Duration(seconds: 60);
   static const Duration connectionTimeout = Duration(seconds: 10);
+  static const Duration scheduleRequestTimeout = Duration(seconds: 15);
+  static const Duration fileTransferTimeout = Duration(minutes: 5);
+  static const Duration backupExecutionTimeout = Duration(minutes: 10);
   static const int maxRetries = 3;
   static const int maxReconnectAttempts = 5;
 }

@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
+import 'package:backup_database/domain/repositories/i_connection_log_repository.dart';
 import 'package:backup_database/domain/repositories/i_server_connection_repository.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
@@ -12,6 +14,7 @@ class ServerConnectionProvider extends ChangeNotifier {
   ServerConnectionProvider(
     this._repository,
     this._connectionManager,
+    this._connectionLogRepository,
   ) {
     loadConnections();
     _listenToConnectionStatus();
@@ -19,6 +22,7 @@ class ServerConnectionProvider extends ChangeNotifier {
 
   final IServerConnectionRepository _repository;
   final ConnectionManager _connectionManager;
+  final IConnectionLogRepository _connectionLogRepository;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
 
   List<ServerConnection> _connections = [];
@@ -26,6 +30,7 @@ class ServerConnectionProvider extends ChangeNotifier {
   String? _error;
   bool _isConnecting = false;
   bool _isTestingConnection = false;
+  bool _hasTriedAutoConnectAtStartup = false;
 
   void _listenToConnectionStatus() {
     _statusSubscription?.cancel();
@@ -61,6 +66,13 @@ class ServerConnectionProvider extends ChangeNotifier {
       (list) {
         _connections = list;
         _isLoading = false;
+        if (currentAppMode == AppMode.client &&
+            !_hasTriedAutoConnectAtStartup &&
+            list.isNotEmpty &&
+            !_connectionManager.isConnected) {
+          _hasTriedAutoConnectAtStartup = true;
+          unawaited(tryConnectToSavedServersInBackground());
+        }
       },
       (failure) {
         _error = failure.toString();
@@ -69,6 +81,64 @@ class ServerConnectionProvider extends ChangeNotifier {
     );
 
     notifyListeners();
+  }
+
+  /// Tenta conectar em sequência a todos os servidores configurados em background.
+  /// Para na primeira conexão bem-sucedida. Não altera [isConnecting].
+  Future<void> tryConnectToSavedServersInBackground() async {
+    if (currentAppMode != AppMode.client) return;
+    if (_connectionManager.isConnected) return;
+    final list = _connections;
+    if (list.isEmpty) return;
+
+    for (final connection in list) {
+      try {
+        await _connectionManager.connectToSavedConnection(
+          connection.id,
+          enableAutoReconnect: true,
+        );
+        if (_connectionManager.isConnected) {
+          await _logConnectionAttempt(
+            clientHost: connection.name,
+            serverId: connection.serverId,
+            success: true,
+          );
+          LoggerService.info(
+            'Conectado ao servidor ${connection.name} (${connection.host}:${connection.port}) em background',
+          );
+          notifyListeners();
+          return;
+        }
+      } on Object catch (e) {
+        final errorMessage = e is StateError ? e.message : e.toString();
+        await _logConnectionAttempt(
+          clientHost: connection.name,
+          serverId: connection.serverId,
+          success: false,
+          errorMessage: errorMessage,
+        );
+        LoggerService.debug(
+          'Falha ao conectar a ${connection.name} em background: $e',
+        );
+        await _connectionManager.disconnect();
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> _logConnectionAttempt({
+    required String clientHost,
+    required bool success,
+    String? serverId,
+    String? errorMessage,
+  }) async {
+    final result = await _connectionLogRepository.insertAttempt(
+      clientHost: clientHost,
+      success: success,
+      serverId: serverId,
+      errorMessage: errorMessage,
+    );
+    result.fold((_) {}, (_) {});
   }
 
   Future<bool> saveConnection({
@@ -188,14 +258,32 @@ class ServerConnectionProvider extends ChangeNotifier {
 
     LoggerService.info('Tentando conectar à conexão: $connectionId');
 
+    final index = _connections.indexWhere((c) => c.id == connectionId);
+    final connection = index >= 0 ? _connections[index] : null;
+
     try {
       await _connectionManager.connectToSavedConnection(
         connectionId,
         enableAutoReconnect: enableAutoReconnect,
       );
+      if (_connectionManager.isConnected && connection != null) {
+        await _logConnectionAttempt(
+          clientHost: connection.name,
+          serverId: connection.serverId,
+          success: true,
+        );
+      }
       LoggerService.info('Conexão estabelecida com sucesso');
     } on Object catch (e) {
       _error = e is StateError ? e.message : e.toString();
+      if (connection != null) {
+        await _logConnectionAttempt(
+          clientHost: connection.name,
+          serverId: connection.serverId,
+          success: false,
+          errorMessage: _error,
+        );
+      }
       LoggerService.error('Erro ao conectar: $_error', e);
     } finally {
       _isConnecting = false;

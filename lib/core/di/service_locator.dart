@@ -125,10 +125,14 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<FileTransferMessageHandler>(
     () => FileTransferMessageHandler(allowedBasePath: transferBasePath),
   );
+  getIt.registerLazySingleton<IBackupRunningState>(
+    getIt.get<BackupProgressProvider>,
+  );
   getIt.registerLazySingleton<MetricsMessageHandler>(
     () => MetricsMessageHandler(
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
       scheduleRepository: getIt<IScheduleRepository>(),
+      backupRunningState: getIt<IBackupRunningState>(),
     ),
   );
   getIt.registerLazySingleton<TcpSocketServer>(
@@ -504,6 +508,7 @@ Future<void> setupServiceLocator() async {
     () => ServerConnectionProvider(
       getIt<IServerConnectionRepository>(),
       getIt<ConnectionManager>(),
+      getIt<IConnectionLogRepository>(),
     ),
   );
 }

@@ -139,6 +139,8 @@ class TcpSocketServer implements SocketServerService {
   Future<void> stop() async {
     if (!_isRunning) return;
 
+    _scheduleHandler?.dispose();
+
     if (_clientManager != null) {
       _clientManager.disconnectAll();
     } else {

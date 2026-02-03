@@ -12,6 +12,7 @@ class ServerListItem extends StatelessWidget {
     this.onEdit,
     this.onDelete,
     this.onTestConnection,
+    this.onShowLogs,
     this.isConnecting = false,
     this.isTestingConnection = false,
   });
@@ -23,6 +24,7 @@ class ServerListItem extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onTestConnection;
+  final VoidCallback? onShowLogs;
   final bool isConnecting;
   final bool isTestingConnection;
 
@@ -78,53 +80,71 @@ class ServerListItem extends StatelessWidget {
                 ),
                 _buildStatusChip(context),
                 const SizedBox(width: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (onTestConnection != null)
-                      Tooltip(
-                        message: 'Testar conexão',
-                        child: IconButton(
-                          icon: const Icon(FluentIcons.link),
-                          onPressed: isTestingConnection
-                              ? null
-                              : onTestConnection,
-                        ),
-                      ),
-                    if (onConnect != null)
-                      Tooltip(
-                        message: _isConnectedToThis
-                            ? 'Desconectar'
-                            : 'Conectar',
-                        child: IconButton(
-                          icon: Icon(
-                            _isConnectedToThis
-                                ? FluentIcons.plug_disconnected
-                                : FluentIcons.plug,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (onTestConnection != null) ...[
+                        Tooltip(
+                          message: 'Testar conexão',
+                          child: IconButton(
+                            icon: const Icon(FluentIcons.link),
+                            onPressed: isTestingConnection
+                                ? null
+                                : onTestConnection,
                           ),
-                          onPressed: isConnecting ? null : onConnect,
                         ),
-                      ),
-                    if (onEdit != null) ...[
-                      Button(
-                        onPressed: onEdit,
-                        child: const Text('Esta conexão'),
-                      ),
-                      const SizedBox(width: 4),
-                      Tooltip(
-                        message: 'Editar conexão',
-                        child: IconButton(
-                          icon: const Icon(FluentIcons.edit),
+                        const SizedBox(width: 8),
+                      ],
+                      if (onConnect != null) ...[
+                        Tooltip(
+                          message: _isConnectedToThis
+                              ? 'Desconectar'
+                              : 'Conectar',
+                          child: IconButton(
+                            icon: Icon(
+                              _isConnectedToThis
+                                  ? FluentIcons.plug_disconnected
+                                  : FluentIcons.plug,
+                            ),
+                            onPressed: isConnecting ? null : onConnect,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      if (onShowLogs != null) ...[
+                        Tooltip(
+                          message: 'Log desta conexão',
+                          child: IconButton(
+                            icon: const Icon(FluentIcons.history),
+                            onPressed: onShowLogs,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      if (onEdit != null) ...[
+                        Button(
                           onPressed: onEdit,
+                          child: const Text('Esta conexão'),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: 'Editar conexão',
+                          child: IconButton(
+                            icon: const Icon(FluentIcons.edit),
+                            onPressed: onEdit,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      if (onDelete != null)
+                        IconButton(
+                          icon: const Icon(FluentIcons.delete),
+                          onPressed: onDelete,
+                        ),
                     ],
-                    if (onDelete != null)
-                      IconButton(
-                        icon: const Icon(FluentIcons.delete),
-                        onPressed: onDelete,
-                      ),
-                  ],
+                  ),
                 ),
               ],
             ),

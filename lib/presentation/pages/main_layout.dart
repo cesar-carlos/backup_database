@@ -1,3 +1,4 @@
+import 'package:backup_database/application/providers/connection_log_provider.dart';
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
@@ -78,6 +79,12 @@ class _MainLayoutState extends State<MainLayout> {
         selectedIcon: FluentIcons.download,
         label: 'Transferir Backups',
         route: RouteNames.transferBackups,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.history,
+        selectedIcon: FluentIcons.history,
+        label: 'Log de Conexões',
+        route: RouteNames.connectionLogs,
       ),
       const NavigationItem(
         icon: FluentIcons.megaphone,
@@ -176,6 +183,8 @@ class _MainLayoutState extends State<MainLayout> {
         if (context.read<ServerConnectionProvider>().isConnected) {
           context.read<RemoteFileTransferProvider>().loadAvailableFiles();
         }
+      case RouteNames.connectionLogs:
+        context.read<ConnectionLogProvider>().loadLogs();
     }
   }
 

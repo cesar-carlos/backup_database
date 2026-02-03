@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
@@ -31,10 +32,6 @@ class ConnectionManager {
   int _nextRequestId = 0;
   final Map<int, Completer<Message>> _pendingRequests = {};
   StreamSubscription<Message>? _messageSubscription;
-
-  static const Duration _scheduleRequestTimeout = Duration(seconds: 15);
-  static const Duration _fileTransferTimeout = Duration(minutes: 5);
-  static const Duration _backupExecutionTimeout = Duration(minutes: 10);
 
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
@@ -195,7 +192,7 @@ class ConnectionManager {
     _pendingRequests[requestId] = completer;
     try {
       await send(createListSchedulesMessage(requestId: requestId));
-      final message = await completer.future.timeout(_scheduleRequestTimeout);
+      final message = await completer.future.timeout(SocketConfig.scheduleRequestTimeout);
       _pendingRequests.remove(requestId);
       if (message.header.type == MessageType.error) {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
@@ -227,7 +224,7 @@ class ConnectionManager {
       await send(
         createUpdateScheduleMessage(requestId: requestId, schedule: schedule),
       );
-      final message = await completer.future.timeout(_scheduleRequestTimeout);
+      final message = await completer.future.timeout(SocketConfig.scheduleRequestTimeout);
       _pendingRequests.remove(requestId);
       if (message.header.type == MessageType.error) {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
@@ -257,7 +254,7 @@ class ConnectionManager {
     _pendingRequests[requestId] = completer;
     try {
       await send(createListFilesMessage(requestId: requestId));
-      final message = await completer.future.timeout(_scheduleRequestTimeout);
+      final message = await completer.future.timeout(SocketConfig.scheduleRequestTimeout);
       _pendingRequests.remove(requestId);
       if (message.header.type == MessageType.error) {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
@@ -303,7 +300,7 @@ class ConnectionManager {
           scheduleId: scheduleId,
         ),
       );
-      return await completer.future.timeout(_fileTransferTimeout);
+      return await completer.future.timeout(SocketConfig.fileTransferTimeout);
     } on TimeoutException {
       _activeTransfers.remove(requestId);
       return rd.Failure(TimeoutException('requestFile timeout'));
@@ -339,7 +336,7 @@ class ConnectionManager {
       );
 
       if (onProgress == null) {
-        final message = await completer.future.timeout(_backupExecutionTimeout);
+        final message = await completer.future.timeout(SocketConfig.backupExecutionTimeout);
         _activeBackups.remove(requestId);
         if (message is rd.Result) {
           return message as rd.Result<void>;
@@ -347,7 +344,7 @@ class ConnectionManager {
         return const rd.Success(rd.unit);
       }
 
-      final result = await completer.future.timeout(_backupExecutionTimeout);
+      final result = await completer.future.timeout(SocketConfig.backupExecutionTimeout);
       _activeBackups.remove(requestId);
       return result;
     } on TimeoutException {
@@ -355,7 +352,7 @@ class ConnectionManager {
       return rd.Failure(
         TimeoutException(
           'Tempo esgotado ao aguardar conclusão do backup '
-          '(limite: ${_backupExecutionTimeout.inMinutes} minutos)',
+          '(limite: ${SocketConfig.backupExecutionTimeout.inMinutes} minutos)',
         ),
       );
     } on Object catch (e) {
@@ -373,7 +370,7 @@ class ConnectionManager {
     _pendingRequests[requestId] = completer;
     try {
       await send(createMetricsRequestMessage(requestId: requestId));
-      final message = await completer.future.timeout(_scheduleRequestTimeout);
+      final message = await completer.future.timeout(SocketConfig.scheduleRequestTimeout);
       _pendingRequests.remove(requestId);
       if (message.header.type == MessageType.error) {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';

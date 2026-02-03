@@ -10,16 +10,21 @@ import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 
 typedef SendToClient = Future<void> Function(String clientId, Message message);
 
+/// Handles remote schedule commands from the client. When the client sends
+/// executeSchedule, the server runs the same backup flow as a local "Run now"
+/// (ExecuteScheduledBackup → SchedulerService.executeNow → _executeScheduledBackup).
+/// Progress (step, message, progress) is streamed to the client via
+/// BackupProgressProvider so the client has the same information as the server UI.
 class ScheduleMessageHandler {
   ScheduleMessageHandler({
     required IScheduleRepository scheduleRepository,
     required UpdateSchedule updateSchedule,
     required ExecuteScheduledBackup executeBackup,
     required BackupProgressProvider progressProvider,
-  })  : _scheduleRepository = scheduleRepository,
-        _updateSchedule = updateSchedule,
-        _executeBackup = executeBackup,
-        _progressProvider = progressProvider {
+  }) : _scheduleRepository = scheduleRepository,
+       _updateSchedule = updateSchedule,
+       _executeBackup = executeBackup,
+       _progressProvider = progressProvider {
     _progressProvider.addListener(_onProgressChanged);
   }
 
@@ -147,10 +152,12 @@ class ScheduleMessageHandler {
         );
       }
     } on Object catch (e, st) {
-      LoggerService.warning(
-        'ScheduleMessageHandler error for client $clientId',
-        e,
-        st,
+      LoggerService.warningWithContext(
+        'ScheduleMessageHandler error',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        error: e,
+        stackTrace: st,
       );
       await sendToClient(
         clientId,
@@ -245,89 +252,152 @@ class ScheduleMessageHandler {
       return;
     }
 
-    if (_progressProvider.isRunning) {
+    if (!_progressProvider.tryStartBackup()) {
+      LoggerService.infoWithContext(
+        'Execute schedule rejected: backup already running',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        scheduleId: scheduleId,
+      );
       await sendToClient(
         clientId,
         createScheduleErrorMessage(
           requestId: requestId,
-          error: 'Já existe um backup em execução no servidor. '
+          error:
+              'Já existe um backup em execução no servidor. '
               'Aguarde conclusão para iniciar novo.',
         ),
       );
       return;
     }
 
-    final scheduleResult = await _scheduleRepository.getById(scheduleId);
-    if (scheduleResult.isError()) {
-      final failure = scheduleResult.exceptionOrNull();
+    LoggerService.infoWithContext(
+      'Execute schedule started',
+      clientId: clientId,
+      requestId: requestId.toString(),
+      scheduleId: scheduleId,
+    );
+
+    try {
+      final scheduleResult = await _scheduleRepository.getById(scheduleId);
+      if (scheduleResult.isError()) {
+        final failure = scheduleResult.exceptionOrNull();
+        _progressProvider.failBackup(
+          failure?.toString() ?? 'Agendamento não encontrado',
+        );
+        await sendToClient(
+          clientId,
+          createScheduleErrorMessage(
+            requestId: requestId,
+            error: failure?.toString() ?? 'Agendamento não encontrado',
+          ),
+        );
+        return;
+      }
+
+      final schedule = scheduleResult.getOrNull();
+      if (schedule == null) {
+        _progressProvider.failBackup('Agendamento não encontrado');
+        await sendToClient(
+          clientId,
+          createScheduleErrorMessage(
+            requestId: requestId,
+            error: 'Agendamento não encontrado',
+          ),
+        );
+        return;
+      }
+
+      _currentClientId = clientId;
+      _currentRequestId = requestId;
+      _currentScheduleId = scheduleId;
+      _sendToClient = sendToClient;
+
+      _progressProvider.setCurrentBackupName(schedule.name);
+      _progressProvider.updateProgress(
+        step: BackupStep.initializing,
+        message: 'Iniciando backup: ${schedule.name}',
+        progress: 0,
+      );
+      _progressProvider.updateProgress(
+        step: BackupStep.executingBackup,
+        message: 'Executando backup do banco de dados...',
+        progress: 0.2,
+      );
+
+      final result = await _executeBackup(scheduleId);
+
+      if (_currentClientId != null) {
+        await result.fold(
+          (_) async {
+            LoggerService.infoWithContext(
+              'Backup completed successfully',
+              clientId: clientId,
+              requestId: requestId.toString(),
+              scheduleId: scheduleId,
+            );
+            final updatedScheduleResult = await _scheduleRepository.getById(
+              scheduleId,
+            );
+            updatedScheduleResult.fold(
+              (updatedSchedule) async {
+                await sendToClient(
+                  clientId,
+                  createScheduleUpdatedMessage(
+                    requestId: requestId,
+                    schedule: updatedSchedule,
+                  ),
+                );
+              },
+              (failure) async {
+                await sendToClient(
+                  clientId,
+                  createScheduleErrorMessage(
+                    requestId: requestId,
+                    error: failure.toString(),
+                  ),
+                );
+              },
+            );
+          },
+          (failure) async {
+            final errorMessage = failure.toString();
+            LoggerService.warningWithContext(
+              'Backup failed',
+              clientId: clientId,
+              requestId: requestId.toString(),
+              scheduleId: scheduleId,
+              error: failure,
+            );
+            await sendToClient(
+              clientId,
+              createScheduleErrorMessage(
+                requestId: requestId,
+                error: errorMessage,
+              ),
+            );
+          },
+        );
+      }
+    } on Object catch (e, st) {
+      LoggerService.warningWithContext(
+        'Execute schedule error',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        scheduleId: scheduleId,
+        error: e,
+        stackTrace: st,
+      );
+      _progressProvider.failBackup(e.toString());
       await sendToClient(
         clientId,
-        createScheduleErrorMessage(
+        createBackupFailedMessage(
           requestId: requestId,
-          error: failure?.toString() ?? 'Agendamento não encontrado',
+          scheduleId: scheduleId,
+          error: e.toString(),
         ),
       );
-      return;
-    }
-
-    final schedule = scheduleResult.getOrNull();
-    if (schedule == null) {
-      await sendToClient(
-        clientId,
-        createScheduleErrorMessage(
-          requestId: requestId,
-          error: 'Agendamento não encontrado',
-        ),
-      );
-      return;
-    }
-
-    _currentClientId = clientId;
-    _currentRequestId = requestId;
-    _currentScheduleId = scheduleId;
-    _sendToClient = sendToClient;
-
-    _progressProvider.startBackup(schedule.name);
-
-    final result = await _executeBackup(scheduleId);
-
-    if (_currentClientId != null) {
-      await result.fold(
-        (_) async {
-          final updatedScheduleResult =
-              await _scheduleRepository.getById(scheduleId);
-          updatedScheduleResult.fold(
-            (updatedSchedule) async {
-              await sendToClient(
-                clientId,
-                createScheduleUpdatedMessage(
-                  requestId: requestId,
-                  schedule: updatedSchedule,
-                ),
-              );
-            },
-            (failure) async {
-              await sendToClient(
-                clientId,
-                createScheduleErrorMessage(
-                  requestId: requestId,
-                  error: failure.toString(),
-                ),
-              );
-            },
-          );
-        },
-        (failure) async {
-          final errorMessage = failure.toString();
-          await sendToClient(
-            clientId,
-            createScheduleErrorMessage(
-              requestId: requestId,
-              error: errorMessage,
-            ),
-          );
-        },
-      );
+      _clearCurrentBackup();
     }
   }
 }

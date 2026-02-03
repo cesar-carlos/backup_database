@@ -52,6 +52,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
 
     if (!_connectionProvider!.isConnected) {
       _hasLoadedInitialSchedules = false;
+      context.read<RemoteSchedulesProvider>().clearExecutionStateOnDisconnect();
     }
   }
 

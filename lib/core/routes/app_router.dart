@@ -68,6 +68,11 @@ final appRouter = GoRouter(
           name: RouteNames.transferBackupsName,
           builder: (context, state) => const TransferBackupsPage(),
         ),
+        GoRoute(
+          path: RouteNames.connectionLogs,
+          name: RouteNames.connectionLogsName,
+          builder: (context, state) => const ConnectionLogPage(),
+        ),
       ],
     ),
   ],

@@ -148,4 +148,18 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  static const String _connectionLostMessage =
+      'Conexão perdida; o backup pode ter continuado no servidor.';
+
+  void clearExecutionStateOnDisconnect() {
+    if (_executingScheduleId == null) return;
+    _isExecuting = false;
+    _executingScheduleId = null;
+    _backupStep = null;
+    _backupMessage = null;
+    _backupProgress = null;
+    _error = _connectionLostMessage;
+    notifyListeners();
+  }
 }

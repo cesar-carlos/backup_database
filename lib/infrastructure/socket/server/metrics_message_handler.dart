@@ -1,6 +1,7 @@
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/domain/services/i_backup_running_state.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
@@ -11,11 +12,14 @@ class MetricsMessageHandler {
   MetricsMessageHandler({
     required IBackupHistoryRepository backupHistoryRepository,
     required IScheduleRepository scheduleRepository,
+    required IBackupRunningState backupRunningState,
   })  : _backupHistoryRepository = backupHistoryRepository,
-        _scheduleRepository = scheduleRepository;
+        _scheduleRepository = scheduleRepository,
+        _backupRunningState = backupRunningState;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;
+  final IBackupRunningState _backupRunningState;
 
   Future<void> handle(
     String clientId,
@@ -96,7 +100,12 @@ class MetricsMessageHandler {
       'failedToday': failedToday,
       'activeSchedules': activeSchedules,
       'recentBackups': recentBackups,
+      'backupInProgress': _backupRunningState.isRunning,
     };
+    if (_backupRunningState.isRunning &&
+        _backupRunningState.currentBackupName != null) {
+      payload['backupScheduleName'] = _backupRunningState.currentBackupName;
+    }
     return payload;
   }
 

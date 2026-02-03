@@ -878,6 +878,9 @@ class SchedulerService implements ISchedulerService {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
+  /// Runs the scheduled backup immediately. Used both by local UI (Run now)
+  /// and by remote client (ScheduleMessageHandler). Same flow in both cases;
+  /// when triggered remotely, progress is streamed to the client via BackupProgressProvider.
   @override
   Future<rd.Result<void>> executeNow(String scheduleId) async {
     final result = await _scheduleRepository.getById(scheduleId);

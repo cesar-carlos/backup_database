@@ -50,6 +50,15 @@ String mapExceptionToMessage(Object? exception) {
     return 'Conecte-se a um servidor para realizar esta operação.';
   }
 
+  if ((message.contains('conclusão do backup') ||
+          message.contains('conclusao do backup')) &&
+      message.contains('limite')) {
+    final limitMatch = RegExp(r'limite:\s*(\d+)').firstMatch(message);
+    final minutes = limitMatch != null ? limitMatch.group(1) : '10';
+    return 'O backup passou do tempo limite ($minutes min). '
+        'Verifique no servidor se foi concluído.';
+  }
+
   if (message.contains('timeout') || message.contains('TimeoutException')) {
     return 'Tempo esgotado ao aguardar resposta do servidor.';
   }

@@ -1,9 +1,12 @@
+import 'package:backup_database/application/providers/connection_log_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/domain/entities/connection_log.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:backup_database/presentation/widgets/client/client.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class ServerLoginPage extends StatelessWidget {
@@ -100,6 +103,8 @@ class ServerLoginPage extends StatelessWidget {
                         onDelete: () => _confirmDelete(context, connection.id),
                         onTestConnection: () =>
                             _testConnection(context, connection),
+                        onShowLogs: () =>
+                            _showConnectionLogs(context, connection),
                         isConnecting: provider.isConnecting,
                         isTestingConnection: provider.isTestingConnection,
                       );
@@ -188,6 +193,62 @@ class ServerLoginPage extends StatelessWidget {
     }
   }
 
+  Future<void> _showConnectionLogs(
+    BuildContext context,
+    ServerConnection connection,
+  ) async {
+    context.read<ConnectionLogProvider>().loadLogs();
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return ContentDialog(
+          title: Text('Log de conexão: ${connection.name}'),
+          content: SizedBox(
+            width: 420,
+            height: 320,
+            child: Consumer<ConnectionLogProvider>(
+              builder: (context, logProvider, _) {
+                if (logProvider.isLoading && logProvider.logs.isEmpty) {
+                  return const Center(child: ProgressRing());
+                }
+                final filtered = logProvider.logs
+                    .where(
+                      (l) =>
+                          l.clientHost == connection.name ||
+                          l.serverId == connection.serverId,
+                    )
+                    .toList();
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'Nenhum registro para esta conexão.',
+                      style: FluentTheme.of(context).typography.body,
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  itemCount: filtered.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 8),
+                  itemBuilder: (_, i) => _ConnectionLogRowCompact(
+                    log: filtered[i],
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            Button(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Fechar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _testConnection(
     BuildContext context,
     ServerConnection connection,
@@ -248,5 +309,77 @@ class ServerLoginPage extends StatelessWidget {
         );
       }
     }
+  }
+}
+
+class _ConnectionLogRowCompact extends StatelessWidget {
+  const _ConnectionLogRowCompact({required this.log});
+
+  final ConnectionLog log;
+
+  static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm:ss');
+
+  @override
+  Widget build(BuildContext context) {
+    final color = log.success ? AppColors.success : AppColors.error;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _dateFormat.format(log.timestamp),
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
+                  if (log.errorMessage != null &&
+                      log.errorMessage!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      log.errorMessage!,
+                      style: FluentTheme.of(context).typography.body?.copyWith(
+                        color: AppColors.error,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    log.success ? FluentIcons.check_mark : FluentIcons.cancel,
+                    size: 12,
+                    color: color,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    log.success ? 'Sucesso' : 'Falha',
+                    style: FluentTheme.of(context).typography.caption?.copyWith(
+                      color: color,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

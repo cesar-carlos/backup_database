@@ -11,6 +11,7 @@ class RouteNames {
   static const String serverLogin = '/server-login';
   static const String remoteSchedules = '/remote-schedules';
   static const String transferBackups = '/transfer-backups';
+  static const String connectionLogs = '/connection-logs';
 
   static const String dashboardName = 'dashboard';
   static const String sqlServerConfigName = 'sql-server-config';
@@ -24,4 +25,5 @@ class RouteNames {
   static const String serverLoginName = 'server-login';
   static const String remoteSchedulesName = 'remote-schedules';
   static const String transferBackupsName = 'transfer-backups';
+  static const String connectionLogsName = 'connection-logs';
 }
