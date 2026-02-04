@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/connection/connected_client.dart';
 import 'package:backup_database/infrastructure/datasources/daos/connection_log_dao.dart';
@@ -24,11 +25,13 @@ class ClientHandler {
     required void Function(String clientId) onDisconnect,
     ServerAuthentication? authentication,
     ConnectionLogDao? connectionLogDao,
+    SocketLoggerService? socketLogger,
   })  : _socket = socket,
         _protocol = protocol,
         _onDisconnect = onDisconnect,
         _authentication = authentication,
         _connectionLogDao = connectionLogDao,
+        _socketLogger = socketLogger,
         _clientId = const Uuid().v4() {
     _remoteAddress = _socket.remoteAddress.address;
     _remotePort = _socket.remotePort;
@@ -39,6 +42,7 @@ class ClientHandler {
   final void Function(String clientId) _onDisconnect;
   final ServerAuthentication? _authentication;
   final ConnectionLogDao? _connectionLogDao;
+  final SocketLoggerService? _socketLogger;
   final String _clientId;
   bool _authHandled = false;
 
@@ -105,6 +109,10 @@ class ClientHandler {
 
       try {
         final message = _protocol.deserializeMessage(messageBytes);
+
+        // Log received message
+        _socketLogger?.logReceived(message);
+
         if (isAuthRequestMessage(message) && !_authHandled) {
           _authHandled = true;
           if (_authentication != null) {
@@ -180,6 +188,10 @@ class ClientHandler {
   Future<void> send(Message message) async {
     try {
       final data = _protocol.serializeMessage(message);
+
+      // Log sent message
+      _socketLogger?.logSent(message);
+
       _socket.add(data);
       await _socket.flush();
     } on Object catch (e) {

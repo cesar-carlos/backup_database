@@ -27,7 +27,7 @@ void main() {
 Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  LoggerService.init();
+  await service_locator.setupServiceLocator();
 
   if (ServiceModeDetector.isServiceMode()) {
     LoggerService.info('🔧 Modo Serviço detectado - inicializando sem UI');

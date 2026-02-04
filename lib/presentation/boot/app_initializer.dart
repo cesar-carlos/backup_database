@@ -12,7 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppInitializer {
   static Future<void> initialize() async {
     await _loadEnvironment();
-    await _setupDependencies();
+    // setupServiceLocator() já foi chamado no main.dart
     await _initializeDefaultCredential();
     await _initializeAuthProviders();
     await _initializeAutoUpdate();
@@ -37,11 +37,6 @@ class AppInitializer {
   static Future<void> _loadEnvironment() async {
     await dotenv.load();
     LoggerService.info('Variáveis de ambiente carregadas');
-  }
-
-  static Future<void> _setupDependencies() async {
-    await service_locator.setupServiceLocator();
-    LoggerService.info('Dependências configuradas');
   }
 
   static Future<void> _initializeAuthProviders() async {

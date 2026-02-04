@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/core/utils/error_mapper.dart' show mapExceptionToMessage;
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
@@ -25,6 +26,12 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   String? _backupMessage;
   double? _backupProgress;
 
+  // Transfer progress fields
+  String? _transferStep;
+  String? _transferMessage;
+  double? _transferProgress;
+  bool _isTransferringFile = false;
+
   List<Schedule> get schedules => _schedules;
   bool get isLoading => _isLoading;
   bool get isUpdating => _isUpdating;
@@ -36,6 +43,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   String? get backupStep => _backupStep;
   String? get backupMessage => _backupMessage;
   double? get backupProgress => _backupProgress;
+  String? get transferStep => _transferStep;
+  String? get transferMessage => _transferMessage;
+  double? get transferProgress => _transferProgress;
+  bool get isTransferringFile => _isTransferringFile;
 
   Future<void> loadSchedules() async {
     if (!_connectionManager.isConnected) {
@@ -113,6 +124,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _backupStep = null;
     _backupMessage = null;
     _backupProgress = null;
+    _transferStep = null;
+    _transferMessage = null;
+    _transferProgress = null;
+    _isTransferringFile = false;
     notifyListeners();
 
     final result = await _connectionManager.executeSchedule(
@@ -127,7 +142,13 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
     return result.fold(
       (backupPath) async {
+        LoggerService.info('===== BACKUP CONCLUÍDO NO SERVIDOR =====');
+        LoggerService.info('BackupPath recebido: "$backupPath"');
+        LoggerService.info('BackupPath está vazio? ${backupPath.isEmpty}');
+        LoggerService.info('_transferProvider é null? ${_transferProvider == null}');
+
         if (backupPath.isEmpty || _transferProvider == null) {
+          LoggerService.warning('⚠️ DOWNLOAD CANCELADO: backupPath.isEmpty=${backupPath.isEmpty}, _transferProvider==null=${_transferProvider == null}');
           _error = null;
           _isExecuting = false;
           _executingScheduleId = null;
@@ -139,14 +160,29 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         }
 
         // Backup concluído no servidor, agora baixar o arquivo
+        LoggerService.info('===== INICIANDO DOWNLOAD DO ARQUIVO =====');
         _backupStep = 'Baixando arquivo';
         _backupMessage = 'Transferindo backup do servidor...';
+        _backupProgress = null;
         notifyListeners();
 
         final downloadSuccess = await _transferProvider.transferCompletedBackupToClient(
           scheduleId,
           backupPath,
+          onTransferProgress: (step, message, progress) {
+            // Atualizar progresso da transferência
+            _transferStep = step;
+            _transferMessage = message;
+            _transferProgress = progress;
+            _isTransferringFile = true;
+            notifyListeners();
+            LoggerService.debug('[TransferProgress] $step: ${(progress * 100).toStringAsFixed(1)}%');
+          },
         );
+
+        _isTransferringFile = false;
+        LoggerService.info('===== DOWNLOAD FINALIZADO =====');
+        LoggerService.info('DownloadSuccess: $downloadSuccess');
 
         _error = null;
         _isExecuting = false;
@@ -154,6 +190,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _backupStep = null;
         _backupMessage = null;
         _backupProgress = null;
+        _transferStep = null;
+        _transferMessage = null;
+        _transferProgress = null;
         notifyListeners();
 
         return downloadSuccess;
@@ -165,6 +204,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _backupStep = null;
         _backupMessage = null;
         _backupProgress = null;
+        _transferStep = null;
+        _transferMessage = null;
+        _transferProgress = null;
+        _isTransferringFile = false;
         notifyListeners();
         return false;
       },
@@ -193,6 +236,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _backupStep = null;
         _backupMessage = null;
         _backupProgress = null;
+        _transferStep = null;
+        _transferMessage = null;
+        _transferProgress = null;
+        _isTransferringFile = false;
         _error = null;
         notifyListeners();
         return true;
@@ -220,6 +267,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _backupStep = null;
     _backupMessage = null;
     _backupProgress = null;
+    _transferStep = null;
+    _transferMessage = null;
+    _transferProgress = null;
+    _isTransferringFile = false;
     _error = _connectionLostMessage;
     notifyListeners();
   }

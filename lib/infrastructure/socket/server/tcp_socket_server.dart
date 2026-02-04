@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/socket_config.dart';
+import 'package:backup_database/core/di/service_locator.dart' as di;
+import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/connection/connected_client.dart';
 import 'package:backup_database/infrastructure/datasources/daos/connection_log_dao.dart';
@@ -26,6 +28,7 @@ class TcpSocketServer implements SocketServerService {
     ScheduleMessageHandler? scheduleHandler,
     FileTransferMessageHandler? fileTransferHandler,
     MetricsMessageHandler? metricsHandler,
+    SocketLoggerService? socketLogger,
   })  : _protocol = protocol ?? BinaryProtocol(compression: PayloadCompression()),
         _authentication = serverCredentialDao != null
             ? ServerAuthentication(serverCredentialDao)
@@ -34,7 +37,8 @@ class TcpSocketServer implements SocketServerService {
         _connectionLogDao = connectionLogDao,
         _scheduleHandler = scheduleHandler,
         _fileTransferHandler = fileTransferHandler,
-        _metricsHandler = metricsHandler;
+        _metricsHandler = metricsHandler,
+        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>();
 
   final BinaryProtocol _protocol;
   final ServerAuthentication? _authentication;
@@ -43,6 +47,7 @@ class TcpSocketServer implements SocketServerService {
   final ScheduleMessageHandler? _scheduleHandler;
   final FileTransferMessageHandler? _fileTransferHandler;
   final MetricsMessageHandler? _metricsHandler;
+  final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
   bool _isRunning = false;
@@ -102,6 +107,7 @@ class TcpSocketServer implements SocketServerService {
       onDisconnect: _onDisconnect,
       authentication: _authentication,
       connectionLogDao: _connectionLogDao,
+      socketLogger: _socketLogger,
     );
     final clientId = handler.clientId;
     final connectedAt = DateTime.now();

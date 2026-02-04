@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:backup_database/core/constants/socket_config.dart';
+import 'package:backup_database/core/di/service_locator.dart' as di;
+import 'package:backup_database/core/logging/logging.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
@@ -24,9 +27,11 @@ typedef BackupProgressCallback =
 
 class ConnectionManager {
   ConnectionManager({ServerConnectionDao? serverConnectionDao})
-    : _serverConnectionDao = serverConnectionDao;
+    : _serverConnectionDao = serverConnectionDao,
+      _socketLogger = di.getIt<SocketLoggerService>();
 
   final ServerConnectionDao? _serverConnectionDao;
+  final SocketLoggerService _socketLogger;
   TcpSocketClient? _client;
   String? _activeHost;
   int? _activePort;
@@ -37,6 +42,9 @@ class ConnectionManager {
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
   final FileChunker _chunker = FileChunker();
+
+  // Getter para verificar se há transferências ativas (usado pelo heartbeat)
+  bool get hasActiveTransfers => _activeTransfers.isNotEmpty;
 
   TcpSocketClient? get activeClient => _client;
   String? get activeHost => _activeHost;
@@ -55,7 +63,10 @@ class ConnectionManager {
     bool enableAutoReconnect = false,
   }) async {
     await disconnect();
-    _client = TcpSocketClient();
+    _client = TcpSocketClient(
+      socketLogger: _socketLogger,
+      canDisconnectOnTimeout: () => !hasActiveTransfers,
+    );
     await _client!.connect(
       host: host,
       port: port,
@@ -92,37 +103,60 @@ class ConnectionManager {
     if (isFileTransferStartMetadata(message)) {
       state.fileName = getFileNameFromMetadata(message);
       state.totalChunks = getTotalChunksFromMetadata(message);
-      return;
-    }
-    if (isFileChunkMessage(message)) {
-      state.chunks.add(getFileChunkFromPayload(message));
-      return;
-    }
-    if (isFileTransferProgressMessage(message)) {
-      state.onProgress?.call(
-        getCurrentChunkFromProgress(message),
-        getTotalChunksFromProgress(message),
+      LoggerService.info(
+        '[ConnectionManager] Metadata recebida: ${state.fileName}, chunks: ${state.totalChunks}',
       );
       return;
     }
+    if (isFileChunkMessage(message)) {
+      final chunk = getFileChunkFromPayload(message);
+      state.chunks.add(chunk);
+      LoggerService.debug(
+        '[ConnectionManager] Chunk recebido: ${chunk.chunkIndex}/${state.totalChunks}',
+      );
+      return;
+    }
+    if (isFileTransferProgressMessage(message)) {
+      final current = getCurrentChunkFromProgress(message);
+      final total = getTotalChunksFromProgress(message);
+      state.onProgress?.call(current, total);
+      LoggerService.debug('[ConnectionManager] Progresso: $current/$total');
+      return;
+    }
     if (isFileTransferCompleteMessage(message)) {
+      LoggerService.info(
+        '[ConnectionManager] Transferência completa recebida, salvando arquivo...',
+      );
       _activeTransfers.remove(requestId);
       _completeFileTransfer(state);
       return;
     }
     if (isFileTransferErrorMessage(message)) {
+      final error = getErrorFromFileTransferError(message);
+      LoggerService.error(
+        '[ConnectionManager] Erro de transferência recebido: $error',
+      );
       _activeTransfers.remove(requestId);
       state.completer.complete(
-        rd.Failure(Exception(getErrorFromFileTransferError(message))),
+        rd.Failure(Exception(error)),
       );
     }
   }
 
   Future<void> _completeFileTransfer(_FileTransferState state) async {
+    LoggerService.info('[ConnectionManager] _completeFileTransfer iniciado');
+    LoggerService.info(
+      '[ConnectionManager] Chunks recebidos: ${state.chunks.length}',
+    );
+    LoggerService.info('[ConnectionManager] OutputPath: ${state.outputPath}');
+
     try {
+      LoggerService.info('[ConnectionManager] Montando arquivo dos chunks...');
       await _chunker.assembleChunks(state.chunks, state.outputPath);
+      LoggerService.info('[ConnectionManager] ✓ Arquivo salvo com sucesso!');
       state.completer.complete(const rd.Success(rd.unit));
     } on Object catch (e) {
+      LoggerService.error('[ConnectionManager] ✗ Erro ao salvar arquivo: $e');
       state.completer.complete(
         rd.Failure(e is Exception ? e : Exception(e.toString())),
       );
@@ -133,6 +167,14 @@ class ConnectionManager {
     Message message,
     _BackupProgressState state,
   ) {
+    // Log para rastrear tipo de mensagem recebida
+    LoggerService.info(
+      '[ConnectionManager._handleBackupProgressMessage] Tipo: ${message.header.type.name}, RequestID: ${message.header.requestId}',
+    );
+    LoggerService.info(
+      '[ConnectionManager._handleBackupProgressMessage] Payload: ${message.payload}',
+    );
+
     if (isBackupProgressMessage(message)) {
       final step = getStepFromBackupProgress(message) ?? '';
       final progressMessage = getMessageFromBackupProgress(message) ?? '';
@@ -141,11 +183,15 @@ class ConnectionManager {
       return;
     }
     if (isBackupCompleteMessage(message)) {
+      LoggerService.info(
+        '[ConnectionManager] ✓ Mensagem backupComplete recebida!',
+      );
+      final path = getBackupPathFromBackupComplete(message);
+      LoggerService.info('[ConnectionManager] backupPath extraído: "$path"');
       _activeBackups.remove(message.header.requestId);
       state.onProgress?.call('Concluído', 'Backup concluído com sucesso!', 1);
       if (!state.completer.isCompleted) {
-        final path = getBackupPathFromBackupComplete(message) ?? '';
-        state.completer.complete(rd.Success(path));
+        state.completer.complete(rd.Success(path ?? ''));
       }
       return;
     }
@@ -216,8 +262,13 @@ class ConnectionManager {
     } on TimeoutException {
       _pendingRequests.remove(requestId);
       return rd.Failure(TimeoutException('listSchedules timeout'));
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
       _pendingRequests.remove(requestId);
+      LoggerService.warning(
+        '[ConnectionManager] listSchedules falhou',
+        e,
+        stackTrace,
+      );
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
     }
   }
@@ -250,8 +301,13 @@ class ConnectionManager {
     } on TimeoutException {
       _pendingRequests.remove(requestId);
       return rd.Failure(TimeoutException('updateSchedule timeout'));
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
       _pendingRequests.remove(requestId);
+      LoggerService.warning(
+        '[ConnectionManager] updateSchedule falhou',
+        e,
+        stackTrace,
+      );
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
     }
   }
@@ -282,8 +338,13 @@ class ConnectionManager {
     } on TimeoutException {
       _pendingRequests.remove(requestId);
       return rd.Failure(TimeoutException('listAvailableFiles timeout'));
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
       _pendingRequests.remove(requestId);
+      LoggerService.warning(
+        '[ConnectionManager] listAvailableFiles falhou',
+        e,
+        stackTrace,
+      );
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
     }
   }
@@ -294,10 +355,20 @@ class ConnectionManager {
     String? scheduleId,
     void Function(int currentChunk, int totalChunks)? onProgress,
   }) async {
+    LoggerService.info('[ConnectionManager] requestFile chamado');
+    LoggerService.info('[ConnectionManager] filePath: $filePath');
+    LoggerService.info('[ConnectionManager] outputPath: $outputPath');
+    LoggerService.info('[ConnectionManager] scheduleId: $scheduleId');
+
     if (!isConnected) {
+      LoggerService.error('[ConnectionManager] Não conectado!');
       return rd.Failure(Exception('ConnectionManager not connected'));
     }
+    LoggerService.info('[ConnectionManager] Conectado ✓');
+
     final requestId = _nextRequestId++;
+    LoggerService.info('[ConnectionManager] RequestID: $requestId');
+
     final completer = Completer<rd.Result<void>>();
     _activeTransfers[requestId] = _FileTransferState(
       completer: completer,
@@ -305,7 +376,11 @@ class ConnectionManager {
       chunks: [],
       onProgress: onProgress,
     );
+
     try {
+      LoggerService.info(
+        '[ConnectionManager] Enviando requisição de transferência...',
+      );
       await send(
         createFileTransferStartRequestMessage(
           requestId: requestId,
@@ -313,12 +388,22 @@ class ConnectionManager {
           scheduleId: scheduleId,
         ),
       );
-      return await completer.future.timeout(SocketConfig.fileTransferTimeout);
+      LoggerService.info(
+        '[ConnectionManager] Requisição enviada, aguardando resposta...',
+      );
+
+      final result = await completer.future.timeout(
+        SocketConfig.fileTransferTimeout,
+      );
+      LoggerService.info('[ConnectionManager] Transferência completada!');
+      return result;
     } on TimeoutException {
       _activeTransfers.remove(requestId);
+      LoggerService.error('[ConnectionManager] Timeout na transferência!');
       return rd.Failure(TimeoutException('requestFile timeout'));
     } on Object catch (e) {
       _activeTransfers.remove(requestId);
+      LoggerService.error('[ConnectionManager] Erro na transferência: $e');
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
     }
   }
@@ -417,10 +502,12 @@ class ConnectionManager {
     final completer = Completer<Message>();
     _pendingRequests[requestId] = completer;
     try {
-      await send(createCancelScheduleMessage(
-        requestId: requestId,
-        scheduleId: scheduleId,
-      ));
+      await send(
+        createCancelScheduleMessage(
+          requestId: requestId,
+          scheduleId: scheduleId,
+        ),
+      );
       final message = await completer.future.timeout(
         SocketConfig.scheduleRequestTimeout,
       );

@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
@@ -14,15 +16,42 @@ import 'package:backup_database/infrastructure/security/secure_credential_servic
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
+
+/// Obtém o diretório de dados do aplicativo sem duplicação de pastas
+Future<Directory> _getAppDataDirectory() async {
+  // No Windows, o getApplicationDocumentsDirectory pode criar pastas duplicadas
+  // Usamos um caminho customizado para evitar isso
+  if (Platform.isWindows) {
+    // Obtém o AppData Roaming diretamente
+    final appData = Platform.environment['APPDATA'];
+    if (appData != null) {
+      // Cria diretório: C:\Users\<usuario>\AppData\Roaming\Backup Database
+      final customPath = p.join(appData, 'Backup Database');
+      return Directory(customPath);
+    }
+  }
+
+  // Para outras plataformas, usa o padrão
+  return getApplicationDocumentsDirectory();
+}
 
 /// Sets up core services and utilities.
 ///
 /// This module registers fundamental services like logging,
 /// encryption, database, HTTP client, and system utilities.
 Future<void> setupCoreModule(GetIt getIt) async {
-  // Utils
-  getIt.registerLazySingleton<LoggerService>(LoggerService.new);
+  final appDataDir = await _getAppDataDirectory();
+  final logsDirectory = p.join(appDataDir.path, 'logs');
+
+  await LoggerService.init(logsDirectory: logsDirectory);
+
+  final socketLogger = SocketLoggerService(logsDirectory: logsDirectory);
+  await socketLogger.initialize();
+  getIt.registerSingleton<SocketLoggerService>(socketLogger);
+
   getIt.registerLazySingleton<ClipboardService>(ClipboardService.new);
   getIt.registerLazySingleton<ISingleInstanceService>(
     SingleInstanceService.new,
@@ -30,11 +59,9 @@ Future<void> setupCoreModule(GetIt getIt) async {
   getIt.registerLazySingleton<IIpcService>(IpcService.new);
   getIt.registerLazySingleton<IWindowsMessageBox>(WindowsMessageBox.new);
 
-  // HTTP Client
   getIt.registerLazySingleton<Dio>(Dio.new);
   getIt.registerLazySingleton<ApiClient>(() => ApiClient(getIt<Dio>()));
 
-  // Database
   final databaseName = getDatabaseNameForMode(currentAppMode);
   getIt.registerLazySingleton<AppDatabase>(
     () => AppDatabase(databaseName: databaseName),

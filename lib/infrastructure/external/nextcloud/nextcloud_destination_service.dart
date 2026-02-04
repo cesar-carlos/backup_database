@@ -7,6 +7,7 @@ import 'package:backup_database/core/errors/nextcloud_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_webdav_utils.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -21,6 +22,7 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     required NextcloudDestinationConfig config,
     String? customFileName,
     int maxRetries = 3,
+    UploadProgressCallback? onProgress,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -73,6 +75,13 @@ class NextcloudDestinationService implements INextcloudDestinationService {
           final response = await dio.putUri(
             uploadUrl,
             data: sourceFile.openRead(),
+            onSendProgress: onProgress != null
+                ? (sent, total) {
+                    if (total > 0) {
+                      onProgress(sent / total);
+                    }
+                  }
+                : null,
             options: Options(
               headers: {
                 'Content-Type': 'application/octet-stream',
@@ -141,6 +150,9 @@ class NextcloudDestinationService implements INextcloudDestinationService {
           );
         } on Object catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
+          LoggerService.warning(
+            'Nextcloud: tentativa $attempt falhou: $e',
+          );
           if (attempt < maxRetries) {
             await Future.delayed(const Duration(seconds: 5));
           }
@@ -190,7 +202,12 @@ class NextcloudDestinationService implements INextcloudDestinationService {
       }
 
       return const rd.Success(false);
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao testar conexão Nextcloud',
+        e,
+        stackTrace,
+      );
       return rd.Failure(
         NextcloudFailure(
           message:
@@ -239,13 +256,20 @@ class NextcloudDestinationService implements INextcloudDestinationService {
             await dio.deleteUri(deleteUrl);
             deletedCount++;
           }
-        } on Object catch (_) {
-          // Nome não é uma data válida, ignorar
+        } on Object catch (e) {
+          LoggerService.debug(
+            'Nextcloud: nome de pasta não é data válida, ignorando: $folderName — $e',
+          );
         }
       }
 
       return rd.Success(deletedCount);
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao limpar backups Nextcloud',
+        e,
+        stackTrace,
+      );
       return rd.Failure(
         NextcloudFailure(
           message: 'Erro ao limpar backups Nextcloud: $e',

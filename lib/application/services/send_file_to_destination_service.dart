@@ -8,6 +8,7 @@ import 'package:backup_database/domain/services/i_google_drive_destination_servi
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:backup_database/domain/services/i_send_file_to_destination_service.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
@@ -39,6 +40,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
   Future<rd.Result<void>> sendFile({
     required String localFilePath,
     required BackupDestination destination,
+    UploadProgressCallback? onProgress,
   }) async {
     try {
       final licenseCheck = await _ensureDestinationFeatureAllowed(destination);
@@ -73,6 +75,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
           final uploadResult = await _localDestinationService.upload(
             sourceFilePath: localFilePath,
             config: config,
+            onProgress: onProgress,
           );
 
           return uploadResult.fold(
@@ -111,6 +114,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
           final uploadResult = await _sendToFtp.call(
             sourceFilePath: localFilePath,
             config: config,
+            onProgress: onProgress,
           );
 
           return uploadResult.fold(
@@ -141,6 +145,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
           final result = await _googleDriveDestinationService.upload(
             sourceFilePath: localFilePath,
             config: config,
+            onProgress: onProgress,
           );
           return result.fold(
             (_) => const rd.Success(()),
@@ -155,6 +160,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
           final result = await _sendToDropbox.call(
             sourceFilePath: localFilePath,
             config: config,
+            onProgress: onProgress,
           );
           return result.fold(
             (_) => const rd.Success(()),
@@ -166,6 +172,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
           final result = await _sendToNextcloud.call(
             sourceFilePath: localFilePath,
             config: config,
+            onProgress: onProgress,
           );
           return result.fold(
             (_) => const rd.Success(()),

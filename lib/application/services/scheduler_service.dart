@@ -392,12 +392,26 @@ class SchedulerService implements ISchedulerService {
       // para que o cliente possa baixar o arquivo
       String? stagingRelativePath;
       if (_transferStagingService != null) {
+        LoggerService.info(
+          'Copiando backup para staging: ${backupHistory.backupPath} (scheduleId: ${schedule.id})',
+        );
         stagingRelativePath = await _transferStagingService.copyToStaging(
           backupHistory.backupPath,
           schedule.id,
         );
-        LoggerService.info(
-          'Backup copiado para staging: $stagingRelativePath',
+
+        if (stagingRelativePath != null) {
+          LoggerService.info(
+            'Backup copiado para staging com sucesso: $stagingRelativePath',
+          );
+        } else {
+          LoggerService.warning(
+            'Falha ao copiar backup para staging (copyToStaging retornou null)',
+          );
+        }
+      } else {
+        LoggerService.warning(
+          'TransferStagingService não está disponível. Cliente não poderá baixar o arquivo.',
         );
       }
 
@@ -454,10 +468,28 @@ class SchedulerService implements ISchedulerService {
       LoggerService.info('Backup agendado concluído: ${schedule.name}');
 
       try {
+        // Usar stagingRelativePath se disponível, senão usa backupPath original
+        final pathToSend = stagingRelativePath ?? backupHistory.backupPath;
+
+        // Log para diagnosticar problema de backupPath vazio
+        LoggerService.info('===== COMPLETANDO BACKUP =====');
+        LoggerService.info('stagingRelativePath: $stagingRelativePath');
+        LoggerService.info('backupHistory.backupPath: ${backupHistory.backupPath}');
+        LoggerService.info('pathToSend: $pathToSend');
+        LoggerService.info('pathToSend está vazio? ${pathToSend.isEmpty}');
+
+        if (stagingRelativePath == null) {
+          LoggerService.warning(
+            'stagingRelativePath é null, usando backupPath original: $pathToSend',
+          );
+        }
+
         _progressNotifier.completeBackup(
           message: 'Backup concluído com sucesso!',
-          backupPath: stagingRelativePath,
+          backupPath: pathToSend,
         );
+
+        LoggerService.info('completeBackup chamado com backupPath: "$pathToSend"');
       } on Object catch (e, s) {
         LoggerService.warning(
           'Erro ao atualizar progresso completeBackup',

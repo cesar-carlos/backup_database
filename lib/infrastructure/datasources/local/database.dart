@@ -44,12 +44,13 @@ part 'database.g.dart';
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({String databaseName = 'backup_database'})
-      : super(_openConnection(databaseName));
+    : super(_openConnection(databaseName));
 
-  AppDatabase.inMemory() : super(LazyDatabase(() async => NativeDatabase.memory()));
+  AppDatabase.inMemory()
+    : super(LazyDatabase(() async => NativeDatabase.memory()));
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration {
@@ -602,6 +603,34 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v14 ao criar índices',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 15) {
+          try {
+            final columns = await customSelect(
+              'PRAGMA table_info(backup_destinations_table)',
+            ).get();
+            final hasTempPathColumn = columns.any(
+              (row) => row.data['name'] == 'temp_path',
+            );
+
+            if (!hasTempPathColumn) {
+              await m.addColumn(
+                backupDestinationsTable,
+                backupDestinationsTable.tempPath,
+              );
+              LoggerService.info(
+                'Migração v15: Coluna temp_path adicionada à '
+                'backup_destinations_table.',
+              );
+            }
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v15 para backup_destinations_table (temp_path)',
               e,
               stackTrace,
             );

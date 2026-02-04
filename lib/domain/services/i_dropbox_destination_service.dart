@@ -1,4 +1,5 @@
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class DropboxUploadResult {
@@ -20,6 +21,7 @@ abstract class IDropboxDestinationService {
     required DropboxDestinationConfig config,
     String? customFileName,
     int maxRetries = 3,
+    UploadProgressCallback? onProgress,
   });
 
   Future<rd.Result<bool>> testConnection(DropboxDestinationConfig config);

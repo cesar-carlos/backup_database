@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
@@ -7,6 +8,7 @@ import 'package:backup_database/core/errors/google_drive_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/infrastructure/external/google/google_auth_service.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
@@ -46,6 +48,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
     required GoogleDriveDestinationConfig config,
     String? customFileName,
     int maxRetries = 3,
+    UploadProgressCallback? onProgress,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -101,8 +104,26 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
               ..name = fileName
               ..parents = [dateFolderId];
 
+            var fileStream = sourceFile.openRead();
+
+            if (onProgress != null) {
+              var bytesSent = 0;
+              fileStream = fileStream.transform(
+                StreamTransformer.fromHandlers(
+                  handleData: (data, sink) {
+                    final chunkLength = data.length;
+                    bytesSent += chunkLength;
+                    if (fileSize > 0) {
+                      onProgress(bytesSent / fileSize);
+                    }
+                    sink.add(data);
+                  },
+                ),
+              );
+            }
+
             final media = drive.Media(
-              sourceFile.openRead(),
+              fileStream,
               fileSize,
             );
 
@@ -397,7 +418,8 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
       });
 
       return rd.Success(result.files ?? []);
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
+      LoggerService.error('Erro ao listar backups Google Drive', e, stackTrace);
       return rd.Failure(
         GoogleDriveFailure(message: 'Erro ao listar backups: $e'),
       );
@@ -431,7 +453,12 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
       }
 
       return rd.Success(_cachedClientData!);
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao obter cliente autenticado Google Drive',
+        e,
+        stackTrace,
+      );
       return rd.Failure(
         GoogleDriveFailure(
           message: 'Erro ao obter cliente autenticado: $e',

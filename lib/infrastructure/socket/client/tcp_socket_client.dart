@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:backup_database/core/constants/socket_config.dart';
+import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/security/password_hasher.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
@@ -17,10 +18,17 @@ const int _headerSize = 16;
 const int _checksumSize = 4;
 
 class TcpSocketClient implements SocketClientService {
-  TcpSocketClient({BinaryProtocol? protocol})
-    : _protocol = protocol ?? BinaryProtocol(compression: PayloadCompression());
+  TcpSocketClient({
+    BinaryProtocol? protocol,
+    SocketLoggerService? socketLogger,
+    bool Function()? canDisconnectOnTimeout,
+  })  : _protocol = protocol ?? BinaryProtocol(compression: PayloadCompression()),
+        _socketLogger = socketLogger,
+        _canDisconnectOnTimeout = canDisconnectOnTimeout;
 
   final BinaryProtocol _protocol;
+  final SocketLoggerService? _socketLogger;
+  final bool Function()? _canDisconnectOnTimeout;
   Socket? _socket;
   ConnectionStatus _status = ConnectionStatus.disconnected;
   final StreamController<Message> _messageController =
@@ -161,7 +169,20 @@ class TcpSocketClient implements SocketClientService {
       sendHeartbeat: (m) {
         send(m).catchError((_) {});
       },
-      onTimeout: () => _handleDisconnect(scheduleReconnect: true),
+      onTimeout: () {
+        // Verificar se pode desconectar (ex: não desconectar durante transferências ativas)
+        final canDisconnect = _canDisconnectOnTimeout?.call() ?? true;
+        if (canDisconnect) {
+          LoggerService.warning(
+            '[TcpSocketClient] Heartbeat timeout - desconectando...',
+          );
+          _handleDisconnect(scheduleReconnect: true);
+        } else {
+          LoggerService.info(
+            '[TcpSocketClient] Heartbeat timeout IGNORADO - transferência ativa em andamento',
+          );
+        }
+      },
     );
     _heartbeatManager!.start();
     _heartbeatSubscription = _messageController.stream.listen((m) {
@@ -185,6 +206,10 @@ class TcpSocketClient implements SocketClientService {
 
       try {
         final message = _protocol.deserializeMessage(messageBytes);
+
+        // Log received message
+        _socketLogger?.logReceived(message);
+
         if (_waitingAuth && isAuthResponseMessage(message)) {
           _waitingAuth = false;
           final success = message.payload['success'] == true;
@@ -239,6 +264,10 @@ class TcpSocketClient implements SocketClientService {
     }
     try {
       final data = _protocol.serializeMessage(message);
+
+      // Log sent message
+      _socketLogger?.logSent(message);
+
       _socket!.add(data);
       await _socket!.flush();
     } on Object catch (e) {

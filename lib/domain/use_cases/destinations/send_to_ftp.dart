@@ -1,6 +1,7 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SendToFtp {
@@ -11,6 +12,7 @@ class SendToFtp {
     required String sourceFilePath,
     required FtpDestinationConfig config,
     String? customFileName,
+    UploadProgressCallback? onProgress,
   }) async {
     if (sourceFilePath.isEmpty) {
       return const rd.Failure(
@@ -27,6 +29,7 @@ class SendToFtp {
       sourceFilePath: sourceFilePath,
       config: config,
       customFileName: customFileName,
+      onProgress: onProgress,
     );
   }
 }

@@ -42,7 +42,7 @@ class ScheduleMessageHandler {
     _progressNotifier.removeListener(_onProgressChanged);
   }
 
-  void _onProgressChanged() {
+  Future<void> _onProgressChanged() async {
     if (_currentClientId == null ||
         _currentRequestId == null ||
         _currentScheduleId == null ||
@@ -55,31 +55,35 @@ class ScheduleMessageHandler {
 
     final progressValue = snapshot.progress ?? 0.0;
 
-    unawaited(
-      _sendToClient!(
-        _currentClientId!,
-        createBackupProgressMessage(
-          requestId: _currentRequestId!,
-          scheduleId: _currentScheduleId!,
-          step: snapshot.step,
-          message: snapshot.message,
-          progress: progressValue,
-        ),
+    // AGUARDAR o envio da primeira mensagem completar antes de continuar
+    await _sendToClient!(
+      _currentClientId!,
+      createBackupProgressMessage(
+        requestId: _currentRequestId!,
+        scheduleId: _currentScheduleId!,
+        step: snapshot.step,
+        message: snapshot.message,
+        progress: progressValue,
       ),
     );
 
     if (snapshot.step == 'Concluído') {
-      unawaited(
-        _sendToClient!(
-          _currentClientId!,
-          createBackupCompleteMessage(
-            requestId: _currentRequestId!,
-            scheduleId: _currentScheduleId!,
-            message: snapshot.message,
-            backupPath: snapshot.backupPath,
-          ),
+      // Log para rastrear backupPath
+      LoggerService.info('[ScheduleMessageHandler] ===== ENVIANDO backupComplete =====');
+      LoggerService.info('[ScheduleMessageHandler] snapshot.backupPath: "${snapshot.backupPath}"');
+      LoggerService.info('[ScheduleMessageHandler] snapshot.backupPath está vazio? ${snapshot.backupPath == null || snapshot.backupPath!.isEmpty}');
+
+      // AGUARDAR o envio da mensagem backupComplete completar
+      await _sendToClient!(
+        _currentClientId!,
+        createBackupCompleteMessage(
+          requestId: _currentRequestId!,
+          scheduleId: _currentScheduleId!,
+          message: snapshot.message,
+          backupPath: snapshot.backupPath,
         ),
       );
+      LoggerService.info('[ScheduleMessageHandler] Mensagem backupComplete enviada');
       _clearCurrentBackup();
     } else if (snapshot.step == 'Erro') {
       unawaited(

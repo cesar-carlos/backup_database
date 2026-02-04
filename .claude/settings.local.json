@@ -57,7 +57,10 @@
       "Bash(Set-Content 'TESTING_SERVER_CLIENT.md' -NoNewline)",
       "Bash(\")",
       "Bash(dart analyze:*)",
-      "Bash(printf:*)"
+      "Bash(printf:*)",
+      "Bash(echo:*)",
+      "Bash(explorer \"D:\\\\Developer\\\\Flutter\\\\backup_database\\\\build\\\\windows\\\\x64\\\\runner\\\\Release\")",
+      "Bash(dir \"D:\\\\Developer\\\\Flutter\\\\backup_database\\\\build\\\\windows\\\\x64\\\\runner\\\\Release\")"
     ]
   }
 }

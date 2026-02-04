@@ -1941,6 +1941,17 @@ class $BackupDestinationsTableTable extends BackupDestinationsTable
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _tempPathMeta = const VerificationMeta(
+    'tempPath',
+  );
+  @override
+  late final GeneratedColumn<String> tempPath = GeneratedColumn<String>(
+    'temp_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1970,6 +1981,7 @@ class $BackupDestinationsTableTable extends BackupDestinationsTable
     type,
     config,
     enabled,
+    tempPath,
     createdAt,
     updatedAt,
   ];
@@ -2020,6 +2032,12 @@ class $BackupDestinationsTableTable extends BackupDestinationsTable
         enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
       );
     }
+    if (data.containsKey('temp_path')) {
+      context.handle(
+        _tempPathMeta,
+        tempPath.isAcceptableOrUnknown(data['temp_path']!, _tempPathMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2068,6 +2086,10 @@ class $BackupDestinationsTableTable extends BackupDestinationsTable
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
       )!,
+      tempPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}temp_path'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -2092,6 +2114,7 @@ class BackupDestinationsTableData extends DataClass
   final String type;
   final String config;
   final bool enabled;
+  final String? tempPath;
   final DateTime createdAt;
   final DateTime updatedAt;
   const BackupDestinationsTableData({
@@ -2100,6 +2123,7 @@ class BackupDestinationsTableData extends DataClass
     required this.type,
     required this.config,
     required this.enabled,
+    this.tempPath,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -2111,6 +2135,9 @@ class BackupDestinationsTableData extends DataClass
     map['type'] = Variable<String>(type);
     map['config'] = Variable<String>(config);
     map['enabled'] = Variable<bool>(enabled);
+    if (!nullToAbsent || tempPath != null) {
+      map['temp_path'] = Variable<String>(tempPath);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -2123,6 +2150,9 @@ class BackupDestinationsTableData extends DataClass
       type: Value(type),
       config: Value(config),
       enabled: Value(enabled),
+      tempPath: tempPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tempPath),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -2139,6 +2169,7 @@ class BackupDestinationsTableData extends DataClass
       type: serializer.fromJson<String>(json['type']),
       config: serializer.fromJson<String>(json['config']),
       enabled: serializer.fromJson<bool>(json['enabled']),
+      tempPath: serializer.fromJson<String?>(json['tempPath']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -2152,6 +2183,7 @@ class BackupDestinationsTableData extends DataClass
       'type': serializer.toJson<String>(type),
       'config': serializer.toJson<String>(config),
       'enabled': serializer.toJson<bool>(enabled),
+      'tempPath': serializer.toJson<String?>(tempPath),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -2163,6 +2195,7 @@ class BackupDestinationsTableData extends DataClass
     String? type,
     String? config,
     bool? enabled,
+    Value<String?> tempPath = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => BackupDestinationsTableData(
@@ -2171,6 +2204,7 @@ class BackupDestinationsTableData extends DataClass
     type: type ?? this.type,
     config: config ?? this.config,
     enabled: enabled ?? this.enabled,
+    tempPath: tempPath.present ? tempPath.value : this.tempPath,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -2183,6 +2217,7 @@ class BackupDestinationsTableData extends DataClass
       type: data.type.present ? data.type.value : this.type,
       config: data.config.present ? data.config.value : this.config,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      tempPath: data.tempPath.present ? data.tempPath.value : this.tempPath,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -2196,6 +2231,7 @@ class BackupDestinationsTableData extends DataClass
           ..write('type: $type, ')
           ..write('config: $config, ')
           ..write('enabled: $enabled, ')
+          ..write('tempPath: $tempPath, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2203,8 +2239,16 @@ class BackupDestinationsTableData extends DataClass
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, type, config, enabled, createdAt, updatedAt);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    type,
+    config,
+    enabled,
+    tempPath,
+    createdAt,
+    updatedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2214,6 +2258,7 @@ class BackupDestinationsTableData extends DataClass
           other.type == this.type &&
           other.config == this.config &&
           other.enabled == this.enabled &&
+          other.tempPath == this.tempPath &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2225,6 +2270,7 @@ class BackupDestinationsTableCompanion
   final Value<String> type;
   final Value<String> config;
   final Value<bool> enabled;
+  final Value<String?> tempPath;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -2234,6 +2280,7 @@ class BackupDestinationsTableCompanion
     this.type = const Value.absent(),
     this.config = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.tempPath = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2244,6 +2291,7 @@ class BackupDestinationsTableCompanion
     required String type,
     required String config,
     this.enabled = const Value.absent(),
+    this.tempPath = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -2259,6 +2307,7 @@ class BackupDestinationsTableCompanion
     Expression<String>? type,
     Expression<String>? config,
     Expression<bool>? enabled,
+    Expression<String>? tempPath,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -2269,6 +2318,7 @@ class BackupDestinationsTableCompanion
       if (type != null) 'type': type,
       if (config != null) 'config': config,
       if (enabled != null) 'enabled': enabled,
+      if (tempPath != null) 'temp_path': tempPath,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -2281,6 +2331,7 @@ class BackupDestinationsTableCompanion
     Value<String>? type,
     Value<String>? config,
     Value<bool>? enabled,
+    Value<String?>? tempPath,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -2291,6 +2342,7 @@ class BackupDestinationsTableCompanion
       type: type ?? this.type,
       config: config ?? this.config,
       enabled: enabled ?? this.enabled,
+      tempPath: tempPath ?? this.tempPath,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -2315,6 +2367,9 @@ class BackupDestinationsTableCompanion
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
     }
+    if (tempPath.present) {
+      map['temp_path'] = Variable<String>(tempPath.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -2335,6 +2390,7 @@ class BackupDestinationsTableCompanion
           ..write('type: $type, ')
           ..write('config: $config, ')
           ..write('enabled: $enabled, ')
+          ..write('tempPath: $tempPath, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -9596,6 +9652,7 @@ typedef $$BackupDestinationsTableTableCreateCompanionBuilder =
       required String type,
       required String config,
       Value<bool> enabled,
+      Value<String?> tempPath,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -9607,6 +9664,7 @@ typedef $$BackupDestinationsTableTableUpdateCompanionBuilder =
       Value<String> type,
       Value<String> config,
       Value<bool> enabled,
+      Value<String?> tempPath,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -9643,6 +9701,11 @@ class $$BackupDestinationsTableTableFilterComposer
 
   ColumnFilters<bool> get enabled => $composableBuilder(
     column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tempPath => $composableBuilder(
+    column: $table.tempPath,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9691,6 +9754,11 @@ class $$BackupDestinationsTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tempPath => $composableBuilder(
+    column: $table.tempPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -9725,6 +9793,9 @@ class $$BackupDestinationsTableTableAnnotationComposer
 
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<String> get tempPath =>
+      $composableBuilder(column: $table.tempPath, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -9784,6 +9855,7 @@ class $$BackupDestinationsTableTableTableManager
                 Value<String> type = const Value.absent(),
                 Value<String> config = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<String?> tempPath = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -9793,6 +9865,7 @@ class $$BackupDestinationsTableTableTableManager
                 type: type,
                 config: config,
                 enabled: enabled,
+                tempPath: tempPath,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -9804,6 +9877,7 @@ class $$BackupDestinationsTableTableTableManager
                 required String type,
                 required String config,
                 Value<bool> enabled = const Value.absent(),
+                Value<String?> tempPath = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -9813,6 +9887,7 @@ class $$BackupDestinationsTableTableTableManager
                 type: type,
                 config: config,
                 enabled: enabled,
+                tempPath: tempPath,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
