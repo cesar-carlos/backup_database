@@ -5,7 +5,6 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:path/path.dart' as p;
 
-/// Service para registrar comunicação socket entre cliente e servidor
 class SocketLoggerService {
   SocketLoggerService({
     required String logsDirectory,
@@ -17,7 +16,6 @@ class SocketLoggerService {
   File? _currentLogFile;
   bool isEnabled = true;
 
-  /// Inicializa o serviço de logging socket
   Future<void> initialize() async {
     try {
       final dir = Directory(_logsDirectory);
@@ -33,19 +31,16 @@ class SocketLoggerService {
     }
   }
 
-  /// Registra uma mensagem enviada
   Future<void> logSent(Message message) async {
     if (!isEnabled) return;
     await _log('[ENVIADO]', message);
   }
 
-  /// Registra uma mensagem recebida
   Future<void> logReceived(Message message) async {
     if (!isEnabled) return;
     await _log('[RECEBIDO]', message);
   }
 
-  /// Registra um evento de conexão
   Future<void> logConnectionEvent(String event) async {
     if (!isEnabled) return;
     await _writeLine('[${DateTime.now().toIso8601String()}] $event');
@@ -148,7 +143,6 @@ class SocketLoggerService {
     }
   }
 
-  /// Limpa todos os logs de socket
   Future<void> clearLogs() async {
     try {
       final dir = Directory(_logsDirectory);
@@ -169,6 +163,5 @@ class SocketLoggerService {
     }
   }
 
-  /// Retorna o caminho do diretório de logs
   String get logsDirectory => _logsDirectory;
 }
