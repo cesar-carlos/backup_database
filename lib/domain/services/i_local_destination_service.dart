@@ -1,4 +1,5 @@
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class LocalUploadResult {
@@ -17,6 +18,7 @@ abstract class ILocalDestinationService {
     required String sourceFilePath,
     required LocalDestinationConfig config,
     String? customFileName,
+    UploadProgressCallback? onProgress,
   });
 
   Future<rd.Result<bool>> testConnection(LocalDestinationConfig config);

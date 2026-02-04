@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 
 enum HealthStatus {
   healthy,
@@ -55,13 +56,16 @@ class HealthIssue {
 class ServiceHealthChecker {
   ServiceHealthChecker({
     required IBackupHistoryRepository backupHistoryRepository,
+    required ProcessService processService,
     this.checkInterval = const Duration(minutes: 30),
     this.maxBackupAge = const Duration(days: 2),
     this.minSuccessRate = 0.7,
     this.minFreeDiskGB = 5.0,
-  }) : _backupHistoryRepository = backupHistoryRepository;
+  })  : _backupHistoryRepository = backupHistoryRepository,
+        _processService = processService;
 
   final IBackupHistoryRepository _backupHistoryRepository;
+  final ProcessService _processService;
 
   final Duration checkInterval;
 
@@ -291,14 +295,85 @@ class ServiceHealthChecker {
     final issues = <HealthIssue>[];
     final metrics = <String, dynamic>{};
 
+    if (!Platform.isWindows) {
+      metrics['disk_check_performed'] = false;
+      metrics['disk_check_skip_reason'] = 'Not Windows';
+      return _CheckResult(issues, metrics);
+    }
+
     try {
       final currentDir = Directory.current;
-      await currentDir.stat();
 
-      metrics['disk_check_performed'] = true;
+      final result = await _processService.run(
+        executable: 'fsutil',
+        arguments: ['volume', 'diskfree', currentDir.path],
+        timeout: const Duration(seconds: 10),
+      );
+
+      result.fold(
+        (processResult) {
+          if (processResult.exitCode != 0) {
+            LoggerService.warning(
+              'fsutil falhou (exit code: ${processResult.exitCode}): '
+              '${processResult.stderr}',
+            );
+            metrics['disk_check_performed'] = false;
+            metrics['disk_check_error'] = processResult.stderr;
+            return;
+          }
+
+          final output = processResult.stdout.trim();
+
+          final lines = output.split('\n');
+          double totalFreeSpaceGB = 0;
+
+          for (final line in lines) {
+            if (line.contains('Total free bytes')) {
+              final parts = line.split(':');
+              if (parts.length >= 2) {
+                final bytesStr = parts[1].trim();
+                final commasRemoved = bytesStr.replaceAll(',', '');
+                final totalFreeBytes = int.tryParse(commasRemoved);
+
+                if (totalFreeBytes != null) {
+                  totalFreeSpaceGB = totalFreeBytes / (1024 * 1024 * 1024);
+                }
+              }
+            }
+          }
+
+          metrics['disk_check_performed'] = true;
+          metrics['free_disk_gb'] = totalFreeSpaceGB;
+
+          if (totalFreeSpaceGB < minFreeDiskGB) {
+            issues.add(
+              HealthIssue(
+                severity: totalFreeSpaceGB < 1.0
+                    ? HealthStatus.critical
+                    : HealthStatus.warning,
+                category: 'disk',
+                message:
+                    'Espaço em disco baixo: ${totalFreeSpaceGB.toStringAsFixed(2)} GB livre '
+                    '(mínimo: ${minFreeDiskGB.toStringAsFixed(1)} GB)',
+                details: 'Diretório verificado: ${currentDir.path}',
+              ),
+            );
+          } else {
+            LoggerService.debug(
+              'Espaço em disco OK: ${totalFreeSpaceGB.toStringAsFixed(2)} GB livre',
+            );
+          }
+        },
+        (failure) {
+          LoggerService.warning('Erro ao executar fsutil: $failure');
+          metrics['disk_check_performed'] = false;
+          metrics['disk_check_error'] = failure.toString();
+        },
+      );
     } on Object catch (e, s) {
-      LoggerService.debug('Não foi possível verificar espaço em disco', e, s);
+      LoggerService.warning('Exceção ao verificar espaço em disco', e, s);
       metrics['disk_check_performed'] = false;
+      metrics['disk_check_exception'] = e.toString();
     }
 
     return _CheckResult(issues, metrics);
@@ -351,6 +426,13 @@ class ServiceHealthChecker {
       final rate = result.metrics['success_rate'] as double;
       LoggerService.debug(
         '  Taxa de sucesso: ${(rate * 100).toStringAsFixed(1)}%',
+      );
+    }
+
+    if (result.metrics.containsKey('free_disk_gb')) {
+      final freeGB = result.metrics['free_disk_gb'] as double;
+      LoggerService.debug(
+        '  Espaço livre: ${freeGB.toStringAsFixed(2)} GB',
       );
     }
   }

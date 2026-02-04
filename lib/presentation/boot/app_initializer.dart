@@ -1,7 +1,8 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
+import 'package:backup_database/application/services/initial_setup_service.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
@@ -11,19 +12,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppInitializer {
   static Future<void> initialize() async {
     await _loadEnvironment();
-    await _setupDependencies();
+    // setupServiceLocator() já foi chamado no main.dart
+    await _initializeDefaultCredential();
     await _initializeAuthProviders();
     await _initializeAutoUpdate();
+  }
+
+  static Future<void> _initializeDefaultCredential() async {
+    try {
+      final initialSetup = service_locator.getIt<InitialSetupService>();
+      final result = await initialSetup.createDefaultCredentialIfNotExists();
+      if (result != null) {
+        LoggerService.info(
+          'Credencial padrão criada (Server ID: ${result.serverId})',
+        );
+      }
+    } on Object catch (e) {
+      LoggerService.warning(
+        'Erro ao criar credencial padrão: $e',
+      );
+    }
   }
 
   static Future<void> _loadEnvironment() async {
     await dotenv.load();
     LoggerService.info('Variáveis de ambiente carregadas');
-  }
-
-  static Future<void> _setupDependencies() async {
-    await service_locator.setupServiceLocator();
-    LoggerService.info('Dependências configuradas');
   }
 
   static Future<void> _initializeAuthProviders() async {

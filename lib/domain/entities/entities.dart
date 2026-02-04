@@ -1,9 +1,17 @@
 export 'backup_destination.dart';
 export 'backup_history.dart';
 export 'backup_log.dart';
+export 'backup_progress_snapshot.dart';
 export 'backup_type.dart';
+export 'backup_validation_result.dart';
 export 'compression_format.dart';
+export 'connection/connected_client.dart';
+export 'connection_log.dart';
+export 'disk_space_info.dart';
 export 'email_config.dart';
+export 'remote_file_entry.dart';
 export 'schedule.dart';
+export 'server_connection.dart';
+export 'server_credential.dart';
 export 'sql_server_config.dart';
 export 'sybase_config.dart';

@@ -6,6 +6,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_service.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
@@ -24,6 +25,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
     required DropboxDestinationConfig config,
     String? customFileName,
     int maxRetries = 3,
+    UploadProgressCallback? onProgress,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -74,8 +76,20 @@ class DropboxDestinationService implements IDropboxDestinationService {
             final dio = dioResult.getOrNull()!;
 
             final uploadResult = useResumableUpload
-                ? await _uploadResumable(dio, sourceFile, filePath, fileSize)
-                : await _uploadSimple(dio, sourceFile, filePath, fileSize);
+                ? await _uploadResumable(
+                    dio,
+                    sourceFile,
+                    filePath,
+                    fileSize,
+                    onProgress,
+                  )
+                : await _uploadSimple(
+                    dio,
+                    sourceFile,
+                    filePath,
+                    fileSize,
+                    onProgress,
+                  );
 
             if (uploadResult.containsKey('size')) {
               final remoteSize = uploadResult['size'] as int;
@@ -115,6 +129,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
           );
         } on Object catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
+          LoggerService.warning('Dropbox: tentativa $attempt falhou: $e');
 
           if (attempt < maxRetries) {
             final delay = useResumableUpload
@@ -145,6 +160,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
     File sourceFile,
     String filePath,
     int fileSize,
+    UploadProgressCallback? onProgress,
   ) async {
     final contentDio = Dio(
       BaseOptions(
@@ -158,7 +174,14 @@ class DropboxDestinationService implements IDropboxDestinationService {
     try {
       final response = await contentDio.post(
         '/2/files/upload',
-        data: await sourceFile.readAsBytes(),
+        data: sourceFile.openRead(),
+        onSendProgress: onProgress != null
+            ? (sent, total) {
+                if (total > 0) {
+                  onProgress(sent / total);
+                }
+              }
+            : null,
         options: Options(
           headers: {
             'Content-Type': 'application/octet-stream',
@@ -178,7 +201,14 @@ class DropboxDestinationService implements IDropboxDestinationService {
         if (errorTag == 'path/conflict') {
           final response = await contentDio.post(
             '/2/files/upload',
-            data: await sourceFile.readAsBytes(),
+            data: sourceFile.openRead(),
+            onSendProgress: onProgress != null
+                ? (sent, total) {
+                    if (total > 0) {
+                      onProgress(sent / total);
+                    }
+                  }
+                : null,
             options: Options(
               headers: {
                 'Content-Type': 'application/octet-stream',
@@ -199,9 +229,10 @@ class DropboxDestinationService implements IDropboxDestinationService {
     File sourceFile,
     String filePath,
     int fileSize,
+    UploadProgressCallback? onProgress,
   ) async {
-    const chunkSize = 4 * 1024 * 1024;
-    final totalChunks = (fileSize / chunkSize).ceil();
+    const dropboxChunkSize = 4 * 1024 * 1024;
+    final totalChunks = (fileSize / dropboxChunkSize).ceil();
 
     final contentDio = Dio(
       BaseOptions(
@@ -214,17 +245,26 @@ class DropboxDestinationService implements IDropboxDestinationService {
 
     String? sessionId;
     var offset = 0;
+    var bytesUploaded = 0;
 
     final fileStream = sourceFile.openRead();
 
     for (var chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-      final chunk = await fileStream.take(chunkSize).toList();
+      final chunk = await fileStream.take(dropboxChunkSize).toList();
       final chunkData = chunk.expand((list) => list).toList();
 
       if (chunkIndex == 0) {
         final response = await contentDio.post(
           '/2/files/upload_session/start',
           data: chunkData,
+          onSendProgress: onProgress != null
+              ? (sent, total) {
+                  if (fileSize > 0) {
+                    final currentProgress = (bytesUploaded + sent) / fileSize;
+                    onProgress(currentProgress);
+                  }
+                }
+              : null,
           options: Options(
             headers: {
               'Content-Type': 'application/octet-stream',
@@ -236,10 +276,19 @@ class DropboxDestinationService implements IDropboxDestinationService {
         final data = response.data as Map<String, dynamic>;
         sessionId = data['session_id'] as String;
         offset = chunkData.length;
+        bytesUploaded += chunkData.length;
       } else if (chunkIndex < totalChunks - 1) {
         await contentDio.post(
           '/2/files/upload_session/append_v2',
           data: chunkData,
+          onSendProgress: onProgress != null
+              ? (sent, total) {
+                  if (fileSize > 0) {
+                    final currentProgress = (bytesUploaded + sent) / fileSize;
+                    onProgress(currentProgress);
+                  }
+                }
+              : null,
           options: Options(
             headers: {
               'Content-Type': 'application/octet-stream',
@@ -250,11 +299,20 @@ class DropboxDestinationService implements IDropboxDestinationService {
         );
 
         offset += chunkData.length;
+        bytesUploaded += chunkData.length;
       } else {
         try {
           final response = await contentDio.post(
             '/2/files/upload_session/finish',
             data: chunkData,
+            onSendProgress: onProgress != null
+                ? (sent, total) {
+                    if (fileSize > 0) {
+                      final currentProgress = (bytesUploaded + sent) / fileSize;
+                      onProgress(currentProgress);
+                    }
+                  }
+                : null,
             options: Options(
               headers: {
                 'Content-Type': 'application/octet-stream',
@@ -275,6 +333,15 @@ class DropboxDestinationService implements IDropboxDestinationService {
               final response = await contentDio.post(
                 '/2/files/upload_session/finish',
                 data: chunkData,
+                onSendProgress: onProgress != null
+                    ? (sent, total) {
+                        if (fileSize > 0) {
+                          final currentProgress =
+                              (bytesUploaded + sent) / fileSize;
+                          onProgress(currentProgress);
+                        }
+                      }
+                    : null,
                 options: Options(
                   headers: {
                     'Content-Type': 'application/octet-stream',
@@ -596,7 +663,8 @@ class DropboxDestinationService implements IDropboxDestinationService {
       }
 
       return rd.Success(deletedCount);
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
+      LoggerService.error('Erro ao limpar backups Dropbox', e, stackTrace);
       return rd.Failure(
         DropboxFailure(
           message: 'Erro ao limpar backups Dropbox: $e',
@@ -628,7 +696,12 @@ class DropboxDestinationService implements IDropboxDestinationService {
       }
 
       return rd.Success(_cachedDio!);
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao obter cliente autenticado Dropbox',
+        e,
+        stackTrace,
+      );
       return rd.Failure(
         DropboxFailure(
           message: 'Erro ao obter cliente autenticado: $e',

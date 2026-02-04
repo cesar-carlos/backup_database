@@ -6,6 +6,7 @@ import 'package:backup_database/core/errors/ftp_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:ftpconnect/ftpconnect.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
@@ -17,6 +18,7 @@ class FtpDestinationService implements IFtpService {
     required FtpDestinationConfig config,
     String? customFileName,
     int maxRetries = 3,
+    UploadProgressCallback? onProgress,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -71,6 +73,11 @@ class FtpDestinationService implements IFtpService {
           final uploaded = await ftp.uploadFile(
             sourceFile,
             sRemoteName: fileName,
+            onProgress: (double progress, int sent, int total) {
+              if (onProgress != null) {
+                onProgress(progress);
+              }
+            },
           );
 
           if (!uploaded) {
@@ -229,7 +236,12 @@ class FtpDestinationService implements IFtpService {
         return const rd.Success(true);
       }
       return const rd.Success(false);
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao testar conexão FTP',
+        e,
+        stackTrace,
+      );
       return rd.Failure(FtpFailure(message: 'Erro ao testar conexão FTP: $e'));
     }
   }

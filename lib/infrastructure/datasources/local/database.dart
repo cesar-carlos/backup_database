@@ -21,6 +21,10 @@ part 'database.g.dart';
     BackupLogsTable,
     EmailConfigsTable,
     LicensesTable,
+    ServerCredentialsTable,
+    ConnectionLogsTable,
+    ServerConnectionsTable,
+    FileTransfersTable,
   ],
   daos: [
     SqlServerConfigDao,
@@ -32,13 +36,21 @@ part 'database.g.dart';
     BackupLogDao,
     EmailConfigDao,
     LicenseDao,
+    ServerCredentialDao,
+    ConnectionLogDao,
+    ServerConnectionDao,
+    FileTransferDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase({String databaseName = 'backup_database'})
+    : super(_openConnection(databaseName));
+
+  AppDatabase.inMemory()
+    : super(LazyDatabase(() async => NativeDatabase.memory()));
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration {
@@ -468,6 +480,162 @@ class AppDatabase extends _$AppDatabase {
             );
           }
         }
+
+        if (from < 14) {
+          try {
+            await customStatement('''
+              CREATE TABLE IF NOT EXISTS server_credentials_table (
+                id TEXT PRIMARY KEY NOT NULL,
+                server_id TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                name TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at INTEGER NOT NULL,
+                last_used_at INTEGER,
+                description TEXT
+              )
+            ''');
+            LoggerService.info(
+              'Migração v14: Tabela server_credentials_table criada.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v14 para server_credentials_table',
+              e,
+              stackTrace,
+            );
+          }
+
+          try {
+            await customStatement('''
+              CREATE TABLE IF NOT EXISTS connection_logs_table (
+                id TEXT PRIMARY KEY NOT NULL,
+                client_host TEXT NOT NULL,
+                server_id TEXT,
+                success INTEGER NOT NULL,
+                error_message TEXT,
+                timestamp INTEGER NOT NULL,
+                client_id TEXT
+              )
+            ''');
+            LoggerService.info(
+              'Migração v14: Tabela connection_logs_table criada.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v14 para connection_logs_table',
+              e,
+              stackTrace,
+            );
+          }
+
+          try {
+            await customStatement('''
+              CREATE TABLE IF NOT EXISTS server_connections_table (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                server_id TEXT NOT NULL,
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL DEFAULT 9527,
+                password TEXT NOT NULL,
+                is_online INTEGER NOT NULL DEFAULT 0,
+                last_connected_at INTEGER,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+              )
+            ''');
+            LoggerService.info(
+              'Migração v14: Tabela server_connections_table criada.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v14 para server_connections_table',
+              e,
+              stackTrace,
+            );
+          }
+
+          try {
+            await customStatement('''
+              CREATE TABLE IF NOT EXISTS file_transfers_table (
+                id TEXT PRIMARY KEY NOT NULL,
+                schedule_id TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                current_chunk INTEGER NOT NULL DEFAULT 0,
+                total_chunks INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                error_message TEXT,
+                started_at INTEGER,
+                completed_at INTEGER,
+                source_path TEXT NOT NULL,
+                destination_path TEXT NOT NULL,
+                checksum TEXT NOT NULL
+              )
+            ''');
+            LoggerService.info(
+              'Migração v14: Tabela file_transfers_table criada.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v14 para file_transfers_table',
+              e,
+              stackTrace,
+            );
+          }
+
+          try {
+            await customStatement('''
+              CREATE INDEX IF NOT EXISTS idx_server_credentials_active
+              ON server_credentials_table(is_active)
+            ''');
+            await customStatement('''
+              CREATE INDEX IF NOT EXISTS idx_connection_logs_timestamp
+              ON connection_logs_table(timestamp DESC)
+            ''');
+            await customStatement('''
+              CREATE INDEX IF NOT EXISTS idx_file_transfers_schedule
+              ON file_transfers_table(schedule_id)
+            ''');
+            LoggerService.info(
+              'Migração v14: Índices criados.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v14 ao criar índices',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 15) {
+          try {
+            final columns = await customSelect(
+              'PRAGMA table_info(backup_destinations_table)',
+            ).get();
+            final hasTempPathColumn = columns.any(
+              (row) => row.data['name'] == 'temp_path',
+            );
+
+            if (!hasTempPathColumn) {
+              await m.addColumn(
+                backupDestinationsTable,
+                backupDestinationsTable.tempPath,
+              );
+              LoggerService.info(
+                'Migração v15: Coluna temp_path adicionada à '
+                'backup_destinations_table.',
+              );
+            }
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v15 para backup_destinations_table (temp_path)',
+              e,
+              stackTrace,
+            );
+          }
+        }
       },
       beforeOpen: (details) async {
         await _ensureSybaseConfigsTableExistsDirect();
@@ -759,10 +927,10 @@ class AppDatabase extends _$AppDatabase {
   }
 }
 
-LazyDatabase _openConnection() {
+LazyDatabase _openConnection([String databaseName = 'backup_database']) {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'backup_database.db'));
+    final file = File(p.join(dbFolder.path, '$databaseName.db'));
     return NativeDatabase.createInBackground(file);
   });
 }

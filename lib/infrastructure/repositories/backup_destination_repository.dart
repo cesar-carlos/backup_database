@@ -131,6 +131,7 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
       type: parsedType,
       config: data.config,
       enabled: data.enabled,
+      tempPath: data.tempPath,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     );
@@ -143,6 +144,9 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
       type: Value(destination.type.name),
       config: Value(destination.config),
       enabled: Value(destination.enabled),
+      tempPath: destination.tempPath != null
+          ? Value(destination.tempPath)
+          : const Value.absent(),
       createdAt: Value(destination.createdAt),
       updatedAt: Value(destination.updatedAt),
     );

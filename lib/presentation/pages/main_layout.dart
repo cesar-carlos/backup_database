@@ -1,8 +1,13 @@
+import 'package:backup_database/application/providers/connection_log_provider.dart';
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
+import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
+import 'package:backup_database/application/providers/server_connection_provider.dart';
+import 'package:backup_database/application/providers/server_credential_provider.dart';
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
+import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/core/theme/theme_provider.dart';
@@ -22,50 +27,109 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
-  final List<NavigationItem> _navigationItems = [
-    const NavigationItem(
-      icon: FluentIcons.view_dashboard,
-      selectedIcon: FluentIcons.view_dashboard,
-      label: 'Dashboard',
-      route: RouteNames.dashboard,
-    ),
-    const NavigationItem(
-      icon: FluentIcons.database,
-      selectedIcon: FluentIcons.database,
-      label: 'Bancos de Dados',
-      route: RouteNames.sqlServerConfig,
-    ),
-    const NavigationItem(
-      icon: FluentIcons.folder,
-      selectedIcon: FluentIcons.folder,
-      label: 'Destinos',
-      route: RouteNames.destinations,
-    ),
-    const NavigationItem(
-      icon: FluentIcons.calendar,
-      selectedIcon: FluentIcons.calendar,
-      label: 'Agendamentos',
-      route: RouteNames.schedules,
-    ),
-    const NavigationItem(
-      icon: FluentIcons.document,
-      selectedIcon: FluentIcons.document,
-      label: 'Logs',
-      route: RouteNames.logs,
-    ),
-    const NavigationItem(
-      icon: FluentIcons.megaphone,
-      selectedIcon: FluentIcons.megaphone,
-      label: 'Notificações',
-      route: RouteNames.notifications,
-    ),
-    const NavigationItem(
-      icon: FluentIcons.settings,
-      selectedIcon: FluentIcons.settings,
-      label: 'Configurações',
-      route: RouteNames.settings,
-    ),
-  ];
+  List<NavigationItem> get _navigationItems {
+    final mode = currentAppMode;
+
+    final allItems = [
+      const NavigationItem(
+        icon: FluentIcons.view_dashboard,
+        selectedIcon: FluentIcons.view_dashboard,
+        label: 'Dashboard',
+        route: RouteNames.dashboard,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.database,
+        selectedIcon: FluentIcons.database,
+        label: 'Bancos de Dados',
+        route: RouteNames.sqlServerConfig,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.folder,
+        selectedIcon: FluentIcons.folder,
+        label: 'Destinos',
+        route: RouteNames.destinations,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.calendar,
+        selectedIcon: FluentIcons.calendar,
+        label: 'Agendamentos',
+        route: RouteNames.schedules,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.server,
+        selectedIcon: FluentIcons.server,
+        label: 'Servidor',
+        route: RouteNames.serverSettings,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.plug,
+        selectedIcon: FluentIcons.plug,
+        label: 'Conectar',
+        route: RouteNames.serverLogin,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.calendar_agenda,
+        selectedIcon: FluentIcons.calendar_agenda,
+        label: 'Agendamentos Remotos',
+        route: RouteNames.remoteSchedules,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.history,
+        selectedIcon: FluentIcons.history,
+        label: 'Log de Conexões',
+        route: RouteNames.connectionLogs,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.megaphone,
+        selectedIcon: FluentIcons.megaphone,
+        label: 'Notificações',
+        route: RouteNames.notifications,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.document,
+        selectedIcon: FluentIcons.document,
+        label: 'Logs',
+        route: RouteNames.logs,
+      ),
+      const NavigationItem(
+        icon: FluentIcons.settings,
+        selectedIcon: FluentIcons.settings,
+        label: 'Configurações',
+        route: RouteNames.settings,
+      ),
+    ];
+
+    // Filtrar itens baseado no modo
+    switch (mode) {
+      case AppMode.client:
+        // Cliente NÃO vê: Bancos de Dados, Agendamentos, Servidor, Logs, Notificações
+        // Cliente apenas se conecta ao servidor e executa ações remotas
+        return allItems
+            .where(
+              (item) =>
+                  item.route != RouteNames.sqlServerConfig &&
+                  item.route != RouteNames.schedules &&
+                  item.route != RouteNames.serverSettings &&
+                  item.route != RouteNames.logs &&
+                  item.route != RouteNames.notifications,
+            )
+            .toList();
+
+      case AppMode.server:
+        // Servidor NÃO vê: Conectar, Agendamentos Remotos
+        return allItems
+            .where(
+              (item) =>
+                  item.route != RouteNames.serverLogin &&
+                  item.route != RouteNames.remoteSchedules,
+            )
+            .toList();
+
+      case AppMode.unified:
+        // Não usado mais (apenas server e client)
+        return allItems;
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -99,6 +163,16 @@ class _MainLayoutState extends State<MainLayout> {
       case RouteNames.notifications:
       case RouteNames.settings:
         break;
+      case RouteNames.serverSettings:
+        context.read<ServerCredentialProvider>().loadCredentials();
+      case RouteNames.serverLogin:
+        context.read<ServerConnectionProvider>().loadConnections();
+      case RouteNames.remoteSchedules:
+        if (context.read<ServerConnectionProvider>().isConnected) {
+          context.read<RemoteSchedulesProvider>().loadSchedules();
+        }
+      case RouteNames.connectionLogs:
+        context.read<ConnectionLogProvider>().loadLogs();
     }
   }
 

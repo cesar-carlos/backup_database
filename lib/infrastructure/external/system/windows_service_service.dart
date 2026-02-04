@@ -150,6 +150,7 @@ class WindowsServiceService implements IWindowsServiceService {
         await _configureService(nssmPath, serviceUser, servicePassword);
 
         LoggerService.info('Serviço instalado com sucesso');
+        LoggerService.info('Auto-restart configurado: Reiniciará automaticamente após crash (60s delay)');
         return const rd.Success(unit);
       }, rd.Failure.new);
     } on Object catch (e, stackTrace) {
@@ -185,6 +186,9 @@ class WindowsServiceService implements IWindowsServiceService {
       ['set', _serviceName, 'AppStdout', '$logPath\\service_stdout.log'],
       ['set', _serviceName, 'AppStderr', '$logPath\\service_stderr.log'],
       ['set', _serviceName, 'AppNoConsole', '1'],
+      // Configure auto-restart on crash
+      ['set', _serviceName, 'AppExit', 'Default', 'Restart'],
+      ['set', _serviceName, 'AppRestartDelay', '60000'],
     ];
 
     for (final config in configs) {

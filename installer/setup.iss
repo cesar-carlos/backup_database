@@ -1,4 +1,4 @@
-﻿#define MyAppName "Backup Database"
+#define MyAppName "Backup Database"
 #define MyAppVersion "2.1.3"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
@@ -30,12 +30,11 @@ CloseApplications=yes
 CloseApplicationsFilter=*.exe
 
 [Languages]
-Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"; Flags: unchecked
+Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"
+Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opcoes de Inicializacao"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -45,29 +44,93 @@ Source: "..\docs\install\installation_guide.md"; DestDir: "{app}\docs"; Flags: i
 Source: "..\docs\path_setup.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "check_dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "dependencies\nssm-2.24\win64\nssm.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "dependencies\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "install_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "uninstall_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+; Main icons for each mode (all will be created)
+Name: "{group}\{#MyAppName} - Server Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Comment: "Run Backup Database as Server"
+Name: "{group}\{#MyAppName} - Client Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"; Comment: "Run Backup Database as Client"
+; Utility icons
 Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
+; Service icons (ONLY for Server mode)
+Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
+Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
 Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
+Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+; Desktop icon (default to server)
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Parameters: "--mode=server"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: startup
+
+[UninstallDelete]
+Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs
 
 [Code]
 var
   VCRedistPage: TOutputProgressWizardPage;
   VCRedistNeeded: Boolean;
+  ModePage: TInputOptionWizardPage;
+  SelectedMode: String;
+
+function IsServiceInstalled(const ServiceName: String): Boolean; forward;
+function StopService(const ServiceName: String): Boolean; forward;
+
+// Função auxiliar para encontrar o desinstalador em múltiplos caminhos
+function FindUninstaller(): String;
+var
+  Paths: array of String;
+  I: Integer;
+  RegPath: String;
+  SecondQuotePos: Integer;
+begin
+  // Lista de caminhos para verificar (em ordem de probabilidade)
+  Paths := [
+    ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe'),
+    ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe'),
+    ExpandConstant('{pf}\{#MyAppName}\unins000.exe'),
+    ExpandConstant('{autopf}\{#MyAppName}\unins000.exe')
+  ];
+
+  // Tentar encontrar em cada caminho
+  for I := 0 to GetArrayLength(Paths) - 1 do
+  begin
+    if FileExists(Paths[I]) then
+    begin
+      Result := Paths[I];
+      Exit;
+    end;
+  end;
+
+  // Fallback: buscar no registro do Windows
+  if RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D_is1', 'UninstallString', RegPath) then
+  begin
+    // Extrair apenas o caminho do executável (remover parâmetros se houver)
+    if Pos('"', RegPath) = 1 then
+    begin
+      RegPath := Copy(RegPath, 2, Length(RegPath) - 1);
+      SecondQuotePos := Pos('"', RegPath);
+      if SecondQuotePos > 0 then
+      begin
+        RegPath := Copy(RegPath, 1, SecondQuotePos - 1);
+      end;
+    end;
+
+    if FileExists(RegPath) then
+    begin
+      Result := RegPath;
+      Exit;
+    end;
+  end;
+
+  // Não encontrado
+  Result := '';
+end;
 
 function IsAppRunning(const ExeName: String): Boolean;
 var
@@ -134,38 +197,38 @@ var
 begin
   Result := True;
   VCRedistNeeded := False;
-  
-  // Verificar se existe uma instalação anterior e executar desinstalação silenciosa
-  // Tentar múltiplos caminhos possíveis (na ordem mais provável primeiro)
-  UninstallPath := ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe');
-  if not FileExists(UninstallPath) then
+
+  // Parar o serviço do Windows primeiro para liberar nssm.exe e a pasta de instalação
+  if IsServiceInstalled('BackupDatabaseService') then
   begin
-    UninstallPath := ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe');
-  end;
-  if not FileExists(UninstallPath) then
-  begin
-    UninstallPath := ExpandConstant('{pf}\{#MyAppName}\unins000.exe');
-  end;
-  if not FileExists(UninstallPath) then
-  begin
-    UninstallPath := ExpandConstant('{autopf}\{#MyAppName}\unins000.exe');
-  end;
-  
-  // Fechar o aplicativo se estiver rodando antes de desinstalar
-  AppExe := ExpandConstant('{#MyAppExeName}');
-  if IsAppRunning(AppExe) then
-  begin
-    CloseApp(AppExe);
+    StopService('BackupDatabaseService');
     Sleep(2000);
   end;
-  
-  // Tentar executar desinstalação se o arquivo existir
-  if FileExists(UninstallPath) then
+
+  // Fechar nssm.exe se estiver em uso (ex.: script "Instalar como Serviço" ainda aberto)
+  if IsAppRunning('nssm.exe') then
   begin
-     // Executar desinstalação MUITO silenciosa da versão anterior
-     // /VERYSILENT é mais agressivo que /SILENT - não mostra nada
-     Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    
+    CloseApp('nssm.exe');
+    Sleep(1500);
+  end;
+  
+  // Verificar se existe uma instalação anterior e executar desinstalação silenciosa
+  UninstallPath := FindUninstaller();
+
+  if UninstallPath <> '' then
+  begin
+    // Fechar o aplicativo se estiver rodando antes de desinstalar
+    AppExe := ExpandConstant('{#MyAppExeName}');
+    if IsAppRunning(AppExe) then
+    begin
+      CloseApp(AppExe);
+      Sleep(2000);
+    end;
+
+    // Executar desinstalação MUITO silenciosa da versão anterior
+    // /VERYSILENT é mais agressivo que /SILENT - não mostra nada
+    Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
     // Aguardar até que o processo de desinstalação termine completamente
     // Verificar se o arquivo de desinstalação ainda existe (indica que ainda está em processo)
     WaitCount := 0;
@@ -174,62 +237,16 @@ begin
       Sleep(500);
       WaitCount := WaitCount + 1;
     end;
-    
+
     // Aguardar um pouco mais para garantir que todos os processos foram finalizados
     Sleep(2000);
-    
+
     // Verificar se ainda há processos relacionados rodando
     if IsAppRunning(AppExe) then
     begin
       CloseApp(AppExe);
       Sleep(1000);
     end;
-  end
-  else
-  begin
-    // Se não encontrou o arquivo, tentar executar diretamente nos caminhos mais comuns
-    // mesmo sem verificar existência (pode ser que a verificação esteja falhando)
-     UninstallPath := ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe');
-     if Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-     begin
-       Sleep(2000);
-     end
-     else
-     begin
-       UninstallPath := ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe');
-       if Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-       begin
-         Sleep(2000);
-       end
-       else
-       begin
-        // Se não encontrou pelo caminho, tentar procurar pelo registro do Windows
-        // Verificar se há uma chave de registro indicando instalação anterior
-         if RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D_is1', 'UninstallString', UninstallPath) then
-         begin
-           // Extrair apenas o caminho do executável (remover parâmetros se houver)
-           // Se começar com aspas, remover as aspas e pegar até o próximo espaço ou fim
-           if Pos('"', UninstallPath) = 1 then
-           begin
-             // Remover primeira aspas
-             UninstallPath := Copy(UninstallPath, 2, Length(UninstallPath) - 1);
-             // Encontrar a próxima aspas
-             SecondQuotePos := Pos('"', UninstallPath);
-             if SecondQuotePos > 0 then
-             begin
-               // Extrair até a segunda aspas
-               UninstallPath := Copy(UninstallPath, 1, SecondQuotePos - 1);
-             end;
-           end;
-           
-           if FileExists(UninstallPath) then
-           begin
-             Exec(UninstallPath, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-             Sleep(2000);
-           end;
-         end;
-       end;
-     end;
   end;
   
   // Fechar processos de desinstalação se estiverem rodando
@@ -309,9 +326,23 @@ end;
 
 procedure InitializeWizard();
 begin
+  // Create mode selection page
+  ModePage := CreateInputOptionPage(wpLicense,
+    'Select Installation Mode',
+    'Choose how you want to use Backup Database',
+    'Select the installation mode that best fits your needs:',
+    True, False);
+
+  // Add options (only Server and Client)
+  ModePage.Add('(Recommended) Server Mode - Run as a dedicated backup server (allows remote connections)');
+  ModePage.Add('Client Mode - Connect to a remote server and manage backups remotely');
+
+  // Set default selection (Server mode - index 0)
+  ModePage.SelectedValueIndex := 0;
+
   if VCRedistNeeded then
   begin
-    VCRedistPage := CreateOutputProgressPage('Verificando Dependências', 'Instalando Visual C++ Redistributables...');
+    VCRedistPage := CreateOutputProgressPage('Checking Dependencies', 'Installing Visual C++ Redistributables...');
   end;
 end;
 
@@ -380,6 +411,45 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+
+  // Only store selected mode when leaving the mode page - do NOT use {app} here
+  // because the user has not yet chosen the install path (Select Dir comes after)
+  if CurPageID = ModePage.ID then
+  begin
+    case ModePage.SelectedValueIndex of
+      0: SelectedMode := 'server';
+      1: SelectedMode := 'client';
+    else
+      SelectedMode := 'server';
+    end;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ModeFile: TStringList;
+  ModeFilePath: String;
+begin
+  // Write .install_mode only after files are installed, when {app} is defined
+  if CurStep = ssPostInstall then
+  begin
+    if SelectedMode = '' then
+      SelectedMode := 'server';
+    ModeFilePath := ExpandConstant('{app}\.install_mode');
+    ModeFile := TStringList.Create;
+    try
+      ModeFile.Add(SelectedMode);
+      ModeFile.SaveToFile(ModeFilePath);
+    finally
+      ModeFile.Free;
+    end;
+  end;
+end;
+
+// Check if server mode was selected (used to conditionally create service icons)
+function IsServerMode(): Boolean;
+begin
+  Result := (SelectedMode = 'server');
 end;
 
 function IsServiceInstalled(const ServiceName: String): Boolean;

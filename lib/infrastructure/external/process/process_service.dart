@@ -130,8 +130,16 @@ class ProcessService {
             executableLower.contains('pg_restore') ||
             executableLower.contains('pg_dump');
 
+        final isSqlCmdTool = executableLower.contains('sqlcmd');
+
+        final isSybaseTool = executableLower.contains('dbisql') ||
+            executableLower.contains('dbbackup') ||
+            executableLower.contains('dbverify');
+
+        List<String>? commonPaths;
+
         if (isPostgresTool) {
-          final commonPaths = [
+          commonPaths = [
             r'C:\Program Files\PostgreSQL\16\bin',
             r'C:\Program Files\PostgreSQL\15\bin',
             r'C:\Program Files\PostgreSQL\14\bin',
@@ -141,15 +149,69 @@ class ProcessService {
             r'C:\Program Files (x86)\PostgreSQL\14\bin',
             r'C:\Program Files (x86)\PostgreSQL\13\bin',
           ];
+        } else if (isSqlCmdTool) {
+          commonPaths = [
+            // SQL Server 2022 (160) - ODBC 170
+            r'C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn',
+            // SQL Server 2019 (150) - ODBC 160
+            r'C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\160\Tools\Binn',
+            // SQL Server 2017 (140) - ODBC 150
+            r'C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\150\Tools\Binn',
+            // SQL Server 2016 (130) - ODBC 140
+            r'C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\130\Tools\Binn',
+            // SQL Server 2014 (120) - ODBC 120
+            r'C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\120\Tools\Binn',
+            // Binn padrão de versões específicas
+            r'C:\Program Files\Microsoft SQL Server\160\Tools\Binn',
+            r'C:\Program Files\Microsoft SQL Server\150\Tools\Binn',
+            r'C:\Program Files\Microsoft SQL Server\140\Tools\Binn',
+            r'C:\Program Files\Microsoft SQL Server\130\Tools\Binn',
+            r'C:\Program Files\Microsoft SQL Server\120\Tools\Binn',
+            r'C:\Program Files\Microsoft SQL Server\110\Tools\Binn',
+            // x86 alternativo
+            r'C:\Program Files (x86)\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\Client SDK\ODBC\160\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\Client SDK\ODBC\150\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\Client SDK\ODBC\130\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\Client SDK\ODBC\120\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\160\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\150\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\140\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\130\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\120\Tools\Binn',
+            r'C:\Program Files (x86)\Microsoft SQL Server\110\Tools\Binn',
+          ];
+        } else if (isSybaseTool) {
+          commonPaths = [
+            // SQL Anywhere 17
+            r'C:\Program Files\SQL Anywhere 17\Bin64',
+            r'C:\Program Files (x86)\SQL Anywhere 17\Bin64',
+            // SQL Anywhere 16
+            r'C:\Program Files\SQL Anywhere 16\Bin64',
+            r'C:\Program Files (x86)\SQL Anywhere 16\Bin64',
+            // SQL Anywhere 12
+            r'C:\Program Files\SQL Anywhere 12\Bin64',
+            r'C:\Program Files (x86)\SQL Anywhere 12\Bin64',
+            // SQL Anywhere 11
+            r'C:\Program Files\SQL Anywhere 11\Bin64',
+            r'C:\Program Files (x86)\SQL Anywhere 11\Bin64',
+          ];
+        }
 
+        if (commonPaths != null) {
           for (final basePath in commonPaths) {
             final potentialPath = path.join(basePath, executable);
             if (File(potentialPath).existsSync()) {
               executablePath = potentialPath;
               executableDir = basePath;
               executableFound = true;
+              final toolType = isPostgresTool
+                  ? 'PostgreSQL'
+                  : isSqlCmdTool
+                      ? 'SQL Server'
+                      : 'Sybase';
               LoggerService.info(
-                'Executável encontrado em caminho comum: $executablePath',
+                'Executável $toolType encontrado em caminho comum: $executablePath',
               );
               break;
             }
@@ -166,7 +228,14 @@ class ProcessService {
             executableLower.contains('pg_restore') ||
             executableLower.contains('pg_dump');
 
+        final isSqlCmdTool = executableLower.contains('sqlcmd');
+
+        final isSybaseTool = executableLower.contains('dbisql') ||
+            executableLower.contains('dbbackup') ||
+            executableLower.contains('dbverify');
+
         String message;
+
         if (isPostgresTool) {
           final toolName = executableLower.contains('pg_basebackup')
               ? 'pg_basebackup'
@@ -191,6 +260,55 @@ class ProcessService {
               '   - Clique em "Novo" e adicione o caminho completo da pasta bin\n'
               '   - Clique em "OK" em todas as janelas\n\n'
               '3. Reinicie o aplicativo de backup\n\n'
+              r'Consulte: docs\path_setup.md para mais detalhes.';
+        } else if (isSqlCmdTool) {
+          message =
+              'sqlcmd não encontrado no PATH do sistema.\n\n'
+              'O sqlcmd é uma ferramenta de linha de comando do SQL Server.\n\n'
+              'OPÇÕES PARA RESOLVER:\n\n'
+              'Opção 1: Instalar SQL Server Command Line Tools\n'
+              '  - Baixe SQL Server Command Line Tools da Microsoft\n'
+              '  - Durante a instalação, selecione "SQL Server Command Line Tools"\n'
+              '  - O instalador configurará o PATH automaticamente\n\n'
+              'Opção 2: Adicionar ao PATH manualmente\n'
+              '  - Localize a pasta Tools\\Binn do SQL Server instalado\n'
+              '    (ex: C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn)\n'
+              '  - Adicione ao PATH do Windows:\n'
+              '    * Pressione Win + X → "Sistema"\n'
+              '    * Clique em "Configurações avançadas do sistema"\n'
+              '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
+              '    * Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
+              '    * Clique em "Novo" e adicione o caminho completo da pasta\n'
+              '    * Clique em "OK" em todas as janelas\n\n'
+              'Opção 3: Usar SQL Server Management Studio (SSMS)\n'
+              '  - SSMS inclui sqlcmd\n'
+              '  - Localize sqlcmd.exe na pasta do SSMS\n'
+              '  - Adicione a pasta ao PATH conforme Opção 2\n\n'
+              r'Consulte: docs\path_setup.md para mais detalhes.';
+        } else if (isSybaseTool) {
+          final toolName = executableLower.contains('dbisql')
+              ? 'dbisql'
+              : executableLower.contains('dbbackup')
+              ? 'dbbackup'
+              : 'dbverify';
+
+          message =
+              '$toolName não encontrado no PATH do sistema.\n\n'
+              'As ferramentas do Sybase SQL Anywhere não estão disponíveis.\n\n'
+              'OPÇÕES PARA RESOLVER:\n\n'
+              'Opção 1: Adicionar ao PATH manualmente\n'
+              '  - Localize a pasta Bin64 do SQL Anywhere instalado\n'
+              '    (ex: C:\\Program Files\\SQL Anywhere 16\\Bin64)\n'
+              '  - Adicione ao PATH do Windows:\n'
+              '    * Pressione Win + X → "Sistema"\n'
+              '    * Clique em "Configurações avançadas do sistema"\n'
+              '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
+              '    * Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
+              '    * Clique em "Novo" e adicione o caminho completo da pasta Bin64\n'
+              '    * Clique em "OK" em todas as janelas\n\n'
+              'Opção 2: SQL Anywhere não instalado?\n'
+              '  - Baixe e instale SQL Anywhere (versões 11, 12, 16 ou 17)\n'
+              '  - Durante a instalação, selecione "Add to PATH"\n\n'
               r'Consulte: docs\path_setup.md para mais detalhes.';
         } else {
           message =
@@ -374,6 +492,12 @@ class ProcessService {
             executableLower.contains('pg_restore') ||
             executableLower.contains('pg_dump');
 
+        final isSqlCmdTool = executableLower.contains('sqlcmd');
+
+        final isSybaseTool = executableLower.contains('dbisql') ||
+            executableLower.contains('dbbackup') ||
+            executableLower.contains('dbverify');
+
         if (isPostgresTool) {
           final toolName = executableLower.contains('pg_basebackup')
               ? 'pg_basebackup'
@@ -398,6 +522,55 @@ class ProcessService {
               '   - Clique em "Novo" e adicione o caminho completo da pasta bin\n'
               '   - Clique em "OK" em todas as janelas\n\n'
               '3. Reinicie o aplicativo de backup\n\n'
+              r'Consulte: docs\path_setup.md para mais detalhes.';
+        } else if (isSqlCmdTool) {
+          message =
+              'sqlcmd não encontrado no PATH do sistema.\n\n'
+              'O sqlcmd é uma ferramenta de linha de comando do SQL Server.\n\n'
+              'OPÇÕES PARA RESOLVER:\n\n'
+              'Opção 1: Instalar SQL Server Command Line Tools\n'
+              '  - Baixe SQL Server Command Line Tools da Microsoft\n'
+              '  - Durante a instalação, selecione "SQL Server Command Line Tools"\n'
+              '  - O instalador configurará o PATH automaticamente\n\n'
+              'Opção 2: Adicionar ao PATH manualmente\n'
+              '  - Localize a pasta Tools\\Binn do SQL Server instalado\n'
+              '    (ex: C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn)\n'
+              '  - Adicione ao PATH do Windows:\n'
+              '    * Pressione Win + X → "Sistema"\n'
+              '    * Clique em "Configurações avançadas do sistema"\n'
+              '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
+              '    * Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
+              '    * Clique em "Novo" e adicione o caminho completo da pasta\n'
+              '    * Clique em "OK" em todas as janelas\n\n'
+              'Opção 3: Usar SQL Server Management Studio (SSMS)\n'
+              '  - SSMS inclui sqlcmd\n'
+              '  - Localize sqlcmd.exe na pasta do SSMS\n'
+              '  - Adicione a pasta ao PATH conforme Opção 2\n\n'
+              r'Consulte: docs\path_setup.md para mais detalhes.';
+        } else if (isSybaseTool) {
+          final toolName = executableLower.contains('dbisql')
+              ? 'dbisql'
+              : executableLower.contains('dbbackup')
+              ? 'dbbackup'
+              : 'dbverify';
+
+          message =
+              '$toolName não encontrado no PATH do sistema.\n\n'
+              'As ferramentas do Sybase SQL Anywhere não estão disponíveis.\n\n'
+              'OPÇÕES PARA RESOLVER:\n\n'
+              'Opção 1: Adicionar ao PATH manualmente\n'
+              '  - Localize a pasta Bin64 do SQL Anywhere instalado\n'
+              '    (ex: C:\\Program Files\\SQL Anywhere 16\\Bin64)\n'
+              '  - Adicione ao PATH do Windows:\n'
+              '    * Pressione Win + X → "Sistema"\n'
+              '    * Clique em "Configurações avançadas do sistema"\n'
+              '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
+              '    * Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
+              '    * Clique em "Novo" e adicione o caminho completo da pasta Bin64\n'
+              '    * Clique em "OK" em todas as janelas\n\n'
+              'Opção 2: SQL Anywhere não instalado?\n'
+              '  - Baixe e instale SQL Anywhere (versões 11, 12, 16 ou 17)\n'
+              '  - Durante a instalação, selecione "Add to PATH"\n\n'
               r'Consulte: docs\path_setup.md para mais detalhes.';
         } else {
           message =

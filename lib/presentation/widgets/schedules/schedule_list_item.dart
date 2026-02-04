@@ -13,6 +13,8 @@ class ScheduleListItem extends StatelessWidget {
     this.onDelete,
     this.onRunNow,
     this.onToggleEnabled,
+    this.onTransferDestinations,
+    this.isOperating = false,
   });
   final Schedule schedule;
   final VoidCallback? onEdit;
@@ -20,23 +22,44 @@ class ScheduleListItem extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onRunNow;
   final ValueChanged<bool>? onToggleEnabled;
+  final VoidCallback? onTransferDestinations;
+  final bool isOperating;
 
   @override
   Widget build(BuildContext context) {
+    final effectivelyDisabled = isOperating || !schedule.enabled;
+
     return ConfigListItem(
       name: schedule.name,
       icon: FluentIcons.calendar,
       enabled: schedule.enabled,
-      onToggleEnabled: onToggleEnabled,
-      onEdit: onEdit,
-      onDuplicate: onDuplicate,
-      onDelete: onDelete,
-      trailingAction: onRunNow != null
-          ? IconButton(
-              icon: const Icon(FluentIcons.play),
-              onPressed: schedule.enabled ? onRunNow : null,
+      onToggleEnabled: isOperating ? null : onToggleEnabled,
+      onEdit: isOperating ? null : onEdit,
+      onDuplicate: isOperating ? null : onDuplicate,
+      onDelete: isOperating ? null : onDelete,
+      trailingAction: isOperating
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: ProgressRing(strokeWidth: 2),
             )
-          : null,
+          : onRunNow != null || onTransferDestinations != null
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (onTransferDestinations != null)
+                      IconButton(
+                        icon: const Icon(FluentIcons.fabric_folder),
+                        onPressed: onTransferDestinations,
+                      ),
+                    if (onRunNow != null)
+                      IconButton(
+                        icon: const Icon(FluentIcons.play),
+                        onPressed: effectivelyDisabled ? null : onRunNow,
+                      ),
+                  ],
+                )
+              : null,
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -1,11 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
-import 'package:backup_database/core/constants/license_features.dart';
-import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -13,18 +9,13 @@ import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
-import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
-import 'package:backup_database/domain/services/i_ftp_service.dart';
-import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
-import 'package:backup_database/domain/services/i_license_validation_service.dart';
-import 'package:backup_database/domain/services/i_local_destination_service.dart';
-import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
+import 'package:backup_database/domain/services/i_backup_cleanup_service.dart';
+import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
+import 'package:backup_database/domain/services/i_destination_orchestrator.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
+import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
-import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
-import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
-import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
-import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
+import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SchedulerService implements ISchedulerService {
@@ -34,88 +25,39 @@ class SchedulerService implements ISchedulerService {
     required IBackupHistoryRepository backupHistoryRepository,
     required IBackupLogRepository backupLogRepository,
     required BackupOrchestratorService backupOrchestratorService,
-    required ILocalDestinationService localDestinationService,
-    required SendToFtp sendToFtp,
-    required IFtpService ftpDestinationService,
-    required IGoogleDriveDestinationService googleDriveDestinationService,
-    required IDropboxDestinationService dropboxDestinationService,
-    required SendToDropbox sendToDropbox,
-    required INextcloudDestinationService nextcloudDestinationService,
-    required SendToNextcloud sendToNextcloud,
+    required IDestinationOrchestrator destinationOrchestrator,
+    required IBackupCleanupService cleanupService,
     required INotificationService notificationService,
-    required ILicenseValidationService licenseValidationService,
+    required IScheduleCalculator scheduleCalculator,
+    required IBackupProgressNotifier progressNotifier,
+    ITransferStagingService? transferStagingService,
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
        _backupHistoryRepository = backupHistoryRepository,
        _backupLogRepository = backupLogRepository,
        _backupOrchestratorService = backupOrchestratorService,
-       _localDestinationService = localDestinationService,
-       _sendToFtp = sendToFtp,
-       _ftpDestinationService = ftpDestinationService,
-       _googleDriveDestinationService = googleDriveDestinationService,
-       _dropboxDestinationService = dropboxDestinationService,
-       _sendToDropbox = sendToDropbox,
-       _nextcloudDestinationService = nextcloudDestinationService,
-       _sendToNextcloud = sendToNextcloud,
+       _destinationOrchestrator = destinationOrchestrator,
+       _cleanupService = cleanupService,
        _notificationService = notificationService,
-       _licenseValidationService = licenseValidationService;
+       _scheduleCalculator = scheduleCalculator,
+       _progressNotifier = progressNotifier,
+       _transferStagingService = transferStagingService;
+
   final IScheduleRepository _scheduleRepository;
   final IBackupDestinationRepository _destinationRepository;
   final IBackupHistoryRepository _backupHistoryRepository;
   final IBackupLogRepository _backupLogRepository;
   final BackupOrchestratorService _backupOrchestratorService;
-  final ILocalDestinationService _localDestinationService;
-  final SendToFtp _sendToFtp;
-  final IFtpService _ftpDestinationService;
-  final IGoogleDriveDestinationService _googleDriveDestinationService;
-  final IDropboxDestinationService _dropboxDestinationService;
-  final SendToDropbox _sendToDropbox;
-  final INextcloudDestinationService _nextcloudDestinationService;
-  final SendToNextcloud _sendToNextcloud;
+  final IDestinationOrchestrator _destinationOrchestrator;
+  final IBackupCleanupService _cleanupService;
   final INotificationService _notificationService;
-  final ILicenseValidationService _licenseValidationService;
+  final IScheduleCalculator _scheduleCalculator;
+  final IBackupProgressNotifier _progressNotifier;
+  final ITransferStagingService? _transferStagingService;
 
-  final ScheduleCalculator _calculator = ScheduleCalculator();
   Timer? _checkTimer;
   bool _isRunning = false;
   final Set<String> _executingSchedules = {};
-
-  Future<rd.Result<void>> _ensureDestinationFeatureAllowed(
-    BackupDestination destination,
-  ) async {
-    String? requiredFeature;
-    switch (destination.type) {
-      case DestinationType.googleDrive:
-        requiredFeature = LicenseFeatures.googleDrive;
-      case DestinationType.dropbox:
-        requiredFeature = LicenseFeatures.dropbox;
-      case DestinationType.nextcloud:
-        requiredFeature = LicenseFeatures.nextcloud;
-      case DestinationType.local:
-      case DestinationType.ftp:
-        requiredFeature = null;
-    }
-
-    if (requiredFeature == null) {
-      return const rd.Success(());
-    }
-
-    final allowedResult = await _licenseValidationService.isFeatureAllowed(
-      requiredFeature,
-    );
-    final allowed = allowedResult.getOrElse((_) => false);
-    if (!allowed) {
-      return rd.Failure(
-        ValidationFailure(
-          message:
-              'Destino ${destination.name} requer licença '
-              '(${destination.type.name}).',
-        ),
-      );
-    }
-
-    return const rd.Success(());
-  }
 
   @override
   Future<void> start() async {
@@ -148,7 +90,7 @@ class SchedulerService implements ISchedulerService {
     result.fold(
       (schedules) async {
         for (final schedule in schedules) {
-          final nextRunAt = _calculator.getNextRunTime(schedule);
+          final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
           if (nextRunAt != null) {
             LoggerService.info(
               'Atualizando schedule ${schedule.name}: '
@@ -177,7 +119,7 @@ class SchedulerService implements ISchedulerService {
     result.fold((schedules) async {
       for (final schedule in schedules) {
         final isExecuting = _executingSchedules.contains(schedule.id);
-        final shouldRun = _calculator.shouldRunNow(schedule);
+        final shouldRun = _scheduleCalculator.shouldRunNow(schedule);
 
         if (isExecuting) {
           continue;
@@ -186,7 +128,7 @@ class SchedulerService implements ISchedulerService {
         if (shouldRun) {
           _executingSchedules.add(schedule.id);
 
-          final nextRunAt = _calculator.getNextRunTime(schedule);
+          final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
           if (nextRunAt != null) {
             await _scheduleRepository.update(
               schedule.copyWith(nextRunAt: nextRunAt),
@@ -269,12 +211,11 @@ class SchedulerService implements ISchedulerService {
 
       if (backupResult.isError()) {
         try {
-          final progressProvider = getIt<BackupProgressProvider>();
           final error = backupResult.exceptionOrNull()!;
           final errorMessage = error is Failure
               ? error.message
               : error.toString();
-          progressProvider.failBackup(errorMessage);
+          _progressNotifier.failBackup(errorMessage);
         } on Object catch (e, s) {
           LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
         }
@@ -301,8 +242,7 @@ class SchedulerService implements ISchedulerService {
         await _backupHistoryRepository.update(failedHistory);
 
         try {
-          final progressProvider = getIt<BackupProgressProvider>();
-          progressProvider.failBackup(errorMessage);
+          _progressNotifier.failBackup(errorMessage);
         } on Object catch (e, s) {
           LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
         }
@@ -314,9 +254,8 @@ class SchedulerService implements ISchedulerService {
 
       if (hasDestinations) {
         try {
-          final progressProvider = getIt<BackupProgressProvider>();
-          progressProvider.updateProgress(
-            step: BackupStep.uploading,
+          _progressNotifier.updateProgress(
+            step: 'Enviando para destino',
             message: 'Enviando para destinos...',
             progress: 0.85,
           );
@@ -344,10 +283,9 @@ class SchedulerService implements ISchedulerService {
         }
 
         try {
-          final progressProvider = getIt<BackupProgressProvider>();
           final progress = 0.85 + (0.1 * (index + 1) / totalDestinations);
-          progressProvider.updateProgress(
-            step: BackupStep.uploading,
+          _progressNotifier.updateProgress(
+            step: 'Enviando para destino',
             message: 'Enviando para ${destination.name}...',
             progress: progress,
           );
@@ -355,7 +293,7 @@ class SchedulerService implements ISchedulerService {
           LoggerService.warning('Erro ao atualizar progresso', e, s);
         }
 
-        final sendResult = await _sendToDestination(
+        final sendResult = await _destinationOrchestrator.uploadToDestination(
           sourceFilePath: backupHistory.backupPath,
           destination: destination,
         );
@@ -424,8 +362,7 @@ class SchedulerService implements ISchedulerService {
         );
 
         try {
-          final progressProvider = getIt<BackupProgressProvider>();
-          progressProvider.failBackup(errorMessage);
+          _progressNotifier.failBackup(errorMessage);
         } on Object catch (e, s) {
           LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
         }
@@ -451,16 +388,30 @@ class SchedulerService implements ISchedulerService {
       }
       await _notificationService.notifyBackupComplete(backupHistory);
 
-      try {
-        final progressProvider = getIt<BackupProgressProvider>();
-        progressProvider.completeBackup(
-          message: 'Backup concluído com sucesso!',
+      // Copiar para staging ANTES de deletar o arquivo temporário
+      // para que o cliente possa baixar o arquivo
+      String? stagingRelativePath;
+      if (_transferStagingService != null) {
+        LoggerService.info(
+          'Copiando backup para staging: ${backupHistory.backupPath} (scheduleId: ${schedule.id})',
         );
-      } on Object catch (e, s) {
+        stagingRelativePath = await _transferStagingService.copyToStaging(
+          backupHistory.backupPath,
+          schedule.id,
+        );
+
+        if (stagingRelativePath != null) {
+          LoggerService.info(
+            'Backup copiado para staging com sucesso: $stagingRelativePath',
+          );
+        } else {
+          LoggerService.warning(
+            'Falha ao copiar backup para staging (copyToStaging retornou null)',
+          );
+        }
+      } else {
         LoggerService.warning(
-          'Erro ao atualizar progresso completeBackup',
-          e,
-          s,
+          'TransferStagingService não está disponível. Cliente não poderá baixar o arquivo.',
         );
       }
 
@@ -498,7 +449,7 @@ class SchedulerService implements ISchedulerService {
 
       final now = DateTime.now();
       final scheduleWithLastRun = schedule.copyWith(lastRunAt: now);
-      final nextRunAt = _calculator.getNextRunTime(scheduleWithLastRun);
+      final nextRunAt = _scheduleCalculator.getNextRunTime(scheduleWithLastRun);
       final updatedSchedule = scheduleWithLastRun.copyWith(
         nextRunAt: nextRunAt,
       );
@@ -509,9 +460,44 @@ class SchedulerService implements ISchedulerService {
         '(baseado em lastRunAt: $now, tipo: ${schedule.scheduleType})',
       );
 
-      await _cleanOldBackups(destinations, backupHistory.id);
+      await _cleanupService.cleanOldBackups(
+        destinations: destinations,
+        backupHistoryId: backupHistory.id,
+      );
 
       LoggerService.info('Backup agendado concluído: ${schedule.name}');
+
+      try {
+        // Usar stagingRelativePath se disponível, senão usa backupPath original
+        final pathToSend = stagingRelativePath ?? backupHistory.backupPath;
+
+        // Log para diagnosticar problema de backupPath vazio
+        LoggerService.info('===== COMPLETANDO BACKUP =====');
+        LoggerService.info('stagingRelativePath: $stagingRelativePath');
+        LoggerService.info('backupHistory.backupPath: ${backupHistory.backupPath}');
+        LoggerService.info('pathToSend: $pathToSend');
+        LoggerService.info('pathToSend está vazio? ${pathToSend.isEmpty}');
+
+        if (stagingRelativePath == null) {
+          LoggerService.warning(
+            'stagingRelativePath é null, usando backupPath original: $pathToSend',
+          );
+        }
+
+        _progressNotifier.completeBackup(
+          message: 'Backup concluído com sucesso!',
+          backupPath: pathToSend,
+        );
+
+        LoggerService.info('completeBackup chamado com backupPath: "$pathToSend"');
+      } on Object catch (e, s) {
+        LoggerService.warning(
+          'Erro ao atualizar progresso completeBackup',
+          e,
+          s,
+        );
+      }
+
       return const rd.Success(());
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro no backup agendado', e, stackTrace);
@@ -535,349 +521,9 @@ class SchedulerService implements ISchedulerService {
     return destinations;
   }
 
-  Future<rd.Result<void>> _sendToDestination({
-    required String sourceFilePath,
-    required BackupDestination destination,
-  }) async {
-    try {
-      final licenseCheck = await _ensureDestinationFeatureAllowed(destination);
-      if (licenseCheck.isError()) {
-        final failure = licenseCheck.exceptionOrNull()!;
-        LoggerService.warning(
-          'Envio bloqueado por licença: ${destination.name}',
-          failure,
-        );
-        return rd.Failure(failure);
-      }
-
-      final configJson = jsonDecode(destination.config) as Map<String, dynamic>;
-
-      switch (destination.type) {
-        case DestinationType.local:
-          final config = LocalDestinationConfig(
-            path: configJson['path'] as String,
-            createSubfoldersByDate:
-                configJson['createSubfoldersByDate'] as bool? ?? true,
-            retentionDays: configJson['retentionDays'] as int? ?? 30,
-          );
-
-          if (config.path.isEmpty) {
-            final errorMessage =
-                'Caminho do destino local está vazio para o destino: '
-                '${destination.name}';
-            LoggerService.error(errorMessage);
-            return rd.Failure(ValidationFailure(message: errorMessage));
-          }
-
-          LoggerService.info(
-            'Copiando backup para destino local: ${destination.name} '
-            '(${config.path})',
-          );
-
-          final uploadResult = await _localDestinationService.upload(
-            sourceFilePath: sourceFilePath,
-            config: config,
-          );
-
-          return uploadResult.fold(
-            (result) {
-              LoggerService.info(
-                'Upload local concluído com sucesso: '
-                '${result.destinationPath} '
-                '(${_formatBytes(result.fileSize)} em '
-                '${result.duration.inSeconds}s)',
-              );
-              return const rd.Success(());
-            },
-            (failure) {
-              LoggerService.error(
-                'Erro ao copiar backup para destino local ${destination.name}',
-                failure,
-              );
-              return rd.Failure(failure);
-            },
-          );
-
-        case DestinationType.ftp:
-          final config = FtpDestinationConfig(
-            host: configJson['host'] as String,
-            port: configJson['port'] as int? ?? 21,
-            username: configJson['username'] as String,
-            password: configJson['password'] as String,
-            remotePath: configJson['remotePath'] as String? ?? '/',
-            useFtps: configJson['useFtps'] as bool? ?? false,
-          );
-
-          LoggerService.info(
-            'Enviando backup para FTP: ${destination.name} (${config.host})',
-          );
-
-          final uploadResult = await _sendToFtp.call(
-            sourceFilePath: sourceFilePath,
-            config: config,
-          );
-
-          return uploadResult.fold(
-            (result) {
-              LoggerService.info(
-                'Upload FTP concluído com sucesso: ${result.remotePath} '
-                '(${_formatBytes(result.fileSize)} em '
-                '${result.duration.inSeconds}s)',
-              );
-              return const rd.Success(());
-            },
-            (failure) {
-              LoggerService.error(
-                'Erro ao enviar backup para FTP ${destination.name}',
-                failure,
-              );
-              return rd.Failure(failure);
-            },
-          );
-
-        case DestinationType.googleDrive:
-          final config = GoogleDriveDestinationConfig(
-            folderId: configJson['folderId'] as String,
-            folderName: configJson['folderName'] as String? ?? 'Backups',
-            accessToken: configJson['accessToken'] as String? ?? '',
-            refreshToken: configJson['refreshToken'] as String? ?? '',
-          );
-          final result = await _googleDriveDestinationService.upload(
-            sourceFilePath: sourceFilePath,
-            config: config,
-          );
-          return result.fold(
-            (_) => const rd.Success(()),
-            rd.Failure.new,
-          );
-
-        case DestinationType.dropbox:
-          final config = DropboxDestinationConfig(
-            folderPath: configJson['folderPath'] as String? ?? '',
-            folderName: configJson['folderName'] as String? ?? 'Backups',
-          );
-          final result = await _sendToDropbox.call(
-            sourceFilePath: sourceFilePath,
-            config: config,
-          );
-          return result.fold(
-            (_) => const rd.Success(()),
-            rd.Failure.new,
-          );
-
-        case DestinationType.nextcloud:
-          final config = NextcloudDestinationConfig.fromJson(configJson);
-          final result = await _sendToNextcloud.call(
-            sourceFilePath: sourceFilePath,
-            config: config,
-          );
-          return result.fold(
-            (_) => const rd.Success(()),
-            rd.Failure.new,
-          );
-      }
-    } on Object catch (e) {
-      LoggerService.error('Erro ao enviar para ${destination.name}: $e', e);
-      return rd.Failure(
-        BackupFailure(
-          message: 'Erro ao enviar para ${destination.name}: $e',
-          originalError: e,
-        ),
-      );
-    }
-  }
-
-  Future<void> _cleanOldBackups(
-    List<BackupDestination> destinations,
-    String backupHistoryId,
-  ) async {
-    for (final destination in destinations) {
-      try {
-        final licenseCheck = await _ensureDestinationFeatureAllowed(
-          destination,
-        );
-        if (licenseCheck.isError()) {
-          LoggerService.info(
-            'Limpeza ignorada por licença: ${destination.name} '
-            '(${destination.type.name})',
-          );
-          continue;
-        }
-
-        final configJson =
-            jsonDecode(destination.config) as Map<String, dynamic>;
-
-        switch (destination.type) {
-          case DestinationType.local:
-            final config = LocalDestinationConfig(
-              path: configJson['path'] as String,
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
-            await _localDestinationService.cleanOldBackups(config: config);
-
-          case DestinationType.ftp:
-            final config = FtpDestinationConfig(
-              host: configJson['host'] as String,
-              port: configJson['port'] as int? ?? 21,
-              username: configJson['username'] as String,
-              password: configJson['password'] as String,
-              remotePath: configJson['remotePath'] as String? ?? '/',
-              useFtps: configJson['useFtps'] as bool? ?? false,
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
-            final cleanResult = await _ftpDestinationService.cleanOldBackups(
-              config: config,
-            );
-            cleanResult.fold((_) {}, (exception) async {
-              LoggerService.error(
-                'Erro ao limpar backups FTP em ${destination.name}',
-                exception,
-              );
-              final failureMessage = exception is Failure
-                  ? exception.message
-                  : exception.toString();
-
-              await _log(
-                backupHistoryId,
-                'error',
-                'Erro ao limpar backups antigos no FTP ${destination.name}: '
-                    '$failureMessage',
-              );
-
-              await _notificationService.sendWarning(
-                databaseName: destination.name,
-                message:
-                    'Erro ao limpar backups antigos no FTP '
-                    '${destination.name}: $failureMessage',
-              );
-            });
-
-          case DestinationType.googleDrive:
-            final config = GoogleDriveDestinationConfig(
-              folderId: configJson['folderId'] as String,
-              folderName: configJson['folderName'] as String? ?? 'Backups',
-              accessToken: configJson['accessToken'] as String? ?? '',
-              refreshToken: configJson['refreshToken'] as String? ?? '',
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
-            final cleanResult = await _googleDriveDestinationService
-                .cleanOldBackups(config: config);
-            cleanResult.fold((_) {}, (exception) async {
-              LoggerService.error(
-                'Erro ao limpar backups Google Drive em ${destination.name}',
-                exception,
-              );
-              final failureMessage = exception is Failure
-                  ? exception.message
-                  : exception.toString();
-
-              await _log(
-                backupHistoryId,
-                'error',
-                'Erro ao limpar backups antigos no Google Drive '
-                    '${destination.name}: $failureMessage',
-              );
-
-              await _notificationService.sendWarning(
-                databaseName: destination.name,
-                message:
-                    'Erro ao limpar backups antigos no Google Drive '
-                    '${destination.name}: $failureMessage',
-              );
-            });
-
-          case DestinationType.dropbox:
-            final config = DropboxDestinationConfig(
-              folderPath: configJson['folderPath'] as String? ?? '',
-              folderName: configJson['folderName'] as String? ?? 'Backups',
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
-            final cleanResult = await _dropboxDestinationService
-                .cleanOldBackups(config: config);
-            cleanResult.fold((_) {}, (exception) async {
-              LoggerService.error(
-                'Erro ao limpar backups Dropbox em ${destination.name}',
-                exception,
-              );
-              final failureMessage = exception is Failure
-                  ? exception.message
-                  : exception.toString();
-
-              await _log(
-                backupHistoryId,
-                'error',
-                'Erro ao limpar backups antigos no Dropbox '
-                    '${destination.name}: $failureMessage',
-              );
-
-              await _notificationService.sendWarning(
-                databaseName: destination.name,
-                message:
-                    'Erro ao limpar backups antigos no Dropbox '
-                    '${destination.name}: $failureMessage',
-              );
-            });
-
-          case DestinationType.nextcloud:
-            final config = NextcloudDestinationConfig.fromJson(configJson);
-            final cleanResult = await _nextcloudDestinationService
-                .cleanOldBackups(config: config);
-            cleanResult.fold((_) {}, (exception) async {
-              LoggerService.error(
-                'Erro ao limpar backups Nextcloud em ${destination.name}',
-                exception,
-              );
-              final failureMessage = exception is Failure
-                  ? exception.message
-                  : exception.toString();
-
-              await _log(
-                backupHistoryId,
-                'error',
-                'Erro ao limpar backups antigos no Nextcloud '
-                    '${destination.name}: $failureMessage',
-              );
-
-              await _notificationService.sendWarning(
-                databaseName: destination.name,
-                message:
-                    'Erro ao limpar backups antigos no Nextcloud '
-                    '${destination.name}: $failureMessage',
-              );
-            });
-        }
-      } on Object catch (e, stackTrace) {
-        LoggerService.error(
-          'Erro ao limpar backups em ${destination.name}',
-          e,
-          stackTrace,
-        );
-
-        await _log(
-          backupHistoryId,
-          'error',
-          'Erro ao limpar backups antigos em ${destination.name}: $e',
-        );
-
-        await _notificationService.sendWarning(
-          databaseName: destination.name,
-          message: 'Erro ao limpar backups antigos em ${destination.name}: $e',
-        );
-      }
-    }
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
-
+  /// Runs the scheduled backup immediately. Used both by local UI (Run now)
+  /// and by remote client (ScheduleMessageHandler). Same flow in both cases;
+  /// when triggered remotely, progress is streamed to the client via BackupProgressProvider.
   @override
   Future<rd.Result<void>> executeNow(String scheduleId) async {
     final result = await _scheduleRepository.getById(scheduleId);
@@ -893,7 +539,7 @@ class SchedulerService implements ISchedulerService {
     final result = await _scheduleRepository.getById(scheduleId);
 
     return result.fold((schedule) async {
-      final nextRunAt = _calculator.getNextRunTime(schedule);
+      final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
       if (nextRunAt != null) {
         await _scheduleRepository.update(
           schedule.copyWith(nextRunAt: nextRunAt),
@@ -963,6 +609,7 @@ class SchedulerService implements ISchedulerService {
   ///
   /// [timeout] Tempo máximo para aguardar (padrão: 5 minutos).
   /// Retorna `true` se todos os backups terminaram, `false` se timeout.
+  @override
   Future<bool> waitForRunningBackups({
     Duration timeout = const Duration(minutes: 5),
   }) async {

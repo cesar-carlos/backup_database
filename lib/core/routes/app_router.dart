@@ -48,6 +48,26 @@ final appRouter = GoRouter(
           name: RouteNames.settingsName,
           builder: (context, state) => const SettingsPage(),
         ),
+        GoRoute(
+          path: RouteNames.serverSettings,
+          name: RouteNames.serverSettingsName,
+          builder: (context, state) => const ServerSettingsPage(),
+        ),
+        GoRoute(
+          path: RouteNames.serverLogin,
+          name: RouteNames.serverLoginName,
+          builder: (context, state) => const ServerLoginPage(),
+        ),
+        GoRoute(
+          path: RouteNames.remoteSchedules,
+          name: RouteNames.remoteSchedulesName,
+          builder: (context, state) => const RemoteSchedulesPage(),
+        ),
+        GoRoute(
+          path: RouteNames.connectionLogs,
+          name: RouteNames.connectionLogsName,
+          builder: (context, state) => const ConnectionLogPage(),
+        ),
       ],
     ),
   ],

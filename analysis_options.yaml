@@ -38,3 +38,4 @@ analyzer:
     inference_failure_on_instance_creation: ignore
     inference_failure_on_untyped_parameter: ignore
     unused_catch_clause: ignore
+    lines_longer_than_80_chars: ignore

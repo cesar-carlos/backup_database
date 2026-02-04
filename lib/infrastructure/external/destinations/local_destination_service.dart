@@ -4,6 +4,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
@@ -14,6 +15,7 @@ class LocalDestinationService implements ILocalDestinationService {
     required String sourceFilePath,
     required LocalDestinationConfig config,
     String? customFileName,
+    UploadProgressCallback? onProgress,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -69,9 +71,14 @@ class LocalDestinationService implements ILocalDestinationService {
       final destinationPath = p.join(destinationDir, fileName);
 
       try {
-        final destinationFile = await sourceFile.copy(destinationPath);
+        await sourceFile.copyWithProgress(
+          destinationPath,
+          onProgress: onProgress,
+        );
+
         stopwatch.stop();
 
+        final destinationFile = File(destinationPath);
         final fileSize = await destinationFile.length();
         final sourceSize = await sourceFile.length();
         if (fileSize != sourceSize) {
@@ -123,7 +130,12 @@ class LocalDestinationService implements ILocalDestinationService {
       await testFile.writeAsString('test');
       await testFile.delete();
       return true;
-    } on Object catch (e) {
+    } on Object catch (e, stackTrace) {
+      LoggerService.debug(
+        'Falha ao verificar permissão de escrita em: $path',
+        e,
+        stackTrace,
+      );
       return false;
     }
   }
@@ -229,6 +241,44 @@ class LocalDestinationService implements ILocalDestinationService {
           originalError: e,
         ),
       );
+    }
+  }
+}
+
+extension FileCopyWithProgress on File {
+  static const int _chunkSize = 1024 * 1024; // 1MB chunks
+
+  Future<void> copyWithProgress(
+    String newPath, {
+    UploadProgressCallback? onProgress,
+  }) async {
+    final raf = await open();
+    final sink = File(newPath).openWrite();
+
+    try {
+      final fileSize = await raf.length();
+      var bytesCopied = 0;
+
+      while (bytesCopied < fileSize) {
+        final bytesToRead = _chunkSize < (fileSize - bytesCopied)
+            ? _chunkSize
+            : (fileSize - bytesCopied);
+        final buffer = List<int>.filled(bytesToRead, 0);
+
+        raf.setPosition(bytesCopied);
+        await raf.readInto(buffer, 0, bytesToRead);
+
+        sink.add(buffer);
+        bytesCopied += bytesToRead;
+
+        if (onProgress != null && fileSize > 0) {
+          final progress = bytesCopied / fileSize;
+          onProgress(progress);
+        }
+      }
+    } finally {
+      await raf.close();
+      await sink.close();
     }
   }
 }

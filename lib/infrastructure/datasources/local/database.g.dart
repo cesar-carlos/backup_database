@@ -1941,6 +1941,17 @@ class $BackupDestinationsTableTable extends BackupDestinationsTable
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _tempPathMeta = const VerificationMeta(
+    'tempPath',
+  );
+  @override
+  late final GeneratedColumn<String> tempPath = GeneratedColumn<String>(
+    'temp_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1970,6 +1981,7 @@ class $BackupDestinationsTableTable extends BackupDestinationsTable
     type,
     config,
     enabled,
+    tempPath,
     createdAt,
     updatedAt,
   ];
@@ -2020,6 +2032,12 @@ class $BackupDestinationsTableTable extends BackupDestinationsTable
         enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
       );
     }
+    if (data.containsKey('temp_path')) {
+      context.handle(
+        _tempPathMeta,
+        tempPath.isAcceptableOrUnknown(data['temp_path']!, _tempPathMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2068,6 +2086,10 @@ class $BackupDestinationsTableTable extends BackupDestinationsTable
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
       )!,
+      tempPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}temp_path'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -2092,6 +2114,7 @@ class BackupDestinationsTableData extends DataClass
   final String type;
   final String config;
   final bool enabled;
+  final String? tempPath;
   final DateTime createdAt;
   final DateTime updatedAt;
   const BackupDestinationsTableData({
@@ -2100,6 +2123,7 @@ class BackupDestinationsTableData extends DataClass
     required this.type,
     required this.config,
     required this.enabled,
+    this.tempPath,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -2111,6 +2135,9 @@ class BackupDestinationsTableData extends DataClass
     map['type'] = Variable<String>(type);
     map['config'] = Variable<String>(config);
     map['enabled'] = Variable<bool>(enabled);
+    if (!nullToAbsent || tempPath != null) {
+      map['temp_path'] = Variable<String>(tempPath);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -2123,6 +2150,9 @@ class BackupDestinationsTableData extends DataClass
       type: Value(type),
       config: Value(config),
       enabled: Value(enabled),
+      tempPath: tempPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tempPath),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -2139,6 +2169,7 @@ class BackupDestinationsTableData extends DataClass
       type: serializer.fromJson<String>(json['type']),
       config: serializer.fromJson<String>(json['config']),
       enabled: serializer.fromJson<bool>(json['enabled']),
+      tempPath: serializer.fromJson<String?>(json['tempPath']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -2152,6 +2183,7 @@ class BackupDestinationsTableData extends DataClass
       'type': serializer.toJson<String>(type),
       'config': serializer.toJson<String>(config),
       'enabled': serializer.toJson<bool>(enabled),
+      'tempPath': serializer.toJson<String?>(tempPath),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -2163,6 +2195,7 @@ class BackupDestinationsTableData extends DataClass
     String? type,
     String? config,
     bool? enabled,
+    Value<String?> tempPath = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => BackupDestinationsTableData(
@@ -2171,6 +2204,7 @@ class BackupDestinationsTableData extends DataClass
     type: type ?? this.type,
     config: config ?? this.config,
     enabled: enabled ?? this.enabled,
+    tempPath: tempPath.present ? tempPath.value : this.tempPath,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -2183,6 +2217,7 @@ class BackupDestinationsTableData extends DataClass
       type: data.type.present ? data.type.value : this.type,
       config: data.config.present ? data.config.value : this.config,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      tempPath: data.tempPath.present ? data.tempPath.value : this.tempPath,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -2196,6 +2231,7 @@ class BackupDestinationsTableData extends DataClass
           ..write('type: $type, ')
           ..write('config: $config, ')
           ..write('enabled: $enabled, ')
+          ..write('tempPath: $tempPath, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2203,8 +2239,16 @@ class BackupDestinationsTableData extends DataClass
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, type, config, enabled, createdAt, updatedAt);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    type,
+    config,
+    enabled,
+    tempPath,
+    createdAt,
+    updatedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2214,6 +2258,7 @@ class BackupDestinationsTableData extends DataClass
           other.type == this.type &&
           other.config == this.config &&
           other.enabled == this.enabled &&
+          other.tempPath == this.tempPath &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2225,6 +2270,7 @@ class BackupDestinationsTableCompanion
   final Value<String> type;
   final Value<String> config;
   final Value<bool> enabled;
+  final Value<String?> tempPath;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -2234,6 +2280,7 @@ class BackupDestinationsTableCompanion
     this.type = const Value.absent(),
     this.config = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.tempPath = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2244,6 +2291,7 @@ class BackupDestinationsTableCompanion
     required String type,
     required String config,
     this.enabled = const Value.absent(),
+    this.tempPath = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -2259,6 +2307,7 @@ class BackupDestinationsTableCompanion
     Expression<String>? type,
     Expression<String>? config,
     Expression<bool>? enabled,
+    Expression<String>? tempPath,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -2269,6 +2318,7 @@ class BackupDestinationsTableCompanion
       if (type != null) 'type': type,
       if (config != null) 'config': config,
       if (enabled != null) 'enabled': enabled,
+      if (tempPath != null) 'temp_path': tempPath,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -2281,6 +2331,7 @@ class BackupDestinationsTableCompanion
     Value<String>? type,
     Value<String>? config,
     Value<bool>? enabled,
+    Value<String?>? tempPath,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -2291,6 +2342,7 @@ class BackupDestinationsTableCompanion
       type: type ?? this.type,
       config: config ?? this.config,
       enabled: enabled ?? this.enabled,
+      tempPath: tempPath ?? this.tempPath,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -2315,6 +2367,9 @@ class BackupDestinationsTableCompanion
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
     }
+    if (tempPath.present) {
+      map['temp_path'] = Variable<String>(tempPath.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -2335,6 +2390,7 @@ class BackupDestinationsTableCompanion
           ..write('type: $type, ')
           ..write('config: $config, ')
           ..write('enabled: $enabled, ')
+          ..write('tempPath: $tempPath, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -6131,6 +6187,2424 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
   }
 }
 
+class $ServerCredentialsTableTable extends ServerCredentialsTable
+    with TableInfo<$ServerCredentialsTableTable, ServerCredentialsTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ServerCredentialsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<String> serverId = GeneratedColumn<String>(
+    'server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _passwordHashMeta = const VerificationMeta(
+    'passwordHash',
+  );
+  @override
+  late final GeneratedColumn<String> passwordHash = GeneratedColumn<String>(
+    'password_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isActiveMeta = const VerificationMeta(
+    'isActive',
+  );
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastUsedAtMeta = const VerificationMeta(
+    'lastUsedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastUsedAt = GeneratedColumn<DateTime>(
+    'last_used_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serverId,
+    passwordHash,
+    name,
+    isActive,
+    createdAt,
+    lastUsedAt,
+    description,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'server_credentials_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ServerCredentialsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_serverIdMeta);
+    }
+    if (data.containsKey('password_hash')) {
+      context.handle(
+        _passwordHashMeta,
+        passwordHash.isAcceptableOrUnknown(
+          data['password_hash']!,
+          _passwordHashMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_passwordHashMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('last_used_at')) {
+      context.handle(
+        _lastUsedAtMeta,
+        lastUsedAt.isAcceptableOrUnknown(
+          data['last_used_at']!,
+          _lastUsedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ServerCredentialsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ServerCredentialsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}server_id'],
+      )!,
+      passwordHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}password_hash'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      lastUsedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_used_at'],
+      ),
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+    );
+  }
+
+  @override
+  $ServerCredentialsTableTable createAlias(String alias) {
+    return $ServerCredentialsTableTable(attachedDatabase, alias);
+  }
+}
+
+class ServerCredentialsTableData extends DataClass
+    implements Insertable<ServerCredentialsTableData> {
+  final String id;
+  final String serverId;
+  final String passwordHash;
+  final String name;
+  final bool isActive;
+  final DateTime createdAt;
+  final DateTime? lastUsedAt;
+  final String? description;
+  const ServerCredentialsTableData({
+    required this.id,
+    required this.serverId,
+    required this.passwordHash,
+    required this.name,
+    required this.isActive,
+    required this.createdAt,
+    this.lastUsedAt,
+    this.description,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['server_id'] = Variable<String>(serverId);
+    map['password_hash'] = Variable<String>(passwordHash);
+    map['name'] = Variable<String>(name);
+    map['is_active'] = Variable<bool>(isActive);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || lastUsedAt != null) {
+      map['last_used_at'] = Variable<DateTime>(lastUsedAt);
+    }
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    return map;
+  }
+
+  ServerCredentialsTableCompanion toCompanion(bool nullToAbsent) {
+    return ServerCredentialsTableCompanion(
+      id: Value(id),
+      serverId: Value(serverId),
+      passwordHash: Value(passwordHash),
+      name: Value(name),
+      isActive: Value(isActive),
+      createdAt: Value(createdAt),
+      lastUsedAt: lastUsedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastUsedAt),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+    );
+  }
+
+  factory ServerCredentialsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ServerCredentialsTableData(
+      id: serializer.fromJson<String>(json['id']),
+      serverId: serializer.fromJson<String>(json['serverId']),
+      passwordHash: serializer.fromJson<String>(json['passwordHash']),
+      name: serializer.fromJson<String>(json['name']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      lastUsedAt: serializer.fromJson<DateTime?>(json['lastUsedAt']),
+      description: serializer.fromJson<String?>(json['description']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'serverId': serializer.toJson<String>(serverId),
+      'passwordHash': serializer.toJson<String>(passwordHash),
+      'name': serializer.toJson<String>(name),
+      'isActive': serializer.toJson<bool>(isActive),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'lastUsedAt': serializer.toJson<DateTime?>(lastUsedAt),
+      'description': serializer.toJson<String?>(description),
+    };
+  }
+
+  ServerCredentialsTableData copyWith({
+    String? id,
+    String? serverId,
+    String? passwordHash,
+    String? name,
+    bool? isActive,
+    DateTime? createdAt,
+    Value<DateTime?> lastUsedAt = const Value.absent(),
+    Value<String?> description = const Value.absent(),
+  }) => ServerCredentialsTableData(
+    id: id ?? this.id,
+    serverId: serverId ?? this.serverId,
+    passwordHash: passwordHash ?? this.passwordHash,
+    name: name ?? this.name,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt ?? this.createdAt,
+    lastUsedAt: lastUsedAt.present ? lastUsedAt.value : this.lastUsedAt,
+    description: description.present ? description.value : this.description,
+  );
+  ServerCredentialsTableData copyWithCompanion(
+    ServerCredentialsTableCompanion data,
+  ) {
+    return ServerCredentialsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      passwordHash: data.passwordHash.present
+          ? data.passwordHash.value
+          : this.passwordHash,
+      name: data.name.present ? data.name.value : this.name,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      lastUsedAt: data.lastUsedAt.present
+          ? data.lastUsedAt.value
+          : this.lastUsedAt,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServerCredentialsTableData(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('passwordHash: $passwordHash, ')
+          ..write('name: $name, ')
+          ..write('isActive: $isActive, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastUsedAt: $lastUsedAt, ')
+          ..write('description: $description')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    passwordHash,
+    name,
+    isActive,
+    createdAt,
+    lastUsedAt,
+    description,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ServerCredentialsTableData &&
+          other.id == this.id &&
+          other.serverId == this.serverId &&
+          other.passwordHash == this.passwordHash &&
+          other.name == this.name &&
+          other.isActive == this.isActive &&
+          other.createdAt == this.createdAt &&
+          other.lastUsedAt == this.lastUsedAt &&
+          other.description == this.description);
+}
+
+class ServerCredentialsTableCompanion
+    extends UpdateCompanion<ServerCredentialsTableData> {
+  final Value<String> id;
+  final Value<String> serverId;
+  final Value<String> passwordHash;
+  final Value<String> name;
+  final Value<bool> isActive;
+  final Value<DateTime> createdAt;
+  final Value<DateTime?> lastUsedAt;
+  final Value<String?> description;
+  final Value<int> rowid;
+  const ServerCredentialsTableCompanion({
+    this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.passwordHash = const Value.absent(),
+    this.name = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.lastUsedAt = const Value.absent(),
+    this.description = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ServerCredentialsTableCompanion.insert({
+    required String id,
+    required String serverId,
+    required String passwordHash,
+    required String name,
+    this.isActive = const Value.absent(),
+    required DateTime createdAt,
+    this.lastUsedAt = const Value.absent(),
+    this.description = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       serverId = Value(serverId),
+       passwordHash = Value(passwordHash),
+       name = Value(name),
+       createdAt = Value(createdAt);
+  static Insertable<ServerCredentialsTableData> custom({
+    Expression<String>? id,
+    Expression<String>? serverId,
+    Expression<String>? passwordHash,
+    Expression<String>? name,
+    Expression<bool>? isActive,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? lastUsedAt,
+    Expression<String>? description,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
+      if (passwordHash != null) 'password_hash': passwordHash,
+      if (name != null) 'name': name,
+      if (isActive != null) 'is_active': isActive,
+      if (createdAt != null) 'created_at': createdAt,
+      if (lastUsedAt != null) 'last_used_at': lastUsedAt,
+      if (description != null) 'description': description,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ServerCredentialsTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? serverId,
+    Value<String>? passwordHash,
+    Value<String>? name,
+    Value<bool>? isActive,
+    Value<DateTime>? createdAt,
+    Value<DateTime?>? lastUsedAt,
+    Value<String?>? description,
+    Value<int>? rowid,
+  }) {
+    return ServerCredentialsTableCompanion(
+      id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
+      passwordHash: passwordHash ?? this.passwordHash,
+      name: name ?? this.name,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+      description: description ?? this.description,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<String>(serverId.value);
+    }
+    if (passwordHash.present) {
+      map['password_hash'] = Variable<String>(passwordHash.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (lastUsedAt.present) {
+      map['last_used_at'] = Variable<DateTime>(lastUsedAt.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServerCredentialsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
+          ..write('passwordHash: $passwordHash, ')
+          ..write('name: $name, ')
+          ..write('isActive: $isActive, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('lastUsedAt: $lastUsedAt, ')
+          ..write('description: $description, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ConnectionLogsTableTable extends ConnectionLogsTable
+    with TableInfo<$ConnectionLogsTableTable, ConnectionLogsTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ConnectionLogsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clientHostMeta = const VerificationMeta(
+    'clientHost',
+  );
+  @override
+  late final GeneratedColumn<String> clientHost = GeneratedColumn<String>(
+    'client_host',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<String> serverId = GeneratedColumn<String>(
+    'server_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _successMeta = const VerificationMeta(
+    'success',
+  );
+  @override
+  late final GeneratedColumn<bool> success = GeneratedColumn<bool>(
+    'success',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("success" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _errorMessageMeta = const VerificationMeta(
+    'errorMessage',
+  );
+  @override
+  late final GeneratedColumn<String> errorMessage = GeneratedColumn<String>(
+    'error_message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _timestampMeta = const VerificationMeta(
+    'timestamp',
+  );
+  @override
+  late final GeneratedColumn<DateTime> timestamp = GeneratedColumn<DateTime>(
+    'timestamp',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clientHost,
+    serverId,
+    success,
+    errorMessage,
+    timestamp,
+    clientId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'connection_logs_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ConnectionLogsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('client_host')) {
+      context.handle(
+        _clientHostMeta,
+        clientHost.isAcceptableOrUnknown(data['client_host']!, _clientHostMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clientHostMeta);
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    }
+    if (data.containsKey('success')) {
+      context.handle(
+        _successMeta,
+        success.isAcceptableOrUnknown(data['success']!, _successMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_successMeta);
+    }
+    if (data.containsKey('error_message')) {
+      context.handle(
+        _errorMessageMeta,
+        errorMessage.isAcceptableOrUnknown(
+          data['error_message']!,
+          _errorMessageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('timestamp')) {
+      context.handle(
+        _timestampMeta,
+        timestamp.isAcceptableOrUnknown(data['timestamp']!, _timestampMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_timestampMeta);
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ConnectionLogsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ConnectionLogsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clientHost: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_host'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}server_id'],
+      ),
+      success: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}success'],
+      )!,
+      errorMessage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_message'],
+      ),
+      timestamp: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}timestamp'],
+      )!,
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      ),
+    );
+  }
+
+  @override
+  $ConnectionLogsTableTable createAlias(String alias) {
+    return $ConnectionLogsTableTable(attachedDatabase, alias);
+  }
+}
+
+class ConnectionLogsTableData extends DataClass
+    implements Insertable<ConnectionLogsTableData> {
+  final String id;
+  final String clientHost;
+  final String? serverId;
+  final bool success;
+  final String? errorMessage;
+  final DateTime timestamp;
+  final String? clientId;
+  const ConnectionLogsTableData({
+    required this.id,
+    required this.clientHost,
+    this.serverId,
+    required this.success,
+    this.errorMessage,
+    required this.timestamp,
+    this.clientId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['client_host'] = Variable<String>(clientHost);
+    if (!nullToAbsent || serverId != null) {
+      map['server_id'] = Variable<String>(serverId);
+    }
+    map['success'] = Variable<bool>(success);
+    if (!nullToAbsent || errorMessage != null) {
+      map['error_message'] = Variable<String>(errorMessage);
+    }
+    map['timestamp'] = Variable<DateTime>(timestamp);
+    if (!nullToAbsent || clientId != null) {
+      map['client_id'] = Variable<String>(clientId);
+    }
+    return map;
+  }
+
+  ConnectionLogsTableCompanion toCompanion(bool nullToAbsent) {
+    return ConnectionLogsTableCompanion(
+      id: Value(id),
+      clientHost: Value(clientHost),
+      serverId: serverId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverId),
+      success: Value(success),
+      errorMessage: errorMessage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorMessage),
+      timestamp: Value(timestamp),
+      clientId: clientId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientId),
+    );
+  }
+
+  factory ConnectionLogsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ConnectionLogsTableData(
+      id: serializer.fromJson<String>(json['id']),
+      clientHost: serializer.fromJson<String>(json['clientHost']),
+      serverId: serializer.fromJson<String?>(json['serverId']),
+      success: serializer.fromJson<bool>(json['success']),
+      errorMessage: serializer.fromJson<String?>(json['errorMessage']),
+      timestamp: serializer.fromJson<DateTime>(json['timestamp']),
+      clientId: serializer.fromJson<String?>(json['clientId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clientHost': serializer.toJson<String>(clientHost),
+      'serverId': serializer.toJson<String?>(serverId),
+      'success': serializer.toJson<bool>(success),
+      'errorMessage': serializer.toJson<String?>(errorMessage),
+      'timestamp': serializer.toJson<DateTime>(timestamp),
+      'clientId': serializer.toJson<String?>(clientId),
+    };
+  }
+
+  ConnectionLogsTableData copyWith({
+    String? id,
+    String? clientHost,
+    Value<String?> serverId = const Value.absent(),
+    bool? success,
+    Value<String?> errorMessage = const Value.absent(),
+    DateTime? timestamp,
+    Value<String?> clientId = const Value.absent(),
+  }) => ConnectionLogsTableData(
+    id: id ?? this.id,
+    clientHost: clientHost ?? this.clientHost,
+    serverId: serverId.present ? serverId.value : this.serverId,
+    success: success ?? this.success,
+    errorMessage: errorMessage.present ? errorMessage.value : this.errorMessage,
+    timestamp: timestamp ?? this.timestamp,
+    clientId: clientId.present ? clientId.value : this.clientId,
+  );
+  ConnectionLogsTableData copyWithCompanion(ConnectionLogsTableCompanion data) {
+    return ConnectionLogsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      clientHost: data.clientHost.present
+          ? data.clientHost.value
+          : this.clientHost,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      success: data.success.present ? data.success.value : this.success,
+      errorMessage: data.errorMessage.present
+          ? data.errorMessage.value
+          : this.errorMessage,
+      timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ConnectionLogsTableData(')
+          ..write('id: $id, ')
+          ..write('clientHost: $clientHost, ')
+          ..write('serverId: $serverId, ')
+          ..write('success: $success, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('timestamp: $timestamp, ')
+          ..write('clientId: $clientId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    clientHost,
+    serverId,
+    success,
+    errorMessage,
+    timestamp,
+    clientId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ConnectionLogsTableData &&
+          other.id == this.id &&
+          other.clientHost == this.clientHost &&
+          other.serverId == this.serverId &&
+          other.success == this.success &&
+          other.errorMessage == this.errorMessage &&
+          other.timestamp == this.timestamp &&
+          other.clientId == this.clientId);
+}
+
+class ConnectionLogsTableCompanion
+    extends UpdateCompanion<ConnectionLogsTableData> {
+  final Value<String> id;
+  final Value<String> clientHost;
+  final Value<String?> serverId;
+  final Value<bool> success;
+  final Value<String?> errorMessage;
+  final Value<DateTime> timestamp;
+  final Value<String?> clientId;
+  final Value<int> rowid;
+  const ConnectionLogsTableCompanion({
+    this.id = const Value.absent(),
+    this.clientHost = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.success = const Value.absent(),
+    this.errorMessage = const Value.absent(),
+    this.timestamp = const Value.absent(),
+    this.clientId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ConnectionLogsTableCompanion.insert({
+    required String id,
+    required String clientHost,
+    this.serverId = const Value.absent(),
+    required bool success,
+    this.errorMessage = const Value.absent(),
+    required DateTime timestamp,
+    this.clientId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clientHost = Value(clientHost),
+       success = Value(success),
+       timestamp = Value(timestamp);
+  static Insertable<ConnectionLogsTableData> custom({
+    Expression<String>? id,
+    Expression<String>? clientHost,
+    Expression<String>? serverId,
+    Expression<bool>? success,
+    Expression<String>? errorMessage,
+    Expression<DateTime>? timestamp,
+    Expression<String>? clientId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clientHost != null) 'client_host': clientHost,
+      if (serverId != null) 'server_id': serverId,
+      if (success != null) 'success': success,
+      if (errorMessage != null) 'error_message': errorMessage,
+      if (timestamp != null) 'timestamp': timestamp,
+      if (clientId != null) 'client_id': clientId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ConnectionLogsTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clientHost,
+    Value<String?>? serverId,
+    Value<bool>? success,
+    Value<String?>? errorMessage,
+    Value<DateTime>? timestamp,
+    Value<String?>? clientId,
+    Value<int>? rowid,
+  }) {
+    return ConnectionLogsTableCompanion(
+      id: id ?? this.id,
+      clientHost: clientHost ?? this.clientHost,
+      serverId: serverId ?? this.serverId,
+      success: success ?? this.success,
+      errorMessage: errorMessage ?? this.errorMessage,
+      timestamp: timestamp ?? this.timestamp,
+      clientId: clientId ?? this.clientId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clientHost.present) {
+      map['client_host'] = Variable<String>(clientHost.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<String>(serverId.value);
+    }
+    if (success.present) {
+      map['success'] = Variable<bool>(success.value);
+    }
+    if (errorMessage.present) {
+      map['error_message'] = Variable<String>(errorMessage.value);
+    }
+    if (timestamp.present) {
+      map['timestamp'] = Variable<DateTime>(timestamp.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ConnectionLogsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('clientHost: $clientHost, ')
+          ..write('serverId: $serverId, ')
+          ..write('success: $success, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('timestamp: $timestamp, ')
+          ..write('clientId: $clientId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ServerConnectionsTableTable extends ServerConnectionsTable
+    with TableInfo<$ServerConnectionsTableTable, ServerConnectionsTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ServerConnectionsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<String> serverId = GeneratedColumn<String>(
+    'server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hostMeta = const VerificationMeta('host');
+  @override
+  late final GeneratedColumn<String> host = GeneratedColumn<String>(
+    'host',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _portMeta = const VerificationMeta('port');
+  @override
+  late final GeneratedColumn<int> port = GeneratedColumn<int>(
+    'port',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(9527),
+  );
+  static const VerificationMeta _passwordMeta = const VerificationMeta(
+    'password',
+  );
+  @override
+  late final GeneratedColumn<String> password = GeneratedColumn<String>(
+    'password',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isOnlineMeta = const VerificationMeta(
+    'isOnline',
+  );
+  @override
+  late final GeneratedColumn<bool> isOnline = GeneratedColumn<bool>(
+    'is_online',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_online" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lastConnectedAtMeta = const VerificationMeta(
+    'lastConnectedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastConnectedAt =
+      GeneratedColumn<DateTime>(
+        'last_connected_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    serverId,
+    host,
+    port,
+    password,
+    isOnline,
+    lastConnectedAt,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'server_connections_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ServerConnectionsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_serverIdMeta);
+    }
+    if (data.containsKey('host')) {
+      context.handle(
+        _hostMeta,
+        host.isAcceptableOrUnknown(data['host']!, _hostMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hostMeta);
+    }
+    if (data.containsKey('port')) {
+      context.handle(
+        _portMeta,
+        port.isAcceptableOrUnknown(data['port']!, _portMeta),
+      );
+    }
+    if (data.containsKey('password')) {
+      context.handle(
+        _passwordMeta,
+        password.isAcceptableOrUnknown(data['password']!, _passwordMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_passwordMeta);
+    }
+    if (data.containsKey('is_online')) {
+      context.handle(
+        _isOnlineMeta,
+        isOnline.isAcceptableOrUnknown(data['is_online']!, _isOnlineMeta),
+      );
+    }
+    if (data.containsKey('last_connected_at')) {
+      context.handle(
+        _lastConnectedAtMeta,
+        lastConnectedAt.isAcceptableOrUnknown(
+          data['last_connected_at']!,
+          _lastConnectedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ServerConnectionsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ServerConnectionsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}server_id'],
+      )!,
+      host: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}host'],
+      )!,
+      port: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}port'],
+      )!,
+      password: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}password'],
+      )!,
+      isOnline: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_online'],
+      )!,
+      lastConnectedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_connected_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ServerConnectionsTableTable createAlias(String alias) {
+    return $ServerConnectionsTableTable(attachedDatabase, alias);
+  }
+}
+
+class ServerConnectionsTableData extends DataClass
+    implements Insertable<ServerConnectionsTableData> {
+  final String id;
+  final String name;
+  final String serverId;
+  final String host;
+  final int port;
+  final String password;
+  final bool isOnline;
+  final DateTime? lastConnectedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const ServerConnectionsTableData({
+    required this.id,
+    required this.name,
+    required this.serverId,
+    required this.host,
+    required this.port,
+    required this.password,
+    required this.isOnline,
+    this.lastConnectedAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['server_id'] = Variable<String>(serverId);
+    map['host'] = Variable<String>(host);
+    map['port'] = Variable<int>(port);
+    map['password'] = Variable<String>(password);
+    map['is_online'] = Variable<bool>(isOnline);
+    if (!nullToAbsent || lastConnectedAt != null) {
+      map['last_connected_at'] = Variable<DateTime>(lastConnectedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  ServerConnectionsTableCompanion toCompanion(bool nullToAbsent) {
+    return ServerConnectionsTableCompanion(
+      id: Value(id),
+      name: Value(name),
+      serverId: Value(serverId),
+      host: Value(host),
+      port: Value(port),
+      password: Value(password),
+      isOnline: Value(isOnline),
+      lastConnectedAt: lastConnectedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastConnectedAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory ServerConnectionsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ServerConnectionsTableData(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      serverId: serializer.fromJson<String>(json['serverId']),
+      host: serializer.fromJson<String>(json['host']),
+      port: serializer.fromJson<int>(json['port']),
+      password: serializer.fromJson<String>(json['password']),
+      isOnline: serializer.fromJson<bool>(json['isOnline']),
+      lastConnectedAt: serializer.fromJson<DateTime?>(json['lastConnectedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'serverId': serializer.toJson<String>(serverId),
+      'host': serializer.toJson<String>(host),
+      'port': serializer.toJson<int>(port),
+      'password': serializer.toJson<String>(password),
+      'isOnline': serializer.toJson<bool>(isOnline),
+      'lastConnectedAt': serializer.toJson<DateTime?>(lastConnectedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  ServerConnectionsTableData copyWith({
+    String? id,
+    String? name,
+    String? serverId,
+    String? host,
+    int? port,
+    String? password,
+    bool? isOnline,
+    Value<DateTime?> lastConnectedAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => ServerConnectionsTableData(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    serverId: serverId ?? this.serverId,
+    host: host ?? this.host,
+    port: port ?? this.port,
+    password: password ?? this.password,
+    isOnline: isOnline ?? this.isOnline,
+    lastConnectedAt: lastConnectedAt.present
+        ? lastConnectedAt.value
+        : this.lastConnectedAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  ServerConnectionsTableData copyWithCompanion(
+    ServerConnectionsTableCompanion data,
+  ) {
+    return ServerConnectionsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
+      host: data.host.present ? data.host.value : this.host,
+      port: data.port.present ? data.port.value : this.port,
+      password: data.password.present ? data.password.value : this.password,
+      isOnline: data.isOnline.present ? data.isOnline.value : this.isOnline,
+      lastConnectedAt: data.lastConnectedAt.present
+          ? data.lastConnectedAt.value
+          : this.lastConnectedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServerConnectionsTableData(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('serverId: $serverId, ')
+          ..write('host: $host, ')
+          ..write('port: $port, ')
+          ..write('password: $password, ')
+          ..write('isOnline: $isOnline, ')
+          ..write('lastConnectedAt: $lastConnectedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    serverId,
+    host,
+    port,
+    password,
+    isOnline,
+    lastConnectedAt,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ServerConnectionsTableData &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.serverId == this.serverId &&
+          other.host == this.host &&
+          other.port == this.port &&
+          other.password == this.password &&
+          other.isOnline == this.isOnline &&
+          other.lastConnectedAt == this.lastConnectedAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class ServerConnectionsTableCompanion
+    extends UpdateCompanion<ServerConnectionsTableData> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> serverId;
+  final Value<String> host;
+  final Value<int> port;
+  final Value<String> password;
+  final Value<bool> isOnline;
+  final Value<DateTime?> lastConnectedAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const ServerConnectionsTableCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.serverId = const Value.absent(),
+    this.host = const Value.absent(),
+    this.port = const Value.absent(),
+    this.password = const Value.absent(),
+    this.isOnline = const Value.absent(),
+    this.lastConnectedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ServerConnectionsTableCompanion.insert({
+    required String id,
+    required String name,
+    required String serverId,
+    required String host,
+    this.port = const Value.absent(),
+    required String password,
+    this.isOnline = const Value.absent(),
+    this.lastConnectedAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       serverId = Value(serverId),
+       host = Value(host),
+       password = Value(password),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<ServerConnectionsTableData> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? serverId,
+    Expression<String>? host,
+    Expression<int>? port,
+    Expression<String>? password,
+    Expression<bool>? isOnline,
+    Expression<DateTime>? lastConnectedAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (serverId != null) 'server_id': serverId,
+      if (host != null) 'host': host,
+      if (port != null) 'port': port,
+      if (password != null) 'password': password,
+      if (isOnline != null) 'is_online': isOnline,
+      if (lastConnectedAt != null) 'last_connected_at': lastConnectedAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ServerConnectionsTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? serverId,
+    Value<String>? host,
+    Value<int>? port,
+    Value<String>? password,
+    Value<bool>? isOnline,
+    Value<DateTime?>? lastConnectedAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return ServerConnectionsTableCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      serverId: serverId ?? this.serverId,
+      host: host ?? this.host,
+      port: port ?? this.port,
+      password: password ?? this.password,
+      isOnline: isOnline ?? this.isOnline,
+      lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<String>(serverId.value);
+    }
+    if (host.present) {
+      map['host'] = Variable<String>(host.value);
+    }
+    if (port.present) {
+      map['port'] = Variable<int>(port.value);
+    }
+    if (password.present) {
+      map['password'] = Variable<String>(password.value);
+    }
+    if (isOnline.present) {
+      map['is_online'] = Variable<bool>(isOnline.value);
+    }
+    if (lastConnectedAt.present) {
+      map['last_connected_at'] = Variable<DateTime>(lastConnectedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServerConnectionsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('serverId: $serverId, ')
+          ..write('host: $host, ')
+          ..write('port: $port, ')
+          ..write('password: $password, ')
+          ..write('isOnline: $isOnline, ')
+          ..write('lastConnectedAt: $lastConnectedAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FileTransfersTableTable extends FileTransfersTable
+    with TableInfo<$FileTransfersTableTable, FileTransfersTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FileTransfersTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scheduleIdMeta = const VerificationMeta(
+    'scheduleId',
+  );
+  @override
+  late final GeneratedColumn<String> scheduleId = GeneratedColumn<String>(
+    'schedule_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fileNameMeta = const VerificationMeta(
+    'fileName',
+  );
+  @override
+  late final GeneratedColumn<String> fileName = GeneratedColumn<String>(
+    'file_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fileSizeMeta = const VerificationMeta(
+    'fileSize',
+  );
+  @override
+  late final GeneratedColumn<int> fileSize = GeneratedColumn<int>(
+    'file_size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currentChunkMeta = const VerificationMeta(
+    'currentChunk',
+  );
+  @override
+  late final GeneratedColumn<int> currentChunk = GeneratedColumn<int>(
+    'current_chunk',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _totalChunksMeta = const VerificationMeta(
+    'totalChunks',
+  );
+  @override
+  late final GeneratedColumn<int> totalChunks = GeneratedColumn<int>(
+    'total_chunks',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _errorMessageMeta = const VerificationMeta(
+    'errorMessage',
+  );
+  @override
+  late final GeneratedColumn<String> errorMessage = GeneratedColumn<String>(
+    'error_message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> completedAt = GeneratedColumn<DateTime>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourcePathMeta = const VerificationMeta(
+    'sourcePath',
+  );
+  @override
+  late final GeneratedColumn<String> sourcePath = GeneratedColumn<String>(
+    'source_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _destinationPathMeta = const VerificationMeta(
+    'destinationPath',
+  );
+  @override
+  late final GeneratedColumn<String> destinationPath = GeneratedColumn<String>(
+    'destination_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _checksumMeta = const VerificationMeta(
+    'checksum',
+  );
+  @override
+  late final GeneratedColumn<String> checksum = GeneratedColumn<String>(
+    'checksum',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    scheduleId,
+    fileName,
+    fileSize,
+    currentChunk,
+    totalChunks,
+    status,
+    errorMessage,
+    startedAt,
+    completedAt,
+    sourcePath,
+    destinationPath,
+    checksum,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'file_transfers_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FileTransfersTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('schedule_id')) {
+      context.handle(
+        _scheduleIdMeta,
+        scheduleId.isAcceptableOrUnknown(data['schedule_id']!, _scheduleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scheduleIdMeta);
+    }
+    if (data.containsKey('file_name')) {
+      context.handle(
+        _fileNameMeta,
+        fileName.isAcceptableOrUnknown(data['file_name']!, _fileNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileNameMeta);
+    }
+    if (data.containsKey('file_size')) {
+      context.handle(
+        _fileSizeMeta,
+        fileSize.isAcceptableOrUnknown(data['file_size']!, _fileSizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileSizeMeta);
+    }
+    if (data.containsKey('current_chunk')) {
+      context.handle(
+        _currentChunkMeta,
+        currentChunk.isAcceptableOrUnknown(
+          data['current_chunk']!,
+          _currentChunkMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentChunkMeta);
+    }
+    if (data.containsKey('total_chunks')) {
+      context.handle(
+        _totalChunksMeta,
+        totalChunks.isAcceptableOrUnknown(
+          data['total_chunks']!,
+          _totalChunksMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_totalChunksMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('error_message')) {
+      context.handle(
+        _errorMessageMeta,
+        errorMessage.isAcceptableOrUnknown(
+          data['error_message']!,
+          _errorMessageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_path')) {
+      context.handle(
+        _sourcePathMeta,
+        sourcePath.isAcceptableOrUnknown(data['source_path']!, _sourcePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourcePathMeta);
+    }
+    if (data.containsKey('destination_path')) {
+      context.handle(
+        _destinationPathMeta,
+        destinationPath.isAcceptableOrUnknown(
+          data['destination_path']!,
+          _destinationPathMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_destinationPathMeta);
+    }
+    if (data.containsKey('checksum')) {
+      context.handle(
+        _checksumMeta,
+        checksum.isAcceptableOrUnknown(data['checksum']!, _checksumMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_checksumMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FileTransfersTableData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FileTransfersTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      scheduleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}schedule_id'],
+      )!,
+      fileName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_name'],
+      )!,
+      fileSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}file_size'],
+      )!,
+      currentChunk: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}current_chunk'],
+      )!,
+      totalChunks: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total_chunks'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      errorMessage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_message'],
+      ),
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      ),
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}completed_at'],
+      ),
+      sourcePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_path'],
+      )!,
+      destinationPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}destination_path'],
+      )!,
+      checksum: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}checksum'],
+      )!,
+    );
+  }
+
+  @override
+  $FileTransfersTableTable createAlias(String alias) {
+    return $FileTransfersTableTable(attachedDatabase, alias);
+  }
+}
+
+class FileTransfersTableData extends DataClass
+    implements Insertable<FileTransfersTableData> {
+  final String id;
+  final String scheduleId;
+  final String fileName;
+  final int fileSize;
+  final int currentChunk;
+  final int totalChunks;
+  final String status;
+  final String? errorMessage;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final String sourcePath;
+  final String destinationPath;
+  final String checksum;
+  const FileTransfersTableData({
+    required this.id,
+    required this.scheduleId,
+    required this.fileName,
+    required this.fileSize,
+    required this.currentChunk,
+    required this.totalChunks,
+    required this.status,
+    this.errorMessage,
+    this.startedAt,
+    this.completedAt,
+    required this.sourcePath,
+    required this.destinationPath,
+    required this.checksum,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['schedule_id'] = Variable<String>(scheduleId);
+    map['file_name'] = Variable<String>(fileName);
+    map['file_size'] = Variable<int>(fileSize);
+    map['current_chunk'] = Variable<int>(currentChunk);
+    map['total_chunks'] = Variable<int>(totalChunks);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || errorMessage != null) {
+      map['error_message'] = Variable<String>(errorMessage);
+    }
+    if (!nullToAbsent || startedAt != null) {
+      map['started_at'] = Variable<DateTime>(startedAt);
+    }
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    map['source_path'] = Variable<String>(sourcePath);
+    map['destination_path'] = Variable<String>(destinationPath);
+    map['checksum'] = Variable<String>(checksum);
+    return map;
+  }
+
+  FileTransfersTableCompanion toCompanion(bool nullToAbsent) {
+    return FileTransfersTableCompanion(
+      id: Value(id),
+      scheduleId: Value(scheduleId),
+      fileName: Value(fileName),
+      fileSize: Value(fileSize),
+      currentChunk: Value(currentChunk),
+      totalChunks: Value(totalChunks),
+      status: Value(status),
+      errorMessage: errorMessage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorMessage),
+      startedAt: startedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startedAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+      sourcePath: Value(sourcePath),
+      destinationPath: Value(destinationPath),
+      checksum: Value(checksum),
+    );
+  }
+
+  factory FileTransfersTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FileTransfersTableData(
+      id: serializer.fromJson<String>(json['id']),
+      scheduleId: serializer.fromJson<String>(json['scheduleId']),
+      fileName: serializer.fromJson<String>(json['fileName']),
+      fileSize: serializer.fromJson<int>(json['fileSize']),
+      currentChunk: serializer.fromJson<int>(json['currentChunk']),
+      totalChunks: serializer.fromJson<int>(json['totalChunks']),
+      status: serializer.fromJson<String>(json['status']),
+      errorMessage: serializer.fromJson<String?>(json['errorMessage']),
+      startedAt: serializer.fromJson<DateTime?>(json['startedAt']),
+      completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+      sourcePath: serializer.fromJson<String>(json['sourcePath']),
+      destinationPath: serializer.fromJson<String>(json['destinationPath']),
+      checksum: serializer.fromJson<String>(json['checksum']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'scheduleId': serializer.toJson<String>(scheduleId),
+      'fileName': serializer.toJson<String>(fileName),
+      'fileSize': serializer.toJson<int>(fileSize),
+      'currentChunk': serializer.toJson<int>(currentChunk),
+      'totalChunks': serializer.toJson<int>(totalChunks),
+      'status': serializer.toJson<String>(status),
+      'errorMessage': serializer.toJson<String?>(errorMessage),
+      'startedAt': serializer.toJson<DateTime?>(startedAt),
+      'completedAt': serializer.toJson<DateTime?>(completedAt),
+      'sourcePath': serializer.toJson<String>(sourcePath),
+      'destinationPath': serializer.toJson<String>(destinationPath),
+      'checksum': serializer.toJson<String>(checksum),
+    };
+  }
+
+  FileTransfersTableData copyWith({
+    String? id,
+    String? scheduleId,
+    String? fileName,
+    int? fileSize,
+    int? currentChunk,
+    int? totalChunks,
+    String? status,
+    Value<String?> errorMessage = const Value.absent(),
+    Value<DateTime?> startedAt = const Value.absent(),
+    Value<DateTime?> completedAt = const Value.absent(),
+    String? sourcePath,
+    String? destinationPath,
+    String? checksum,
+  }) => FileTransfersTableData(
+    id: id ?? this.id,
+    scheduleId: scheduleId ?? this.scheduleId,
+    fileName: fileName ?? this.fileName,
+    fileSize: fileSize ?? this.fileSize,
+    currentChunk: currentChunk ?? this.currentChunk,
+    totalChunks: totalChunks ?? this.totalChunks,
+    status: status ?? this.status,
+    errorMessage: errorMessage.present ? errorMessage.value : this.errorMessage,
+    startedAt: startedAt.present ? startedAt.value : this.startedAt,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+    sourcePath: sourcePath ?? this.sourcePath,
+    destinationPath: destinationPath ?? this.destinationPath,
+    checksum: checksum ?? this.checksum,
+  );
+  FileTransfersTableData copyWithCompanion(FileTransfersTableCompanion data) {
+    return FileTransfersTableData(
+      id: data.id.present ? data.id.value : this.id,
+      scheduleId: data.scheduleId.present
+          ? data.scheduleId.value
+          : this.scheduleId,
+      fileName: data.fileName.present ? data.fileName.value : this.fileName,
+      fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
+      currentChunk: data.currentChunk.present
+          ? data.currentChunk.value
+          : this.currentChunk,
+      totalChunks: data.totalChunks.present
+          ? data.totalChunks.value
+          : this.totalChunks,
+      status: data.status.present ? data.status.value : this.status,
+      errorMessage: data.errorMessage.present
+          ? data.errorMessage.value
+          : this.errorMessage,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+      sourcePath: data.sourcePath.present
+          ? data.sourcePath.value
+          : this.sourcePath,
+      destinationPath: data.destinationPath.present
+          ? data.destinationPath.value
+          : this.destinationPath,
+      checksum: data.checksum.present ? data.checksum.value : this.checksum,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FileTransfersTableData(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('fileName: $fileName, ')
+          ..write('fileSize: $fileSize, ')
+          ..write('currentChunk: $currentChunk, ')
+          ..write('totalChunks: $totalChunks, ')
+          ..write('status: $status, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('sourcePath: $sourcePath, ')
+          ..write('destinationPath: $destinationPath, ')
+          ..write('checksum: $checksum')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    scheduleId,
+    fileName,
+    fileSize,
+    currentChunk,
+    totalChunks,
+    status,
+    errorMessage,
+    startedAt,
+    completedAt,
+    sourcePath,
+    destinationPath,
+    checksum,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FileTransfersTableData &&
+          other.id == this.id &&
+          other.scheduleId == this.scheduleId &&
+          other.fileName == this.fileName &&
+          other.fileSize == this.fileSize &&
+          other.currentChunk == this.currentChunk &&
+          other.totalChunks == this.totalChunks &&
+          other.status == this.status &&
+          other.errorMessage == this.errorMessage &&
+          other.startedAt == this.startedAt &&
+          other.completedAt == this.completedAt &&
+          other.sourcePath == this.sourcePath &&
+          other.destinationPath == this.destinationPath &&
+          other.checksum == this.checksum);
+}
+
+class FileTransfersTableCompanion
+    extends UpdateCompanion<FileTransfersTableData> {
+  final Value<String> id;
+  final Value<String> scheduleId;
+  final Value<String> fileName;
+  final Value<int> fileSize;
+  final Value<int> currentChunk;
+  final Value<int> totalChunks;
+  final Value<String> status;
+  final Value<String?> errorMessage;
+  final Value<DateTime?> startedAt;
+  final Value<DateTime?> completedAt;
+  final Value<String> sourcePath;
+  final Value<String> destinationPath;
+  final Value<String> checksum;
+  final Value<int> rowid;
+  const FileTransfersTableCompanion({
+    this.id = const Value.absent(),
+    this.scheduleId = const Value.absent(),
+    this.fileName = const Value.absent(),
+    this.fileSize = const Value.absent(),
+    this.currentChunk = const Value.absent(),
+    this.totalChunks = const Value.absent(),
+    this.status = const Value.absent(),
+    this.errorMessage = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.sourcePath = const Value.absent(),
+    this.destinationPath = const Value.absent(),
+    this.checksum = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FileTransfersTableCompanion.insert({
+    required String id,
+    required String scheduleId,
+    required String fileName,
+    required int fileSize,
+    required int currentChunk,
+    required int totalChunks,
+    required String status,
+    this.errorMessage = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    required String sourcePath,
+    required String destinationPath,
+    required String checksum,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       scheduleId = Value(scheduleId),
+       fileName = Value(fileName),
+       fileSize = Value(fileSize),
+       currentChunk = Value(currentChunk),
+       totalChunks = Value(totalChunks),
+       status = Value(status),
+       sourcePath = Value(sourcePath),
+       destinationPath = Value(destinationPath),
+       checksum = Value(checksum);
+  static Insertable<FileTransfersTableData> custom({
+    Expression<String>? id,
+    Expression<String>? scheduleId,
+    Expression<String>? fileName,
+    Expression<int>? fileSize,
+    Expression<int>? currentChunk,
+    Expression<int>? totalChunks,
+    Expression<String>? status,
+    Expression<String>? errorMessage,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? completedAt,
+    Expression<String>? sourcePath,
+    Expression<String>? destinationPath,
+    Expression<String>? checksum,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (scheduleId != null) 'schedule_id': scheduleId,
+      if (fileName != null) 'file_name': fileName,
+      if (fileSize != null) 'file_size': fileSize,
+      if (currentChunk != null) 'current_chunk': currentChunk,
+      if (totalChunks != null) 'total_chunks': totalChunks,
+      if (status != null) 'status': status,
+      if (errorMessage != null) 'error_message': errorMessage,
+      if (startedAt != null) 'started_at': startedAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (sourcePath != null) 'source_path': sourcePath,
+      if (destinationPath != null) 'destination_path': destinationPath,
+      if (checksum != null) 'checksum': checksum,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FileTransfersTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? scheduleId,
+    Value<String>? fileName,
+    Value<int>? fileSize,
+    Value<int>? currentChunk,
+    Value<int>? totalChunks,
+    Value<String>? status,
+    Value<String?>? errorMessage,
+    Value<DateTime?>? startedAt,
+    Value<DateTime?>? completedAt,
+    Value<String>? sourcePath,
+    Value<String>? destinationPath,
+    Value<String>? checksum,
+    Value<int>? rowid,
+  }) {
+    return FileTransfersTableCompanion(
+      id: id ?? this.id,
+      scheduleId: scheduleId ?? this.scheduleId,
+      fileName: fileName ?? this.fileName,
+      fileSize: fileSize ?? this.fileSize,
+      currentChunk: currentChunk ?? this.currentChunk,
+      totalChunks: totalChunks ?? this.totalChunks,
+      status: status ?? this.status,
+      errorMessage: errorMessage ?? this.errorMessage,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      sourcePath: sourcePath ?? this.sourcePath,
+      destinationPath: destinationPath ?? this.destinationPath,
+      checksum: checksum ?? this.checksum,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (scheduleId.present) {
+      map['schedule_id'] = Variable<String>(scheduleId.value);
+    }
+    if (fileName.present) {
+      map['file_name'] = Variable<String>(fileName.value);
+    }
+    if (fileSize.present) {
+      map['file_size'] = Variable<int>(fileSize.value);
+    }
+    if (currentChunk.present) {
+      map['current_chunk'] = Variable<int>(currentChunk.value);
+    }
+    if (totalChunks.present) {
+      map['total_chunks'] = Variable<int>(totalChunks.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (errorMessage.present) {
+      map['error_message'] = Variable<String>(errorMessage.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<DateTime>(completedAt.value);
+    }
+    if (sourcePath.present) {
+      map['source_path'] = Variable<String>(sourcePath.value);
+    }
+    if (destinationPath.present) {
+      map['destination_path'] = Variable<String>(destinationPath.value);
+    }
+    if (checksum.present) {
+      map['checksum'] = Variable<String>(checksum.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FileTransfersTableCompanion(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('fileName: $fileName, ')
+          ..write('fileSize: $fileSize, ')
+          ..write('currentChunk: $currentChunk, ')
+          ..write('totalChunks: $totalChunks, ')
+          ..write('status: $status, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('sourcePath: $sourcePath, ')
+          ..write('destinationPath: $destinationPath, ')
+          ..write('checksum: $checksum, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6151,6 +8625,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $EmailConfigsTableTable emailConfigsTable =
       $EmailConfigsTableTable(this);
   late final $LicensesTableTable licensesTable = $LicensesTableTable(this);
+  late final $ServerCredentialsTableTable serverCredentialsTable =
+      $ServerCredentialsTableTable(this);
+  late final $ConnectionLogsTableTable connectionLogsTable =
+      $ConnectionLogsTableTable(this);
+  late final $ServerConnectionsTableTable serverConnectionsTable =
+      $ServerConnectionsTableTable(this);
+  late final $FileTransfersTableTable fileTransfersTable =
+      $FileTransfersTableTable(this);
   late final SqlServerConfigDao sqlServerConfigDao = SqlServerConfigDao(
     this as AppDatabase,
   );
@@ -6172,6 +8654,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this as AppDatabase,
   );
   late final LicenseDao licenseDao = LicenseDao(this as AppDatabase);
+  late final ServerCredentialDao serverCredentialDao = ServerCredentialDao(
+    this as AppDatabase,
+  );
+  late final ConnectionLogDao connectionLogDao = ConnectionLogDao(
+    this as AppDatabase,
+  );
+  late final ServerConnectionDao serverConnectionDao = ServerConnectionDao(
+    this as AppDatabase,
+  );
+  late final FileTransferDao fileTransferDao = FileTransferDao(
+    this as AppDatabase,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6186,6 +8680,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     backupLogsTable,
     emailConfigsTable,
     licensesTable,
+    serverCredentialsTable,
+    connectionLogsTable,
+    serverConnectionsTable,
+    fileTransfersTable,
   ];
 }
 
@@ -7154,6 +9652,7 @@ typedef $$BackupDestinationsTableTableCreateCompanionBuilder =
       required String type,
       required String config,
       Value<bool> enabled,
+      Value<String?> tempPath,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -7165,6 +9664,7 @@ typedef $$BackupDestinationsTableTableUpdateCompanionBuilder =
       Value<String> type,
       Value<String> config,
       Value<bool> enabled,
+      Value<String?> tempPath,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -7201,6 +9701,11 @@ class $$BackupDestinationsTableTableFilterComposer
 
   ColumnFilters<bool> get enabled => $composableBuilder(
     column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tempPath => $composableBuilder(
+    column: $table.tempPath,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7249,6 +9754,11 @@ class $$BackupDestinationsTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tempPath => $composableBuilder(
+    column: $table.tempPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -7283,6 +9793,9 @@ class $$BackupDestinationsTableTableAnnotationComposer
 
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<String> get tempPath =>
+      $composableBuilder(column: $table.tempPath, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -7342,6 +9855,7 @@ class $$BackupDestinationsTableTableTableManager
                 Value<String> type = const Value.absent(),
                 Value<String> config = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<String?> tempPath = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -7351,6 +9865,7 @@ class $$BackupDestinationsTableTableTableManager
                 type: type,
                 config: config,
                 enabled: enabled,
+                tempPath: tempPath,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -7362,6 +9877,7 @@ class $$BackupDestinationsTableTableTableManager
                 required String type,
                 required String config,
                 Value<bool> enabled = const Value.absent(),
+                Value<String?> tempPath = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -7371,6 +9887,7 @@ class $$BackupDestinationsTableTableTableManager
                 type: type,
                 config: config,
                 enabled: enabled,
+                tempPath: tempPath,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -9232,6 +11749,1241 @@ typedef $$LicensesTableTableProcessedTableManager =
       LicensesTableData,
       PrefetchHooks Function()
     >;
+typedef $$ServerCredentialsTableTableCreateCompanionBuilder =
+    ServerCredentialsTableCompanion Function({
+      required String id,
+      required String serverId,
+      required String passwordHash,
+      required String name,
+      Value<bool> isActive,
+      required DateTime createdAt,
+      Value<DateTime?> lastUsedAt,
+      Value<String?> description,
+      Value<int> rowid,
+    });
+typedef $$ServerCredentialsTableTableUpdateCompanionBuilder =
+    ServerCredentialsTableCompanion Function({
+      Value<String> id,
+      Value<String> serverId,
+      Value<String> passwordHash,
+      Value<String> name,
+      Value<bool> isActive,
+      Value<DateTime> createdAt,
+      Value<DateTime?> lastUsedAt,
+      Value<String?> description,
+      Value<int> rowid,
+    });
+
+class $$ServerCredentialsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ServerCredentialsTableTable> {
+  $$ServerCredentialsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get passwordHash => $composableBuilder(
+    column: $table.passwordHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ServerCredentialsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ServerCredentialsTableTable> {
+  $$ServerCredentialsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get passwordHash => $composableBuilder(
+    column: $table.passwordHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isActive => $composableBuilder(
+    column: $table.isActive,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ServerCredentialsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ServerCredentialsTableTable> {
+  $$ServerCredentialsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get passwordHash => $composableBuilder(
+    column: $table.passwordHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<bool> get isActive =>
+      $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastUsedAt => $composableBuilder(
+    column: $table.lastUsedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+}
+
+class $$ServerCredentialsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ServerCredentialsTableTable,
+          ServerCredentialsTableData,
+          $$ServerCredentialsTableTableFilterComposer,
+          $$ServerCredentialsTableTableOrderingComposer,
+          $$ServerCredentialsTableTableAnnotationComposer,
+          $$ServerCredentialsTableTableCreateCompanionBuilder,
+          $$ServerCredentialsTableTableUpdateCompanionBuilder,
+          (
+            ServerCredentialsTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $ServerCredentialsTableTable,
+              ServerCredentialsTableData
+            >,
+          ),
+          ServerCredentialsTableData,
+          PrefetchHooks Function()
+        > {
+  $$ServerCredentialsTableTableTableManager(
+    _$AppDatabase db,
+    $ServerCredentialsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ServerCredentialsTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ServerCredentialsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ServerCredentialsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> serverId = const Value.absent(),
+                Value<String> passwordHash = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<bool> isActive = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> lastUsedAt = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ServerCredentialsTableCompanion(
+                id: id,
+                serverId: serverId,
+                passwordHash: passwordHash,
+                name: name,
+                isActive: isActive,
+                createdAt: createdAt,
+                lastUsedAt: lastUsedAt,
+                description: description,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String serverId,
+                required String passwordHash,
+                required String name,
+                Value<bool> isActive = const Value.absent(),
+                required DateTime createdAt,
+                Value<DateTime?> lastUsedAt = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ServerCredentialsTableCompanion.insert(
+                id: id,
+                serverId: serverId,
+                passwordHash: passwordHash,
+                name: name,
+                isActive: isActive,
+                createdAt: createdAt,
+                lastUsedAt: lastUsedAt,
+                description: description,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ServerCredentialsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ServerCredentialsTableTable,
+      ServerCredentialsTableData,
+      $$ServerCredentialsTableTableFilterComposer,
+      $$ServerCredentialsTableTableOrderingComposer,
+      $$ServerCredentialsTableTableAnnotationComposer,
+      $$ServerCredentialsTableTableCreateCompanionBuilder,
+      $$ServerCredentialsTableTableUpdateCompanionBuilder,
+      (
+        ServerCredentialsTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $ServerCredentialsTableTable,
+          ServerCredentialsTableData
+        >,
+      ),
+      ServerCredentialsTableData,
+      PrefetchHooks Function()
+    >;
+typedef $$ConnectionLogsTableTableCreateCompanionBuilder =
+    ConnectionLogsTableCompanion Function({
+      required String id,
+      required String clientHost,
+      Value<String?> serverId,
+      required bool success,
+      Value<String?> errorMessage,
+      required DateTime timestamp,
+      Value<String?> clientId,
+      Value<int> rowid,
+    });
+typedef $$ConnectionLogsTableTableUpdateCompanionBuilder =
+    ConnectionLogsTableCompanion Function({
+      Value<String> id,
+      Value<String> clientHost,
+      Value<String?> serverId,
+      Value<bool> success,
+      Value<String?> errorMessage,
+      Value<DateTime> timestamp,
+      Value<String?> clientId,
+      Value<int> rowid,
+    });
+
+class $$ConnectionLogsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ConnectionLogsTableTable> {
+  $$ConnectionLogsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientHost => $composableBuilder(
+    column: $table.clientHost,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get success => $composableBuilder(
+    column: $table.success,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get timestamp => $composableBuilder(
+    column: $table.timestamp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ConnectionLogsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ConnectionLogsTableTable> {
+  $$ConnectionLogsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientHost => $composableBuilder(
+    column: $table.clientHost,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get success => $composableBuilder(
+    column: $table.success,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get timestamp => $composableBuilder(
+    column: $table.timestamp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ConnectionLogsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ConnectionLogsTableTable> {
+  $$ConnectionLogsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clientHost => $composableBuilder(
+    column: $table.clientHost,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<bool> get success =>
+      $composableBuilder(column: $table.success, builder: (column) => column);
+
+  GeneratedColumn<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get timestamp =>
+      $composableBuilder(column: $table.timestamp, builder: (column) => column);
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+}
+
+class $$ConnectionLogsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ConnectionLogsTableTable,
+          ConnectionLogsTableData,
+          $$ConnectionLogsTableTableFilterComposer,
+          $$ConnectionLogsTableTableOrderingComposer,
+          $$ConnectionLogsTableTableAnnotationComposer,
+          $$ConnectionLogsTableTableCreateCompanionBuilder,
+          $$ConnectionLogsTableTableUpdateCompanionBuilder,
+          (
+            ConnectionLogsTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $ConnectionLogsTableTable,
+              ConnectionLogsTableData
+            >,
+          ),
+          ConnectionLogsTableData,
+          PrefetchHooks Function()
+        > {
+  $$ConnectionLogsTableTableTableManager(
+    _$AppDatabase db,
+    $ConnectionLogsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ConnectionLogsTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ConnectionLogsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ConnectionLogsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clientHost = const Value.absent(),
+                Value<String?> serverId = const Value.absent(),
+                Value<bool> success = const Value.absent(),
+                Value<String?> errorMessage = const Value.absent(),
+                Value<DateTime> timestamp = const Value.absent(),
+                Value<String?> clientId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ConnectionLogsTableCompanion(
+                id: id,
+                clientHost: clientHost,
+                serverId: serverId,
+                success: success,
+                errorMessage: errorMessage,
+                timestamp: timestamp,
+                clientId: clientId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clientHost,
+                Value<String?> serverId = const Value.absent(),
+                required bool success,
+                Value<String?> errorMessage = const Value.absent(),
+                required DateTime timestamp,
+                Value<String?> clientId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ConnectionLogsTableCompanion.insert(
+                id: id,
+                clientHost: clientHost,
+                serverId: serverId,
+                success: success,
+                errorMessage: errorMessage,
+                timestamp: timestamp,
+                clientId: clientId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ConnectionLogsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ConnectionLogsTableTable,
+      ConnectionLogsTableData,
+      $$ConnectionLogsTableTableFilterComposer,
+      $$ConnectionLogsTableTableOrderingComposer,
+      $$ConnectionLogsTableTableAnnotationComposer,
+      $$ConnectionLogsTableTableCreateCompanionBuilder,
+      $$ConnectionLogsTableTableUpdateCompanionBuilder,
+      (
+        ConnectionLogsTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $ConnectionLogsTableTable,
+          ConnectionLogsTableData
+        >,
+      ),
+      ConnectionLogsTableData,
+      PrefetchHooks Function()
+    >;
+typedef $$ServerConnectionsTableTableCreateCompanionBuilder =
+    ServerConnectionsTableCompanion Function({
+      required String id,
+      required String name,
+      required String serverId,
+      required String host,
+      Value<int> port,
+      required String password,
+      Value<bool> isOnline,
+      Value<DateTime?> lastConnectedAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$ServerConnectionsTableTableUpdateCompanionBuilder =
+    ServerConnectionsTableCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> serverId,
+      Value<String> host,
+      Value<int> port,
+      Value<String> password,
+      Value<bool> isOnline,
+      Value<DateTime?> lastConnectedAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$ServerConnectionsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ServerConnectionsTableTable> {
+  $$ServerConnectionsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get port => $composableBuilder(
+    column: $table.port,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get password => $composableBuilder(
+    column: $table.password,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isOnline => $composableBuilder(
+    column: $table.isOnline,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastConnectedAt => $composableBuilder(
+    column: $table.lastConnectedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ServerConnectionsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ServerConnectionsTableTable> {
+  $$ServerConnectionsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serverId => $composableBuilder(
+    column: $table.serverId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get port => $composableBuilder(
+    column: $table.port,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get password => $composableBuilder(
+    column: $table.password,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isOnline => $composableBuilder(
+    column: $table.isOnline,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastConnectedAt => $composableBuilder(
+    column: $table.lastConnectedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ServerConnectionsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ServerConnectionsTableTable> {
+  $$ServerConnectionsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
+  GeneratedColumn<String> get host =>
+      $composableBuilder(column: $table.host, builder: (column) => column);
+
+  GeneratedColumn<int> get port =>
+      $composableBuilder(column: $table.port, builder: (column) => column);
+
+  GeneratedColumn<String> get password =>
+      $composableBuilder(column: $table.password, builder: (column) => column);
+
+  GeneratedColumn<bool> get isOnline =>
+      $composableBuilder(column: $table.isOnline, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastConnectedAt => $composableBuilder(
+    column: $table.lastConnectedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$ServerConnectionsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ServerConnectionsTableTable,
+          ServerConnectionsTableData,
+          $$ServerConnectionsTableTableFilterComposer,
+          $$ServerConnectionsTableTableOrderingComposer,
+          $$ServerConnectionsTableTableAnnotationComposer,
+          $$ServerConnectionsTableTableCreateCompanionBuilder,
+          $$ServerConnectionsTableTableUpdateCompanionBuilder,
+          (
+            ServerConnectionsTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $ServerConnectionsTableTable,
+              ServerConnectionsTableData
+            >,
+          ),
+          ServerConnectionsTableData,
+          PrefetchHooks Function()
+        > {
+  $$ServerConnectionsTableTableTableManager(
+    _$AppDatabase db,
+    $ServerConnectionsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ServerConnectionsTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ServerConnectionsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ServerConnectionsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> serverId = const Value.absent(),
+                Value<String> host = const Value.absent(),
+                Value<int> port = const Value.absent(),
+                Value<String> password = const Value.absent(),
+                Value<bool> isOnline = const Value.absent(),
+                Value<DateTime?> lastConnectedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ServerConnectionsTableCompanion(
+                id: id,
+                name: name,
+                serverId: serverId,
+                host: host,
+                port: port,
+                password: password,
+                isOnline: isOnline,
+                lastConnectedAt: lastConnectedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String serverId,
+                required String host,
+                Value<int> port = const Value.absent(),
+                required String password,
+                Value<bool> isOnline = const Value.absent(),
+                Value<DateTime?> lastConnectedAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ServerConnectionsTableCompanion.insert(
+                id: id,
+                name: name,
+                serverId: serverId,
+                host: host,
+                port: port,
+                password: password,
+                isOnline: isOnline,
+                lastConnectedAt: lastConnectedAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ServerConnectionsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ServerConnectionsTableTable,
+      ServerConnectionsTableData,
+      $$ServerConnectionsTableTableFilterComposer,
+      $$ServerConnectionsTableTableOrderingComposer,
+      $$ServerConnectionsTableTableAnnotationComposer,
+      $$ServerConnectionsTableTableCreateCompanionBuilder,
+      $$ServerConnectionsTableTableUpdateCompanionBuilder,
+      (
+        ServerConnectionsTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $ServerConnectionsTableTable,
+          ServerConnectionsTableData
+        >,
+      ),
+      ServerConnectionsTableData,
+      PrefetchHooks Function()
+    >;
+typedef $$FileTransfersTableTableCreateCompanionBuilder =
+    FileTransfersTableCompanion Function({
+      required String id,
+      required String scheduleId,
+      required String fileName,
+      required int fileSize,
+      required int currentChunk,
+      required int totalChunks,
+      required String status,
+      Value<String?> errorMessage,
+      Value<DateTime?> startedAt,
+      Value<DateTime?> completedAt,
+      required String sourcePath,
+      required String destinationPath,
+      required String checksum,
+      Value<int> rowid,
+    });
+typedef $$FileTransfersTableTableUpdateCompanionBuilder =
+    FileTransfersTableCompanion Function({
+      Value<String> id,
+      Value<String> scheduleId,
+      Value<String> fileName,
+      Value<int> fileSize,
+      Value<int> currentChunk,
+      Value<int> totalChunks,
+      Value<String> status,
+      Value<String?> errorMessage,
+      Value<DateTime?> startedAt,
+      Value<DateTime?> completedAt,
+      Value<String> sourcePath,
+      Value<String> destinationPath,
+      Value<String> checksum,
+      Value<int> rowid,
+    });
+
+class $$FileTransfersTableTableFilterComposer
+    extends Composer<_$AppDatabase, $FileTransfersTableTable> {
+  $$FileTransfersTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scheduleId => $composableBuilder(
+    column: $table.scheduleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fileSize => $composableBuilder(
+    column: $table.fileSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get currentChunk => $composableBuilder(
+    column: $table.currentChunk,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalChunks => $composableBuilder(
+    column: $table.totalChunks,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourcePath => $composableBuilder(
+    column: $table.sourcePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get destinationPath => $composableBuilder(
+    column: $table.destinationPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get checksum => $composableBuilder(
+    column: $table.checksum,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FileTransfersTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $FileTransfersTableTable> {
+  $$FileTransfersTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scheduleId => $composableBuilder(
+    column: $table.scheduleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fileSize => $composableBuilder(
+    column: $table.fileSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get currentChunk => $composableBuilder(
+    column: $table.currentChunk,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalChunks => $composableBuilder(
+    column: $table.totalChunks,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourcePath => $composableBuilder(
+    column: $table.sourcePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get destinationPath => $composableBuilder(
+    column: $table.destinationPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get checksum => $composableBuilder(
+    column: $table.checksum,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FileTransfersTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FileTransfersTableTable> {
+  $$FileTransfersTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get scheduleId => $composableBuilder(
+    column: $table.scheduleId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get fileName =>
+      $composableBuilder(column: $table.fileName, builder: (column) => column);
+
+  GeneratedColumn<int> get fileSize =>
+      $composableBuilder(column: $table.fileSize, builder: (column) => column);
+
+  GeneratedColumn<int> get currentChunk => $composableBuilder(
+    column: $table.currentChunk,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalChunks => $composableBuilder(
+    column: $table.totalChunks,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourcePath => $composableBuilder(
+    column: $table.sourcePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get destinationPath => $composableBuilder(
+    column: $table.destinationPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get checksum =>
+      $composableBuilder(column: $table.checksum, builder: (column) => column);
+}
+
+class $$FileTransfersTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FileTransfersTableTable,
+          FileTransfersTableData,
+          $$FileTransfersTableTableFilterComposer,
+          $$FileTransfersTableTableOrderingComposer,
+          $$FileTransfersTableTableAnnotationComposer,
+          $$FileTransfersTableTableCreateCompanionBuilder,
+          $$FileTransfersTableTableUpdateCompanionBuilder,
+          (
+            FileTransfersTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $FileTransfersTableTable,
+              FileTransfersTableData
+            >,
+          ),
+          FileTransfersTableData,
+          PrefetchHooks Function()
+        > {
+  $$FileTransfersTableTableTableManager(
+    _$AppDatabase db,
+    $FileTransfersTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FileTransfersTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FileTransfersTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FileTransfersTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> scheduleId = const Value.absent(),
+                Value<String> fileName = const Value.absent(),
+                Value<int> fileSize = const Value.absent(),
+                Value<int> currentChunk = const Value.absent(),
+                Value<int> totalChunks = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> errorMessage = const Value.absent(),
+                Value<DateTime?> startedAt = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                Value<String> sourcePath = const Value.absent(),
+                Value<String> destinationPath = const Value.absent(),
+                Value<String> checksum = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FileTransfersTableCompanion(
+                id: id,
+                scheduleId: scheduleId,
+                fileName: fileName,
+                fileSize: fileSize,
+                currentChunk: currentChunk,
+                totalChunks: totalChunks,
+                status: status,
+                errorMessage: errorMessage,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                sourcePath: sourcePath,
+                destinationPath: destinationPath,
+                checksum: checksum,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String scheduleId,
+                required String fileName,
+                required int fileSize,
+                required int currentChunk,
+                required int totalChunks,
+                required String status,
+                Value<String?> errorMessage = const Value.absent(),
+                Value<DateTime?> startedAt = const Value.absent(),
+                Value<DateTime?> completedAt = const Value.absent(),
+                required String sourcePath,
+                required String destinationPath,
+                required String checksum,
+                Value<int> rowid = const Value.absent(),
+              }) => FileTransfersTableCompanion.insert(
+                id: id,
+                scheduleId: scheduleId,
+                fileName: fileName,
+                fileSize: fileSize,
+                currentChunk: currentChunk,
+                totalChunks: totalChunks,
+                status: status,
+                errorMessage: errorMessage,
+                startedAt: startedAt,
+                completedAt: completedAt,
+                sourcePath: sourcePath,
+                destinationPath: destinationPath,
+                checksum: checksum,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FileTransfersTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FileTransfersTableTable,
+      FileTransfersTableData,
+      $$FileTransfersTableTableFilterComposer,
+      $$FileTransfersTableTableOrderingComposer,
+      $$FileTransfersTableTableAnnotationComposer,
+      $$FileTransfersTableTableCreateCompanionBuilder,
+      $$FileTransfersTableTableUpdateCompanionBuilder,
+      (
+        FileTransfersTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $FileTransfersTableTable,
+          FileTransfersTableData
+        >,
+      ),
+      FileTransfersTableData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -9257,4 +13009,18 @@ class $AppDatabaseManager {
       $$EmailConfigsTableTableTableManager(_db, _db.emailConfigsTable);
   $$LicensesTableTableTableManager get licensesTable =>
       $$LicensesTableTableTableManager(_db, _db.licensesTable);
+  $$ServerCredentialsTableTableTableManager get serverCredentialsTable =>
+      $$ServerCredentialsTableTableTableManager(
+        _db,
+        _db.serverCredentialsTable,
+      );
+  $$ConnectionLogsTableTableTableManager get connectionLogsTable =>
+      $$ConnectionLogsTableTableTableManager(_db, _db.connectionLogsTable);
+  $$ServerConnectionsTableTableTableManager get serverConnectionsTable =>
+      $$ServerConnectionsTableTableTableManager(
+        _db,
+        _db.serverConnectionsTable,
+      );
+  $$FileTransfersTableTableTableManager get fileTransfersTable =>
+      $$FileTransfersTableTableTableManager(_db, _db.fileTransfersTable);
 }

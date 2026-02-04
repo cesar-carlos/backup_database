@@ -1,22 +1,26 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/application/services/service_health_checker.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/service/service_shutdown_handler.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
+import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
-import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ServiceModeInitializer {
+  ServiceModeInitializer._();
+
+  static final Completer<void> _shutdownCompleter = Completer<void>();
+
   static Future<void> initialize() async {
-    SchedulerService? schedulerService;
+    ISchedulerService? schedulerService;
     ServiceHealthChecker? healthChecker;
     WindowsEventLogService? eventLog;
-    SingleInstanceService? singleInstanceService;
+    ISingleInstanceService? singleInstanceService;
 
     try {
       await dotenv.load();
@@ -26,6 +30,7 @@ class ServiceModeInitializer {
       final isFirstServiceInstance = await singleInstanceService.checkAndLock(
         isServiceMode: true,
       );
+      LoggerService.info('Single instance check realizado para modo serviço');
 
       if (!isFirstServiceInstance) {
         LoggerService.warning(
@@ -37,7 +42,7 @@ class ServiceModeInitializer {
       await service_locator.setupServiceLocator();
       LoggerService.info('Dependências configuradas');
 
-      schedulerService = service_locator.getIt<SchedulerService>();
+      schedulerService = service_locator.getIt<ISchedulerService>();
       healthChecker = service_locator.getIt<ServiceHealthChecker>();
       eventLog = service_locator.getIt<WindowsEventLogService>();
 
@@ -74,9 +79,14 @@ class ServiceModeInitializer {
         await eventLog?.logServiceStopped();
 
         LoggerService.info('✅ Shutdown callback: Serviços parados');
+
+        // Completa o Future para encerrar o serviço
+        if (!_shutdownCompleter.isCompleted) {
+          _shutdownCompleter.complete();
+        }
       });
 
-      await schedulerService.start();
+      schedulerService.start();
       LoggerService.info('✅ Serviço de agendamento iniciado em modo serviço');
 
       // Inicia health checker
@@ -85,8 +95,8 @@ class ServiceModeInitializer {
 
       LoggerService.info('✅ Aplicativo rodando como serviço do Windows');
 
-      // Aguarda indefinidamente (será interrompido por shutdown signal)
-      await Future.delayed(const Duration(days: 365));
+      // Aguarda indefinidamente (será interrompido por shutdown signal via Completer)
+      await _shutdownCompleter.future;
 
       await singleInstanceService.releaseLock();
     } on Object catch (e, stackTrace) {
@@ -131,6 +141,12 @@ class ServiceModeInitializer {
           s,
         );
       }
+
+      // Completa o Future em caso de erro fatal
+      if (!_shutdownCompleter.isCompleted) {
+        _shutdownCompleter.completeError(e);
+      }
+
       exit(1);
     }
   }

@@ -1,6 +1,7 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 
 class DailyScheduleConfig {
   const DailyScheduleConfig({
@@ -90,7 +91,8 @@ class IntervalScheduleConfig {
   };
 }
 
-class ScheduleCalculator {
+class ScheduleCalculator implements IScheduleCalculator {
+  @override
   DateTime? getNextRunTime(Schedule schedule, {DateTime? from}) {
     final now = from ?? DateTime.now();
 
@@ -234,6 +236,7 @@ class ScheduleCalculator {
     }
   }
 
+  @override
   bool shouldRunNow(Schedule schedule, {DateTime? now}) {
     final currentTime = now ?? DateTime.now();
 

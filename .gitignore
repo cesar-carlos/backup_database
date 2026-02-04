@@ -49,6 +49,10 @@ app.*.map.json
 .env.local
 .env.*.local
 
+# Testing scripts temporary files
+.env.backup
+.server.pid
+
 # IDE and Editor
 .metadata
 

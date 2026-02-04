@@ -1,14 +1,21 @@
-﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
 
 class DashboardProvider extends ChangeNotifier {
-  DashboardProvider(this._backupHistoryRepository, this._scheduleRepository);
+  DashboardProvider(
+    this._backupHistoryRepository,
+    this._scheduleRepository, {
+    ConnectionManager? connectionManager,
+  }) : _connectionManager = connectionManager;
+
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;
+  final ConnectionManager? _connectionManager;
 
   int _totalBackups = 0;
   int _backupsToday = 0;
@@ -16,6 +23,7 @@ class DashboardProvider extends ChangeNotifier {
   int _activeSchedules = 0;
   List<BackupHistory> _recentBackups = [];
   List<Schedule> _activeSchedulesList = [];
+  Map<String, dynamic>? _serverMetrics;
   bool _isLoading = false;
   String? _error;
 
@@ -25,12 +33,14 @@ class DashboardProvider extends ChangeNotifier {
   int get activeSchedules => _activeSchedules;
   List<BackupHistory> get recentBackups => _recentBackups;
   List<Schedule> get activeSchedulesList => _activeSchedulesList;
+  Map<String, dynamic>? get serverMetrics => _serverMetrics;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
   Future<void> loadDashboardData() async {
     _isLoading = true;
     _error = null;
+    _serverMetrics = null;
     notifyListeners();
 
     try {
@@ -41,12 +51,25 @@ class DashboardProvider extends ChangeNotifier {
         _loadActiveSchedules(),
         _loadRecentBackups(),
       ]);
+      if (_connectionManager?.isConnected ?? false) {
+        await _loadServerMetrics();
+      }
     } on Object catch (e) {
       _error = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _loadServerMetrics() async {
+    final manager = _connectionManager;
+    if (manager == null || !manager.isConnected) return;
+    final result = await manager.getServerMetrics();
+    result.fold(
+      (metrics) => _serverMetrics = metrics,
+      (_) => _serverMetrics = null,
+    );
   }
 
   Future<void> _loadTotalBackups() async {

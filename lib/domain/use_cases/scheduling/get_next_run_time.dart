@@ -1,8 +1,9 @@
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
+import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 
 class GetNextRunTime {
-  final ScheduleCalculator _calculator = ScheduleCalculator();
+  GetNextRunTime(this._calculator);
+  final IScheduleCalculator _calculator;
 
   DateTime? call(Schedule schedule) {
     return _calculator.getNextRunTime(schedule);

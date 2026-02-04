@@ -32,4 +32,10 @@ class AppConstants {
   static const int defaultSybasePort = 2638;
 
   static const int logRotationDays = 90;
+
+  static const String receivedBackupsDefaultPathKey =
+      'received_backups_default_path';
+
+  static const String scheduleTransferDestinationsKey =
+      'schedule_transfer_destinations';
 }

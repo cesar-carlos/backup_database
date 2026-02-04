@@ -1,11 +1,14 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
-import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
+import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
@@ -15,11 +18,16 @@ import 'package:backup_database/presentation/boot/single_instance_checker.dart';
 import 'package:backup_database/presentation/handlers/tray_menu_handler.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-Future<void> main() async {
+void main() {
+  runZonedGuarded(_runApp, _handleError);
+}
+
+Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  LoggerService.init();
+  await service_locator.setupServiceLocator();
 
   if (ServiceModeDetector.isServiceMode()) {
     LoggerService.info('🔧 Modo Serviço detectado - inicializando sem UI');
@@ -27,21 +35,28 @@ Future<void> main() async {
     return;
   }
 
+  await _loadEnvironment();
   _checkOsCompatibility();
 
-  final canContinue =
-      await SingleInstanceChecker.checkAndHandleSecondInstance();
-  if (!canContinue) return;
+  if (SingleInstanceConfig.isEnabled) {
+    final canContinue =
+        await SingleInstanceChecker.checkAndHandleSecondInstance();
+    if (!canContinue) return;
 
-  final canContinueIpc = await SingleInstanceChecker.checkIpcServerAndHandle();
-  if (!canContinueIpc) return;
-
-  LoggerService.info(
-    '✅ Primeira instância confirmada - continuando inicialização',
-  );
+    final canContinueIpc =
+        await SingleInstanceChecker.checkIpcServerAndHandle();
+    if (!canContinueIpc) return;
+  } else {
+    LoggerService.info(
+      '⚠️ Single instance check desabilitado via configuração',
+    );
+  }
 
   try {
     await AppInitializer.initialize();
+
+    setAppMode(getAppMode(Platform.executableArguments));
+    LoggerService.info('Modo do aplicativo: ${currentAppMode.name}');
 
     final launchConfig = await AppInitializer.getLaunchConfig();
 
@@ -52,13 +67,23 @@ Future<void> main() async {
 
     await _initializeAppServices(launchConfig);
 
-    runZonedGuarded(() => runApp(const BackupDatabaseApp()), _handleError);
+    runApp(const BackupDatabaseApp());
 
     await _startScheduler();
+    await _startSocketServer();
   } on Object catch (e, stackTrace) {
     LoggerService.error('Erro fatal na inicialização', e, stackTrace);
     await AppCleanup.cleanup();
     exit(1);
+  }
+}
+
+Future<void> _loadEnvironment() async {
+  try {
+    await dotenv.load();
+    LoggerService.info('Variaveis de ambiente carregadas');
+  } on Object catch (e) {
+    LoggerService.warning('Nao foi possivel carregar .env: $e');
   }
 }
 
@@ -88,7 +113,10 @@ void _checkOsCompatibility() {
 Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   final windowManager = WindowManagerService();
   try {
-    await windowManager.initialize(startMinimized: launchConfig.startMinimized);
+    await windowManager.initialize(
+      title: getWindowTitleForMode(currentAppMode),
+      startMinimized: launchConfig.startMinimized,
+    );
   } on Object catch (e) {
     LoggerService.warning(
       'Erro ao inicializar window manager (continuando sem UI): $e',
@@ -96,7 +124,8 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   }
 
   try {
-    final singleInstanceService = SingleInstanceService();
+    final singleInstanceService = service_locator
+        .getIt<ISingleInstanceService>();
     await singleInstanceService.startIpcServer(
       onShowWindow: () async {
         LoggerService.info(
@@ -142,11 +171,38 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
 
 Future<void> _startScheduler() async {
   try {
-    final schedulerService = service_locator.getIt<SchedulerService>();
-    await schedulerService.start();
+    final schedulerService = service_locator.getIt<ISchedulerService>();
+    schedulerService.start();
     LoggerService.info('Serviço de agendamento iniciado');
   } on Object catch (e) {
     LoggerService.error('Erro ao iniciar scheduler', e);
+  }
+}
+
+Future<void> _startSocketServer() async {
+  if (currentAppMode != AppMode.server) {
+    LoggerService.info(
+      'Modo cliente detectado - socket server não será iniciado',
+    );
+    return;
+  }
+
+  try {
+    final socketServer = service_locator.getIt<SocketServerService>();
+
+    if (socketServer.isRunning) {
+      LoggerService.info(
+        'Socket server já está rodando na porta ${socketServer.port}',
+      );
+      return;
+    }
+
+    await socketServer.start();
+    LoggerService.info(
+      '✅ Socket server iniciado automaticamente na porta 9527',
+    );
+  } on Object catch (e, stackTrace) {
+    LoggerService.error('Erro ao iniciar socket server', e, stackTrace);
   }
 }
 

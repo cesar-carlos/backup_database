@@ -1,9 +1,12 @@
 export 'i_backup_destination_repository.dart';
 export 'i_backup_history_repository.dart';
 export 'i_backup_log_repository.dart';
+export 'i_connection_log_repository.dart';
 export 'i_email_config_repository.dart';
 export 'i_license_repository.dart';
 export 'i_postgres_config_repository.dart';
 export 'i_schedule_repository.dart';
+export 'i_server_connection_repository.dart';
+export 'i_server_credential_repository.dart';
 export 'i_sql_server_config_repository.dart';
 export 'i_sybase_config_repository.dart';

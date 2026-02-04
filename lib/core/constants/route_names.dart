@@ -7,6 +7,10 @@ class RouteNames {
   static const String logs = '/logs';
   static const String notifications = '/notifications';
   static const String settings = '/settings';
+  static const String serverSettings = '/server-settings';
+  static const String serverLogin = '/server-login';
+  static const String remoteSchedules = '/remote-schedules';
+  static const String connectionLogs = '/connection-logs';
 
   static const String dashboardName = 'dashboard';
   static const String sqlServerConfigName = 'sql-server-config';
@@ -16,4 +20,8 @@ class RouteNames {
   static const String logsName = 'logs';
   static const String notificationsName = 'notifications';
   static const String settingsName = 'settings';
+  static const String serverSettingsName = 'server-settings';
+  static const String serverLoginName = 'server-login';
+  static const String remoteSchedulesName = 'remote-schedules';
+  static const String connectionLogsName = 'connection-logs';
 }

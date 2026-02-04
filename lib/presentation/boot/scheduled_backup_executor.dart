@@ -1,9 +1,9 @@
-﻿import 'dart:io';
+import 'dart:io';
 
-import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 
 class ScheduledBackupExecutor {
@@ -11,7 +11,7 @@ class ScheduledBackupExecutor {
     LoggerService.info('Executando backup agendado: $scheduleId');
 
     try {
-      final schedulerService = service_locator.getIt<SchedulerService>();
+      final schedulerService = service_locator.getIt<ISchedulerService>();
       await schedulerService.executeNow(scheduleId);
       LoggerService.info('Backup concluído');
     } on Object catch (e) {

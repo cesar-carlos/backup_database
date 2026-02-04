@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:backup_database/application/providers/dropbox_auth_provider.dart';
 import 'package:backup_database/application/providers/google_auth_provider.dart';
 import 'package:backup_database/application/providers/license_provider.dart';
+import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
@@ -15,6 +17,7 @@ import 'package:backup_database/infrastructure/external/nextcloud/nextcloud.dart
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 class DestinationDialog extends StatefulWidget {
@@ -42,6 +45,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   final _nameController = TextEditingController();
 
   final _localPathController = TextEditingController();
+  final _tempPathController = TextEditingController();
   bool _createSubfoldersByDate = true;
 
   final _ftpHostController = TextEditingController();
@@ -79,6 +83,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
     if (widget.destination != null) {
       _nameController.text = widget.destination!.name;
       _isEnabled = widget.destination!.enabled;
+
+      // Carregar tempPath (apenas em cliente)
+      if (widget.destination!.tempPath != null) {
+        _tempPathController.text = widget.destination!.tempPath!;
+      }
 
       final config =
           jsonDecode(widget.destination!.config) as Map<String, dynamic>;
@@ -140,6 +149,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   void dispose() {
     _nameController.dispose();
     _localPathController.dispose();
+    _tempPathController.dispose();
     _ftpHostController.dispose();
     _ftpPortController.dispose();
     _ftpUsernameController.dispose();
@@ -249,6 +259,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
               _buildNameField(),
               const SizedBox(height: 16),
               _buildTypeSpecificFields(),
+              if (currentAppMode == AppMode.client) ...[
+                const SizedBox(height: 16),
+                _buildTempPathField(),
+              ],
               const SizedBox(height: 16),
               _buildRetentionSection(),
               if (_selectedType == DestinationType.local) ...[
@@ -740,6 +754,64 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTempPathField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: AppTextField(
+                controller: _tempPathController,
+                label: 'Pasta Temporária (Downloads do Servidor)',
+                hint: r'C:\TempBackups',
+                prefixIcon: const Icon(FluentIcons.folder),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Caminho da pasta temporária é obrigatório';
+                  }
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: IconButton(
+                icon: const Icon(FluentIcons.folder_open),
+                onPressed: _selectTempPathFolder,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: FluentTheme.of(
+              context,
+            ).resources.cardBackgroundFillColorDefault,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(FluentIcons.info, size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Arquivos baixados do servidor serão salvos nesta pasta temporária antes de serem enviados para os destinos finais.',
+                  style: FluentTheme.of(context).typography.caption,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -1363,6 +1435,47 @@ class _DestinationDialogState extends State<DestinationDialog> {
     }
   }
 
+  Future<void> _selectTempPathFolder() async {
+    final result = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Selecionar pasta temporária para downloads',
+    );
+    if (result != null) {
+      // Validate folder
+      final dir = Directory(result);
+      if (!await dir.exists()) {
+        try {
+          await dir.create(recursive: true);
+        } on Object catch (e) {
+          _showError('Não foi possível criar a pasta: $e');
+          return;
+        }
+      }
+
+      // Check write permissions by trying to create and delete a test file
+      try {
+        final testFile = File(
+          p.join(
+            result,
+            '.write_test_${DateTime.now().millisecondsSinceEpoch}',
+          ),
+        );
+        await testFile.writeAsString('test');
+        await testFile.delete();
+      } on Object catch (e) {
+        _showError(
+          'Sem permissão de escrita na pasta selecionada.\n'
+          'Escolha outra pasta ou verifique as permissões.\n\n'
+          'Erro: $e',
+        );
+        return;
+      }
+
+      setState(() {
+        _tempPathController.text = result;
+      });
+    }
+  }
+
   Future<void> _testFtpConnection() async {
     if (_ftpHostController.text.trim().isEmpty) {
       _showError('Servidor FTP é obrigatório');
@@ -1587,6 +1700,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
       type: _selectedType,
       config: configJson,
       enabled: _isEnabled,
+      tempPath: currentAppMode == AppMode.client
+          ? _tempPathController.text.trim().isEmpty
+                ? null
+                : _tempPathController.text.trim()
+          : null, // Only save tempPath in client mode
       createdAt: widget.destination?.createdAt,
     );
 
