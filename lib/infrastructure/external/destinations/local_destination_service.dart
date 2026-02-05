@@ -73,7 +73,8 @@ class LocalDestinationService implements ILocalDestinationService {
       try {
         final normalizedSource = p.normalize(p.absolute(sourceFilePath));
         final normalizedDest = p.normalize(p.absolute(destinationPath));
-        final samePath = normalizedSource.toLowerCase() == normalizedDest.toLowerCase();
+        final samePath =
+            normalizedSource.toLowerCase() == normalizedDest.toLowerCase();
         if (samePath) {
           stopwatch.stop();
           LoggerService.warning(
@@ -161,22 +162,22 @@ class LocalDestinationService implements ILocalDestinationService {
 
         // destinationFile já foi definido anteriormente neste escopo
         if (!await destinationFile.exists()) {
-           throw FileSystemException(
-             destinationPath,
-             'Arquivo de destino não encontrado após cópia atômica',
-           );
+          throw FileSystemException(
+            destinationPath,
+            'Arquivo de destino não encontrado após cópia atômica',
+          );
         }
 
         final copiedSize = await destinationFile.length();
         LoggerService.info('Tamanho do arquivo de destino: $copiedSize bytes');
 
         if (copiedSize != fileSize) {
-           // Se chegou aqui, algo muito estranho aconteceu pós-rename
-           throw FileSystemException(
-             destinationPath,
-             'Tamanho do arquivo de destino difere do arquivo de origem após cópia '
-             '(origem: $fileSize bytes, destino: $copiedSize bytes)',
-           );
+          // Se chegou aqui, algo muito estranho aconteceu pós-rename
+          throw FileSystemException(
+            destinationPath,
+            'Tamanho do arquivo de destino difere do arquivo de origem após cópia '
+            '(origem: $fileSize bytes, destino: $copiedSize bytes)',
+          );
         }
 
         LoggerService.info(
@@ -250,16 +251,17 @@ class LocalDestinationService implements ILocalDestinationService {
         );
         // Se for erro de permissão fatal, não adianta tentar de novo
         if (e is FileSystemException && (e.osError?.errorCode == 5)) {
-           rethrow;
+          rethrow;
         }
       }
     }
 
-    throw lastError ??
-        FileSystemException(
-          'Falha ao copiar arquivo após $maxRetries tentativas',
-          destinationPath,
-        );
+    if (lastError is Exception) throw lastError;
+    if (lastError is Error) throw lastError;
+    throw FileSystemException(
+      'Falha ao copiar arquivo após $maxRetries tentativas',
+      destinationPath,
+    );
   }
 
   Future<void> _atomicCopy({
@@ -270,32 +272,35 @@ class LocalDestinationService implements ILocalDestinationService {
     final tempDestinationPath = '$destinationPath.tmp';
     final tempFile = File(tempDestinationPath);
     final finalFile = File(destinationPath);
-    
+
     // Limpar temp antigo se existir (de falha anterior)
     if (await tempFile.exists()) {
       try {
         await tempFile.delete();
-      } catch (e) {
-        LoggerService.warning('Não foi possível limpar arquivo temporário antigo: $tempDestinationPath', e);
+      } on Object catch (e) {
+        LoggerService.warning(
+          'Não foi possível limpar arquivo temporário antigo: $tempDestinationPath',
+          e,
+        );
       }
     }
 
     final sourceSize = await sourceFile.length();
-    
+
     try {
       // 1. Copiar para .tmp
       await sourceFile.copyToWithBugFix(
-        tempDestinationPath, 
-        onProgress: onProgress
+        tempDestinationPath,
+        onProgress: onProgress,
       );
-      
+
       // 2. Verificar integridade do .tmp
       final tempSize = await tempFile.length();
       if (tempSize != sourceSize) {
         throw FileSystemException(
-           'Tamanho do arquivo temporário incorreto. '
-           'Esperado: $sourceSize, Encontrado: $tempSize',
-           tempDestinationPath
+          'Tamanho do arquivo temporário incorreto. '
+          'Esperado: $sourceSize, Encontrado: $tempSize',
+          tempDestinationPath,
         );
       }
 
@@ -306,13 +311,11 @@ class LocalDestinationService implements ILocalDestinationService {
         await finalFile.delete();
       }
       await tempFile.rename(destinationPath);
-      
-    } catch (e) {
-      // Cleanup em caso de erro
+    } on Object catch (e) {
       if (await tempFile.exists()) {
         try {
           await tempFile.delete();
-        } catch (_) {
+        } on Object catch (_) {
           // ignore
         }
       }
@@ -450,10 +453,12 @@ extension FileCopyWithProgress on File {
     String newPath, {
     UploadProgressCallback? onProgress,
   }) async {
-    LoggerService.info('[CopyDebug] Iniciando copyToWithBugFix: $path -> $newPath');
-    
+    LoggerService.info(
+      '[CopyDebug] Iniciando copyToWithBugFix: $path -> $newPath',
+    );
+
     // Retry na abertura do arquivo de origem para evitar locks transientes
-    final sourceRaf = await _openWithRetry(); 
+    final sourceRaf = await _openWithRetry();
     RandomAccessFile? destRaf;
 
     try {
@@ -473,28 +478,30 @@ extension FileCopyWithProgress on File {
         final buffer = List<int>.filled(bytesToRead, 0);
 
         sourceRaf.setPosition(bytesCopied);
-        
+
         // CORREÇÃO: Verificar bytes retornados pelo readInto
         final bytesRead = await sourceRaf.readInto(buffer, 0, bytesToRead);
-        
+
         if (bytesRead == 0 && bytesToRead > 0) {
-           throw FileSystemException(
-             'Leitura interrompida inesperadamente (0 bytes lidos) na posição $bytesCopied',
-             newPath, 
-           );
+          throw FileSystemException(
+            'Leitura interrompida inesperadamente (0 bytes lidos) na posição $bytesCopied',
+            newPath,
+          );
         }
 
         // Escrever usando RAF
         if (bytesRead < bytesToRead) {
-           await destRaf.writeFrom(buffer, 0, bytesRead);
-           bytesCopied += bytesRead;
+          await destRaf.writeFrom(buffer, 0, bytesRead);
+          bytesCopied += bytesRead;
         } else {
-           await destRaf.writeFrom(buffer);
-           bytesCopied += bytesToRead;
+          await destRaf.writeFrom(buffer);
+          bytesCopied += bytesToRead;
         }
 
         if (loopCount % 10 == 0 || bytesCopied == fileSize) {
-           LoggerService.debug('[CopyDebug] Loop $loopCount: $bytesCopied/$fileSize bytes copiados');
+          LoggerService.debug(
+            '[CopyDebug] Loop $loopCount: $bytesCopied/$fileSize bytes copiados',
+          );
         }
 
         if (onProgress != null && fileSize > 0) {
@@ -505,29 +512,29 @@ extension FileCopyWithProgress on File {
       LoggerService.info('[CopyDebug] Loop finalizado. Efetuando flush...');
       await destRaf.flush();
       LoggerService.info('[CopyDebug] Flush OK.');
-    } catch (e, st) {
+    } on Object catch (e, st) {
       LoggerService.error('[CopyDebug] Erro durante cópia: $e', e, st);
       rethrow;
     } finally {
       LoggerService.info('[CopyDebug] Fechando arquivos...');
       try {
-         await sourceRaf.close();
-         LoggerService.info('[CopyDebug] Source fechado.');
-      } catch (e) {
-         LoggerService.warning('[CopyDebug] Erro ao fechar source: $e');
+        await sourceRaf.close();
+        LoggerService.info('[CopyDebug] Source fechado.');
+      } on Object catch (e) {
+        LoggerService.warning('[CopyDebug] Erro ao fechar source: $e');
       }
       try {
-         await destRaf?.close();
-         LoggerService.info('[CopyDebug] Destino fechado.');
-      } catch (e) {
-         LoggerService.warning('[CopyDebug] Erro ao fechar destino: $e');
+        await destRaf?.close();
+        LoggerService.info('[CopyDebug] Destino fechado.');
+      } on Object catch (e) {
+        LoggerService.warning('[CopyDebug] Erro ao fechar destino: $e');
       }
     }
   }
-  
+
   Future<RandomAccessFile> _openWithRetry([int retries = 3]) async {
     var attempt = 0;
-    while(true) {
+    while (true) {
       try {
         attempt++;
         return await open();

@@ -43,7 +43,7 @@ class ConnectionManager {
 
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
-  
+
   // Getter para verificar se há transferências ativas (usado pelo heartbeat)
   bool get hasActiveTransfers => _activeTransfers.isNotEmpty;
 
@@ -108,9 +108,9 @@ class ConnectionManager {
 
       // Validar SHA-256 (Fase 2)
       if (message.payload.containsKey('hash')) {
-         state.expectedHash = message.payload['hash'] as String?;
+        state.expectedHash = message.payload['hash'] as String?;
       }
-      
+
       LoggerService.info(
         '[ConnectionManager] Metadata recebida: ${state.fileName}, chunks: ${state.totalChunks}, compressed: ${state.isCompressed}',
       );
@@ -124,21 +124,27 @@ class ConnectionManager {
       if (state.isCompressed) {
         try {
           dataToWrite = Uint8List.fromList(gzip.decode(chunk.data));
-          LoggerService.debug('[ConnectionManager] Chunk descomprimido: ${chunk.data.length} -> ${dataToWrite.length} bytes');
-        } catch (e) {
-          LoggerService.error('[ConnectionManager] Falha ao descomprimir chunk ${chunk.chunkIndex}: $e');
+          LoggerService.debug(
+            '[ConnectionManager] Chunk descomprimido: ${chunk.data.length} -> ${dataToWrite.length} bytes',
+          );
+        } on Object catch (e) {
+          LoggerService.error(
+            '[ConnectionManager] Falha ao descomprimir chunk ${chunk.chunkIndex}: $e',
+          );
           _cleanupTransfer(requestId);
-          state.completer.complete(rd.Failure(Exception('Falha na descompressão GZIP: $e')));
+          state.completer.complete(
+            rd.Failure(Exception('Falha na descompressão GZIP: $e')),
+          );
           return;
         }
       }
-      
+
       // Streaming: Escrever diretamente no sink
       state.fileSink.add(dataToWrite);
       if (chunk.chunkIndex % 10 == 0) {
-         // Flush periódico opcional
+        // Flush periódico opcional
       }
-      
+
       LoggerService.debug(
         '[ConnectionManager] Chunk ${chunk.chunkIndex}/${chunk.totalChunks} recebido e escrito: ${chunk.data.length} bytes',
       );
@@ -179,31 +185,41 @@ class ConnectionManager {
       // Finalizar escrita no .part
       await state.fileSink.flush();
       await state.fileSink.close();
-      
+
       final partFile = File(state.partFilePath);
       final finalFile = File(state.outputPath);
 
       // Verificar tamanho do arquivo baixado
       final partSize = await partFile.length();
-      LoggerService.info('[ConnectionManager] Tamanho do arquivo parcial: $partSize bytes');
-      
+      LoggerService.info(
+        '[ConnectionManager] Tamanho do arquivo parcial: $partSize bytes',
+      );
+
       // Validar SHA-256 (Fase 2)
       if (state.expectedHash != null && state.expectedHash!.isNotEmpty) {
-        LoggerService.info('[ConnectionManager] Calculando SHA-256 para validação...');
+        LoggerService.info(
+          '[ConnectionManager] Calculando SHA-256 para validação...',
+        );
         final digest = await sha256.bind(partFile.openRead()).first;
         final actualHash = digest.toString();
-        
+
         if (actualHash != state.expectedHash) {
-           LoggerService.error('[ConnectionManager] SHA-256 Checksum FALHOU! Esperado: ${state.expectedHash}, Calculado: $actualHash');
-           await partFile.delete(); // Deletar arquivo corrompido
-           throw FileSystemException(
-             'Falha de integridade: SHA-256 inválido.', 
-             state.outputPath
-           );
+          LoggerService.error(
+            '[ConnectionManager] SHA-256 Checksum FALHOU! Esperado: ${state.expectedHash}, Calculado: $actualHash',
+          );
+          await partFile.delete(); // Deletar arquivo corrompido
+          throw FileSystemException(
+            'Falha de integridade: SHA-256 inválido.',
+            state.outputPath,
+          );
         }
-        LoggerService.info('[ConnectionManager] SHA-256 Verificado com sucesso.');
+        LoggerService.info(
+          '[ConnectionManager] SHA-256 Verificado com sucesso.',
+        );
       } else {
-        LoggerService.warning('[ConnectionManager] SHA-256 não disponível no metadata. Integridade não verificada.');
+        LoggerService.warning(
+          '[ConnectionManager] SHA-256 não disponível no metadata. Integridade não verificada.',
+        );
       }
 
       // Rename Atômico: .part -> Final
@@ -211,7 +227,9 @@ class ConnectionManager {
         await finalFile.delete();
       }
       await partFile.rename(state.outputPath);
-      LoggerService.info('[ConnectionManager] ✓ Arquivo renomeado e salvo com sucesso!');
+      LoggerService.info(
+        '[ConnectionManager] ✓ Arquivo renomeado e salvo com sucesso!',
+      );
 
       state.completer.complete(const rd.Success(rd.unit));
     } on Object catch (e) {
@@ -429,7 +447,7 @@ class ConnectionManager {
     LoggerService.info('[ConnectionManager] RequestID: $requestId');
 
     final completer = Completer<rd.Result<void>>();
-    
+
     // Resume Logic: Check for .part file
     final partFilePath = '$outputPath.part';
     final partFile = File(partFilePath);
@@ -440,30 +458,36 @@ class ConnectionManager {
       if (await partFile.exists()) {
         final partSize = await partFile.length();
         if (partSize > 0) {
-           // Assume o chunk size padrão. 
-           // TODO: Idealmente armazenar metadados do download anterior para garantir mesmo chunk size.
-           // Por enquanto assumimos que o config não muda.
-           startChunk = (partSize / SocketConfig.chunkSize).floor();
-           final validSize = startChunk * SocketConfig.chunkSize;
-           
-           LoggerService.info('[ConnectionManager] Arquivo parcial encontrado. Resume do chunk $startChunk ($validSize bytes)');
-           
-           // Truncar para o último limite de chunk válido para evitar corrupção
-           fileSink = partFile.openWrite(mode: FileMode.append);
-           // Nota: O ideal seria truncar, mas append funciona se o server mandar a partir do offset correto.
-           // Se o server mandar startChunk, ele manda o chunk *inteiro*.
-           // Se o arquivo local tiver bytes extras (chunk incompleto), precisamos aparar.
-           // Vamos fazer um truncate manual antes de abrir o sink.
-           if (partSize != validSize) {
-              LoggerService.info('[ConnectionManager] Truncando arquivo parcial de $partSize para $validSize bytes');
-              final raf = await partFile.open(mode: FileMode.write); // write mode aqui pode limpar. Cuidado.
-              await raf.setPosition(validSize);
-              await raf.truncate(validSize);
-              await raf.close();
-           }
+          // Assume o chunk size padrão.
+          // TODO(dev): Armazenar metadados do download anterior para garantir mesmo chunk size.
+          // Por enquanto assumimos que o config não muda.
+          startChunk = (partSize / SocketConfig.chunkSize).floor();
+          final validSize = startChunk * SocketConfig.chunkSize;
+
+          LoggerService.info(
+            '[ConnectionManager] Arquivo parcial encontrado. Resume do chunk $startChunk ($validSize bytes)',
+          );
+
+          // Truncar para o último limite de chunk válido para evitar corrupção
+          fileSink = partFile.openWrite(mode: FileMode.append);
+          // Nota: O ideal seria truncar, mas append funciona se o server mandar a partir do offset correto.
+          // Se o server mandar startChunk, ele manda o chunk *inteiro*.
+          // Se o arquivo local tiver bytes extras (chunk incompleto), precisamos aparar.
+          // Vamos fazer um truncate manual antes de abrir o sink.
+          if (partSize != validSize) {
+            LoggerService.info(
+              '[ConnectionManager] Truncando arquivo parcial de $partSize para $validSize bytes',
+            );
+            final raf = await partFile.open(
+              mode: FileMode.write,
+            ); // write mode aqui pode limpar. Cuidado.
+            await raf.setPosition(validSize);
+            await raf.truncate(validSize);
+            await raf.close();
+          }
         }
       }
-      
+
       fileSink ??= partFile.openWrite(mode: FileMode.append);
 
       _activeTransfers[requestId] = _FileTransferState(
