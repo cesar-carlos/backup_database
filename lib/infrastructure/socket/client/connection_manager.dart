@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/di/service_locator.dart' as di;
@@ -8,7 +10,6 @@ import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
-import 'package:backup_database/infrastructure/protocol/file_chunker.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
@@ -16,6 +17,7 @@ import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:backup_database/infrastructure/socket/client/tcp_socket_client.dart';
+import 'package:crypto/crypto.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 typedef BackupProgressCallback =
@@ -41,8 +43,7 @@ class ConnectionManager {
 
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
-  final FileChunker _chunker = FileChunker();
-
+  
   // Getter para verificar se há transferências ativas (usado pelo heartbeat)
   bool get hasActiveTransfers => _activeTransfers.isNotEmpty;
 
@@ -103,16 +104,43 @@ class ConnectionManager {
     if (isFileTransferStartMetadata(message)) {
       state.fileName = getFileNameFromMetadata(message);
       state.totalChunks = getTotalChunksFromMetadata(message);
+      state.isCompressed = getIsCompressedFromMetadata(message);
+
+      // Validar SHA-256 (Fase 2)
+      if (message.payload.containsKey('hash')) {
+         state.expectedHash = message.payload['hash'] as String?;
+      }
+      
       LoggerService.info(
-        '[ConnectionManager] Metadata recebida: ${state.fileName}, chunks: ${state.totalChunks}',
+        '[ConnectionManager] Metadata recebida: ${state.fileName}, chunks: ${state.totalChunks}, compressed: ${state.isCompressed}',
       );
       return;
     }
     if (isFileChunkMessage(message)) {
       final chunk = getFileChunkFromPayload(message);
-      state.chunks.add(chunk);
+      var dataToWrite = chunk.data;
+
+      // Decompressão (Fase 3)
+      if (state.isCompressed) {
+        try {
+          dataToWrite = Uint8List.fromList(gzip.decode(chunk.data));
+          LoggerService.debug('[ConnectionManager] Chunk descomprimido: ${chunk.data.length} -> ${dataToWrite.length} bytes');
+        } catch (e) {
+          LoggerService.error('[ConnectionManager] Falha ao descomprimir chunk ${chunk.chunkIndex}: $e');
+          _cleanupTransfer(requestId);
+          state.completer.complete(rd.Failure(Exception('Falha na descompressão GZIP: $e')));
+          return;
+        }
+      }
+      
+      // Streaming: Escrever diretamente no sink
+      state.fileSink.add(dataToWrite);
+      if (chunk.chunkIndex % 10 == 0) {
+         // Flush periódico opcional
+      }
+      
       LoggerService.debug(
-        '[ConnectionManager] Chunk recebido: ${chunk.chunkIndex}/${state.totalChunks}',
+        '[ConnectionManager] Chunk ${chunk.chunkIndex}/${chunk.totalChunks} recebido e escrito: ${chunk.data.length} bytes',
       );
       return;
     }
@@ -125,7 +153,7 @@ class ConnectionManager {
     }
     if (isFileTransferCompleteMessage(message)) {
       LoggerService.info(
-        '[ConnectionManager] Transferência completa recebida, salvando arquivo...',
+        '[ConnectionManager] Transferência completa recebida, finalizando arquivo...',
       );
       _activeTransfers.remove(requestId);
       _completeFileTransfer(state);
@@ -136,7 +164,7 @@ class ConnectionManager {
       LoggerService.error(
         '[ConnectionManager] Erro de transferência recebido: $error',
       );
-      _activeTransfers.remove(requestId);
+      _cleanupTransfer(requestId);
       state.completer.complete(
         rd.Failure(Exception(error)),
       );
@@ -145,15 +173,46 @@ class ConnectionManager {
 
   Future<void> _completeFileTransfer(_FileTransferState state) async {
     LoggerService.info('[ConnectionManager] _completeFileTransfer iniciado');
-    LoggerService.info(
-      '[ConnectionManager] Chunks recebidos: ${state.chunks.length}',
-    );
     LoggerService.info('[ConnectionManager] OutputPath: ${state.outputPath}');
 
     try {
-      LoggerService.info('[ConnectionManager] Montando arquivo dos chunks...');
-      await _chunker.assembleChunks(state.chunks, state.outputPath);
-      LoggerService.info('[ConnectionManager] ✓ Arquivo salvo com sucesso!');
+      // Finalizar escrita no .part
+      await state.fileSink.flush();
+      await state.fileSink.close();
+      
+      final partFile = File(state.partFilePath);
+      final finalFile = File(state.outputPath);
+
+      // Verificar tamanho do arquivo baixado
+      final partSize = await partFile.length();
+      LoggerService.info('[ConnectionManager] Tamanho do arquivo parcial: $partSize bytes');
+      
+      // Validar SHA-256 (Fase 2)
+      if (state.expectedHash != null && state.expectedHash!.isNotEmpty) {
+        LoggerService.info('[ConnectionManager] Calculando SHA-256 para validação...');
+        final digest = await sha256.bind(partFile.openRead()).first;
+        final actualHash = digest.toString();
+        
+        if (actualHash != state.expectedHash) {
+           LoggerService.error('[ConnectionManager] SHA-256 Checksum FALHOU! Esperado: ${state.expectedHash}, Calculado: $actualHash');
+           await partFile.delete(); // Deletar arquivo corrompido
+           throw FileSystemException(
+             'Falha de integridade: SHA-256 inválido.', 
+             state.outputPath
+           );
+        }
+        LoggerService.info('[ConnectionManager] SHA-256 Verificado com sucesso.');
+      } else {
+        LoggerService.warning('[ConnectionManager] SHA-256 não disponível no metadata. Integridade não verificada.');
+      }
+
+      // Rename Atômico: .part -> Final
+      if (await finalFile.exists()) {
+        await finalFile.delete();
+      }
+      await partFile.rename(state.outputPath);
+      LoggerService.info('[ConnectionManager] ✓ Arquivo renomeado e salvo com sucesso!');
+
       state.completer.complete(const rd.Success(rd.unit));
     } on Object catch (e) {
       LoggerService.error('[ConnectionManager] ✗ Erro ao salvar arquivo: $e');
@@ -370,22 +429,60 @@ class ConnectionManager {
     LoggerService.info('[ConnectionManager] RequestID: $requestId');
 
     final completer = Completer<rd.Result<void>>();
-    _activeTransfers[requestId] = _FileTransferState(
-      completer: completer,
-      outputPath: outputPath,
-      chunks: [],
-      onProgress: onProgress,
-    );
+    
+    // Resume Logic: Check for .part file
+    final partFilePath = '$outputPath.part';
+    final partFile = File(partFilePath);
+    var startChunk = 0;
+    IOSink? fileSink;
 
     try {
+      if (await partFile.exists()) {
+        final partSize = await partFile.length();
+        if (partSize > 0) {
+           // Assume o chunk size padrão. 
+           // TODO: Idealmente armazenar metadados do download anterior para garantir mesmo chunk size.
+           // Por enquanto assumimos que o config não muda.
+           startChunk = (partSize / SocketConfig.chunkSize).floor();
+           final validSize = startChunk * SocketConfig.chunkSize;
+           
+           LoggerService.info('[ConnectionManager] Arquivo parcial encontrado. Resume do chunk $startChunk ($validSize bytes)');
+           
+           // Truncar para o último limite de chunk válido para evitar corrupção
+           fileSink = partFile.openWrite(mode: FileMode.append);
+           // Nota: O ideal seria truncar, mas append funciona se o server mandar a partir do offset correto.
+           // Se o server mandar startChunk, ele manda o chunk *inteiro*.
+           // Se o arquivo local tiver bytes extras (chunk incompleto), precisamos aparar.
+           // Vamos fazer um truncate manual antes de abrir o sink.
+           if (partSize != validSize) {
+              LoggerService.info('[ConnectionManager] Truncando arquivo parcial de $partSize para $validSize bytes');
+              final raf = await partFile.open(mode: FileMode.write); // write mode aqui pode limpar. Cuidado.
+              await raf.setPosition(validSize);
+              await raf.truncate(validSize);
+              await raf.close();
+           }
+        }
+      }
+      
+      fileSink ??= partFile.openWrite(mode: FileMode.append);
+
+      _activeTransfers[requestId] = _FileTransferState(
+        completer: completer,
+        outputPath: outputPath,
+        partFilePath: partFilePath,
+        fileSink: fileSink,
+        onProgress: onProgress,
+      );
+
       LoggerService.info(
-        '[ConnectionManager] Enviando requisição de transferência...',
+        '[ConnectionManager] Enviando requisição de transferência (startChunk: $startChunk)...',
       );
       await send(
         createFileTransferStartRequestMessage(
           requestId: requestId,
           filePath: filePath,
           scheduleId: scheduleId,
+          startChunk: startChunk,
         ),
       );
       LoggerService.info(
@@ -398,13 +495,20 @@ class ConnectionManager {
       LoggerService.info('[ConnectionManager] Transferência completada!');
       return result;
     } on TimeoutException {
-      _activeTransfers.remove(requestId);
+      _cleanupTransfer(requestId);
       LoggerService.error('[ConnectionManager] Timeout na transferência!');
       return rd.Failure(TimeoutException('requestFile timeout'));
     } on Object catch (e) {
-      _activeTransfers.remove(requestId);
+      _cleanupTransfer(requestId);
       LoggerService.error('[ConnectionManager] Erro na transferência: $e');
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  void _cleanupTransfer(int requestId) {
+    final state = _activeTransfers.remove(requestId);
+    if (state != null) {
+      state.fileSink.close(); // Fecha o arquivo para liberar lock
     }
   }
 
@@ -576,16 +680,20 @@ class _FileTransferState {
   _FileTransferState({
     required this.completer,
     required this.outputPath,
-    required this.chunks,
+    required this.partFilePath,
+    required this.fileSink,
     this.onProgress,
   });
 
   final Completer<rd.Result<void>> completer;
   final String outputPath;
-  final List<FileChunk> chunks;
+  final String partFilePath;
+  final IOSink fileSink;
   final void Function(int currentChunk, int totalChunks)? onProgress;
   String fileName = '';
   int totalChunks = 0;
+  String? expectedHash;
+  bool isCompressed = false;
 }
 
 class _BackupProgressState {

@@ -171,9 +171,16 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           backupPath,
           onTransferProgress: (step, message, progress) {
             // Atualizar progresso da transferência
+            // CORREÇÃO: Atualizar também os campos de backup para que a UI (Card) exiba o progresso
+            _backupStep = step;
+            _backupMessage = message;
+            _backupProgress = progress;
+
+            // Manter campos específicos de transferência atualizados por compatibilidade
             _transferStep = step;
             _transferMessage = message;
             _transferProgress = progress;
+
             _isTransferringFile = true;
             notifyListeners();
             LoggerService.debug('[TransferProgress] $step: ${(progress * 100).toStringAsFixed(1)}%');

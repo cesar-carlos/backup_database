@@ -544,6 +544,32 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     );
 
     if (success) {
+      final downloadedFile = File(outputFilePath);
+      if (!await downloadedFile.exists()) {
+        _error =
+            'Arquivo baixado não encontrado após transferência: $outputFilePath';
+        LoggerService.error('✗ $_error');
+        _isTransferring = false;
+        notifyListeners();
+        return false;
+      }
+      final downloadedSize = await downloadedFile.length();
+      if (downloadedSize == 0) {
+        _error =
+            'Arquivo baixado está vazio (0 bytes). Não é possível enviar para '
+            'destinos. Verifique o backup no servidor.';
+        LoggerService.error('✗ $_error');
+        _isTransferring = false;
+        notifyListeners();
+        return false;
+      }
+      LoggerService.info(
+        'Arquivo baixado verificado: $outputFilePath ($downloadedSize bytes)',
+      );
+
+      // Pequeno delay para garantir que o arquivo está liberado no disco (Windows)
+      await Future.delayed(const Duration(milliseconds: 300));
+
       // Limpar arquivo do staging após download bem-sucedido
       try {
         LoggerService.info('Limpando staging do servidor...');

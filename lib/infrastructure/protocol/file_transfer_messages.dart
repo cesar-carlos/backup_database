@@ -55,10 +55,12 @@ Message createFileTransferStartRequestMessage({
   required int requestId,
   required String filePath,
   String? scheduleId,
+  int? startChunk,
 }) {
   final payload = <String, dynamic>{
     'filePath': filePath,
     ...? (scheduleId != null ? {'scheduleId': scheduleId} : null),
+    ...? (startChunk != null ? {'startChunk': startChunk} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -78,11 +80,13 @@ Message createFileTransferStartMetadataMessage({
   required String fileName,
   required int fileSize,
   required int totalChunks,
+  bool isCompressed = false,
 }) {
   final payload = <String, dynamic>{
     'fileName': fileName,
     'fileSize': fileSize,
     'totalChunks': totalChunks,
+    'isCompressed': isCompressed,
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -265,6 +269,9 @@ int getFileSizeFromMetadata(Message message) =>
 
 int getTotalChunksFromMetadata(Message message) =>
     message.payload['totalChunks'] as int? ?? 0;
+
+bool getIsCompressedFromMetadata(Message message) =>
+    message.payload['isCompressed'] as bool? ?? false;
 
 FileChunk getFileChunkFromPayload(Message message) =>
     FileChunk.fromJson(Map<String, dynamic>.from(message.payload));

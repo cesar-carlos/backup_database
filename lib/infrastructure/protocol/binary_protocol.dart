@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:backup_database/core/utils/crc32.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/compression.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
@@ -23,7 +24,11 @@ class BinaryProtocol {
     final flag1 = message.header.flags.length > 1 ? message.header.flags[1] : 0;
 
     final Uint8List payloadBytes;
-    if (compression != null &&
+    // Não comprimir chunks de arquivo - descompressão causa backlog no cliente
+    final shouldSkipCompression = message.header.type == MessageType.fileChunk;
+
+    if (!shouldSkipCompression &&
+        compression != null &&
         PayloadCompression.shouldCompress(rawPayload.length)) {
       payloadBytes = compression!.compress(Uint8List.fromList(rawPayload));
       flag0 |= _flagCompressed;
@@ -120,7 +125,13 @@ class BinaryProtocol {
           'Message is compressed but BinaryProtocol has no compression',
         );
       }
+      LoggerService.debug(
+        '[BinaryProtocol] Mensagem comprimida detectada, descomprimindo ${payloadBytes.length} bytes',
+      );
       bytesToDecode = compression!.decompress(payloadBytes);
+      LoggerService.debug(
+        '[BinaryProtocol] Descomprimido para ${bytesToDecode.length} bytes',
+      );
     }
 
     final payloadJson = utf8.decode(bytesToDecode);
@@ -137,6 +148,19 @@ class BinaryProtocol {
       flags: flags,
       reserved: reserved,
     );
+
+    // Log específico para chunks de arquivo
+    if (type == MessageType.fileChunk) {
+      final chunkIndex = payload['chunkIndex'];
+      final dataSize = payload['data'] is String
+          ? (payload['data'] as String).length
+          : (payload['data'] is List
+              ? (payload['data'] as List).length
+              : 0);
+      LoggerService.info(
+        '[BinaryProtocol] Chunk desserializado: index=$chunkIndex, dataSize=$dataSize, payloadLength=${payloadJson.length}',
+      );
+    }
 
     return Message(
       header: header,

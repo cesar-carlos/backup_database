@@ -12,6 +12,8 @@ import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SendFileToDestinationService implements ISendFileToDestinationService {
@@ -22,12 +24,12 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
     required SendToDropbox sendToDropbox,
     required SendToNextcloud sendToNextcloud,
     required ILicenseValidationService licenseValidationService,
-  })  : _localDestinationService = localDestinationService,
-        _sendToFtp = sendToFtp,
-        _googleDriveDestinationService = googleDriveDestinationService,
-        _sendToDropbox = sendToDropbox,
-        _sendToNextcloud = sendToNextcloud,
-        _licenseValidationService = licenseValidationService;
+  }) : _localDestinationService = localDestinationService,
+       _sendToFtp = sendToFtp,
+       _googleDriveDestinationService = googleDriveDestinationService,
+       _sendToDropbox = sendToDropbox,
+       _sendToNextcloud = sendToNextcloud,
+       _licenseValidationService = licenseValidationService;
 
   final ILocalDestinationService _localDestinationService;
   final SendToFtp _sendToFtp;
@@ -65,6 +67,32 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
                 '${destination.name}';
             LoggerService.error(errorMessage);
             return rd.Failure(ValidationFailure(message: errorMessage));
+          }
+
+          // Verificar se o arquivo já está no destino (evita cópia desnecessária)
+          final sourceFile = p.normalize(p.absolute(localFilePath));
+
+          // Construir o caminho completo onde o arquivo seria salvo
+          var destinationDir = config.path;
+          if (config.createSubfoldersByDate) {
+            final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
+            destinationDir = p.join(config.path, dateFolder);
+          }
+          final finalDestinationPath = p.normalize(
+            p.absolute(p.join(destinationDir, p.basename(localFilePath))),
+          );
+
+          // Verifica se o arquivo JÁ ESTÁ no caminho final de destino (case-insensitive no Windows)
+          final fileAlreadyInDestination =
+              sourceFile.toLowerCase() == finalDestinationPath.toLowerCase();
+
+          if (fileAlreadyInDestination) {
+            LoggerService.info(
+              'Arquivo já está no destino local ${destination.name} '
+              '($finalDestinationPath), pulando cópia',
+            );
+            // Arquivo já está no destino, não precisa copiar
+            return const rd.Success(rd.unit);
           }
 
           LoggerService.info(

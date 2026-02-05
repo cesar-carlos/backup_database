@@ -86,8 +86,15 @@ class FileTransferMessageHandler {
 
       final fileName = p.basename(resolved);
       final fileSize = await file.length();
+      LoggerService.info(
+        '[FileTransferHandler] Iniciando transferência: $fileName ($fileSize bytes) para cliente $clientId',
+      );
+
       final chunks = await _chunker.chunkFile(resolved);
       final totalChunks = chunks.length;
+      LoggerService.info(
+        '[FileTransferHandler] Arquivo dividido em $totalChunks chunks',
+      );
 
       await sendToClient(
         clientId,
@@ -98,12 +105,24 @@ class FileTransferMessageHandler {
           totalChunks: totalChunks,
         ),
       );
+      LoggerService.info(
+        '[FileTransferHandler] Metadados enviados: fileName=$fileName, fileSize=$fileSize, totalChunks=$totalChunks',
+      );
 
+      // Enviar chunks um a um, aguardando confirmação do cliente
       for (var i = 0; i < chunks.length; i++) {
+        final chunk = chunks[i];
+        LoggerService.info(
+          '[FileTransferHandler] Enviando chunk ${chunk.chunkIndex + 1}/$totalChunks: ${chunk.data.length} bytes, checksum=${chunk.checksum}',
+        );
         await sendToClient(
           clientId,
-          createFileChunkMessage(requestId: requestId, chunk: chunks[i]),
+          createFileChunkMessage(requestId: requestId, chunk: chunk),
         );
+
+        // Pequeno delay para garantir que o cliente processou
+        await Future.delayed(const Duration(milliseconds: 5));
+
         await sendToClient(
           clientId,
           createFileTransferProgressMessage(
@@ -112,6 +131,9 @@ class FileTransferMessageHandler {
             totalChunks: totalChunks,
           ),
         );
+
+        // Delay adicional após cada chunk para evitar overflow do TCP buffer
+        await Future.delayed(const Duration(milliseconds: 5));
       }
 
       await sendToClient(
@@ -119,7 +141,7 @@ class FileTransferMessageHandler {
         createFileTransferCompleteMessage(requestId: requestId),
       );
       LoggerService.info(
-        'File transfer completed: $fileName to client $clientId',
+        '[FileTransferHandler] ✓ Transferência concluída: $fileName ($totalChunks chunks) para cliente $clientId',
       );
     } on Object catch (e, st) {
       LoggerService.warning(
