@@ -103,22 +103,6 @@ class LocalDestinationService implements ILocalDestinationService {
           );
         }
 
-        // Validar tamanho com retry para evitar race condition com lock do Windows
-        final fileSizeResult = await _getFileSizeWithRetry(sourceFile);
-        if (fileSizeResult.isError()) {
-          stopwatch.stop();
-          final failure = fileSizeResult.exceptionOrNull()!;
-          return rd.Failure(
-            FileSystemFailure(
-              message: 'Falha ao validar arquivo de origem: $failure',
-              originalError: failure,
-            ),
-          );
-        }
-
-        final fileSize = fileSizeResult.getOrNull()!;
-        LoggerService.info('Tamanho do arquivo de origem: $fileSize bytes');
-
         final destinationFile = File(destinationPath);
         if (await destinationFile.exists()) {
           LoggerService.info('Arquivo de destino já existe, será sobrescrito');
@@ -155,13 +139,15 @@ class LocalDestinationService implements ILocalDestinationService {
         }
 
         final copiedSize = await destinationFile.length();
+        final sourceSize = await sourceFile.length();
+        LoggerService.info('Tamanho do arquivo de origem: $sourceSize bytes');
         LoggerService.info('Tamanho do arquivo de destino: $copiedSize bytes');
 
-        if (copiedSize != fileSize) {
+        if (copiedSize != sourceSize) {
           throw FileSystemException(
             destinationPath,
             'Tamanho do arquivo de destino difere do arquivo de origem após cópia '
-            '(origem: $fileSize bytes, destino: $copiedSize bytes)',
+            '(origem: $sourceSize bytes, destino: $copiedSize bytes)',
           );
         }
 
@@ -315,119 +301,6 @@ class LocalDestinationService implements ILocalDestinationService {
       );
       return false;
     }
-  }
-
-  /// Valida o tamanho do arquivo com retry para evitar race condition com lock do Windows.
-  ///
-  /// Tenta múltiplas vezes obter o tamanho do arquivo, garantindo que:
-  /// - O arquivo não está vazio (0 bytes)
-  /// - O arquivo está acessível (sem lock)
-  ///
-  /// Retorna [rd.Success] com o tamanho em bytes se válido, ou [Failure] se falhar após todas as tentativas.
-  Future<rd.Result<int>> _getFileSizeWithRetry(
-    File file, {
-    int maxRetries = 5,
-    Duration initialDelay = const Duration(milliseconds: 200),
-    Duration maxDelay = const Duration(seconds: 2),
-    int backoffMultiplier = 2,
-  }) async {
-    var attempt = 0;
-    var delay = initialDelay;
-
-    while (attempt < maxRetries) {
-      attempt++;
-      try {
-        // Tentar abrir o arquivo para verificar se está liberado
-        final raf = await file.open();
-        final size = await raf.length();
-        await raf.close();
-
-        // Validar se o tamanho é válido
-        if (size == 0) {
-          throw FileSystemException(
-            file.path,
-            'Arquivo está vazio (0 bytes) - pode estar bloqueado ou em uso',
-          );
-        }
-
-        LoggerService.debug(
-          '[FileSizeValidation] Arquivo válido na tentativa $attempt/$maxRetries: ${file.path} ($size bytes)',
-        );
-        return rd.Success(size);
-      } on Object catch (e) {
-        final isLastAttempt = attempt >= maxRetries;
-
-        if (e is FileSystemException &&
-            e.message.contains('vazio') &&
-            !isLastAttempt) {
-          // Arquivo vazio pode ser lock temporário, tentar novamente
-          LoggerService.warning(
-            '[FileSizeValidation] Tentativa $attempt/$maxRetries: '
-            'Arquivo pode estar bloqueado (${file.path}): $e',
-          );
-
-          if (!isLastAttempt) {
-            LoggerService.info(
-              '[FileSizeValidation] Aguardando ${delay.inMilliseconds}ms antes da próxima tentativa...',
-            );
-            await Future.delayed(delay);
-
-            // Calcular próximo delay com backoff exponencial
-            final nextDelayMs = delay.inMilliseconds * backoffMultiplier;
-            delay = Duration(
-              milliseconds: nextDelayMs < maxDelay.inMilliseconds
-                  ? nextDelayMs
-                  : maxDelay.inMilliseconds,
-            );
-            continue;
-          }
-        }
-
-        if (isLastAttempt) {
-          LoggerService.error(
-            '[FileSizeValidation] Falha após $maxRetries tentativas: ${file.path}',
-            e,
-          );
-          return rd.Failure(
-            FileSystemFailure(
-              message:
-                  'Arquivo de origem está bloqueado ou inacessível após $maxRetries tentativas: $e',
-              originalError: e,
-            ),
-          );
-        }
-
-        // Outro tipo de erro (lock, permissão, etc), tentar novamente
-        LoggerService.warning(
-          '[FileSizeValidation] Erro na tentativa $attempt/$maxRetries: $e',
-        );
-
-        if (!isLastAttempt) {
-          LoggerService.info(
-            '[FileSizeValidation] Aguardando ${delay.inMilliseconds}ms antes da próxima tentativa...',
-          );
-          await Future.delayed(delay);
-
-          // Calcular próximo delay com backoff exponencial
-          final nextDelayMs = delay.inMilliseconds * backoffMultiplier;
-          delay = Duration(
-            milliseconds: nextDelayMs < maxDelay.inMilliseconds
-                ? nextDelayMs
-                : maxDelay.inMilliseconds,
-          );
-
-          // Continuar para próxima tentativa
-          continue;
-        }
-      }
-    }
-
-    return rd.Failure(
-      FileSystemFailure(
-        message:
-            'Falha ao validar tamanho do arquivo após $maxRetries tentativas',
-      ),
-    );
   }
 
   String _getPermissionErrorMessage(FileSystemException e, String path) {
