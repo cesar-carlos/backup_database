@@ -69,9 +69,15 @@ class ScheduleMessageHandler {
 
     if (snapshot.step == 'Concluído') {
       // Log para rastrear backupPath
-      LoggerService.info('[ScheduleMessageHandler] ===== ENVIANDO backupComplete =====');
-      LoggerService.info('[ScheduleMessageHandler] snapshot.backupPath: "${snapshot.backupPath}"');
-      LoggerService.info('[ScheduleMessageHandler] snapshot.backupPath está vazio? ${snapshot.backupPath == null || snapshot.backupPath!.isEmpty}');
+      LoggerService.info(
+        '[ScheduleMessageHandler] ===== ENVIANDO backupComplete =====',
+      );
+      LoggerService.info(
+        '[ScheduleMessageHandler] snapshot.backupPath: "${snapshot.backupPath}"',
+      );
+      LoggerService.info(
+        '[ScheduleMessageHandler] snapshot.backupPath está vazio? ${snapshot.backupPath == null || snapshot.backupPath!.isEmpty}',
+      );
 
       // AGUARDAR o envio da mensagem backupComplete completar
       await _sendToClient!(
@@ -83,7 +89,9 @@ class ScheduleMessageHandler {
           backupPath: snapshot.backupPath,
         ),
       );
-      LoggerService.info('[ScheduleMessageHandler] Mensagem backupComplete enviada');
+      LoggerService.info(
+        '[ScheduleMessageHandler] Mensagem backupComplete enviada',
+      );
       _clearCurrentBackup();
     } else if (snapshot.step == 'Erro') {
       unawaited(

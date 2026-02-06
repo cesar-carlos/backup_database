@@ -29,16 +29,17 @@ class TcpSocketServer implements SocketServerService {
     FileTransferMessageHandler? fileTransferHandler,
     MetricsMessageHandler? metricsHandler,
     SocketLoggerService? socketLogger,
-  })  : _protocol = protocol ?? BinaryProtocol(compression: PayloadCompression()),
-        _authentication = serverCredentialDao != null
-            ? ServerAuthentication(serverCredentialDao)
-            : null,
-        _clientManager = clientManager,
-        _connectionLogDao = connectionLogDao,
-        _scheduleHandler = scheduleHandler,
-        _fileTransferHandler = fileTransferHandler,
-        _metricsHandler = metricsHandler,
-        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>();
+  }) : _protocol =
+           protocol ?? BinaryProtocol(compression: PayloadCompression()),
+       _authentication = serverCredentialDao != null
+           ? ServerAuthentication(serverCredentialDao)
+           : null,
+       _clientManager = clientManager,
+       _connectionLogDao = connectionLogDao,
+       _scheduleHandler = scheduleHandler,
+       _fileTransferHandler = fileTransferHandler,
+       _metricsHandler = metricsHandler,
+       _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>();
 
   final BinaryProtocol _protocol;
   final ServerAuthentication? _authentication;
@@ -213,8 +214,7 @@ class TcpSocketServer implements SocketServerService {
 
   @override
   Future<void> sendToClient(String clientId, Message message) async {
-    final handler =
-        _clientManager?.getHandler(clientId) ?? _handlers[clientId];
+    final handler = _clientManager?.getHandler(clientId) ?? _handlers[clientId];
     if (handler == null) {
       LoggerService.warning('sendToClient: client not found: $clientId');
       return;

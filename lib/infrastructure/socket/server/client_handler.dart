@@ -26,13 +26,13 @@ class ClientHandler {
     ServerAuthentication? authentication,
     ConnectionLogDao? connectionLogDao,
     SocketLoggerService? socketLogger,
-  })  : _socket = socket,
-        _protocol = protocol,
-        _onDisconnect = onDisconnect,
-        _authentication = authentication,
-        _connectionLogDao = connectionLogDao,
-        _socketLogger = socketLogger,
-        _clientId = const Uuid().v4() {
+  }) : _socket = socket,
+       _protocol = protocol,
+       _onDisconnect = onDisconnect,
+       _authentication = authentication,
+       _connectionLogDao = connectionLogDao,
+       _socketLogger = socketLogger,
+       _clientId = const Uuid().v4() {
     _remoteAddress = _socket.remoteAddress.address;
     _remotePort = _socket.remotePort;
   }
@@ -66,15 +66,15 @@ class ClientHandler {
   void updateHeartbeat() => _lastHeartbeat = DateTime.now();
 
   ConnectedClient toConnectedClient(DateTime connectedAt) => ConnectedClient(
-        id: _clientId,
-        clientId: _clientId,
-        clientName: clientName.isEmpty ? _remoteAddress : clientName,
-        host: _remoteAddress,
-        port: _remotePort,
-        connectedAt: connectedAt,
-        lastHeartbeat: _lastHeartbeat,
-        isAuthenticated: isAuthenticated,
-      );
+    id: _clientId,
+    clientId: _clientId,
+    clientName: clientName.isEmpty ? _remoteAddress : clientName,
+    host: _remoteAddress,
+    port: _remotePort,
+    connectedAt: connectedAt,
+    lastHeartbeat: _lastHeartbeat,
+    isAuthenticated: isAuthenticated,
+  );
 
   void start() {
     if (_authentication == null) {
@@ -116,9 +116,9 @@ class ClientHandler {
         if (isAuthRequestMessage(message) && !_authHandled) {
           _authHandled = true;
           if (_authentication != null) {
-            _authentication
-                .validateAuthRequest(message)
-                .then((bool valid) async {
+            _authentication.validateAuthRequest(message).then((
+              bool valid,
+            ) async {
               isAuthenticated = valid;
               final serverId = message.payload['serverId'] as String?;
               try {
@@ -126,8 +126,9 @@ class ClientHandler {
                   clientHost: _remoteAddress,
                   serverId: serverId,
                   success: valid,
-                  errorMessage:
-                      valid ? null : 'Invalid password or credential not found',
+                  errorMessage: valid
+                      ? null
+                      : 'Invalid password or credential not found',
                   clientId: _clientId,
                 );
               } on Object catch (e) {

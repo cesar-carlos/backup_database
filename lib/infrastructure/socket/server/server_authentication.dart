@@ -18,22 +18,30 @@ class ServerAuthentication {
         serverId.isEmpty ||
         passwordHash == null ||
         passwordHash.isEmpty) {
-      LoggerService.warning('ServerAuthentication: missing serverId or passwordHash');
+      LoggerService.warning(
+        'ServerAuthentication: missing serverId or passwordHash',
+      );
       return false;
     }
 
     final credential = await _dao.getByServerId(serverId);
     if (credential == null || !credential.isActive) {
-      LoggerService.warning('ServerAuthentication: no active credential for serverId');
+      LoggerService.warning(
+        'ServerAuthentication: no active credential for serverId',
+      );
       return false;
     }
 
-    final valid =
-        PasswordHasher.constantTimeEquals(credential.passwordHash, passwordHash);
+    final valid = PasswordHasher.constantTimeEquals(
+      credential.passwordHash,
+      passwordHash,
+    );
     if (valid) {
       LoggerService.info('ServerAuthentication: success for serverId');
     } else {
-      LoggerService.warning('ServerAuthentication: invalid password for serverId');
+      LoggerService.warning(
+        'ServerAuthentication: invalid password for serverId',
+      );
     }
     return valid;
   }

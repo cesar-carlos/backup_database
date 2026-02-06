@@ -13,9 +13,9 @@ class MetricsMessageHandler {
     required IBackupHistoryRepository backupHistoryRepository,
     required IScheduleRepository scheduleRepository,
     required IBackupRunningState backupRunningState,
-  })  : _backupHistoryRepository = backupHistoryRepository,
-        _scheduleRepository = scheduleRepository,
-        _backupRunningState = backupRunningState;
+  }) : _backupHistoryRepository = backupHistoryRepository,
+       _scheduleRepository = scheduleRepository,
+       _backupRunningState = backupRunningState;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;
@@ -74,8 +74,7 @@ class MetricsMessageHandler {
     todayResult.fold(
       (list) {
         backupsToday = list.length;
-        failedToday =
-            list.where((b) => b.status == BackupStatus.error).length;
+        failedToday = list.where((b) => b.status == BackupStatus.error).length;
       },
       (_) {},
     );

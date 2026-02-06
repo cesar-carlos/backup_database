@@ -31,10 +31,10 @@ class HeartbeatManager {
     required void Function() onTimeout,
     Duration? interval,
     Duration? timeout,
-  })  : _sendHeartbeat = sendHeartbeat,
-        _onTimeout = onTimeout,
-        _interval = interval ?? SocketConfig.heartbeatInterval,
-        _timeout = timeout ?? SocketConfig.heartbeatTimeout;
+  }) : _sendHeartbeat = sendHeartbeat,
+       _onTimeout = onTimeout,
+       _interval = interval ?? SocketConfig.heartbeatInterval,
+       _timeout = timeout ?? SocketConfig.heartbeatTimeout;
 
   final void Function(Message) _sendHeartbeat;
   final void Function() _onTimeout;
