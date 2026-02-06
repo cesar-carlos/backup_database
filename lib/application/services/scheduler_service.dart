@@ -474,7 +474,9 @@ class SchedulerService implements ISchedulerService {
         // Log para diagnosticar problema de backupPath vazio
         LoggerService.info('===== COMPLETANDO BACKUP =====');
         LoggerService.info('stagingRelativePath: $stagingRelativePath');
-        LoggerService.info('backupHistory.backupPath: ${backupHistory.backupPath}');
+        LoggerService.info(
+          'backupHistory.backupPath: ${backupHistory.backupPath}',
+        );
         LoggerService.info('pathToSend: $pathToSend');
         LoggerService.info('pathToSend está vazio? ${pathToSend.isEmpty}');
 
@@ -489,7 +491,9 @@ class SchedulerService implements ISchedulerService {
           backupPath: pathToSend,
         );
 
-        LoggerService.info('completeBackup chamado com backupPath: "$pathToSend"');
+        LoggerService.info(
+          'completeBackup chamado com backupPath: "$pathToSend"',
+        );
       } on Object catch (e, s) {
         LoggerService.warning(
           'Erro ao atualizar progresso completeBackup',

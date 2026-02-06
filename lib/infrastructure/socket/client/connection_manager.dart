@@ -96,23 +96,26 @@ class ConnectionManager {
     completer?.complete(message);
   }
 
-  void _handleFileTransferMessage(
+  Future<void> _handleFileTransferMessage(
     int requestId,
     Message message,
     _FileTransferState state,
-  ) {
+  ) async {
     if (isFileTransferStartMetadata(message)) {
       state.fileName = getFileNameFromMetadata(message);
       state.totalChunks = getTotalChunksFromMetadata(message);
       state.isCompressed = getIsCompressedFromMetadata(message);
+      state.expectedSize = getFileSizeFromMetadata(message);
 
       // Validar SHA-256 (Fase 2)
       if (message.payload.containsKey('hash')) {
-        state.expectedHash = message.payload['hash'] as String?;
+        state.expectedHash = getHashFromMetadata(message);
       }
 
       LoggerService.info(
-        '[ConnectionManager] Metadata recebida: ${state.fileName}, chunks: ${state.totalChunks}, compressed: ${state.isCompressed}',
+        '[ConnectionManager] Metadata recebida: ${state.fileName}, '
+        'chunks: ${state.totalChunks}, compressed: ${state.isCompressed}, '
+        'expectedSize: ${state.expectedSize}',
       );
       return;
     }
@@ -131,7 +134,7 @@ class ConnectionManager {
           LoggerService.error(
             '[ConnectionManager] Falha ao descomprimir chunk ${chunk.chunkIndex}: $e',
           );
-          _cleanupTransfer(requestId);
+          await _cleanupTransfer(requestId);
           state.completer.complete(
             rd.Failure(Exception('Falha na descompressão GZIP: $e')),
           );
@@ -194,6 +197,30 @@ class ConnectionManager {
       LoggerService.info(
         '[ConnectionManager] Tamanho do arquivo parcial: $partSize bytes',
       );
+
+      // Validar tamanho esperado (se disponível no metadata)
+      if (state.expectedSize > 0) {
+        LoggerService.info(
+          '[ConnectionManager] Validando tamanho: esperado=${state.expectedSize}, baixado=$partSize',
+        );
+        if (partSize != state.expectedSize) {
+          LoggerService.error(
+            '[ConnectionManager] Tamanho incorreto! Esperado: ${state.expectedSize}, Recebido: $partSize',
+          );
+          await partFile.delete(); // Deletar arquivo incompleto/corrompido
+          throw FileSystemException(
+            'Tamanho do arquivo incorreto. Esperado: ${state.expectedSize}, Recebido: $partSize',
+            state.outputPath,
+          );
+        }
+        LoggerService.info(
+          '[ConnectionManager] ✓ Tamanho validado com sucesso!',
+        );
+      } else {
+        LoggerService.warning(
+          '[ConnectionManager] Tamanho esperado não disponível no metadata. Pulando validação de tamanho.',
+        );
+      }
 
       // Validar SHA-256 (Fase 2)
       if (state.expectedHash != null && state.expectedHash!.isNotEmpty) {
@@ -283,14 +310,24 @@ class ConnectionManager {
   Future<void> disconnect() async {
     _messageSubscription?.cancel();
     _messageSubscription = null;
-    for (final state in _activeTransfers.values) {
-      if (!state.completer.isCompleted) {
-        state.completer.complete(
+
+    // Fechar todos os fileSinks antes de limpar
+    for (final entry in _activeTransfers.entries) {
+      if (!entry.value.completer.isCompleted) {
+        entry.value.completer.complete(
           rd.Failure(Exception('Disconnected during file transfer')),
         );
+        try {
+          await entry.value.fileSink.close();
+        } on Object catch (e) {
+          LoggerService.warning(
+            '[ConnectionManager] Erro ao fechar fileSink durante disconnect: $e',
+          );
+        }
       }
     }
     _activeTransfers.clear();
+
     for (final state in _activeBackups.values) {
       if (!state.completer.isCompleted) {
         state.completer.complete(
@@ -519,20 +556,27 @@ class ConnectionManager {
       LoggerService.info('[ConnectionManager] Transferência completada!');
       return result;
     } on TimeoutException {
-      _cleanupTransfer(requestId);
+      await _cleanupTransfer(requestId);
       LoggerService.error('[ConnectionManager] Timeout na transferência!');
       return rd.Failure(TimeoutException('requestFile timeout'));
     } on Object catch (e) {
-      _cleanupTransfer(requestId);
+      await _cleanupTransfer(requestId);
       LoggerService.error('[ConnectionManager] Erro na transferência: $e');
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
     }
   }
 
-  void _cleanupTransfer(int requestId) {
+  Future<void> _cleanupTransfer(int requestId) async {
     final state = _activeTransfers.remove(requestId);
     if (state != null) {
-      state.fileSink.close(); // Fecha o arquivo para liberar lock
+      try {
+        // Fechar o sink de forma assíncrona para garantir liberação do lock
+        await state.fileSink.close();
+      } on Object catch (e) {
+        LoggerService.warning(
+          '[ConnectionManager] Erro ao fechar fileSink durante cleanup: $e',
+        );
+      }
     }
   }
 
@@ -716,6 +760,7 @@ class _FileTransferState {
   final void Function(int currentChunk, int totalChunks)? onProgress;
   String fileName = '';
   int totalChunks = 0;
+  int expectedSize = 0;
   String? expectedHash;
   bool isCompressed = false;
 }

@@ -19,11 +19,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
-typedef TransferProgressCallback = void Function(
-  String step,
-  String message,
-  double progress,
-);
+typedef TransferProgressCallback =
+    void Function(
+      String step,
+      String message,
+      double progress,
+    );
 
 class RemoteFileTransferProvider extends ChangeNotifier {
   RemoteFileTransferProvider(
@@ -224,7 +225,6 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         errorMessage: d.errorMessage,
       );
 
-  /// Executa uma operação com retentativa e exponential backoff
   Future<T> _executeWithRetry<T>(
     Future<T> Function() operation, {
     int maxAttempts = SocketConfig.maxRetries,
@@ -256,7 +256,6 @@ class RemoteFileTransferProvider extends ChangeNotifier {
           rethrow;
         }
 
-        // Aguarda com exponential backoff antes da próxima tentativa
         LoggerService.info(
           'Retrying $name in ${delay.inSeconds}s '
           '(attempt ${attempt + 1}/$maxAttempts)',
@@ -264,10 +263,9 @@ class RemoteFileTransferProvider extends ChangeNotifier {
 
         await Future.delayed(delay);
 
-        // Calcula próximo delay com exponential backoff
         final nextDelayMs = delay.inMilliseconds * backoffMultiplier;
         final nextDelay = Duration(milliseconds: nextDelayMs);
-        // Usa o delay menor entre o calculado e o máximo
+
         delay = nextDelay < maxDelay ? nextDelay : maxDelay;
       }
     }
@@ -345,9 +343,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             checksum: '',
           ),
         );
-      } on Object catch (_) {
-        // ignore persistence failure; transfer result already reported
-      }
+      } on Object catch (_) {}
       loadTransferHistory();
     }
 
@@ -358,10 +354,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
 
       final errors = <String>[];
       for (final id in _selectedDestinationIds) {
-        // ❌ CORREÇÃO: Não usar fold com closures async
         final destResult = await _destinationRepository.getById(id);
 
-        // Usa fold síncrono para extrair o destino ou adicionar erro
         final destination = destResult.fold(
           (dest) => dest,
           (failure) {
@@ -418,23 +412,24 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     }
     LoggerService.info('Cliente conectado ao servidor ✓');
 
-    // Get linked destinations to find tempPath
     final linkedIds = await getLinkedDestinationIds(scheduleId);
-    LoggerService.info('Destinos vinculados encontrados: ${linkedIds.length} destinos');
+    LoggerService.info(
+      'Destinos vinculados encontrados: ${linkedIds.length} destinos',
+    );
     if (linkedIds.isNotEmpty) {
       LoggerService.info('IDs dos destinos: ${linkedIds.join(', ')}');
     }
 
-    // Determine download directory:
-    // 1. Use tempPath from first linked destination if available
-    // 2. Otherwise fall back to user-configured output path or default
     String destDir;
     String? tempPathForCleanup;
 
     if (linkedIds.isNotEmpty) {
-      // Try to get tempPath from first linked destination
-      LoggerService.info('Buscando tempPath do primeiro destino vinculado: ${linkedIds.first}');
-      final firstDestResult = await _destinationRepository.getById(linkedIds.first);
+      LoggerService.info(
+        'Buscando tempPath do primeiro destino vinculado: ${linkedIds.first}',
+      );
+      final firstDestResult = await _destinationRepository.getById(
+        linkedIds.first,
+      );
       final firstDest = firstDestResult.fold(
         (dest) {
           LoggerService.info('Destino encontrado: ${dest.name}');
@@ -452,17 +447,18 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         LoggerService.info('✓ tempPath configurado: $destDir');
         LoggerService.info('✓ Usando tempPath do destino "${firstDest.name}"');
       } else {
-        // No tempPath configured, fall back to default behavior
-        LoggerService.warning('⚠ tempPath não configurado no destino, usando outputPath padrão');
+        LoggerService.warning(
+          '⚠ tempPath não configurado no destino, usando outputPath padrão',
+        );
         destDir = _outputPath.trim();
       }
     } else {
-      // No linked destinations, use default output path
-      LoggerService.warning('⚠ Nenhum destino vinculado, usando outputPath padrão');
+      LoggerService.warning(
+        '⚠ Nenhum destino vinculado, usando outputPath padrão',
+      );
       destDir = _outputPath.trim();
     }
 
-    // Fallback to default if destDir is still empty
     if (destDir.isEmpty) {
       LoggerService.info('destDir vazio, buscando caminho padrão...');
       final defaultPath = await getDefaultOutputPath();
@@ -567,21 +563,14 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         'Arquivo baixado verificado: $outputFilePath ($downloadedSize bytes)',
       );
 
-      // Pequeno delay para garantir que o arquivo está liberado no disco (Windows)
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      // Limpar arquivo do staging após download bem-sucedido
       try {
         LoggerService.info('Limpando staging do servidor...');
         await _transferStagingService.cleanupStaging(scheduleId);
         LoggerService.info('✓ Staging limpo');
       } on Object catch (e) {
-        // Não falhar a operação se cleanup falhar, apenas logar
         LoggerService.warning('Erro ao limpar staging (não crítico): $e');
-        // O cleanupOldBackups irá limpar arquivos órfãos posteriormente
       }
 
-      // Upload to linked destinations if any
       if (linkedIds.isNotEmpty) {
         LoggerService.info('===== INICIANDO UPLOAD PARA DESTINOS =====');
         LoggerService.info('Arquivo local: $outputFilePath');
@@ -597,7 +586,6 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         for (final id in linkedIds) {
           LoggerService.info('--- Processando destino: $id ---');
 
-          // Atualizar progresso antes de começar o upload
           final uploadProgress = linkedIds.isNotEmpty
               ? completedUploads / linkedIds.length
               : 0.0;
@@ -607,13 +595,13 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             uploadProgress,
           );
 
-          // ❌ CORREÇÃO: Não usar fold com closures async
           final destResult = await _destinationRepository.getById(id);
 
-          // Usa fold síncrono para extrair o destino ou adicionar erro
           final destination = destResult.fold(
             (dest) {
-              LoggerService.info('Destino carregado: ${dest.name} (tipo: ${dest.type.name})');
+              LoggerService.info(
+                'Destino carregado: ${dest.name} (tipo: ${dest.type.name})',
+              );
               return dest;
             },
             (failure) {
@@ -641,9 +629,9 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             localFilePath: outputFilePath,
             destination: destination,
             onProgress: (uploadProgressValue) {
-              // Calcular progresso total considerando todos os destinos
               final baseProgress = completedUploads / linkedIds.length;
-              final destinationProgress = (1 / linkedIds.length) * uploadProgressValue;
+              final destinationProgress =
+                  (1 / linkedIds.length) * uploadProgressValue;
               final totalProgress = baseProgress + destinationProgress;
 
               onTransferProgress?.call(
@@ -680,13 +668,11 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         if (errors.isEmpty) {
           LoggerService.info('✓ TODOS OS UPLOADS CONCLUÍDOS COM SUCESSO!');
         } else {
-          LoggerService.warning('⚠ Uploads concluídos com erros: $_uploadError');
+          LoggerService.warning(
+            '⚠ Uploads concluídos com erros: $_uploadError',
+          );
         }
 
-        // Cleanup temp file if:
-        // 1. We used a tempPath (not the default output)
-        // 2. All uploads succeeded (no errors)
-        // 3. The file still exists
         if (tempPathForCleanup != null && errors.isEmpty) {
           LoggerService.info('===== LIMPANDO ARQUIVO TEMPORÁRIO =====');
           LoggerService.info('TempPath: $tempPathForCleanup');
@@ -694,17 +680,24 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             final tempFile = File(outputFilePath);
             if (await tempFile.exists()) {
               await tempFile.delete();
-              LoggerService.info('✓ Arquivo temporário removido: $outputFilePath');
+              LoggerService.info(
+                '✓ Arquivo temporário removido: $outputFilePath',
+              );
             } else {
-              LoggerService.warning('Arquivo temporário não encontrado (pode já ter sido removido)');
+              LoggerService.warning(
+                'Arquivo temporário não encontrado (pode já ter sido removido)',
+              );
             }
           } on Object catch (e) {
-            // Don't fail the operation if cleanup fails
-            LoggerService.warning('Não foi possível remover arquivo temporário: $e');
+            LoggerService.warning(
+              'Não foi possível remover arquivo temporário: $e',
+            );
           }
         } else {
           if (tempPathForCleanup != null) {
-            LoggerService.info('Arquivo temporário PRESERVADO (houve erros no upload)');
+            LoggerService.info(
+              'Arquivo temporário PRESERVADO (houve erros no upload)',
+            );
           }
         }
       } else {

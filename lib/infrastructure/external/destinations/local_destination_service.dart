@@ -95,7 +95,6 @@ class LocalDestinationService implements ILocalDestinationService {
           'Iniciando cópia: $sourceFilePath -> $destinationPath',
         );
 
-        // Verificar se arquivo de origem existe e pode ser lido
         final sourceFile = File(sourceFilePath);
         if (!await sourceFile.exists()) {
           throw FileSystemException(
@@ -104,33 +103,22 @@ class LocalDestinationService implements ILocalDestinationService {
           );
         }
 
-        // Obter tamanho do arquivo para progresso
-        final fileSize = await sourceFile.length();
-        LoggerService.info('Tamanho do arquivo de origem: $fileSize bytes');
-
-        if (fileSize == 0) {
+        // Validar tamanho com retry para evitar race condition com lock do Windows
+        final fileSizeResult = await _getFileSizeWithRetry(sourceFile);
+        if (fileSizeResult.isError()) {
           stopwatch.stop();
+          final failure = fileSizeResult.exceptionOrNull()!;
           return rd.Failure(
             FileSystemFailure(
-              message:
-                  'Arquivo de origem está vazio (0 bytes): $sourceFilePath. '
-                  'Não é possível copiar para o destino.',
+              message: 'Falha ao validar arquivo de origem: $failure',
+              originalError: failure,
             ),
           );
         }
 
-        // Verificar se arquivo pode ser aberto (não está lockado)
-        try {
-          final raf = await sourceFile.open();
-          await raf.close();
-        } on Object catch (e) {
-          throw FileSystemException(
-            sourceFilePath,
-            'Arquivo de origem está bloqueado ou inacessível: $e',
-          );
-        }
+        final fileSize = fileSizeResult.getOrNull()!;
+        LoggerService.info('Tamanho do arquivo de origem: $fileSize bytes');
 
-        // Verificar se já existe arquivo no destino e pode ser sobrescrito
         final destinationFile = File(destinationPath);
         if (await destinationFile.exists()) {
           LoggerService.info('Arquivo de destino já existe, será sobrescrito');
@@ -145,7 +133,6 @@ class LocalDestinationService implements ILocalDestinationService {
           }
         }
 
-        // Copiar o arquivo (leitura/escrita com retry e atomicidade)
         LoggerService.info(
           'Executando cópia segura: $sourceFilePath -> $destinationPath',
         );
@@ -160,7 +147,6 @@ class LocalDestinationService implements ILocalDestinationService {
 
         stopwatch.stop();
 
-        // destinationFile já foi definido anteriormente neste escopo
         if (!await destinationFile.exists()) {
           throw FileSystemException(
             destinationPath,
@@ -172,7 +158,6 @@ class LocalDestinationService implements ILocalDestinationService {
         LoggerService.info('Tamanho do arquivo de destino: $copiedSize bytes');
 
         if (copiedSize != fileSize) {
-          // Se chegou aqui, algo muito estranho aconteceu pós-rename
           throw FileSystemException(
             destinationPath,
             'Tamanho do arquivo de destino difere do arquivo de origem após cópia '
@@ -184,7 +169,6 @@ class LocalDestinationService implements ILocalDestinationService {
           'Arquivo copiado com sucesso: $destinationPath ($copiedSize bytes)',
         );
 
-        // Notificar progresso completo
         onProgress?.call(1);
 
         return rd.Success(
@@ -234,7 +218,7 @@ class LocalDestinationService implements ILocalDestinationService {
           LoggerService.info(
             'Tentativa de cópia $attempt/$maxRetries para $destinationPath...',
           );
-          // Exponential backoff simples: 500ms, 1000ms, 2000ms
+
           await Future.delayed(Duration(milliseconds: 500 * attempt));
         }
 
@@ -243,13 +227,13 @@ class LocalDestinationService implements ILocalDestinationService {
           destinationPath: destinationPath,
           onProgress: onProgress,
         );
-        return; // Sucesso
+        return;
       } on Object catch (e) {
         lastError = e;
         LoggerService.warning(
           'Falha na tentativa $attempt/$maxRetries de copiar arquivo: $e',
         );
-        // Se for erro de permissão fatal, não adianta tentar de novo
+
         if (e is FileSystemException && (e.osError?.errorCode == 5)) {
           rethrow;
         }
@@ -273,7 +257,6 @@ class LocalDestinationService implements ILocalDestinationService {
     final tempFile = File(tempDestinationPath);
     final finalFile = File(destinationPath);
 
-    // Limpar temp antigo se existir (de falha anterior)
     if (await tempFile.exists()) {
       try {
         await tempFile.delete();
@@ -288,13 +271,11 @@ class LocalDestinationService implements ILocalDestinationService {
     final sourceSize = await sourceFile.length();
 
     try {
-      // 1. Copiar para .tmp
       await sourceFile.copyToWithBugFix(
         tempDestinationPath,
         onProgress: onProgress,
       );
 
-      // 2. Verificar integridade do .tmp
       final tempSize = await tempFile.length();
       if (tempSize != sourceSize) {
         throw FileSystemException(
@@ -304,9 +285,6 @@ class LocalDestinationService implements ILocalDestinationService {
         );
       }
 
-      // 3. Rename atômico (ou move) para o final
-      // No Windows, rename falha se o destino existe, então deletamos antes.
-      // O delete é seguro pois já validamos o .tmp
       if (await finalFile.exists()) {
         await finalFile.delete();
       }
@@ -315,9 +293,7 @@ class LocalDestinationService implements ILocalDestinationService {
       if (await tempFile.exists()) {
         try {
           await tempFile.delete();
-        } on Object catch (_) {
-          // ignore
-        }
+        } on Object catch (_) {}
       }
       rethrow;
     }
@@ -339,6 +315,102 @@ class LocalDestinationService implements ILocalDestinationService {
       );
       return false;
     }
+  }
+
+  /// Valida o tamanho do arquivo com retry para evitar race condition com lock do Windows.
+  ///
+  /// Tenta múltiplas vezes obter o tamanho do arquivo, garantindo que:
+  /// - O arquivo não está vazio (0 bytes)
+  /// - O arquivo está acessível (sem lock)
+  ///
+  /// Retorna [rd.Success] com o tamanho em bytes se válido, ou [Failure] se falhar após todas as tentativas.
+  Future<rd.Result<int>> _getFileSizeWithRetry(
+    File file, {
+    int maxRetries = 5,
+    Duration initialDelay = const Duration(milliseconds: 200),
+    Duration maxDelay = const Duration(seconds: 2),
+    int backoffMultiplier = 2,
+  }) async {
+    var attempt = 0;
+    var delay = initialDelay;
+
+    while (attempt < maxRetries) {
+      attempt++;
+      try {
+        // Tentar abrir o arquivo para verificar se está liberado
+        final raf = await file.open();
+        final size = await raf.length();
+        await raf.close();
+
+        // Validar se o tamanho é válido
+        if (size == 0) {
+          throw FileSystemException(
+            file.path,
+            'Arquivo está vazio (0 bytes) - pode estar bloqueado ou em uso',
+          );
+        }
+
+        LoggerService.debug(
+          '[FileSizeValidation] Arquivo válido na tentativa $attempt/$maxRetries: ${file.path} ($size bytes)',
+        );
+        return rd.Success(size);
+      } on Object catch (e) {
+        final isLastAttempt = attempt >= maxRetries;
+
+        if (e is FileSystemException &&
+            e.message.contains('vazio') &&
+            !isLastAttempt) {
+          // Arquivo vazio pode ser lock temporário, tentar novamente
+          LoggerService.warning(
+            '[FileSizeValidation] Tentativa $attempt/$maxRetries: '
+            'Arquivo pode estar bloqueado (${file.path}): $e',
+          );
+
+          if (!isLastAttempt) {
+            LoggerService.info(
+              '[FileSizeValidation] Aguardando ${delay.inMilliseconds}ms antes da próxima tentativa...',
+            );
+            await Future.delayed(delay);
+
+            // Calcular próximo delay com backoff exponencial
+            final nextDelayMs = delay.inMilliseconds * backoffMultiplier;
+            delay = Duration(
+              milliseconds: nextDelayMs < maxDelay.inMilliseconds
+                  ? nextDelayMs
+                  : maxDelay.inMilliseconds,
+            );
+            continue;
+          }
+        }
+
+        if (isLastAttempt) {
+          LoggerService.error(
+            '[FileSizeValidation] Falha após $maxRetries tentativas: ${file.path}',
+            e,
+          );
+          return rd.Failure(
+            FileSystemFailure(
+              message:
+                  'Arquivo de origem está bloqueado ou inacessível após $maxRetries tentativas: $e',
+              originalError: e,
+            ),
+          );
+        }
+
+        // Outro tipo de erro, tentar novamente
+        LoggerService.warning(
+          '[FileSizeValidation] Erro na tentativa $attempt/$maxRetries: $e',
+        );
+        await Future.delayed(delay);
+      }
+    }
+
+    return rd.Failure(
+      FileSystemFailure(
+        message:
+            'Falha ao validar tamanho do arquivo após $maxRetries tentativas',
+      ),
+    );
   }
 
   String _getPermissionErrorMessage(FileSystemException e, String path) {
@@ -447,7 +519,7 @@ class LocalDestinationService implements ILocalDestinationService {
 }
 
 extension FileCopyWithProgress on File {
-  static const int _chunkSize = 1024 * 1024; // 1MB chunks
+  static const int _chunkSize = 1024 * 1024;
 
   Future<void> copyToWithBugFix(
     String newPath, {
@@ -457,7 +529,6 @@ extension FileCopyWithProgress on File {
       '[CopyDebug] Iniciando copyToWithBugFix: $path -> $newPath',
     );
 
-    // Retry na abertura do arquivo de origem para evitar locks transientes
     final sourceRaf = await _openWithRetry();
     RandomAccessFile? destRaf;
 
@@ -479,7 +550,6 @@ extension FileCopyWithProgress on File {
 
         sourceRaf.setPosition(bytesCopied);
 
-        // CORREÇÃO: Verificar bytes retornados pelo readInto
         final bytesRead = await sourceRaf.readInto(buffer, 0, bytesToRead);
 
         if (bytesRead == 0 && bytesToRead > 0) {
@@ -489,7 +559,6 @@ extension FileCopyWithProgress on File {
           );
         }
 
-        // Escrever usando RAF
         if (bytesRead < bytesToRead) {
           await destRaf.writeFrom(buffer, 0, bytesRead);
           bytesCopied += bytesRead;

@@ -81,12 +81,14 @@ Message createFileTransferStartMetadataMessage({
   required int fileSize,
   required int totalChunks,
   bool isCompressed = false,
+  String? hash,
 }) {
   final payload = <String, dynamic>{
     'fileName': fileName,
     'fileSize': fileSize,
     'totalChunks': totalChunks,
     'isCompressed': isCompressed,
+    ...? (hash != null ? {'hash': hash} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -272,6 +274,9 @@ int getTotalChunksFromMetadata(Message message) =>
 
 bool getIsCompressedFromMetadata(Message message) =>
     message.payload['isCompressed'] as bool? ?? false;
+
+String? getHashFromMetadata(Message message) =>
+    message.payload['hash'] as String?;
 
 FileChunk getFileChunkFromPayload(Message message) =>
     FileChunk.fromJson(Map<String, dynamic>.from(message.payload));
