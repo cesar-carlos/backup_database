@@ -397,11 +397,28 @@ class LocalDestinationService implements ILocalDestinationService {
           );
         }
 
-        // Outro tipo de erro, tentar novamente
+        // Outro tipo de erro (lock, permissão, etc), tentar novamente
         LoggerService.warning(
           '[FileSizeValidation] Erro na tentativa $attempt/$maxRetries: $e',
         );
-        await Future.delayed(delay);
+
+        if (!isLastAttempt) {
+          LoggerService.info(
+            '[FileSizeValidation] Aguardando ${delay.inMilliseconds}ms antes da próxima tentativa...',
+          );
+          await Future.delayed(delay);
+
+          // Calcular próximo delay com backoff exponencial
+          final nextDelayMs = delay.inMilliseconds * backoffMultiplier;
+          delay = Duration(
+            milliseconds: nextDelayMs < maxDelay.inMilliseconds
+                ? nextDelayMs
+                : maxDelay.inMilliseconds,
+          );
+
+          // Continuar para próxima tentativa
+          continue;
+        }
       }
     }
 
