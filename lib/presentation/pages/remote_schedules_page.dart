@@ -337,25 +337,30 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
   ) async {
     final transferProvider = context.read<RemoteFileTransferProvider>();
     final destinationProvider = context.read<DestinationProvider>();
+
+    if (destinationProvider.destinations.isEmpty ||
+        destinationProvider.isLoading) {
+      await destinationProvider.loadDestinations();
+    }
+    if (!context.mounted) return;
+
     final destinations = destinationProvider.destinations;
     if (destinations.isEmpty) {
-      if (context.mounted) {
-        await showDialog<void>(
-          context: context,
-          builder: (context) => ContentDialog(
-            title: const Text('Destinos após transferir'),
-            content: const Text(
-              'Cadastre destinos em Destinos para vincular aqui.',
-            ),
-            actions: [
-              Button(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
+      await showDialog<void>(
+        context: context,
+        builder: (context) => ContentDialog(
+          title: const Text('Destinos após transferir'),
+          content: const Text(
+            'Cadastre destinos em Destinos para vincular aqui.',
           ),
-        );
-      }
+          actions: [
+            Button(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
       return;
     }
 
