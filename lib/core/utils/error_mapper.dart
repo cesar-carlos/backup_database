@@ -50,6 +50,18 @@ String mapExceptionToMessage(Object? exception) {
     return 'Conecte-se a um servidor para realizar esta operação.';
   }
 
+  if (message.contains('Disconnected') ||
+      message.contains('disconnected') ||
+      message.contains('Conexão perdida')) {
+    if (message.contains('during file transfer')) {
+      return 'Conexão perdida durante o download. Reconecte-se e tente novamente.';
+    }
+    if (message.contains('during backup')) {
+      return 'Conexão perdida durante o backup. O backup pode ter continuado no servidor.';
+    }
+    return 'Você foi desconectado do servidor. Reconecte-se para continuar.';
+  }
+
   if ((message.contains('conclusão do backup') ||
           message.contains('conclusao do backup')) &&
       message.contains('limite')) {

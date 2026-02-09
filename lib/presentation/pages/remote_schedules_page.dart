@@ -104,8 +104,9 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                             const SizedBox(height: 16),
                             Text(
                               provider.error!,
-                              style:
-                                  FluentTheme.of(context).typography.bodyLarge,
+                              style: FluentTheme.of(
+                                context,
+                              ).typography.bodyLarge,
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),
@@ -136,6 +137,13 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
         ],
       ),
     );
+  }
+
+  bool _isDisconnectionError(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('desconectado') ||
+        lower.contains('conexão perdida') ||
+        lower.contains('reconecte-se');
   }
 
   Widget _buildNotConnected(BuildContext context) {
@@ -187,6 +195,15 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                 content: Text(provider.error!),
                 severity: InfoBarSeverity.error,
                 onClose: () => provider.clearError(),
+                action: _isDisconnectionError(provider.error!)
+                    ? Button(
+                        onPressed: () {
+                          provider.clearError();
+                          context.go('/server-login');
+                        },
+                        child: const Text('Reconectar'),
+                      )
+                    : null,
               ),
             ),
           ],
@@ -206,7 +223,8 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
               separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final schedule = provider.schedules[index];
-                final isOperating = schedule.id == provider.updatingScheduleId ||
+                final isOperating =
+                    schedule.id == provider.updatingScheduleId ||
                     schedule.id == provider.executingScheduleId;
                 return ScheduleListItem(
                   schedule: schedule,
@@ -214,23 +232,24 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                   onToggleEnabled: schedule.id == provider.updatingScheduleId
                       ? null
                       : (enabled) => _onToggleEnabled(
-                            context,
-                            provider,
-                            schedule,
-                            enabled,
-                          ),
-                  onRunNow: schedule.id == provider.executingScheduleId ||
+                          context,
+                          provider,
+                          schedule,
+                          enabled,
+                        ),
+                  onRunNow:
+                      schedule.id == provider.executingScheduleId ||
                           !schedule.enabled
                       ? null
                       : () => _onRunNow(context, provider, schedule.id),
                   onTransferDestinations:
                       schedule.id == provider.updatingScheduleId ||
-                              schedule.id == provider.executingScheduleId
-                          ? null
-                          : () => _showTransferDestinationsDialog(
-                                context,
-                                schedule,
-                              ),
+                          schedule.id == provider.executingScheduleId
+                      ? null
+                      : () => _showTransferDestinationsDialog(
+                          context,
+                          schedule,
+                        ),
                 );
               },
             ),
@@ -505,8 +524,7 @@ Widget _buildBackupProgressCard(
                     const SizedBox(height: 4),
                     Text(
                       schedule.name,
-                      style:
-                          FluentTheme.of(context).typography.bodyStrong,
+                      style: FluentTheme.of(context).typography.bodyStrong,
                     ),
                   ],
                 ),

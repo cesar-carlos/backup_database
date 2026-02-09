@@ -8,6 +8,7 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/dashboard/dashboard.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -91,6 +92,26 @@ class _DashboardPageState extends State<DashboardPage> {
                               child: ProgressRing(),
                             ),
                         ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            if (isClientMode)
+              Consumer<ServerConnectionProvider>(
+                builder: (context, connProvider, _) {
+                  if (connProvider.isConnected) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: InfoBar(
+                      title: const Text('Desconectado'),
+                      content: const Text(
+                        'Conecte-se a um servidor para ver métricas em tempo real.',
+                      ),
+                      severity: InfoBarSeverity.warning,
+                      action: Button(
+                        onPressed: () => context.go('/server-login'),
+                        child: const Text('Conectar'),
                       ),
                     ),
                   );
