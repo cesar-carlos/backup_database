@@ -1,4 +1,3 @@
-import 'package:backup_database/application/providers/connection_log_provider.dart';
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
@@ -172,7 +171,8 @@ class _MainLayoutState extends State<MainLayout> {
           context.read<RemoteSchedulesProvider>().loadSchedules();
         }
       case RouteNames.connectionLogs:
-        context.read<ConnectionLogProvider>().loadLogs();
+        // loadLogs() é chamado no initState do widget
+        break;
     }
   }
 

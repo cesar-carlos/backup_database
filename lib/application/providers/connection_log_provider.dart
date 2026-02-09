@@ -7,9 +7,7 @@ enum ConnectionLogFilter { all, success, failed }
 const int _defaultRecentLimit = 100;
 
 class ConnectionLogProvider extends ChangeNotifier {
-  ConnectionLogProvider(this._repository) {
-    loadLogs();
-  }
+  ConnectionLogProvider(this._repository);
 
   final IConnectionLogRepository _repository;
 
