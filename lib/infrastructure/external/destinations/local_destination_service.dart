@@ -31,6 +31,21 @@ class LocalDestinationService implements ILocalDestinationService {
         );
       }
 
+      final sizeValidation = await _validateSourceFileWithRetry(sourceFile);
+      if (sizeValidation.isError()) {
+        final error = sizeValidation.exceptionOrNull();
+        final message = error is Failure
+            ? error.message
+            : error?.toString() ?? 'Erro desconhecido';
+        return rd.Failure(
+          FileSystemFailure(
+            message: 'Arquivo de origem inválido: $sourceFilePath\n'
+                'O arquivo pode estar ainda sendo baixado ou travado pelo sistema.\n'
+                'Detalhes: $message',
+          ),
+        );
+      }
+
       var destinationDir = config.path;
       if (config.createSubfoldersByDate) {
         final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -301,6 +316,67 @@ class LocalDestinationService implements ILocalDestinationService {
       );
       return false;
     }
+  }
+
+  Future<rd.Result<int>> _validateSourceFileWithRetry(File sourceFile) async {
+    const maxAttempts = 10;
+    const initialDelayMs = 100;
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final size = await sourceFile.length();
+
+        if (size > 0) {
+          if (attempt > 0) {
+            LoggerService.info(
+              '[ValidateFile] Arquivo válido na tentativa ${attempt + 1}: $size bytes',
+            );
+          }
+          return rd.Success(size);
+        }
+
+        LoggerService.warning(
+          '[ValidateFile] Arquivo com 0 bytes na tentativa ${attempt + 1}, '
+          'aguardando liberação...',
+        );
+
+        if (attempt < maxAttempts - 1) {
+          final delay = initialDelayMs * (attempt + 1);
+          await Future.delayed(Duration(milliseconds: delay));
+        }
+      } on FileSystemException catch (e) {
+        LoggerService.warning(
+          '[ValidateFile] Erro ao ler arquivo (tentativa ${attempt + 1}): $e',
+        );
+
+        if (attempt < maxAttempts - 1) {
+          final delay = initialDelayMs * (attempt + 1);
+          await Future.delayed(Duration(milliseconds: delay));
+        } else {
+          return rd.Failure(
+            FileSystemFailure(
+              message: 'Arquivo travado ou inacessível após $maxAttempts tentativas',
+              originalError: e,
+            ),
+          );
+        }
+      } on Object catch (e) {
+        LoggerService.error('[ValidateFile] Erro inesperado ao validar arquivo', e);
+        return rd.Failure(
+          FileSystemFailure(
+            message: 'Erro inesperado ao validar arquivo: $e',
+            originalError: e,
+          ),
+        );
+      }
+    }
+
+    return const rd.Failure(
+      FileSystemFailure(
+        message: 'Arquivo inválido (0 bytes) após $maxAttempts tentativas. '
+            'O arquivo pode estar ainda sendo baixado.',
+      ),
+    );
   }
 
   String _getPermissionErrorMessage(FileSystemException e, String path) {

@@ -189,6 +189,9 @@ class ConnectionManager {
       await state.fileSink.flush();
       await state.fileSink.close();
 
+      // AGUARDAR liberação do arquivo no Windows (bug de lock)
+      await _waitForFileRelease(state.partFilePath);
+
       final partFile = File(state.partFilePath);
       final finalFile = File(state.outputPath);
 
@@ -264,6 +267,38 @@ class ConnectionManager {
       state.completer.complete(
         rd.Failure(e is Exception ? e : Exception(e.toString())),
       );
+    }
+  }
+
+  /// Aguarda o arquivo ser liberado pelo sistema operacional.
+  /// Necessário no Windows para evitar lock quando o arquivo ainda está
+  /// sendo usado por outro processo (antivirus, indexador, etc).
+  Future<void> _waitForFileRelease(String filePath) async {
+    const maxAttempts = 10;
+    const delayMs = 100;
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        // Tentar abrir o arquivo em modo leitura para verificar se está liberado
+        final file = File(filePath);
+        final handle = await file.open();
+        await handle.close();
+        LoggerService.info(
+          '[ConnectionManager] Arquivo liberado na tentativa ${attempt + 1}',
+        );
+        return; // Arquivo liberado
+      } on Object catch (e) {
+        LoggerService.debug(
+          '[ConnectionManager] Arquivo ainda travado (tentativa ${attempt + 1}): $e',
+        );
+        if (attempt < maxAttempts - 1) {
+          await Future.delayed(Duration(milliseconds: delayMs * (attempt + 1)));
+        } else {
+          LoggerService.warning(
+            '[ConnectionManager] Arquivo ainda travado após $maxAttempts tentativas. Continuando...',
+          );
+        }
+      }
     }
   }
 
