@@ -5,6 +5,7 @@ import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/logging/logging.dart';
+import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
@@ -53,6 +54,7 @@ Future<void> setupCoreModule(GetIt getIt) async {
   getIt.registerSingleton<SocketLoggerService>(socketLogger);
 
   getIt.registerLazySingleton<ClipboardService>(ClipboardService.new);
+  getIt.registerLazySingleton<TempDirectoryService>(TempDirectoryService.new);
   getIt.registerLazySingleton<ISingleInstanceService>(
     SingleInstanceService.new,
   );

@@ -50,7 +50,7 @@ class AppDatabase extends _$AppDatabase {
     : super(LazyDatabase(() async => NativeDatabase.memory()));
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration {
@@ -631,6 +631,34 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v15 para backup_destinations_table (temp_path)',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 16) {
+          try {
+            final columns = await customSelect(
+              'PRAGMA table_info(backup_destinations_table)',
+            ).get();
+            final hasTempPathColumn = columns.any(
+              (row) => row.data['name'] == 'temp_path',
+            );
+
+            if (hasTempPathColumn) {
+              await customStatement(
+                'ALTER TABLE backup_destinations_table '
+                'DROP COLUMN temp_path',
+              );
+              LoggerService.info(
+                'Migração v16: Coluna temp_path removida de '
+                'backup_destinations_table. Agora usando TempDirectoryService.',
+              );
+            }
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v16 para backup_destinations_table (remover temp_path)',
               e,
               stackTrace,
             );

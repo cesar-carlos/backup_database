@@ -1,9 +1,10 @@
 import 'dart:convert';
-import 'dart:io' show Directory, File;
+import 'dart:io' show File;
 
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
@@ -15,7 +16,6 @@ import 'package:backup_database/infrastructure/socket/client/connection_manager.
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -30,13 +30,15 @@ class RemoteFileTransferProvider extends ChangeNotifier {
   RemoteFileTransferProvider(
     this._connectionManager,
     this._destinationRepository,
-    this._sendFileToDestinationService, {
+    this._sendFileToDestinationService,
+    this._tempDirectoryService, {
     FileTransferDao? fileTransferDao,
   }) : _fileTransferDao = fileTransferDao;
 
   final ConnectionManager _connectionManager;
   final IBackupDestinationRepository _destinationRepository;
   final ISendFileToDestinationService _sendFileToDestinationService;
+  final TempDirectoryService _tempDirectoryService;
   final FileTransferDao? _fileTransferDao;
 
   ITransferStagingService? _stagingServiceCache;
@@ -395,8 +397,6 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     return success;
   }
 
-  static const String _receivedBackupsSubdir = 'ReceivedBackups';
-
   Future<bool> transferCompletedBackupToClient(
     String scheduleId,
     String relativePath, {
@@ -420,65 +420,13 @@ class RemoteFileTransferProvider extends ChangeNotifier {
       LoggerService.info('IDs dos destinos: ${linkedIds.join(', ')}');
     }
 
-    String destDir;
-    String? tempPathForCleanup;
+    // Usa TempDirectoryService para obter pasta de downloads
+    LoggerService.info('Obtendo pasta de downloads do TempDirectoryService...');
+    final downloadsDir = await _tempDirectoryService.getDownloadsDirectory();
+    final destDir = downloadsDir.path;
+    final tempPathForCleanup = destDir;
 
-    if (linkedIds.isNotEmpty) {
-      LoggerService.info(
-        'Buscando tempPath do primeiro destino vinculado: ${linkedIds.first}',
-      );
-      final firstDestResult = await _destinationRepository.getById(
-        linkedIds.first,
-      );
-      final firstDest = firstDestResult.fold(
-        (dest) {
-          LoggerService.info('Destino encontrado: ${dest.name}');
-          return dest;
-        },
-        (failure) {
-          LoggerService.warning('Destino não encontrado: $failure');
-          return null;
-        },
-      );
-
-      if (firstDest?.tempPath != null && firstDest!.tempPath!.isNotEmpty) {
-        destDir = firstDest.tempPath!;
-        tempPathForCleanup = firstDest.tempPath;
-        LoggerService.info('✓ tempPath configurado: $destDir');
-        LoggerService.info('✓ Usando tempPath do destino "${firstDest.name}"');
-      } else {
-        LoggerService.warning(
-          '⚠ tempPath não configurado no destino, usando outputPath padrão',
-        );
-        destDir = _outputPath.trim();
-      }
-    } else {
-      LoggerService.warning(
-        '⚠ Nenhum destino vinculado, usando outputPath padrão',
-      );
-      destDir = _outputPath.trim();
-    }
-
-    if (destDir.isEmpty) {
-      LoggerService.info('destDir vazio, buscando caminho padrão...');
-      final defaultPath = await getDefaultOutputPath();
-      if (defaultPath != null && defaultPath.isNotEmpty) {
-        destDir = defaultPath;
-        LoggerService.info('Usando defaultPath: $destDir');
-      } else {
-        final appDir = await getApplicationDocumentsDirectory();
-        destDir = p.join(appDir.path, _receivedBackupsSubdir);
-        LoggerService.info('Usando appDir + ReceivedBackups: $destDir');
-      }
-    }
-
-    LoggerService.info('Diretório final de download: $destDir');
-
-    final dir = Directory(destDir);
-    if (!await dir.exists()) {
-      LoggerService.info('Criando diretório de download: $destDir');
-      await dir.create(recursive: true);
-    }
+    LoggerService.info('✓ Pasta de downloads configurada: $destDir');
 
     final outputFilePath = p.join(destDir, p.basename(relativePath));
     LoggerService.info('Caminho completo do arquivo: $outputFilePath');
@@ -673,7 +621,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
           );
         }
 
-        if (tempPathForCleanup != null && errors.isEmpty) {
+        if (errors.isEmpty) {
           LoggerService.info('===== LIMPANDO ARQUIVO TEMPORÁRIO =====');
           LoggerService.info('TempPath: $tempPathForCleanup');
           try {
@@ -694,14 +642,32 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             );
           }
         } else {
-          if (tempPathForCleanup != null) {
-            LoggerService.info(
-              'Arquivo temporário PRESERVADO (houve erros no upload)',
-            );
-          }
+          LoggerService.info(
+            'Arquivo temporário PRESERVADO (houve erros no upload)',
+          );
         }
       } else {
         LoggerService.info('Nenhum destino vinculado, pulando upload');
+
+        // Limpar arquivo temporário mesmo sem destinos vinculados
+        LoggerService.info('===== LIMPANDO ARQUIVO TEMPORÁRIO (sem destinos) =====');
+        try {
+          final tempFile = File(outputFilePath);
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+            LoggerService.info(
+              '✓ Arquivo temporário removido: $outputFilePath',
+            );
+          } else {
+            LoggerService.warning(
+              'Arquivo temporário não encontrado (pode já ter sido removido)',
+            );
+          }
+        } on Object catch (e) {
+          LoggerService.warning(
+            'Não foi possível remover arquivo temporário: $e',
+          );
+        }
       }
     }
 

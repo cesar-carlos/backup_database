@@ -9,7 +9,6 @@ class BackupDestination {
     required this.config,
     String? id,
     this.enabled = true,
-    this.tempPath,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : id = id ?? const Uuid().v4(),
@@ -20,7 +19,6 @@ class BackupDestination {
   final DestinationType type;
   final String config;
   final bool enabled;
-  final String? tempPath;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -30,7 +28,6 @@ class BackupDestination {
     DestinationType? type,
     String? config,
     bool? enabled,
-    String? tempPath,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -40,7 +37,6 @@ class BackupDestination {
       type: type ?? this.type,
       config: config ?? this.config,
       enabled: enabled ?? this.enabled,
-      tempPath: tempPath ?? this.tempPath,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );

@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
@@ -130,6 +131,7 @@ Future<void> setupPresentationModule(GetIt getIt) async {
       getIt<ConnectionManager>(),
       getIt<IBackupDestinationRepository>(),
       getIt<ISendFileToDestinationService>(),
+      getIt<TempDirectoryService>(),
       fileTransferDao: getIt<AppDatabase>().fileTransferDao,
     ),
   );
