@@ -103,30 +103,39 @@ class _ConnectionLogsContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Filtro e ações
         Row(
           children: [
-            ComboBox<ConnectionLogFilter>(
-              value: provider.filter,
-              items: filterOptions
-                  .map(
-                    (f) => ComboBoxItem<ConnectionLogFilter>(
-                      value: f,
-                      child: Text(_filterLabel(f)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) provider.setFilter(value);
-              },
+            SizedBox(
+              width: 200,
+              child: ComboBox<ConnectionLogFilter>(
+                value: provider.filter,
+                isExpanded: true,
+                placeholder: const Text('Filtrar'),
+                items: filterOptions
+                    .map(
+                      (f) => ComboBoxItem<ConnectionLogFilter>(
+                        value: f,
+                        child: Text(_filterLabel(f)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) provider.setFilter(value);
+                },
+              ),
             ),
             const SizedBox(width: 8),
-            CommandBar(
-              primaryItems: [
-                CommandBarButton(
-                  icon: const Icon(FluentIcons.refresh),
-                  onPressed: provider.loadLogs,
-                ),
-              ],
+            Button(
+              onPressed: provider.loadLogs,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(FluentIcons.refresh, size: 16),
+                  SizedBox(width: 6),
+                  Text('Atualizar'),
+                ],
+              ),
             ),
           ],
         ),
@@ -136,7 +145,7 @@ class _ConnectionLogsContent extends StatelessWidget {
             itemCount: provider.logs.length,
             separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) =>
-              _ConnectionLogRow(log: provider.logs[index]),
+                _ConnectionLogRow(log: provider.logs[index]),
           ),
         ),
       ],
@@ -149,8 +158,7 @@ class _ConnectionLogRow extends StatelessWidget {
 
   final ConnectionLog log;
 
-  static final DateFormat _dateFormat =
-      DateFormat('dd/MM/yyyy HH:mm:ss');
+  static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm:ss');
 
   @override
   Widget build(BuildContext context) {
@@ -190,8 +198,8 @@ class _ConnectionLogRow extends StatelessWidget {
                     SelectableText(
                       log.errorMessage!,
                       style: FluentTheme.of(context).typography.body?.copyWith(
-                            color: AppColors.error,
-                          ),
+                        color: AppColors.error,
+                      ),
                     ),
                   ],
                 ],
@@ -232,8 +240,8 @@ class _StatusChip extends StatelessWidget {
           Text(
             success ? 'Sucesso' : 'Falha',
             style: FluentTheme.of(context).typography.caption?.copyWith(
-                  color: color,
-                ),
+              color: color,
+            ),
           ),
         ],
       ),
