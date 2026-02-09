@@ -1,4 +1,6 @@
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
+import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/error_mapper.dart' show mapExceptionToMessage;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -9,10 +11,13 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   RemoteSchedulesProvider(
     this._connectionManager, {
     RemoteFileTransferProvider? transferProvider,
-  }) : _transferProvider = transferProvider;
+    TempDirectoryService? tempDirectoryService,
+  })  : _transferProvider = transferProvider,
+        _tempDirectoryService = tempDirectoryService ?? getIt<TempDirectoryService>();
 
   final ConnectionManager _connectionManager;
   final RemoteFileTransferProvider? _transferProvider;
+  final TempDirectoryService _tempDirectoryService;
 
   List<Schedule> _schedules = [];
   bool _isLoading = false;
@@ -129,6 +134,31 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _transferProgress = null;
     _isTransferringFile = false;
     notifyListeners();
+
+    // Validar permissão na pasta de downloads antes de iniciar o backup no servidor
+    _backupStep = 'Validando configurações';
+    _backupMessage = 'Verificando permissões na pasta temporária...';
+    notifyListeners();
+
+    final hasPermission = await _tempDirectoryService.validateDownloadsDirectory();
+    if (!hasPermission) {
+      final downloadsDir = await _tempDirectoryService.getDownloadsDirectory();
+      _error = 'Sem permissão de escrita na pasta temporária:\n${downloadsDir.path}\n\n'
+          'Execute o aplicativo como Administrador ou configure outra pasta em Configurações > Geral.';
+      _isExecuting = false;
+      _executingScheduleId = null;
+      _backupStep = null;
+      _backupMessage = null;
+      _backupProgress = null;
+      _transferStep = null;
+      _transferMessage = null;
+      _transferProgress = null;
+      _isTransferringFile = false;
+      notifyListeners();
+      return false;
+    }
+
+    LoggerService.info('✓ Pasta de downloads validada com sucesso');
 
     final result = await _connectionManager.executeSchedule(
       scheduleId,
