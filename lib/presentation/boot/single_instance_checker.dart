@@ -7,34 +7,31 @@ import 'package:backup_database/infrastructure/external/system/ipc_service.dart'
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/windows_message_box.dart';
 
-/// Utility class for checking and handling single instance enforcement.
-///
-/// NOTE: This class directly instantiates services instead of using DI because
-/// it runs BEFORE the dependency injection container is initialized. This is
-/// intentional - we want to check for existing instances before setting up
-/// databases, services, and other resources that could conflict with or
-/// duplicate another running instance.
 class SingleInstanceChecker {
   SingleInstanceChecker._();
 
-  // Direct instantiation required because this runs before DI setup
   static final ISingleInstanceService _singleInstanceService =
       SingleInstanceService();
   static const IWindowsMessageBox _messageBox = WindowsMessageBox();
 
-  // User-facing messages with Unicode escapes to guarantee correct encoding
-  // \u00E1=á \u00E3=ã \u00E7=ç \u00E9=é \u00ED=í \u00F3=ó \u00FA=ú \u00E2=â
   static const String _dialogTitle =
       'Backup Database - J\u00E1 em Execu\u00E7\u00E3o';
-  static const String _dialogMessage =
+  static const String _dialogMessageSameUser =
       'O aplicativo Backup Database j\u00E1 est\u00E1 aberto.\n\n'
       'A janela existente foi trazida para frente.\n\n'
-      'N\u00E3o \u00E9 poss\u00EDvel executar mais de uma inst\u00E2ncia ao mesmo tempo.';
+      'N\u00E3o \u00E9 poss\u00EDvel executar mais de uma inst\u00E2ncia '
+      'ao mesmo tempo.';
+  static const String _dialogMessageDifferentUser =
+      'O aplicativo Backup Database j\u00E1 est\u00E1 em execu\u00E7\u00E3o '
+      'em outro usu\u00E1rio do Windows.\n\n'
+      'N\u00E3o \u00E9 poss\u00EDvel executar mais de uma inst\u00E2ncia ao '
+      'mesmo tempo neste computador.';
+  static const String _dialogMessageUnknownUser =
+      'O aplicativo Backup Database j\u00E1 est\u00E1 em execu\u00E7\u00E3o '
+      'neste computador.\n\n'
+      'N\u00E3o foi poss\u00EDvel identificar o usu\u00E1rio da inst\u00E2ncia '
+      'existente.';
 
-  /// Checks if this is the first instance using mutex.
-  ///
-  /// Returns `true` if the application can continue (first instance),
-  /// `false` if another instance is already running.
   static Future<bool> checkAndHandleSecondInstance() async {
     final isFirstInstance = await _singleInstanceService.checkAndLock();
 
@@ -46,10 +43,6 @@ class SingleInstanceChecker {
     return false;
   }
 
-  /// Checks if an IPC server is already running.
-  ///
-  /// Returns `true` if no server is running (can continue),
-  /// `false` if another instance is already running.
   static Future<bool> checkIpcServerAndHandle() async {
     final isServerRunning = await IpcService.checkServerRunning();
 
@@ -61,9 +54,6 @@ class SingleInstanceChecker {
     return false;
   }
 
-  /// Handles the case when a second instance is detected.
-  ///
-  /// Notifies the existing instance and shows a warning dialog.
   static Future<void> handleSecondInstance() async {
     final currentUser =
         WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
@@ -102,6 +92,31 @@ class SingleInstanceChecker {
       await Future.delayed(SingleInstanceConfig.retryDelay);
     }
 
-    _messageBox.showWarning(_dialogTitle, _dialogMessage);
+    final dialogMessage = _getDialogMessage(
+      isDifferentUser: isDifferentUser,
+      couldNotDetermineUser: couldNotDetermineUser,
+      existingUser: existingUser,
+    );
+    _messageBox.showWarning(_dialogTitle, dialogMessage);
+  }
+
+  static String _getDialogMessage({
+    required bool isDifferentUser,
+    required bool couldNotDetermineUser,
+    String? existingUser,
+  }) {
+    if (isDifferentUser) {
+      if (existingUser != null && existingUser.isNotEmpty) {
+        return '$_dialogMessageDifferentUser\n\n'
+            'Usuario da instancia existente: $existingUser.';
+      }
+      return _dialogMessageDifferentUser;
+    }
+
+    if (couldNotDetermineUser) {
+      return _dialogMessageUnknownUser;
+    }
+
+    return _dialogMessageSameUser;
   }
 }

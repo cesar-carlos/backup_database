@@ -5,7 +5,7 @@ abstract class ISchedulerService {
 
   Future<Result<void>> refreshSchedule(String scheduleId);
 
-  void start();
+  Future<void> start();
 
   void stop();
 

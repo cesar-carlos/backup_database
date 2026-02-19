@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/core.dart';
@@ -22,7 +23,7 @@ class TrayMenuHandler {
         TrayManagerService().setSchedulerPaused(true);
 
       case TrayMenuAction.resumeScheduler:
-        service_locator.getIt<ISchedulerService>().start();
+        unawaited(service_locator.getIt<ISchedulerService>().start());
         TrayManagerService().setSchedulerPaused(false);
 
       case TrayMenuAction.settings:

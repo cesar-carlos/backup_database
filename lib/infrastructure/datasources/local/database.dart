@@ -619,9 +619,9 @@ class AppDatabase extends _$AppDatabase {
             );
 
             if (!hasTempPathColumn) {
-              await m.addColumn(
-                backupDestinationsTable,
-                backupDestinationsTable.tempPath,
+              await customStatement(
+                'ALTER TABLE backup_destinations_table '
+                'ADD COLUMN temp_path TEXT',
               );
               LoggerService.info(
                 'Migração v15: Coluna temp_path adicionada à '

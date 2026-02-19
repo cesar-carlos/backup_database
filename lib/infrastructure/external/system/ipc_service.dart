@@ -14,19 +14,19 @@ class IpcService implements IIpcService {
   bool _isRunning = false;
   int _currentPort = SingleInstanceConfig.ipcBasePort;
 
+  static int? _cachedActivePort;
+  static DateTime? _cachedActivePortAt;
+
   @override
   Future<bool> startServer({Function()? onShowWindow}) async {
     if (_isRunning) {
-      LoggerService.debug('IPC Server já está rodando');
+      LoggerService.debug('IPC Server ja esta rodando');
       return true;
     }
 
     _onShowWindow = onShowWindow;
 
-    final portsToTry = [
-      SingleInstanceConfig.ipcBasePort,
-      ...SingleInstanceConfig.ipcAlternativePorts,
-    ];
+    final portsToTry = _getPortsToTry();
 
     for (final port in portsToTry) {
       try {
@@ -36,6 +36,7 @@ class IpcService implements IIpcService {
           port,
         );
         _currentPort = port;
+        _markActivePort(port);
         _isRunning = true;
 
         LoggerService.info('IPC Server iniciado na porta $_currentPort');
@@ -55,25 +56,19 @@ class IpcService implements IIpcService {
       } on SocketException catch (e) {
         if (e.osError?.errorCode == 10013 || e.osError?.errorCode == 10048) {
           LoggerService.debug(
-            'Porta $port não disponível (${e.osError?.errorCode}), tentando próxima...',
-          );
-          continue;
-        } else {
-          LoggerService.warning(
-            'Erro ao tentar porta $port: ${e.message}',
+            'Porta $port nao disponivel (${e.osError?.errorCode}), tentando proxima...',
           );
           continue;
         }
+
+        LoggerService.warning('Erro ao tentar porta $port: ${e.message}');
       } on Object catch (e) {
-        LoggerService.warning(
-          'Erro inesperado ao tentar porta $port: $e',
-        );
-        continue;
+        LoggerService.warning('Erro inesperado ao tentar porta $port: $e');
       }
     }
 
     LoggerService.error(
-      'Não foi possível iniciar IPC Server em nenhuma porta tentada. '
+      'Nao foi possivel iniciar IPC Server em nenhuma porta tentada. '
       'Tentativas: ${portsToTry.join(", ")}',
     );
     _isRunning = false;
@@ -81,7 +76,7 @@ class IpcService implements IIpcService {
   }
 
   void _handleConnection(Socket socket) {
-    LoggerService.debug('Nova conexão IPC recebida');
+    LoggerService.debug('Nova conexao IPC recebida');
 
     socket.listen(
       (data) async {
@@ -92,7 +87,10 @@ class IpcService implements IIpcService {
           if (message == SingleInstanceConfig.showWindowCommand) {
             LoggerService.info('Comando SHOW_WINDOW recebido via IPC');
             _onShowWindow?.call();
-          } else if (message == SingleInstanceConfig.getUserInfoCommand) {
+            return;
+          }
+
+          if (message == SingleInstanceConfig.getUserInfoCommand) {
             LoggerService.debug('Comando GET_USER_INFO recebido via IPC');
             final username =
                 WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
@@ -103,13 +101,20 @@ class IpcService implements IIpcService {
             );
             await socket.flush();
             LoggerService.debug('Resposta USER_INFO enviada: $username');
+            return;
+          }
+
+          if (message == SingleInstanceConfig.pingCommand) {
+            LoggerService.debug('Comando PING recebido via IPC');
+            socket.add(utf8.encode(SingleInstanceConfig.pongResponse));
+            await socket.flush();
           }
         } on Object catch (e) {
           LoggerService.error('Erro ao processar mensagem IPC', e);
         }
       },
       onError: (error) {
-        LoggerService.error('Erro na conexão IPC', error);
+        LoggerService.error('Erro na conexao IPC', error);
       },
       onDone: () {
         socket.close();
@@ -119,18 +124,16 @@ class IpcService implements IIpcService {
 
   /// Sends a SHOW_WINDOW command to an existing instance.
   static Future<bool> sendShowWindow() async {
-    final portsToTry = [
-      SingleInstanceConfig.ipcBasePort,
-      ...SingleInstanceConfig.ipcAlternativePorts,
-    ];
+    final portsToTry = _getPortsToTry();
 
     for (final port in portsToTry) {
+      Socket? socket;
       try {
         LoggerService.debug(
           'Tentando enviar comando SHOW_WINDOW na porta $port...',
         );
 
-        final socket = await Socket.connect(
+        socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
           port,
           timeout: SingleInstanceConfig.connectionTimeout,
@@ -141,58 +144,58 @@ class IpcService implements IIpcService {
 
         await Future.delayed(SingleInstanceConfig.socketCloseDelay);
         await socket.close();
+        _markActivePort(port);
 
         LoggerService.info(
           'Comando SHOW_WINDOW enviado com sucesso na porta $port',
         );
         return true;
-      } on Object catch (e) {
-        LoggerService.debug('Porta $port não disponível, tentando próxima...');
-        continue;
+      } on Object catch (_) {
+        LoggerService.debug('Porta $port nao disponivel, tentando proxima...');
+      } finally {
+        await _closeClientResources(socket: socket);
       }
     }
 
     LoggerService.warning(
-      'Não foi possível enviar comando IPC em nenhuma porta tentada',
+      'Nao foi possivel enviar comando IPC em nenhuma porta tentada',
     );
     return false;
   }
 
   /// Checks if an IPC server is already running.
   static Future<bool> checkServerRunning() async {
-    final portsToTry = [
-      SingleInstanceConfig.ipcBasePort,
-      ...SingleInstanceConfig.ipcAlternativePorts,
-    ];
+    final portsToTry = _getPortsToTry();
+    final firstRoundCount = portsToTry.length > 2 ? 2 : portsToTry.length;
+    final firstRoundPorts = portsToTry.take(firstRoundCount).toList();
 
-    for (final port in portsToTry) {
-      try {
-        final socket = await Socket.connect(
-          InternetAddress.loopbackIPv4,
-          port,
-          timeout: SingleInstanceConfig.quickConnectionTimeout,
-        );
-
-        await socket.close();
-        return true;
-      } on Object catch (e) {
-        continue;
-      }
+    final firstRoundResult = await _checkPortsWithTimeout(
+      ports: firstRoundPorts,
+      timeout: SingleInstanceConfig.ipcDiscoveryFastTimeout,
+    );
+    if (firstRoundResult) {
+      return true;
     }
 
-    return false;
+    final remainingPorts = portsToTry.skip(firstRoundCount).toList();
+    if (remainingPorts.isEmpty) {
+      return false;
+    }
+
+    return _checkPortsWithTimeout(
+      ports: remainingPorts,
+      timeout: SingleInstanceConfig.ipcDiscoverySlowTimeout,
+    );
   }
 
   /// Gets the username of the user running the existing instance.
   static Future<String?> getExistingInstanceUser() async {
-    final portsToTry = [
-      SingleInstanceConfig.ipcBasePort,
-      ...SingleInstanceConfig.ipcAlternativePorts,
-    ];
+    final portsToTry = _getPortsToTry();
 
     for (final port in portsToTry) {
+      Socket? socket;
       try {
-        final socket = await Socket.connect(
+        socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
           port,
           timeout: SingleInstanceConfig.connectionTimeout,
@@ -201,50 +204,25 @@ class IpcService implements IIpcService {
         socket.add(utf8.encode(SingleInstanceConfig.getUserInfoCommand));
         await socket.flush();
 
-        final completer = Completer<String?>();
-
-        socket.listen(
-          (data) {
-            final message = utf8.decode(data).trim();
-            if (message.startsWith(
-              SingleInstanceConfig.userInfoResponsePrefix,
-            )) {
-              final username = message.substring(
-                SingleInstanceConfig.userInfoResponsePrefix.length,
-              );
-              if (!completer.isCompleted) {
-                completer.complete(username);
-              }
-            }
-          },
-          onDone: () {
-            if (!completer.isCompleted) {
-              completer.complete(null);
-            }
-            socket.close();
-          },
-          onError: (e) {
-            if (!completer.isCompleted) {
-              completer.complete(null);
-            }
-          },
-        );
-
-        final result = await completer.future.timeout(
+        final data = await socket.first.timeout(
           SingleInstanceConfig.connectionTimeout,
-          onTimeout: () => null,
         );
-
-        if (result != null) {
-          return result;
+        final message = utf8.decode(data).trim();
+        if (message.startsWith(SingleInstanceConfig.userInfoResponsePrefix)) {
+          _markActivePort(port);
+          return message.substring(
+            SingleInstanceConfig.userInfoResponsePrefix.length,
+          );
         }
-      } on Object catch (e) {
+      } on Object catch (_) {
         continue;
+      } finally {
+        await _closeClientResources(socket: socket);
       }
     }
 
     LoggerService.debug(
-      'Não foi possível obter usuário da instância existente',
+      'Nao foi possivel obter usuario da instancia existente',
     );
     return null;
   }
@@ -264,4 +242,93 @@ class IpcService implements IIpcService {
 
   @override
   bool get isRunning => _isRunning;
+
+  static Future<void> _closeClientResources({
+    Socket? socket,
+  }) async {
+    if (socket != null) {
+      try {
+        await socket.close();
+      } on Object catch (_) {
+        try {
+          socket.destroy();
+        } on Object catch (_) {}
+      }
+    }
+  }
+
+  static List<int> _getPortsToTry() {
+    final defaultPorts = [
+      SingleInstanceConfig.ipcBasePort,
+      ...SingleInstanceConfig.ipcAlternativePorts,
+    ];
+    final cachedPort = _getCachedActivePortIfFresh();
+    if (cachedPort == null) {
+      return defaultPorts;
+    }
+
+    return [cachedPort, ...defaultPorts.where((port) => port != cachedPort)];
+  }
+
+  static int? _getCachedActivePortIfFresh() {
+    final cachedPort = _cachedActivePort;
+    final cachedAt = _cachedActivePortAt;
+    if (cachedPort == null || cachedAt == null) {
+      return null;
+    }
+
+    final cacheAge = DateTime.now().difference(cachedAt);
+    if (cacheAge <= SingleInstanceConfig.ipcPortCacheTtl) {
+      return cachedPort;
+    }
+
+    _cachedActivePort = null;
+    _cachedActivePortAt = null;
+    return null;
+  }
+
+  static void _markActivePort(int port) {
+    _cachedActivePort = port;
+    _cachedActivePortAt = DateTime.now();
+  }
+
+  static Future<bool> _checkPortsWithTimeout({
+    required List<int> ports,
+    required Duration timeout,
+  }) async {
+    final results = await Future.wait(
+      ports.map((port) => _probeServerPort(port: port, timeout: timeout)),
+    );
+    return results.any((isActive) => isActive);
+  }
+
+  static Future<bool> _probeServerPort({
+    required int port,
+    required Duration timeout,
+  }) async {
+    Socket? socket;
+    try {
+      socket = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        port,
+        timeout: timeout,
+      );
+
+      socket.add(utf8.encode(SingleInstanceConfig.pingCommand));
+      await socket.flush();
+
+      final data = await socket.first.timeout(timeout);
+      final response = utf8.decode(data).trim();
+      if (response == SingleInstanceConfig.pongResponse) {
+        _markActivePort(port);
+        return true;
+      }
+
+      return false;
+    } on Object catch (_) {
+      return false;
+    } finally {
+      await _closeClientResources(socket: socket);
+    }
+  }
 }

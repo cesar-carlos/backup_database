@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -30,6 +30,9 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _defaultProgramData = r'C:\ProgramData';
   static const String _runningState = 'RUNNING';
   static const String _localSystemAccount = 'LocalSystem';
+  static const int _serviceNotInstalledWinError = 1060;
+  static const int _serviceNotInstalledBatchError = 36;
+  static const int _accessDeniedWinError = 5;
 
   @override
   Future<rd.Result<WindowsServiceStatus>> getStatus() async {
@@ -46,26 +49,53 @@ class WindowsServiceService implements IWindowsServiceService {
         timeout: _shortTimeout,
       );
 
-      return result.fold((processResult) {
-        final isInstalled = processResult.exitCode == _successExitCode;
+      return result.fold(
+        (processResult) {
+          if (processResult.exitCode == _successExitCode) {
+            final isRunning = processResult.stdout.contains(_runningState);
+            return rd.Success(
+              WindowsServiceStatus(
+                isInstalled: true,
+                isRunning: isRunning,
+                serviceName: _serviceName,
+                displayName: _displayName,
+              ),
+            );
+          }
 
-        if (!isInstalled) {
-          return const rd.Success(
-            WindowsServiceStatus(isInstalled: false, isRunning: false),
+          if (_isServiceNotInstalledResponse(processResult)) {
+            return const rd.Success(
+              WindowsServiceStatus(isInstalled: false, isRunning: false),
+            );
+          }
+
+          if (_isAccessDeniedResponse(processResult)) {
+            return const rd.Failure(
+              ServerFailure(
+                message:
+                    'Acesso negado ao consultar status do serviço. Execute o aplicativo como Administrador.',
+              ),
+            );
+          }
+
+          final errorOutput = _getProcessOutput(processResult);
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Falha ao consultar status do serviço (exit code: ${processResult.exitCode}). '
+                  'Saída: $errorOutput',
+            ),
           );
-        }
-
-        final isRunning = processResult.stdout.contains(_runningState);
-
-        return rd.Success(
-          WindowsServiceStatus(
-            isInstalled: true,
-            isRunning: isRunning,
-            serviceName: _serviceName,
-            displayName: _displayName,
-          ),
-        );
-      }, rd.Failure.new);
+        },
+        (failure) {
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Erro ao executar comando para consultar status do serviço: $failure',
+            ),
+          );
+        },
+      );
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar status do serviço', e, stackTrace);
       return rd.Failure(
@@ -150,7 +180,9 @@ class WindowsServiceService implements IWindowsServiceService {
         await _configureService(nssmPath, serviceUser, servicePassword);
 
         LoggerService.info('Serviço instalado com sucesso');
-        LoggerService.info('Auto-restart configurado: Reiniciará automaticamente após crash (60s delay)');
+        LoggerService.info(
+          'Auto-restart configurado: Reiniciará automaticamente após crash (60s delay)',
+        );
         return const rd.Success(unit);
       }, rd.Failure.new);
     } on Object catch (e, stackTrace) {
@@ -484,5 +516,46 @@ class WindowsServiceService implements IWindowsServiceService {
       await Future.delayed(_serviceDelay);
       return startService();
     }, rd.Failure.new);
+  }
+
+  bool _isServiceNotInstalledResponse(ProcessResult processResult) {
+    if (processResult.exitCode == _serviceNotInstalledWinError ||
+        processResult.exitCode == _serviceNotInstalledBatchError) {
+      return true;
+    }
+
+    final output = _getProcessOutput(processResult).toLowerCase();
+    return output.contains('1060') ||
+        output.contains('does not exist as an installed service') ||
+        output.contains('specified service does not exist') ||
+        output.contains('nao existe como servico instalado') ||
+        output.contains('não existe como serviço instalado');
+  }
+
+  bool _isAccessDeniedResponse(ProcessResult processResult) {
+    if (processResult.exitCode == _accessDeniedWinError) {
+      return true;
+    }
+
+    final output = _getProcessOutput(processResult).toLowerCase();
+    return output.contains('access is denied') ||
+        output.contains('acesso negado') ||
+        output.contains('falha 5') ||
+        output.contains('failure 5');
+  }
+
+  String _getProcessOutput(ProcessResult processResult) {
+    final stderr = processResult.stderr.trim();
+    final stdout = processResult.stdout.trim();
+    if (stderr.isNotEmpty && stdout.isNotEmpty) {
+      return '$stderr | $stdout';
+    }
+    if (stderr.isNotEmpty) {
+      return stderr;
+    }
+    if (stdout.isNotEmpty) {
+      return stdout;
+    }
+    return 'sem saída';
   }
 }

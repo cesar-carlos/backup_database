@@ -7,6 +7,7 @@ import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/presentation/app_widget.dart';
@@ -15,6 +16,7 @@ import 'package:backup_database/presentation/boot/app_initializer.dart';
 import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
 import 'package:backup_database/presentation/boot/service_mode_initializer.dart';
 import 'package:backup_database/presentation/boot/single_instance_checker.dart';
+import 'package:backup_database/presentation/boot/ui_scheduler_policy.dart';
 import 'package:backup_database/presentation/handlers/tray_menu_handler.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -27,36 +29,39 @@ void main() {
 Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await service_locator.setupServiceLocator();
-
   if (ServiceModeDetector.isServiceMode()) {
-    LoggerService.info('🔧 Modo Serviço detectado - inicializando sem UI');
+    LoggerService.info('Modo Servico detectado - inicializando sem UI');
     await ServiceModeInitializer.initialize();
     return;
   }
 
   await _loadEnvironment();
+  setAppMode(getAppMode(Platform.executableArguments));
+  LoggerService.info('Modo do aplicativo: ${currentAppMode.name}');
+
+  await service_locator.setupServiceLocator();
   _checkOsCompatibility();
 
   if (SingleInstanceConfig.isEnabled) {
     final canContinue =
         await SingleInstanceChecker.checkAndHandleSecondInstance();
-    if (!canContinue) return;
+    if (!canContinue) {
+      return;
+    }
 
     final canContinueIpc =
         await SingleInstanceChecker.checkIpcServerAndHandle();
-    if (!canContinueIpc) return;
+    if (!canContinueIpc) {
+      return;
+    }
   } else {
     LoggerService.info(
-      '⚠️ Single instance check desabilitado via configuração',
+      'Single instance check desabilitado via configuracao',
     );
   }
 
   try {
     await AppInitializer.initialize();
-
-    setAppMode(getAppMode(Platform.executableArguments));
-    LoggerService.info('Modo do aplicativo: ${currentAppMode.name}');
 
     final launchConfig = await AppInitializer.getLaunchConfig();
 
@@ -72,7 +77,7 @@ Future<void> _runApp() async {
     await _startScheduler();
     await _startSocketServer();
   } on Object catch (e, stackTrace) {
-    LoggerService.error('Erro fatal na inicialização', e, stackTrace);
+    LoggerService.error('Erro fatal na inicializacao', e, stackTrace);
     await AppCleanup.cleanup();
     exit(1);
   }
@@ -90,21 +95,21 @@ Future<void> _loadEnvironment() async {
 void _checkOsCompatibility() {
   if (!OsVersionChecker.isCompatible()) {
     LoggerService.warning(
-      '⚠️ Sistema operacional pode não ser compatível. Requisito: Windows 8.1 (6.3) / Server 2012 R2 ou superior.',
+      'Sistema operacional pode nao ser compativel. Requisito: Windows 8.1 (6.3) / Server 2012 R2 ou superior.',
     );
     LoggerService.warning(
-      'O aplicativo pode não funcionar corretamente em versões mais antigas do Windows.',
+      'O aplicativo pode nao funcionar corretamente em versoes mais antigas do Windows.',
     );
   } else {
     final versionInfo = OsVersionChecker.getVersionInfo();
     versionInfo.fold(
       (info) {
         LoggerService.info(
-          '✅ Sistema operacional compatível: ${info.versionName} (${info.majorVersion}.${info.minorVersion})',
+          'Sistema operacional compativel: ${info.versionName} (${info.majorVersion}.${info.minorVersion})',
         );
       },
       (failure) {
-        LoggerService.warning('Não foi possível verificar versão do SO');
+        LoggerService.warning('Nao foi possivel verificar versao do SO');
       },
     );
   }
@@ -123,29 +128,39 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
     );
   }
 
-  try {
-    final singleInstanceService = service_locator
-        .getIt<ISingleInstanceService>();
-    await singleInstanceService.startIpcServer(
-      onShowWindow: () async {
-        LoggerService.info(
-          'Recebido comando SHOW_WINDOW via IPC de outra instância',
-        );
-        try {
-          await WindowManagerService().show();
-          LoggerService.info('Janela trazida para frente após comando IPC');
-        } on Object catch (e, stackTrace) {
-          LoggerService.error('Erro ao mostrar janela via IPC', e, stackTrace);
-        }
-      },
-    );
-    LoggerService.info('IPC Server inicializado e pronto');
-  } on Object catch (e) {
-    if (ServiceModeDetector.isServiceMode()) {
-      LoggerService.debug('IPC Server não disponível em modo serviço (normal)');
-    } else {
-      LoggerService.warning('Erro ao inicializar IPC Server: $e');
+  if (SingleInstanceConfig.isEnabled) {
+    try {
+      final singleInstanceService = service_locator
+          .getIt<ISingleInstanceService>();
+      await singleInstanceService.startIpcServer(
+        onShowWindow: () async {
+          LoggerService.info(
+            'Recebido comando SHOW_WINDOW via IPC de outra instancia',
+          );
+          try {
+            await WindowManagerService().show();
+            LoggerService.info('Janela trazida para frente apos comando IPC');
+          } on Object catch (e, stackTrace) {
+            LoggerService.error(
+              'Erro ao mostrar janela via IPC',
+              e,
+              stackTrace,
+            );
+          }
+        },
+      );
+      LoggerService.info('IPC Server inicializado e pronto');
+    } on Object catch (e) {
+      if (ServiceModeDetector.isServiceMode()) {
+        LoggerService.debug('IPC Server nao disponivel em modo servico');
+      } else {
+        LoggerService.warning('Erro ao inicializar IPC Server: $e');
+      }
     }
+  } else {
+    LoggerService.info(
+      'IPC Server nao iniciado: single instance desabilitado via configuracao',
+    );
   }
 
   final trayManager = TrayManagerService();
@@ -153,9 +168,7 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
     await trayManager.initialize(onMenuAction: TrayMenuHandler.handleAction);
   } on Object catch (e) {
     if (ServiceModeDetector.isServiceMode()) {
-      LoggerService.debug(
-        'Tray Manager não disponível em modo serviço (normal)',
-      );
+      LoggerService.debug('Tray Manager nao disponivel em modo servico');
     } else {
       LoggerService.warning('Erro ao inicializar tray manager: $e');
     }
@@ -171,9 +184,26 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
 
 Future<void> _startScheduler() async {
   try {
+    final fallbackMode = _getUiSchedulerFallbackModeFromEnv();
+    final windowsServiceService = service_locator
+        .getIt<IWindowsServiceService>();
+    final schedulerPolicy = UiSchedulerPolicy(
+      windowsServiceService,
+      onWarning: LoggerService.warning,
+      fallbackMode: fallbackMode,
+    );
+    final shouldSkipScheduler = await schedulerPolicy
+        .shouldSkipSchedulerInUiMode();
+    if (shouldSkipScheduler) {
+      LoggerService.info(
+        'Scheduler local nao iniciado: servico do Windows em execucao',
+      );
+      return;
+    }
+
     final schedulerService = service_locator.getIt<ISchedulerService>();
-    schedulerService.start();
-    LoggerService.info('Serviço de agendamento iniciado');
+    await schedulerService.start();
+    LoggerService.info('Servico de agendamento iniciado');
   } on Object catch (e) {
     LoggerService.error('Erro ao iniciar scheduler', e);
   }
@@ -182,7 +212,7 @@ Future<void> _startScheduler() async {
 Future<void> _startSocketServer() async {
   if (currentAppMode != AppMode.server) {
     LoggerService.info(
-      'Modo cliente detectado - socket server não será iniciado',
+      'Modo cliente detectado - socket server nao sera iniciado',
     );
     return;
   }
@@ -192,14 +222,14 @@ Future<void> _startSocketServer() async {
 
     if (socketServer.isRunning) {
       LoggerService.info(
-        'Socket server já está rodando na porta ${socketServer.port}',
+        'Socket server ja esta rodando na porta ${socketServer.port}',
       );
       return;
     }
 
     await socketServer.start();
     LoggerService.info(
-      '✅ Socket server iniciado automaticamente na porta 9527',
+      'Socket server iniciado automaticamente na porta 9527',
     );
   } on Object catch (e, stackTrace) {
     LoggerService.error('Erro ao iniciar socket server', e, stackTrace);
@@ -210,5 +240,17 @@ void _handleError(Object error, StackTrace stack) {
   if (error.toString().contains('physicalKey is already pressed')) {
     return;
   }
-  LoggerService.error('Erro não tratado na UI', error, stack);
+  LoggerService.error('Erro nao tratado na UI', error, stack);
+}
+
+UiSchedulerFallbackMode _getUiSchedulerFallbackModeFromEnv() {
+  final normalized = dotenv.env['UI_SCHEDULER_FALLBACK_MODE']
+      ?.trim()
+      .toLowerCase();
+
+  if (normalized == 'fail_safe') {
+    return UiSchedulerFallbackMode.failSafe;
+  }
+
+  return UiSchedulerFallbackMode.failOpen;
 }

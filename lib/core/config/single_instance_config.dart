@@ -15,7 +15,14 @@ class SingleInstanceConfig {
   static bool get isEnabled {
     final envValue = dotenv.env['SINGLE_INSTANCE_ENABLED'];
     if (envValue != null) {
-      return envValue.toLowerCase() == 'true';
+      final normalizedValue = envValue.trim().toLowerCase();
+      if (normalizedValue == 'true') {
+        return true;
+      }
+      if (normalizedValue == 'false') {
+        return false;
+      }
+      return true;
     }
     return true;
   }
@@ -44,9 +51,14 @@ class SingleInstanceConfig {
   static const Duration connectionTimeout = Duration(seconds: 1);
   static const Duration quickConnectionTimeout = Duration(milliseconds: 500);
   static const Duration socketCloseDelay = Duration(milliseconds: 100);
+  static const Duration ipcDiscoveryFastTimeout = Duration(milliseconds: 150);
+  static const Duration ipcDiscoverySlowTimeout = Duration(milliseconds: 300);
+  static const Duration ipcPortCacheTtl = Duration(minutes: 2);
 
   // IPC commands
   static const String showWindowCommand = 'SHOW_WINDOW';
   static const String getUserInfoCommand = 'GET_USER_INFO';
   static const String userInfoResponsePrefix = 'USER_INFO:';
+  static const String pingCommand = 'PING';
+  static const String pongResponse = 'PONG';
 }

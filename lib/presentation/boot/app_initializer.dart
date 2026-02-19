@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppInitializer {
   static Future<void> initialize() async {
     await _loadEnvironment();
-    // setupServiceLocator() já foi chamado no main.dart
     await _initializeDefaultCredential();
     await _initializeAuthProviders();
     await _initializeAutoUpdate();
@@ -24,19 +23,22 @@ class AppInitializer {
       final result = await initialSetup.createDefaultCredentialIfNotExists();
       if (result != null) {
         LoggerService.info(
-          'Credencial padrão criada (Server ID: ${result.serverId})',
+          'Credencial padrao criada (Server ID: ${result.serverId})',
         );
       }
     } on Object catch (e) {
-      LoggerService.warning(
-        'Erro ao criar credencial padrão: $e',
-      );
+      LoggerService.warning('Erro ao criar credencial padrao: $e');
     }
   }
 
   static Future<void> _loadEnvironment() async {
+    if (dotenv.isInitialized) {
+      LoggerService.debug('Variaveis de ambiente ja carregadas');
+      return;
+    }
+
     await dotenv.load();
-    LoggerService.info('Variáveis de ambiente carregadas');
+    LoggerService.info('Variaveis de ambiente carregadas');
   }
 
   static Future<void> _initializeAuthProviders() async {
@@ -71,7 +73,7 @@ class AppInitializer {
     final prefs = await SharedPreferences.getInstance();
     final startMinimizedFromSettings = prefs.getBool('start_minimized') ?? true;
     LoggerService.info(
-      'Configuração "Iniciar Minimizado" carregada: $startMinimizedFromSettings',
+      'Configuracao "Iniciar Minimizado" carregada: $startMinimizedFromSettings',
     );
 
     final args = Platform.executableArguments;
@@ -84,7 +86,7 @@ class AppInitializer {
     final startMinimized = startMinimizedFromArgs || startMinimizedFromSettings;
 
     LoggerService.info(
-      'Iniciar minimizado: $startMinimized (configuração: $startMinimizedFromSettings, argumento: $startMinimizedFromArgs)',
+      'Iniciar minimizado: $startMinimized (configuracao: $startMinimizedFromSettings, argumento: $startMinimizedFromArgs)',
     );
 
     return LaunchConfig(
@@ -110,6 +112,7 @@ class LaunchConfig {
     required this.startMinimized,
     required this.args,
   });
+
   final String? scheduleId;
   final bool startMinimized;
   final List<String> args;

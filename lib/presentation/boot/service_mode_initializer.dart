@@ -14,9 +14,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ServiceModeInitializer {
   ServiceModeInitializer._();
 
-  static final Completer<void> _shutdownCompleter = Completer<void>();
-
   static Future<void> initialize() async {
+    final shutdownCompleter = Completer<void>();
     ISchedulerService? schedulerService;
     ServiceHealthChecker? healthChecker;
     WindowsEventLogService? eventLog;
@@ -24,6 +23,10 @@ class ServiceModeInitializer {
 
     try {
       await dotenv.load();
+      setAppMode(getAppMode(Platform.executableArguments));
+      LoggerService.info(
+        'Modo do aplicativo (servico): ${currentAppMode.name}',
+      );
       LoggerService.info('Variáveis de ambiente carregadas');
 
       singleInstanceService = SingleInstanceService();
@@ -81,12 +84,12 @@ class ServiceModeInitializer {
         LoggerService.info('✅ Shutdown callback: Serviços parados');
 
         // Completa o Future para encerrar o serviço
-        if (!_shutdownCompleter.isCompleted) {
-          _shutdownCompleter.complete();
+        if (!shutdownCompleter.isCompleted) {
+          shutdownCompleter.complete();
         }
       });
 
-      schedulerService.start();
+      await schedulerService.start();
       LoggerService.info('✅ Serviço de agendamento iniciado em modo serviço');
 
       // Inicia health checker
@@ -96,7 +99,7 @@ class ServiceModeInitializer {
       LoggerService.info('✅ Aplicativo rodando como serviço do Windows');
 
       // Aguarda indefinidamente (será interrompido por shutdown signal via Completer)
-      await _shutdownCompleter.future;
+      await shutdownCompleter.future;
 
       await singleInstanceService.releaseLock();
     } on Object catch (e, stackTrace) {
@@ -143,8 +146,8 @@ class ServiceModeInitializer {
       }
 
       // Completa o Future em caso de erro fatal
-      if (!_shutdownCompleter.isCompleted) {
-        _shutdownCompleter.completeError(e);
+      if (!shutdownCompleter.isCompleted) {
+        shutdownCompleter.completeError(e);
       }
 
       exit(1);

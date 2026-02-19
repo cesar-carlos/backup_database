@@ -92,6 +92,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
           return;
         }
         await _loadTempPath();
+        if (!mounted) {
+          return;
+        }
         MessageModal.showSuccess(
           context,
           message: 'Pasta temporária alterada com sucesso!',

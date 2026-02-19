@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -245,7 +247,7 @@ class SchedulerProvider extends ChangeNotifier {
   }
 
   void startScheduler() {
-    _schedulerService.start();
+    unawaited(_schedulerService.start());
     _isSchedulerRunning = true;
     notifyListeners();
   }
