@@ -17,6 +17,12 @@ class SqlServerConfigListItem extends StatelessWidget {
   final VoidCallback? onDelete;
   final ValueChanged<bool>? onToggleEnabled;
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ConfigListItem(
@@ -33,9 +39,9 @@ class SqlServerConfigListItem extends StatelessWidget {
           const SizedBox(height: 4),
           Text('${config.server}:${config.port}'),
           const SizedBox(height: 2),
-          Text('Banco: ${config.database}'),
+          Text('${_t(context, 'Banco', 'Database')}: ${config.database}'),
           const SizedBox(height: 2),
-          Text('Usuário: ${config.username}'),
+          Text('${_t(context, 'Usuario', 'User')}: ${config.username}'),
         ],
       ),
     );

@@ -15,6 +15,12 @@ class ServerCredentialListItem extends StatelessWidget {
   final VoidCallback? onDelete;
   final ValueChanged<bool>? onToggleActive;
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ConfigListItem(
@@ -29,7 +35,7 @@ class ServerCredentialListItem extends StatelessWidget {
         children: [
           const SizedBox(height: 4),
           Text(
-            'Server ID: ${credential.serverId}',
+            '${_t(context, 'ID do servidor', 'Server ID')}: ${credential.serverId}',
             style: FluentTheme.of(context).typography.body,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

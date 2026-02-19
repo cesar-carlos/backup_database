@@ -164,13 +164,11 @@ class _SchedulesPageState extends State<SchedulesPage> {
         title: const Text('Confirmar Exclusão'),
         content: const Text('Tem certeza que deseja excluir este agendamento?'),
         actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          Button(
+          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
+          ActionButton(
+            label: 'Excluir',
+            icon: FluentIcons.delete,
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Excluir'),
           ),
         ],
       ),
@@ -201,20 +199,11 @@ class _SchedulesPageState extends State<SchedulesPage> {
         title: const Text('Executar Backup'),
         content: const Text('Deseja executar este backup agora?'),
         actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          Button(
+          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
+          ActionButton(
+            label: 'Executar',
+            icon: FluentIcons.play,
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(FluentIcons.play),
-                SizedBox(width: 8),
-                Text('Executar'),
-              ],
-            ),
           ),
         ],
       ),

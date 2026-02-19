@@ -1,3 +1,4 @@
+import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class CancelButton extends StatelessWidget {
@@ -6,9 +7,11 @@ class CancelButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = WidgetTexts.fromContext(context);
+
     return Button(
       onPressed: onPressed ?? () => Navigator.of(context).pop(),
-      child: const Text('Cancelar'),
+      child: Text(texts.cancel),
     );
   }
 }

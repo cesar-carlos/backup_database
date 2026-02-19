@@ -14,6 +14,12 @@ class ConnectionLogsList extends StatefulWidget {
 }
 
 class _ConnectionLogsListState extends State<ConnectionLogsList> {
+  String _t(String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -50,7 +56,7 @@ class _ConnectionLogsListState extends State<ConnectionLogsList> {
                   const SizedBox(height: 16),
                   Button(
                     onPressed: () => provider.loadLogs(),
-                    child: const Text('Tentar Novamente'),
+                    child: Text(_t('Tentar novamente', 'Try again')),
                   ),
                 ],
               ),
@@ -61,8 +67,8 @@ class _ConnectionLogsListState extends State<ConnectionLogsList> {
           return AppCard(
             child: EmptyState(
               icon: FluentIcons.history,
-              message: 'Nenhum registro de conexão',
-              actionLabel: 'Atualizar',
+              message: _t('Nenhum registro de conexao', 'No connection logs'),
+              actionLabel: _t('Atualizar', 'Refresh'),
               onAction: () => provider.loadLogs(),
             ),
           );
@@ -78,18 +84,20 @@ class _ConnectionLogsContent extends StatelessWidget {
 
   final ConnectionLogProvider provider;
 
-  static const String _filterAll = 'Todos';
-  static const String _filterSuccess = 'Sucesso';
-  static const String _filterFailed = 'Falha';
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
 
-  String _filterLabel(ConnectionLogFilter filter) {
+  String _filterLabel(BuildContext context, ConnectionLogFilter filter) {
     switch (filter) {
       case ConnectionLogFilter.all:
-        return _filterAll;
+        return _t(context, 'Todos', 'All');
       case ConnectionLogFilter.success:
-        return _filterSuccess;
+        return _t(context, 'Sucesso', 'Success');
       case ConnectionLogFilter.failed:
-        return _filterFailed;
+        return _t(context, 'Falha', 'Failure');
     }
   }
 
@@ -103,7 +111,6 @@ class _ConnectionLogsContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Filtro e ações
         Row(
           children: [
             SizedBox(
@@ -111,12 +118,12 @@ class _ConnectionLogsContent extends StatelessWidget {
               child: ComboBox<ConnectionLogFilter>(
                 value: provider.filter,
                 isExpanded: true,
-                placeholder: const Text('Filtrar'),
+                placeholder: Text(_t(context, 'Filtrar', 'Filter')),
                 items: filterOptions
                     .map(
                       (f) => ComboBoxItem<ConnectionLogFilter>(
                         value: f,
-                        child: Text(_filterLabel(f)),
+                        child: Text(_filterLabel(context, f)),
                       ),
                     )
                     .toList(),
@@ -128,12 +135,12 @@ class _ConnectionLogsContent extends StatelessWidget {
             const SizedBox(width: 8),
             Button(
               onPressed: provider.loadLogs,
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(FluentIcons.refresh, size: 16),
-                  SizedBox(width: 6),
-                  Text('Atualizar'),
+                  const Icon(FluentIcons.refresh, size: 16),
+                  const SizedBox(width: 6),
+                  Text(_t(context, 'Atualizar', 'Refresh')),
                 ],
               ),
             ),
@@ -160,6 +167,12 @@ class _ConnectionLogRow extends StatelessWidget {
 
   static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm:ss');
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -181,7 +194,7 @@ class _ConnectionLogRow extends StatelessWidget {
                       if (log.serverId != null && log.serverId!.isNotEmpty) ...[
                         const SizedBox(width: 8),
                         Text(
-                          'Server ID: ${log.serverId}',
+                          '${_t(context, 'Server ID', 'Server ID')}: ${log.serverId}',
                           style: FluentTheme.of(context).typography.caption,
                         ),
                       ],
@@ -219,6 +232,12 @@ class _StatusChip extends StatelessWidget {
 
   final bool success;
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     final color = success ? AppColors.success : AppColors.error;
@@ -238,7 +257,9 @@ class _StatusChip extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            success ? 'Sucesso' : 'Falha',
+            success
+                ? _t(context, 'Sucesso', 'Success')
+                : _t(context, 'Falha', 'Failure'),
             style: FluentTheme.of(context).typography.caption?.copyWith(
               color: color,
             ),

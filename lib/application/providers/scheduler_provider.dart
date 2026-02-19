@@ -175,7 +175,11 @@ class SchedulerProvider extends ChangeNotifier {
       backupType: source.backupType,
       truncateLog: source.truncateLog,
       compressBackup: source.compressBackup,
+      compressionFormat: source.compressionFormat,
       enabled: source.enabled,
+      enableChecksum: source.enableChecksum,
+      verifyAfterBackup: source.verifyAfterBackup,
+      postBackupScript: source.postBackupScript,
     );
 
     return createSchedule(copy);
@@ -262,6 +266,26 @@ class SchedulerProvider extends ChangeNotifier {
     try {
       return _schedules.firstWhere((s) => s.id == id);
     } on Object catch (e) {
+      return null;
+    }
+  }
+
+  Future<List<Schedule>?> getSchedulesByDatabaseConfig(
+    String databaseConfigId,
+  ) async {
+    try {
+      final result = await _repository.getByDatabaseConfig(databaseConfigId);
+      return result.fold((schedules) => schedules, (failure) => null);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<List<Schedule>?> getSchedulesByDestination(String destinationId) async {
+    try {
+      final result = await _repository.getByDestinationId(destinationId);
+      return result.fold((schedules) => schedules, (failure) => null);
+    } on Object {
       return null;
     }
   }

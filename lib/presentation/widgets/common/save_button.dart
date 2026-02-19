@@ -1,3 +1,4 @@
+import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class SaveButton extends StatelessWidget {
@@ -13,6 +14,8 @@ class SaveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = WidgetTexts.fromContext(context);
+
     return Button(
       onPressed: isLoading ? null : onPressed,
       child: isLoading
@@ -26,7 +29,7 @@ class SaveButton extends StatelessWidget {
               children: [
                 const Icon(FluentIcons.save),
                 const SizedBox(width: 8),
-                Text(isEditing ? 'Salvar' : 'Criar'),
+                Text(isEditing ? texts.save : texts.create),
               ],
             ),
     );

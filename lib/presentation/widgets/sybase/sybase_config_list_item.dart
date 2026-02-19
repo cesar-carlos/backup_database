@@ -17,6 +17,12 @@ class SybaseConfigListItem extends StatelessWidget {
   final VoidCallback? onDelete;
   final ValueChanged<bool>? onToggleEnabled;
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ConfigListItem(
@@ -31,11 +37,15 @@ class SybaseConfigListItem extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 4),
-          Text('Servidor: ${config.serverName}:${config.port}'),
+          Text(
+            '${_t(context, 'Servidor', 'Server')}: ${config.serverName}:${config.port}',
+          ),
           const SizedBox(height: 2),
-          Text('Banco: ${config.databaseName}'),
+          Text(
+            '${_t(context, 'Banco', 'Database')}: ${config.databaseName}',
+          ),
           const SizedBox(height: 2),
-          Text('Usuário: ${config.username}'),
+          Text('${_t(context, 'Usuario', 'User')}: ${config.username}'),
         ],
       ),
     );

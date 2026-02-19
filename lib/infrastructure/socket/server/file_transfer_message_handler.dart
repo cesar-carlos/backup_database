@@ -16,9 +16,9 @@ class FileTransferMessageHandler {
     required String allowedBasePath,
     required IFileTransferLockService lockService,
     FileChunker? chunker,
-  })  : _allowedBasePath = p.normalize(p.absolute(allowedBasePath)),
-        _lockService = lockService,
-        _chunker = chunker ?? FileChunker();
+  }) : _allowedBasePath = p.normalize(p.absolute(allowedBasePath)),
+       _lockService = lockService,
+       _chunker = chunker ?? FileChunker();
 
   final String _allowedBasePath;
   final IFileTransferLockService _lockService;
@@ -37,6 +37,7 @@ class FileTransferMessageHandler {
 
     final requestId = message.header.requestId;
     final filePath = getFilePathFromRequest(message);
+    final startChunk = getStartChunkFromRequest(message);
 
     // Adquire lock para evitar conflitos de download simultâneo
     final lockAcquired = await _lockService.tryAcquireLock(filePath);
@@ -45,7 +46,8 @@ class FileTransferMessageHandler {
         clientId,
         createFileTransferErrorMessage(
           requestId: requestId,
-          errorMessage: 'Arquivo está sendo baixado por outro cliente. Tente novamente em alguns minutos.',
+          errorMessage:
+              'Arquivo está sendo baixado por outro cliente. Tente novamente em alguns minutos.',
           errorCode: ErrorCode.fileBusy,
         ),
       );
@@ -89,12 +91,25 @@ class FileTransferMessageHandler {
       LoggerService.info(
         '[FileTransferHandler] Iniciando transferência: $fileName ($fileSize bytes) para cliente $clientId',
       );
+      LoggerService.info(
+        '[FileTransferHandler] startChunk solicitado pelo cliente: $startChunk',
+      );
 
       final chunks = await _chunker.chunkFile(resolved);
       final totalChunks = chunks.length;
+      final normalizedStartChunk = startChunk < 0 ? 0 : startChunk;
+      final effectiveStartChunk = normalizedStartChunk > totalChunks
+          ? totalChunks
+          : normalizedStartChunk;
       LoggerService.info(
         '[FileTransferHandler] Arquivo dividido em $totalChunks chunks',
       );
+      if (effectiveStartChunk != startChunk) {
+        LoggerService.warning(
+          '[FileTransferHandler] startChunk ajustado de '
+          '$startChunk para $effectiveStartChunk',
+        );
+      }
 
       await sendToClient(
         clientId,
@@ -103,6 +118,7 @@ class FileTransferMessageHandler {
           fileName: fileName,
           fileSize: fileSize,
           totalChunks: totalChunks,
+          chunkSize: _chunker.chunkSize,
         ),
       );
       LoggerService.info(
@@ -110,7 +126,7 @@ class FileTransferMessageHandler {
       );
 
       // Enviar chunks um a um, aguardando confirmação do cliente
-      for (var i = 0; i < chunks.length; i++) {
+      for (var i = effectiveStartChunk; i < chunks.length; i++) {
         final chunk = chunks[i];
         LoggerService.info(
           '[FileTransferHandler] Enviando chunk ${chunk.chunkIndex + 1}/$totalChunks: ${chunk.data.length} bytes, checksum=${chunk.checksum}',
@@ -236,11 +252,13 @@ class FileTransferMessageHandler {
         final stat = await entity.stat();
         final fullPath = p.normalize(entity.path);
         final relativePath = p.relative(fullPath, from: basePath);
-        result.add(RemoteFileEntry(
-          path: relativePath,
-          size: stat.size,
-          lastModified: stat.modified,
-        ));
+        result.add(
+          RemoteFileEntry(
+            path: relativePath,
+            size: stat.size,
+            lastModified: stat.modified,
+          ),
+        );
       } else if (entity is Directory) {
         result.addAll(
           await _listFilesRecursive(entity, basePath),

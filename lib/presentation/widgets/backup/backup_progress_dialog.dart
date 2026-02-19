@@ -15,6 +15,10 @@ class BackupProgressDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = _BackupProgressTexts.fromLocale(
+      Localizations.localeOf(context),
+    );
+
     return Consumer<BackupProgressProvider>(
       builder: (context, provider, child) {
         final progress = provider.currentProgress;
@@ -37,7 +41,7 @@ class BackupProgressDialog extends StatelessWidget {
                   child: ProgressRing(strokeWidth: 2),
                 ),
               const SizedBox(width: 12),
-              const Text('Backup em Execução'),
+              Text(texts.title),
             ],
           ),
           content: ConstrainedBox(
@@ -67,7 +71,7 @@ class BackupProgressDialog extends StatelessWidget {
                   if (progress.elapsed != null) ...[
                     const SizedBox(height: 16),
                     Text(
-                      'Tempo decorrido: ${_formatDuration(progress.elapsed!)}',
+                      '${texts.elapsedLabel}: ${_formatDuration(progress.elapsed!, texts)}',
                       style: FluentTheme.of(
                         context,
                       ).typography.caption?.copyWith(color: AppColors.grey600),
@@ -114,7 +118,7 @@ class BackupProgressDialog extends StatelessWidget {
                   provider.reset();
                   Navigator.of(context).pop();
                 },
-                child: const Text('Fechar'),
+                child: Text(texts.closeButton),
               ),
           ],
         );
@@ -122,13 +126,16 @@ class BackupProgressDialog extends StatelessWidget {
     );
   }
 
-  static String _formatDuration(Duration duration) {
+  static String _formatDuration(
+    Duration duration,
+    _BackupProgressTexts texts,
+  ) {
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds % 60;
     if (minutes > 0) {
-      return '${minutes}m ${seconds}s';
+      return '$minutes${texts.minuteShort} $seconds${texts.secondShort}';
     }
-    return '${seconds}s';
+    return '$seconds${texts.secondShort}';
   }
 }
 
@@ -171,6 +178,44 @@ class _CustomProgressBar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _BackupProgressTexts {
+  const _BackupProgressTexts({
+    required this.title,
+    required this.elapsedLabel,
+    required this.closeButton,
+    required this.minuteShort,
+    required this.secondShort,
+  });
+
+  final String title;
+  final String elapsedLabel;
+  final String closeButton;
+  final String minuteShort;
+  final String secondShort;
+
+  factory _BackupProgressTexts.fromLocale(Locale locale) {
+    final language = locale.languageCode.toLowerCase();
+
+    if (language == 'pt') {
+      return const _BackupProgressTexts(
+        title: 'Backup em execucao',
+        elapsedLabel: 'Tempo decorrido',
+        closeButton: 'Fechar',
+        minuteShort: 'm',
+        secondShort: 's',
+      );
+    }
+
+    return const _BackupProgressTexts(
+      title: 'Backup in progress',
+      elapsedLabel: 'Elapsed time',
+      closeButton: 'Close',
+      minuteShort: 'm',
+      secondShort: 's',
     );
   }
 }

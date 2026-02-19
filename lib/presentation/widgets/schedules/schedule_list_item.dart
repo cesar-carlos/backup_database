@@ -1,6 +1,7 @@
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
+import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
 
@@ -27,6 +28,7 @@ class ScheduleListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = WidgetTexts.fromContext(context);
     final effectivelyDisabled = isOperating || !schedule.enabled;
 
     return ConfigListItem(
@@ -75,7 +77,7 @@ class ScheduleListItem extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  _getScheduleTypeName(schedule.scheduleType),
+                  texts.scheduleTypeName(schedule.scheduleType),
                   style: FluentTheme.of(context).typography.caption?.copyWith(
                     color: _getScheduleTypeColor(schedule.scheduleType),
                   ),
@@ -102,12 +104,12 @@ class ScheduleListItem extends StatelessWidget {
           const SizedBox(height: 4),
           if (schedule.nextRunAt != null)
             Text(
-              'Próxima execução: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.nextRunAt!)}',
+              '${texts.nextRunLabel}: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.nextRunAt!)}',
               style: FluentTheme.of(context).typography.body,
             ),
           if (schedule.lastRunAt != null)
             Text(
-              'Última execução: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.lastRunAt!)}',
+              '${texts.lastRunLabel}: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.lastRunAt!)}',
               style: FluentTheme.of(context).typography.body?.copyWith(
                 color: FluentTheme.of(context).resources.textFillColorSecondary,
               ),
@@ -115,19 +117,6 @@ class ScheduleListItem extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _getScheduleTypeName(ScheduleType type) {
-    switch (type) {
-      case ScheduleType.daily:
-        return 'Diário';
-      case ScheduleType.weekly:
-        return 'Semanal';
-      case ScheduleType.monthly:
-        return 'Mensal';
-      case ScheduleType.interval:
-        return 'Intervalo';
-    }
   }
 
   Color _getScheduleTypeColor(ScheduleType type) {

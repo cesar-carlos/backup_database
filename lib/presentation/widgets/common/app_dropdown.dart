@@ -1,3 +1,4 @@
+import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class AppDropdown<T> extends StatelessWidget {
@@ -19,6 +20,8 @@ class AppDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = WidgetTexts.fromContext(context);
+
     return InfoLabel(
       label: label,
       child: SizedBox(
@@ -28,7 +31,7 @@ class AppDropdown<T> extends StatelessWidget {
           items: items,
           onChanged: onChanged,
           isExpanded: true,
-          placeholder: placeholder ?? Text('Selecione $label'),
+          placeholder: placeholder ?? Text(texts.select(label)),
         ),
       ),
     );

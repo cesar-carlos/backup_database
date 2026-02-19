@@ -3497,6 +3497,349 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
   }
 }
 
+class $ScheduleDestinationsTableTable extends ScheduleDestinationsTable
+    with
+        TableInfo<
+          $ScheduleDestinationsTableTable,
+          ScheduleDestinationsTableData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScheduleDestinationsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scheduleIdMeta = const VerificationMeta(
+    'scheduleId',
+  );
+  @override
+  late final GeneratedColumn<String> scheduleId = GeneratedColumn<String>(
+    'schedule_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES schedules_table (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _destinationIdMeta = const VerificationMeta(
+    'destinationId',
+  );
+  @override
+  late final GeneratedColumn<String> destinationId = GeneratedColumn<String>(
+    'destination_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES backup_destinations_table (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    scheduleId,
+    destinationId,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'schedule_destinations_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ScheduleDestinationsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('schedule_id')) {
+      context.handle(
+        _scheduleIdMeta,
+        scheduleId.isAcceptableOrUnknown(data['schedule_id']!, _scheduleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scheduleIdMeta);
+    }
+    if (data.containsKey('destination_id')) {
+      context.handle(
+        _destinationIdMeta,
+        destinationId.isAcceptableOrUnknown(
+          data['destination_id']!,
+          _destinationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_destinationIdMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {scheduleId, destinationId},
+  ];
+  @override
+  ScheduleDestinationsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ScheduleDestinationsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      scheduleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}schedule_id'],
+      )!,
+      destinationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}destination_id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ScheduleDestinationsTableTable createAlias(String alias) {
+    return $ScheduleDestinationsTableTable(attachedDatabase, alias);
+  }
+}
+
+class ScheduleDestinationsTableData extends DataClass
+    implements Insertable<ScheduleDestinationsTableData> {
+  final String id;
+  final String scheduleId;
+  final String destinationId;
+  final DateTime createdAt;
+  const ScheduleDestinationsTableData({
+    required this.id,
+    required this.scheduleId,
+    required this.destinationId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['schedule_id'] = Variable<String>(scheduleId);
+    map['destination_id'] = Variable<String>(destinationId);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ScheduleDestinationsTableCompanion toCompanion(bool nullToAbsent) {
+    return ScheduleDestinationsTableCompanion(
+      id: Value(id),
+      scheduleId: Value(scheduleId),
+      destinationId: Value(destinationId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ScheduleDestinationsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ScheduleDestinationsTableData(
+      id: serializer.fromJson<String>(json['id']),
+      scheduleId: serializer.fromJson<String>(json['scheduleId']),
+      destinationId: serializer.fromJson<String>(json['destinationId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'scheduleId': serializer.toJson<String>(scheduleId),
+      'destinationId': serializer.toJson<String>(destinationId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ScheduleDestinationsTableData copyWith({
+    String? id,
+    String? scheduleId,
+    String? destinationId,
+    DateTime? createdAt,
+  }) => ScheduleDestinationsTableData(
+    id: id ?? this.id,
+    scheduleId: scheduleId ?? this.scheduleId,
+    destinationId: destinationId ?? this.destinationId,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  ScheduleDestinationsTableData copyWithCompanion(
+    ScheduleDestinationsTableCompanion data,
+  ) {
+    return ScheduleDestinationsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      scheduleId: data.scheduleId.present
+          ? data.scheduleId.value
+          : this.scheduleId,
+      destinationId: data.destinationId.present
+          ? data.destinationId.value
+          : this.destinationId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScheduleDestinationsTableData(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('destinationId: $destinationId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, scheduleId, destinationId, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScheduleDestinationsTableData &&
+          other.id == this.id &&
+          other.scheduleId == this.scheduleId &&
+          other.destinationId == this.destinationId &&
+          other.createdAt == this.createdAt);
+}
+
+class ScheduleDestinationsTableCompanion
+    extends UpdateCompanion<ScheduleDestinationsTableData> {
+  final Value<String> id;
+  final Value<String> scheduleId;
+  final Value<String> destinationId;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const ScheduleDestinationsTableCompanion({
+    this.id = const Value.absent(),
+    this.scheduleId = const Value.absent(),
+    this.destinationId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ScheduleDestinationsTableCompanion.insert({
+    required String id,
+    required String scheduleId,
+    required String destinationId,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       scheduleId = Value(scheduleId),
+       destinationId = Value(destinationId),
+       createdAt = Value(createdAt);
+  static Insertable<ScheduleDestinationsTableData> custom({
+    Expression<String>? id,
+    Expression<String>? scheduleId,
+    Expression<String>? destinationId,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (scheduleId != null) 'schedule_id': scheduleId,
+      if (destinationId != null) 'destination_id': destinationId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ScheduleDestinationsTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? scheduleId,
+    Value<String>? destinationId,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return ScheduleDestinationsTableCompanion(
+      id: id ?? this.id,
+      scheduleId: scheduleId ?? this.scheduleId,
+      destinationId: destinationId ?? this.destinationId,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (scheduleId.present) {
+      map['schedule_id'] = Variable<String>(scheduleId.value);
+    }
+    if (destinationId.present) {
+      map['destination_id'] = Variable<String>(destinationId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScheduleDestinationsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('destinationId: $destinationId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $BackupHistoryTableTable extends BackupHistoryTable
     with TableInfo<$BackupHistoryTableTable, BackupHistoryTableData> {
   @override
@@ -8561,6 +8904,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BackupDestinationsTableTable backupDestinationsTable =
       $BackupDestinationsTableTable(this);
   late final $SchedulesTableTable schedulesTable = $SchedulesTableTable(this);
+  late final $ScheduleDestinationsTableTable scheduleDestinationsTable =
+      $ScheduleDestinationsTableTable(this);
   late final $BackupHistoryTableTable backupHistoryTable =
       $BackupHistoryTableTable(this);
   late final $BackupLogsTableTable backupLogsTable = $BackupLogsTableTable(
@@ -8589,6 +8934,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final BackupDestinationDao backupDestinationDao = BackupDestinationDao(
     this as AppDatabase,
   );
+  late final ScheduleDestinationDao scheduleDestinationDao =
+      ScheduleDestinationDao(this as AppDatabase);
   late final ScheduleDao scheduleDao = ScheduleDao(this as AppDatabase);
   late final BackupHistoryDao backupHistoryDao = BackupHistoryDao(
     this as AppDatabase,
@@ -8620,6 +8967,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     postgresConfigsTable,
     backupDestinationsTable,
     schedulesTable,
+    scheduleDestinationsTable,
     backupHistoryTable,
     backupLogsTable,
     emailConfigsTable,
@@ -8629,6 +8977,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     serverConnectionsTable,
     fileTransfersTable,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'schedules_table',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [
+        TableUpdate('schedule_destinations_table', kind: UpdateKind.delete),
+      ],
+    ),
+  ]);
 }
 
 typedef $$SqlServerConfigsTableTableCreateCompanionBuilder =
@@ -9612,6 +9972,48 @@ typedef $$BackupDestinationsTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$BackupDestinationsTableTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $BackupDestinationsTableTable,
+          BackupDestinationsTableData
+        > {
+  $$BackupDestinationsTableTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $ScheduleDestinationsTableTable,
+    List<ScheduleDestinationsTableData>
+  >
+  _scheduleDestinationsTableRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.scheduleDestinationsTable,
+        aliasName: $_aliasNameGenerator(
+          db.backupDestinationsTable.id,
+          db.scheduleDestinationsTable.destinationId,
+        ),
+      );
+
+  $$ScheduleDestinationsTableTableProcessedTableManager
+  get scheduleDestinationsTableRefs {
+    final manager = $$ScheduleDestinationsTableTableTableManager(
+      $_db,
+      $_db.scheduleDestinationsTable,
+    ).filter((f) => f.destinationId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _scheduleDestinationsTableRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$BackupDestinationsTableTableFilterComposer
     extends Composer<_$AppDatabase, $BackupDestinationsTableTable> {
   $$BackupDestinationsTableTableFilterComposer({
@@ -9655,6 +10057,33 @@ class $$BackupDestinationsTableTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> scheduleDestinationsTableRefs(
+    Expression<bool> Function($$ScheduleDestinationsTableTableFilterComposer f)
+    f,
+  ) {
+    final $$ScheduleDestinationsTableTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.scheduleDestinationsTable,
+          getReferencedColumn: (t) => t.destinationId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ScheduleDestinationsTableTableFilterComposer(
+                $db: $db,
+                $table: $db.scheduleDestinationsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$BackupDestinationsTableTableOrderingComposer
@@ -9731,6 +10160,33 @@ class $$BackupDestinationsTableTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> scheduleDestinationsTableRefs<T extends Object>(
+    Expression<T> Function($$ScheduleDestinationsTableTableAnnotationComposer a)
+    f,
+  ) {
+    final $$ScheduleDestinationsTableTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.scheduleDestinationsTable,
+          getReferencedColumn: (t) => t.destinationId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ScheduleDestinationsTableTableAnnotationComposer(
+                $db: $db,
+                $table: $db.scheduleDestinationsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$BackupDestinationsTableTableTableManager
@@ -9746,14 +10202,10 @@ class $$BackupDestinationsTableTableTableManager
           $$BackupDestinationsTableTableUpdateCompanionBuilder,
           (
             BackupDestinationsTableData,
-            BaseReferences<
-              _$AppDatabase,
-              $BackupDestinationsTableTable,
-              BackupDestinationsTableData
-            >,
+            $$BackupDestinationsTableTableReferences,
           ),
           BackupDestinationsTableData,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool scheduleDestinationsTableRefs})
         > {
   $$BackupDestinationsTableTableTableManager(
     _$AppDatabase db,
@@ -9818,9 +10270,47 @@ class $$BackupDestinationsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$BackupDestinationsTableTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({scheduleDestinationsTableRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (scheduleDestinationsTableRefs) db.scheduleDestinationsTable,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (scheduleDestinationsTableRefs)
+                    await $_getPrefetchedData<
+                      BackupDestinationsTableData,
+                      $BackupDestinationsTableTable,
+                      ScheduleDestinationsTableData
+                    >(
+                      currentTable: table,
+                      referencedTable: $$BackupDestinationsTableTableReferences
+                          ._scheduleDestinationsTableRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$BackupDestinationsTableTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).scheduleDestinationsTableRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where(
+                            (e) => e.destinationId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -9835,16 +10325,9 @@ typedef $$BackupDestinationsTableTableProcessedTableManager =
       $$BackupDestinationsTableTableAnnotationComposer,
       $$BackupDestinationsTableTableCreateCompanionBuilder,
       $$BackupDestinationsTableTableUpdateCompanionBuilder,
-      (
-        BackupDestinationsTableData,
-        BaseReferences<
-          _$AppDatabase,
-          $BackupDestinationsTableTable,
-          BackupDestinationsTableData
-        >,
-      ),
+      (BackupDestinationsTableData, $$BackupDestinationsTableTableReferences),
       BackupDestinationsTableData,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool scheduleDestinationsTableRefs})
     >;
 typedef $$SchedulesTableTableCreateCompanionBuilder =
     SchedulesTableCompanion Function({
@@ -9894,6 +10377,48 @@ typedef $$SchedulesTableTableUpdateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<int> rowid,
     });
+
+final class $$SchedulesTableTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $SchedulesTableTable,
+          SchedulesTableData
+        > {
+  $$SchedulesTableTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $ScheduleDestinationsTableTable,
+    List<ScheduleDestinationsTableData>
+  >
+  _scheduleDestinationsTableRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.scheduleDestinationsTable,
+        aliasName: $_aliasNameGenerator(
+          db.schedulesTable.id,
+          db.scheduleDestinationsTable.scheduleId,
+        ),
+      );
+
+  $$ScheduleDestinationsTableTableProcessedTableManager
+  get scheduleDestinationsTableRefs {
+    final manager = $$ScheduleDestinationsTableTableTableManager(
+      $_db,
+      $_db.scheduleDestinationsTable,
+    ).filter((f) => f.scheduleId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _scheduleDestinationsTableRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
 
 class $$SchedulesTableTableFilterComposer
     extends Composer<_$AppDatabase, $SchedulesTableTable> {
@@ -10003,6 +10528,33 @@ class $$SchedulesTableTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> scheduleDestinationsTableRefs(
+    Expression<bool> Function($$ScheduleDestinationsTableTableFilterComposer f)
+    f,
+  ) {
+    final $$ScheduleDestinationsTableTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.scheduleDestinationsTable,
+          getReferencedColumn: (t) => t.scheduleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ScheduleDestinationsTableTableFilterComposer(
+                $db: $db,
+                $table: $db.scheduleDestinationsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$SchedulesTableTableOrderingComposer
@@ -10209,6 +10761,33 @@ class $$SchedulesTableTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> scheduleDestinationsTableRefs<T extends Object>(
+    Expression<T> Function($$ScheduleDestinationsTableTableAnnotationComposer a)
+    f,
+  ) {
+    final $$ScheduleDestinationsTableTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.scheduleDestinationsTable,
+          getReferencedColumn: (t) => t.scheduleId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ScheduleDestinationsTableTableAnnotationComposer(
+                $db: $db,
+                $table: $db.scheduleDestinationsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$SchedulesTableTableTableManager
@@ -10222,16 +10801,9 @@ class $$SchedulesTableTableTableManager
           $$SchedulesTableTableAnnotationComposer,
           $$SchedulesTableTableCreateCompanionBuilder,
           $$SchedulesTableTableUpdateCompanionBuilder,
-          (
-            SchedulesTableData,
-            BaseReferences<
-              _$AppDatabase,
-              $SchedulesTableTable,
-              SchedulesTableData
-            >,
-          ),
+          (SchedulesTableData, $$SchedulesTableTableReferences),
           SchedulesTableData,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool scheduleDestinationsTableRefs})
         > {
   $$SchedulesTableTableTableManager(
     _$AppDatabase db,
@@ -10339,9 +10911,45 @@ class $$SchedulesTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$SchedulesTableTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({scheduleDestinationsTableRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (scheduleDestinationsTableRefs) db.scheduleDestinationsTable,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (scheduleDestinationsTableRefs)
+                    await $_getPrefetchedData<
+                      SchedulesTableData,
+                      $SchedulesTableTable,
+                      ScheduleDestinationsTableData
+                    >(
+                      currentTable: table,
+                      referencedTable: $$SchedulesTableTableReferences
+                          ._scheduleDestinationsTableRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$SchedulesTableTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).scheduleDestinationsTableRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.scheduleId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -10356,12 +10964,436 @@ typedef $$SchedulesTableTableProcessedTableManager =
       $$SchedulesTableTableAnnotationComposer,
       $$SchedulesTableTableCreateCompanionBuilder,
       $$SchedulesTableTableUpdateCompanionBuilder,
-      (
-        SchedulesTableData,
-        BaseReferences<_$AppDatabase, $SchedulesTableTable, SchedulesTableData>,
-      ),
+      (SchedulesTableData, $$SchedulesTableTableReferences),
       SchedulesTableData,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool scheduleDestinationsTableRefs})
+    >;
+typedef $$ScheduleDestinationsTableTableCreateCompanionBuilder =
+    ScheduleDestinationsTableCompanion Function({
+      required String id,
+      required String scheduleId,
+      required String destinationId,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$ScheduleDestinationsTableTableUpdateCompanionBuilder =
+    ScheduleDestinationsTableCompanion Function({
+      Value<String> id,
+      Value<String> scheduleId,
+      Value<String> destinationId,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+final class $$ScheduleDestinationsTableTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $ScheduleDestinationsTableTable,
+          ScheduleDestinationsTableData
+        > {
+  $$ScheduleDestinationsTableTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $SchedulesTableTable _scheduleIdTable(_$AppDatabase db) =>
+      db.schedulesTable.createAlias(
+        $_aliasNameGenerator(
+          db.scheduleDestinationsTable.scheduleId,
+          db.schedulesTable.id,
+        ),
+      );
+
+  $$SchedulesTableTableProcessedTableManager get scheduleId {
+    final $_column = $_itemColumn<String>('schedule_id')!;
+
+    final manager = $$SchedulesTableTableTableManager(
+      $_db,
+      $_db.schedulesTable,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_scheduleIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $BackupDestinationsTableTable _destinationIdTable(_$AppDatabase db) =>
+      db.backupDestinationsTable.createAlias(
+        $_aliasNameGenerator(
+          db.scheduleDestinationsTable.destinationId,
+          db.backupDestinationsTable.id,
+        ),
+      );
+
+  $$BackupDestinationsTableTableProcessedTableManager get destinationId {
+    final $_column = $_itemColumn<String>('destination_id')!;
+
+    final manager = $$BackupDestinationsTableTableTableManager(
+      $_db,
+      $_db.backupDestinationsTable,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_destinationIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ScheduleDestinationsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ScheduleDestinationsTableTable> {
+  $$ScheduleDestinationsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$SchedulesTableTableFilterComposer get scheduleId {
+    final $$SchedulesTableTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.scheduleId,
+      referencedTable: $db.schedulesTable,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SchedulesTableTableFilterComposer(
+            $db: $db,
+            $table: $db.schedulesTable,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$BackupDestinationsTableTableFilterComposer get destinationId {
+    final $$BackupDestinationsTableTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.destinationId,
+          referencedTable: $db.backupDestinationsTable,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$BackupDestinationsTableTableFilterComposer(
+                $db: $db,
+                $table: $db.backupDestinationsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$ScheduleDestinationsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ScheduleDestinationsTableTable> {
+  $$ScheduleDestinationsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$SchedulesTableTableOrderingComposer get scheduleId {
+    final $$SchedulesTableTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.scheduleId,
+      referencedTable: $db.schedulesTable,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SchedulesTableTableOrderingComposer(
+            $db: $db,
+            $table: $db.schedulesTable,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$BackupDestinationsTableTableOrderingComposer get destinationId {
+    final $$BackupDestinationsTableTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.destinationId,
+          referencedTable: $db.backupDestinationsTable,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$BackupDestinationsTableTableOrderingComposer(
+                $db: $db,
+                $table: $db.backupDestinationsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$ScheduleDestinationsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ScheduleDestinationsTableTable> {
+  $$ScheduleDestinationsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$SchedulesTableTableAnnotationComposer get scheduleId {
+    final $$SchedulesTableTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.scheduleId,
+      referencedTable: $db.schedulesTable,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SchedulesTableTableAnnotationComposer(
+            $db: $db,
+            $table: $db.schedulesTable,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$BackupDestinationsTableTableAnnotationComposer get destinationId {
+    final $$BackupDestinationsTableTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.destinationId,
+          referencedTable: $db.backupDestinationsTable,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$BackupDestinationsTableTableAnnotationComposer(
+                $db: $db,
+                $table: $db.backupDestinationsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$ScheduleDestinationsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ScheduleDestinationsTableTable,
+          ScheduleDestinationsTableData,
+          $$ScheduleDestinationsTableTableFilterComposer,
+          $$ScheduleDestinationsTableTableOrderingComposer,
+          $$ScheduleDestinationsTableTableAnnotationComposer,
+          $$ScheduleDestinationsTableTableCreateCompanionBuilder,
+          $$ScheduleDestinationsTableTableUpdateCompanionBuilder,
+          (
+            ScheduleDestinationsTableData,
+            $$ScheduleDestinationsTableTableReferences,
+          ),
+          ScheduleDestinationsTableData,
+          PrefetchHooks Function({bool scheduleId, bool destinationId})
+        > {
+  $$ScheduleDestinationsTableTableTableManager(
+    _$AppDatabase db,
+    $ScheduleDestinationsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScheduleDestinationsTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ScheduleDestinationsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ScheduleDestinationsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> scheduleId = const Value.absent(),
+                Value<String> destinationId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ScheduleDestinationsTableCompanion(
+                id: id,
+                scheduleId: scheduleId,
+                destinationId: destinationId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String scheduleId,
+                required String destinationId,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ScheduleDestinationsTableCompanion.insert(
+                id: id,
+                scheduleId: scheduleId,
+                destinationId: destinationId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ScheduleDestinationsTableTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({scheduleId = false, destinationId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (scheduleId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.scheduleId,
+                                referencedTable:
+                                    $$ScheduleDestinationsTableTableReferences
+                                        ._scheduleIdTable(db),
+                                referencedColumn:
+                                    $$ScheduleDestinationsTableTableReferences
+                                        ._scheduleIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (destinationId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.destinationId,
+                                referencedTable:
+                                    $$ScheduleDestinationsTableTableReferences
+                                        ._destinationIdTable(db),
+                                referencedColumn:
+                                    $$ScheduleDestinationsTableTableReferences
+                                        ._destinationIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ScheduleDestinationsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ScheduleDestinationsTableTable,
+      ScheduleDestinationsTableData,
+      $$ScheduleDestinationsTableTableFilterComposer,
+      $$ScheduleDestinationsTableTableOrderingComposer,
+      $$ScheduleDestinationsTableTableAnnotationComposer,
+      $$ScheduleDestinationsTableTableCreateCompanionBuilder,
+      $$ScheduleDestinationsTableTableUpdateCompanionBuilder,
+      (
+        ScheduleDestinationsTableData,
+        $$ScheduleDestinationsTableTableReferences,
+      ),
+      ScheduleDestinationsTableData,
+      PrefetchHooks Function({bool scheduleId, bool destinationId})
     >;
 typedef $$BackupHistoryTableTableCreateCompanionBuilder =
     BackupHistoryTableCompanion Function({
@@ -12926,6 +13958,11 @@ class $AppDatabaseManager {
       );
   $$SchedulesTableTableTableManager get schedulesTable =>
       $$SchedulesTableTableTableManager(_db, _db.schedulesTable);
+  $$ScheduleDestinationsTableTableTableManager get scheduleDestinationsTable =>
+      $$ScheduleDestinationsTableTableTableManager(
+        _db,
+        _db.scheduleDestinationsTable,
+      );
   $$BackupHistoryTableTableTableManager get backupHistoryTable =>
       $$BackupHistoryTableTableTableManager(_db, _db.backupHistoryTable);
   $$BackupLogsTableTableTableManager get backupLogsTable =>

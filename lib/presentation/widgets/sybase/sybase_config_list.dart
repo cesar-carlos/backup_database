@@ -17,13 +17,25 @@ class SybaseConfigList extends StatelessWidget {
   final void Function(String)? onDelete;
   final void Function(String, bool)? onToggleEnabled;
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (configs.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Text('Nenhuma configuração encontrada'),
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            _t(
+              context,
+              'Nenhuma configuracao encontrada',
+              'No configuration found',
+            ),
+          ),
         ),
       );
     }

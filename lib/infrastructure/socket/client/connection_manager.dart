@@ -15,6 +15,7 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/socket/client/file_transfer_resume_metadata_store.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:backup_database/infrastructure/socket/client/tcp_socket_client.dart';
 import 'package:crypto/crypto.dart';
@@ -28,11 +29,16 @@ typedef BackupProgressCallback =
     );
 
 class ConnectionManager {
-  ConnectionManager({ServerConnectionDao? serverConnectionDao})
-    : _serverConnectionDao = serverConnectionDao,
-      _socketLogger = di.getIt<SocketLoggerService>();
+  ConnectionManager({
+    ServerConnectionDao? serverConnectionDao,
+    FileTransferResumeMetadataStore? resumeMetadataStore,
+  }) : _serverConnectionDao = serverConnectionDao,
+       _resumeMetadataStore =
+           resumeMetadataStore ?? const FileTransferResumeMetadataStore(),
+       _socketLogger = di.getIt<SocketLoggerService>();
 
   final ServerConnectionDao? _serverConnectionDao;
+  final FileTransferResumeMetadataStore _resumeMetadataStore;
   final SocketLoggerService _socketLogger;
   TcpSocketClient? _client;
   String? _activeHost;
@@ -106,6 +112,11 @@ class ConnectionManager {
       state.totalChunks = getTotalChunksFromMetadata(message);
       state.isCompressed = getIsCompressedFromMetadata(message);
       state.expectedSize = getFileSizeFromMetadata(message);
+      state.transferChunkSize =
+          getChunkSizeFromMetadata(message) ?? SocketConfig.chunkSize;
+      if (state.transferChunkSize <= 0) {
+        state.transferChunkSize = SocketConfig.chunkSize;
+      }
 
       // Validar SHA-256 (Fase 2)
       if (message.payload.containsKey('hash')) {
@@ -115,8 +126,29 @@ class ConnectionManager {
       LoggerService.info(
         '[ConnectionManager] Metadata recebida: ${state.fileName}, '
         'chunks: ${state.totalChunks}, compressed: ${state.isCompressed}, '
-        'expectedSize: ${state.expectedSize}',
+        'expectedSize: ${state.expectedSize}, '
+        'chunkSize: ${state.transferChunkSize}',
       );
+
+      try {
+        await _resumeMetadataStore.write(
+          state.outputPath,
+          FileTransferResumeMetadata(
+            filePath: state.sourceFilePath,
+            partFilePath: state.partFilePath,
+            chunkSize: state.transferChunkSize,
+            expectedSize: state.expectedSize > 0 ? state.expectedSize : null,
+            expectedHash: state.expectedHash,
+            isCompressed: state.isCompressed,
+            scheduleId: state.scheduleId,
+            updatedAt: DateTime.now(),
+          ),
+        );
+      } on Object catch (e) {
+        LoggerService.warning(
+          '[ConnectionManager] Falha ao persistir metadata de resume: $e',
+        );
+      }
       return;
     }
     if (isFileChunkMessage(message)) {
@@ -260,6 +292,7 @@ class ConnectionManager {
       LoggerService.info(
         '[ConnectionManager] ✓ Arquivo renomeado e salvo com sucesso!',
       );
+      await _resumeMetadataStore.delete(state.outputPath);
 
       state.completer.complete(const rd.Success(rd.unit));
     } on Object catch (e) {
@@ -498,6 +531,19 @@ class ConnectionManager {
     }
   }
 
+  bool _canResumeWithMetadata({
+    required FileTransferResumeMetadata? metadata,
+    required String filePath,
+    required String? scheduleId,
+  }) {
+    if (metadata == null) {
+      return true;
+    }
+    final sameFile = metadata.filePath == filePath;
+    final sameSchedule = metadata.scheduleId == scheduleId;
+    return sameFile && sameSchedule;
+  }
+
   Future<rd.Result<void>> requestFile({
     required String filePath,
     required String outputPath,
@@ -524,40 +570,66 @@ class ConnectionManager {
     final partFilePath = '$outputPath.part';
     final partFile = File(partFilePath);
     var startChunk = 0;
+    var transferChunkSize = SocketConfig.chunkSize;
     IOSink? fileSink;
 
     try {
-      if (await partFile.exists()) {
-        final partSize = await partFile.length();
-        if (partSize > 0) {
-          // Assume o chunk size padrão.
-          // TODO(dev): Armazenar metadados do download anterior para garantir mesmo chunk size.
-          // Por enquanto assumimos que o config não muda.
-          startChunk = (partSize / SocketConfig.chunkSize).floor();
-          final validSize = startChunk * SocketConfig.chunkSize;
+      final partExists = await partFile.exists();
+      final resumeMetadata = await _resumeMetadataStore.read(outputPath);
 
-          LoggerService.info(
-            '[ConnectionManager] Arquivo parcial encontrado. Resume do chunk $startChunk ($validSize bytes)',
+      if (partExists) {
+        if (resumeMetadata == null) {
+          LoggerService.warning(
+            '[ConnectionManager] Arquivo parcial descartado: '
+            'metadata de resume ausente.',
           );
+          await partFile.delete();
+          await _resumeMetadataStore.delete(outputPath);
+        } else if (!_canResumeWithMetadata(
+          metadata: resumeMetadata,
+          filePath: filePath,
+          scheduleId: scheduleId,
+        )) {
+          LoggerService.warning(
+            '[ConnectionManager] Arquivo parcial descartado: '
+            'metadata de resume incompatível.',
+          );
+          await partFile.delete();
+          await _resumeMetadataStore.delete(outputPath);
+        } else if (resumeMetadata.chunkSize <= 0) {
+          LoggerService.warning(
+            '[ConnectionManager] Arquivo parcial descartado: '
+            'chunkSize inválido no metadata de resume.',
+          );
+          await partFile.delete();
+          await _resumeMetadataStore.delete(outputPath);
+        } else {
+          transferChunkSize = resumeMetadata.chunkSize;
 
-          // Truncar para o último limite de chunk válido para evitar corrupção
-          fileSink = partFile.openWrite(mode: FileMode.append);
-          // Nota: O ideal seria truncar, mas append funciona se o server mandar a partir do offset correto.
-          // Se o server mandar startChunk, ele manda o chunk *inteiro*.
-          // Se o arquivo local tiver bytes extras (chunk incompleto), precisamos aparar.
-          // Vamos fazer um truncate manual antes de abrir o sink.
-          if (partSize != validSize) {
+          final partSize = await partFile.length();
+          if (partSize > 0) {
+            startChunk = (partSize / transferChunkSize).floor();
+            final validSize = startChunk * transferChunkSize;
+
             LoggerService.info(
-              '[ConnectionManager] Truncando arquivo parcial de $partSize para $validSize bytes',
+              '[ConnectionManager] Arquivo parcial encontrado. '
+              'Resume do chunk $startChunk '
+              '($validSize bytes, chunkSize=$transferChunkSize)',
             );
-            final raf = await partFile.open(
-              mode: FileMode.write,
-            ); // write mode aqui pode limpar. Cuidado.
-            await raf.setPosition(validSize);
-            await raf.truncate(validSize);
-            await raf.close();
+
+            if (partSize != validSize) {
+              LoggerService.info(
+                '[ConnectionManager] Truncando arquivo parcial '
+                'de $partSize para $validSize bytes',
+              );
+              final raf = await partFile.open(mode: FileMode.append);
+              await raf.truncate(validSize);
+              await raf.close();
+            }
           }
         }
+      } else {
+        await _resumeMetadataStore.delete(outputPath);
       }
 
       fileSink ??= partFile.openWrite(mode: FileMode.append);
@@ -566,6 +638,9 @@ class ConnectionManager {
         completer: completer,
         outputPath: outputPath,
         partFilePath: partFilePath,
+        sourceFilePath: filePath,
+        scheduleId: scheduleId,
+        transferChunkSize: transferChunkSize,
         fileSink: fileSink,
         onProgress: onProgress,
       );
@@ -610,6 +685,17 @@ class ConnectionManager {
       } on Object catch (e) {
         LoggerService.warning(
           '[ConnectionManager] Erro ao fechar fileSink durante cleanup: $e',
+        );
+      }
+
+      try {
+        final partExists = await File(state.partFilePath).exists();
+        if (!partExists) {
+          await _resumeMetadataStore.delete(state.outputPath);
+        }
+      } on Object catch (e) {
+        LoggerService.warning(
+          '[ConnectionManager] Erro ao limpar metadata de resume: $e',
         );
       }
     }
@@ -784,6 +870,9 @@ class _FileTransferState {
     required this.completer,
     required this.outputPath,
     required this.partFilePath,
+    required this.sourceFilePath,
+    required this.scheduleId,
+    required this.transferChunkSize,
     required this.fileSink,
     this.onProgress,
   });
@@ -791,6 +880,8 @@ class _FileTransferState {
   final Completer<rd.Result<void>> completer;
   final String outputPath;
   final String partFilePath;
+  final String sourceFilePath;
+  final String? scheduleId;
   final IOSink fileSink;
   final void Function(int currentChunk, int totalChunks)? onProgress;
   String fileName = '';
@@ -798,6 +889,7 @@ class _FileTransferState {
   int expectedSize = 0;
   String? expectedHash;
   bool isCompressed = false;
+  int transferChunkSize;
 }
 
 class _BackupProgressState {

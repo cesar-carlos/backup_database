@@ -31,6 +31,12 @@ class ServerListItem extends StatelessWidget {
   bool get _isConnectedToThis =>
       connectionStatus == ConnectionStatus.connected && isActiveConnection;
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -63,7 +69,7 @@ class ServerListItem extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${connection.host}:${connection.port} · Server ID: ${connection.serverId}',
+                        '${connection.host}:${connection.port} - Server ID: ${connection.serverId}',
                         style: FluentTheme.of(context).typography.caption,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -71,7 +77,7 @@ class ServerListItem extends StatelessWidget {
                       if (connection.lastConnectedAt != null) ...[
                         const SizedBox(height: 4),
                         Text(
-                          'Última conexão: ${_formatDate(connection.lastConnectedAt!)}',
+                          '${_t(context, 'Ultima conexao', 'Last connection')}: ${_formatDate(context, connection.lastConnectedAt!)}',
                           style: FluentTheme.of(context).typography.caption,
                         ),
                       ],
@@ -87,7 +93,11 @@ class ServerListItem extends StatelessWidget {
                     children: [
                       if (onTestConnection != null) ...[
                         Tooltip(
-                          message: 'Testar conexão',
+                          message: _t(
+                            context,
+                            'Testar conexao',
+                            'Test connection',
+                          ),
                           child: IconButton(
                             icon: const Icon(FluentIcons.link),
                             onPressed: isTestingConnection
@@ -100,8 +110,8 @@ class ServerListItem extends StatelessWidget {
                       if (onConnect != null) ...[
                         Tooltip(
                           message: _isConnectedToThis
-                              ? 'Desconectar'
-                              : 'Conectar',
+                              ? _t(context, 'Desconectar', 'Disconnect')
+                              : _t(context, 'Conectar', 'Connect'),
                           child: IconButton(
                             icon: Icon(
                               _isConnectedToThis
@@ -115,7 +125,11 @@ class ServerListItem extends StatelessWidget {
                       ],
                       if (onShowLogs != null) ...[
                         Tooltip(
-                          message: 'Log desta conexão',
+                          message: _t(
+                            context,
+                            'Log desta conexao',
+                            'Connection log',
+                          ),
                           child: IconButton(
                             icon: const Icon(FluentIcons.history),
                             onPressed: onShowLogs,
@@ -126,11 +140,17 @@ class ServerListItem extends StatelessWidget {
                       if (onEdit != null) ...[
                         Button(
                           onPressed: onEdit,
-                          child: const Text('Esta conexão'),
+                          child: Text(
+                            _t(context, 'Esta conexao', 'This connection'),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Tooltip(
-                          message: 'Editar conexão',
+                          message: _t(
+                            context,
+                            'Editar conexao',
+                            'Edit connection',
+                          ),
                           child: IconButton(
                             icon: const Icon(FluentIcons.edit),
                             onPressed: onEdit,
@@ -181,31 +201,40 @@ class ServerListItem extends StatelessWidget {
   (String, IconData, Color) _getStatusInfo(BuildContext context) {
     if (isConnecting) {
       return (
-        'Conectando...',
+        _t(context, 'Conectando...', 'Connecting...'),
         FluentIcons.sync,
         FluentTheme.of(context).accentColor,
       );
     }
     if (_isConnectedToThis) {
       return (
-        'Conectado',
+        _t(context, 'Conectado', 'Connected'),
         FluentIcons.check_mark,
         FluentTheme.of(context).accentColor,
       );
     }
     return (
-      'Offline',
+      _t(context, 'Offline', 'Offline'),
       FluentIcons.circle_stop,
       FluentTheme.of(context).resources.textFillColorSecondary,
     );
   }
 
-  String _formatDate(DateTime date) {
+  String _formatDate(BuildContext context, DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
-    if (diff.inDays > 0) return '${diff.inDays}d atrás';
-    if (diff.inHours > 0) return '${diff.inHours}h atrás';
-    if (diff.inMinutes > 0) return '${diff.inMinutes}min atrás';
-    return 'Agora';
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+
+    if (diff.inDays > 0) {
+      return isPt ? '${diff.inDays}d atras' : '${diff.inDays}d ago';
+    }
+    if (diff.inHours > 0) {
+      return isPt ? '${diff.inHours}h atras' : '${diff.inHours}h ago';
+    }
+    if (diff.inMinutes > 0) {
+      return isPt ? '${diff.inMinutes}min atras' : '${diff.inMinutes}min ago';
+    }
+    return _t(context, 'Agora', 'Now');
   }
 }

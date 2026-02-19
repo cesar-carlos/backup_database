@@ -15,6 +15,12 @@ class ConnectedClientsList extends StatefulWidget {
 }
 
 class _ConnectedClientsListState extends State<ConnectedClientsList> {
+  String _t(String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -54,7 +60,7 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
                   const SizedBox(height: 16),
                   Button(
                     onPressed: () => provider.refresh(),
-                    child: const Text('Tentar Novamente'),
+                    child: Text(_t('Tentar novamente', 'Try again')),
                   ),
                 ],
               ),
@@ -65,8 +71,8 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
           return AppCard(
             child: EmptyState(
               icon: FluentIcons.people,
-              message: 'Nenhum cliente conectado',
-              actionLabel: 'Atualizar',
+              message: _t('Nenhum cliente conectado', 'No connected clients'),
+              actionLabel: _t('Atualizar', 'Refresh'),
               onAction: () => provider.refresh(),
             ),
           );
@@ -91,13 +97,16 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Servidor não está em execução',
+              _t('Servidor nao esta em execucao', 'Server is not running'),
               style: FluentTheme.of(context).typography.titleLarge,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Inicie o servidor para aceitar conexões de clientes.',
+              _t(
+                'Inicie o servidor para aceitar conexoes de clientes.',
+                'Start the server to accept client connections.',
+              ),
               style: FluentTheme.of(context).typography.body,
               textAlign: TextAlign.center,
             ),
@@ -105,16 +114,16 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
               const SizedBox(height: 16),
               Text(
                 provider.error!,
-                style: FluentTheme.of(context).typography.body?.copyWith(
-                      color: AppColors.error,
-                    ),
+                style: FluentTheme.of(
+                  context,
+                ).typography.body?.copyWith(color: AppColors.error),
                 textAlign: TextAlign.center,
               ),
             ],
             const SizedBox(height: 24),
             FilledButton(
               onPressed: provider.startServer,
-              child: const Text('Iniciar servidor'),
+              child: Text(_t('Iniciar servidor', 'Start server')),
             ),
           ],
         ),
@@ -136,6 +145,12 @@ class _ConnectedClientsContent extends StatefulWidget {
 class _ConnectedClientsContentState extends State<_ConnectedClientsContent> {
   static const Duration _pollInterval = Duration(seconds: 5);
   Timer? _pollTimer;
+
+  String _t(String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
 
   @override
   void initState() {
@@ -165,7 +180,7 @@ class _ConnectedClientsContentState extends State<_ConnectedClientsContent> {
             ),
             CommandBarButton(
               icon: const Icon(FluentIcons.stop),
-              label: const Text('Parar servidor'),
+              label: Text(_t('Parar servidor', 'Stop server')),
               onPressed: () => widget.provider.stopServer(),
             ),
           ],
@@ -199,6 +214,12 @@ class _ConnectedClientRow extends StatelessWidget {
   final ConnectedClient client;
   final VoidCallback onDisconnect;
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -219,7 +240,8 @@ class _ConnectedClientRow extends StatelessWidget {
                     client.clientName.isNotEmpty
                         ? client.clientName
                         : client.clientId,
-                    style: FluentTheme.of(context).typography.subtitle?.copyWith(
+                    style: FluentTheme.of(context).typography.subtitle
+                        ?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                   ),
@@ -230,8 +252,8 @@ class _ConnectedClientRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Conectado: ${_formatDateTime(client.connectedAt)} · '
-                    'Último heartbeat: ${_formatDateTime(client.lastHeartbeat)}',
+                    '${_t(context, 'Conectado', 'Connected')}: ${_formatDateTime(context, client.connectedAt)} · '
+                    '${_t(context, 'Ultimo heartbeat', 'Last heartbeat')}: ${_formatDateTime(context, client.lastHeartbeat)}',
                     style: FluentTheme.of(context).typography.caption,
                   ),
                 ],
@@ -240,7 +262,7 @@ class _ConnectedClientRow extends StatelessWidget {
             _buildAuthChip(context),
             const SizedBox(width: 8),
             Tooltip(
-              message: 'Desconectar',
+              message: _t(context, 'Desconectar', 'Disconnect'),
               child: IconButton(
                 icon: const Icon(FluentIcons.plug_disconnected),
                 onPressed: onDisconnect,
@@ -263,20 +285,32 @@ class _ConnectedClientRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        client.isAuthenticated ? 'Autenticado' : 'Não autenticado',
+        client.isAuthenticated
+            ? _t(context, 'Autenticado', 'Authenticated')
+            : _t(context, 'Nao autenticado', 'Not authenticated'),
         style: FluentTheme.of(context).typography.caption?.copyWith(
-              color: color,
-            ),
+          color: color,
+        ),
       ),
     );
   }
 
-  String _formatDateTime(DateTime dt) {
+  String _formatDateTime(BuildContext context, DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inDays > 0) return '${diff.inDays}d atrás';
-    if (diff.inHours > 0) return '${diff.inHours}h atrás';
-    if (diff.inMinutes > 0) return '${diff.inMinutes}min atrás';
-    return 'Agora';
+    if (diff.inDays > 0) {
+      return _t(context, '${diff.inDays}d atras', '${diff.inDays}d ago');
+    }
+    if (diff.inHours > 0) {
+      return _t(context, '${diff.inHours}h atras', '${diff.inHours}h ago');
+    }
+    if (diff.inMinutes > 0) {
+      return _t(
+        context,
+        '${diff.inMinutes}min atras',
+        '${diff.inMinutes}m ago',
+      );
+    }
+    return _t(context, 'Agora', 'Now');
   }
 }

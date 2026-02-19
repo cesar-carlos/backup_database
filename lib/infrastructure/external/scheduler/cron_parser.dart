@@ -250,10 +250,6 @@ class ScheduleCalculator implements IScheduleCalculator {
       return false;
     }
 
-    if (diffInSeconds < -60) {
-      return false;
-    }
-
     return true;
   }
 

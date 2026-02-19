@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 enum MessageType { success, info, warning, error }
@@ -37,12 +38,13 @@ class MessageModal extends StatelessWidget {
   static Future<void> showSuccess(
     BuildContext context, {
     required String message,
-    String title = 'Sucesso',
+    String? title,
     String? buttonLabel,
   }) {
+    final texts = WidgetTexts.fromContext(context);
     return show(
       context,
-      title: title,
+      title: title ?? texts.success,
       message: message,
       buttonLabel: buttonLabel,
     );
@@ -51,12 +53,13 @@ class MessageModal extends StatelessWidget {
   static Future<void> showInfo(
     BuildContext context, {
     required String message,
-    String title = 'Informação',
+    String? title,
     String? buttonLabel,
   }) {
+    final texts = WidgetTexts.fromContext(context);
     return show(
       context,
-      title: title,
+      title: title ?? texts.information,
       message: message,
       buttonLabel: buttonLabel,
       type: MessageType.info,
@@ -66,12 +69,13 @@ class MessageModal extends StatelessWidget {
   static Future<void> showWarning(
     BuildContext context, {
     required String message,
-    String title = 'Atenção',
+    String? title,
     String? buttonLabel,
   }) {
+    final texts = WidgetTexts.fromContext(context);
     return show(
       context,
-      title: title,
+      title: title ?? texts.attention,
       message: message,
       buttonLabel: buttonLabel,
       type: MessageType.warning,
@@ -81,19 +85,20 @@ class MessageModal extends StatelessWidget {
   static Future<void> showError(
     BuildContext context, {
     required String message,
-    String title = 'Erro',
+    String? title,
     String? buttonLabel,
   }) {
+    final texts = WidgetTexts.fromContext(context);
     return show(
       context,
-      title: title,
+      title: title ?? texts.error,
       message: message,
       buttonLabel: buttonLabel,
       type: MessageType.error,
     );
   }
 
-  Color _getColor(BuildContext context) {
+  Color _getColor() {
     switch (type) {
       case MessageType.success:
         return AppColors.success;
@@ -121,7 +126,8 @@ class MessageModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _getColor(context);
+    final texts = WidgetTexts.fromContext(context);
+    final color = _getColor();
     final icon = _getIcon();
 
     return ContentDialog(
@@ -149,7 +155,7 @@ class MessageModal extends StatelessWidget {
       actions: [
         Button(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(buttonLabel ?? 'OK'),
+          child: Text(buttonLabel ?? texts.ok),
         ),
       ],
     );

@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class AppErrorWidget extends StatelessWidget {
@@ -12,6 +13,8 @@ class AppErrorWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final texts = WidgetTexts.fromContext(context);
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -25,7 +28,7 @@ class AppErrorWidget extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Erro',
+              texts.error,
               style: FluentTheme.of(context).typography.title,
             ),
             const SizedBox(height: 8),
@@ -38,12 +41,12 @@ class AppErrorWidget extends StatelessWidget {
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: onRetry,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(FluentIcons.refresh, size: 16),
-                    SizedBox(width: 8),
-                    Text('Tentar novamente'),
+                    const Icon(FluentIcons.refresh, size: 16),
+                    const SizedBox(width: 8),
+                    Text(texts.retry),
                   ],
                 ),
               ),

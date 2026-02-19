@@ -7,6 +7,7 @@ export 'file_transfer_dao.dart';
 export 'license_dao.dart';
 export 'postgres_config_dao.dart';
 export 'schedule_dao.dart';
+export 'schedule_destination_dao.dart';
 export 'server_connection_dao.dart';
 export 'server_credential_dao.dart';
 export 'sql_server_config_dao.dart';

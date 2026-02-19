@@ -1,6 +1,8 @@
 import 'package:backup_database/application/providers/postgres_config_provider.dart';
+import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
 import 'package:backup_database/application/providers/sybase_config_provider.dart';
+import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
@@ -11,6 +13,7 @@ import 'package:backup_database/presentation/widgets/sql_server/sql_server.dart'
 import 'package:backup_database/presentation/widgets/sybase/sybase.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 class DatabaseConfigPage extends StatefulWidget {
@@ -399,126 +402,133 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _confirmDeletePostgres(String id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: const Text(
-          'Tem certeza que deseja excluir esta configuração PostgreSQL?',
-        ),
-        actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          Button(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
+    final provider = context.read<PostgresConfigProvider>();
+    final configName =
+        provider.getConfigById(id)?.name ?? 'Configuração PostgreSQL';
+
+    await _handleDeleteWithDependencies(
+      configId: id,
+      configName: configName,
+      databaseLabel: 'PostgreSQL',
+      confirmMessage: 'Tem certeza que deseja excluir esta configuração?',
+      successMessage: 'Configuração PostgreSQL excluída com sucesso!',
+      fallbackErrorMessage: 'Erro ao excluir configuração PostgreSQL',
+      onDelete: () => provider.deleteConfig(id),
+      readError: () => provider.error,
     );
-
-    if ((confirmed ?? false) && mounted) {
-      final provider = context.read<PostgresConfigProvider>();
-      final success = await provider.deleteConfig(id);
-
-      if (!mounted) return;
-
-      if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Configuração PostgreSQL excluída com sucesso!',
-        );
-      } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao excluir configuração PostgreSQL',
-        );
-      }
-    }
   }
 
   Future<void> _confirmDeleteSqlServer(String id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: const Text(
-          'Tem certeza que deseja excluir esta configuração SQL Server?',
-        ),
-        actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          Button(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
+    final provider = context.read<SqlServerConfigProvider>();
+    final configName =
+        provider.getConfigById(id)?.name ?? 'Configuração SQL Server';
+
+    await _handleDeleteWithDependencies(
+      configId: id,
+      configName: configName,
+      databaseLabel: 'SQL Server',
+      confirmMessage: 'Tem certeza que deseja excluir esta configuração?',
+      successMessage: 'Configuração SQL Server excluída com sucesso!',
+      fallbackErrorMessage: 'Erro ao excluir configuração SQL Server',
+      onDelete: () => provider.deleteConfig(id),
+      readError: () => provider.error,
     );
-
-    if ((confirmed ?? false) && mounted) {
-      final provider = context.read<SqlServerConfigProvider>();
-      final success = await provider.deleteConfig(id);
-
-      if (!mounted) return;
-
-      if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Configuração SQL Server excluída com sucesso!',
-        );
-      } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao excluir configuração',
-        );
-      }
-    }
   }
 
   Future<void> _confirmDeleteSybase(String id) async {
+    final provider = context.read<SybaseConfigProvider>();
+    final configName =
+        provider.getConfigById(id)?.name ?? 'Configuração Sybase';
+
+    await _handleDeleteWithDependencies(
+      configId: id,
+      configName: configName,
+      databaseLabel: 'Sybase SQL Anywhere',
+      confirmMessage: 'Tem certeza que deseja excluir esta configuração?',
+      successMessage: 'Configuração Sybase excluída com sucesso!',
+      fallbackErrorMessage: 'Erro ao excluir configuração Sybase',
+      onDelete: () => provider.deleteConfig(id),
+      readError: () => provider.error,
+    );
+  }
+
+  Future<void> _handleDeleteWithDependencies({
+    required String configId,
+    required String configName,
+    required String databaseLabel,
+    required String confirmMessage,
+    required String successMessage,
+    required String fallbackErrorMessage,
+    required Future<bool> Function() onDelete,
+    required String? Function() readError,
+  }) async {
+    final linkedSchedules = await context
+        .read<SchedulerProvider>()
+        .getSchedulesByDatabaseConfig(configId);
+
+    if (!mounted) return;
+
+    if (linkedSchedules == null) {
+      await MessageModal.showError(
+        context,
+        message:
+            'Não foi possível validar dependências da configuração. '
+            'Tente novamente.',
+      );
+      return;
+    }
+
+    if (linkedSchedules.isNotEmpty) {
+      final action = await DatabaseConfigDependencyDialog.show(
+        context,
+        databaseLabel: databaseLabel,
+        configName: configName,
+        schedules: linkedSchedules,
+      );
+
+      if (!mounted) return;
+
+      if (action == DependencyDialogAction.goToSchedules) {
+        context.go(RouteNames.schedules);
+      }
+      return;
+    }
+
+    final confirmed = await _showDeleteConfirmDialog(confirmMessage);
+    if (!confirmed || !mounted) return;
+
+    final success = await onDelete();
+    if (!mounted) return;
+
+    if (success) {
+      await MessageModal.showSuccess(context, message: successMessage);
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message: readError() ?? fallbackErrorMessage,
+    );
+  }
+
+  Future<bool> _showDeleteConfirmDialog(String message) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
         title: const Text('Confirmar Exclusão'),
-        content: const Text(
-          'Tem certeza que deseja excluir esta configuração Sybase?',
-        ),
+        content: Text(message),
         actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          Button(
+          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
+          ActionButton(
+            label: 'Excluir',
+            icon: FluentIcons.delete,
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Excluir'),
           ),
         ],
       ),
     );
 
-    if ((confirmed ?? false) && mounted) {
-      final provider = context.read<SybaseConfigProvider>();
-      final success = await provider.deleteConfig(id);
-
-      if (!mounted) return;
-
-      if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Configuração Sybase excluída com sucesso!',
-        );
-      } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao excluir configuração Sybase',
-        );
-      }
-    }
+    return confirmed ?? false;
   }
 
   Widget _buildPostgresConfigList(

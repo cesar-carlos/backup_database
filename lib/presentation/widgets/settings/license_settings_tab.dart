@@ -37,6 +37,12 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
     super.dispose();
   }
 
+  String _t(String pt, String en) {
+    final isPt = Localizations.localeOf(context).languageCode.toLowerCase() ==
+        'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<LicenseProvider>(
@@ -51,16 +57,16 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Licenciamento',
+                      _t('Licenciamento', 'Licensing'),
                       style: FluentTheme.of(context).typography.subtitle,
                     ),
                     const SizedBox(height: 16),
                     InfoLabel(
-                      label: 'Chave do Dispositivo',
+                      label: _t('Chave do dispositivo', 'Device key'),
                       child: TextBox(
                         readOnly: true,
                         controller: TextEditingController(
-                          text: licenseProvider.deviceKey ?? 'Carregando...',
+                          text: licenseProvider.deviceKey ?? _t('Carregando...', 'Loading...'),
                         ),
                         suffix: IconButton(
                           icon: const Icon(FluentIcons.copy),
@@ -76,7 +82,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                         MessageModal.showSuccess(
                                           this.context,
                                           message:
-                                              'Chave do dispositivo copiada para clipboard!',
+                                              _t('Chave do dispositivo copiada para clipboard!', 'Device key copied to clipboard!'),
                                         );
                                       }
                                     } else {
@@ -84,7 +90,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                         MessageModal.showError(
                                           this.context,
                                           message:
-                                              'Erro ao copiar para clipboard',
+                                              _t('Erro ao copiar para clipboard', 'Error copying to clipboard'),
                                         );
                                       }
                                     }
@@ -96,10 +102,10 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                     ),
                     const SizedBox(height: 16),
                     InfoLabel(
-                      label: 'Chave de Licença',
+                      label: _t('Chave de licenca', 'License key'),
                       child: TextBox(
                         controller: _licenseKeyController,
-                        placeholder: 'Cole a chave de licença aqui',
+                        placeholder: _t('Cole a chave de licenca aqui', 'Paste the license key here'),
                         enabled: !licenseProvider.isLoading,
                       ),
                     ),
@@ -116,7 +122,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                 MessageModal.showSuccess(
                                   this.context,
                                   message:
-                                      'Licença validada e salva com sucesso!',
+                                      _t('Licenca validada e salva com sucesso!', 'License validated and saved successfully!'),
                                 );
                                 _licenseKeyController.clear();
                               } else if (mounted) {
@@ -124,7 +130,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                   this.context,
                                   message:
                                       licenseProvider.error ??
-                                      'Erro ao validar licença',
+                                      _t('Erro ao validar licenca', 'Error validating license'),
                                 );
                               }
                             },
@@ -134,12 +140,12 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                               height: 16,
                               child: ProgressRing(strokeWidth: 2),
                             )
-                          : const Text('Validar Licença'),
+                          : Text(_t('Validar licenca', 'Validate license')),
                     ),
                     if (licenseProvider.error != null) ...[
                       const SizedBox(height: 16),
                       InfoLabel(
-                        label: 'Erro',
+                        label: _t('Erro', 'Error'),
                         child: Text(
                           licenseProvider.error!,
                           style: FluentTheme.of(context).typography.body
@@ -151,7 +157,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                     const Divider(),
                     const SizedBox(height: 16),
                     Text(
-                      'Status da Licença',
+                      _t('Status da licenca', 'License status'),
                       style: FluentTheme.of(context).typography.subtitle,
                     ),
                     const SizedBox(height: 16),
@@ -176,30 +182,36 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
 
   Widget _buildLicenseStatus(License? license) {
     if (license == null) {
-      return const ListTile(
-        leading: Icon(FluentIcons.cancel, color: Color(0xFFF44336)),
-        title: Text('Sem Licença'),
-        subtitle: Text('Nenhuma licença válida encontrada'),
+      return ListTile(
+        leading: const Icon(FluentIcons.cancel, color: Color(0xFFF44336)),
+        title: Text(_t('Sem licenca', 'No license')),
+        subtitle: Text(_t('Nenhuma licenca valida encontrada', 'No valid license found')),
       );
     }
 
     if (license.isExpired) {
       return ListTile(
         leading: const Icon(FluentIcons.warning, color: Color(0xFFFF9800)),
-        title: const Text('Licença Expirada'),
+        title: Text(_t('Licenca expirada', 'Expired license')),
         subtitle: Text(
-          'Expirou em: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
+          _t(
+            'Expirou em: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
+            'Expired on: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
+          ),
         ),
       );
     }
 
     return ListTile(
       leading: const Icon(FluentIcons.accept, color: Color(0xFF4CAF50)),
-      title: const Text('Licença Válida'),
+      title: Text(_t('Licenca valida', 'Valid license')),
       subtitle: Text(
         license.expiresAt != null
-            ? 'Válida até: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}'
-            : 'Licença permanente',
+            ? _t(
+                'Valida ate: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
+                'Valid until: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
+              )
+            : _t('Licenca permanente', 'Permanent license'),
       ),
     );
   }
@@ -209,7 +221,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Recursos Permitidos',
+          _t('Recursos permitidos', 'Allowed features'),
           style: FluentTheme.of(context).typography.bodyStrong,
         ),
         const SizedBox(height: 8),
@@ -244,7 +256,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
           Row(
             children: [
               Text(
-                'Gerador de Licenças',
+                _t('Gerador de licencas', 'License generator'),
                 style: FluentTheme.of(context).typography.subtitle,
               ),
               const Spacer(),
@@ -254,13 +266,13 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                   if (!isAuthenticated) {
                     return Button(
                       onPressed: () => _showAuthDialog(context),
-                      child: const Text('Acessar Gerador'),
+                      child: Text(_t('Acessar gerador', 'Open generator')),
                     );
                   }
                   return Button(
                     onPressed: () =>
                         _showGeneratorDialog(context, licenseProvider),
-                    child: const Text('Gerar Licença'),
+                    child: Text(_t('Gerar licenca', 'Generate license')),
                   );
                 },
               ),
@@ -279,30 +291,30 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => ContentDialog(
-          title: const Row(
+          title: Row(
             children: [
-              Icon(FluentIcons.lock),
-              SizedBox(width: 8),
-              Text('Autenticação'),
+              const Icon(FluentIcons.lock),
+              const SizedBox(width: 8),
+              Text(_t('Autenticacao', 'Authentication')),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Digite a senha de administrador para acessar o gerador de licenças:',
+              Text(
+                _t('Digite a senha de administrador para acessar o gerador de licencas:', 'Enter admin password to access license generator:'),
               ),
               const SizedBox(height: 16),
               PasswordField(
                 controller: passwordController,
-                hint: 'Digite a senha',
+                hint: _t('Digite a senha', 'Enter password'),
               ),
               if (errorMessage != null) ...[
                 const SizedBox(height: 16),
                 InfoBar(
                   severity: InfoBarSeverity.error,
-                  title: const Text('Erro'),
+                  title: Text(_t('Erro', 'Error')),
                   content: Text(errorMessage!),
                 ),
               ],
@@ -323,7 +335,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
 
                 if (enteredPassword.isEmpty) {
                   setState(() {
-                    errorMessage = 'Senha não pode estar vazia';
+                    errorMessage = _t('Senha nao pode estar vazia', 'Password cannot be empty');
                   });
                   return;
                 }
@@ -334,11 +346,11 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                   _isAuthenticatedNotifier.value = true;
                 } else {
                   setState(() {
-                    errorMessage = 'Senha incorreta';
+                    errorMessage = _t('Senha incorreta', 'Incorrect password');
                   });
                 }
               },
-              child: const Text('Entrar'),
+              child: Text(_t('Entrar', 'Sign in')),
             ),
           ],
         ),
@@ -365,11 +377,11 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) => ContentDialog(
-            title: const Row(
+            title: Row(
               children: [
-                Icon(FluentIcons.certificate),
-                SizedBox(width: 8),
-                Text('Gerador de Licença'),
+                const Icon(FluentIcons.certificate),
+                const SizedBox(width: 8),
+                Text(_t('Gerador de licenca', 'License generator')),
               ],
             ),
             content: SizedBox(
@@ -381,11 +393,11 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       InfoLabel(
-                        label: 'Chave do Dispositivo',
+                        label: _t('Chave do dispositivo', 'Device key'),
                         child: TextBox(
                           controller: deviceKeyController,
                           placeholder:
-                              'Digite a chave do dispositivo para gerar a licença',
+                              _t('Digite a chave do dispositivo para gerar a licenca', 'Enter device key to generate the license'),
                           enabled: !isLoading,
                         ),
                       ),
@@ -402,13 +414,13 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                           licenseProvider.deviceKey!;
                                     });
                                   },
-                            child: const Text('Usar Chave Atual'),
+                            child: Text(_t('Usar chave atual', 'Use current key')),
                           ),
                         ),
                       ],
                       const SizedBox(height: 16),
                       Text(
-                        'Recursos Permitidos',
+                        _t('Recursos permitidos', 'Allowed features'),
                         style: FluentTheme.of(ctx).typography.bodyStrong,
                       ),
                       const SizedBox(height: 8),
@@ -434,14 +446,14 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                       ),
                       const SizedBox(height: 16),
                       InfoLabel(
-                        label: 'Data de Expiração (opcional)',
+                        label: _t('Data de expiracao (opcional)', 'Expiration date (optional)'),
                         child: Row(
                           children: [
                             Expanded(
                               child: TextBox(
                                 controller: expiresAtController,
                                 placeholder:
-                                    'DD/MM/YYYY ou deixe vazio para licença permanente',
+                                    _t('DD/MM/YYYY ou deixe vazio para licenca permanente', 'DD/MM/YYYY or leave empty for permanent license'),
                                 enabled: !isLoading,
                               ),
                             ),
@@ -474,14 +486,14 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                         const SizedBox(height: 16),
                         InfoBar(
                           severity: InfoBarSeverity.error,
-                          title: const Text('Erro'),
+                          title: Text(_t('Erro', 'Error')),
                           content: Text(errorMessage!),
                         ),
                       ],
                       if (generatedLicenseController.text.isNotEmpty) ...[
                         const SizedBox(height: 16),
                         InfoLabel(
-                          label: 'Licença Gerada',
+                          label: _t('Licenca gerada', 'Generated license'),
                           child: TextBox(
                             controller: generatedLicenseController,
                             maxLines: 5,
@@ -502,15 +514,15 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                               if (!mounted) return;
                               MessageModal.showSuccess(
                                 this.context,
-                                message: 'Licença copiada para clipboard!',
+                                message: _t('Licenca copiada para clipboard!', 'License copied to clipboard!'),
                               );
                             } else {
                               setDialogState(() {
-                                errorMessage = 'Erro ao copiar para clipboard';
+                                errorMessage = _t('Erro ao copiar para clipboard', 'Error copying to clipboard');
                               });
                             }
                           },
-                          child: const Text('Copiar Licença'),
+                          child: Text(_t('Copiar licenca', 'Copy license')),
                         ),
                       ],
                     ],
@@ -537,14 +549,14 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
 
                         if (deviceKey.isEmpty) {
                           setDialogState(() {
-                            errorMessage = 'Chave do dispositivo é obrigatória';
+                            errorMessage = _t('Chave do dispositivo e obrigatoria', 'Device key is required');
                           });
                           return;
                         }
 
                         if (selectedFeatures.isEmpty) {
                           setDialogState(() {
-                            errorMessage = 'Selecione pelo menos um recurso';
+                            errorMessage = _t('Selecione pelo menos um recurso', 'Select at least one feature');
                           });
                           return;
                         }
@@ -569,13 +581,13 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                           } else {
                             errorMessage =
                                 licenseProvider.error ??
-                                'Erro ao gerar licença';
+                                _t('Erro ao gerar licenca', 'Error generating license');
                           }
                         });
                       },
                 child: isLoading
                     ? const ProgressRing(strokeWidth: 2)
-                    : const Text('Gerar Licença'),
+                    : Text(_t('Gerar licenca', 'Generate license')),
               ),
             ],
           ),

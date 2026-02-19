@@ -148,8 +148,17 @@ class SqlServerConfigProvider extends ChangeNotifier {
 
   Future<bool> deleteConfig(String id) async {
     final schedulesResult = await _scheduleRepository.getByDatabaseConfig(id);
-    if (schedulesResult.isSuccess() &&
-        schedulesResult.getOrNull()!.isNotEmpty) {
+    if (schedulesResult.isError()) {
+      final failure = schedulesResult.exceptionOrNull();
+      _error = failure is Failure
+          ? 'Não foi possível validar dependências: ${failure.message}'
+          : 'Não foi possível validar dependências antes da exclusão.';
+      notifyListeners();
+      return false;
+    }
+
+    final linkedSchedules = schedulesResult.getOrNull() ?? [];
+    if (linkedSchedules.isNotEmpty) {
       _error =
           'Há agendamentos vinculados a esta configuração. '
           'Remova-os antes de excluir.';

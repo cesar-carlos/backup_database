@@ -8,13 +8,19 @@ class RecentBackupsList extends StatelessWidget {
   const RecentBackupsList({required this.backups, super.key});
   final List<BackupHistory> backups;
 
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (backups.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('Nenhum backup recente'),
+          padding: const EdgeInsets.all(24),
+          child: Text(_t(context, 'Nenhum backup recente', 'No recent backup')),
         ),
       );
     }
@@ -57,7 +63,7 @@ class RecentBackupsList extends StatelessWidget {
             ],
           ),
           trailing: Text(
-            _getStatusText(backup.status),
+            _getStatusText(context, backup.status),
             style: TextStyle(
               color: _getStatusColor(backup.status),
               fontWeight: FontWeight.bold,
@@ -94,16 +100,16 @@ class RecentBackupsList extends StatelessWidget {
     }
   }
 
-  String _getStatusText(BackupStatus status) {
+  String _getStatusText(BuildContext context, BackupStatus status) {
     switch (status) {
       case BackupStatus.success:
-        return 'Sucesso';
+        return _t(context, 'Sucesso', 'Success');
       case BackupStatus.error:
-        return 'Erro';
+        return _t(context, 'Erro', 'Error');
       case BackupStatus.warning:
-        return 'Aviso';
+        return _t(context, 'Aviso', 'Warning');
       case BackupStatus.running:
-        return 'Em progresso';
+        return _t(context, 'Em progresso', 'In progress');
     }
   }
 

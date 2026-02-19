@@ -514,8 +514,6 @@ extension FileCopyWithProgress on File {
             : (fileSize - bytesCopied);
         final buffer = List<int>.filled(bytesToRead, 0);
 
-        sourceRaf.setPosition(bytesCopied);
-
         final bytesRead = await sourceRaf.readInto(buffer, 0, bytesToRead);
 
         if (bytesRead == 0 && bytesToRead > 0) {

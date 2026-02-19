@@ -29,8 +29,8 @@ Message createFileListMessage({
 }) {
   final payload = <String, dynamic>{
     'files': files.map(_remoteFileEntryToMap).toList(),
-    ...? (error != null ? {'error': error} : null),
-    ...? (errorCode != null ? {'errorCode': errorCode.code} : null),
+    ...?(error != null ? {'error': error} : null),
+    ...?(errorCode != null ? {'errorCode': errorCode.code} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -46,10 +46,10 @@ Message createFileListMessage({
 }
 
 Map<String, dynamic> _remoteFileEntryToMap(RemoteFileEntry e) => {
-      'path': e.path,
-      'size': e.size,
-      'lastModified': e.lastModified.toIso8601String(),
-    };
+  'path': e.path,
+  'size': e.size,
+  'lastModified': e.lastModified.toIso8601String(),
+};
 
 Message createFileTransferStartRequestMessage({
   required int requestId,
@@ -59,8 +59,8 @@ Message createFileTransferStartRequestMessage({
 }) {
   final payload = <String, dynamic>{
     'filePath': filePath,
-    ...? (scheduleId != null ? {'scheduleId': scheduleId} : null),
-    ...? (startChunk != null ? {'startChunk': startChunk} : null),
+    ...?(scheduleId != null ? {'scheduleId': scheduleId} : null),
+    ...?(startChunk != null ? {'startChunk': startChunk} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -80,6 +80,7 @@ Message createFileTransferStartMetadataMessage({
   required String fileName,
   required int fileSize,
   required int totalChunks,
+  int? chunkSize,
   bool isCompressed = false,
   String? hash,
 }) {
@@ -87,8 +88,9 @@ Message createFileTransferStartMetadataMessage({
     'fileName': fileName,
     'fileSize': fileSize,
     'totalChunks': totalChunks,
+    ...?(chunkSize != null ? {'chunkSize': chunkSize} : null),
     'isCompressed': isCompressed,
-    ...? (hash != null ? {'hash': hash} : null),
+    ...?(hash != null ? {'hash': hash} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -148,7 +150,7 @@ Message createFileTransferCompleteMessage({
   int? checksum,
 }) {
   final payload = <String, dynamic>{
-    ...? (checksum != null ? {'checksum': checksum} : null),
+    ...?(checksum != null ? {'checksum': checksum} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -170,7 +172,7 @@ Message createFileTransferErrorMessage({
 }) {
   final payload = <String, dynamic>{
     'error': errorMessage,
-    ...? (errorCode != null ? {'errorCode': errorCode.code} : null),
+    ...?(errorCode != null ? {'errorCode': errorCode.code} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -221,11 +223,13 @@ List<RemoteFileEntry> getFileListFromPayload(Message message) {
     final lastModified = lastModifiedStr != null
         ? DateTime.tryParse(lastModifiedStr) ?? DateTime.now()
         : DateTime.now();
-    result.add(RemoteFileEntry(
-      path: path,
-      size: size,
-      lastModified: lastModified,
-    ));
+    result.add(
+      RemoteFileEntry(
+        path: path,
+        size: size,
+        lastModified: lastModified,
+      ),
+    );
   }
   return result;
 }
@@ -263,6 +267,9 @@ String getFilePathFromRequest(Message message) =>
 String? getScheduleIdFromRequest(Message message) =>
     message.payload['scheduleId'] as String?;
 
+int getStartChunkFromRequest(Message message) =>
+    message.payload['startChunk'] as int? ?? 0;
+
 String getFileNameFromMetadata(Message message) =>
     message.payload['fileName'] as String? ?? '';
 
@@ -271,6 +278,9 @@ int getFileSizeFromMetadata(Message message) =>
 
 int getTotalChunksFromMetadata(Message message) =>
     message.payload['totalChunks'] as int? ?? 0;
+
+int? getChunkSizeFromMetadata(Message message) =>
+    message.payload['chunkSize'] as int?;
 
 bool getIsCompressedFromMetadata(Message message) =>
     message.payload['isCompressed'] as bool? ?? false;

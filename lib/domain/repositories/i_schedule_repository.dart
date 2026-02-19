@@ -11,6 +11,9 @@ abstract class IScheduleRepository {
   Future<rd.Result<List<Schedule>>> getByDatabaseConfig(
     String databaseConfigId,
   );
+  Future<rd.Result<List<Schedule>>> getByDestinationId(
+    String destinationId,
+  );
   Future<rd.Result<void>> updateLastRun(
     String id,
     DateTime lastRunAt,

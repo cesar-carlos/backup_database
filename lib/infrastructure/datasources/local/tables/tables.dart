@@ -6,6 +6,7 @@ export 'email_configs_table.dart';
 export 'file_transfers_table.dart';
 export 'licenses_table.dart';
 export 'postgres_configs_table.dart';
+export 'schedule_destinations_table.dart';
 export 'schedules_table.dart';
 export 'server_connections_table.dart';
 export 'server_credentials_table.dart';

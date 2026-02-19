@@ -71,6 +71,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   bool get isEditing => widget.destination != null;
 
+  String _t(String pt, String en) {
+    final isPt = Localizations.localeOf(context).languageCode.toLowerCase() ==
+        'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -177,7 +183,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         Icon(_getTypeIcon(_selectedType), color: AppColors.primary),
         const SizedBox(width: 12),
         Text(
-          isEditing ? 'Editar Destino' : 'Novo Destino',
+          isEditing ? _t('Editar destino', 'Edit destination') : _t('Novo destino', 'New destination'),
           style: FluentTheme.of(context).typography.title,
         ),
       ],
@@ -228,13 +234,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       isNextcloudBlocked) {
                     return InfoBar(
                       severity: InfoBarSeverity.warning,
-                      title: const Text('Recurso Bloqueado'),
+                      title: Text(_t('Recurso bloqueado', 'Feature blocked')),
                       content: const Text(
                         'Este destino requer uma licença válida. '
                         'Acesse Configurações > Licenciamento para mais informações.',
                       ),
                       action: Button(
-                        child: const Text('Ver Licenciamento'),
+                        child: Text(_t('Ver licenciamento', 'View licensing')),
                         onPressed: () {
                           Navigator.of(context).pop();
                         },
@@ -286,9 +292,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
             );
 
         return AppDropdown<DestinationType>(
-          label: 'Tipo de Destino',
+          label: _t('Tipo de destino', 'Destination type'),
           value: _selectedType,
-          placeholder: const Text('Tipo de Destino'),
+          placeholder: Text(_t('Tipo de destino', 'Destination type')),
           items: DestinationType.values.map((type) {
             final isGoogleDriveBlocked =
                 type == DestinationType.googleDrive && !hasGoogleDrive;
@@ -321,7 +327,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         Flexible(
                           child: Text(
                             isBlocked
-                                ? '${_getTypeName(type)} (Requer licença)'
+                                ? '${_getTypeName(type)} (${_t('Requer licenca', 'License required')})'
                                 : _getTypeName(type),
                             textAlign: TextAlign.start,
                             style: TextStyle(
@@ -369,9 +375,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         isNextcloudBlocked) {
                       MessageModal.showWarning(
                         context,
-                        message:
-                            'Este destino requer uma licença válida. '
-                            'Acesse Configurações > Licenciamento para mais informações.',
+                        message: _t(
+                          'Este destino requer uma licenca valida. Acesse Configuracoes > Licenciamento para mais informacoes.',
+                          'This destination requires a valid license. Go to Settings > Licensing for more information.',
+                        ),
                       );
                       return;
                     }
@@ -389,12 +396,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Widget _buildNameField() {
     return AppTextField(
       controller: _nameController,
-      label: 'Nome do Destino',
-      hint: 'Ex: Backup Local, FTP Servidor, Google Drive, Dropbox',
+      label: _t('Nome do destino', 'Destination name'),
+      hint: _t(
+        'Ex: Backup local, FTP servidor, Google Drive, Dropbox',
+        'Ex: Local backup, FTP server, Google Drive, Dropbox',
+      ),
       prefixIcon: const Icon(FluentIcons.tag),
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return 'Nome é obrigatório';
+          return _t('Nome e obrigatorio', 'Name is required');
         }
         return null;
       },
@@ -420,19 +430,19 @@ class _DestinationDialogState extends State<DestinationDialog> {
       children: [
         AppTextField(
           controller: _nextcloudServerUrlController,
-          label: 'URL do Nextcloud',
+          label: _t('URL do Nextcloud', 'Nextcloud URL'),
           hint: 'https://cloud.exemplo.com',
           prefixIcon: const Icon(FluentIcons.globe),
           validator: (value) {
             final text = value?.trim() ?? '';
-            if (text.isEmpty) return 'URL é obrigatória';
+            if (text.isEmpty) return _t('URL e obrigatoria', 'URL is required');
 
             final uri = Uri.tryParse(text);
             if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-              return 'URL inválida';
+              return _t('URL invalida', 'Invalid URL');
             }
             if (uri.scheme != 'https' && uri.scheme != 'http') {
-              return 'Use http ou https';
+              return _t('Use http ou https', 'Use http or https');
             }
             return null;
           },
@@ -440,25 +450,25 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         AppTextField(
           controller: _nextcloudUsernameController,
-          label: 'Usuário',
+          label: _t('Usuario', 'Username'),
           hint: 'usuario',
           prefixIcon: const Icon(FluentIcons.contact),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Usuário é obrigatório';
+              return _t('Usuario e obrigatorio', 'Username is required');
             }
             return null;
           },
         ),
         const SizedBox(height: 16),
         AppDropdown<NextcloudAuthMode>(
-          label: 'Tipo de Credencial',
+          label: _t('Tipo de credencial', 'Credential type'),
           value: _nextcloudAuthMode,
-          placeholder: const Text('Tipo de Credencial'),
+          placeholder: Text(_t('Tipo de credencial', 'Credential type')),
           items: NextcloudAuthMode.values.map((mode) {
             final label = mode == NextcloudAuthMode.appPassword
-                ? 'App Password (recomendado)'
-                : 'Senha do usuário';
+                ? _t('App Password (recomendado)', 'App Password (recommended)')
+                : _t('Senha do usuario', 'User password');
             return ComboBoxItem<NextcloudAuthMode>(
               value: mode,
               child: Text(label),
@@ -475,18 +485,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
         AppTextField(
           controller: _nextcloudAppPasswordController,
           label: _nextcloudAuthMode == NextcloudAuthMode.appPassword
-              ? 'App Password'
-              : 'Senha do usuário',
+              ? _t('App Password', 'App Password')
+              : _t('Senha do usuario', 'User password'),
           hint: _nextcloudAuthMode == NextcloudAuthMode.appPassword
-              ? 'Senha de aplicativo do Nextcloud'
-              : 'Senha do usuário do Nextcloud',
+              ? _t('Senha de aplicativo do Nextcloud', 'Nextcloud app password')
+              : _t('Senha do usuario do Nextcloud', 'Nextcloud user password'),
           prefixIcon: const Icon(FluentIcons.lock),
           obscureText: true,
           validator: (value) {
             if (value == null || value.isEmpty) {
               return _nextcloudAuthMode == NextcloudAuthMode.appPassword
-                  ? 'App Password é obrigatório'
-                  : 'Senha do usuário é obrigatória';
+                  ? _t('App Password e obrigatorio', 'App Password is required')
+                  : _t(
+                      'Senha do usuario e obrigatoria',
+                      'User password is required',
+                    );
             }
             return null;
           },
@@ -494,19 +507,19 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         AppTextField(
           controller: _nextcloudRemotePathController,
-          label: 'Caminho Remoto (opcional)',
+          label: _t('Caminho remoto (opcional)', 'Remote path (optional)'),
           hint: '/ ou /Backups',
           prefixIcon: const Icon(FluentIcons.folder),
         ),
         const SizedBox(height: 16),
         AppTextField(
           controller: _nextcloudFolderNameController,
-          label: 'Nome da Pasta',
+          label: _t('Nome da pasta', 'Folder name'),
           hint: 'Backups',
           prefixIcon: const Icon(FluentIcons.cloud),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Nome da pasta é obrigatório';
+              return _t('Nome da pasta e obrigatorio', 'Folder name is required');
             }
             return null;
           },
@@ -516,7 +529,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             InfoLabel(
-              label: 'Permitir certificado inválido (self-signed)',
+              label: _t(
+                'Permitir certificado invalido (self-signed)',
+                'Allow invalid certificate (self-signed)',
+              ),
               child: ToggleSwitch(
                 checked: _nextcloudAllowInvalidCertificates,
                 onChanged: _setNextcloudAllowInvalidCertificates,
@@ -524,14 +540,17 @@ class _DestinationDialogState extends State<DestinationDialog> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Use apenas se seu Nextcloud usa certificado self-signed ou CA interna.',
+              _t(
+                'Use apenas se seu Nextcloud usa certificado self-signed ou CA interna.',
+                'Use only if your Nextcloud uses self-signed cert or internal CA.',
+              ),
               style: FluentTheme.of(context).typography.caption,
             ),
           ],
         ),
         const SizedBox(height: 16),
         ActionButton(
-          label: 'Testar Conexão Nextcloud',
+          label: _t('Testar conexao Nextcloud', 'Test Nextcloud connection'),
           icon: FluentIcons.network_tower,
           onPressed: _testNextcloudConnection,
           isLoading: _isTestingNextcloudConnection,
@@ -549,19 +568,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: const Text('Atenção'),
-        content: const Text(
-          'Permitir certificado inválido reduz a segurança da conexão.\n'
-          'Habilite apenas se o servidor usa certificado self-signed ou CA interna.',
+        title: Text(_t('Atencao', 'Attention')),
+        content: Text(
+          _t(
+            'Permitir certificado invalido reduz a seguranca da conexao.\nHabilite apenas se o servidor usa certificado self-signed ou CA interna.',
+            'Allowing invalid certificate reduces connection security.\nEnable only if server uses self-signed cert or internal CA.',
+          ),
         ),
         actions: [
           Button(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
+            child: Text(_t('Cancelar', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Habilitar'),
+            child: Text(_t('Habilitar', 'Enable')),
           ),
         ],
       ),
@@ -571,15 +592,17 @@ class _DestinationDialogState extends State<DestinationDialog> {
       setState(() => _nextcloudAllowInvalidCertificates = true);
     }
   }
-
   Widget _buildRetentionSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         NumericField(
           controller: _retentionDaysController,
-          label: 'Dias de Retenção',
-          hint: 'Ex: 7 (mantém backups por 7 dias)',
+          label: _t('Dias de retencao', 'Retention days'),
+          hint: _t(
+            'Ex: 7 (mantem backups por 7 dias)',
+            'Ex: 7 (keeps backups for 7 days)',
+          ),
           prefixIcon: FluentIcons.delete,
           minValue: 1,
         ),
@@ -613,7 +636,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Limpeza Automática',
+                      _t('Limpeza automatica', 'Automatic cleanup'),
                       style: FluentTheme.of(context).typography.caption
                           ?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -622,7 +645,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Backups anteriores a ${_formatDate(cutoffDate)} serão excluídos automaticamente após cada backup executado.',
+                      _t(
+                        'Backups anteriores a ${_formatDate(cutoffDate)} serao excluidos automaticamente apos cada backup executado.',
+                        'Backups older than ${_formatDate(cutoffDate)} will be automatically removed after each backup run.',
+                      ),
                       style: FluentTheme.of(context).typography.caption,
                     ),
                   ],
@@ -637,7 +663,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Widget _buildCreateSubfoldersSwitch() {
     return InfoLabel(
-      label: 'Criar subpastas por data',
+      label: _t('Criar subpastas por data', 'Create date-based subfolders'),
       child: ToggleSwitch(
         checked: _createSubfoldersByDate,
         onChanged: (value) {
@@ -654,7 +680,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InfoLabel(
-          label: 'Usar FTPS',
+          label: _t('Usar FTPS', 'Use FTPS'),
           child: ToggleSwitch(
             checked: _useFtps,
             onChanged: (value) {
@@ -666,12 +692,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Conexão FTP segura (SSL/TLS)',
+          _t('Conexao FTP segura (SSL/TLS)', 'Secure FTP connection (SSL/TLS)'),
           style: FluentTheme.of(context).typography.caption,
         ),
         const SizedBox(height: 16),
         ActionButton(
-          label: 'Testar Conexão FTP',
+          label: _t('Testar conexao FTP', 'Test FTP connection'),
           icon: FluentIcons.network_tower,
           onPressed: _testFtpConnection,
           isLoading: _isTestingFtpConnection,
@@ -685,7 +711,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InfoLabel(
-          label: 'Habilitado',
+          label: _t('Habilitado', 'Enabled'),
           child: ToggleSwitch(
             checked: _isEnabled,
             onChanged: (value) {
@@ -697,7 +723,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Destino ativo para uso em agendamentos',
+          _t(
+            'Destino ativo para uso em agendamentos',
+            'Destination active for schedule use',
+          ),
           style: FluentTheme.of(context).typography.caption,
         ),
       ],
@@ -720,12 +749,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
             Expanded(
               child: AppTextField(
                 controller: _localPathController,
-                label: 'Caminho da Pasta',
+                label: _t('Caminho da pasta', 'Folder path'),
                 hint: r'C:\Backups',
                 prefixIcon: const Icon(FluentIcons.folder),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Caminho é obrigatório';
+                    return _t('Caminho e obrigatorio', 'Path is required');
                   }
                   return null;
                 },
@@ -754,12 +783,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
               flex: 3,
               child: AppTextField(
                 controller: _ftpHostController,
-                label: 'Servidor FTP',
+                label: _t('Servidor FTP', 'FTP server'),
                 hint: 'ftp.exemplo.com',
                 prefixIcon: const Icon(FluentIcons.server),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Servidor é obrigatório';
+                    return _t('Servidor e obrigatorio', 'Server is required');
                   }
                   return null;
                 },
@@ -769,7 +798,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
             Expanded(
               child: NumericField(
                 controller: _ftpPortController,
-                label: 'Porta',
+                label: _t('Porta', 'Port'),
                 hint: '21',
                 prefixIcon: FluentIcons.number_field,
                 minValue: 1,
@@ -781,12 +810,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         AppTextField(
           controller: _ftpUsernameController,
-          label: 'Usuário',
+          label: _t('Usuario', 'Username'),
           hint: 'usuario_ftp',
           prefixIcon: const Icon(FluentIcons.contact),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Usuário é obrigatório';
+              return _t('Usuario e obrigatorio', 'Username is required');
             }
             return null;
           },
@@ -794,18 +823,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         PasswordField(
           controller: _ftpPasswordController,
-          label: 'Senha FTP',
-          hint: 'Senha do FTP',
+          label: _t('Senha FTP', 'FTP password'),
+          hint: _t('Senha do FTP', 'FTP password'),
         ),
         const SizedBox(height: 16),
         AppTextField(
           controller: _ftpRemotePathController,
-          label: 'Caminho Remoto',
+          label: _t('Caminho remoto', 'Remote path'),
           hint: '/backups',
           prefixIcon: const Icon(FluentIcons.folder),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Caminho remoto é obrigatório';
+              return _t(
+                'Caminho remoto e obrigatorio',
+                'Remote path is required',
+              );
             }
             return null;
           },
@@ -813,7 +845,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ],
     );
   }
-
   Widget _buildGoogleDriveFields() {
     final googleAuth = getIt<GoogleAuthProvider>();
 
@@ -842,13 +873,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Widget _buildGoogleFolderField(GoogleAuthProvider googleAuth) {
     return AppTextField(
       controller: _googleFolderNameController,
-      label: 'Nome da Pasta no Google Drive',
+      label: _t('Nome da pasta no Google Drive', 'Google Drive folder name'),
       hint: 'Backups',
       prefixIcon: const Icon(FluentIcons.cloud),
       enabled: googleAuth.isSignedIn,
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return 'Nome da pasta é obrigatório';
+          return _t('Nome da pasta e obrigatorio', 'Folder name is required');
         }
         return null;
       },
@@ -869,7 +900,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Conecte-se ao Google para configurar o destino.',
+              _t(
+                'Conecte-se ao Google para configurar o destino.',
+                'Sign in to Google to configure this destination.',
+              ),
               style: FluentTheme.of(
                 context,
               ).typography.caption?.copyWith(color: AppColors.error),
@@ -919,8 +953,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
               Expanded(
                 child: Text(
                   isSignedIn
-                      ? 'Conectado como ${googleAuth.currentEmail ?? 'usuário'}'
-                      : 'Não conectado ao Google',
+                      ? _t(
+                          'Conectado como ${googleAuth.currentEmail ?? 'usuario'}',
+                          'Connected as ${googleAuth.currentEmail ?? 'user'}',
+                        )
+                      : _t('Nao conectado ao Google', 'Not connected to Google'),
                   style: FluentTheme.of(
                     context,
                   ).typography.body?.copyWith(fontWeight: FontWeight.w500),
@@ -934,12 +971,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
               if (isSignedIn)
                 Button(
                   onPressed: isLoading ? null : () => googleAuth.signOut(),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(FluentIcons.sign_out, size: 18),
-                      SizedBox(width: 8),
-                      Text('Desconectar'),
+                      const Icon(FluentIcons.sign_out, size: 18),
+                      const SizedBox(width: 8),
+                      Text(_t('Desconectar', 'Disconnect')),
                     ],
                   ),
                 )
@@ -960,7 +997,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       else
                         const Icon(FluentIcons.signin, size: 18),
                       const SizedBox(width: 8),
-                      Text(isLoading ? 'Conectando...' : 'Conectar ao Google'),
+                      Text(
+                        isLoading
+                            ? _t('Conectando...', 'Connecting...')
+                            : _t('Conectar ao Google', 'Connect to Google'),
+                      ),
                     ],
                   ),
                 ),
@@ -1002,7 +1043,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Configuração OAuth',
+                _t('Configuracao OAuth', 'OAuth configuration'),
                 style: FluentTheme.of(
                   context,
                 ).typography.subtitle?.copyWith(color: AppColors.primary),
@@ -1011,18 +1052,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Para usar o Google Drive, configure as credenciais OAuth do Google Cloud Console.',
+            _t(
+              'Para usar o Google Drive, configure as credenciais OAuth do Google Cloud Console.',
+              'To use Google Drive, configure OAuth credentials in Google Cloud Console.',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 12),
           Button(
             onPressed: () => _showOAuthConfigDialog(googleAuth),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(FluentIcons.lock, size: 18),
-                SizedBox(width: 8),
-                Text('Configurar Credenciais'),
+                const Icon(FluentIcons.lock, size: 18),
+                const SizedBox(width: 8),
+                Text(_t('Configurar credenciais', 'Configure credentials')),
               ],
             ),
           ),
@@ -1034,7 +1078,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Future<void> _connectToGoogle(GoogleAuthProvider googleAuth) async {
     final success = await googleAuth.signIn();
     if (success && mounted) {
-      _showSuccess('Conectado ao Google com sucesso!');
+      _showSuccess(
+        _t(
+          'Conectado ao Google com sucesso!',
+          'Connected to Google successfully!',
+        ),
+      );
     }
   }
 
@@ -1049,7 +1098,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     );
 
     if ((result ?? false) && mounted) {
-      _showSuccess('Credenciais OAuth configuradas!');
+      _showSuccess(_t('Credenciais OAuth configuradas!', 'OAuth credentials configured!'));
     }
   }
 
@@ -1083,21 +1132,24 @@ class _DestinationDialogState extends State<DestinationDialog> {
       children: [
         AppTextField(
           controller: _dropboxFolderPathController,
-          label: 'Caminho da Pasta (opcional)',
-          hint: '/Backups ou deixe vazio para raiz',
+          label: _t('Caminho da pasta (opcional)', 'Folder path (optional)'),
+          hint: _t(
+            '/Backups ou deixe vazio para raiz',
+            '/Backups or leave empty for root',
+          ),
           prefixIcon: const Icon(FluentIcons.folder),
           enabled: dropboxAuth.isSignedIn,
         ),
         const SizedBox(height: 16),
         AppTextField(
           controller: _dropboxFolderNameController,
-          label: 'Nome da Pasta no Dropbox',
+          label: _t('Nome da pasta no Dropbox', 'Dropbox folder name'),
           hint: 'Backups',
           prefixIcon: const Icon(FluentIcons.cloud),
           enabled: dropboxAuth.isSignedIn,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Nome da pasta é obrigatório';
+              return _t('Nome da pasta e obrigatorio', 'Folder name is required');
             }
             return null;
           },
@@ -1120,7 +1172,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Conecte-se ao Dropbox para configurar o destino.',
+              _t(
+                'Conecte-se ao Dropbox para configurar o destino.',
+                'Sign in to Dropbox to configure this destination.',
+              ),
               style: FluentTheme.of(
                 context,
               ).typography.caption?.copyWith(color: AppColors.error),
@@ -1170,8 +1225,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
               Expanded(
                 child: Text(
                   isSignedIn
-                      ? 'Conectado como ${dropboxAuth.currentEmail ?? 'usuário'}'
-                      : 'Não conectado ao Dropbox',
+                      ? _t(
+                          'Conectado como ${dropboxAuth.currentEmail ?? 'usuario'}',
+                          'Connected as ${dropboxAuth.currentEmail ?? 'user'}',
+                        )
+                      : _t('Nao conectado ao Dropbox', 'Not connected to Dropbox'),
                   style: FluentTheme.of(
                     context,
                   ).typography.body?.copyWith(fontWeight: FontWeight.w500),
@@ -1185,12 +1243,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
               if (isSignedIn)
                 Button(
                   onPressed: isLoading ? null : () => dropboxAuth.signOut(),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(FluentIcons.sign_out, size: 18),
-                      SizedBox(width: 8),
-                      Text('Desconectar'),
+                      const Icon(FluentIcons.sign_out, size: 18),
+                      const SizedBox(width: 8),
+                      Text(_t('Desconectar', 'Disconnect')),
                     ],
                   ),
                 )
@@ -1211,7 +1269,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       else
                         const Icon(FluentIcons.signin, size: 18),
                       const SizedBox(width: 8),
-                      Text(isLoading ? 'Conectando...' : 'Conectar ao Dropbox'),
+                      Text(
+                        isLoading
+                            ? _t('Conectando...', 'Connecting...')
+                            : _t('Conectar ao Dropbox', 'Connect to Dropbox'),
+                      ),
                     ],
                   ),
                 ),
@@ -1256,7 +1318,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Configuração OAuth',
+                _t('Configuracao OAuth', 'OAuth configuration'),
                 style: FluentTheme.of(
                   context,
                 ).typography.subtitle?.copyWith(color: AppColors.primary),
@@ -1266,8 +1328,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(height: 12),
           Text(
             isConfigured && hasClientId
-                ? 'Credenciais OAuth configuradas. Clique em "Alterar Credenciais" para modificar.'
-                : 'Para usar o Dropbox, configure as credenciais OAuth do Dropbox App Console.',
+                ? _t(
+                    'Credenciais OAuth configuradas. Clique em "Alterar credenciais" para modificar.',
+                    'OAuth credentials configured. Click "Change credentials" to modify.',
+                  )
+                : _t(
+                    'Para usar o Dropbox, configure as credenciais OAuth do Dropbox App Console.',
+                    'To use Dropbox, configure OAuth credentials in Dropbox App Console.',
+                  ),
             style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 12),
@@ -1280,8 +1348,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 const SizedBox(width: 8),
                 Text(
                   isConfigured && hasClientId
-                      ? 'Alterar Credenciais'
-                      : 'Configurar Credenciais',
+                      ? _t('Alterar credenciais', 'Change credentials')
+                      : _t('Configurar credenciais', 'Configure credentials'),
                 ),
               ],
             ),
@@ -1294,7 +1362,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Future<void> _connectToDropbox(DropboxAuthProvider dropboxAuth) async {
     final success = await dropboxAuth.signIn();
     if (success && mounted) {
-      _showSuccess('Conectado ao Dropbox com sucesso!');
+      _showSuccess(
+        _t(
+          'Conectado ao Dropbox com sucesso!',
+          'Connected to Dropbox successfully!',
+        ),
+      );
     }
   }
 
@@ -1311,10 +1384,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
     );
 
     if ((result ?? false) && mounted) {
-      _showSuccess('Credenciais OAuth configuradas!');
+      _showSuccess(_t('Credenciais OAuth configuradas!', 'OAuth credentials configured!'));
     }
   }
-
   IconData _getTypeIcon(DestinationType type) {
     switch (type) {
       case DestinationType.local:
@@ -1333,9 +1405,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
   String _getTypeName(DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return 'Pasta Local';
+        return _t('Pasta local', 'Local folder');
       case DestinationType.ftp:
-        return 'Servidor FTP';
+        return _t('Servidor FTP', 'FTP server');
       case DestinationType.googleDrive:
         return 'Google Drive';
       case DestinationType.dropbox:
@@ -1354,7 +1426,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Future<void> _selectLocalFolder() async {
     final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Selecionar pasta de destino',
+      dialogTitle: _t('Selecionar pasta de destino', 'Select destination folder'),
     );
     if (result != null) {
       setState(() {
@@ -1365,19 +1437,19 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Future<void> _testFtpConnection() async {
     if (_ftpHostController.text.trim().isEmpty) {
-      _showError('Servidor FTP é obrigatório');
+      _showError(_t('Servidor FTP e obrigatorio', 'FTP server is required'));
       return;
     }
     if (_ftpPortController.text.trim().isEmpty) {
-      _showError('Porta é obrigatória');
+      _showError(_t('Porta e obrigatoria', 'Port is required'));
       return;
     }
     if (_ftpUsernameController.text.trim().isEmpty) {
-      _showError('Usuário é obrigatório');
+      _showError(_t('Usuario e obrigatorio', 'Username is required'));
       return;
     }
     if (_ftpPasswordController.text.trim().isEmpty) {
-      _showError('Senha é obrigatória');
+      _showError(_t('Senha e obrigatoria', 'Password is required'));
       return;
     }
 
@@ -1388,7 +1460,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
     try {
       final port = int.tryParse(_ftpPortController.text.trim());
       if (port == null || port < 1 || port > 65535) {
-        _showError('Porta inválida. Use um valor entre 1 e 65535');
+        _showError(
+          _t(
+            'Porta invalida. Use um valor entre 1 e 65535',
+            'Invalid port. Use a value between 1 and 65535',
+          ),
+        );
         return;
       }
 
@@ -1407,20 +1484,35 @@ class _DestinationDialogState extends State<DestinationDialog> {
       result.fold(
         (success) {
           if (success) {
-            _showSuccess('Conexão FTP estabelecida com sucesso!');
+            _showSuccess(
+              _t(
+                'Conexao FTP estabelecida com sucesso!',
+                'FTP connection established successfully!',
+              ),
+            );
           } else {
-            _showError('Falha ao conectar ao servidor FTP');
+            _showError(
+              _t(
+                'Falha ao conectar ao servidor FTP',
+                'Failed to connect to FTP server',
+              ),
+            );
           }
         },
         (failure) {
           final message = failure is Failure
               ? failure.message
               : failure.toString();
-          _showError('Erro ao testar conexão FTP:\n$message');
+          _showError(
+            _t(
+              'Erro ao testar conexao FTP:\n$message',
+              'Error testing FTP connection:\n$message',
+            ),
+          );
         },
       );
     } on Object catch (e) {
-      _showError('Erro inesperado: $e');
+      _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
     } finally {
       setState(() {
         _isTestingFtpConnection = false;
@@ -1430,18 +1522,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Future<void> _testNextcloudConnection() async {
     if (_nextcloudServerUrlController.text.trim().isEmpty) {
-      _showError('URL do Nextcloud é obrigatória');
+      _showError(
+        _t('URL do Nextcloud e obrigatoria', 'Nextcloud URL is required'),
+      );
       return;
     }
     if (_nextcloudUsernameController.text.trim().isEmpty) {
-      _showError('Usuário é obrigatório');
+      _showError(_t('Usuario e obrigatorio', 'Username is required'));
       return;
     }
     if (_nextcloudAppPasswordController.text.trim().isEmpty) {
       _showError(
         _nextcloudAuthMode == NextcloudAuthMode.appPassword
-            ? 'App Password é obrigatório'
-            : 'Senha do usuário é obrigatória',
+            ? _t('App Password e obrigatorio', 'App Password is required')
+            : _t('Senha do usuario e obrigatoria', 'User password is required'),
       );
       return;
     }
@@ -1469,27 +1563,41 @@ class _DestinationDialogState extends State<DestinationDialog> {
       result.fold(
         (success) {
           if (success) {
-            _showSuccess('Conexão Nextcloud estabelecida com sucesso!');
+            _showSuccess(
+              _t(
+                'Conexao Nextcloud estabelecida com sucesso!',
+                'Nextcloud connection established successfully!',
+              ),
+            );
           } else {
-            _showError('Falha ao conectar ao servidor Nextcloud');
+            _showError(
+              _t(
+                'Falha ao conectar ao servidor Nextcloud',
+                'Failed to connect to Nextcloud server',
+              ),
+            );
           }
         },
         (failure) {
           final message = failure is Failure
               ? failure.message
               : failure.toString();
-          _showError('Erro ao testar conexão Nextcloud:\n$message');
+          _showError(
+            _t(
+              'Erro ao testar conexao Nextcloud:\n$message',
+              'Error testing Nextcloud connection:\n$message',
+            ),
+          );
         },
       );
     } on Object catch (e) {
-      _showError('Erro inesperado: $e');
+      _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
     } finally {
       setState(() {
         _isTestingNextcloudConnection = false;
       });
     }
   }
-
   void _showSuccess(String message) {
     MessageModal.showSuccess(context, message: message);
   }
@@ -1507,7 +1615,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
     if (_selectedType == DestinationType.googleDrive) {
       final googleAuth = getIt<GoogleAuthProvider>();
       if (!googleAuth.isSignedIn) {
-        _showError('Conecte-se ao Google antes de salvar.');
+        _showError(
+          _t(
+            'Conecte-se ao Google antes de salvar.',
+            'Connect to Google before saving.',
+          ),
+        );
         return;
       }
     }
@@ -1515,7 +1628,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
     if (_selectedType == DestinationType.dropbox) {
       final dropboxAuth = getIt<DropboxAuthProvider>();
       if (!dropboxAuth.isSignedIn) {
-        _showError('Conecte-se ao Dropbox antes de salvar.');
+        _showError(
+          _t(
+            'Conecte-se ao Dropbox antes de salvar.',
+            'Connect to Dropbox before saving.',
+          ),
+        );
         return;
       }
     }
@@ -1527,8 +1645,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
           licenseProvider.currentLicense!.hasFeature(LicenseFeatures.nextcloud);
       if (!hasNextcloud) {
         _showError(
-          'Este destino requer uma licença válida. '
-          'Acesse Configurações > Licenciamento.',
+          _t(
+            'Este destino requer uma licenca valida. Acesse Configuracoes > Licenciamento.',
+            'This destination requires a valid license. Go to Settings > Licensing.',
+          ),
         );
         return;
       }
@@ -1593,7 +1713,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
     Navigator.of(context).pop(destination);
   }
 }
-
 class _OAuthConfigDialog extends StatefulWidget {
   const _OAuthConfigDialog({
     required this.googleAuth,
@@ -1613,6 +1732,12 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
   late final TextEditingController _clientSecretController;
   bool _isLoading = false;
 
+  String _t(String pt, String en) {
+    final isPt = Localizations.localeOf(context).languageCode.toLowerCase() ==
+        'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1631,7 +1756,10 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
 
   Future<void> _save() async {
     if (_clientIdController.text.trim().isEmpty) {
-      MessageModal.showError(context, message: 'Client ID é obrigatório');
+      MessageModal.showError(
+        context,
+        message: _t('Client ID e obrigatorio', 'Client ID is required'),
+      );
       return;
     }
 
@@ -1656,11 +1784,11 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return ContentDialog(
-      title: const Row(
+      title: Row(
         children: [
-          Icon(FluentIcons.cloud),
-          SizedBox(width: 8),
-          Text('Configurar Google OAuth'),
+          const Icon(FluentIcons.cloud),
+          const SizedBox(width: 8),
+          Text(_t('Configurar Google OAuth', 'Configure Google OAuth')),
         ],
       ),
       content: SizedBox(
@@ -1670,7 +1798,10 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Obtenha as credenciais no Google Cloud Console:',
+              _t(
+                'Obtenha as credenciais no Google Cloud Console:',
+                'Get credentials from Google Cloud Console:',
+              ),
               style: FluentTheme.of(context).typography.caption,
             ),
             const SizedBox(height: 8),
@@ -1684,7 +1815,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
               enabled: !_isLoading,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Client ID é obrigatório';
+                  return _t('Client ID e obrigatorio', 'Client ID is required');
                 }
                 return null;
               },
@@ -1719,24 +1850,36 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '1. Acesse console.cloud.google.com',
+            _t(
+              '1. Acesse console.cloud.google.com',
+              '1. Go to console.cloud.google.com',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            '2. Crie um projeto ou selecione existente',
+            _t(
+              '2. Crie um projeto ou selecione existente',
+              '2. Create a project or select an existing one',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            '3. Ative a Google Drive API',
+            _t('3. Ative a Google Drive API', '3. Enable Google Drive API'),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            '4. Crie credenciais OAuth (Desktop)',
+            _t(
+              '4. Crie credenciais OAuth (Desktop)',
+              '4. Create OAuth credentials (Desktop)',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 4),
           Text(
-            '5. Na credencial criada, adicione em "URIs de redirecionamento autorizados":',
+            _t(
+              '5. Na credencial criada, adicione em "URIs de redirecionamento autorizados":',
+              '5. In the created credential, add this under "Authorized redirect URIs":',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 4),
@@ -1756,7 +1899,10 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
+            _t(
+              'Nota: localhost e o seu proprio computador. O app cria um servidor temporario automaticamente durante a autenticacao.',
+              'Note: localhost is your own machine. The app creates a temporary local server during authentication.',
+            ),
             style: FluentTheme.of(context).typography.caption?.copyWith(
               fontSize: 11,
               fontStyle: FontStyle.italic,
@@ -1767,7 +1913,6 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
     );
   }
 }
-
 class _DropboxOAuthConfigDialog extends StatefulWidget {
   const _DropboxOAuthConfigDialog({
     required this.dropboxAuth,
@@ -1788,6 +1933,12 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
   late final TextEditingController _clientSecretController;
   bool _isLoading = false;
 
+  String _t(String pt, String en) {
+    final isPt = Localizations.localeOf(context).languageCode.toLowerCase() ==
+        'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1806,7 +1957,10 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
 
   Future<void> _save() async {
     if (_clientIdController.text.trim().isEmpty) {
-      MessageModal.showError(context, message: 'Client ID é obrigatório');
+      MessageModal.showError(
+        context,
+        message: _t('Client ID e obrigatorio', 'Client ID is required'),
+      );
       return;
     }
 
@@ -1831,11 +1985,11 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return ContentDialog(
-      title: const Row(
+      title: Row(
         children: [
-          Icon(FluentIcons.cloud),
-          SizedBox(width: 8),
-          Text('Configurar Dropbox OAuth'),
+          const Icon(FluentIcons.cloud),
+          const SizedBox(width: 8),
+          Text(_t('Configurar Dropbox OAuth', 'Configure Dropbox OAuth')),
         ],
       ),
       content: SizedBox(
@@ -1845,7 +1999,10 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Obtenha as credenciais no Dropbox App Console:',
+              _t(
+                'Obtenha as credenciais no Dropbox App Console:',
+                'Get credentials from Dropbox App Console:',
+              ),
               style: FluentTheme.of(context).typography.caption,
             ),
             const SizedBox(height: 8),
@@ -1859,7 +2016,7 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
               enabled: !_isLoading,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'App Key é obrigatório';
+                  return _t('App Key e obrigatorio', 'App Key is required');
                 }
                 return null;
               },
@@ -1894,24 +2051,36 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '1. Acesse dropbox.com/developers/apps',
+            _t(
+              '1. Acesse dropbox.com/developers/apps',
+              '1. Go to dropbox.com/developers/apps',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            '2. Clique em "Create app"',
+            _t('2. Clique em "Create app"', '2. Click "Create app"'),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            '3. Escolha "Scoped access" e "Full Dropbox"',
+            _t(
+              '3. Escolha "Scoped access" e "Full Dropbox"',
+              '3. Choose "Scoped access" and "Full Dropbox"',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            '4. Configure os scopes: files.content.write, files.content.read, account_info.read',
+            _t(
+              '4. Configure os scopes: files.content.write, files.content.read, account_info.read',
+              '4. Configure scopes: files.content.write, files.content.read, account_info.read',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 4),
           Text(
-            '5. Na seção "OAuth 2", adicione em "Redirect URIs":',
+            _t(
+              '5. Na secao "OAuth 2", adicione em "Redirect URIs":',
+              '5. In section "OAuth 2", add this in "Redirect URIs":',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 4),
@@ -1931,7 +2100,10 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
+            _t(
+              'Nota: localhost e o seu proprio computador. O app cria um servidor temporario automaticamente durante a autenticacao.',
+              'Note: localhost is your own machine. The app creates a temporary local server during authentication.',
+            ),
             style: FluentTheme.of(context).typography.caption?.copyWith(
               fontSize: 11,
               fontStyle: FontStyle.italic,

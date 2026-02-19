@@ -16,24 +16,18 @@ class ScheduleRepository implements IScheduleRepository {
   @override
   Future<rd.Result<List<Schedule>>> getAll() async {
     try {
-      LoggerService.info(
-        '[ScheduleRepository] Carregando todos os agendamentos...',
-      );
+      LoggerService.info('[ScheduleRepository] Loading schedules...');
       final schedules = await _database.scheduleDao.getAll();
-      LoggerService.info(
-        '[ScheduleRepository] Encontrados ${schedules.length} agendamentos no banco',
-      );
-      final entities = schedules.map(_toEntity).toList();
-      LoggerService.info(
-        '[ScheduleRepository] Convertidos ${entities.length} agendamentos para entidades',
-      );
+
+      final entities = <Schedule>[];
+      for (final schedule in schedules) {
+        final entity = await _toEntity(schedule);
+        entities.add(entity);
+      }
+
       return rd.Success(entities);
     } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        '[ScheduleRepository] Erro ao buscar agendamentos',
-        e,
-        stackTrace,
-      );
+      LoggerService.error('[ScheduleRepository] Failed to load schedules', e, stackTrace);
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar agendamentos: $e'),
       );
@@ -46,10 +40,12 @@ class ScheduleRepository implements IScheduleRepository {
       final schedule = await _database.scheduleDao.getById(id);
       if (schedule == null) {
         return const rd.Failure(
-          NotFoundFailure(message: 'Agendamento não encontrado'),
+          NotFoundFailure(message: 'Agendamento nao encontrado'),
         );
       }
-      return rd.Success(_toEntity(schedule));
+
+      final entity = await _toEntity(schedule);
+      return rd.Success(entity);
     } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar agendamento: $e'),
@@ -60,33 +56,16 @@ class ScheduleRepository implements IScheduleRepository {
   @override
   Future<rd.Result<Schedule>> create(Schedule schedule) async {
     try {
-      LoggerService.info(
-        '[ScheduleRepository] Criando agendamento: ${schedule.name}',
-      );
       final companion = _toCompanion(schedule);
-      final id = await _database.scheduleDao.insertSchedule(companion);
-      LoggerService.info('[ScheduleRepository] Agendamento criado com ID: $id');
 
-      final saved = await _database.scheduleDao.getById(schedule.id);
-      if (saved == null) {
-        LoggerService.error(
-          '[ScheduleRepository] Agendamento não foi encontrado após inserção!',
-        );
-        return const rd.Failure(
-          DatabaseFailure(message: 'Agendamento não foi salvo corretamente'),
-        );
-      }
+      await _database.transaction(() async {
+        await _database.scheduleDao.insertSchedule(companion);
+        await _replaceScheduleDestinations(schedule.id, schedule.destinationIds);
+      });
 
-      LoggerService.info(
-        '[ScheduleRepository] Agendamento verificado no banco: ${saved.name}',
-      );
       return rd.Success(schedule);
     } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        '[ScheduleRepository] Erro ao criar agendamento',
-        e,
-        stackTrace,
-      );
+      LoggerService.error('[ScheduleRepository] Failed to create schedule', e, stackTrace);
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao criar agendamento: $e'),
       );
@@ -97,7 +76,11 @@ class ScheduleRepository implements IScheduleRepository {
   Future<rd.Result<Schedule>> update(Schedule schedule) async {
     try {
       final companion = _toCompanion(schedule);
-      await _database.scheduleDao.updateSchedule(companion);
+      await _database.transaction(() async {
+        await _database.scheduleDao.updateSchedule(companion);
+        await _replaceScheduleDestinations(schedule.id, schedule.destinationIds);
+      });
+
       return rd.Success(schedule);
     } on Object catch (e) {
       return rd.Failure(
@@ -109,7 +92,10 @@ class ScheduleRepository implements IScheduleRepository {
   @override
   Future<rd.Result<void>> delete(String id) async {
     try {
-      await _database.scheduleDao.deleteSchedule(id);
+      await _database.transaction(() async {
+        await _database.scheduleDestinationDao.deleteByScheduleId(id);
+        await _database.scheduleDao.deleteSchedule(id);
+      });
       return const rd.Success(unit);
     } on Object catch (e) {
       return rd.Failure(
@@ -122,7 +108,13 @@ class ScheduleRepository implements IScheduleRepository {
   Future<rd.Result<List<Schedule>>> getEnabled() async {
     try {
       final schedules = await _database.scheduleDao.getEnabled();
-      final entities = schedules.map(_toEntity).toList();
+      final entities = <Schedule>[];
+
+      for (final schedule in schedules) {
+        final entity = await _toEntity(schedule);
+        entities.add(entity);
+      }
+
       return rd.Success(entities);
     } on Object catch (e) {
       return rd.Failure(
@@ -139,12 +131,48 @@ class ScheduleRepository implements IScheduleRepository {
       final schedules = await _database.scheduleDao.getByDatabaseConfig(
         databaseConfigId,
       );
-      final entities = schedules.map(_toEntity).toList();
+      final entities = <Schedule>[];
+
+      for (final schedule in schedules) {
+        final entity = await _toEntity(schedule);
+        entities.add(entity);
+      }
+
       return rd.Success(entities);
     } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(
-          message: 'Erro ao buscar agendamentos por configuração: $e',
+          message: 'Erro ao buscar agendamentos por configuracao: $e',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<rd.Result<List<Schedule>>> getByDestinationId(
+    String destinationId,
+  ) async {
+    try {
+      final relations = await _database.scheduleDestinationDao.getByDestinationId(
+        destinationId,
+      );
+      final entities = <Schedule>[];
+
+      for (final relation in relations) {
+        final schedule = await _database.scheduleDao.getById(relation.scheduleId);
+        if (schedule == null) {
+          continue;
+        }
+
+        final entity = await _toEntity(schedule);
+        entities.add(entity);
+      }
+
+      return rd.Success(entities);
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(
+          message: 'Erro ao buscar agendamentos por destino: $e',
         ),
       );
     }
@@ -161,21 +189,16 @@ class ScheduleRepository implements IScheduleRepository {
       return const rd.Success(unit);
     } on Object catch (e) {
       return rd.Failure(
-        DatabaseFailure(message: 'Erro ao atualizar última execução: $e'),
+        DatabaseFailure(message: 'Erro ao atualizar ultima execucao: $e'),
       );
     }
   }
 
-  Schedule _toEntity(SchedulesTableData data) {
-    List<String> destinationIds;
-    try {
-      destinationIds = (jsonDecode(data.destinationIds) as List).cast<String>();
-    } on Object catch (e) {
-      LoggerService.warning(
-        '[ScheduleRepository] Erro ao decodificar destinationIds para schedule ${data.id}: $e',
-      );
-      destinationIds = [];
-    }
+  Future<Schedule> _toEntity(SchedulesTableData data) async {
+    final destinationIds = await _loadDestinationIds(
+      data.id,
+      data.destinationIds,
+    );
 
     return Schedule(
       id: data.id,
@@ -205,6 +228,50 @@ class ScheduleRepository implements IScheduleRepository {
     );
   }
 
+  Future<List<String>> _loadDestinationIds(
+    String scheduleId,
+    String legacyDestinationIdsJson,
+  ) async {
+    try {
+      final relations = await _database.scheduleDestinationDao.getByScheduleId(
+        scheduleId,
+      );
+      if (relations.isNotEmpty) {
+        return relations.map((r) => r.destinationId).toList();
+      }
+    } on Object catch (e) {
+      LoggerService.warning(
+        '[ScheduleRepository] Failed loading relational destinations for '
+        '$scheduleId: $e',
+      );
+    }
+
+    // Fallback while old DBs migrate.
+    try {
+      return (jsonDecode(legacyDestinationIdsJson) as List).cast<String>();
+    } on Object {
+      return [];
+    }
+  }
+
+  Future<void> _replaceScheduleDestinations(
+    String scheduleId,
+    List<String> destinationIds,
+  ) async {
+    await _database.scheduleDestinationDao.deleteByScheduleId(scheduleId);
+
+    for (final destinationId in destinationIds.toSet()) {
+      await _database.scheduleDestinationDao.insertRelation(
+        ScheduleDestinationsTableCompanion.insert(
+          id: '$scheduleId:$destinationId',
+          scheduleId: scheduleId,
+          destinationId: destinationId,
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
+  }
+
   SchedulesTableCompanion _toCompanion(Schedule schedule) {
     return SchedulesTableCompanion(
       id: Value(schedule.id),
@@ -213,6 +280,7 @@ class ScheduleRepository implements IScheduleRepository {
       databaseType: Value(schedule.databaseType.name),
       scheduleType: Value(schedule.scheduleType.name),
       scheduleConfig: Value(schedule.scheduleConfig),
+      // Keep legacy JSON synced for backwards compatibility.
       destinationIds: Value(jsonEncode(schedule.destinationIds)),
       backupFolder: Value(schedule.backupFolder),
       backupType: Value(schedule.backupType.name),

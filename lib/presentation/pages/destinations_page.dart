@@ -1,9 +1,12 @@
 import 'package:backup_database/application/providers/destination_provider.dart';
+import 'package:backup_database/application/providers/scheduler_provider.dart';
+import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/destinations/destinations.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 class DestinationsPage extends StatelessWidget {
@@ -58,9 +61,7 @@ class DestinationsPage extends StatelessWidget {
                             const SizedBox(height: 16),
                             Text(
                               provider.error!,
-                              style: FluentTheme.of(
-                                context,
-                              ).typography.bodyLarge,
+                              style: FluentTheme.of(context).typography.bodyLarge,
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),
@@ -87,14 +88,12 @@ class DestinationsPage extends StatelessWidget {
 
                   return ListView.separated(
                     itemCount: provider.destinations.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 8),
+                    separatorBuilder: (context, index) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final destination = provider.destinations[index];
                       return DestinationListItem(
                         destination: destination,
-                        onEdit: () =>
-                            _showDestinationDialog(context, destination),
+                        onEdit: () => _showDestinationDialog(context, destination),
                         onDelete: () => _confirmDelete(context, destination.id),
                         onToggleEnabled: (enabled) =>
                             provider.toggleEnabled(destination.id, enabled),
@@ -126,14 +125,14 @@ class DestinationsPage extends StatelessWidget {
           : await provider.updateDestination(result);
 
       if (success && context.mounted) {
-        MessageModal.showSuccess(
+        await MessageModal.showSuccess(
           context,
           message: destination == null
               ? 'Destino criado com sucesso!'
               : 'Destino atualizado com sucesso!',
         );
       } else if (context.mounted) {
-        MessageModal.showError(
+        await MessageModal.showError(
           context,
           message: provider.error ?? 'Erro ao salvar destino',
         );
@@ -142,37 +141,68 @@ class DestinationsPage extends StatelessWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, String id) async {
+    final destinationProvider = context.read<DestinationProvider>();
+    final destinationName = destinationProvider.getDestinationById(id)?.name ?? 'Destino';
+
+    final linkedSchedules = await context
+        .read<SchedulerProvider>()
+        .getSchedulesByDestination(id);
+
+    if (!context.mounted) return;
+
+    if (linkedSchedules == null) {
+      await MessageModal.showError(
+        context,
+        message:
+            'Nao foi possivel validar dependencias do destino. Tente novamente.',
+      );
+      return;
+    }
+
+    if (linkedSchedules.isNotEmpty) {
+      final action = await DestinationDependencyDialog.show(
+        context,
+        destinationName: destinationName,
+        schedules: linkedSchedules,
+      );
+
+      if (!context.mounted) return;
+
+      if (action == DestinationDependencyDialogAction.goToSchedules) {
+        context.go(RouteNames.schedules);
+      }
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
         title: const Text('Confirmar Exclusão'),
         content: const Text('Tem certeza que deseja excluir este destino?'),
         actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          Button(
+          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
+          ActionButton(
+            label: 'Excluir',
+            icon: FluentIcons.delete,
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Excluir'),
           ),
         ],
       ),
     );
 
     if ((confirmed ?? false) && context.mounted) {
-      final provider = context.read<DestinationProvider>();
-      final success = await provider.deleteDestination(id);
+      final success = await destinationProvider.deleteDestination(id);
+      if (!context.mounted) return;
 
-      if (success && context.mounted) {
-        MessageModal.showSuccess(
+      if (success) {
+        await MessageModal.showSuccess(
           context,
-          message: 'Destino excluído com sucesso!',
+          message: 'Destino excluido com sucesso!',
         );
-      } else if (context.mounted) {
-        MessageModal.showError(
+      } else {
+        await MessageModal.showError(
           context,
-          message: provider.error ?? 'Erro ao excluir destino',
+          message: destinationProvider.error ?? 'Erro ao excluir destino',
         );
       }
     }

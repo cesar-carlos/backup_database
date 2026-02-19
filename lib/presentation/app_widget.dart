@@ -91,17 +91,20 @@ class BackupDatabaseApp extends StatelessWidget {
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
-          return GlobalBackupProgressListener(
-            child: FluentApp.router(
-              title: getWindowTitleForMode(currentAppMode),
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.lightFluentTheme,
-              darkTheme: AppTheme.darkFluentTheme,
-              themeMode: themeProvider.isDarkMode
-                  ? ThemeMode.dark
-                  : ThemeMode.light,
-              routerConfig: appRouter,
-            ),
+          return FluentApp.router(
+            title: getWindowTitleForMode(currentAppMode),
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightFluentTheme,
+            darkTheme: AppTheme.darkFluentTheme,
+            themeMode: themeProvider.isDarkMode
+                ? ThemeMode.dark
+                : ThemeMode.light,
+            routerConfig: appRouter,
+            builder: (context, child) {
+              return GlobalBackupProgressListener(
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
           );
         },
       ),

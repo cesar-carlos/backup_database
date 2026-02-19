@@ -1,3 +1,4 @@
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -92,13 +93,20 @@ class DestinationProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteDestination(String id) async {
-    final schedulesResult = await _scheduleRepository.getAll();
-    final hasLinked =
-        schedulesResult.isSuccess() &&
-        schedulesResult.getOrNull()!.any((s) => s.destinationIds.contains(id));
+    final schedulesResult = await _scheduleRepository.getByDestinationId(id);
+    if (schedulesResult.isError()) {
+      final failure = schedulesResult.exceptionOrNull();
+      _error = failure is Failure
+          ? 'Nao foi possivel validar dependencias: ${failure.message}'
+          : 'Nao foi possivel validar dependencias antes da exclusao.';
+      notifyListeners();
+      return false;
+    }
+
+    final hasLinked = (schedulesResult.getOrNull() ?? []).isNotEmpty;
     if (hasLinked) {
       _error =
-          'Há agendamentos vinculados a este destino. '
+          'Ha agendamentos vinculados a este destino. '
           'Remova-os antes de excluir.';
       notifyListeners();
       return false;
@@ -130,5 +138,13 @@ class DestinationProvider extends ChangeNotifier {
     final destination = _destinations.firstWhere((d) => d.id == id);
     final updated = destination.copyWith(enabled: enabled);
     return updateDestination(updated);
+  }
+
+  BackupDestination? getDestinationById(String id) {
+    try {
+      return _destinations.firstWhere((d) => d.id == id);
+    } on Object {
+      return null;
+    }
   }
 }

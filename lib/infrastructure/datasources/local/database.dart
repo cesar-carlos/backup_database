@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -16,6 +17,7 @@ part 'database.g.dart';
     SybaseConfigsTable,
     PostgresConfigsTable,
     BackupDestinationsTable,
+    ScheduleDestinationsTable,
     SchedulesTable,
     BackupHistoryTable,
     BackupLogsTable,
@@ -31,6 +33,7 @@ part 'database.g.dart';
     SybaseConfigDao,
     PostgresConfigDao,
     BackupDestinationDao,
+    ScheduleDestinationDao,
     ScheduleDao,
     BackupHistoryDao,
     BackupLogDao,
@@ -50,7 +53,7 @@ class AppDatabase extends _$AppDatabase {
     : super(LazyDatabase(() async => NativeDatabase.memory()));
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration {
@@ -664,9 +667,47 @@ class AppDatabase extends _$AppDatabase {
             );
           }
         }
+
+        if (from < 17) {
+          try {
+            await m.createTable(scheduleDestinationsTable);
+            await _createScheduleDestinationIndexes();
+            await _backfillScheduleDestinations();
+            LoggerService.info(
+              'Migração v17: Tabela schedule_destinations_table criada com '
+              'backfill concluído.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v17 para schedule_destinations_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 18) {
+          try {
+            await _createScheduleDatabaseConfigIntegrityTriggers();
+            LoggerService.info(
+              'Migracao v18: Triggers de integridade para configuracao de '
+              'banco em schedules_table criados.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migracao v18 de integridade schedule/configuracao',
+              e,
+              stackTrace,
+            );
+          }
+        }
       },
       beforeOpen: (details) async {
+        await customStatement('PRAGMA foreign_keys = ON');
         await _ensureSybaseConfigsTableExistsDirect();
+        await _ensureScheduleDestinationsTableExists();
+        await _createScheduleDestinationIndexes();
+        await _createScheduleDatabaseConfigIntegrityTriggers();
 
         await _migrateSybaseColumnsToSnakeCase();
 
@@ -948,6 +989,217 @@ class AppDatabase extends _$AppDatabase {
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
         'Erro ao verificar/adicionar colunas em email_configs',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _ensureScheduleDestinationsTableExists() async {
+    try {
+      await customStatement('''
+        CREATE TABLE IF NOT EXISTS schedule_destinations_table (
+          id TEXT PRIMARY KEY NOT NULL,
+          schedule_id TEXT NOT NULL,
+          destination_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          UNIQUE(schedule_id, destination_id),
+          FOREIGN KEY(schedule_id) REFERENCES schedules_table(id)
+            ON DELETE CASCADE,
+          FOREIGN KEY(destination_id) REFERENCES backup_destinations_table(id)
+            ON DELETE RESTRICT
+        )
+      ''');
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao garantir tabela schedule_destinations_table',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _createScheduleDestinationIndexes() async {
+    try {
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_schedule_destinations_schedule_id
+        ON schedule_destinations_table(schedule_id)
+      ''');
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_schedule_destinations_destination_id
+        ON schedule_destinations_table(destination_id)
+      ''');
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao criar índices de schedule_destinations_table',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _backfillScheduleDestinations() async {
+    try {
+      final existingDestinations = await customSelect(
+        'SELECT id FROM backup_destinations_table',
+      ).get();
+      final destinationIds = existingDestinations
+          .map((row) => row.read<String>('id'))
+          .toSet();
+
+      if (destinationIds.isEmpty) {
+        return;
+      }
+
+      final schedules = await customSelect(
+        'SELECT id, destination_ids FROM schedules_table',
+      ).get();
+
+      for (final row in schedules) {
+        final scheduleId = row.read<String>('id');
+        final destinationIdsRaw = row.read<String>('destination_ids');
+        List<String> ids;
+
+        try {
+          ids = (jsonDecode(destinationIdsRaw) as List).cast<String>();
+        } on Object catch (e) {
+          LoggerService.warning(
+            'Não foi possível converter destination_ids do schedule '
+            '$scheduleId durante backfill: $e',
+          );
+          continue;
+        }
+
+        for (final destinationId in ids.toSet()) {
+          if (!destinationIds.contains(destinationId)) {
+            LoggerService.warning(
+              'Destino $destinationId referenciado por schedule $scheduleId '
+              'não existe. Ignorando vínculo no backfill.',
+            );
+            continue;
+          }
+
+          await customStatement(
+            '''
+            INSERT OR IGNORE INTO schedule_destinations_table
+              (id, schedule_id, destination_id, created_at)
+            VALUES (?, ?, ?, ?)
+            ''',
+            [
+              '$scheduleId:$destinationId',
+              scheduleId,
+              destinationId,
+              DateTime.now().millisecondsSinceEpoch,
+            ],
+          );
+        }
+      }
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro no backfill de schedule_destinations_table',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _createScheduleDatabaseConfigIntegrityTriggers() async {
+    try {
+      await customStatement('''
+        CREATE TRIGGER IF NOT EXISTS trg_schedules_validate_config_insert
+        BEFORE INSERT ON schedules_table
+        BEGIN
+          SELECT RAISE(ABORT, 'database_type invalido em schedules_table')
+          WHERE NEW.database_type NOT IN ('sqlServer', 'sybase', 'postgresql');
+
+          SELECT RAISE(ABORT, 'Configuracao SQL Server inexistente para agendamento')
+          WHERE NEW.database_type = 'sqlServer' AND NOT EXISTS (
+            SELECT 1 FROM sql_server_configs_table c
+            WHERE c.id = NEW.database_config_id
+          );
+
+          SELECT RAISE(ABORT, 'Configuracao Sybase inexistente para agendamento')
+          WHERE NEW.database_type = 'sybase' AND NOT EXISTS (
+            SELECT 1 FROM sybase_configs c
+            WHERE c.id = NEW.database_config_id
+          );
+
+          SELECT RAISE(ABORT, 'Configuracao PostgreSQL inexistente para agendamento')
+          WHERE NEW.database_type = 'postgresql' AND NOT EXISTS (
+            SELECT 1 FROM postgres_configs_table c
+            WHERE c.id = NEW.database_config_id
+          );
+        END;
+      ''');
+
+      await customStatement('''
+        CREATE TRIGGER IF NOT EXISTS trg_schedules_validate_config_update
+        BEFORE UPDATE OF database_type, database_config_id ON schedules_table
+        BEGIN
+          SELECT RAISE(ABORT, 'database_type invalido em schedules_table')
+          WHERE NEW.database_type NOT IN ('sqlServer', 'sybase', 'postgresql');
+
+          SELECT RAISE(ABORT, 'Configuracao SQL Server inexistente para agendamento')
+          WHERE NEW.database_type = 'sqlServer' AND NOT EXISTS (
+            SELECT 1 FROM sql_server_configs_table c
+            WHERE c.id = NEW.database_config_id
+          );
+
+          SELECT RAISE(ABORT, 'Configuracao Sybase inexistente para agendamento')
+          WHERE NEW.database_type = 'sybase' AND NOT EXISTS (
+            SELECT 1 FROM sybase_configs c
+            WHERE c.id = NEW.database_config_id
+          );
+
+          SELECT RAISE(ABORT, 'Configuracao PostgreSQL inexistente para agendamento')
+          WHERE NEW.database_type = 'postgresql' AND NOT EXISTS (
+            SELECT 1 FROM postgres_configs_table c
+            WHERE c.id = NEW.database_config_id
+          );
+        END;
+      ''');
+
+      await customStatement('''
+        CREATE TRIGGER IF NOT EXISTS trg_sql_server_configs_restrict_delete
+        BEFORE DELETE ON sql_server_configs_table
+        BEGIN
+          SELECT RAISE(ABORT, 'Configuracao em uso por agendamentos')
+          WHERE EXISTS (
+            SELECT 1 FROM schedules_table s
+            WHERE s.database_type = 'sqlServer'
+              AND s.database_config_id = OLD.id
+          );
+        END;
+      ''');
+
+      await customStatement('''
+        CREATE TRIGGER IF NOT EXISTS trg_sybase_configs_restrict_delete
+        BEFORE DELETE ON sybase_configs
+        BEGIN
+          SELECT RAISE(ABORT, 'Configuracao em uso por agendamentos')
+          WHERE EXISTS (
+            SELECT 1 FROM schedules_table s
+            WHERE s.database_type = 'sybase'
+              AND s.database_config_id = OLD.id
+          );
+        END;
+      ''');
+
+      await customStatement('''
+        CREATE TRIGGER IF NOT EXISTS trg_postgres_configs_restrict_delete
+        BEFORE DELETE ON postgres_configs_table
+        BEGIN
+          SELECT RAISE(ABORT, 'Configuracao em uso por agendamentos')
+          WHERE EXISTS (
+            SELECT 1 FROM schedules_table s
+            WHERE s.database_type = 'postgresql'
+              AND s.database_config_id = OLD.id
+          );
+        END;
+      ''');
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao criar triggers de integridade schedule/configuracao',
         e,
         stackTrace,
       );

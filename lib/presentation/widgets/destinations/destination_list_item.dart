@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -15,6 +15,12 @@ class DestinationListItem extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final ValueChanged<bool>? onToggleEnabled;
+
+  String _t(BuildContext context, String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +45,7 @@ class DestinationListItem extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  _getTypeName(destination.type),
+                  _getTypeName(context, destination.type),
                   style: FluentTheme.of(context).typography.caption?.copyWith(
                     color: _getTypeColor(destination.type),
                   ),
@@ -49,7 +55,7 @@ class DestinationListItem extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            _getConfigSummary(destination),
+            _getConfigSummary(context, destination),
             style: FluentTheme.of(context).typography.body,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -89,10 +95,10 @@ class DestinationListItem extends StatelessWidget {
     }
   }
 
-  String _getTypeName(DestinationType type) {
+  String _getTypeName(BuildContext context, DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return 'Local';
+        return _t(context, 'Local', 'Local');
       case DestinationType.ftp:
         return 'FTP';
       case DestinationType.googleDrive:
@@ -104,7 +110,10 @@ class DestinationListItem extends StatelessWidget {
     }
   }
 
-  String _getConfigSummary(BackupDestination destination) {
+  String _getConfigSummary(
+    BuildContext context,
+    BackupDestination destination,
+  ) {
     try {
       final config = destination.config;
       switch (destination.type) {
@@ -129,7 +138,7 @@ class DestinationListItem extends StatelessWidget {
                 r'"folderName"\s*:\s*"([^"]*)"',
               ).firstMatch(config)?.group(1) ??
               '';
-          return 'Pasta: $folderName';
+          return '${_t(context, 'Pasta', 'Folder')}: $folderName';
         case DestinationType.dropbox:
           final folderPath =
               RegExp(
@@ -142,9 +151,9 @@ class DestinationListItem extends StatelessWidget {
               ).firstMatch(config)?.group(1) ??
               '';
           if (folderPath.isEmpty) {
-            return 'Pasta: /$folderName';
+            return '${_t(context, 'Pasta', 'Folder')}: /$folderName';
           }
-          return 'Pasta: $folderPath/$folderName';
+          return '${_t(context, 'Pasta', 'Folder')}: $folderPath/$folderName';
         case DestinationType.nextcloud:
           final serverUrl =
               RegExp(

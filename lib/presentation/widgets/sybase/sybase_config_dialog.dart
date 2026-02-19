@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -52,6 +52,12 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
   bool get isEditing => widget.config != null;
 
+  String _t(String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -95,7 +101,12 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       final port = int.tryParse(_portController.text.trim()) ?? 2638;
 
       if (port < 1 || port > 65535) {
-        throw Exception('Porta inválida. Deve estar entre 1 e 65535.');
+        throw Exception(
+          _t(
+            'Porta invalida. Deve estar entre 1 e 65535.',
+            'Invalid port. Must be between 1 and 65535.',
+          ),
+        );
       }
 
       final testConfig = SybaseConfig(
@@ -115,18 +126,24 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
         (_) {
           MessageModal.showSuccess(
             context,
-            message: 'Conexão testada com sucesso!',
+            message: _t(
+              'Conexao testada com sucesso!',
+              'Connection tested successfully!',
+            ),
           );
         },
         (failure) {
           final f = failure as Failure;
           final errorMessage = f.message.isNotEmpty
               ? f.message
-              : 'Erro desconhecido ao testar conexão';
+              : _t(
+                  'Erro desconhecido ao testar conexao',
+                  'Unknown error testing connection',
+                );
 
           MessageModal.showError(
             context,
-            title: 'Erro ao Testar Conexão',
+            title: _t('Erro ao testar conexao', 'Error testing connection'),
             message: errorMessage,
           );
         },
@@ -140,8 +157,10 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
       MessageModal.showError(
         context,
-        title: 'Erro ao Testar Conexão',
-        message: errorMessage.isNotEmpty ? errorMessage : 'Erro desconhecido',
+        title: _t('Erro ao testar conexao', 'Error testing connection'),
+        message: errorMessage.isNotEmpty
+            ? errorMessage
+            : _t('Erro desconhecido', 'Unknown error'),
       );
     } finally {
       if (mounted) {
@@ -190,8 +209,11 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
           Expanded(
             child: Text(
               isEditing
-                  ? 'Editar Configuração Sybase'
-                  : 'Nova Configuração Sybase',
+                  ? _t(
+                      'Editar configuracao Sybase',
+                      'Edit Sybase configuration',
+                    )
+                  : _t('Nova configuracao Sybase', 'New Sybase configuration'),
               style: FluentTheme.of(context).typography.title,
             ),
           ),
@@ -208,11 +230,11 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
               children: [
                 AppTextField(
                   controller: _nameController,
-                  label: 'Nome da Configuração',
-                  hint: 'Ex: Produção Sybase',
+                  label: _t('Nome da configuracao', 'Configuration name'),
+                  hint: _t('Ex: Producao Sybase', 'Ex: Production Sybase'),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Nome é obrigatório';
+                      return _t('Nome e obrigatorio', 'Name is required');
                     }
                     return null;
                   },
@@ -225,11 +247,20 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                       flex: 3,
                       child: AppTextField(
                         controller: _serverNameController,
-                        label: 'Nome do Servidor (Engine Name)',
-                        hint: 'Ex: VL (nome do serviço Sybase)',
+                        label: _t(
+                          'Nome do servidor (Engine Name)',
+                          'Server name (Engine Name)',
+                        ),
+                        hint: _t(
+                          'Ex: VL (nome do servico Sybase)',
+                          'Ex: VL (Sybase service name)',
+                        ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Engine Name é obrigatório';
+                            return _t(
+                              'Engine Name e obrigatorio',
+                              'Engine Name is required',
+                            );
                           }
                           return null;
                         },
@@ -240,18 +271,24 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                     Expanded(
                       child: NumericField(
                         controller: _portController,
-                        label: 'Porta',
+                        label: _t('Porta', 'Port'),
                         hint: AppConstants.defaultSybasePort.toString(),
                         prefixIcon: FluentIcons.number_field,
                         minValue: 1,
                         maxValue: 65535,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Porta é obrigatória';
+                            return _t(
+                              'Porta e obrigatoria',
+                              'Port is required',
+                            );
                           }
                           final port = int.tryParse(value);
                           if (port == null || port < 1 || port > 65535) {
-                            return 'Porta deve estar entre 1 e 65535';
+                            return _t(
+                              'Porta deve estar entre 1 e 65535',
+                              'Port must be between 1 and 65535',
+                            );
                           }
                           return null;
                         },
@@ -262,11 +299,20 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                 const SizedBox(height: 16),
                 AppTextField(
                   controller: _databaseNameController,
-                  label: 'Nome do Banco de Dados (DBN)',
-                  hint: 'Ex: VL (geralmente igual ao Engine Name)',
+                  label: _t(
+                    'Nome do banco de dados (DBN)',
+                    'Database name (DBN)',
+                  ),
+                  hint: _t(
+                    'Ex: VL (geralmente igual ao Engine Name)',
+                    'Ex: VL (usually same as Engine Name)',
+                  ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Nome do banco de dados é obrigatório';
+                      return _t(
+                        'Nome do banco de dados e obrigatorio',
+                        'Database name is required',
+                      );
                     }
                     return null;
                   },
@@ -292,7 +338,10 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'O Engine Name e DBN geralmente são iguais ao nome do serviço Sybase (ex: VL)',
+                          _t(
+                            'O Engine Name e DBN geralmente sao iguais ao nome do servico Sybase (ex: VL)',
+                            'Engine Name and DBN are usually equal to Sybase service name (ex: VL)',
+                          ),
                           style: FluentTheme.of(context).typography.caption,
                         ),
                       ),
@@ -302,11 +351,14 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                 const SizedBox(height: 16),
                 AppTextField(
                   controller: _usernameController,
-                  label: 'Usuário',
-                  hint: 'DBA ou usuário do Sybase',
+                  label: _t('Usuario', 'Username'),
+                  hint: _t('DBA ou usuario do Sybase', 'DBA or Sybase user'),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Usuário é obrigatório';
+                      return _t(
+                        'Usuario e obrigatorio',
+                        'Username is required',
+                      );
                     }
                     return null;
                   },
@@ -316,7 +368,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                 PasswordField(controller: _passwordController),
                 const SizedBox(height: 16),
                 InfoLabel(
-                  label: 'Habilitado',
+                  label: _t('Habilitado', 'Enabled'),
                   child: ToggleSwitch(
                     checked: _isEnabled,
                     onChanged: (value) {
@@ -328,7 +380,10 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Permitir uso desta configuração em agendamentos',
+                  _t(
+                    'Permitir uso desta configuracao em agendamentos',
+                    'Allow this configuration in schedules',
+                  ),
                   style: FluentTheme.of(context).typography.caption,
                 ),
               ],
@@ -339,7 +394,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       actions: [
         const CancelButton(),
         ActionButton(
-          label: 'Testar Conexão',
+          label: _t('Testar conexao', 'Test connection'),
           icon: FluentIcons.check_mark,
           onPressed: _testConnection,
           isLoading: _isTestingConnection,

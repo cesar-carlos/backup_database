@@ -1,8 +1,12 @@
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/presentation/pages/pages.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+final appNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouter = GoRouter(
+  navigatorKey: appNavigatorKey,
   initialLocation: RouteNames.dashboard,
   routes: [
     ShellRoute(

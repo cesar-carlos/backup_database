@@ -46,6 +46,12 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
   bool _isActive = true;
   bool _isEditing = false;
 
+  String _t(String pt, String en) {
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
+    return isPt ? pt : en;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -109,9 +115,14 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
 
   String? _validatePassword(String? value) {
     if (_isEditing && (value == null || value.isEmpty)) return null;
-    if (value == null || value.isEmpty) return 'Senha é obrigatória';
+    if (value == null || value.isEmpty) {
+      return _t('Senha e obrigatoria', 'Password is required');
+    }
     if (value.length < _minPasswordLength) {
-      return 'Senha deve ter pelo menos $_minPasswordLength caracteres';
+      return _t(
+        'Senha deve ter pelo menos $_minPasswordLength caracteres',
+        'Password must have at least $_minPasswordLength characters',
+      );
     }
     return null;
   }
@@ -122,7 +133,9 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
         (value == null || value.isEmpty)) {
       return null;
     }
-    if (value != _passwordController.text) return 'As senhas não coincidem';
+    if (value != _passwordController.text) {
+      return _t('As senhas nao coincidem', 'Passwords do not match');
+    }
     return null;
   }
 
@@ -133,38 +146,55 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
     final confirm = _confirmPasswordController.text;
 
     if (serverId.isEmpty) {
-      MessageModal.showError(context, message: 'Informe o Server ID.');
+      MessageModal.showError(
+        context,
+        message: _t('Informe o Server ID.', 'Enter Server ID.'),
+      );
       return;
     }
     if (name.isEmpty) {
       MessageModal.showError(
         context,
-        message: 'Informe um nome para a credencial.',
+        message: _t(
+          'Informe um nome para a credencial.',
+          'Enter a name for the credential.',
+        ),
       );
       return;
     }
     if (!_isEditing) {
       if (password.isEmpty) {
-        MessageModal.showError(context, message: 'Informe a senha.');
+        MessageModal.showError(
+          context,
+          message: _t('Informe a senha.', 'Enter password.'),
+        );
         return;
       }
       if (password.length < _minPasswordLength) {
         MessageModal.showError(
           context,
-          message:
-              'A senha deve ter pelo menos $_minPasswordLength caracteres.',
+          message: _t(
+            'A senha deve ter pelo menos $_minPasswordLength caracteres.',
+            'Password must have at least $_minPasswordLength characters.',
+          ),
         );
         return;
       }
     } else if (password.isNotEmpty && password.length < _minPasswordLength) {
       MessageModal.showError(
         context,
-        message: 'A senha deve ter pelo menos $_minPasswordLength caracteres.',
+        message: _t(
+          'A senha deve ter pelo menos $_minPasswordLength caracteres.',
+          'Password must have at least $_minPasswordLength characters.',
+        ),
       );
       return;
     }
     if (password != confirm) {
-      MessageModal.showError(context, message: 'As senhas não coincidem.');
+      MessageModal.showError(
+        context,
+        message: _t('As senhas nao coincidem.', 'Passwords do not match.'),
+      );
       return;
     }
 
@@ -184,7 +214,11 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
   @override
   Widget build(BuildContext context) {
     return ContentDialog(
-      title: Text(_isEditing ? 'Editar Credencial' : 'Nova Credencial'),
+      title: Text(
+        _isEditing
+            ? _t('Editar credencial', 'Edit credential')
+            : _t('Nova credencial', 'New credential'),
+      ),
       content: SingleChildScrollView(
         child: SizedBox(
           width: 400,
@@ -193,19 +227,22 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               InfoLabel(
-                label: 'Server ID',
+                label: _t('ID do servidor', 'Server ID'),
                 child: Row(
                   children: [
                     Expanded(
                       child: TextBox(
                         controller: _serverIdController,
-                        placeholder: 'Identificador único do servidor',
+                        placeholder: _t(
+                          'Identificador unico do servidor',
+                          'Unique server identifier',
+                        ),
                         enabled: false,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Tooltip(
-                      message: 'Copiar Server ID',
+                      message: _t('Copiar Server ID', 'Copy Server ID'),
                       child: IconButton(
                         icon: const Icon(FluentIcons.copy),
                         onPressed: () {
@@ -214,9 +251,11 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
                             Clipboard.setData(ClipboardData(text: text));
                             MessageModal.showInfo(
                               context,
-                              message:
-                                  'Server ID copiado para a área de transferência.',
-                              title: 'Copiado',
+                              message: _t(
+                                'Server ID copiado para a area de transferencia.',
+                                'Server ID copied to clipboard.',
+                              ),
+                              title: _t('Copiado', 'Copied'),
                             );
                           }
                         },
@@ -227,18 +266,21 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
               ),
               const SizedBox(height: 16),
               InfoLabel(
-                label: 'Nome',
+                label: _t('Nome', 'Name'),
                 child: TextBox(
                   controller: _nameController,
-                  placeholder: 'Nome descritivo',
+                  placeholder: _t('Nome descritivo', 'Descriptive name'),
                 ),
               ),
               const SizedBox(height: 16),
               PasswordField(
                 controller: _passwordController,
                 hint: _isEditing
-                    ? 'Deixe em branco para manter'
-                    : 'Mínimo $_minPasswordLength caracteres',
+                    ? _t('Deixe em branco para manter', 'Leave blank to keep')
+                    : _t(
+                        'Minimo $_minPasswordLength caracteres',
+                        'Minimum $_minPasswordLength characters',
+                      ),
                 validator: _validatePassword,
               ),
               if (_isEditing && _passwordController.text.isNotEmpty) ...[
@@ -247,7 +289,10 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     Tooltip(
-                      message: 'Copiar senha para a área de transferência',
+                      message: _t(
+                        'Copiar senha para a area de transferencia',
+                        'Copy password to clipboard',
+                      ),
                       child: Button(
                         onPressed: () {
                           final text = _passwordController.text;
@@ -255,18 +300,20 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
                             Clipboard.setData(ClipboardData(text: text));
                             MessageModal.showInfo(
                               context,
-                              message:
-                                  'Senha copiada para a área de transferência.',
-                              title: 'Copiado',
+                              message: _t(
+                                'Senha copiada para a area de transferencia.',
+                                'Password copied to clipboard.',
+                              ),
+                              title: _t('Copiado', 'Copied'),
                             );
                           }
                         },
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(FluentIcons.copy, size: 16),
-                            SizedBox(width: 8),
-                            Text('Copiar senha'),
+                            const Icon(FluentIcons.copy, size: 16),
+                            const SizedBox(width: 8),
+                            Text(_t('Copiar senha', 'Copy password')),
                           ],
                         ),
                       ),
@@ -276,30 +323,32 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
               ],
               const SizedBox(height: 16),
               PasswordField(
-                label: 'Confirmar senha',
+                label: _t('Confirmar senha', 'Confirm password'),
                 controller: _confirmPasswordController,
                 hint: _isEditing
-                    ? 'Deixe em branco para manter'
-                    : 'Repita a senha',
+                    ? _t('Deixe em branco para manter', 'Leave blank to keep')
+                    : _t('Repita a senha', 'Repeat password'),
                 validator: _validateConfirm,
               ),
               const SizedBox(height: 16),
               Button(
                 onPressed: _fillGeneratedPassword,
-                child: const Text('Gerar senha aleatória'),
+                child: Text(
+                  _t('Gerar senha aleatoria', 'Generate random password'),
+                ),
               ),
               const SizedBox(height: 16),
               InfoLabel(
-                label: 'Descrição (opcional)',
+                label: _t('Descricao (opcional)', 'Description (optional)'),
                 child: TextBox(
                   controller: _descriptionController,
-                  placeholder: 'Observações',
+                  placeholder: _t('Observacoes', 'Notes'),
                   maxLines: 2,
                 ),
               ),
               const SizedBox(height: 16),
               InfoLabel(
-                label: 'Ativo',
+                label: _t('Ativo', 'Active'),
                 child: ToggleSwitch(
                   checked: _isActive,
                   onChanged: (value) => setState(() => _isActive = value),
@@ -312,11 +361,11 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
       actions: [
         Button(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
+          child: Text(_t('Cancelar', 'Cancel')),
         ),
         FilledButton(
           onPressed: _submit,
-          child: const Text('Salvar'),
+          child: Text(_t('Salvar', 'Save')),
         ),
       ],
     );

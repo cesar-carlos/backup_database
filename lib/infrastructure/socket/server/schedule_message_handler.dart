@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -18,10 +19,12 @@ typedef SendToClient = Future<void> Function(String clientId, Message message);
 class ScheduleMessageHandler {
   ScheduleMessageHandler({
     required IScheduleRepository scheduleRepository,
+    required ISchedulerService schedulerService,
     required UpdateSchedule updateSchedule,
     required ExecuteScheduledBackup executeBackup,
     required IBackupProgressNotifier progressNotifier,
   }) : _scheduleRepository = scheduleRepository,
+       _schedulerService = schedulerService,
        _updateSchedule = updateSchedule,
        _executeBackup = executeBackup,
        _progressNotifier = progressNotifier {
@@ -29,6 +32,7 @@ class ScheduleMessageHandler {
   }
 
   final IScheduleRepository _scheduleRepository;
+  final ISchedulerService _schedulerService;
   final UpdateSchedule _updateSchedule;
   final ExecuteScheduledBackup _executeBackup;
   final IBackupProgressNotifier _progressNotifier;
@@ -379,6 +383,8 @@ class ScheduleMessageHandler {
                 error: errorMessage,
               ),
             );
+            _progressNotifier.failBackup(errorMessage);
+            _clearCurrentBackup();
           },
         );
       }
@@ -441,8 +447,19 @@ class ScheduleMessageHandler {
       scheduleId: scheduleId,
     );
 
-    // Notifica falha para sinalizar cancelamento
-    _progressNotifier.failBackup('Backup cancelado pelo usuário');
+    final cancelResult = await _schedulerService.cancelExecution(scheduleId);
+    if (cancelResult.isError()) {
+      final failure = cancelResult.exceptionOrNull();
+      await sendToClient(
+        clientId,
+        createScheduleErrorMessage(
+          requestId: requestId,
+          error: failure?.toString() ?? 'Falha ao cancelar backup',
+        ),
+      );
+      return;
+    }
+
     _clearCurrentBackup();
 
     await sendToClient(

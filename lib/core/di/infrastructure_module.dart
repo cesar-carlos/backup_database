@@ -170,6 +170,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<ScheduleMessageHandler>(
     () => ScheduleMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
+      schedulerService: getIt<ISchedulerService>(),
       updateSchedule: getIt<UpdateSchedule>(),
       executeBackup: getIt<ExecuteScheduledBackup>(),
       progressNotifier: getIt<IBackupProgressNotifier>(),

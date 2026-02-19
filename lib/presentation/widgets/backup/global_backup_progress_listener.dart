@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/core/routes/app_router.dart';
 import 'package:backup_database/presentation/widgets/backup/backup_progress_dialog.dart';
 import 'package:flutter/material.dart';
 
@@ -52,7 +53,9 @@ class _GlobalBackupProgressListenerState
   void _showDialog() {
     if (!mounted) return;
 
-    BackupProgressDialog.show(context).then((_) {
+    final dialogContext = appNavigatorKey.currentContext ?? context;
+
+    BackupProgressDialog.show(dialogContext).then((_) {
       if (mounted) {
         _provider.reset();
         setState(() {

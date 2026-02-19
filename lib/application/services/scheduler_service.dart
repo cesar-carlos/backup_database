@@ -58,6 +58,7 @@ class SchedulerService implements ISchedulerService {
   Timer? _checkTimer;
   bool _isRunning = false;
   final Set<String> _executingSchedules = {};
+  final Set<String> _cancelRequestedSchedules = {};
 
   @override
   Future<void> start() async {
@@ -113,21 +114,15 @@ class SchedulerService implements ISchedulerService {
 
   Future<void> _checkSchedules() async {
     if (!_isRunning) return;
+    if (_executingSchedules.isNotEmpty) return;
 
     final result = await _scheduleRepository.getEnabled();
 
     result.fold((schedules) async {
       for (final schedule in schedules) {
-        final isExecuting = _executingSchedules.contains(schedule.id);
         final shouldRun = _scheduleCalculator.shouldRunNow(schedule);
 
-        if (isExecuting) {
-          continue;
-        }
-
         if (shouldRun) {
-          _executingSchedules.add(schedule.id);
-
           final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
           if (nextRunAt != null) {
             await _scheduleRepository.update(
@@ -136,14 +131,9 @@ class SchedulerService implements ISchedulerService {
           }
 
           unawaited(
-            _executeScheduledBackup(schedule)
-                .then((_) {
-                  _executingSchedules.remove(schedule.id);
-                })
-                .catchError((error) {
-                  _executingSchedules.remove(schedule.id);
-                }),
+            _runScheduleWithLock(schedule),
           );
+          break;
         }
       }
     }, (failure) => null);
@@ -159,7 +149,26 @@ class SchedulerService implements ISchedulerService {
     var shouldDeleteTempFile = false;
 
     try {
+      final canceledAtStart = await _failIfCancellationRequested(
+        schedule: schedule,
+      );
+      if (canceledAtStart != null) {
+        return canceledAtStart;
+      }
+
       final destinations = await _getDestinations(schedule.destinationIds);
+      if (destinations.length != schedule.destinationIds.length) {
+        final foundIds = destinations.map((d) => d.id).toSet();
+        final missingIds = schedule.destinationIds
+            .where((id) => !foundIds.contains(id))
+            .toList();
+
+        final errorMessage =
+            'Destinos vinculados ao agendamento nao foram encontrados: '
+            '${missingIds.join(", ")}';
+        LoggerService.error(errorMessage);
+        return rd.Failure(ValidationFailure(message: errorMessage));
+      }
 
       if (schedule.backupFolder.isEmpty) {
         final errorMessage =
@@ -225,6 +234,14 @@ class SchedulerService implements ISchedulerService {
       final backupHistory = backupResult.getOrNull()!;
       tempBackupPath = backupHistory.backupPath;
 
+      final canceledAfterBackup = await _failIfCancellationRequested(
+        schedule: schedule,
+        backupHistory: backupHistory,
+      );
+      if (canceledAfterBackup != null) {
+        return canceledAfterBackup;
+      }
+
       final backupFile = File(backupHistory.backupPath);
       if (!await backupFile.exists()) {
         final errorMessage =
@@ -270,6 +287,14 @@ class SchedulerService implements ISchedulerService {
       final totalDestinations = destinations.length;
 
       for (var index = 0; index < destinations.length; index++) {
+        final canceledBeforeUpload = await _failIfCancellationRequested(
+          schedule: schedule,
+          backupHistory: backupHistory,
+        );
+        if (canceledBeforeUpload != null) {
+          return canceledBeforeUpload;
+        }
+
         final destination = destinations[index];
 
         if (!await backupFile.exists()) {
@@ -502,13 +527,70 @@ class SchedulerService implements ISchedulerService {
         );
       }
 
-      return const rd.Success(());
+      return const rd.Success(rd.unit);
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro no backup agendado', e, stackTrace);
       return rd.Failure(
         BackupFailure(message: 'Erro no backup agendado: $e', originalError: e),
       );
     }
+  }
+
+  Future<rd.Result<void>> _runScheduleWithLock(Schedule schedule) async {
+    if (_executingSchedules.isNotEmpty) {
+      return const rd.Failure(
+        ValidationFailure(
+          message: 'Ja existe um backup em execucao no servidor.',
+        ),
+      );
+    }
+
+    if (_executingSchedules.contains(schedule.id)) {
+      return const rd.Failure(
+        ValidationFailure(message: 'Este agendamento ja esta em execucao.'),
+      );
+    }
+
+    _executingSchedules.add(schedule.id);
+    try {
+      return await _executeScheduledBackup(schedule);
+    } finally {
+      _executingSchedules.remove(schedule.id);
+      _cancelRequestedSchedules.remove(schedule.id);
+    }
+  }
+
+  Future<rd.Result<void>?> _failIfCancellationRequested({
+    required Schedule schedule,
+    BackupHistory? backupHistory,
+  }) async {
+    if (!_cancelRequestedSchedules.contains(schedule.id)) {
+      return null;
+    }
+
+    const message = 'Backup cancelado pelo usuario.';
+    LoggerService.warning(
+      'Cancelamento detectado para schedule ${schedule.id} (${schedule.name})',
+    );
+
+    if (backupHistory != null) {
+      final finishedAt = DateTime.now();
+      final canceledHistory = backupHistory.copyWith(
+        status: BackupStatus.warning,
+        errorMessage: message,
+        finishedAt: finishedAt,
+        durationSeconds: finishedAt.difference(backupHistory.startedAt).inSeconds,
+      );
+      await _backupHistoryRepository.update(canceledHistory);
+    }
+
+    try {
+      _progressNotifier.failBackup(message);
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
+    }
+
+    return const rd.Failure(ValidationFailure(message: message));
   }
 
   Future<List<BackupDestination>> _getDestinations(List<String> ids) async {
@@ -533,9 +615,27 @@ class SchedulerService implements ISchedulerService {
     final result = await _scheduleRepository.getById(scheduleId);
 
     return result.fold(
-      (schedule) async => _executeScheduledBackup(schedule),
+      (schedule) async => _runScheduleWithLock(schedule),
       rd.Failure.new,
     );
+  }
+
+  @override
+  Future<rd.Result<void>> cancelExecution(String scheduleId) async {
+    if (scheduleId.isEmpty) {
+      return const rd.Failure(
+        ValidationFailure(message: 'ID do agendamento nao pode ser vazio'),
+      );
+    }
+
+    if (!_executingSchedules.contains(scheduleId)) {
+      return const rd.Failure(
+        ValidationFailure(message: 'Nao ha backup em execucao para este schedule'),
+      );
+    }
+
+    _cancelRequestedSchedules.add(scheduleId);
+    return const rd.Success(rd.unit);
   }
 
   @override
@@ -549,7 +649,7 @@ class SchedulerService implements ISchedulerService {
           schedule.copyWith(nextRunAt: nextRunAt),
         );
       }
-      return const rd.Success(());
+      return const rd.Success(rd.unit);
     }, rd.Failure.new);
   }
 
