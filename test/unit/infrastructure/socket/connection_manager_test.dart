@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:backup_database/core/di/service_locator.dart' as di;
+import 'package:backup_database/core/logging/socket_logger_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -22,6 +26,14 @@ class MockServerConnectionDao extends Mock implements ServerConnectionDao {}
 void main() {
   late ConnectionManager manager;
   late TcpSocketServer server;
+
+  setUpAll(() {
+    if (!di.getIt.isRegistered<SocketLoggerService>()) {
+      di.getIt.registerSingleton<SocketLoggerService>(
+        SocketLoggerService(logsDirectory: Directory.systemTemp.path),
+      );
+    }
+  });
 
   setUp(() {
     manager = ConnectionManager();
@@ -107,32 +119,35 @@ void main() {
       expect(list, isEmpty);
     });
 
-    test('getSavedConnections when dao provided returns dao.getAll()', () async {
-      final mockDao = MockServerConnectionDao();
-      final now = DateTime.now();
-      final saved = [
-        ServerConnectionsTableData(
-          id: 'conn-1',
-          name: 'Server A',
-          serverId: 's1',
-          host: '127.0.0.1',
-          port: 9527,
-          password: 'p1',
-          isOnline: false,
-          createdAt: now,
-          updatedAt: now,
-        ),
-      ];
-      when(mockDao.getAll).thenAnswer((_) async => saved);
-      final mgr = ConnectionManager(serverConnectionDao: mockDao);
-      addTearDown(mgr.disconnect);
-      final list = await mgr.getSavedConnections();
-      expect(list.length, 1);
-      expect(list.first.id, 'conn-1');
-      expect(list.first.name, 'Server A');
-      expect(list.first.host, '127.0.0.1');
-      verify(mockDao.getAll).called(1);
-    });
+    test(
+      'getSavedConnections when dao provided returns dao.getAll()',
+      () async {
+        final mockDao = MockServerConnectionDao();
+        final now = DateTime.now();
+        final saved = [
+          ServerConnectionsTableData(
+            id: 'conn-1',
+            name: 'Server A',
+            serverId: 's1',
+            host: '127.0.0.1',
+            port: 9527,
+            password: 'p1',
+            isOnline: false,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        ];
+        when(mockDao.getAll).thenAnswer((_) async => saved);
+        final mgr = ConnectionManager(serverConnectionDao: mockDao);
+        addTearDown(mgr.disconnect);
+        final list = await mgr.getSavedConnections();
+        expect(list.length, 1);
+        expect(list.first.id, 'conn-1');
+        expect(list.first.name, 'Server A');
+        expect(list.first.host, '127.0.0.1');
+        verify(mockDao.getAll).called(1);
+      },
+    );
 
     test('connectToSavedConnection when no dao throws', () async {
       final mgr = ConnectionManager();
@@ -178,7 +193,9 @@ void main() {
           updatedAt: now,
         ),
       );
-      final mgr = ConnectionManager(serverConnectionDao: db.serverConnectionDao);
+      final mgr = ConnectionManager(
+        serverConnectionDao: db.serverConnectionDao,
+      );
       addTearDown(mgr.disconnect);
       await mgr.connectToSavedConnection('saved-1');
       expect(mgr.isConnected, isTrue);

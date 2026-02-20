@@ -9,6 +9,13 @@ class EmailConfigDao extends DatabaseAccessor<AppDatabase>
     with _$EmailConfigDaoMixin {
   EmailConfigDao(super.db);
 
+  Future<List<EmailConfigsTableData>> getAll() =>
+      select(emailConfigsTable).get();
+
+  Future<EmailConfigsTableData?> getById(String id) => (select(
+    emailConfigsTable,
+  )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+
   Future<EmailConfigsTableData?> get() =>
       select(emailConfigsTable).getSingleOrNull();
 
@@ -20,7 +27,7 @@ class EmailConfigDao extends DatabaseAccessor<AppDatabase>
       return false;
     }
 
-    final existing = await get();
+    final existing = await getById(config.id.value);
     if (existing == null) {
       return false;
     }
@@ -30,6 +37,9 @@ class EmailConfigDao extends DatabaseAccessor<AppDatabase>
     )..where((tbl) => tbl.id.equals(config.id.value))).write(config);
     return updated > 0;
   }
+
+  Future<int> deleteById(String id) =>
+      (delete(emailConfigsTable)..where((tbl) => tbl.id.equals(id))).go();
 
   Future<int> deleteAll() => delete(emailConfigsTable).go();
 

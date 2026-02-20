@@ -4,9 +4,15 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class ConfigureEmail {
   ConfigureEmail(this._repository);
+
   final IEmailConfigRepository _repository;
 
   Future<rd.Result<EmailConfig>> call(EmailConfig config) async {
-    return _repository.save(config);
+    final existingResult = await _repository.getById(config.id);
+
+    return existingResult.fold(
+      (_) => _repository.update(config),
+      (_) => _repository.create(config),
+    );
   }
 }

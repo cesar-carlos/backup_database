@@ -3,10 +3,20 @@ import 'package:backup_database/application/providers/notification_provider.dart
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
+import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/notifications/notifications.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
+bool _hasEmailNotificationFeature(LicenseProvider licenseProvider) {
+  return licenseProvider.hasValidLicense &&
+      licenseProvider.currentLicense != null &&
+      licenseProvider.currentLicense!.hasFeature(
+        LicenseFeatures.emailNotification,
+      );
+}
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -16,131 +26,214 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _smtpServerController;
-  late final TextEditingController _smtpPortController;
-  late final TextEditingController _emailController;
-  late final TextEditingController _passwordController;
-  late final TextEditingController _recipientEmailController;
-
-  bool _notifyOnSuccess = true;
-  bool _notifyOnError = true;
-  bool _attachLog = false;
-
   @override
   void initState() {
     super.initState();
-    _smtpServerController = TextEditingController();
-    _smtpPortController = TextEditingController();
-    _emailController = TextEditingController();
-    _passwordController = TextEditingController();
-    _recipientEmailController = TextEditingController();
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final provider = context.read<NotificationProvider>();
-      await provider.loadConfig();
-      _loadConfig();
+      await context.read<NotificationProvider>().loadConfigs();
     });
   }
 
-  @override
-  void dispose() {
-    _smtpServerController.dispose();
-    _smtpPortController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _recipientEmailController.dispose();
-    super.dispose();
-  }
-
-  void _loadConfig() {
-    final provider = context.read<NotificationProvider>();
-
-    if (provider.isLoading) {
-      return;
-    }
-
-    final config = provider.emailConfig;
-
-    if (config != null) {
-      setState(() {
-        _smtpServerController.text = config.smtpServer;
-        _smtpPortController.text = config.smtpPort.toString();
-        _emailController.text = config.username;
-        _passwordController.text = config.password;
-        _recipientEmailController.text = config.recipients.isNotEmpty
-            ? config.recipients.first
-            : '';
-        _notifyOnSuccess = config.notifyOnSuccess;
-        _notifyOnError = config.notifyOnError;
-        _attachLog = config.attachLog;
-      });
-    }
-  }
-
-  Future<void> _saveConfig() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    final smtpPort = int.tryParse(_smtpPortController.text.trim());
-    if (smtpPort == null) {
-      MessageModal.showError(context, message: 'Porta SMTP inválida');
-      return;
-    }
-
-    final recipientEmail = _recipientEmailController.text.trim();
-    if (recipientEmail.isEmpty) {
-      MessageModal.showError(
+  Future<void> _openConfigModal({EmailConfig? initial}) async {
+    final licenseProvider = context.read<LicenseProvider>();
+    if (!_hasEmailNotificationFeature(licenseProvider)) {
+      await MessageModal.showWarning(
         context,
-        message: 'E-mail de destino é obrigatório',
+        message: 'Este recurso exige licenca com notificacao por e-mail',
       );
       return;
     }
 
     final provider = context.read<NotificationProvider>();
-    final existingConfig = provider.emailConfig;
-
-    final emailConfig = EmailConfig(
-      id: existingConfig?.id,
-      senderName: existingConfig?.senderName ?? 'Sistema de Backup',
-      fromEmail: _emailController.text.trim(),
-      fromName: existingConfig?.fromName ?? 'Sistema de Backup',
-      smtpServer: _smtpServerController.text.trim(),
-      smtpPort: smtpPort,
-      username: _emailController.text.trim(),
-      password: _passwordController.text,
-      useSsl: smtpPort == 465,
-      recipients: [recipientEmail],
-      notifyOnSuccess: _notifyOnSuccess,
-      notifyOnError: _notifyOnError,
-      attachLog: _attachLog,
-      enabled: existingConfig?.enabled ?? true,
-      createdAt: existingConfig?.createdAt,
+    final result = await NotificationConfigDialog.show(
+      context,
+      initialConfig: initial ?? provider.selectedConfig,
     );
 
-    final success = await provider.saveConfig(emailConfig);
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final success = await provider.saveConfig(result);
 
     if (!mounted) return;
 
     if (success) {
-      MessageModal.showSuccess(
+      await MessageModal.showSuccess(
         context,
-        message: 'Configuração salva com sucesso!',
+        message: 'Configuracao salva com sucesso',
       );
     } else {
-      MessageModal.showError(
+      await MessageModal.showError(
         context,
-        message: provider.error ?? 'Erro ao salvar configuração',
+        message: provider.error ?? 'Erro ao salvar configuracao',
       );
     }
+  }
+
+  Future<void> _deleteConfig(EmailConfig config) async {
+    final confirmed = await _confirmDialog(
+      title: 'Excluir configuracao',
+      message:
+          'Deseja realmente excluir a configuracao "${config.configName}"?',
+    );
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    final provider = context.read<NotificationProvider>();
+    final success = await provider.deleteConfigById(config.id);
+
+    if (!mounted) return;
+
+    if (success) {
+      await MessageModal.showSuccess(
+        context,
+        message: 'Configuracao removida com sucesso',
+      );
+    } else {
+      await MessageModal.showError(
+        context,
+        message: provider.error ?? 'Erro ao remover configuracao',
+      );
+    }
+  }
+
+  Future<void> _openTargetModal({EmailNotificationTarget? initial}) async {
+    final provider = context.read<NotificationProvider>();
+    final selected = provider.selectedConfig;
+    if (selected == null) {
+      await MessageModal.showWarning(
+        context,
+        message: 'Selecione uma configuracao SMTP para continuar',
+      );
+      return;
+    }
+
+    final result = await EmailTargetDialog.show(
+      context,
+      emailConfigId: selected.id,
+      initialTarget: initial,
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final success = initial == null
+        ? await provider.addTarget(result)
+        : await provider.updateTarget(result);
+
+    if (!mounted) return;
+
+    if (success) {
+      await MessageModal.showSuccess(
+        context,
+        message: initial == null
+            ? 'Destinatario adicionado com sucesso'
+            : 'Destinatario atualizado com sucesso',
+      );
+    } else {
+      await MessageModal.showError(
+        context,
+        message: provider.error ?? 'Erro ao salvar destinatario',
+      );
+    }
+  }
+
+  Future<void> _deleteTarget(EmailNotificationTarget target) async {
+    final confirmed = await _confirmDialog(
+      title: 'Excluir destinatario',
+      message: 'Deseja excluir o destinatario "${target.recipientEmail}"?',
+    );
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    final provider = context.read<NotificationProvider>();
+    final success = await provider.deleteTargetById(target.id);
+
+    if (!mounted) return;
+
+    if (!success) {
+      await MessageModal.showError(
+        context,
+        message: provider.error ?? 'Erro ao excluir destinatario',
+      );
+    }
+  }
+
+  Future<void> _testConnection() async {
+    final licenseProvider = context.read<LicenseProvider>();
+    if (!_hasEmailNotificationFeature(licenseProvider)) {
+      return;
+    }
+
+    final provider = context.read<NotificationProvider>();
+    final success = await provider.testConfiguration();
+    if (!mounted) return;
+
+    if (success) {
+      await MessageModal.showSuccess(
+        context,
+        message: 'Teste de conexao realizado com sucesso',
+      );
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message: provider.error ?? 'Erro ao testar conexao',
+    );
+  }
+
+  Future<void> _refresh() async {
+    await context.read<NotificationProvider>().loadConfigs();
+  }
+
+  Future<bool> _confirmDialog({
+    required String title,
+    required String message,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => ContentDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          const CancelButton(),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   @override
   Widget build(BuildContext context) {
     return ScaffoldPage(
-      header: const PageHeader(
-        title: Text('Configurações de Notificações por E-mail'),
+      header: PageHeader(
+        title: const Text('Configuracoes de Notificacoes por E-mail'),
+        commandBar: Consumer2<NotificationProvider, LicenseProvider>(
+          builder: (context, provider, licenseProvider, _) {
+            return _NotificationsCommandBar(
+              hasEmailNotification: _hasEmailNotificationFeature(
+                licenseProvider,
+              ),
+              selectedConfig: provider.selectedConfig,
+              onRefresh: _refresh,
+              onCreateConfig: _openConfigModal,
+              onEditConfig: (config) => _openConfigModal(initial: config),
+              onDeleteConfig: _deleteConfig,
+            );
+          },
+        ),
       ),
       content: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -149,235 +242,192 @@ class _NotificationsPageState extends State<NotificationsPage> {
           children: [
             Consumer<LicenseProvider>(
               builder: (context, licenseProvider, child) {
-                final hasEmailNotification =
-                    licenseProvider.hasValidLicense &&
-                    licenseProvider.currentLicense!.hasFeature(
-                      LicenseFeatures.emailNotification,
-                    );
-
-                if (!hasEmailNotification) {
-                  return AppCard(
-                    child: InfoBar(
-                      severity: InfoBarSeverity.warning,
-                      title: const Text('Recurso Requer Licença'),
-                      content: const Text(
-                        'As notificações por e-mail são um recurso premium. '
-                        'É necessária uma licença válida com permissão para este recurso.',
-                      ),
-                      action: Button(
-                        child: const Text('Ver Licenciamento'),
-                        onPressed: () {
-                          context.go(RouteNames.settings);
-                        },
-                      ),
-                    ),
-                  );
-                }
-
-                return const SizedBox.shrink();
+                return _LicenseRequirementInfoCard(
+                  hasEmailNotification: _hasEmailNotificationFeature(
+                    licenseProvider,
+                  ),
+                );
               },
             ),
             const SizedBox(height: 16),
             Consumer2<NotificationProvider, LicenseProvider>(
               builder: (context, provider, licenseProvider, child) {
-                final hasEmailNotification =
-                    licenseProvider.hasValidLicense &&
-                    licenseProvider.currentLicense!.hasFeature(
-                      LicenseFeatures.emailNotification,
-                    );
-
-                return AppCard(
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppTextField(
-                          controller: _smtpServerController,
-                          label: 'Servidor SMTP',
-                          hint: 'smtp.exemplo.com',
-                          enabled: hasEmailNotification,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Servidor SMTP é obrigatório';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        NumericField(
-                          controller: _smtpPortController,
-                          label: 'Porta',
-                          hint: '587',
-                          prefixIcon: FluentIcons.number_field,
-                          minValue: 1,
-                          maxValue: 65535,
-                          enabled: hasEmailNotification,
-                        ),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          controller: _emailController,
-                          label: 'E-mail',
-                          keyboardType: TextInputType.emailAddress,
-                          hint: 'seu-email@exemplo.com',
-                          enabled: hasEmailNotification,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'E-mail é obrigatório';
-                            }
-                            if (!value.contains('@')) {
-                              return 'E-mail inválido';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        PasswordField(
-                          controller: _passwordController,
-                          hint: 'Senha do e-mail',
-                          enabled: hasEmailNotification,
-                        ),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          controller: _recipientEmailController,
-                          label: 'E-mail de Destino',
-                          keyboardType: TextInputType.emailAddress,
-                          hint: 'destino@exemplo.com',
-                          enabled: hasEmailNotification,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'E-mail de destino é obrigatório';
-                            }
-                            if (!value.contains('@')) {
-                              return 'E-mail inválido';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 24),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Quando enviar notificações',
-                          style: FluentTheme.of(context).typography.subtitle
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 16),
-                        InfoLabel(
-                          label: 'Notificar em caso de sucesso',
-                          child: ToggleSwitch(
-                            checked: _notifyOnSuccess,
-                            onChanged: hasEmailNotification
-                                ? (value) {
-                                    setState(() {
-                                      _notifyOnSuccess = value;
-                                    });
-                                  }
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        InfoLabel(
-                          label: 'Notificar em caso de erro',
-                          child: ToggleSwitch(
-                            checked: _notifyOnError,
-                            onChanged: hasEmailNotification
-                                ? (value) {
-                                    setState(() {
-                                      _notifyOnError = value;
-                                    });
-                                  }
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Detalhamento',
-                          style: FluentTheme.of(context).typography.subtitle
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 16),
-                        InfoLabel(
-                          label: 'Incluir detalhamento/logs no e-mail',
-                          child: ToggleSwitch(
-                            checked: _attachLog,
-                            onChanged: hasEmailNotification
-                                ? (value) {
-                                    setState(() {
-                                      _attachLog = value;
-                                    });
-                                  }
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Consumer<NotificationProvider>(
-                              builder: (_, provider, child) {
-                                return ActionButton(
-                                  label: provider.isTesting
-                                      ? 'Testando...'
-                                      : 'Testar Conexão',
-                                  icon: FluentIcons.network_tower,
-                                  isLoading: provider.isTesting,
-                                  onPressed:
-                                      (provider.isTesting ||
-                                          !hasEmailNotification)
-                                      ? null
-                                      : () async {
-                                          final success = await provider
-                                              .testConfiguration();
-
-                                          if (!mounted) return;
-
-                                          if (success) {
-                                            if (mounted) {
-                                              MessageModal.showSuccess(
-                                                this.context,
-                                                message:
-                                                    'Teste de conexão realizado com sucesso!',
-                                              );
-                                            }
-                                          } else {
-                                            if (mounted) {
-                                              MessageModal.showError(
-                                                this.context,
-                                                message:
-                                                    provider.error ??
-                                                    'Erro ao testar conexão',
-                                              );
-                                            }
-                                          }
-                                        },
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 16),
-                            Consumer<NotificationProvider>(
-                              builder: (context, provider, child) {
-                                return SaveButton(
-                                  onPressed: hasEmailNotification
-                                      ? _saveConfig
-                                      : null,
-                                  isLoading: provider.isLoading,
-                                  isEditing: true,
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                return _NotificationsContentSection(
+                  provider: provider,
+                  hasEmailNotification: _hasEmailNotificationFeature(
+                    licenseProvider,
                   ),
+                  onRefresh: _refresh,
+                  onCreateConfig: _openConfigModal,
+                  onEditConfig: (config) => _openConfigModal(initial: config),
+                  onDeleteConfig: _deleteConfig,
+                  onTestConnection: _testConnection,
+                  onAddTarget: _openTargetModal,
+                  onEditTarget: (target) => _openTargetModal(initial: target),
+                  onDeleteTarget: _deleteTarget,
                 );
               },
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _NotificationsCommandBar extends StatelessWidget {
+  const _NotificationsCommandBar({
+    required this.hasEmailNotification,
+    required this.selectedConfig,
+    required this.onRefresh,
+    required this.onCreateConfig,
+    required this.onEditConfig,
+    required this.onDeleteConfig,
+  });
+
+  final bool hasEmailNotification;
+  final EmailConfig? selectedConfig;
+  final VoidCallback onRefresh;
+  final VoidCallback onCreateConfig;
+  final ValueChanged<EmailConfig> onEditConfig;
+  final ValueChanged<EmailConfig> onDeleteConfig;
+
+  @override
+  Widget build(BuildContext context) {
+    return CommandBar(
+      mainAxisAlignment: MainAxisAlignment.end,
+      primaryItems: [
+        CommandBarButton(
+          icon: const Icon(FluentIcons.refresh),
+          onPressed: onRefresh,
+        ),
+        CommandBarButton(
+          icon: const Icon(FluentIcons.add),
+          label: const Text('Nova configuracao'),
+          onPressed: hasEmailNotification ? onCreateConfig : null,
+        ),
+        CommandBarButton(
+          icon: const Icon(FluentIcons.edit),
+          label: const Text('Editar'),
+          onPressed: hasEmailNotification && selectedConfig != null
+              ? () => onEditConfig(selectedConfig!)
+              : null,
+        ),
+        CommandBarButton(
+          icon: const Icon(FluentIcons.delete),
+          label: const Text('Excluir'),
+          onPressed: hasEmailNotification && selectedConfig != null
+              ? () => onDeleteConfig(selectedConfig!)
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _LicenseRequirementInfoCard extends StatelessWidget {
+  const _LicenseRequirementInfoCard({
+    required this.hasEmailNotification,
+  });
+
+  final bool hasEmailNotification;
+
+  @override
+  Widget build(BuildContext context) {
+    if (hasEmailNotification) {
+      return const SizedBox.shrink();
+    }
+
+    return AppCard(
+      child: InfoBar(
+        severity: InfoBarSeverity.warning,
+        title: const Text('Recurso requer licenca'),
+        content: const Text(
+          'As notificacoes por e-mail sao um recurso premium. '
+          'E necessaria uma licenca valida com permissao para este recurso.',
+        ),
+        action: Button(
+          child: const Text('Ver licenciamento'),
+          onPressed: () {
+            context.go(RouteNames.settings);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationsContentSection extends StatelessWidget {
+  const _NotificationsContentSection({
+    required this.provider,
+    required this.hasEmailNotification,
+    required this.onRefresh,
+    required this.onCreateConfig,
+    required this.onEditConfig,
+    required this.onDeleteConfig,
+    required this.onTestConnection,
+    required this.onAddTarget,
+    required this.onEditTarget,
+    required this.onDeleteTarget,
+  });
+
+  final NotificationProvider provider;
+  final bool hasEmailNotification;
+  final VoidCallback onRefresh;
+  final VoidCallback onCreateConfig;
+  final ValueChanged<EmailConfig> onEditConfig;
+  final ValueChanged<EmailConfig> onDeleteConfig;
+  final Future<void> Function() onTestConnection;
+  final Future<void> Function() onAddTarget;
+  final ValueChanged<EmailNotificationTarget> onEditTarget;
+  final ValueChanged<EmailNotificationTarget> onDeleteTarget;
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.error != null && provider.configs.isEmpty) {
+      return AppCard(
+        child: InfoBar(
+          severity: InfoBarSeverity.error,
+          title: const Text('Erro ao carregar configuracao'),
+          content: Text(provider.error!),
+          action: Button(
+            onPressed: onRefresh,
+            child: const Text('Tentar novamente'),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        EmailConfigGrid(
+          configs: provider.configs,
+          selectedConfigId: provider.selectedConfigId,
+          canManage: hasEmailNotification,
+          isLoading: provider.isLoading,
+          isTesting: provider.isTesting,
+          onCreate: onCreateConfig,
+          onEdit: onEditConfig,
+          onDelete: onDeleteConfig,
+          onSelect: (config) => provider.selectConfig(config.id),
+          onTest: onTestConnection,
+          onToggleEnabled: (config, enabled) {
+            provider.toggleConfigEnabled(config.id, enabled);
+          },
+        ),
+        const SizedBox(height: 16),
+        EmailTargetGrid(
+          targets: provider.targets,
+          canManage: hasEmailNotification,
+          hasSelectedConfig: provider.selectedConfig != null,
+          onAdd: onAddTarget,
+          onEdit: onEditTarget,
+          onDelete: onDeleteTarget,
+          onToggleEnabled: (target, enabled) {
+            provider.toggleTargetEnabled(target.id, enabled);
+          },
+        ),
+      ],
     );
   }
 }

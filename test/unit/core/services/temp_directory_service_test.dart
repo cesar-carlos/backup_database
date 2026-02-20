@@ -11,6 +11,7 @@ void main() {
   late Directory testTempDir;
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
     tempService = TempDirectoryService();
     testTempDir = await Directory.systemTemp.createTemp(
       'temp_dir_service_test_',
@@ -29,7 +30,7 @@ void main() {
     test('getDownloadsDirectory cria pasta se não existir', () async {
       final downloadsDir = await tempService.getDownloadsDirectory();
 
-      expect(downloadsDir.exists(), isTrue);
+      expect(await downloadsDir.exists(), isTrue);
       expect(downloadsDir.path.contains('BackupDatabase'), isTrue);
       expect(downloadsDir.path.contains('Downloads'), isTrue);
     });
@@ -61,7 +62,7 @@ void main() {
     });
 
     test('setCustomTempPath retorna false para path inválido', () async {
-      const invalidPath = r'C:\NonExistent\Path\That\Cannot\Be\Created';
+      const invalidPath = r'C:\Invalid<>Path\That\Cannot\Be\Created';
       final result = await tempService.setCustomTempPath(invalidPath);
 
       expect(result, isFalse);

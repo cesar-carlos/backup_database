@@ -22,6 +22,7 @@ part 'database.g.dart';
     BackupHistoryTable,
     BackupLogsTable,
     EmailConfigsTable,
+    EmailNotificationTargetsTable,
     LicensesTable,
     ServerCredentialsTable,
     ConnectionLogsTable,
@@ -38,6 +39,7 @@ part 'database.g.dart';
     BackupHistoryDao,
     BackupLogDao,
     EmailConfigDao,
+    EmailNotificationTargetDao,
     LicenseDao,
     ServerCredentialDao,
     ConnectionLogDao,
@@ -52,8 +54,10 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.inMemory()
     : super(LazyDatabase(() async => NativeDatabase.memory()));
 
+  AppDatabase.forTesting(super.executor);
+
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration {
@@ -701,6 +705,40 @@ class AppDatabase extends _$AppDatabase {
             );
           }
         }
+
+        if (from < 19) {
+          try {
+            await _ensureEmailNotificationTargetsSchema();
+            await _backfillEmailNotificationTargetsFromLegacy();
+            LoggerService.info(
+              'Migracao v19: schema de notificacoes multi-destinatario '
+              'criado e dados legados migrados.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migracao v19 de notificacoes multi-destinatario',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 20) {
+          try {
+            await _cleanupLegacyEmailNotificationFields();
+            LoggerService.info(
+              'Migracao v20: limpeza de campos legados de notificacao '
+              'concluida.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migracao v20 de limpeza de campos legados de '
+              'notificacao',
+              e,
+              stackTrace,
+            );
+          }
+        }
       },
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -712,6 +750,7 @@ class AppDatabase extends _$AppDatabase {
         await _migrateSybaseColumnsToSnakeCase();
 
         await _ensureEmailConfigsColumnsExist();
+        await _ensureEmailNotificationTargetsSchema();
       },
     );
   }
@@ -865,6 +904,7 @@ class AppDatabase extends _$AppDatabase {
 
       final expectedColumns = {
         'id',
+        'config_name',
         'sender_name',
         'from_email',
         'from_name',
@@ -989,6 +1029,155 @@ class AppDatabase extends _$AppDatabase {
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
         'Erro ao verificar/adicionar colunas em email_configs',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _ensureEmailNotificationTargetsSchema() async {
+    try {
+      final columns = await customSelect(
+        'PRAGMA table_info(email_configs_table)',
+      ).get();
+      final hasConfigNameColumn = columns.any(
+        (row) => row.data['name'] == 'config_name',
+      );
+
+      if (!hasConfigNameColumn) {
+        await customStatement(
+          '''ALTER TABLE email_configs_table ADD COLUMN config_name TEXT NOT NULL DEFAULT 'Configuracao SMTP' ''',
+        );
+        LoggerService.info(
+          'Coluna config_name adicionada em email_configs_table.',
+        );
+      }
+
+      await customStatement('''
+        CREATE TABLE IF NOT EXISTS email_notification_targets_table (
+          id TEXT PRIMARY KEY NOT NULL,
+          email_config_id TEXT NOT NULL,
+          recipient_email TEXT NOT NULL,
+          notify_on_success INTEGER NOT NULL DEFAULT 1,
+          notify_on_error INTEGER NOT NULL DEFAULT 1,
+          notify_on_warning INTEGER NOT NULL DEFAULT 1,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          UNIQUE(email_config_id, recipient_email),
+          FOREIGN KEY(email_config_id) REFERENCES email_configs_table(id)
+            ON DELETE CASCADE
+        )
+      ''');
+
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_email_notification_targets_config_id
+        ON email_notification_targets_table(email_config_id)
+      ''');
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao garantir schema de email_notification_targets',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _backfillEmailNotificationTargetsFromLegacy() async {
+    try {
+      final rows = await customSelect('''
+        SELECT 
+          id,
+          recipients,
+          notify_on_success,
+          notify_on_error,
+          notify_on_warning
+        FROM email_configs_table
+      ''').get();
+
+      for (final row in rows) {
+        final configId = row.read<String>('id');
+        final recipientsRaw = row.read<String>('recipients');
+        final notifyOnSuccess = row.read<int>('notify_on_success');
+        final notifyOnError = row.read<int>('notify_on_error');
+        final notifyOnWarning = row.read<int>('notify_on_warning');
+
+        List<String> recipients;
+        try {
+          recipients = (jsonDecode(recipientsRaw) as List<dynamic>)
+              .whereType<String>()
+              .map((r) => r.trim())
+              .where((r) => r.isNotEmpty)
+              .toSet()
+              .toList();
+        } on Object catch (e) {
+          LoggerService.warning(
+            'Falha ao parsear recipients da configuracao $configId: $e',
+          );
+          recipients = const [];
+        }
+
+        for (final recipient in recipients) {
+          final targetId = '$configId:$recipient';
+          final now = DateTime.now().millisecondsSinceEpoch;
+          await customStatement(
+            '''
+            INSERT OR IGNORE INTO email_notification_targets_table (
+              id,
+              email_config_id,
+              recipient_email,
+              notify_on_success,
+              notify_on_error,
+              notify_on_warning,
+              enabled,
+              created_at,
+              updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+            ''',
+            [
+              targetId,
+              configId,
+              recipient,
+              notifyOnSuccess,
+              notifyOnError,
+              notifyOnWarning,
+              now,
+              now,
+            ],
+          );
+        }
+      }
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro no backfill de email_notification_targets_table',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _cleanupLegacyEmailNotificationFields() async {
+    try {
+      await customStatement(
+        '''
+        UPDATE email_configs_table
+        SET
+          recipients = '[]',
+          notify_on_success = 1,
+          notify_on_error = 1,
+          notify_on_warning = 1,
+          updated_at = ?
+        WHERE
+          recipients != '[]'
+          OR notify_on_success != 1
+          OR notify_on_error != 1
+          OR notify_on_warning != 1
+        ''',
+        [DateTime.now().millisecondsSinceEpoch],
+      );
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao limpar campos legados de notificacao',
         e,
         stackTrace,
       );

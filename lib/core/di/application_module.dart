@@ -19,8 +19,11 @@ Future<void> setupApplicationModule(GetIt getIt) async {
   getIt.registerLazySingleton<INotificationService>(
     () => NotificationService(
       emailConfigRepository: getIt<IEmailConfigRepository>(),
+      emailNotificationTargetRepository:
+          getIt<IEmailNotificationTargetRepository>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
-      emailService: getIt<EmailService>(),
+      emailService: getIt<IEmailService>(),
+      licenseValidationService: getIt<ILicenseValidationService>(),
     ),
   );
 

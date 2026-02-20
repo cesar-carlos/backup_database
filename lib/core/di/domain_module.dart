@@ -58,6 +58,9 @@ Future<void> setupDomainModule(GetIt getIt) async {
   getIt.registerLazySingleton<IEmailConfigRepository>(
     () => EmailConfigRepository(getIt<AppDatabase>()),
   );
+  getIt.registerLazySingleton<IEmailNotificationTargetRepository>(
+    () => EmailNotificationTargetRepository(getIt<AppDatabase>()),
+  );
   getIt.registerLazySingleton<ILicenseRepository>(
     () => LicenseRepository(getIt<AppDatabase>()),
   );
@@ -144,6 +147,33 @@ Future<void> setupDomainModule(GetIt getIt) async {
   );
   getIt.registerLazySingleton<ConfigureEmail>(
     () => ConfigureEmail(getIt<IEmailConfigRepository>()),
+  );
+  getIt.registerLazySingleton<ListEmailConfigurations>(
+    () => ListEmailConfigurations(getIt<IEmailConfigRepository>()),
+  );
+  getIt.registerLazySingleton<DeleteEmailConfiguration>(
+    () => DeleteEmailConfiguration(getIt<IEmailConfigRepository>()),
+  );
+  getIt.registerLazySingleton<ListEmailNotificationTargets>(
+    () => ListEmailNotificationTargets(
+      getIt<IEmailNotificationTargetRepository>(),
+    ),
+  );
+  getIt.registerLazySingleton<ConfigureEmailNotificationTarget>(
+    () => ConfigureEmailNotificationTarget(
+      getIt<IEmailNotificationTargetRepository>(),
+    ),
+  );
+  getIt.registerLazySingleton<DeleteEmailNotificationTarget>(
+    () => DeleteEmailNotificationTarget(
+      getIt<IEmailNotificationTargetRepository>(),
+    ),
+  );
+  getIt.registerLazySingleton<GetEmailNotificationProfiles>(
+    () => GetEmailNotificationProfiles(
+      emailConfigRepository: getIt<IEmailConfigRepository>(),
+      targetRepository: getIt<IEmailNotificationTargetRepository>(),
+    ),
   );
   getIt.registerLazySingleton<TestEmailConfiguration>(
     () => TestEmailConfiguration(getIt<INotificationService>()),

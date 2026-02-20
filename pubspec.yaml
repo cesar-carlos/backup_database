@@ -66,6 +66,7 @@ dev_dependencies:
   pubspec_dependency_sorter: ^1.0.5
   very_good_analysis: ^10.0.0
   coverage: ^1.15.0
+  sqlite3: ^2.9.3
 
 flutter:
   uses-material-design: true

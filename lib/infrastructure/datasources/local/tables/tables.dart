@@ -3,6 +3,7 @@ export 'backup_history_table.dart';
 export 'backup_logs_table.dart';
 export 'connection_logs_table.dart';
 export 'email_configs_table.dart';
+export 'email_notification_targets_table.dart';
 export 'file_transfers_table.dart';
 export 'licenses_table.dart';
 export 'postgres_configs_table.dart';

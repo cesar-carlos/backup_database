@@ -61,7 +61,9 @@ class DestinationsPage extends StatelessWidget {
                             const SizedBox(height: 16),
                             Text(
                               provider.error!,
-                              style: FluentTheme.of(context).typography.bodyLarge,
+                              style: FluentTheme.of(
+                                context,
+                              ).typography.bodyLarge,
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 16),
@@ -86,19 +88,13 @@ class DestinationsPage extends StatelessWidget {
                     );
                   }
 
-                  return ListView.separated(
-                    itemCount: provider.destinations.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final destination = provider.destinations[index];
-                      return DestinationListItem(
-                        destination: destination,
-                        onEdit: () => _showDestinationDialog(context, destination),
-                        onDelete: () => _confirmDelete(context, destination.id),
-                        onToggleEnabled: (enabled) =>
-                            provider.toggleEnabled(destination.id, enabled),
-                      );
-                    },
+                  return DestinationGrid(
+                    destinations: provider.destinations,
+                    onEdit: (destination) =>
+                        _showDestinationDialog(context, destination),
+                    onDelete: (id) => _confirmDelete(context, id),
+                    onToggleEnabled: (destination, enabled) =>
+                        provider.toggleEnabled(destination.id, enabled),
                   );
                 },
               ),
@@ -142,7 +138,8 @@ class DestinationsPage extends StatelessWidget {
 
   Future<void> _confirmDelete(BuildContext context, String id) async {
     final destinationProvider = context.read<DestinationProvider>();
-    final destinationName = destinationProvider.getDestinationById(id)?.name ?? 'Destino';
+    final destinationName =
+        destinationProvider.getDestinationById(id)?.name ?? 'Destino';
 
     final linkedSchedules = await context
         .read<SchedulerProvider>()

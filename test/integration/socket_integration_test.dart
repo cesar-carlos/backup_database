@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:backup_database/core/di/service_locator.dart' as di;
+import 'package:backup_database/core/logging/socket_logger_service.dart';
 import 'package:backup_database/core/security/password_hasher.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -37,6 +41,14 @@ void main() {
   late TcpSocketServer server;
   late TcpSocketClient client;
   late int testPort;
+
+  setUpAll(() {
+    if (!di.getIt.isRegistered<SocketLoggerService>()) {
+      di.getIt.registerSingleton<SocketLoggerService>(
+        SocketLoggerService(logsDirectory: Directory.systemTemp.path),
+      );
+    }
+  });
 
   setUp(() async {
     server = TcpSocketServer();
@@ -140,7 +152,7 @@ void main() {
         final passwordHash = PasswordHasher.hash(password, serverId);
         await db.serverCredentialDao.insertCredential(
           ServerCredentialsTableCompanion.insert(
-            id: Uuid().v4(), // ignore: prefer_const_constructors - runtime id and timestamp
+            id: const Uuid().v4(),
             serverId: serverId,
             passwordHash: passwordHash,
             name: 'Test Server',
@@ -186,7 +198,7 @@ void main() {
       final passwordHash = PasswordHasher.hash(password, serverId);
       await db.serverCredentialDao.insertCredential(
         ServerCredentialsTableCompanion.insert(
-          id: Uuid().v4(), // ignore: prefer_const_constructors - runtime id and timestamp
+          id: const Uuid().v4(),
           serverId: serverId,
           passwordHash: passwordHash,
           name: 'Test',
@@ -231,7 +243,7 @@ void main() {
       final passwordHash = PasswordHasher.hash(password, serverId);
       await db.serverCredentialDao.insertCredential(
         ServerCredentialsTableCompanion.insert(
-          id: Uuid().v4(), // ignore: prefer_const_constructors - runtime id and timestamp
+          id: const Uuid().v4(),
           serverId: serverId,
           passwordHash: passwordHash,
           name: 'Heartbeat Test',

@@ -4,6 +4,7 @@ class EmailConfig {
   EmailConfig({
     required this.recipients,
     String? id,
+    this.configName = 'Configuracao SMTP',
     this.senderName = 'Sistema de Backup',
     this.fromEmail = 'backup@example.com',
     this.fromName = 'Sistema de Backup',
@@ -23,6 +24,7 @@ class EmailConfig {
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
   final String id;
+  final String configName;
   final String senderName;
   final String fromEmail;
   final String fromName;
@@ -42,6 +44,7 @@ class EmailConfig {
 
   EmailConfig copyWith({
     String? id,
+    String? configName,
     String? senderName,
     String? fromEmail,
     String? fromName,
@@ -61,6 +64,7 @@ class EmailConfig {
   }) {
     return EmailConfig(
       id: id ?? this.id,
+      configName: configName ?? this.configName,
       senderName: senderName ?? this.senderName,
       fromEmail: fromEmail ?? this.fromEmail,
       fromName: fromName ?? this.fromName,

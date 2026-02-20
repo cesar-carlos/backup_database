@@ -24,6 +24,10 @@ class BackupProgressDialog extends StatelessWidget {
         final progress = provider.currentProgress;
 
         if (progress == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!context.mounted) return;
+            Navigator.of(context).maybePop();
+          });
           return const SizedBox.shrink();
         }
 

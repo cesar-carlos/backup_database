@@ -9,6 +9,8 @@ export 'connection/connected_client.dart';
 export 'connection_log.dart';
 export 'disk_space_info.dart';
 export 'email_config.dart';
+export 'email_notification_profile.dart';
+export 'email_notification_target.dart';
 export 'remote_file_entry.dart';
 export 'schedule.dart';
 export 'server_connection.dart';

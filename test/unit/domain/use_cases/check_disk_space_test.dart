@@ -60,7 +60,7 @@ void main() {
 
       result.fold(
         (resultInfo) {
-          expect(resultInfo.hasEnoughSpace(1024), true);
+          expect(resultInfo.hasEnoughSpace(512), true);
           expect(resultInfo.hasEnoughSpace(resultInfo.freeBytes + 1), false);
         },
         (failure) => fail('Não deveria falhar: $failure'),

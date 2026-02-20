@@ -4,11 +4,13 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
+import 'package:backup_database/domain/services/i_email_service.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-class EmailService {
+class EmailService implements IEmailService {
+  @override
   Future<rd.Result<bool>> sendEmail({
     required EmailConfig config,
     required String subject,
@@ -54,6 +56,7 @@ class EmailService {
     }
   }
 
+  @override
   Future<rd.Result<bool>> sendBackupSuccessNotification({
     required EmailConfig config,
     required BackupHistory history,
@@ -74,6 +77,7 @@ class EmailService {
     );
   }
 
+  @override
   Future<rd.Result<bool>> sendBackupErrorNotification({
     required EmailConfig config,
     required BackupHistory history,
@@ -94,6 +98,7 @@ class EmailService {
     );
   }
 
+  @override
   Future<rd.Result<bool>> sendBackupWarningNotification({
     required EmailConfig config,
     required String databaseName,

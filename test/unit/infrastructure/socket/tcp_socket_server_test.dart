@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:backup_database/core/di/service_locator.dart' as di;
+import 'package:backup_database/core/logging/socket_logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/client/tcp_socket_client.dart';
@@ -15,6 +19,14 @@ int getPort() {
 
 void main() {
   late SocketServerService server;
+
+  setUpAll(() {
+    if (!di.getIt.isRegistered<SocketLoggerService>()) {
+      di.getIt.registerSingleton<SocketLoggerService>(
+        SocketLoggerService(logsDirectory: Directory.systemTemp.path),
+      );
+    }
+  });
 
   setUp(() {
     server = TcpSocketServer();

@@ -249,21 +249,14 @@ class _CredentialsTab extends StatelessWidget {
                     ),
                   );
                 }
-                return ListView.separated(
-                  itemCount: provider.credentials.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final credential = provider.credentials[index];
-                    return ServerCredentialListItem(
-                      credential: credential,
-                      onEdit: () => onEditCredential(credential),
-                      onDelete: () => onConfirmDelete(context, credential.id),
-                      onToggleActive: (active) {
-                        provider.updateCredential(
-                          credential,
-                          isActive: active,
-                        );
-                      },
+                return ServerCredentialGrid(
+                  credentials: provider.credentials,
+                  onEdit: onEditCredential,
+                  onDelete: (id) => onConfirmDelete(context, id),
+                  onToggleActive: (credential, active) {
+                    provider.updateCredential(
+                      credential,
+                      isActive: active,
                     );
                   },
                 );

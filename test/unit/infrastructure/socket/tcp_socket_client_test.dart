@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:backup_database/core/di/service_locator.dart' as di;
+import 'package:backup_database/core/logging/socket_logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
@@ -17,6 +19,14 @@ int getPort() {
 
 void main() {
   late TcpSocketClient client;
+
+  setUpAll(() {
+    if (!di.getIt.isRegistered<SocketLoggerService>()) {
+      di.getIt.registerSingleton<SocketLoggerService>(
+        SocketLoggerService(logsDirectory: Directory.systemTemp.path),
+      );
+    }
+  });
 
   setUp(() {
     client = TcpSocketClient();
@@ -112,65 +122,71 @@ void main() {
       await sub.cancel();
     });
 
-    test('reconnect after server restarts when enableAutoReconnect true', () async {
-      final server = TcpSocketServer();
-      final port = getPort();
-      await server.start(port: port);
-      addTearDown(() async {
+    test(
+      'reconnect after server restarts when enableAutoReconnect true',
+      () async {
+        final server = TcpSocketServer();
+        final port = getPort();
+        await server.start(port: port);
+        addTearDown(() async {
+          await server.stop();
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        });
+
+        final reconnectingClient = TcpSocketClient();
+        addTearDown(reconnectingClient.disconnect);
+        await reconnectingClient.connect(
+          host: '127.0.0.1',
+          port: port,
+          enableAutoReconnect: true,
+        );
+        expect(reconnectingClient.isConnected, isTrue);
+
         await server.stop();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      });
+        await Future<void>.delayed(const Duration(milliseconds: 400));
 
-      final reconnectingClient = TcpSocketClient();
-      addTearDown(reconnectingClient.disconnect);
-      await reconnectingClient.connect(
-        host: '127.0.0.1',
-        port: port,
-        enableAutoReconnect: true,
-      );
-      expect(reconnectingClient.isConnected, isTrue);
+        final server2 = TcpSocketServer();
+        await server2.start(port: port);
+        addTearDown(() async {
+          await server2.stop();
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        });
 
-      await server.stop();
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-
-      final server2 = TcpSocketServer();
-      await server2.start(port: port);
-      addTearDown(() async {
-        await server2.stop();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      });
-
-      final deadline = DateTime.now().add(const Duration(seconds: 25));
-      while (DateTime.now().isBefore(deadline)) {
-        if (reconnectingClient.status == ConnectionStatus.connected) {
-          break;
+        final deadline = DateTime.now().add(const Duration(seconds: 25));
+        while (DateTime.now().isBefore(deadline)) {
+          if (reconnectingClient.status == ConnectionStatus.connected) {
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 200));
         }
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      }
-      expect(reconnectingClient.isConnected, isTrue);
-      expect(reconnectingClient.status, ConnectionStatus.connected);
-    });
+        expect(reconnectingClient.isConnected, isTrue);
+        expect(reconnectingClient.status, ConnectionStatus.connected);
+      },
+    );
 
-    test('when server stops and does not restart, client becomes disconnected', () async {
-      final server = TcpSocketServer();
-      final port = getPort();
-      await server.start(port: port);
-      final reconnectingClient = TcpSocketClient();
-      addTearDown(reconnectingClient.disconnect);
-      await reconnectingClient.connect(
-        host: '127.0.0.1',
-        port: port,
-        enableAutoReconnect: true,
-      );
-      expect(reconnectingClient.isConnected, isTrue);
-      await server.stop();
-      await Future<void>.delayed(const Duration(milliseconds: 800));
-      expect(reconnectingClient.isConnected, isFalse);
-      expect(
-        reconnectingClient.status == ConnectionStatus.disconnected ||
-            reconnectingClient.status == ConnectionStatus.error,
-        isTrue,
-      );
-    });
+    test(
+      'when server stops and does not restart, client becomes disconnected',
+      () async {
+        final server = TcpSocketServer();
+        final port = getPort();
+        await server.start(port: port);
+        final reconnectingClient = TcpSocketClient();
+        addTearDown(reconnectingClient.disconnect);
+        await reconnectingClient.connect(
+          host: '127.0.0.1',
+          port: port,
+          enableAutoReconnect: true,
+        );
+        expect(reconnectingClient.isConnected, isTrue);
+        await server.stop();
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        expect(reconnectingClient.isConnected, isFalse);
+        expect(
+          reconnectingClient.status == ConnectionStatus.disconnected ||
+              reconnectingClient.status == ConnectionStatus.error,
+          isTrue,
+        );
+      },
+    );
   });
 }

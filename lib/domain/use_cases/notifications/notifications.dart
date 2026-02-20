@@ -1,3 +1,9 @@
 export 'configure_email.dart';
+export 'configure_email_notification_target.dart';
+export 'delete_email_configuration.dart';
+export 'delete_email_notification_target.dart';
+export 'get_email_notification_profiles.dart';
+export 'list_email_configurations.dart';
+export 'list_email_notification_targets.dart';
 export 'send_email_notification.dart';
 export 'test_email_configuration.dart';

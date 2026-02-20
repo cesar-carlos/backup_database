@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 
 class EmailConfigsTable extends Table {
   TextColumn get id => text()();
+  TextColumn get configName =>
+      text().withDefault(const Constant('Configuracao SMTP'))();
   TextColumn get senderName =>
       text().withDefault(const Constant('Sistema de Backup'))();
   TextColumn get fromEmail =>

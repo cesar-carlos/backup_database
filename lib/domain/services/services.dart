@@ -9,6 +9,7 @@ export 'i_compression_service.dart';
 export 'i_destination_orchestrator.dart';
 export 'i_device_key_service.dart';
 export 'i_dropbox_destination_service.dart';
+export 'i_email_service.dart';
 export 'i_file_transfer_lock_service.dart';
 export 'i_file_validator.dart';
 export 'i_ftp_service.dart';

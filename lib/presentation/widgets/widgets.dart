@@ -3,6 +3,7 @@ export 'common/common.dart';
 export 'dashboard/dashboard.dart';
 export 'destinations/destinations.dart';
 export 'navigation/navigation.dart';
+export 'notifications/notifications.dart';
 export 'schedules/schedules.dart';
 export 'server/server.dart';
 export 'sql_server/sql_server.dart';

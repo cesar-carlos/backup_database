@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
 import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
@@ -83,6 +85,22 @@ void main() {
         fileSize: 1,
         status: BackupStatus.running,
         startedAt: DateTime(2026),
+      ),
+    );
+    registerFallbackValue(
+      BackupDestination(
+        id: 'fallback-destination',
+        name: 'Destino',
+        type: DestinationType.local,
+        config: '{"path":"C:/tmp"}',
+      ),
+    );
+    registerFallbackValue(
+      BackupLog(
+        backupHistoryId: 'fallback-history',
+        level: LogLevel.info,
+        category: LogCategory.execution,
+        message: 'fallback',
       ),
     );
   });
@@ -228,5 +246,139 @@ void main() {
         contains('Nao ha backup em execucao'),
       );
     });
+  });
+
+  group('SchedulerService notifications', () {
+    test(
+      'executeNow notifies completion on successful scheduled backup',
+      () async {
+        final schedule = buildSchedule();
+        final backupPath = '${tempDir.path}${Platform.pathSeparator}ok.bak';
+        final backupFile = File(backupPath)..writeAsStringSync('backup');
+        final history = BackupHistory(
+          id: 'history-ok',
+          scheduleId: schedule.id,
+          databaseName: schedule.name,
+          databaseType: schedule.databaseType.name,
+          backupPath: backupFile.path,
+          fileSize: 1024,
+          status: BackupStatus.success,
+          startedAt: DateTime.now().subtract(const Duration(seconds: 5)),
+        );
+
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+          ),
+        ).thenAnswer((_) async => rd.Success(history));
+        when(
+          () => notificationService.notifyBackupComplete(any()),
+        ).thenAnswer((_) async => const rd.Success(true));
+        when(
+          () => cleanupService.cleanOldBackups(
+            destinations: any(named: 'destinations'),
+            backupHistoryId: any(named: 'backupHistoryId'),
+          ),
+        ).thenAnswer((_) async => const rd.Success(rd.unit));
+        when(
+          () => scheduleCalculator.getNextRunTime(any()),
+        ).thenReturn(DateTime.now().add(const Duration(days: 1)));
+        when(
+          () => scheduleRepository.update(any()),
+        ).thenAnswer((_) async => rd.Success(schedule));
+
+        final result = await service.executeNow(scheduleId);
+
+        expect(result.isSuccess(), isTrue);
+        verify(() => notificationService.notifyBackupComplete(history)).called(1);
+      },
+    );
+
+    test(
+      'executeNow notifies with error history when upload fails for destination',
+      () async {
+        final destination = BackupDestination(
+          id: 'dest-1',
+          name: 'Local',
+          type: DestinationType.local,
+          config: '{"path":"D:/dest"}',
+        );
+        final schedule = buildSchedule().copyWith(
+          destinationIds: [destination.id],
+        );
+        final backupPath = '${tempDir.path}${Platform.pathSeparator}error.bak';
+        final backupFile = File(backupPath)..writeAsStringSync('backup');
+        final history = BackupHistory(
+          id: 'history-error',
+          scheduleId: schedule.id,
+          databaseName: schedule.name,
+          databaseType: schedule.databaseType.name,
+          backupPath: backupFile.path,
+          fileSize: 2048,
+          status: BackupStatus.success,
+          startedAt: DateTime.now().subtract(const Duration(seconds: 10)),
+        );
+
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () => destinationRepository.getById(destination.id),
+        ).thenAnswer((_) async => rd.Success(destination));
+        when(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+          ),
+        ).thenAnswer((_) async => rd.Success(history));
+        when(
+          () => destinationOrchestrator.uploadToDestination(
+            sourceFilePath: any(named: 'sourceFilePath'),
+            destination: any(named: 'destination'),
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Failure(
+            ValidationFailure(message: 'falha upload'),
+          ),
+        );
+        when(
+          () => backupHistoryRepository.update(any()),
+        ).thenAnswer((_) async => rd.Success(history));
+        when(
+          () => backupLogRepository.create(any()),
+        ).thenAnswer(
+          (_) async => rd.Success(
+            BackupLog(
+              backupHistoryId: history.id,
+              level: LogLevel.error,
+              category: LogCategory.execution,
+              message: 'Falha ao enviar backup',
+            ),
+          ),
+        );
+        when(
+          () => notificationService.notifyBackupComplete(any()),
+        ).thenAnswer((_) async => const rd.Success(true));
+        when(() => progressNotifier.failBackup(any())).thenReturn(null);
+
+        final result = await service.executeNow(scheduleId);
+
+        expect(result.isError(), isTrue);
+        final capturedHistory =
+            verify(
+                  () => notificationService.notifyBackupComplete(captureAny()),
+                ).captured.single
+                as BackupHistory;
+        expect(capturedHistory.status, BackupStatus.error);
+        expect(
+          capturedHistory.errorMessage,
+          contains('falhou ao enviar para destinos'),
+        );
+      },
+    );
   });
 }

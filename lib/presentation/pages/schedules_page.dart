@@ -1,7 +1,6 @@
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/presentation/widgets/backup/backup_progress_dialog.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedules.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -102,23 +101,16 @@ class _SchedulesPageState extends State<SchedulesPage> {
                     );
                   }
 
-                  return ListView.separated(
-                    itemCount: provider.schedules.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final schedule = provider.schedules[index];
-                      return ScheduleListItem(
-                        schedule: schedule,
-                        onEdit: () => _showScheduleDialog(context, schedule),
-                        onDuplicate: () =>
-                            _duplicateSchedule(context, schedule),
-                        onDelete: () => _confirmDelete(context, schedule.id),
-                        onRunNow: () => _runNow(context, schedule.id),
-                        onToggleEnabled: (enabled) =>
-                            provider.toggleSchedule(schedule.id, enabled),
-                      );
-                    },
+                  return ScheduleGrid(
+                    schedules: provider.schedules,
+                    onEdit: (schedule) =>
+                        _showScheduleDialog(context, schedule),
+                    onDuplicate: (schedule) =>
+                        _duplicateSchedule(context, schedule),
+                    onDelete: (id) => _confirmDelete(context, id),
+                    onRunNow: (id) => _runNow(context, id),
+                    onToggleEnabled: (schedule, enabled) =>
+                        provider.toggleSchedule(schedule.id, enabled),
                   );
                 },
               ),
@@ -211,28 +203,14 @@ class _SchedulesPageState extends State<SchedulesPage> {
 
     if ((confirmed ?? false) && context.mounted) {
       final schedulerProvider = context.read<SchedulerProvider>();
-
-      BackupProgressDialog.show(context);
-
       final success = await schedulerProvider.executeNow(id);
 
-      await Future.delayed(const Duration(seconds: 1));
-
-      if (context.mounted) {
-        Navigator.of(context).pop();
-
-        if (success) {
-          MessageModal.showSuccess(
-            context,
-            message: 'Backup executado com sucesso!',
-          );
-        } else {
-          MessageModal.showError(
-            context,
-            title: 'Erro ao Executar Backup',
-            message: schedulerProvider.error ?? 'Erro ao executar backup',
-          );
-        }
+      if (!success && context.mounted) {
+        MessageModal.showError(
+          context,
+          title: 'Erro ao Executar Backup',
+          message: schedulerProvider.error ?? 'Erro ao executar backup',
+        );
       }
     }
   }

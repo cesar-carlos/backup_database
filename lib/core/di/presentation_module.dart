@@ -37,6 +37,8 @@ Future<void> setupPresentationModule(GetIt getIt) async {
   getIt.registerFactory<NotificationProvider>(
     () => NotificationProvider(
       emailConfigRepository: getIt<IEmailConfigRepository>(),
+      emailNotificationTargetRepository:
+          getIt<IEmailNotificationTargetRepository>(),
       testEmailConfiguration: getIt<TestEmailConfiguration>(),
     ),
   );

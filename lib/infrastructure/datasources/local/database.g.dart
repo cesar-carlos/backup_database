@@ -5063,6 +5063,18 @@ class $EmailConfigsTableTable extends EmailConfigsTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _configNameMeta = const VerificationMeta(
+    'configName',
+  );
+  @override
+  late final GeneratedColumn<String> configName = GeneratedColumn<String>(
+    'config_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Configuracao SMTP'),
+  );
   static const VerificationMeta _senderNameMeta = const VerificationMeta(
     'senderName',
   );
@@ -5272,6 +5284,7 @@ class $EmailConfigsTableTable extends EmailConfigsTable
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    configName,
     senderName,
     fromEmail,
     fromName,
@@ -5305,6 +5318,12 @@ class $EmailConfigsTableTable extends EmailConfigsTable
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('config_name')) {
+      context.handle(
+        _configNameMeta,
+        configName.isAcceptableOrUnknown(data['config_name']!, _configNameMeta),
+      );
     }
     if (data.containsKey('sender_name')) {
       context.handle(
@@ -5428,6 +5447,10 @@ class $EmailConfigsTableTable extends EmailConfigsTable
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      configName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}config_name'],
+      )!,
       senderName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}sender_name'],
@@ -5504,6 +5527,7 @@ class $EmailConfigsTableTable extends EmailConfigsTable
 class EmailConfigsTableData extends DataClass
     implements Insertable<EmailConfigsTableData> {
   final String id;
+  final String configName;
   final String senderName;
   final String fromEmail;
   final String fromName;
@@ -5522,6 +5546,7 @@ class EmailConfigsTableData extends DataClass
   final DateTime updatedAt;
   const EmailConfigsTableData({
     required this.id,
+    required this.configName,
     required this.senderName,
     required this.fromEmail,
     required this.fromName,
@@ -5543,6 +5568,7 @@ class EmailConfigsTableData extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['config_name'] = Variable<String>(configName);
     map['sender_name'] = Variable<String>(senderName);
     map['from_email'] = Variable<String>(fromEmail);
     map['from_name'] = Variable<String>(fromName);
@@ -5565,6 +5591,7 @@ class EmailConfigsTableData extends DataClass
   EmailConfigsTableCompanion toCompanion(bool nullToAbsent) {
     return EmailConfigsTableCompanion(
       id: Value(id),
+      configName: Value(configName),
       senderName: Value(senderName),
       fromEmail: Value(fromEmail),
       fromName: Value(fromName),
@@ -5591,6 +5618,7 @@ class EmailConfigsTableData extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return EmailConfigsTableData(
       id: serializer.fromJson<String>(json['id']),
+      configName: serializer.fromJson<String>(json['configName']),
       senderName: serializer.fromJson<String>(json['senderName']),
       fromEmail: serializer.fromJson<String>(json['fromEmail']),
       fromName: serializer.fromJson<String>(json['fromName']),
@@ -5614,6 +5642,7 @@ class EmailConfigsTableData extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'configName': serializer.toJson<String>(configName),
       'senderName': serializer.toJson<String>(senderName),
       'fromEmail': serializer.toJson<String>(fromEmail),
       'fromName': serializer.toJson<String>(fromName),
@@ -5635,6 +5664,7 @@ class EmailConfigsTableData extends DataClass
 
   EmailConfigsTableData copyWith({
     String? id,
+    String? configName,
     String? senderName,
     String? fromEmail,
     String? fromName,
@@ -5653,6 +5683,7 @@ class EmailConfigsTableData extends DataClass
     DateTime? updatedAt,
   }) => EmailConfigsTableData(
     id: id ?? this.id,
+    configName: configName ?? this.configName,
     senderName: senderName ?? this.senderName,
     fromEmail: fromEmail ?? this.fromEmail,
     fromName: fromName ?? this.fromName,
@@ -5673,6 +5704,9 @@ class EmailConfigsTableData extends DataClass
   EmailConfigsTableData copyWithCompanion(EmailConfigsTableCompanion data) {
     return EmailConfigsTableData(
       id: data.id.present ? data.id.value : this.id,
+      configName: data.configName.present
+          ? data.configName.value
+          : this.configName,
       senderName: data.senderName.present
           ? data.senderName.value
           : this.senderName,
@@ -5708,6 +5742,7 @@ class EmailConfigsTableData extends DataClass
   String toString() {
     return (StringBuffer('EmailConfigsTableData(')
           ..write('id: $id, ')
+          ..write('configName: $configName, ')
           ..write('senderName: $senderName, ')
           ..write('fromEmail: $fromEmail, ')
           ..write('fromName: $fromName, ')
@@ -5731,6 +5766,7 @@ class EmailConfigsTableData extends DataClass
   @override
   int get hashCode => Object.hash(
     id,
+    configName,
     senderName,
     fromEmail,
     fromName,
@@ -5753,6 +5789,7 @@ class EmailConfigsTableData extends DataClass
       identical(this, other) ||
       (other is EmailConfigsTableData &&
           other.id == this.id &&
+          other.configName == this.configName &&
           other.senderName == this.senderName &&
           other.fromEmail == this.fromEmail &&
           other.fromName == this.fromName &&
@@ -5774,6 +5811,7 @@ class EmailConfigsTableData extends DataClass
 class EmailConfigsTableCompanion
     extends UpdateCompanion<EmailConfigsTableData> {
   final Value<String> id;
+  final Value<String> configName;
   final Value<String> senderName;
   final Value<String> fromEmail;
   final Value<String> fromName;
@@ -5793,6 +5831,7 @@ class EmailConfigsTableCompanion
   final Value<int> rowid;
   const EmailConfigsTableCompanion({
     this.id = const Value.absent(),
+    this.configName = const Value.absent(),
     this.senderName = const Value.absent(),
     this.fromEmail = const Value.absent(),
     this.fromName = const Value.absent(),
@@ -5813,6 +5852,7 @@ class EmailConfigsTableCompanion
   });
   EmailConfigsTableCompanion.insert({
     required String id,
+    this.configName = const Value.absent(),
     this.senderName = const Value.absent(),
     this.fromEmail = const Value.absent(),
     this.fromName = const Value.absent(),
@@ -5835,6 +5875,7 @@ class EmailConfigsTableCompanion
        updatedAt = Value(updatedAt);
   static Insertable<EmailConfigsTableData> custom({
     Expression<String>? id,
+    Expression<String>? configName,
     Expression<String>? senderName,
     Expression<String>? fromEmail,
     Expression<String>? fromName,
@@ -5855,6 +5896,7 @@ class EmailConfigsTableCompanion
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (configName != null) 'config_name': configName,
       if (senderName != null) 'sender_name': senderName,
       if (fromEmail != null) 'from_email': fromEmail,
       if (fromName != null) 'from_name': fromName,
@@ -5877,6 +5919,7 @@ class EmailConfigsTableCompanion
 
   EmailConfigsTableCompanion copyWith({
     Value<String>? id,
+    Value<String>? configName,
     Value<String>? senderName,
     Value<String>? fromEmail,
     Value<String>? fromName,
@@ -5897,6 +5940,7 @@ class EmailConfigsTableCompanion
   }) {
     return EmailConfigsTableCompanion(
       id: id ?? this.id,
+      configName: configName ?? this.configName,
       senderName: senderName ?? this.senderName,
       fromEmail: fromEmail ?? this.fromEmail,
       fromName: fromName ?? this.fromName,
@@ -5922,6 +5966,9 @@ class EmailConfigsTableCompanion
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (configName.present) {
+      map['config_name'] = Variable<String>(configName.value);
     }
     if (senderName.present) {
       map['sender_name'] = Variable<String>(senderName.value);
@@ -5981,6 +6028,7 @@ class EmailConfigsTableCompanion
   String toString() {
     return (StringBuffer('EmailConfigsTableCompanion(')
           ..write('id: $id, ')
+          ..write('configName: $configName, ')
           ..write('senderName: $senderName, ')
           ..write('fromEmail: $fromEmail, ')
           ..write('fromName: $fromName, ')
@@ -5994,6 +6042,613 @@ class EmailConfigsTableCompanion
           ..write('notifyOnError: $notifyOnError, ')
           ..write('notifyOnWarning: $notifyOnWarning, ')
           ..write('attachLog: $attachLog, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $EmailNotificationTargetsTableTable extends EmailNotificationTargetsTable
+    with
+        TableInfo<
+          $EmailNotificationTargetsTableTable,
+          EmailNotificationTargetsTableData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EmailNotificationTargetsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _emailConfigIdMeta = const VerificationMeta(
+    'emailConfigId',
+  );
+  @override
+  late final GeneratedColumn<String> emailConfigId = GeneratedColumn<String>(
+    'email_config_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES email_configs_table (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _recipientEmailMeta = const VerificationMeta(
+    'recipientEmail',
+  );
+  @override
+  late final GeneratedColumn<String> recipientEmail = GeneratedColumn<String>(
+    'recipient_email',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _notifyOnSuccessMeta = const VerificationMeta(
+    'notifyOnSuccess',
+  );
+  @override
+  late final GeneratedColumn<bool> notifyOnSuccess = GeneratedColumn<bool>(
+    'notify_on_success',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("notify_on_success" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _notifyOnErrorMeta = const VerificationMeta(
+    'notifyOnError',
+  );
+  @override
+  late final GeneratedColumn<bool> notifyOnError = GeneratedColumn<bool>(
+    'notify_on_error',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("notify_on_error" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _notifyOnWarningMeta = const VerificationMeta(
+    'notifyOnWarning',
+  );
+  @override
+  late final GeneratedColumn<bool> notifyOnWarning = GeneratedColumn<bool>(
+    'notify_on_warning',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("notify_on_warning" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    emailConfigId,
+    recipientEmail,
+    notifyOnSuccess,
+    notifyOnError,
+    notifyOnWarning,
+    enabled,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'email_notification_targets_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<EmailNotificationTargetsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('email_config_id')) {
+      context.handle(
+        _emailConfigIdMeta,
+        emailConfigId.isAcceptableOrUnknown(
+          data['email_config_id']!,
+          _emailConfigIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_emailConfigIdMeta);
+    }
+    if (data.containsKey('recipient_email')) {
+      context.handle(
+        _recipientEmailMeta,
+        recipientEmail.isAcceptableOrUnknown(
+          data['recipient_email']!,
+          _recipientEmailMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_recipientEmailMeta);
+    }
+    if (data.containsKey('notify_on_success')) {
+      context.handle(
+        _notifyOnSuccessMeta,
+        notifyOnSuccess.isAcceptableOrUnknown(
+          data['notify_on_success']!,
+          _notifyOnSuccessMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notify_on_error')) {
+      context.handle(
+        _notifyOnErrorMeta,
+        notifyOnError.isAcceptableOrUnknown(
+          data['notify_on_error']!,
+          _notifyOnErrorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notify_on_warning')) {
+      context.handle(
+        _notifyOnWarningMeta,
+        notifyOnWarning.isAcceptableOrUnknown(
+          data['notify_on_warning']!,
+          _notifyOnWarningMeta,
+        ),
+      );
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {emailConfigId, recipientEmail},
+  ];
+  @override
+  EmailNotificationTargetsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EmailNotificationTargetsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      emailConfigId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}email_config_id'],
+      )!,
+      recipientEmail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}recipient_email'],
+      )!,
+      notifyOnSuccess: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}notify_on_success'],
+      )!,
+      notifyOnError: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}notify_on_error'],
+      )!,
+      notifyOnWarning: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}notify_on_warning'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $EmailNotificationTargetsTableTable createAlias(String alias) {
+    return $EmailNotificationTargetsTableTable(attachedDatabase, alias);
+  }
+}
+
+class EmailNotificationTargetsTableData extends DataClass
+    implements Insertable<EmailNotificationTargetsTableData> {
+  final String id;
+  final String emailConfigId;
+  final String recipientEmail;
+  final bool notifyOnSuccess;
+  final bool notifyOnError;
+  final bool notifyOnWarning;
+  final bool enabled;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const EmailNotificationTargetsTableData({
+    required this.id,
+    required this.emailConfigId,
+    required this.recipientEmail,
+    required this.notifyOnSuccess,
+    required this.notifyOnError,
+    required this.notifyOnWarning,
+    required this.enabled,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['email_config_id'] = Variable<String>(emailConfigId);
+    map['recipient_email'] = Variable<String>(recipientEmail);
+    map['notify_on_success'] = Variable<bool>(notifyOnSuccess);
+    map['notify_on_error'] = Variable<bool>(notifyOnError);
+    map['notify_on_warning'] = Variable<bool>(notifyOnWarning);
+    map['enabled'] = Variable<bool>(enabled);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  EmailNotificationTargetsTableCompanion toCompanion(bool nullToAbsent) {
+    return EmailNotificationTargetsTableCompanion(
+      id: Value(id),
+      emailConfigId: Value(emailConfigId),
+      recipientEmail: Value(recipientEmail),
+      notifyOnSuccess: Value(notifyOnSuccess),
+      notifyOnError: Value(notifyOnError),
+      notifyOnWarning: Value(notifyOnWarning),
+      enabled: Value(enabled),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory EmailNotificationTargetsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EmailNotificationTargetsTableData(
+      id: serializer.fromJson<String>(json['id']),
+      emailConfigId: serializer.fromJson<String>(json['emailConfigId']),
+      recipientEmail: serializer.fromJson<String>(json['recipientEmail']),
+      notifyOnSuccess: serializer.fromJson<bool>(json['notifyOnSuccess']),
+      notifyOnError: serializer.fromJson<bool>(json['notifyOnError']),
+      notifyOnWarning: serializer.fromJson<bool>(json['notifyOnWarning']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'emailConfigId': serializer.toJson<String>(emailConfigId),
+      'recipientEmail': serializer.toJson<String>(recipientEmail),
+      'notifyOnSuccess': serializer.toJson<bool>(notifyOnSuccess),
+      'notifyOnError': serializer.toJson<bool>(notifyOnError),
+      'notifyOnWarning': serializer.toJson<bool>(notifyOnWarning),
+      'enabled': serializer.toJson<bool>(enabled),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  EmailNotificationTargetsTableData copyWith({
+    String? id,
+    String? emailConfigId,
+    String? recipientEmail,
+    bool? notifyOnSuccess,
+    bool? notifyOnError,
+    bool? notifyOnWarning,
+    bool? enabled,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => EmailNotificationTargetsTableData(
+    id: id ?? this.id,
+    emailConfigId: emailConfigId ?? this.emailConfigId,
+    recipientEmail: recipientEmail ?? this.recipientEmail,
+    notifyOnSuccess: notifyOnSuccess ?? this.notifyOnSuccess,
+    notifyOnError: notifyOnError ?? this.notifyOnError,
+    notifyOnWarning: notifyOnWarning ?? this.notifyOnWarning,
+    enabled: enabled ?? this.enabled,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  EmailNotificationTargetsTableData copyWithCompanion(
+    EmailNotificationTargetsTableCompanion data,
+  ) {
+    return EmailNotificationTargetsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      emailConfigId: data.emailConfigId.present
+          ? data.emailConfigId.value
+          : this.emailConfigId,
+      recipientEmail: data.recipientEmail.present
+          ? data.recipientEmail.value
+          : this.recipientEmail,
+      notifyOnSuccess: data.notifyOnSuccess.present
+          ? data.notifyOnSuccess.value
+          : this.notifyOnSuccess,
+      notifyOnError: data.notifyOnError.present
+          ? data.notifyOnError.value
+          : this.notifyOnError,
+      notifyOnWarning: data.notifyOnWarning.present
+          ? data.notifyOnWarning.value
+          : this.notifyOnWarning,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EmailNotificationTargetsTableData(')
+          ..write('id: $id, ')
+          ..write('emailConfigId: $emailConfigId, ')
+          ..write('recipientEmail: $recipientEmail, ')
+          ..write('notifyOnSuccess: $notifyOnSuccess, ')
+          ..write('notifyOnError: $notifyOnError, ')
+          ..write('notifyOnWarning: $notifyOnWarning, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    emailConfigId,
+    recipientEmail,
+    notifyOnSuccess,
+    notifyOnError,
+    notifyOnWarning,
+    enabled,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EmailNotificationTargetsTableData &&
+          other.id == this.id &&
+          other.emailConfigId == this.emailConfigId &&
+          other.recipientEmail == this.recipientEmail &&
+          other.notifyOnSuccess == this.notifyOnSuccess &&
+          other.notifyOnError == this.notifyOnError &&
+          other.notifyOnWarning == this.notifyOnWarning &&
+          other.enabled == this.enabled &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class EmailNotificationTargetsTableCompanion
+    extends UpdateCompanion<EmailNotificationTargetsTableData> {
+  final Value<String> id;
+  final Value<String> emailConfigId;
+  final Value<String> recipientEmail;
+  final Value<bool> notifyOnSuccess;
+  final Value<bool> notifyOnError;
+  final Value<bool> notifyOnWarning;
+  final Value<bool> enabled;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const EmailNotificationTargetsTableCompanion({
+    this.id = const Value.absent(),
+    this.emailConfigId = const Value.absent(),
+    this.recipientEmail = const Value.absent(),
+    this.notifyOnSuccess = const Value.absent(),
+    this.notifyOnError = const Value.absent(),
+    this.notifyOnWarning = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  EmailNotificationTargetsTableCompanion.insert({
+    required String id,
+    required String emailConfigId,
+    required String recipientEmail,
+    this.notifyOnSuccess = const Value.absent(),
+    this.notifyOnError = const Value.absent(),
+    this.notifyOnWarning = const Value.absent(),
+    this.enabled = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       emailConfigId = Value(emailConfigId),
+       recipientEmail = Value(recipientEmail),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<EmailNotificationTargetsTableData> custom({
+    Expression<String>? id,
+    Expression<String>? emailConfigId,
+    Expression<String>? recipientEmail,
+    Expression<bool>? notifyOnSuccess,
+    Expression<bool>? notifyOnError,
+    Expression<bool>? notifyOnWarning,
+    Expression<bool>? enabled,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (emailConfigId != null) 'email_config_id': emailConfigId,
+      if (recipientEmail != null) 'recipient_email': recipientEmail,
+      if (notifyOnSuccess != null) 'notify_on_success': notifyOnSuccess,
+      if (notifyOnError != null) 'notify_on_error': notifyOnError,
+      if (notifyOnWarning != null) 'notify_on_warning': notifyOnWarning,
+      if (enabled != null) 'enabled': enabled,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  EmailNotificationTargetsTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? emailConfigId,
+    Value<String>? recipientEmail,
+    Value<bool>? notifyOnSuccess,
+    Value<bool>? notifyOnError,
+    Value<bool>? notifyOnWarning,
+    Value<bool>? enabled,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return EmailNotificationTargetsTableCompanion(
+      id: id ?? this.id,
+      emailConfigId: emailConfigId ?? this.emailConfigId,
+      recipientEmail: recipientEmail ?? this.recipientEmail,
+      notifyOnSuccess: notifyOnSuccess ?? this.notifyOnSuccess,
+      notifyOnError: notifyOnError ?? this.notifyOnError,
+      notifyOnWarning: notifyOnWarning ?? this.notifyOnWarning,
+      enabled: enabled ?? this.enabled,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (emailConfigId.present) {
+      map['email_config_id'] = Variable<String>(emailConfigId.value);
+    }
+    if (recipientEmail.present) {
+      map['recipient_email'] = Variable<String>(recipientEmail.value);
+    }
+    if (notifyOnSuccess.present) {
+      map['notify_on_success'] = Variable<bool>(notifyOnSuccess.value);
+    }
+    if (notifyOnError.present) {
+      map['notify_on_error'] = Variable<bool>(notifyOnError.value);
+    }
+    if (notifyOnWarning.present) {
+      map['notify_on_warning'] = Variable<bool>(notifyOnWarning.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EmailNotificationTargetsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('emailConfigId: $emailConfigId, ')
+          ..write('recipientEmail: $recipientEmail, ')
+          ..write('notifyOnSuccess: $notifyOnSuccess, ')
+          ..write('notifyOnError: $notifyOnError, ')
+          ..write('notifyOnWarning: $notifyOnWarning, ')
           ..write('enabled: $enabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -8913,6 +9568,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $EmailConfigsTableTable emailConfigsTable =
       $EmailConfigsTableTable(this);
+  late final $EmailNotificationTargetsTableTable emailNotificationTargetsTable =
+      $EmailNotificationTargetsTableTable(this);
   late final $LicensesTableTable licensesTable = $LicensesTableTable(this);
   late final $ServerCredentialsTableTable serverCredentialsTable =
       $ServerCredentialsTableTable(this);
@@ -8944,6 +9601,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final EmailConfigDao emailConfigDao = EmailConfigDao(
     this as AppDatabase,
   );
+  late final EmailNotificationTargetDao emailNotificationTargetDao =
+      EmailNotificationTargetDao(this as AppDatabase);
   late final LicenseDao licenseDao = LicenseDao(this as AppDatabase);
   late final ServerCredentialDao serverCredentialDao = ServerCredentialDao(
     this as AppDatabase,
@@ -8971,6 +9630,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     backupHistoryTable,
     backupLogsTable,
     emailConfigsTable,
+    emailNotificationTargetsTable,
     licensesTable,
     serverCredentialsTable,
     connectionLogsTable,
@@ -8986,6 +9646,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       ),
       result: [
         TableUpdate('schedule_destinations_table', kind: UpdateKind.delete),
+      ],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'email_configs_table',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [
+        TableUpdate(
+          'email_notification_targets_table',
+          kind: UpdateKind.delete,
+        ),
       ],
     ),
   ]);
@@ -12010,6 +12682,7 @@ typedef $$BackupLogsTableTableProcessedTableManager =
 typedef $$EmailConfigsTableTableCreateCompanionBuilder =
     EmailConfigsTableCompanion Function({
       required String id,
+      Value<String> configName,
       Value<String> senderName,
       Value<String> fromEmail,
       Value<String> fromName,
@@ -12031,6 +12704,7 @@ typedef $$EmailConfigsTableTableCreateCompanionBuilder =
 typedef $$EmailConfigsTableTableUpdateCompanionBuilder =
     EmailConfigsTableCompanion Function({
       Value<String> id,
+      Value<String> configName,
       Value<String> senderName,
       Value<String> fromEmail,
       Value<String> fromName,
@@ -12050,6 +12724,48 @@ typedef $$EmailConfigsTableTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$EmailConfigsTableTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $EmailConfigsTableTable,
+          EmailConfigsTableData
+        > {
+  $$EmailConfigsTableTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $EmailNotificationTargetsTableTable,
+    List<EmailNotificationTargetsTableData>
+  >
+  _emailNotificationTargetsTableRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.emailNotificationTargetsTable,
+        aliasName: $_aliasNameGenerator(
+          db.emailConfigsTable.id,
+          db.emailNotificationTargetsTable.emailConfigId,
+        ),
+      );
+
+  $$EmailNotificationTargetsTableTableProcessedTableManager
+  get emailNotificationTargetsTableRefs {
+    final manager = $$EmailNotificationTargetsTableTableTableManager(
+      $_db,
+      $_db.emailNotificationTargetsTable,
+    ).filter((f) => f.emailConfigId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _emailNotificationTargetsTableRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$EmailConfigsTableTableFilterComposer
     extends Composer<_$AppDatabase, $EmailConfigsTableTable> {
   $$EmailConfigsTableTableFilterComposer({
@@ -12061,6 +12777,11 @@ class $$EmailConfigsTableTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get configName => $composableBuilder(
+    column: $table.configName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12143,6 +12864,35 @@ class $$EmailConfigsTableTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> emailNotificationTargetsTableRefs(
+    Expression<bool> Function(
+      $$EmailNotificationTargetsTableTableFilterComposer f,
+    )
+    f,
+  ) {
+    final $$EmailNotificationTargetsTableTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.emailNotificationTargetsTable,
+          getReferencedColumn: (t) => t.emailConfigId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$EmailNotificationTargetsTableTableFilterComposer(
+                $db: $db,
+                $table: $db.emailNotificationTargetsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$EmailConfigsTableTableOrderingComposer
@@ -12156,6 +12906,11 @@ class $$EmailConfigsTableTableOrderingComposer
   });
   ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configName => $composableBuilder(
+    column: $table.configName,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -12252,6 +13007,11 @@ class $$EmailConfigsTableTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get configName => $composableBuilder(
+    column: $table.configName,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get senderName => $composableBuilder(
     column: $table.senderName,
     builder: (column) => column,
@@ -12311,6 +13071,35 @@ class $$EmailConfigsTableTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> emailNotificationTargetsTableRefs<T extends Object>(
+    Expression<T> Function(
+      $$EmailNotificationTargetsTableTableAnnotationComposer a,
+    )
+    f,
+  ) {
+    final $$EmailNotificationTargetsTableTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.emailNotificationTargetsTable,
+          getReferencedColumn: (t) => t.emailConfigId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$EmailNotificationTargetsTableTableAnnotationComposer(
+                $db: $db,
+                $table: $db.emailNotificationTargetsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$EmailConfigsTableTableTableManager
@@ -12324,16 +13113,9 @@ class $$EmailConfigsTableTableTableManager
           $$EmailConfigsTableTableAnnotationComposer,
           $$EmailConfigsTableTableCreateCompanionBuilder,
           $$EmailConfigsTableTableUpdateCompanionBuilder,
-          (
-            EmailConfigsTableData,
-            BaseReferences<
-              _$AppDatabase,
-              $EmailConfigsTableTable,
-              EmailConfigsTableData
-            >,
-          ),
+          (EmailConfigsTableData, $$EmailConfigsTableTableReferences),
           EmailConfigsTableData,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool emailNotificationTargetsTableRefs})
         > {
   $$EmailConfigsTableTableTableManager(
     _$AppDatabase db,
@@ -12354,6 +13136,7 @@ class $$EmailConfigsTableTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> configName = const Value.absent(),
                 Value<String> senderName = const Value.absent(),
                 Value<String> fromEmail = const Value.absent(),
                 Value<String> fromName = const Value.absent(),
@@ -12373,6 +13156,7 @@ class $$EmailConfigsTableTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => EmailConfigsTableCompanion(
                 id: id,
+                configName: configName,
                 senderName: senderName,
                 fromEmail: fromEmail,
                 fromName: fromName,
@@ -12394,6 +13178,7 @@ class $$EmailConfigsTableTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String> configName = const Value.absent(),
                 Value<String> senderName = const Value.absent(),
                 Value<String> fromEmail = const Value.absent(),
                 Value<String> fromName = const Value.absent(),
@@ -12413,6 +13198,7 @@ class $$EmailConfigsTableTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => EmailConfigsTableCompanion.insert(
                 id: id,
+                configName: configName,
                 senderName: senderName,
                 fromEmail: fromEmail,
                 fromName: fromName,
@@ -12432,9 +13218,48 @@ class $$EmailConfigsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$EmailConfigsTableTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({emailNotificationTargetsTableRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (emailNotificationTargetsTableRefs)
+                  db.emailNotificationTargetsTable,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (emailNotificationTargetsTableRefs)
+                    await $_getPrefetchedData<
+                      EmailConfigsTableData,
+                      $EmailConfigsTableTable,
+                      EmailNotificationTargetsTableData
+                    >(
+                      currentTable: table,
+                      referencedTable: $$EmailConfigsTableTableReferences
+                          ._emailNotificationTargetsTableRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$EmailConfigsTableTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).emailNotificationTargetsTableRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where(
+                            (e) => e.emailConfigId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -12449,16 +13274,444 @@ typedef $$EmailConfigsTableTableProcessedTableManager =
       $$EmailConfigsTableTableAnnotationComposer,
       $$EmailConfigsTableTableCreateCompanionBuilder,
       $$EmailConfigsTableTableUpdateCompanionBuilder,
-      (
-        EmailConfigsTableData,
+      (EmailConfigsTableData, $$EmailConfigsTableTableReferences),
+      EmailConfigsTableData,
+      PrefetchHooks Function({bool emailNotificationTargetsTableRefs})
+    >;
+typedef $$EmailNotificationTargetsTableTableCreateCompanionBuilder =
+    EmailNotificationTargetsTableCompanion Function({
+      required String id,
+      required String emailConfigId,
+      required String recipientEmail,
+      Value<bool> notifyOnSuccess,
+      Value<bool> notifyOnError,
+      Value<bool> notifyOnWarning,
+      Value<bool> enabled,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$EmailNotificationTargetsTableTableUpdateCompanionBuilder =
+    EmailNotificationTargetsTableCompanion Function({
+      Value<String> id,
+      Value<String> emailConfigId,
+      Value<String> recipientEmail,
+      Value<bool> notifyOnSuccess,
+      Value<bool> notifyOnError,
+      Value<bool> notifyOnWarning,
+      Value<bool> enabled,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$EmailNotificationTargetsTableTableReferences
+    extends
         BaseReferences<
           _$AppDatabase,
-          $EmailConfigsTableTable,
-          EmailConfigsTableData
-        >,
+          $EmailNotificationTargetsTableTable,
+          EmailNotificationTargetsTableData
+        > {
+  $$EmailNotificationTargetsTableTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $EmailConfigsTableTable _emailConfigIdTable(_$AppDatabase db) =>
+      db.emailConfigsTable.createAlias(
+        $_aliasNameGenerator(
+          db.emailNotificationTargetsTable.emailConfigId,
+          db.emailConfigsTable.id,
+        ),
+      );
+
+  $$EmailConfigsTableTableProcessedTableManager get emailConfigId {
+    final $_column = $_itemColumn<String>('email_config_id')!;
+
+    final manager = $$EmailConfigsTableTableTableManager(
+      $_db,
+      $_db.emailConfigsTable,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_emailConfigIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$EmailNotificationTargetsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $EmailNotificationTargetsTableTable> {
+  $$EmailNotificationTargetsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recipientEmail => $composableBuilder(
+    column: $table.recipientEmail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get notifyOnSuccess => $composableBuilder(
+    column: $table.notifyOnSuccess,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get notifyOnError => $composableBuilder(
+    column: $table.notifyOnError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get notifyOnWarning => $composableBuilder(
+    column: $table.notifyOnWarning,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$EmailConfigsTableTableFilterComposer get emailConfigId {
+    final $$EmailConfigsTableTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.emailConfigId,
+      referencedTable: $db.emailConfigsTable,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EmailConfigsTableTableFilterComposer(
+            $db: $db,
+            $table: $db.emailConfigsTable,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$EmailNotificationTargetsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $EmailNotificationTargetsTableTable> {
+  $$EmailNotificationTargetsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get recipientEmail => $composableBuilder(
+    column: $table.recipientEmail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get notifyOnSuccess => $composableBuilder(
+    column: $table.notifyOnSuccess,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get notifyOnError => $composableBuilder(
+    column: $table.notifyOnError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get notifyOnWarning => $composableBuilder(
+    column: $table.notifyOnWarning,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$EmailConfigsTableTableOrderingComposer get emailConfigId {
+    final $$EmailConfigsTableTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.emailConfigId,
+      referencedTable: $db.emailConfigsTable,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EmailConfigsTableTableOrderingComposer(
+            $db: $db,
+            $table: $db.emailConfigsTable,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$EmailNotificationTargetsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $EmailNotificationTargetsTableTable> {
+  $$EmailNotificationTargetsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get recipientEmail => $composableBuilder(
+    column: $table.recipientEmail,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get notifyOnSuccess => $composableBuilder(
+    column: $table.notifyOnSuccess,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get notifyOnError => $composableBuilder(
+    column: $table.notifyOnError,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get notifyOnWarning => $composableBuilder(
+    column: $table.notifyOnWarning,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$EmailConfigsTableTableAnnotationComposer get emailConfigId {
+    final $$EmailConfigsTableTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.emailConfigId,
+          referencedTable: $db.emailConfigsTable,
+          getReferencedColumn: (t) => t.id,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$EmailConfigsTableTableAnnotationComposer(
+                $db: $db,
+                $table: $db.emailConfigsTable,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$EmailNotificationTargetsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EmailNotificationTargetsTableTable,
+          EmailNotificationTargetsTableData,
+          $$EmailNotificationTargetsTableTableFilterComposer,
+          $$EmailNotificationTargetsTableTableOrderingComposer,
+          $$EmailNotificationTargetsTableTableAnnotationComposer,
+          $$EmailNotificationTargetsTableTableCreateCompanionBuilder,
+          $$EmailNotificationTargetsTableTableUpdateCompanionBuilder,
+          (
+            EmailNotificationTargetsTableData,
+            $$EmailNotificationTargetsTableTableReferences,
+          ),
+          EmailNotificationTargetsTableData,
+          PrefetchHooks Function({bool emailConfigId})
+        > {
+  $$EmailNotificationTargetsTableTableTableManager(
+    _$AppDatabase db,
+    $EmailNotificationTargetsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$EmailNotificationTargetsTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$EmailNotificationTargetsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$EmailNotificationTargetsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> emailConfigId = const Value.absent(),
+                Value<String> recipientEmail = const Value.absent(),
+                Value<bool> notifyOnSuccess = const Value.absent(),
+                Value<bool> notifyOnError = const Value.absent(),
+                Value<bool> notifyOnWarning = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => EmailNotificationTargetsTableCompanion(
+                id: id,
+                emailConfigId: emailConfigId,
+                recipientEmail: recipientEmail,
+                notifyOnSuccess: notifyOnSuccess,
+                notifyOnError: notifyOnError,
+                notifyOnWarning: notifyOnWarning,
+                enabled: enabled,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String emailConfigId,
+                required String recipientEmail,
+                Value<bool> notifyOnSuccess = const Value.absent(),
+                Value<bool> notifyOnError = const Value.absent(),
+                Value<bool> notifyOnWarning = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => EmailNotificationTargetsTableCompanion.insert(
+                id: id,
+                emailConfigId: emailConfigId,
+                recipientEmail: recipientEmail,
+                notifyOnSuccess: notifyOnSuccess,
+                notifyOnError: notifyOnError,
+                notifyOnWarning: notifyOnWarning,
+                enabled: enabled,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$EmailNotificationTargetsTableTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({emailConfigId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (emailConfigId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.emailConfigId,
+                                referencedTable:
+                                    $$EmailNotificationTargetsTableTableReferences
+                                        ._emailConfigIdTable(db),
+                                referencedColumn:
+                                    $$EmailNotificationTargetsTableTableReferences
+                                        ._emailConfigIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$EmailNotificationTargetsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EmailNotificationTargetsTableTable,
+      EmailNotificationTargetsTableData,
+      $$EmailNotificationTargetsTableTableFilterComposer,
+      $$EmailNotificationTargetsTableTableOrderingComposer,
+      $$EmailNotificationTargetsTableTableAnnotationComposer,
+      $$EmailNotificationTargetsTableTableCreateCompanionBuilder,
+      $$EmailNotificationTargetsTableTableUpdateCompanionBuilder,
+      (
+        EmailNotificationTargetsTableData,
+        $$EmailNotificationTargetsTableTableReferences,
       ),
-      EmailConfigsTableData,
-      PrefetchHooks Function()
+      EmailNotificationTargetsTableData,
+      PrefetchHooks Function({bool emailConfigId})
     >;
 typedef $$LicensesTableTableCreateCompanionBuilder =
     LicensesTableCompanion Function({
@@ -13969,6 +15222,12 @@ class $AppDatabaseManager {
       $$BackupLogsTableTableTableManager(_db, _db.backupLogsTable);
   $$EmailConfigsTableTableTableManager get emailConfigsTable =>
       $$EmailConfigsTableTableTableManager(_db, _db.emailConfigsTable);
+  $$EmailNotificationTargetsTableTableTableManager
+  get emailNotificationTargetsTable =>
+      $$EmailNotificationTargetsTableTableTableManager(
+        _db,
+        _db.emailNotificationTargetsTable,
+      );
   $$LicensesTableTableTableManager get licensesTable =>
       $$LicensesTableTableTableManager(_db, _db.licensesTable);
   $$ServerCredentialsTableTableTableManager get serverCredentialsTable =>

@@ -83,6 +83,7 @@ class _ConnectionLogsContent extends StatelessWidget {
   const _ConnectionLogsContent({required this.provider});
 
   final ConnectionLogProvider provider;
+  static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm:ss');
 
   String _t(BuildContext context, String pt, String en) {
     final isPt =
@@ -99,6 +100,18 @@ class _ConnectionLogsContent extends StatelessWidget {
       case ConnectionLogFilter.failed:
         return _t(context, 'Falha', 'Failure');
     }
+  }
+
+  String _serverId(ConnectionLog log) {
+    final value = log.serverId?.trim();
+    if (value == null || value.isEmpty) return '-';
+    return value;
+  }
+
+  String _errorMessage(ConnectionLog log) {
+    final value = log.errorMessage?.trim();
+    if (value == null || value.isEmpty) return '-';
+    return value;
   }
 
   @override
@@ -148,81 +161,66 @@ class _ConnectionLogsContent extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Expanded(
-          child: ListView.separated(
-            itemCount: provider.logs.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) =>
-                _ConnectionLogRow(log: provider.logs[index]),
+          child: AppCard(
+            child: AppDataGrid<ConnectionLog>(
+              minWidth: 1100,
+              columns: [
+                AppDataGridColumn<ConnectionLog>(
+                  label: _t(context, 'Host do cliente', 'Client host'),
+                  width: const FlexColumnWidth(2),
+                  cellBuilder: (context, row) => Text(
+                    row.clientHost,
+                    style: FluentTheme.of(context).typography.bodyStrong,
+                  ),
+                ),
+                AppDataGridColumn<ConnectionLog>(
+                  label: 'Server ID',
+                  width: const FlexColumnWidth(1.4),
+                  cellBuilder: (context, row) => SelectableText(_serverId(row)),
+                ),
+                AppDataGridColumn<ConnectionLog>(
+                  label: _t(context, 'Data/Hora', 'Date/Time'),
+                  width: const FlexColumnWidth(1.5),
+                  cellBuilder: (context, row) => Text(
+                    _dateFormat.format(row.timestamp),
+                  ),
+                ),
+                AppDataGridColumn<ConnectionLog>(
+                  label: _t(context, 'Status', 'Status'),
+                  width: const FlexColumnWidth(1.1),
+                  cellAlignment: Alignment.center,
+                  headerAlignment: Alignment.center,
+                  cellBuilder: (context, row) =>
+                      _StatusChip(success: row.success),
+                ),
+                AppDataGridColumn<ConnectionLog>(
+                  label: _t(context, 'Mensagem de erro', 'Error message'),
+                  width: const FlexColumnWidth(3),
+                  cellBuilder: (context, row) {
+                    final message = _errorMessage(row);
+                    if (message == '-') {
+                      return const Text('-');
+                    }
+
+                    return Tooltip(
+                      message: message,
+                      child: Text(
+                        message,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: FluentTheme.of(
+                          context,
+                        ).typography.body?.copyWith(color: AppColors.error),
+                      ),
+                    );
+                  },
+                ),
+              ],
+              rows: provider.logs,
+            ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ConnectionLogRow extends StatelessWidget {
-  const _ConnectionLogRow({required this.log});
-
-  final ConnectionLog log;
-
-  static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm:ss');
-
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        log.clientHost,
-                        style: FluentTheme.of(context).typography.bodyStrong,
-                      ),
-                      if (log.serverId != null && log.serverId!.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '${_t(context, 'Server ID', 'Server ID')}: ${log.serverId}',
-                          style: FluentTheme.of(context).typography.caption,
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _dateFormat.format(log.timestamp),
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                  if (log.errorMessage != null &&
-                      log.errorMessage!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SelectableText(
-                      log.errorMessage!,
-                      style: FluentTheme.of(context).typography.body?.copyWith(
-                        color: AppColors.error,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            _StatusChip(success: log.success),
-          ],
-        ),
-      ),
     );
   }
 }
