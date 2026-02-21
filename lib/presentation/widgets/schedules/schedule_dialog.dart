@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/application/providers/providers.dart';
@@ -67,6 +67,21 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   bool get isEditing => widget.schedule != null;
 
+  BackupType _normalizeBackupTypeForDatabase(
+    DatabaseType databaseType,
+    BackupType backupType,
+  ) {
+    if (databaseType != DatabaseType.postgresql &&
+        backupType == BackupType.fullSingle) {
+      return BackupType.full;
+    }
+    if (databaseType == DatabaseType.sybase &&
+        backupType == BackupType.differential) {
+      return BackupType.full;
+    }
+    return backupType;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -78,14 +93,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _databaseType = widget.schedule!.databaseType;
       _selectedDatabaseConfigId = widget.schedule!.databaseConfigId;
       _scheduleType = widget.schedule!.scheduleType;
-      _backupType = widget.schedule!.backupType;
+      _backupType = _normalizeBackupTypeForDatabase(
+        _databaseType,
+        widget.schedule!.backupType,
+      );
       _truncateLog = widget.schedule!.truncateLog;
-      if (_databaseType != DatabaseType.postgresql &&
-          _backupType == BackupType.fullSingle) {
-        _backupType = BackupType.full;
-      }
-      // Sybase differential usa backup incremental de transaction log
-      // Mantém o tipo selecionado pois o serviço trata corretamente
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
       _compressionFormat = widget.schedule!.compressionFormat;
@@ -301,6 +313,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                       setState(() {
                         _selectedDatabaseConfigId = null;
                         _databaseType = value;
+                        _backupType = _normalizeBackupTypeForDatabase(
+                          _databaseType,
+                          _backupType,
+                        );
+                        _onBackupTypeChanged();
                       });
                       _formKey.currentState?.validate();
                     }
@@ -333,7 +350,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               if (_databaseType == DatabaseType.sybase) {
                 allTypes = [
                   BackupType.full,
-                  BackupType.differential,
                   BackupType.log,
                 ];
               } else if (_databaseType == DatabaseType.postgresql) {
@@ -741,9 +757,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                   children: [
                     Expanded(
                       child: _buildCheckboxWithInfo(
-                        label: hasVerifyIntegrity
-                            ? 'Verify After Backup'
-                            : 'Verify After Backup (Requer licença)',
+                                label: hasVerifyIntegrity
+                                    ? 'Verify After Backup'
+                                    : 'Verify After Backup (Requer licença)',
                         value: _verifyAfterBackup,
                         onChanged: hasVerifyIntegrity
                             ? (value) {
@@ -752,17 +768,17 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                 });
                               }
                             : null,
-                        infoText: hasVerifyIntegrity
-                            ? (_databaseType == DatabaseType.sqlServer
-                                  ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
-                                        'Garante que o backup pode ser restaurado sem restaurar os dados.'
-                                  : _databaseType == DatabaseType.postgresql
-                                  ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
-                                        'Garante que o backup está íntegro e pode ser restaurado.'
-                                  : 'Verifica a integridade do backup após criação usando dbverify. '
-                                        'Garante que o backup está íntegro e pode ser restaurado.')
-                            : 'Este recurso requer uma licença válida. '
-                                  'Acesse Configurações > Licenciamento para mais informações.',
+                                infoText: hasVerifyIntegrity
+                                    ? (_databaseType == DatabaseType.sqlServer
+                                          ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
+                                                'Garante que o backup pode ser restaurado sem restaurar os dados.'
+                                          : _databaseType == DatabaseType.postgresql
+                                          ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
+                                                'Garante que o backup está íntegro e pode ser restaurado.'
+                                          : 'Verifica a integridade do backup após criação usando dbvalid (preferencial) '
+                                                'e dbverify (fallback). Garante que o backup está íntegro e pode ser restaurado.')
+                                    : 'Este recurso requer uma licença válida. '
+                                          'Acesse Configurações > Licenciamento para mais informações.',
                       ),
                     ),
                     if (!hasVerifyIntegrity) ...[
@@ -1408,9 +1424,21 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         case BackupType.fullSingle:
           return 'Backup lógico completo usando pg_dump. Banco ONLINE. Inclui apenas a base de dados especificada na configuração. Formato .backup.';
         case BackupType.log:
-          return 'Backup de arquivos WAL (Write-Ahead Log) usando pg_basebackup com streaming. Requer streaming habilitado no PostgreSQL.';
+          return 'Captura de WAL para PITR usando pg_receivewal em modo one-shot (ate um LSN alvo). Pode usar replication slot dedicado quando habilitado por ambiente.';
         case BackupType.differential:
           return 'Backup incremental usando pg_basebackup. Requer backup FULL anterior com manifest. (PostgreSQL 17+)';
+      }
+    }
+    if (_databaseType == DatabaseType.sybase) {
+      switch (type) {
+        case BackupType.full:
+          return 'Backup completo do banco de dados via BACKUP DATABASE/dbbackup.';
+        case BackupType.log:
+          return 'Backup do log de transações. Pode ser executado frequentemente e requer backup Full anterior.';
+        case BackupType.differential:
+          return 'Sybase SQL Anywhere não suporta backup diferencial nativo; este tipo é convertido para Full.';
+        case BackupType.fullSingle:
+          return 'Sybase trata este tipo como backup Full.';
       }
     }
     switch (type) {
@@ -1628,6 +1656,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     final effectiveCompressionFormat = _compressBackup
         ? _compressionFormat
         : CompressionFormat.none;
+    final effectiveBackupType = _normalizeBackupTypeForDatabase(
+      _databaseType,
+      _backupType,
+    );
 
     final isValidFolder = await _validateBackupFolder();
     if (!isValidFolder) {
@@ -1677,7 +1709,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       scheduleConfig: scheduleConfigJson,
       destinationIds: _selectedDestinationIds,
       backupFolder: _backupFolderController.text.trim(),
-      backupType: _backupType,
+      backupType: effectiveBackupType,
       compressBackup: _compressBackup,
       compressionFormat: effectiveCompressionFormat,
       enabled: _isEnabled,

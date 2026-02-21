@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
@@ -52,6 +54,7 @@ class NotificationProvider extends ChangeNotifier {
   NotificationHistoryPeriod _historyPeriod =
       NotificationHistoryPeriod.last7Days;
   String? _historyConfigIdFilter;
+  Timer? _historyReloadTimer;
 
   List<EmailConfig> get configs => _configs;
   String? get selectedConfigId => _selectedConfigId;
@@ -137,7 +140,7 @@ class NotificationProvider extends ChangeNotifier {
       _testHistory = const [];
       _historyConfigIdFilter = null;
       _historyError = null;
-      _error = 'Erro ao carregar configuracao de e-mail: $e';
+      _error = 'Erro ao carregar configuração de e-mail: $e';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -197,7 +200,7 @@ class NotificationProvider extends ChangeNotifier {
     try {
       final recipient = await _resolvePrimaryRecipient(config);
       if (recipient == null) {
-        _error = 'Informe ao menos um e-mail destinatario na configuracao SMTP';
+        _error = 'Informe ao menos um e-mail destinatário na configuração SMTP';
         _isLoading = false;
         notifyListeners();
         return false;
@@ -279,7 +282,7 @@ class NotificationProvider extends ChangeNotifier {
         : _findConfigById(configId);
 
     if (config == null) {
-      _error = 'Nenhuma configuracao de e-mail definida';
+      _error = 'Nenhuma configuração de e-mail definida';
       notifyListeners();
       return false;
     }
@@ -306,7 +309,7 @@ class NotificationProvider extends ChangeNotifier {
       return false;
     } finally {
       _endTesting(config.id);
-      await _loadTestHistory();
+      _scheduleHistoryReload();
     }
   }
 
@@ -333,7 +336,7 @@ class NotificationProvider extends ChangeNotifier {
       return false;
     } finally {
       _endTesting(config.id);
-      await _loadTestHistory();
+      _scheduleHistoryReload();
     }
   }
 
@@ -574,6 +577,14 @@ class NotificationProvider extends ChangeNotifier {
 
   Future<void> refreshTestHistory() async {
     await _loadTestHistory();
+  }
+
+  void _scheduleHistoryReload() {
+    _historyReloadTimer?.cancel();
+    _historyReloadTimer = Timer(
+      const Duration(milliseconds: 300),
+      _loadTestHistory,
+    );
   }
 
   Future<void> setHistoryPeriod(NotificationHistoryPeriod period) async {

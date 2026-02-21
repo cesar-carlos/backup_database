@@ -32,14 +32,15 @@ class EmailService implements IEmailService {
        _smtpSendFn = smtpSendFn ?? send,
        _retryDelayFn = retryDelayFn ?? Future.delayed;
 
-  static const int _maxSendAttempts = 3;
-  static const Duration _smtpSendTimeout = Duration(seconds: 20);
-  static const int _baseRetryDelayMs = 400;
-  static const int _maxRetryDelayMs = 3000;
   static final Random _random = Random();
   final SmtpSendFn _smtpSendFn;
   final RetryDelayFn _retryDelayFn;
   final IOAuthSmtpService _oauthSmtpService;
+
+  static int get _maxSendAttempts => AppConstants.smtpMaxSendAttempts;
+  static Duration get _smtpSendTimeout => AppConstants.smtpSendTimeout;
+  static int get _baseRetryDelayMs => AppConstants.smtpBaseRetryDelayMs;
+  static int get _maxRetryDelayMs => AppConstants.smtpMaxRetryDelayMs;
 
   @override
   Future<rd.Result<bool>> sendEmail({
@@ -72,6 +73,7 @@ class EmailService implements IEmailService {
 
     LoggerService.info(
       '[EmailService] Iniciando envio SMTP | '
+      'configId=${config.id} '
       'server=${config.smtpServer}:${config.smtpPort} '
       'ssl=${config.useSsl} '
       'allowInsecure=${AppConstants.allowInsecureSmtp} '
@@ -121,6 +123,7 @@ class EmailService implements IEmailService {
 
         LoggerService.info(
           '[EmailService] Mensagem aceita pelo servidor SMTP | '
+          'configId=${config.id} '
           'attempt=$attempt/$_maxSendAttempts '
           'opened=${report.connectionOpened} '
           'sendStart=${report.messageSendingStart} '
@@ -134,6 +137,7 @@ class EmailService implements IEmailService {
         final isLastAttempt = attempt >= _maxSendAttempts;
         if (!isTransient || isLastAttempt) {
           return _mapSendErrorToFailure(
+            configId: config.id,
             error: e,
             stackTrace: stackTrace,
             smtpServerHost: config.smtpServer,
@@ -145,6 +149,7 @@ class EmailService implements IEmailService {
         final delay = _calculateRetryDelay(attempt);
         LoggerService.warning(
           '[EmailService] Falha SMTP transiente; nova tentativa agendada | '
+          'configId=${config.id} '
           'attempt=$attempt/$_maxSendAttempts '
           'retryInMs=${delay.inMilliseconds} '
           'erro=${_sanitizeErrorText(e.toString())}',
@@ -308,6 +313,7 @@ Este é um e-mail automático do Sistema de Backup.
   }
 
   rd.Result<bool> _mapSendErrorToFailure({
+    required String configId,
     required Object error,
     required StackTrace stackTrace,
     required String smtpServerHost,
@@ -316,7 +322,7 @@ Este é um e-mail automático do Sistema de Backup.
   }) {
     if (error is SmtpClientAuthenticationException) {
       LoggerService.error(
-        'Erro de autenticacao SMTP (attempts=$attempts)',
+        'Erro de autenticacao SMTP (configId=$configId attempts=$attempts)',
         error,
         stackTrace,
       );
@@ -330,7 +336,7 @@ Este é um e-mail automático do Sistema de Backup.
 
     if (error is SmtpClientCommunicationException) {
       LoggerService.error(
-        'Servidor SMTP rejeitou a mensagem (attempts=$attempts)',
+        'Servidor SMTP rejeitou a mensagem (configId=$configId attempts=$attempts)',
         error,
         stackTrace,
       );
@@ -343,7 +349,7 @@ Este é um e-mail automático do Sistema de Backup.
     }
 
     if (error is SmtpMessageValidationException) {
-      LoggerService.error('Mensagem SMTP invalida', error, stackTrace);
+      LoggerService.error('Mensagem SMTP invalida (configId=$configId)', error, stackTrace);
       return rd.Failure(
         ValidationFailure(
           message:
@@ -354,7 +360,7 @@ Este é um e-mail automático do Sistema de Backup.
 
     if (error is SocketException || error is TimeoutException) {
       LoggerService.error(
-        'Falha de conexao SMTP (attempts=$attempts)',
+        'Falha de conexao SMTP (configId=$configId attempts=$attempts)',
         error,
         stackTrace,
       );
@@ -368,7 +374,7 @@ Este é um e-mail automático do Sistema de Backup.
 
     if (error is MailerException) {
       LoggerService.error(
-        'Falha SMTP ao enviar e-mail (attempts=$attempts)',
+        'Falha SMTP ao enviar e-mail (configId=$configId attempts=$attempts)',
         error,
         stackTrace,
       );
@@ -381,7 +387,7 @@ Este é um e-mail automático do Sistema de Backup.
     }
 
     LoggerService.error(
-      'Erro ao enviar e-mail (attempts=$attempts)',
+      'Erro ao enviar e-mail (configId=$configId attempts=$attempts)',
       error,
       stackTrace,
     );

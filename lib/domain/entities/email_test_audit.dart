@@ -12,6 +12,7 @@ class EmailTestAudit {
     this.errorType,
     this.errorMessage,
     this.attempts = 1,
+    this.durationMs,
     String? id,
     DateTime? createdAt,
   }) : id = id ?? const Uuid().v4(),
@@ -28,6 +29,7 @@ class EmailTestAudit {
   final String? errorType;
   final String? errorMessage;
   final int attempts;
+  final int? durationMs;
   final DateTime createdAt;
 
   bool get isSuccess => status.toLowerCase() == 'success';

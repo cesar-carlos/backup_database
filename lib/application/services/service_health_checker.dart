@@ -1,10 +1,16 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:backup_database/application/services/alert_service.dart';
+import 'package:backup_database/application/services/log_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/infrastructure/external/process/postgres_wal_slot_utils.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 enum HealthStatus {
   healthy,
@@ -57,15 +63,24 @@ class ServiceHealthChecker {
   ServiceHealthChecker({
     required IBackupHistoryRepository backupHistoryRepository,
     required ProcessService processService,
+    required IPostgresConfigRepository postgresConfigRepository,
+    LogService? logService,
+    AlertService? alertService,
     this.checkInterval = const Duration(minutes: 30),
     this.maxBackupAge = const Duration(days: 2),
     this.minSuccessRate = 0.7,
     this.minFreeDiskGB = 5.0,
-  })  : _backupHistoryRepository = backupHistoryRepository,
-        _processService = processService;
+  }) : _backupHistoryRepository = backupHistoryRepository,
+       _processService = processService,
+       _postgresConfigRepository = postgresConfigRepository,
+       _logService = logService,
+       _alertService = alertService;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final ProcessService _processService;
+  final IPostgresConfigRepository _postgresConfigRepository;
+  final LogService? _logService;
+  final AlertService? _alertService;
 
   final Duration checkInterval;
 
@@ -131,6 +146,10 @@ class ServiceHealthChecker {
       issues.addAll(diskSpaceResult.issues);
       metrics.addAll(diskSpaceResult.metrics);
 
+      final slotHealthResult = await _checkPostgresWalSlots();
+      issues.addAll(slotHealthResult.issues);
+      metrics.addAll(slotHealthResult.metrics);
+
       final status = _determineStatus(issues);
 
       final result = HealthCheckResult(
@@ -142,6 +161,7 @@ class ServiceHealthChecker {
 
       _lastResult = result;
 
+      await _publishOperationalAlerts(result);
       _logHealthResult(result);
 
       return result;
@@ -221,8 +241,7 @@ class ServiceHealthChecker {
             HealthIssue(
               severity: HealthStatus.warning,
               category: 'backup',
-              message:
-                  'Erro ao buscar histórico de backups: $failure',
+              message: 'Erro ao buscar histórico de backups: $failure',
             ),
           );
         },
@@ -379,6 +398,274 @@ class ServiceHealthChecker {
     return _CheckResult(issues, metrics);
   }
 
+  Future<_CheckResult> _checkPostgresWalSlots() async {
+    final issues = <HealthIssue>[];
+    final metrics = <String, dynamic>{};
+
+    final enabled = _isWalSlotHealthCheckEnabled();
+    metrics['wal_slot_health_check_enabled'] = enabled;
+    if (!enabled) {
+      return _CheckResult(issues, metrics);
+    }
+
+    final maxLagMb = _slotLagThresholdMb();
+    final maxInactiveHours = _slotInactiveThresholdHours();
+    metrics['wal_slot_max_lag_mb'] = maxLagMb;
+    metrics['wal_slot_max_inactive_hours'] = maxInactiveHours;
+
+    final configsResult = await _postgresConfigRepository.getEnabled();
+    if (configsResult.isError()) {
+      final failure = configsResult.exceptionOrNull();
+      issues.add(
+        HealthIssue(
+          severity: HealthStatus.warning,
+          category: 'postgres_slot',
+          message:
+              'Falha ao carregar configuracoes PostgreSQL para health check de slot: $failure',
+        ),
+      );
+      return _CheckResult(issues, metrics);
+    }
+
+    final configs = configsResult.getOrNull()!;
+    var checkedConfigs = 0;
+    var checkedSlots = 0;
+
+    for (final config in configs) {
+      checkedConfigs++;
+      final slotResult = await _queryWalSlotHealth(config);
+
+      slotResult.fold(
+        (slots) {
+          checkedSlots += slots.length;
+          for (final slot in slots) {
+            final lagMb = slot.lagBytes / (1024 * 1024);
+            final inactiveHours = slot.inactiveSeconds != null
+                ? slot.inactiveSeconds! / 3600
+                : null;
+
+            if (lagMb >= maxLagMb) {
+              issues.add(
+                HealthIssue(
+                  severity: lagMb >= (maxLagMb * 2)
+                      ? HealthStatus.critical
+                      : HealthStatus.warning,
+                  category: 'postgres_slot',
+                  message:
+                      'Slot WAL com atraso alto (${lagMb.toStringAsFixed(1)} MB): ${slot.slotName}',
+                  details:
+                      'Config: ${config.name} | Host: ${config.host} | Limite: ${maxLagMb.toStringAsFixed(1)} MB',
+                ),
+              );
+            }
+
+            if (!slot.active && inactiveHours != null) {
+              if (inactiveHours >= maxInactiveHours) {
+                issues.add(
+                  HealthIssue(
+                    severity: inactiveHours >= (maxInactiveHours * 2)
+                        ? HealthStatus.critical
+                        : HealthStatus.warning,
+                    category: 'postgres_slot',
+                    message:
+                        'Slot WAL inativo por ${inactiveHours.toStringAsFixed(1)}h: ${slot.slotName}',
+                    details:
+                        'Config: ${config.name} | Host: ${config.host} | Limite: ${maxInactiveHours.toStringAsFixed(1)}h',
+                  ),
+                );
+              }
+            }
+          }
+        },
+        (failure) {
+          issues.add(
+            HealthIssue(
+              severity: HealthStatus.warning,
+              category: 'postgres_slot',
+              message:
+                  'Falha ao verificar slots WAL em ${config.name}: $failure',
+            ),
+          );
+        },
+      );
+    }
+
+    metrics['wal_slot_checked_configs'] = checkedConfigs;
+    metrics['wal_slot_checked_slots'] = checkedSlots;
+    return _CheckResult(issues, metrics);
+  }
+
+  bool _isWalSlotHealthCheckEnabled() {
+    final raw = Platform.environment['BACKUP_DATABASE_PG_SLOT_HEALTH_ENABLED'];
+    if (raw == null || raw.trim().isEmpty) {
+      return PostgresWalSlotUtils.isWalSlotEnabled(
+        environment: Platform.environment,
+      );
+    }
+
+    final normalized = raw.trim().toLowerCase();
+    return normalized == '1' ||
+        normalized == 'true' ||
+        normalized == 'yes' ||
+        normalized == 'on';
+  }
+
+  double _slotLagThresholdMb() {
+    final raw = Platform.environment['BACKUP_DATABASE_PG_SLOT_MAX_LAG_MB'];
+    final parsed = double.tryParse(raw ?? '');
+    if (parsed == null || parsed <= 0) {
+      return 1024;
+    }
+    return parsed;
+  }
+
+  double _slotInactiveThresholdHours() {
+    final raw = Platform.environment['BACKUP_DATABASE_PG_SLOT_INACTIVE_HOURS'];
+    final parsed = double.tryParse(raw ?? '');
+    if (parsed == null || parsed <= 0) {
+      return 24;
+    }
+    return parsed;
+  }
+
+  Future<rd.Result<List<_WalSlotHealthSnapshot>>> _queryWalSlotHealth(
+    PostgresConfig config,
+  ) async {
+    final withInactiveSince = await _runWalSlotHealthQuery(
+      config,
+      includeInactiveSince: true,
+    );
+    if (!withInactiveSince.isError()) {
+      return withInactiveSince;
+    }
+
+    return _runWalSlotHealthQuery(config, includeInactiveSince: false);
+  }
+
+  Future<rd.Result<List<_WalSlotHealthSnapshot>>> _runWalSlotHealthQuery(
+    PostgresConfig config, {
+    required bool includeInactiveSince,
+  }) async {
+    final inactiveExpr = includeInactiveSince
+        ? 'COALESCE(EXTRACT(EPOCH FROM (now() - inactive_since))::bigint, 0)'
+        : '0';
+
+    final sql =
+        'SELECT slot_name, active::text, '
+        'COALESCE(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn), 0)::bigint, '
+        '$inactiveExpr '
+        "FROM pg_replication_slots WHERE slot_type = 'physical';";
+
+    final arguments = <String>[
+      '-h',
+      config.host,
+      '-p',
+      config.portValue.toString(),
+      '-U',
+      config.username,
+      '-d',
+      config.databaseValue,
+      '-t',
+      '-A',
+      '-F',
+      '|',
+      '-c',
+      sql,
+    ];
+
+    final environment = <String, String>{'PGPASSWORD': config.password};
+    final result = await _processService.run(
+      executable: 'psql',
+      arguments: arguments,
+      environment: environment,
+      timeout: const Duration(seconds: 30),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (!processResult.isSuccess) {
+          return rd.Failure(
+            Exception(
+              processResult.stderr.isNotEmpty
+                  ? processResult.stderr
+                  : processResult.stdout,
+            ),
+          );
+        }
+
+        final lines = processResult.stdout
+            .split(RegExp(r'[\r\n]+'))
+            .map((line) => line.trim())
+            .where((line) => line.isNotEmpty)
+            .toList();
+
+        final snapshots = <_WalSlotHealthSnapshot>[];
+        for (final line in lines) {
+          final parts = line.split('|');
+          if (parts.length < 4) {
+            continue;
+          }
+
+          snapshots.add(
+            _WalSlotHealthSnapshot(
+              slotName: parts[0].trim(),
+              active:
+                  parts[1].trim().toLowerCase() == 't' ||
+                  parts[1].trim().toLowerCase() == 'true',
+              lagBytes: int.tryParse(parts[2].trim()) ?? 0,
+              inactiveSeconds: int.tryParse(parts[3].trim()),
+            ),
+          );
+        }
+
+        return rd.Success(snapshots);
+      },
+      (failure) => rd.Failure(Exception(failure.toString())),
+    );
+  }
+
+  Future<void> _publishOperationalAlerts(HealthCheckResult result) async {
+    final slotIssues = result.issues
+        .where((issue) => issue.category == 'postgres_slot')
+        .toList();
+    if (slotIssues.isEmpty) {
+      _alertService?.replaceOperationalAlerts(const []);
+      return;
+    }
+
+    final alerts = slotIssues
+        .map(
+          (issue) => BackupAlert(
+            type: issue.message.contains('atraso alto')
+                ? AlertType.walSlotLag
+                : AlertType.walSlotInactive,
+            scheduleId: 'postgres-slot-health',
+            severity: issue.severity == HealthStatus.critical
+                ? AlertSeverity.critical
+                : AlertSeverity.high,
+            message: issue.message,
+          ),
+        )
+        .toList();
+    _alertService?.replaceOperationalAlerts(alerts);
+
+    final logService = _logService;
+    if (logService == null) {
+      return;
+    }
+
+    for (final issue in slotIssues) {
+      await logService.log(
+        level: issue.severity == HealthStatus.critical
+            ? LogLevel.error
+            : LogLevel.warning,
+        category: LogCategory.system,
+        message: issue.message,
+        details: issue.details,
+      );
+    }
+  }
+
   HealthStatus _determineStatus(List<HealthIssue> issues) {
     if (issues.any((i) => i.severity == HealthStatus.critical)) {
       return HealthStatus.critical;
@@ -447,4 +734,18 @@ class _CheckResult {
 
   final List<HealthIssue> issues;
   final Map<String, dynamic> metrics;
+}
+
+class _WalSlotHealthSnapshot {
+  const _WalSlotHealthSnapshot({
+    required this.slotName,
+    required this.active,
+    required this.lagBytes,
+    required this.inactiveSeconds,
+  });
+
+  final String slotName;
+  final bool active;
+  final int lagBytes;
+  final int? inactiveSeconds;
 }

@@ -2,13 +2,14 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 
 class AlertService {
-  final List<BackupAlert> _alerts = [];
+  final List<BackupAlert> _historyAlerts = [];
+  final List<BackupAlert> _operationalAlerts = [];
 
   List<BackupAlert> checkAlerts(List<BackupHistory> history) {
-    _alerts.clear();
+    _historyAlerts.clear();
 
     if (history.isEmpty) {
-      return _alerts;
+      return getActiveAlerts();
     }
 
     final bySchedule = <String, List<BackupHistory>>{};
@@ -22,7 +23,7 @@ class AlertService {
       backups.sort((a, b) => b.startedAt.compareTo(a.startedAt));
 
       if (_hasConsecutiveFailures(backups)) {
-        _alerts.add(
+        _historyAlerts.add(
           BackupAlert(
             type: AlertType.consecutiveFailures,
             scheduleId: entry.key,
@@ -34,7 +35,7 @@ class AlertService {
       }
 
       if (_hasHighErrorRate(backups)) {
-        _alerts.add(
+        _historyAlerts.add(
           BackupAlert(
             type: AlertType.highErrorRate,
             scheduleId: entry.key,
@@ -45,7 +46,13 @@ class AlertService {
       }
     }
 
-    return _alerts;
+    return getActiveAlerts();
+  }
+
+  void replaceOperationalAlerts(List<BackupAlert> alerts) {
+    _operationalAlerts
+      ..clear()
+      ..addAll(alerts);
   }
 
   bool _hasConsecutiveFailures(
@@ -82,14 +89,17 @@ class AlertService {
     return rate > threshold;
   }
 
-  List<BackupAlert> getActiveAlerts() => List.unmodifiable(_alerts);
+  List<BackupAlert> getActiveAlerts() {
+    return List.unmodifiable([..._historyAlerts, ..._operationalAlerts]);
+  }
 
   void clearAlerts() {
-    _alerts.clear();
+    _historyAlerts.clear();
+    _operationalAlerts.clear();
   }
 
   void logAlerts() {
-    for (final alert in _alerts) {
+    for (final alert in getActiveAlerts()) {
       LoggerService.warning(
         '[ALERTA ${alert.severity.name.toUpperCase()}] ${alert.message}',
       );
@@ -119,6 +129,8 @@ enum AlertType {
   highErrorRate,
   tokenExpiring,
   lowDiskSpace,
+  walSlotLag,
+  walSlotInactive,
 }
 
 enum AlertSeverity {

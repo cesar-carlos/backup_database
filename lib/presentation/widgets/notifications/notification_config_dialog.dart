@@ -2,14 +2,13 @@ import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:uuid/uuid.dart';
+import 'package:zard/zard.dart';
 
 class NotificationConfigDialog extends StatefulWidget {
   const NotificationConfigDialog({
     super.key,
     this.initialConfig,
     this.initialRecipientEmail,
-    this.onTestConnection,
-    this.getTestErrorMessage,
     this.onConnectOAuth,
     this.onReconnectOAuth,
     this.onDisconnectOAuth,
@@ -17,8 +16,6 @@ class NotificationConfigDialog extends StatefulWidget {
 
   final EmailConfig? initialConfig;
   final String? initialRecipientEmail;
-  final Future<bool> Function(EmailConfig config)? onTestConnection;
-  final String? Function()? getTestErrorMessage;
   final Future<EmailConfig?> Function(
     EmailConfig config,
     SmtpOAuthProvider provider,
@@ -35,8 +32,6 @@ class NotificationConfigDialog extends StatefulWidget {
     BuildContext context, {
     EmailConfig? initialConfig,
     String? initialRecipientEmail,
-    Future<bool> Function(EmailConfig config)? onTestConnection,
-    String? Function()? getTestErrorMessage,
     Future<EmailConfig?> Function(
       EmailConfig config,
       SmtpOAuthProvider provider,
@@ -54,8 +49,6 @@ class NotificationConfigDialog extends StatefulWidget {
       builder: (context) => NotificationConfigDialog(
         initialConfig: initialConfig,
         initialRecipientEmail: initialRecipientEmail,
-        onTestConnection: onTestConnection,
-        getTestErrorMessage: getTestErrorMessage,
         onConnectOAuth: onConnectOAuth,
         onReconnectOAuth: onReconnectOAuth,
         onDisconnectOAuth: onDisconnectOAuth,
@@ -77,11 +70,15 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
   late final TextEditingController _recipientEmailController;
   late final TextEditingController _passwordController;
   late final String _draftConfigId;
+  late final Schema<String> _configNameSchema;
+  late final Schema<String> _smtpServerSchema;
+  late final Schema<String> _emailSchema;
+  late final Schema<String> _recipientEmailSchema;
+  late final Schema<String> _passwordSchema;
   bool _notifyOnSuccess = true;
   bool _notifyOnError = true;
   bool _notifyOnWarning = true;
   bool _attachLog = false;
-  bool _isTesting = false;
   bool _isConnectingOAuth = false;
   SmtpAuthMode _authMode = SmtpAuthMode.password;
   SmtpOAuthProvider? _oauthProvider;
@@ -113,6 +110,22 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
       text: widget.initialRecipientEmail ?? legacyRecipient,
     );
     _passwordController = TextEditingController(text: config?.password ?? '');
+    _configNameSchema = z.string().min(
+      1,
+      message: 'Nome da configuracao e obrigatorio',
+    );
+    _smtpServerSchema = z.string().min(
+      1,
+      message: 'Servidor SMTP e obrigatorio',
+    );
+    _emailSchema = z
+        .string()
+        .min(1, message: 'E-mail e obrigatorio')
+        .email(message: 'E-mail invalido');
+    _recipientEmailSchema = z.string().email(
+      message: 'E-mail de destino invalido',
+    );
+    _passwordSchema = z.string().min(1, message: 'Senha e obrigatoria');
     _authMode = config?.authMode ?? SmtpAuthMode.password;
     _oauthProvider = config?.oauthProvider;
     _oauthAccountEmail = config?.oauthAccountEmail;
@@ -142,7 +155,6 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
 
     final smtpPort = int.tryParse(_smtpPortController.text.trim());
     if (smtpPort == null) {
-      MessageModal.showError(context, message: 'Porta SMTP invalida');
       return null;
     }
 
@@ -180,57 +192,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
       return;
     }
 
-    if (config.recipients.isEmpty) {
-      MessageModal.showError(
-        context,
-        message: 'E-mail de destino e obrigatorio',
-      );
-      return;
-    }
-
     Navigator.of(context).pop(config);
-  }
-
-  Future<void> _testConnection() async {
-    final onTestConnection = widget.onTestConnection;
-    if (onTestConnection == null) {
-      return;
-    }
-
-    final config = _buildConfig();
-    if (config == null) {
-      return;
-    }
-
-    setState(() {
-      _isTesting = true;
-    });
-
-    final success = await onTestConnection(config);
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isTesting = false;
-    });
-
-    if (success) {
-      await MessageModal.showSuccess(
-        context,
-        message:
-            'Mensagem de teste aceita pelo servidor SMTP e encaminhada ao destinatario.\n\n'
-            'Se nao encontrar na caixa de entrada, verifique spam/lixo eletronico, quarentena e filtros do provedor.',
-      );
-      return;
-    }
-
-    await MessageModal.showError(
-      context,
-      message:
-          widget.getTestErrorMessage?.call() ??
-          'Erro ao testar conexao SMTP. Verifique os dados informados.',
-    );
   }
 
   Future<void> _connectOAuth() async {
@@ -269,9 +231,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     if (updated == null) {
       await MessageModal.showError(
         context,
-        message:
-            widget.getTestErrorMessage?.call() ??
-            'Falha ao conectar conta OAuth SMTP.',
+        message: 'Falha ao conectar conta OAuth SMTP.',
       );
       return;
     }
@@ -330,9 +290,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     if (updated == null) {
       await MessageModal.showError(
         context,
-        message:
-            widget.getTestErrorMessage?.call() ??
-            'Falha ao reconectar conta OAuth SMTP.',
+        message: 'Falha ao reconectar conta OAuth SMTP.',
       );
       return;
     }
@@ -408,27 +366,39 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
   }
 
   String? _validateConfigName(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Nome da configuracao e obrigatorio';
-    }
-    return null;
+    return _validateWithSchema(_configNameSchema, value?.trim() ?? '');
   }
 
   String? _validateSmtpServer(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Servidor SMTP e obrigatorio';
-    }
-    return null;
+    return _validateWithSchema(_smtpServerSchema, value?.trim() ?? '');
   }
 
   String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'E-mail e obrigatorio';
+    return _validateWithSchema(_emailSchema, value?.trim() ?? '');
+  }
+
+  String? _validateRecipientEmail(String? value) {
+    final recipient = value?.trim() ?? '';
+    if (recipient.isEmpty) {
+      return 'E-mail de destino é obrigatório';
     }
-    if (!value.contains('@')) {
-      return 'E-mail invalido';
+    return _validateWithSchema(_recipientEmailSchema, recipient);
+  }
+
+  String? _validatePassword(String? value) {
+    return _validateWithSchema(_passwordSchema, value?.trim() ?? '');
+  }
+
+  String? _validateWithSchema(Schema<String> schema, String value) {
+    final result = schema.safeParse(value);
+    if (result.success) {
+      return null;
     }
-    return null;
+    final issues = result.error?.issues;
+    if (issues == null || issues.isEmpty) {
+      return 'Valor invalido';
+    }
+    return issues.first.message;
   }
 
   @override
@@ -454,85 +424,84 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
         ],
       ),
       content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SmtpSettingsSection(
-                configNameController: _configNameController,
-                smtpServerController: _smtpServerController,
-                smtpPortController: _smtpPortController,
-                emailController: _emailController,
-                recipientEmailController: _recipientEmailController,
-                passwordController: _passwordController,
-                configNameValidator: _validateConfigName,
-                smtpServerValidator: _validateSmtpServer,
-                emailValidator: _validateEmail,
-              ),
-              const SizedBox(height: 16),
-              _SmtpAuthenticationSection(
-                authMode: _authMode,
-                isBusy: _isConnectingOAuth,
-                oauthAccountEmail: _oauthAccountEmail,
-                oauthConnectedAt: _oauthConnectedAt,
-                onAuthModeChanged: (mode) {
-                  setState(() {
-                    _authMode = mode;
-                    if (mode == SmtpAuthMode.password) {
-                      _oauthProvider = null;
-                      _oauthAccountEmail = null;
-                      _oauthTokenKey = null;
-                      _oauthConnectedAt = null;
-                    } else {
-                      _oauthProvider = mode == SmtpAuthMode.oauthGoogle
-                          ? SmtpOAuthProvider.google
-                          : SmtpOAuthProvider.microsoft;
-                    }
-                  });
-                },
-                onConnect: _connectOAuth,
-                onReconnect: _reconnectOAuth,
-                onDisconnect: _disconnectOAuth,
-              ),
-              const SizedBox(height: 24),
-              _NotificationBehaviorSection(
-                notifyOnSuccess: _notifyOnSuccess,
-                notifyOnError: _notifyOnError,
-                notifyOnWarning: _notifyOnWarning,
-                attachLog: _attachLog,
-                onNotifyOnSuccessChanged: (value) {
-                  setState(() {
-                    _notifyOnSuccess = value;
-                  });
-                },
-                onNotifyOnErrorChanged: (value) {
-                  setState(() {
-                    _notifyOnError = value;
-                  });
-                },
-                onNotifyOnWarningChanged: (value) {
-                  setState(() {
-                    _notifyOnWarning = value;
-                  });
-                },
-                onAttachLogChanged: (value) {
-                  setState(() {
-                    _attachLog = value;
-                  });
-                },
-              ),
-            ],
+        child: Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SmtpSettingsSection(
+                  configNameController: _configNameController,
+                  smtpServerController: _smtpServerController,
+                  smtpPortController: _smtpPortController,
+                  emailController: _emailController,
+                  recipientEmailController: _recipientEmailController,
+                  passwordController: _passwordController,
+                  configNameValidator: _validateConfigName,
+                  smtpServerValidator: _validateSmtpServer,
+                  emailValidator: _validateEmail,
+                  recipientEmailValidator: _validateRecipientEmail,
+                  passwordValidator: _validatePassword,
+                ),
+                const SizedBox(height: 16),
+                _SmtpAuthenticationSection(
+                  authMode: _authMode,
+                  isBusy: _isConnectingOAuth,
+                  oauthAccountEmail: _oauthAccountEmail,
+                  oauthConnectedAt: _oauthConnectedAt,
+                  onAuthModeChanged: (mode) {
+                    setState(() {
+                      _authMode = mode;
+                      if (mode == SmtpAuthMode.password) {
+                        _oauthProvider = null;
+                        _oauthAccountEmail = null;
+                        _oauthTokenKey = null;
+                        _oauthConnectedAt = null;
+                      } else {
+                        _oauthProvider = mode == SmtpAuthMode.oauthGoogle
+                            ? SmtpOAuthProvider.google
+                            : SmtpOAuthProvider.microsoft;
+                      }
+                    });
+                  },
+                  onConnect: _connectOAuth,
+                  onReconnect: _reconnectOAuth,
+                  onDisconnect: _disconnectOAuth,
+                ),
+                const SizedBox(height: 24),
+                _NotificationBehaviorSection(
+                  notifyOnSuccess: _notifyOnSuccess,
+                  notifyOnError: _notifyOnError,
+                  notifyOnWarning: _notifyOnWarning,
+                  attachLog: _attachLog,
+                  onNotifyOnSuccessChanged: (value) {
+                    setState(() {
+                      _notifyOnSuccess = value;
+                    });
+                  },
+                  onNotifyOnErrorChanged: (value) {
+                    setState(() {
+                      _notifyOnError = value;
+                    });
+                  },
+                  onNotifyOnWarningChanged: (value) {
+                    setState(() {
+                      _notifyOnWarning = value;
+                    });
+                  },
+                  onAttachLogChanged: (value) {
+                    setState(() {
+                      _attachLog = value;
+                    });
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
       actions: [
-        ActionButton(
-          label: 'Testar conexao',
-          icon: FluentIcons.network_tower,
-          isLoading: _isTesting,
-          onPressed: _isTesting ? null : _testConnection,
-        ),
         const CancelButton(),
         SaveButton(
           onPressed: _submit,
@@ -652,6 +621,8 @@ class _SmtpSettingsSection extends StatelessWidget {
     required this.configNameValidator,
     required this.smtpServerValidator,
     required this.emailValidator,
+    required this.recipientEmailValidator,
+    required this.passwordValidator,
   });
 
   final TextEditingController configNameController;
@@ -663,6 +634,8 @@ class _SmtpSettingsSection extends StatelessWidget {
   final String? Function(String?) configNameValidator;
   final String? Function(String?) smtpServerValidator;
   final String? Function(String?) emailValidator;
+  final String? Function(String?) recipientEmailValidator;
+  final String? Function(String?) passwordValidator;
 
   @override
   Widget build(BuildContext context) {
@@ -700,26 +673,18 @@ class _SmtpSettingsSection extends StatelessWidget {
           validator: emailValidator,
         ),
         const SizedBox(height: 16),
-        AppTextField(
-          controller: recipientEmailController,
-          label: 'E-mail de destino',
-          keyboardType: TextInputType.emailAddress,
-          hint: 'destino@exemplo.com',
-          validator: (value) {
-            final email = value?.trim() ?? '';
-            if (email.isEmpty) {
-              return null;
-            }
-            if (!email.contains('@')) {
-              return 'E-mail de destino invalido';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
         PasswordField(
           controller: passwordController,
           hint: 'Senha do e-mail',
+          validator: passwordValidator,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: recipientEmailController,
+          label: 'E-mail de destino *',
+          keyboardType: TextInputType.emailAddress,
+          hint: 'destino@exemplo.com',
+          validator: recipientEmailValidator,
         ),
       ],
     );

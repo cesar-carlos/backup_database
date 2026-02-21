@@ -35,7 +35,7 @@ class DestinationsPage extends StatelessWidget {
         ),
       ),
       content: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

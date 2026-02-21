@@ -20,6 +20,27 @@
       "request": "launch",
       "type": "dart",
       "flutterMode": "release"
+    },
+    {
+      "name": "backup_database (oauth microsoft)",
+      "request": "launch",
+      "type": "dart",
+      "toolArgs": [
+        "--dart-define=ENABLE_MICROSOFT_SMTP_OAUTH=true",
+        "--dart-define=SMTP_MICROSOFT_TENANT=${env:SMTP_MICROSOFT_TENANT}",
+        "--dart-define=SMTP_MICROSOFT_CLIENT_ID=${env:SMTP_MICROSOFT_CLIENT_ID}",
+        "--dart-define=SMTP_MICROSOFT_CLIENT_SECRET=${env:SMTP_MICROSOFT_CLIENT_SECRET}"
+      ]
+    },
+    {
+      "name": "backup_database (oauth google)",
+      "request": "launch",
+      "type": "dart",
+      "toolArgs": [
+        "--dart-define=ENABLE_GOOGLE_SMTP_OAUTH=true",
+        "--dart-define=SMTP_GOOGLE_CLIENT_ID=${env:SMTP_GOOGLE_CLIENT_ID}",
+        "--dart-define=SMTP_GOOGLE_CLIENT_SECRET=${env:SMTP_GOOGLE_CLIENT_SECRET}"
+      ]
     }
   ]
 }

@@ -48,64 +48,78 @@ class EmailTestHistoryPanel extends StatelessWidget {
               ),
               const Spacer(),
               SizedBox(
-                width: 220,
-                child: ComboBox<String?>(
-                  value: selectedConfigId,
-                  items: [
-                    const ComboBoxItem<String?>(
-                      child: Text('Todas configuracoes'),
-                    ),
-                    ...configs.map(
-                      (config) => ComboBoxItem<String?>(
-                        value: config.id,
-                        child: Text(config.configName),
+                width: 200,
+                child: SizedBox(
+                  height: 34,
+                  child: AppDropdown<String?>(
+                    label: 'Configuracao',
+                    compact: true,
+                    value: selectedConfigId,
+                    items: [
+                      const ComboBoxItem<String?>(
+                        child: Text('Todas configuracoes'),
                       ),
-                    ),
-                  ],
-                  onChanged: onConfigChanged,
+                      ...configs.map(
+                        (config) => ComboBoxItem<String?>(
+                          value: config.id,
+                          child: Text(config.configName),
+                        ),
+                      ),
+                    ],
+                    onChanged: onConfigChanged,
+                    placeholder: const Text('Todas configuracoes'),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               SizedBox(
-                width: 180,
-                child: ComboBox<NotificationHistoryPeriod>(
-                  value: period,
-                  isExpanded: true,
-                  items: const [
-                    ComboBoxItem(
-                      value: NotificationHistoryPeriod.last24Hours,
-                      child: Text('Ultimas 24h'),
-                    ),
-                    ComboBoxItem(
-                      value: NotificationHistoryPeriod.last7Days,
-                      child: Text('Ultimos 7 dias'),
-                    ),
-                    ComboBoxItem(
-                      value: NotificationHistoryPeriod.last30Days,
-                      child: Text('Ultimos 30 dias'),
-                    ),
-                    ComboBoxItem(
-                      value: NotificationHistoryPeriod.all,
-                      child: Text('Todo periodo'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      onPeriodChanged(value);
-                    }
-                  },
+                width: 170,
+                child: SizedBox(
+                  height: 34,
+                  child: AppDropdown<NotificationHistoryPeriod>(
+                    label: 'Periodo',
+                    compact: true,
+                    value: period,
+                    items: const [
+                      ComboBoxItem(
+                        value: NotificationHistoryPeriod.last24Hours,
+                        child: Text('Ultimas 24h'),
+                      ),
+                      ComboBoxItem(
+                        value: NotificationHistoryPeriod.last7Days,
+                        child: Text('Ultimos 7 dias'),
+                      ),
+                      ComboBoxItem(
+                        value: NotificationHistoryPeriod.last30Days,
+                        child: Text('Ultimos 30 dias'),
+                      ),
+                      ComboBoxItem(
+                        value: NotificationHistoryPeriod.all,
+                        child: Text('Todo periodo'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        onPeriodChanged(value);
+                      }
+                    },
+                    placeholder: const Text('Ultimos 7 dias'),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
-              Button(
-                onPressed: onRefresh,
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(FluentIcons.refresh, size: 16),
-                    SizedBox(width: 6),
-                    Text('Atualizar'),
-                  ],
+              SizedBox(
+                height: 32,
+                child: Button(
+                  onPressed: onRefresh,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(FluentIcons.refresh, size: 16),
+                      SizedBox(width: 6),
+                      Text('Atualizar'),
+                    ],
+                  ),
                 ),
               ),
             ],

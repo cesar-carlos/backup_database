@@ -16,6 +16,7 @@ O sistema de backup precisa das seguintes ferramentas disponíveis no PATH:
 ### 3. **PostgreSQL**
 - `psql.exe` - Para testar conexões e executar scripts SQL
 - `pg_basebackup.exe` - Para executar backups físicos completos
+- `pg_receivewal.exe` - Para captura de WAL (PITR)
 - `pg_verifybackup.exe` - Para verificar integridade dos backups
 
 ---
@@ -203,6 +204,50 @@ pg_basebackup --version
 
 Se aparecer a versão do pg_basebackup, está configurado corretamente.
 
+#### Verificar pg_receivewal (PostgreSQL):
+```cmd
+pg_receivewal --version
+```
+
+Se aparecer a versão do pg_receivewal, está configurado corretamente.
+
+#### Opcional: habilitar replication slot dedicado para backup WAL
+
+Defina a variável de ambiente:
+
+```cmd
+setx BACKUP_DATABASE_PG_LOG_USE_SLOT true
+```
+
+Opcionalmente, defina um nome fixo de slot:
+
+```cmd
+setx BACKUP_DATABASE_PG_LOG_SLOT_NAME backup_database_wal_slot
+```
+
+#### Opcional: ajustar timeout do backup LOG (WAL)
+
+```cmd
+setx BACKUP_DATABASE_PG_LOG_TIMEOUT_SECONDS 3600
+```
+
+#### Opcional: habilitar compressao no pg_receivewal
+
+```cmd
+setx BACKUP_DATABASE_PG_LOG_COMPRESSION gzip
+```
+
+Se a versao do `pg_receivewal` nao suportar `--compress`, o sistema faz
+fallback automatico sem compressao.
+
+#### Opcional: habilitar monitoramento de saude dos slots WAL
+
+```cmd
+setx BACKUP_DATABASE_PG_SLOT_HEALTH_ENABLED true
+setx BACKUP_DATABASE_PG_SLOT_MAX_LAG_MB 1024
+setx BACKUP_DATABASE_PG_SLOT_INACTIVE_HOURS 24
+```
+
 ### Via Interface do Aplicativo
 
 1. No aplicativo de backup, vá em **Configurações > Sybase**
@@ -276,4 +321,3 @@ Se mesmo após configurar o PATH os problemas persistirem:
    "C:\Program Files\SQL Anywhere 16\Bin64\dbbackup.exe" -?
    ```
 4. Consulte os logs do aplicativo em `C:\ProgramData\BackupDatabase\logs\`
-

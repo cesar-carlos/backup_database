@@ -36,7 +36,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return ScaffoldPage(
       header: const PageHeader(title: Text('Dashboard')),
       content: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -61,7 +61,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             'Servidor Remoto',
                             style: FluentTheme.of(context).typography.subtitle,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
                           ComboBox<String>(
                             placeholder: const Text('Selecione um servidor'),
                             isExpanded: true,
@@ -137,7 +137,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         'Local',
                         style: FluentTheme.of(context).typography.subtitle,
                       ),
-                    if (!isClientMode) const SizedBox(height: 8),
+                    if (!isClientMode) const SizedBox(height: 4),
                     if (!isClientMode)
                       Row(
                         children: [
@@ -184,7 +184,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         isClientMode ? 'Servidor Remoto' : 'Servidor',
                         style: FluentTheme.of(context).typography.subtitle,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
                           Expanded(

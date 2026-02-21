@@ -8,32 +8,37 @@ class AppDropdown<T> extends StatelessWidget {
     required this.items,
     super.key,
     this.onChanged,
-    this.validator,
     this.placeholder,
+    this.compact = false,
   });
   final String label;
   final T? value;
   final List<ComboBoxItem<T>> items;
   final ValueChanged<T?>? onChanged;
-  final String? Function(T?)? validator;
   final Widget? placeholder;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final texts = WidgetTexts.fromContext(context);
+    final combo = SizedBox(
+      width: double.infinity,
+      child: ComboBox<T>(
+        value: value,
+        items: items,
+        onChanged: onChanged,
+        isExpanded: true,
+        placeholder: placeholder ?? Text(texts.select(label)),
+      ),
+    );
+
+    if (compact) {
+      return combo;
+    }
 
     return InfoLabel(
       label: label,
-      child: SizedBox(
-        width: double.infinity,
-        child: ComboBox<T>(
-          value: value,
-          items: items,
-          onChanged: onChanged,
-          isExpanded: true,
-          placeholder: placeholder ?? Text(texts.select(label)),
-        ),
-      ),
+      child: combo,
     );
   }
 }

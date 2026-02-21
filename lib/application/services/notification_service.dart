@@ -84,7 +84,7 @@ class NotificationService implements INotificationService {
     if (destinationRecipient == null || !destinationRecipient.contains('@')) {
       const failure = ValidationFailure(
         message:
-            'Informe um e-mail de destino valido para testar a configuracao',
+            'Informe um e-mail de destino válido para testar a configuração',
       );
       await _saveEmailTestAudit(
         config: config,
@@ -127,7 +127,7 @@ class NotificationService implements INotificationService {
     final subject = '[SMTP-TEST:$correlationId] ${config.configName}';
     final body =
         '''
-Esta e uma mensagem de teste da configuracao SMTP do Backup Database.
+Esta é uma mensagem de teste da configuração SMTP do Backup Database.
 
 Objetivo:
 - Validar servidor, credenciais e entrega para o destinatario configurado.

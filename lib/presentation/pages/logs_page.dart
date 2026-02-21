@@ -131,6 +131,8 @@ class _LogsPageState extends State<LogsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<LogProvider>();
+
     return ScaffoldPage(
       header: PageHeader(
         title: const Text('Logs'),
@@ -151,82 +153,19 @@ class _LogsPageState extends State<LogsPage> {
         ),
       ),
       content: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildFilters(context),
+            _LogsFiltersCard(
+              provider: provider,
+              searchController: _searchController,
+            ),
             const SizedBox(height: 16),
             Expanded(
-              child: Consumer<LogProvider>(
-                builder: (context, provider, child) {
-                  if (provider.isLoading && provider.logs.isEmpty) {
-                    return const Center(child: ProgressRing());
-                  }
-
-                  if (provider.error != null && provider.logs.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            FluentIcons.error,
-                            size: 48,
-                            color: AppColors.error,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            provider.error!,
-                            style: FluentTheme.of(
-                              context,
-                            ).typography.body?.copyWith(color: AppColors.error),
-                          ),
-                          const SizedBox(height: 16),
-                          ActionButton(
-                            label: 'Tentar Novamente',
-                            onPressed: () => provider.refresh(),
-                            icon: FluentIcons.refresh,
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  if (provider.logs.isEmpty) {
-                    return const AppCard(
-                      child: EmptyState(
-                        icon: FluentIcons.document,
-                        message: 'Nenhum log registrado',
-                      ),
-                    );
-                  }
-
-                  return AppCard(
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            itemCount:
-                                provider.logs.length +
-                                (provider.hasMore ? 1 : 0),
-                            itemBuilder: (context, index) {
-                              if (index == provider.logs.length) {
-                                return const Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: Center(child: ProgressRing()),
-                                );
-                              }
-
-                              final log = provider.logs[index];
-                              return _LogListItem(log: log);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+              child: _LogsContent(
+                provider: provider,
+                scrollController: _scrollController,
               ),
             ),
           ],
@@ -234,111 +173,194 @@ class _LogsPageState extends State<LogsPage> {
       ),
     );
   }
+}
 
-  Widget _buildFilters(BuildContext context) {
-    return Consumer<LogProvider>(
-      builder: (context, provider, child) {
-        return AppCard(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: AppTextField(
-                  controller: _searchController,
-                  label: 'Buscar',
-                  hint: 'Digite para buscar nos logs...',
-                  prefixIcon: const Icon(FluentIcons.search),
-                  onChanged: (value) {
-                    provider.setSearchQuery(value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 150,
-                child: AppDropdown<LogLevel?>(
-                  label: 'Nível',
-                  value: provider.filterLevel,
-                  placeholder: const Text('Nível'),
-                  items: [
-                    const ComboBoxItem(child: Text('Todos')),
-                    ...LogLevel.values.map(
-                      (level) => ComboBoxItem<LogLevel?>(
-                        value: level,
-                        child: Text(_getLevelLabel(level)),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    provider.setFilterLevel(value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 150,
-                child: AppDropdown<LogCategory?>(
-                  label: 'Categoria',
-                  value: provider.filterCategory,
-                  placeholder: const Text('Categoria'),
-                  items: [
-                    const ComboBoxItem(child: Text('Todas')),
-                    ...LogCategory.values.map(
-                      (category) => ComboBoxItem<LogCategory?>(
-                        value: category,
-                        child: Text(_getCategoryLabel(category)),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    provider.setFilterCategory(value);
-                  },
-                ),
-              ),
-              if (provider.filterLevel != null ||
-                  provider.filterCategory != null ||
-                  provider.searchQuery.isNotEmpty) ...[
-                const SizedBox(width: 16),
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: IconButton(
-                    icon: const Icon(FluentIcons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      provider.clearFilters();
-                    },
+String _getLevelLabel(LogLevel level) {
+  switch (level) {
+    case LogLevel.debug:
+      return 'Debug';
+    case LogLevel.info:
+      return 'Info';
+    case LogLevel.warning:
+      return 'Aviso';
+    case LogLevel.error:
+      return 'Erro';
+  }
+}
+
+String _getCategoryLabel(LogCategory category) {
+  switch (category) {
+    case LogCategory.execution:
+      return 'Execução';
+    case LogCategory.system:
+      return 'Sistema';
+    case LogCategory.audit:
+      return 'Auditoria';
+  }
+}
+
+class _LogsFiltersCard extends StatelessWidget {
+  const _LogsFiltersCard({
+    required this.provider,
+    required this.searchController,
+  });
+
+  final LogProvider provider;
+  final TextEditingController searchController;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: AppTextField(
+              controller: searchController,
+              label: 'Buscar',
+              hint: 'Digite para buscar nos logs...',
+              prefixIcon: const Icon(FluentIcons.search),
+              onChanged: provider.setSearchQuery,
+            ),
+          ),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 150,
+            child: AppDropdown<LogLevel?>(
+              label: 'Nível',
+              value: provider.filterLevel,
+              placeholder: const Text('Nível'),
+              items: [
+                const ComboBoxItem(child: Text('Todos')),
+                ...LogLevel.values.map(
+                  (level) => ComboBoxItem<LogLevel?>(
+                    value: level,
+                    child: Text(_getLevelLabel(level)),
                   ),
                 ),
               ],
-            ],
+              onChanged: provider.setFilterLevel,
+            ),
           ),
-        );
-      },
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 150,
+            child: AppDropdown<LogCategory?>(
+              label: 'Categoria',
+              value: provider.filterCategory,
+              placeholder: const Text('Categoria'),
+              items: [
+                const ComboBoxItem(child: Text('Todas')),
+                ...LogCategory.values.map(
+                  (category) => ComboBoxItem<LogCategory?>(
+                    value: category,
+                    child: Text(_getCategoryLabel(category)),
+                  ),
+                ),
+              ],
+              onChanged: provider.setFilterCategory,
+            ),
+          ),
+          if (_hasActiveFilters(provider)) ...[
+            const SizedBox(width: 16),
+            Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: IconButton(
+                icon: const Icon(FluentIcons.clear),
+                onPressed: () {
+                  searchController.clear();
+                  provider.clearFilters();
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  String _getLevelLabel(LogLevel level) {
-    switch (level) {
-      case LogLevel.debug:
-        return 'Debug';
-      case LogLevel.info:
-        return 'Info';
-      case LogLevel.warning:
-        return 'Aviso';
-      case LogLevel.error:
-        return 'Erro';
-    }
+  bool _hasActiveFilters(LogProvider provider) {
+    return provider.filterLevel != null ||
+        provider.filterCategory != null ||
+        provider.searchQuery.isNotEmpty;
   }
+}
 
-  String _getCategoryLabel(LogCategory category) {
-    switch (category) {
-      case LogCategory.execution:
-        return 'Execução';
-      case LogCategory.system:
-        return 'Sistema';
-      case LogCategory.audit:
-        return 'Auditoria';
+class _LogsContent extends StatelessWidget {
+  const _LogsContent({
+    required this.provider,
+    required this.scrollController,
+  });
+
+  final LogProvider provider;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.isLoading && provider.logs.isEmpty) {
+      return const Center(child: ProgressRing());
     }
+
+    if (provider.error != null && provider.logs.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              FluentIcons.error,
+              size: 48,
+              color: AppColors.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              provider.error!,
+              style: FluentTheme.of(context).typography.body?.copyWith(
+                color: AppColors.error,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ActionButton(
+              label: 'Tentar Novamente',
+              onPressed: provider.refresh,
+              icon: FluentIcons.refresh,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (provider.logs.isEmpty) {
+      return const AppCard(
+        child: EmptyState(
+          icon: FluentIcons.document,
+          message: 'Nenhum log registrado',
+        ),
+      );
+    }
+
+    return AppCard(
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: scrollController,
+              itemCount: provider.logs.length + (provider.hasMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == provider.logs.length) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: ProgressRing()),
+                  );
+                }
+
+                final log = provider.logs[index];
+                return _LogListItem(log: log);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -437,30 +459,6 @@ class _LogListItem extends StatelessWidget {
         return AppColors.logWarning;
       case LogLevel.error:
         return AppColors.error;
-    }
-  }
-
-  String _getLevelLabel(LogLevel level) {
-    switch (level) {
-      case LogLevel.debug:
-        return 'Debug';
-      case LogLevel.info:
-        return 'Info';
-      case LogLevel.warning:
-        return 'Aviso';
-      case LogLevel.error:
-        return 'Erro';
-    }
-  }
-
-  String _getCategoryLabel(LogCategory category) {
-    switch (category) {
-      case LogCategory.execution:
-        return 'Execução';
-      case LogCategory.system:
-        return 'Sistema';
-      case LogCategory.audit:
-        return 'Auditoria';
     }
   }
 }

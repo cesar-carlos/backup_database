@@ -42,7 +42,7 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
                   icon: const Icon(FluentIcons.people),
                   text: const Text('Clientes Conectados'),
                   body: const Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: EdgeInsets.fromLTRB(24, 6, 24, 24),
                     child: ConnectedClientsList(),
                   ),
                 ),
@@ -50,7 +50,7 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
                   icon: const Icon(FluentIcons.history),
                   text: const Text('Log de Conexões'),
                   body: const Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: EdgeInsets.fromLTRB(24, 6, 24, 24),
                     child: ConnectionLogsList(),
                   ),
                 ),
@@ -184,7 +184,7 @@ class _CredentialsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -204,7 +204,7 @@ class _CredentialsTab extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 4),
           Expanded(
             child: Consumer<ServerCredentialProvider>(
               builder: (context, provider, _) {

@@ -80,4 +80,10 @@ class AppConstants {
 
   static const String scheduleTransferDestinationsKey =
       'schedule_transfer_destinations';
+
+  static const Duration smtpSendTimeout = Duration(seconds: 20);
+  static const int smtpMaxSendAttempts = 3;
+  static const int smtpBaseRetryDelayMs = 400;
+  static const int smtpMaxRetryDelayMs = 3000;
+  static const int smtpHistoryReloadDebounceMs = 300;
 }

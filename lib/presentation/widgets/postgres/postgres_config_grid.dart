@@ -34,7 +34,7 @@ class PostgresConfigGrid extends StatelessWidget {
           child: Text(
             _t(
               context,
-              'Nenhuma configuracao encontrada',
+              'Nenhuma configuração encontrada',
               'No configuration found',
             ),
           ),
@@ -44,7 +44,7 @@ class PostgresConfigGrid extends StatelessWidget {
 
     return AppCard(
       child: AppDataGrid<PostgresConfig>(
-        minWidth: 980,
+        minWidth: 1000,
         columns: [
           AppDataGridColumn<PostgresConfig>(
             label: _t(context, 'Nome', 'Name'),

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -23,6 +23,9 @@ class ProcessResult {
 }
 
 class ProcessService {
+  static const Duration _executableCacheTtl = Duration(minutes: 10);
+  final Map<String, _ExecutableCacheEntry> _executablePathCache = {};
+
   Future<rd.Result<ProcessResult>> run({
     required String executable,
     required List<String> arguments,
@@ -43,6 +46,7 @@ class ProcessService {
       String? executablePath;
       String? executableDir;
       var executableFound = false;
+      final cacheKey = executable.toLowerCase();
 
       final isAbsolutePath = path.isAbsolute(executable);
 
@@ -61,8 +65,25 @@ class ProcessService {
           );
         }
       } else {
+        final cachedEntry = _executablePathCache[cacheKey];
+        if (cachedEntry != null) {
+          final isExpired =
+              DateTime.now().difference(cachedEntry.cachedAt) >
+              _executableCacheTtl;
+          if (!isExpired && File(cachedEntry.path).existsSync()) {
+            executablePath = cachedEntry.path;
+            executableDir = path.dirname(cachedEntry.path);
+            executableFound = true;
+            LoggerService.debug(
+              'Executavel encontrado em cache: $executablePath',
+            );
+          } else {
+            _executablePathCache.remove(cacheKey);
+          }
+        }
+
         try {
-          if (Platform.isWindows) {
+          if (!executableFound && Platform.isWindows) {
             final whereResult = await Process.run(
               'cmd',
               ['/c', 'where', executable],
@@ -90,7 +111,7 @@ class ProcessService {
                 'where não encontrou $executable. Exit code: ${whereResult.exitCode}, stderr: ${whereResult.stderr}',
               );
             }
-          } else {
+          } else if (!executableFound) {
             final whereResult = await Process.run(
               'which',
               [executable],
@@ -128,11 +149,13 @@ class ProcessService {
             executableLower.contains('pg_basebackup') ||
             executableLower.contains('pg_verifybackup') ||
             executableLower.contains('pg_restore') ||
-            executableLower.contains('pg_dump');
+            executableLower.contains('pg_dump') ||
+            executableLower.contains('pg_receivewal');
 
         final isSqlCmdTool = executableLower.contains('sqlcmd');
 
-        final isSybaseTool = executableLower.contains('dbisql') ||
+        final isSybaseTool =
+            executableLower.contains('dbisql') ||
             executableLower.contains('dbbackup') ||
             executableLower.contains('dbverify');
 
@@ -208,8 +231,8 @@ class ProcessService {
               final toolType = isPostgresTool
                   ? 'PostgreSQL'
                   : isSqlCmdTool
-                      ? 'SQL Server'
-                      : 'Sybase';
+                  ? 'SQL Server'
+                  : 'Sybase';
               LoggerService.info(
                 'Executável $toolType encontrado em caminho comum: $executablePath',
               );
@@ -219,18 +242,28 @@ class ProcessService {
         }
       }
 
+      if (!isAbsolutePath && executableFound && executablePath != null) {
+        _executablePathCache[cacheKey] = _ExecutableCacheEntry(
+          path: executablePath,
+          cachedAt: DateTime.now(),
+        );
+      }
+
       if (!executableFound) {
+        _executablePathCache.remove(cacheKey);
         final executableLower = executable.toLowerCase();
         final isPostgresTool =
             executableLower.contains('psql') ||
             executableLower.contains('pg_basebackup') ||
             executableLower.contains('pg_verifybackup') ||
             executableLower.contains('pg_restore') ||
-            executableLower.contains('pg_dump');
+            executableLower.contains('pg_dump') ||
+            executableLower.contains('pg_receivewal');
 
         final isSqlCmdTool = executableLower.contains('sqlcmd');
 
-        final isSybaseTool = executableLower.contains('dbisql') ||
+        final isSybaseTool =
+            executableLower.contains('dbisql') ||
             executableLower.contains('dbbackup') ||
             executableLower.contains('dbverify');
 
@@ -243,6 +276,8 @@ class ProcessService {
               ? 'pg_verifybackup'
               : executableLower.contains('pg_restore')
               ? 'pg_restore'
+              : executableLower.contains('pg_receivewal')
+              ? 'pg_receivewal'
               : executableLower.contains('pg_dump')
               ? 'pg_dump'
               : 'psql';
@@ -484,17 +519,20 @@ class ProcessService {
           errorString.contains('não foi encontrado') ||
           errorString.contains('cmdlet') ||
           errorString.contains('programa operável')) {
+        _executablePathCache.remove(executable.toLowerCase());
         final executableLower = executable.toLowerCase();
         final isPostgresTool =
             executableLower.contains('psql') ||
             executableLower.contains('pg_basebackup') ||
             executableLower.contains('pg_verifybackup') ||
             executableLower.contains('pg_restore') ||
-            executableLower.contains('pg_dump');
+            executableLower.contains('pg_dump') ||
+            executableLower.contains('pg_receivewal');
 
         final isSqlCmdTool = executableLower.contains('sqlcmd');
 
-        final isSybaseTool = executableLower.contains('dbisql') ||
+        final isSybaseTool =
+            executableLower.contains('dbisql') ||
             executableLower.contains('dbbackup') ||
             executableLower.contains('dbverify');
 
@@ -505,6 +543,8 @@ class ProcessService {
               ? 'pg_verifybackup'
               : executableLower.contains('pg_restore')
               ? 'pg_restore'
+              : executableLower.contains('pg_receivewal')
+              ? 'pg_receivewal'
               : executableLower.contains('pg_dump')
               ? 'pg_dump'
               : 'psql';
@@ -587,4 +627,14 @@ class ProcessService {
       );
     }
   }
+}
+
+class _ExecutableCacheEntry {
+  const _ExecutableCacheEntry({
+    required this.path,
+    required this.cachedAt,
+  });
+
+  final String path;
+  final DateTime cachedAt;
 }

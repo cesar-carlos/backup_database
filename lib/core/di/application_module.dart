@@ -16,6 +16,8 @@ Future<void> setupApplicationModule(GetIt getIt) async {
   // APPLICATION SERVICES
   // ========================================================================
 
+  getIt.registerLazySingleton<AlertService>(AlertService.new);
+
   getIt.registerLazySingleton<INotificationService>(
     () => NotificationService(
       emailConfigRepository: getIt<IEmailConfigRepository>(),
@@ -90,6 +92,9 @@ Future<void> setupApplicationModule(GetIt getIt) async {
     () => ServiceHealthChecker(
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
       processService: getIt<ProcessService>(),
+      postgresConfigRepository: getIt<IPostgresConfigRepository>(),
+      logService: getIt<LogService>(),
+      alertService: getIt<AlertService>(),
     ),
   );
 }

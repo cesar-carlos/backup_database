@@ -61,7 +61,8 @@
       "Bash(echo:*)",
       "Bash(explorer \"D:\\\\Developer\\\\Flutter\\\\backup_database\\\\build\\\\windows\\\\x64\\\\runner\\\\Release\")",
       "Bash(dir \"D:\\\\Developer\\\\Flutter\\\\backup_database\\\\build\\\\windows\\\\x64\\\\runner\\\\Release\")",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(python3:*)"
     ]
   }
 }

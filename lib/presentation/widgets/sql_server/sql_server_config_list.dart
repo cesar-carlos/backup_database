@@ -33,7 +33,7 @@ class SqlServerConfigList extends StatelessWidget {
           child: Text(
             _t(
               context,
-              'Nenhuma configuracao encontrada',
+              'Nenhuma configuração encontrada',
               'No configuration found',
             ),
           ),
@@ -43,7 +43,7 @@ class SqlServerConfigList extends StatelessWidget {
 
     return AppCard(
       child: AppDataGrid<SqlServerConfig>(
-        minWidth: 980,
+        minWidth: 1000,
         columns: [
           AppDataGridColumn<SqlServerConfig>(
             label: _t(context, 'Nome', 'Name'),

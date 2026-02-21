@@ -45,7 +45,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
         ),
       ),
       content: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -219,6 +219,28 @@ class _SchedulesPageState extends State<SchedulesPage> {
     BuildContext context,
     Schedule schedule,
   ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => ContentDialog(
+        title: const Text('Duplicar Agendamento'),
+        content: Text(
+          'Deseja duplicar o agendamento "${schedule.name}"?',
+        ),
+        actions: [
+          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
+          ActionButton(
+            label: 'Duplicar',
+            icon: FluentIcons.copy,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (!(confirmed ?? false) || !context.mounted) {
+      return;
+    }
+
     final provider = context.read<SchedulerProvider>();
     final success = await provider.duplicateSchedule(schedule);
 

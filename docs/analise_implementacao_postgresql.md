@@ -1,290 +1,152 @@
-# Análise da Implementação PostgreSQL
+# Analise da Implementacao PostgreSQL
 
-## 📊 Resumo Executivo
+Atualizado em: 2026-02-21
 
-A implementação do suporte a PostgreSQL está **completa e funcional**, seguindo os padrões do projeto e oferecendo múltiplas estratégias de backup para diferentes necessidades.
+## Resumo executivo
 
-## ✅ Pontos Fortes
+O suporte a PostgreSQL esta implementado nas camadas de UI, provider, repositorio, servico e orchestrator.
+As estrategias `full`, `fullSingle`, `differential` e `log` existem no codigo.
 
-1. **Arquitetura Consistente**: Segue o mesmo padrão de SQL Server e Sybase
-2. **Separação de Responsabilidades**: Clean Architecture bem aplicada
-3. **Tratamento de Erros**: Uso correto do Result pattern com mensagens claras
-4. **Segurança**: Criptografia de senhas implementada
-5. **Integração Completa**: UI, Providers, Repositories, Services todos implementados
-6. **Múltiplas Estratégias**: Suporte a backup físico (cluster) e lógico (base específica)
+Porem, o documento anterior superestimava o estado atual em alguns pontos:
 
-## 🎯 Estratégias de Backup Implementadas
+- verificacao de integridade nao se aplica a todos os tipos.
 
-### 1. **Full (pg_basebackup)**
+## O que esta implementado no codigo
 
-- **Ferramenta**: `pg_basebackup`
-- **Escopo**: Cluster PostgreSQL completo (todos os bancos)
-- **Formato**: Diretório com estrutura física do cluster
-- **Verificação**: `pg_verifybackup` com manifest SHA256
-- **Uso**: Backup físico completo do cluster para restauração completa
+1. Configuracao PostgreSQL
+- entidade: `PostgresConfig`
+- provider: `PostgresConfigProvider`
+- repositorio: `PostgresConfigRepository`
+- persistencia local: tabela `postgres_configs_table`
 
-### 2. **Full Single (pg_dump)**
+2. Seguranca de senha
+- senha e salva via `ISecureCredentialService`
+- tabela local guarda `password` vazio (`''`)
+- senha real e buscada por chave segura (`postgres_password_<id>`)
 
-- **Ferramenta**: `pg_dump`
-- **Escopo**: Base de dados específica (configurada)
-- **Formato**: Arquivo único `.backup` (custom format)
-- **Verificação**: `pg_restore -l` para listar objetos
-- **Uso**: Backup lógico de uma base específica, portável e eficiente
+3. Integracao de execucao
+- `BackupOrchestratorService` chama `IPostgresBackupService`
+- compressao continua no orchestrator apos gerar backup bruto
+- UI de agendamento permite os tipos PostgreSQL: `full`, `fullSingle`, `differential`, `log`
 
-### 3. **Incremental (pg_basebackup)**
+## Estrategias (comportamento real)
 
-- **Ferramenta**: `pg_basebackup` com `--incremental`
-- **Escopo**: Cluster PostgreSQL completo
-- **Formato**: Diretório incremental baseado em manifest anterior
-- **Verificação**: `pg_verifybackup`
-- **Requisitos**: PostgreSQL 17+ com `summarize_wal` habilitado
-- **Uso**: Backup apenas das alterações desde o último FULL
+### 1) Full
+- ferramenta: `pg_basebackup`
+- argumentos principais: `-D`, `-P`, `--manifest-checksums=sha256`, `--wal-method=stream`
+- saida: diretorio
+- verificacao opcional: `pg_verifybackup -D <backupPath>` (quando `verifyAfterBackup=true`)
 
-### 4. **Log (pg_basebackup)**
+### 2) Full Single
+- ferramenta: `pg_dump`
+- argumentos principais: `-F c`, `-f <arquivo.backup>`, `--no-owner`, `--no-privileges`
+- escopo: banco configurado (`config.database`)
+- saida: arquivo `.backup`
+- verificacao opcional: `pg_restore -l <arquivo.backup>`
 
-- **Ferramenta**: `pg_basebackup` com `-X stream`
-- **Escopo**: WAL files (Write-Ahead Log)
-- **Formato**: Diretório com arquivos WAL
-- **Verificação**: Não aplicável (WAL files)
-- **Uso**: Captura de transações para PITR (Point-In-Time Recovery)
+### 3) Differential (incremental)
+- tentativa: `pg_basebackup --incremental=<manifest anterior>`
+- requisito tecnico: encontrar FULL anterior com `backup_manifest`
+- busca de FULL anterior: pasta atual + pasta irma `Full`
+- fallback automatico: se nao achar FULL valido, executa `FULL`
+- no fallback, o path final e ajustado para sufixo `_full_` (nao permanece `_incremental_`)
 
-## 📋 Comparativo de Estratégias
+### 4) Log
+- ferramenta: `pg_receivewal`
+- modo: one-shot com `--endpos=<LSN atual>` e `--no-loop`
+- preparacao: consulta LSN atual via `psql` (`SELECT pg_current_wal_lsn();`)
+- escopo: captura de WAL para PITR
+- saida: segmentos WAL + arquivo `wal_capture_info.txt`
+- replication slot dedicado: opcional por ambiente
+- verificacao: nao executa pos-validacao nesse tipo
+- timeout do modo LOG configuravel por ambiente
+- compressao opcional do WAL via `pg_receivewal --compress` com fallback automatico
 
-| Estratégia      | Ferramenta      | Escopo          | Formato           | Online | Incremental | Log |
-| --------------- | --------------- | --------------- | ----------------- | ------ | ----------- | --- |
-| **Full**        | `pg_basebackup` | Cluster         | Diretório         | ✅     | ❌          | ❌  |
-| **Full Single** | `pg_dump`       | Base específica | Arquivo `.backup` | ✅     | ❌          | ❌  |
-| **Incremental** | `pg_basebackup` | Cluster         | Diretório         | ✅     | ✅          | ❌  |
-| **Log**         | `pg_basebackup` | WAL files       | Diretório         | ✅     | ✅          | ✅  |
+#### Slot opcional (WAL)
 
-## 🔧 Implementação Técnica
+Variaveis suportadas:
 
-### Formato de Backup FULL (pg_basebackup)
+- `BACKUP_DATABASE_PG_LOG_USE_SLOT=true|false` (padrao: `false`)
+- `BACKUP_DATABASE_PG_LOG_SLOT_NAME=<nome>` (opcional)
+- `BACKUP_DATABASE_PG_LOG_TIMEOUT_SECONDS=<segundos>` (opcional, padrao: 3600)
+- `BACKUP_DATABASE_PG_LOG_COMPRESSION=<modo>` (opcional, ex.: `gzip`, `lz4`, `none`)
 
-```dart
-final arguments = [
-  '-h', config.host,
-  '-p', config.port.toString(),
-  '-U', config.username,
-  '-D', backupPath,  // Diretório de saída
-  '-P',  // Progresso
-  '--manifest-checksums=sha256',  // Manifest com checksums
-  '--wal-method=stream',  // Stream WAL durante backup
-];
-```
+Quando habilitado:
 
-**Características**:
+- o servico cria/valida slot com `pg_receivewal --create-slot --if-not-exists`;
+- usa `--slot=<nome>` na captura WAL;
+- se `BACKUP_DATABASE_PG_LOG_SLOT_NAME` nao for informado, o nome e derivado de `config.id` e sanitizado.
+- no delete da configuracao, o sistema tenta remover o slot remoto em modo best effort.
 
-- Plain format (sem `-Ft`) para compatibilidade com `pg_verifybackup`
-- Manifest com checksums SHA256 para verificação
-- WAL streaming durante backup
-- Compressão feita pelo orchestrator após backup
+#### Saude de slot (observabilidade)
 
-### Formato de Backup FULL SINGLE (pg_dump)
+Variaveis suportadas:
 
-```dart
-final arguments = [
-  '-h', config.host,
-  '-p', config.port.toString(),
-  '-U', config.username,
-  '-d', config.database,  // Base específica
-  '-F', 'c',  // Custom format (binário)
-  '-f', backupPath,  // Arquivo .backup
-  '-v',  // Verbose
-  '--no-owner',  // Portabilidade
-  '--no-privileges',  // Portabilidade
-];
-```
+- `BACKUP_DATABASE_PG_SLOT_HEALTH_ENABLED=true|false` (padrao: segue `BACKUP_DATABASE_PG_LOG_USE_SLOT`)
+- `BACKUP_DATABASE_PG_SLOT_MAX_LAG_MB=<valor>` (padrao: 1024)
+- `BACKUP_DATABASE_PG_SLOT_INACTIVE_HOURS=<valor>` (padrao: 24)
 
-**Características**:
+Com isso, o `ServiceHealthChecker` avalia `pg_replication_slots`, gera `HealthIssue` e publica alertas operacionais antes de crescimento excessivo em `pg_wal`.
 
-- Formato custom (binário) para eficiência
-- Backup apenas da base especificada
-- Arquivo único `.backup`
-- Portável entre diferentes instalações PostgreSQL
+## Estrutura de saida real
 
-### Verificação de Integridade
-
-**Backup FULL/INCREMENTAL**:
-
-- Usa `pg_verifybackup -D backupPath -m`
-- Verifica manifest e checksums SHA256
-- Compatível com backups criados por `pg_basebackup`
-
-**Backup FULL SINGLE**:
-
-- Usa `pg_restore -l backupPath`
-- Lista objetos do backup para verificar integridade
-- Conta objetos para validação adicional
-
-## 🎨 Estrutura de Arquivos
-
-### Backup FULL/INCREMENTAL/LOG (pg_basebackup)
+O orchestrator separa por tipo de backup:
 
 ```
-backup_directory/
-  ├── database_full_timestamp/
-  │   ├── base/
-  │   │   └── [arquivos do cluster]
-  │   ├── pg_wal/
-  │   │   └── [WAL files]
-  │   └── backup_manifest
-  └── database_incremental_timestamp/
-      └── [arquivos incrementais]
+<backupFolder>/
+  Full/
+  Full Single/
+  Diferencial/
+  Log de Transacoes/
 ```
 
-### Backup FULL SINGLE (pg_dump)
+Dentro de cada pasta, o `PostgresBackupService` gera nome com sufixo por tipo:
 
-```
-backup_directory/
-  └── database_fullSingle_timestamp.backup
-```
+- `*_full_<timestamp>/`
+- `*_fullSingle_<timestamp>.backup`
+- `*_incremental_<timestamp>/`
+- `*_log_<timestamp>/`
 
-## ✅ Problemas Resolvidos
+## Observacao tecnica (incremental)
 
-### 1. ✅ Formato de Backup Corrigido
+O orchestrator separa as saidas por tipo de pasta.
+Para manter o incremental funcional nesse modelo, o servico agora busca FULL anterior em dois locais:
 
-- **Antes**: Usava `-Ft` (tar) incompatível com `pg_verifybackup`
-- **Agora**: Plain format compatível com verificação
-- **Status**: Resolvido
+1. pasta atual do tipo solicitado;
+2. pasta irma `Full` no mesmo nivel.
 
-### 2. ✅ Cálculo de Tamanho Correto
+Se ainda assim nao existir FULL valido com `backup_manifest`, ocorre fallback para FULL.
 
-- **Antes**: Podia estar incorreto com formato tar
-- **Agora**: Calcula corretamente diretórios e arquivos
-- **Status**: Resolvido
+## Verificacao de integridade (estado atual)
 
-### 3. ✅ Compressão Não Duplicada
+- `full`: sim, opcional (`verifyAfterBackup`)
+- `fullSingle`: sim, opcional (`verifyAfterBackup`)
+- `differential`: sim, opcional (`verifyAfterBackup`)
+- `log`: nao
 
-- **Antes**: Backup comprimido com `-z` + compressão do orchestrator
-- **Agora**: Backup sem compressão, orchestrator comprime depois
-- **Status**: Resolvido
+Logo, nao e correto afirmar "verificacao para todos os tipos".
 
-### 4. ✅ Backup WAL Implementado
+## Ferramentas necessarias por fluxo
 
-- **Antes**: Retornava erro
-- **Agora**: Usa `pg_basebackup` com `-X stream`
-- **Status**: Implementado
+- `pg_basebackup`: `full`, `differential`
+- `pg_receivewal`: `log`
+- `pg_dump`: `fullSingle`
+- `pg_verifybackup`: verificacao de `full`/`differential` (quando habilitada)
+- `pg_restore`: verificacao de `fullSingle` (quando habilitada)
+- `psql`: teste de conexao, listagem de bancos na UI e leitura do LSN atual no modo `log`
 
-### 5. ✅ Suporte a Base Específica
+## Estado de testes
 
-- **Antes**: Apenas backup do cluster completo
-- **Agora**: Opção FULL SINGLE com `pg_dump` para base específica
-- **Status**: Implementado
+Nao foram encontrados testes unitarios/integracao especificos para o fluxo de backup PostgreSQL (`PostgresBackupService`).
 
-## 🔍 Detalhes de Implementação
+Recomendado priorizar:
 
-### Busca de Backup Anterior (Incremental)
+1. teste do fallback `differential -> full`;
+2. teste da descoberta de FULL anterior considerando pastas por tipo;
+3. teste para confirmar semantica real do tipo `log`;
+4. teste de verificacao (`pg_verifybackup` e `pg_restore`) por tipo.
 
-O sistema busca automaticamente o último backup FULL com manifest:
+## Conclusao
 
-```dart
-Future<rd.Result<String>> _findPreviousFullBackup({
-  required String outputDirectory,
-  required String databaseName,
-}) async {
-  // Busca diretórios que começam com 'databaseName_full_'
-  // Verifica existência de backup_manifest
-  // Ordena por data de modificação (mais recente primeiro)
-  // Retorna caminho do backup anterior
-}
-```
-
-### Tratamento de Erros
-
-- **Executável não encontrado**: Mensagens detalhadas com instruções de PATH
-- **Conexão falhada**: Mensagens específicas (autenticação, host, porta, banco)
-- **Backup vazio**: Validação de tamanho após criação
-- **Verificação falha**: Warning (não falha o backup)
-
-### Mensagens ao Usuário
-
-Todas as mensagens de erro seguem o padrão:
-
-- Explicação clara do problema
-- Instruções passo a passo para resolver
-- Referência à documentação (`docs/path_setup.md`)
-
-## 🧪 Testes Necessários
-
-1. **Teste de Backup FULL**:
-
-   - Verificar criação de diretório
-   - Verificar cálculo de tamanho
-   - Verificar verificação de integridade
-   - Testar restauração
-
-2. **Teste de Backup FULL SINGLE**:
-
-   - Verificar criação de arquivo `.backup`
-   - Verificar cálculo de tamanho
-   - Verificar verificação com `pg_restore -l`
-   - Testar restauração em outra base
-
-3. **Teste de Backup INCREMENTAL**:
-
-   - Verificar busca de backup anterior
-   - Verificar criação de backup incremental
-   - Verificar que requer backup FULL anterior
-   - Testar fallback para FULL se não encontrar anterior
-
-4. **Teste de Backup LOG**:
-
-   - Verificar captura de WAL files
-   - Verificar que não faz verificação
-   - Testar PITR (Point-In-Time Recovery)
-
-5. **Teste de Compressão**:
-   - Verificar que não há compressão duplicada
-   - Verificar que ZIP contém estrutura correta
-   - Testar com diferentes tipos de backup
-
-## 📚 Referências
-
-- [PostgreSQL pg_basebackup Documentation](https://www.postgresql.org/docs/current/app-pgbasebackup.html)
-- [PostgreSQL pg_dump Documentation](https://www.postgresql.org/docs/current/app-pgdump.html)
-- [PostgreSQL pg_verifybackup Documentation](https://www.postgresql.org/docs/current/app-pgverifybackup.html)
-- [PostgreSQL pg_restore Documentation](https://www.postgresql.org/docs/current/app-pgrestore.html)
-- [PostgreSQL Backup and Restore Best Practices](https://www.postgresql.org/docs/current/backup.html)
-- [PostgreSQL Incremental Backups](https://www.postgresql.fastware.com/trunk-line/2024-05-introducing-incremental-backups-with-pg-basebackup)
-
-## 🎯 Conclusão
-
-A implementação está **100% completa e funcional**, oferecendo:
-
-- ✅ Backup físico completo do cluster (`pg_basebackup` FULL)
-- ✅ Backup lógico de base específica (`pg_dump` FULL SINGLE)
-- ✅ Backup incremental do cluster (`pg_basebackup` INCREMENTAL)
-- ✅ Backup de WAL files (`pg_basebackup` LOG)
-- ✅ Verificação de integridade para todos os tipos
-- ✅ Tratamento de erros robusto e informativo
-- ✅ UI completa e intuitiva
-- ✅ Conformidade com padrões do projeto
-
-**Status**: Pronto para produção ✅
-
-## 📝 Notas Importantes
-
-1. **Backup FULL vs FULL SINGLE**:
-
-   - FULL: Backup de TODO o cluster (todos os bancos)
-   - FULL SINGLE: Backup de UMA base específica
-
-2. **Requisitos para INCREMENTAL**:
-
-   - PostgreSQL 17+
-   - `summarize_wal` habilitado no servidor
-   - Backup FULL anterior com manifest
-
-3. **Nomenclatura**:
-
-   - O campo `config.database` é usado para nomear backups
-   - FULL SINGLE faz backup apenas dessa base
-   - FULL faz backup de todo o cluster (usa `database` apenas para nome)
-
-4. **Ferramentas Necessárias**:
-   - `pg_basebackup`: Para FULL, INCREMENTAL, LOG
-   - `pg_dump`: Para FULL SINGLE
-   - `pg_verifybackup`: Para verificar backups físicos
-   - `pg_restore`: Para verificar backups lógicos
-   - `psql`: Para teste de conexão
+A implementacao PostgreSQL esta ampla e integrada, mas o documento anterior nao refletia com precisao o comportamento atual.
+Este arquivo agora descreve o estado real do codigo, incluindo limitacoes abertas.

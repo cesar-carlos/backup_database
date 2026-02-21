@@ -126,7 +126,7 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
             i: widget.columns[i].width,
           if (hasActions)
             widget.columns.length: FixedColumnWidth(
-              math.max(88, (widget.actions.length * 40) + 20).toDouble(),
+              math.max(76, (widget.actions.length * 36) + 16).toDouble(),
             ),
         };
         final viewportWidth = constraints.maxWidth.isFinite
@@ -216,7 +216,7 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
 
   Widget _buildActionsCell(BuildContext context, T row) {
     return _GridCell(
-      alignment: Alignment.centerRight,
+      alignment: Alignment.center,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

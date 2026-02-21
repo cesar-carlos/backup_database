@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/presentation/widgets/notifications/notification_config_dialog.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -7,9 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   Widget buildDialog({
-    required Future<bool> Function(EmailConfig config) onTestConnection,
     EmailConfig? initialConfig,
-    String? Function()? getTestErrorMessage,
     Future<EmailConfig?> Function(
       EmailConfig config,
       SmtpOAuthProvider provider,
@@ -43,8 +39,6 @@ void main() {
         child: NotificationConfigDialog(
           initialConfig: config,
           initialRecipientEmail: 'destino@example.com',
-          onTestConnection: onTestConnection,
-          getTestErrorMessage: getTestErrorMessage,
           onConnectOAuth: onConnectOAuth,
           onReconnectOAuth: onReconnectOAuth,
           onDisconnectOAuth: onDisconnectOAuth,
@@ -54,68 +48,6 @@ void main() {
   }
 
   group('NotificationConfigDialog', () {
-    testWidgets(
-      'shows success message after successful test connection',
-      (tester) async {
-        await tester.pumpWidget(
-          buildDialog(
-            onTestConnection: (_) async => true,
-          ),
-        );
-
-        await tester.tap(find.text('Testar conexao'));
-        await tester.pumpAndSettle();
-
-        expect(
-          find.textContaining('Mensagem de teste aceita pelo servidor SMTP'),
-          findsOneWidget,
-        );
-      },
-    );
-
-    testWidgets(
-      'shows error message from provider when test connection fails',
-      (tester) async {
-        await tester.pumpWidget(
-          buildDialog(
-            onTestConnection: (_) async => false,
-            getTestErrorMessage: () => 'Falha SMTP detalhada',
-          ),
-        );
-
-        await tester.tap(find.text('Testar conexao'));
-        await tester.pumpAndSettle();
-
-        expect(find.text('Falha SMTP detalhada'), findsOneWidget);
-      },
-    );
-
-    testWidgets(
-      'shows loading state while testing',
-      (tester) async {
-        final completer = Completer<bool>();
-        var callCount = 0;
-
-        await tester.pumpWidget(
-          buildDialog(
-            onTestConnection: (_) {
-              callCount++;
-              return completer.future;
-            },
-          ),
-        );
-
-        await tester.tap(find.text('Testar conexao'));
-        await tester.pump();
-
-        expect(find.byType(ProgressRing), findsOneWidget);
-        expect(callCount, 1);
-
-        completer.complete(true);
-        await tester.pumpAndSettle();
-      },
-    );
-
     testWidgets(
       'shows oauth actions when selecting OAuth mode',
       (tester) async {
@@ -132,7 +64,6 @@ void main() {
         await tester.pumpWidget(
           buildDialog(
             initialConfig: oauthConfig,
-            onTestConnection: (_) async => true,
             onConnectOAuth: (config, provider) async => config,
           ),
         );
@@ -168,7 +99,6 @@ void main() {
               child: NotificationConfigDialog(
                 initialConfig: oauthConfig,
                 initialRecipientEmail: 'destino@example.com',
-                onTestConnection: (_) async => true,
                 onConnectOAuth: (config, provider) async {
                   return config.copyWith(
                     authMode: SmtpAuthMode.oauthGoogle,

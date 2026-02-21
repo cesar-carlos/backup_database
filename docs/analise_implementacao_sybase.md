@@ -26,7 +26,8 @@ A implementação segue **Clean Architecture** com as seguintes camadas:
 
 #### **Application Layer**
 
-- **Orchestrator**: `BackupOrchestratorService` (integração com Sybase)
+- **Orchestrator**: `BackupOrchestratorService` (execução e compressão do backup)
+- **Scheduler**: `SchedulerService` (envio para destinos e estado final da execução)
 - **Provider**: `SybaseConfigProvider` (`lib/application/providers/sybase_config_provider.dart`)
 
 #### **Presentation Layer**
@@ -70,7 +71,7 @@ class SybaseConfig {
 ### 1. **Full (Completo)**
 
 - **Comando SQL**: `BACKUP DATABASE DIRECTORY '<path>'`
-- **Comando dbbackup**: `dbbackup -d -c '<connection>' -y <path>`
+- **Comando dbbackup**: `dbbackup -c '<connection>' -y <path>`
 - **Estrutura**: Cria um diretório com o nome do banco de dados contendo todos os arquivos
 - **Status**: Banco ONLINE durante o backup
 - **Uso**: Base para backups diferenciais e logs
@@ -80,14 +81,16 @@ class SybaseConfig {
 - **Comportamento**: Convertido automaticamente para Full
 - **Motivo**: Sybase SQL Anywhere não suporta backup diferencial nativo via comandos de linha
 - **Implementação**: `backupType == BackupType.differential` → tratado como `BackupType.full`
+- **UI atual**: Opção não é exibida para Sybase no agendamento
+- **Compatibilidade**: Agendamentos legados com `Differential` são normalizados para `Full` ao editar/salvar
 
 ### 3. **Log (Transação)**
 
 - **Comando SQL (TRUNCATE)**: `BACKUP DATABASE DIRECTORY '<path>' TRANSACTION LOG TRUNCATE`
 - **Comando SQL (ONLY)**: `BACKUP DATABASE DIRECTORY '<path>' TRANSACTION LOG ONLY`
-- **Comando dbbackup (TRUNCATE)**: `dbbackup -x -c '<connection>' -y <path>`
+- **Comando dbbackup (TRUNCATE)**: `dbbackup -t -x -c '<connection>' -y <path>`
 - **Comando dbbackup (ONLY)**: `dbbackup -t -r -c '<connection>' -y <path>`
-- **Extensão**: `.trn`
+- **Saída**: arquivo de log dentro de um diretório por execução
 - **Truncate Log**: Opção para liberar espaço após backup
 - **Status**: Banco ONLINE durante o backup
 
@@ -166,17 +169,25 @@ Se `dbisql` falhar, tenta `dbbackup` com as seguintes estratégias:
 - **Propósito**: Ferramenta nativa de backup do Sybase
 - **Uso**: Fallback quando dbisql falha
 - **Argumentos**:
-  - `-d`: Backup completo (full)
+  - (sem `-t`): Backup completo (full)
+  - `-t`: Backup de transaction log
   - `-x`: Backup de log com truncate
   - `-t -r`: Backup de log sem truncate
   - `-c '<connection>'`: String de conexão
   - `-y <path>`: Caminho de destino
 - **Timeout**: 2 horas
 
-### 3. **dbverify**
+### 3. **dbvalid**
 
-- **Propósito**: Verificar integridade do backup
-- **Uso**: Quando `verifyAfterBackup = true`
+- **Propósito**: Verificar integridade de arquivo `.db` de backup (preferencial)
+- **Uso**: Quando `verifyAfterBackup = true` e há backup Full com `.db` disponível
+- **Argumentos**: `-c 'UID=<user>;PWD=<pass>;DBF=<backup_file.db>'`
+- **Timeout**: 30 minutos
+
+### 4. **dbverify** (fallback)
+
+- **Propósito**: Verificação por conexão ativa ao banco
+- **Uso**: Fallback quando `dbvalid` não é aplicável/falha
 - **Argumentos**: `-c '<connection>' -d <databaseName>`
 - **Timeout**: 30 minutos
 
@@ -198,18 +209,23 @@ Se `dbisql` falhar, tenta `dbbackup` com as seguintes estratégias:
 
 ```
 <outputDirectory>/
-  └── <databaseName>_log_<timestamp>.trn
+  └── <databaseName>_log_<timestamp>/
+      └── <arquivo_gerado_pelo_sybase>.trn (ou .log)
 ```
 
 ---
 
 ## ✅ Verificação de Integridade
 
-### dbverify
+### dbvalid + dbverify (fallback)
 
-Quando `verifyAfterBackup = true`, o sistema executa `dbverify` após o backup:
+Quando `verifyAfterBackup = true`, o sistema tenta:
+
+1. `dbvalid` no arquivo `.db` do backup Full (validação offline preferencial)
+2. `dbverify` por conexão (fallback)
 
 ```dart
+dbvalid -c 'UID=<user>;PWD=<pass>;DBF=<backup_file.db>'
 dbverify -c '<connection>' -d <databaseName>
 ```
 
@@ -219,7 +235,7 @@ dbverify -c '<connection>' -d <databaseName>
 2. `ENG=<databaseName>;DBN=<databaseName>;UID=<username>;PWD=<password>`
 3. `ENG=<serverName>;UID=<username>;PWD=<password>`
 
-**Observação**: Se a verificação falhar, o backup não é considerado como falha, apenas um warning é registrado.
+**Observação**: Se a verificação falhar em modo atual, o backup não é marcado como falha; é registrado warning.
 
 ---
 
@@ -322,7 +338,7 @@ Após executar o backup, o sistema:
 
 ### Tratamento Especial para Backup de Log
 
-Para backups de log (`.trn`):
+Para backups de log (`.trn`/`.log`):
 
 - Aguarda até 5 segundos adicionais para o arquivo ser liberado pelo Sybase
 - Tenta abrir o arquivo em modo leitura para garantir que está acessível
@@ -336,7 +352,8 @@ Para backups de log (`.trn`):
 
 1. **dbisql**: Ferramenta de linha de comando do Sybase SQL Anywhere
 2. **dbbackup**: Ferramenta nativa de backup do Sybase SQL Anywhere
-3. **dbverify**: Ferramenta de verificação de integridade (opcional)
+3. **dbvalid**: Verificação de integridade de backup Full (recomendada)
+4. **dbverify**: Verificação por conexão (fallback/opcional)
 
 ### Caminhos de Instalação Padrão
 
@@ -376,7 +393,7 @@ As ferramentas devem estar no PATH do sistema ou do usuário. Consulte `docs/pat
 
 - Valida configuração do banco
 - Cria diretório de saída se não existir
-- Determina tipo efetivo de backup (differential → full)
+- Determina tipo efetivo de backup (`differential` e `fullSingle` → `full`)
 
 ### 2. Execução do Backup
 
@@ -401,8 +418,8 @@ As ferramentas devem estar no PATH do sistema ou do usuário. Consulte `docs/pat
 
 ### 4. Verificação de Integridade (Opcional)
 
-- Se `verifyAfterBackup = true`, executa `dbverify`
-- Tenta 3 estratégias de conexão
+- Se `verifyAfterBackup = true`, tenta `dbvalid` no arquivo do backup Full
+- Em caso de falha/indisponibilidade, tenta `dbverify` com 3 estratégias de conexão
 - Registra warning se falhar (não falha o backup)
 
 ### 5. Retorno
@@ -422,10 +439,17 @@ As ferramentas devem estar no PATH do sistema ou do usuário. Consulte `docs/pat
 O `BackupOrchestratorService` integra o backup Sybase com:
 
 - Compressão (ZIP/RAR)
-- Envio para destinos (Local, FTP, Google Drive)
 - Histórico de backups
 - Logs de execução
 - Notificações por e-mail
+
+### SchedulerService
+
+O `SchedulerService` integra com:
+
+- Envio para destinos (Local, FTP, Google Drive, etc.)
+- Tratamento de falhas de upload por destino
+- Status final da execução considerando envio
 
 ### ScheduleDialog
 
@@ -437,7 +461,7 @@ Na UI, o usuário pode configurar:
 - Compressão (ZIP/RAR)
 - Destinos de envio
 
-**Observação**: Backup Differential não está disponível na UI para Sybase, pois é convertido para Full internamente.
+**Observação**: Para Sybase, `Differential` não é exibido na UI; caso exista em agendamento legado, é convertido para `Full` ao editar/salvar.
 
 ---
 
@@ -449,7 +473,7 @@ Na UI, o usuário pode configurar:
 | Backup Differential     | ❌ (convertido para Full) | ✅                      | ✅                              |
 | Backup Log              | ✅                        | ✅                      | ✅                              |
 | Banco ONLINE            | ✅                        | ✅                      | ✅                              |
-| Verificação Integridade | ✅ (dbverify)             | ✅ (RESTORE VERIFYONLY) | ✅ (pg_verifybackup/pg_restore) |
+| Verificação Integridade | ✅ (dbvalid + dbverify)   | ✅ (RESTORE VERIFYONLY) | ✅ (pg_verifybackup/pg_restore) |
 | Compressão              | ✅ (ZIP/RAR)              | ✅ (ZIP/RAR)            | ✅ (ZIP/RAR)                    |
 
 ---
@@ -476,12 +500,13 @@ final escapedBackupPath = backupPath.replaceAll('\\', '\\\\');
 ### Nomenclatura de Arquivos
 
 - **Full**: Diretório com nome do banco (`<databaseName>/`)
-- **Log**: Arquivo com timestamp (`<databaseName>_log_<timestamp>.trn`)
+- **Log**: Diretório por execução (`<databaseName>_log_<timestamp>/`) contendo arquivo `.trn`/`.log`
 
 ### Tratamento de Differential
 
 ```dart
-final effectiveType = backupType == BackupType.differential
+final effectiveType = (backupType == BackupType.differential ||
+    backupType == BackupType.fullSingle)
     ? BackupType.full
     : backupType;
 ```
@@ -505,7 +530,7 @@ final effectiveType = backupType == BackupType.differential
 - [x] Múltiplas estratégias de conexão
 - [x] Suporte a Full e Log backups
 - [x] Tratamento de Differential (convertido para Full)
-- [x] Verificação de integridade (dbverify)
+- [x] Verificação de integridade (dbvalid + fallback dbverify)
 - [x] Teste de conexão
 - [x] Tratamento de erros específicos
 - [x] Integração com BackupOrchestratorService
@@ -516,4 +541,4 @@ final effectiveType = backupType == BackupType.differential
 
 ---
 
-**Última atualização**: Dezembro 2024
+**Última atualização**: 21 de fevereiro de 2026

@@ -8,12 +8,10 @@ class EmailConfigGrid extends StatelessWidget {
     required this.selectedConfigId,
     required this.canManage,
     required this.isLoading,
-    required this.testingConfigId,
     required this.onCreate,
     required this.onEdit,
     required this.onDelete,
     required this.onSelect,
-    required this.onTest,
     required this.onToggleEnabled,
     super.key,
   });
@@ -22,12 +20,10 @@ class EmailConfigGrid extends StatelessWidget {
   final String? selectedConfigId;
   final bool canManage;
   final bool isLoading;
-  final String? testingConfigId;
   final VoidCallback onCreate;
   final ValueChanged<EmailConfig> onEdit;
   final ValueChanged<EmailConfig> onDelete;
   final ValueChanged<EmailConfig> onSelect;
-  final ValueChanged<EmailConfig> onTest;
   final void Function(EmailConfig config, bool enabled) onToggleEnabled;
 
   @override
@@ -45,27 +41,11 @@ class EmailConfigGrid extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                'Configuracoes SMTP',
-                style: FluentTheme.of(context).typography.subtitle?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              Button(
-                onPressed: canManage ? onCreate : null,
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(FluentIcons.add),
-                    SizedBox(width: 8),
-                    Text('Nova configuracao'),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            'Configuracoes SMTP',
+            style: FluentTheme.of(context).typography.subtitle?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 16),
           if (configs.isEmpty)
@@ -128,12 +108,6 @@ class EmailConfigGrid extends StatelessWidget {
                 ),
               ],
               actions: [
-                AppDataGridAction<EmailConfig>(
-                  icon: FluentIcons.network_tower,
-                  tooltip: 'Testar conexao',
-                  onPressed: onTest,
-                  isEnabled: (row) => canManage && testingConfigId != row.id,
-                ),
                 AppDataGridAction<EmailConfig>(
                   icon: FluentIcons.edit,
                   tooltip: 'Editar',

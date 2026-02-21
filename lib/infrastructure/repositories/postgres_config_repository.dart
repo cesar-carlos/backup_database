@@ -1,10 +1,15 @@
-﻿import 'package:backup_database/core/core.dart';
+import 'dart:io';
+
+import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/external/process/postgres_wal_slot_utils.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart'
+    as ps;
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -12,10 +17,12 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
   PostgresConfigRepository(
     this._database,
     this._secureCredentialService,
+    this._processService,
   );
 
   final AppDatabase _database;
   final ISecureCredentialService _secureCredentialService;
+  final ps.ProcessService _processService;
 
   static const String _passwordKeyPrefix = 'postgres_password_';
 
@@ -103,6 +110,12 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
   @override
   Future<rd.Result<void>> delete(String id) async {
     try {
+      final existingConfigResult = await getById(id);
+      final existingConfig = existingConfigResult.getOrNull();
+      if (existingConfig != null) {
+        await _dropWalReplicationSlotBestEffort(existingConfig);
+      }
+
       final passwordKey = '$_passwordKeyPrefix$id';
       await _secureCredentialService.deletePassword(key: passwordKey);
       await _database.postgresConfigDao.deleteConfig(id);
@@ -112,6 +125,72 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
         DatabaseFailure(message: 'Erro ao deletar configuração: $e'),
       );
     }
+  }
+
+  Future<void> _dropWalReplicationSlotBestEffort(PostgresConfig config) async {
+    final useSlot = PostgresWalSlotUtils.isWalSlotEnabled(
+      environment: Platform.environment,
+    );
+    if (!useSlot) {
+      return;
+    }
+
+    final slotName = PostgresWalSlotUtils.resolveWalSlotName(
+      config: config,
+      environment: Platform.environment,
+    );
+    final escapedSlotName = slotName.replaceAll("'", "''");
+    final dropSlotSql =
+        "SELECT pg_drop_replication_slot('$escapedSlotName') "
+        "WHERE EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = '$escapedSlotName');";
+
+    final arguments = <String>[
+      '-h',
+      config.host,
+      '-p',
+      config.portValue.toString(),
+      '-U',
+      config.username,
+      '-d',
+      config.databaseValue,
+      '-c',
+      dropSlotSql,
+    ];
+
+    final environment = <String, String>{'PGPASSWORD': config.password};
+    final result = await _processService.run(
+      executable: 'psql',
+      arguments: arguments,
+      environment: environment,
+      timeout: const Duration(seconds: 30),
+    );
+
+    result.fold(
+      (processResult) {
+        if (processResult.isSuccess) {
+          LoggerService.info(
+            'Replication slot removido no delete da configuracao PostgreSQL: $slotName',
+          );
+          return;
+        }
+
+        final output = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+        LoggerService.warning(
+          'Falha ao remover replication slot no delete da configuracao. '
+          'Slot: $slotName. Limpeza manual recomendada via '
+          "SELECT pg_drop_replication_slot('$slotName'). Erro: $output",
+        );
+      },
+      (failure) {
+        LoggerService.warning(
+          'Erro ao remover replication slot no delete da configuracao. '
+          'Slot: $slotName. Limpeza manual recomendada via '
+          "SELECT pg_drop_replication_slot('$slotName'). Erro: $failure",
+        );
+      },
+    );
   }
 
   @override

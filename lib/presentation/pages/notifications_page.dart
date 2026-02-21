@@ -60,8 +60,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
       context,
       initialConfig: initialConfig,
       initialRecipientEmail: initialRecipientEmail,
-      onTestConnection: provider.testDraftConfiguration,
-      getTestErrorMessage: () => provider.error,
       onConnectOAuth: (config, providerType) {
         return provider.connectOAuth(
           config: config,
@@ -127,30 +125,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
-  Future<void> _testConnection(EmailConfig config) async {
-    final licenseProvider = context.read<LicenseProvider>();
-    if (!_hasEmailNotificationFeature(licenseProvider)) {
-      return;
-    }
-
-    final provider = context.read<NotificationProvider>();
-    final success = await provider.testConfiguration(config.id);
-    if (!mounted) return;
-
-    if (success) {
-      await MessageModal.showSuccess(
-        context,
-        message: 'Teste de conexao realizado com sucesso',
-      );
-      return;
-    }
-
-    await MessageModal.showError(
-      context,
-      message: provider.error ?? 'Erro ao testar conexao',
-    );
-  }
-
   Future<void> _refresh() async {
     await context.read<NotificationProvider>().loadConfigs();
   }
@@ -195,7 +169,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ),
       ),
       content: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -208,7 +182,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 );
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
             Consumer2<NotificationProvider, LicenseProvider>(
               builder: (context, provider, licenseProvider, child) {
                 return _NotificationsContentSection(
@@ -220,7 +194,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   onCreateConfig: _openConfigModal,
                   onEditConfig: (config) => _openConfigModal(initial: config),
                   onDeleteConfig: _deleteConfig,
-                  onTestConnection: _testConnection,
                 );
               },
             ),
@@ -301,7 +274,6 @@ class _NotificationsContentSection extends StatelessWidget {
     required this.onCreateConfig,
     required this.onEditConfig,
     required this.onDeleteConfig,
-    required this.onTestConnection,
   });
 
   final NotificationProvider provider;
@@ -310,7 +282,6 @@ class _NotificationsContentSection extends StatelessWidget {
   final VoidCallback onCreateConfig;
   final ValueChanged<EmailConfig> onEditConfig;
   final ValueChanged<EmailConfig> onDeleteConfig;
-  final Future<void> Function(EmailConfig config) onTestConnection;
 
   @override
   Widget build(BuildContext context) {
@@ -335,12 +306,10 @@ class _NotificationsContentSection extends StatelessWidget {
           selectedConfigId: provider.selectedConfigId,
           canManage: hasEmailNotification,
           isLoading: provider.isLoading,
-          testingConfigId: provider.testingConfigId,
           onCreate: onCreateConfig,
           onEdit: onEditConfig,
           onDelete: onDeleteConfig,
           onSelect: (config) => provider.selectConfig(config.id),
-          onTest: onTestConnection,
           onToggleEnabled: (config, enabled) {
             provider.toggleConfigEnabled(config.id, enabled);
           },

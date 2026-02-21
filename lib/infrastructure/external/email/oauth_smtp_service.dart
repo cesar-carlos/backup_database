@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:backup_database/core/constants/app_constants.dart';
@@ -38,6 +39,12 @@ typedef OAuthAccountEmailResolver =
       required String accessToken,
     });
 
+class _FlightLock<T> {
+  _FlightLock(this.completer);
+
+  final Completer<T> completer;
+}
+
 class OAuthSmtpService implements IOAuthSmtpService {
   OAuthSmtpService(
     this._secureCredentialService, {
@@ -76,6 +83,7 @@ class OAuthSmtpService implements IOAuthSmtpService {
   final OAuthTokenExchangeFn? _getTokenWithAuthCodeFlowFn;
   final OAuthTokenRefreshFn? _refreshTokenFn;
   final OAuthAccountEmailResolver? _accountEmailResolver;
+  final Map<String, _FlightLock<rd.Result<String>>> _tokenRefreshLocks = {};
 
   @override
   Future<rd.Result<SmtpOAuthState>> connect({
@@ -169,6 +177,19 @@ class OAuthSmtpService implements IOAuthSmtpService {
     final client =
         _oauthClientFactory?.call(provider) ?? _buildOAuthClient(provider);
 
+    final existingLock = _tokenRefreshLocks[trimmedKey];
+    if (existingLock != null) {
+      LoggerService.info(
+        '[OAuthSmtpService] Token refresh em andamento para tokenKey=$trimmedKey. Aguardando resultado...',
+      );
+      return existingLock.completer.future;
+    }
+
+    final lock = _FlightLock<rd.Result<String>>(Completer<rd.Result<String>>());
+    _tokenRefreshLocks[trimmedKey] = lock;
+
+    rd.Result<String>? result;
+
     try {
       final response = _refreshTokenFn == null
           ? await client.refreshToken(
@@ -213,23 +234,27 @@ class OAuthSmtpService implements IOAuthSmtpService {
         tokenData: refreshedTokenData,
       );
       if (saveResult.isError()) {
-        return rd.Failure(saveResult.exceptionOrNull()!);
+        result = rd.Failure(saveResult.exceptionOrNull()!);
+      } else {
+        result = rd.Success(refreshedAccessToken);
       }
-
-      return rd.Success(refreshedAccessToken);
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
         '[OAuthSmtpService] Falha ao atualizar token OAuth SMTP',
         e,
         stackTrace,
       );
-      return const rd.Failure(
+      result = const rd.Failure(
         ServerFailure(
           message:
-              'Falha ao atualizar token OAuth SMTP. Reconecte a conta e tente novamente.',
+                'Falha ao atualizar token OAuth SMTP. Reconecte a conta e tente novamente.',
         ),
       );
+    } finally {
+      lock.completer.complete(result!);
+      _tokenRefreshLocks.remove(trimmedKey);
     }
+    return lock.completer.future;
   }
 
   Future<rd.Result<SmtpOAuthState>> _connectInternal({

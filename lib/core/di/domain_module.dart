@@ -3,6 +3,7 @@ import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
 import 'package:backup_database/infrastructure/repositories/repositories.dart';
@@ -35,6 +36,7 @@ Future<void> setupDomainModule(GetIt getIt) async {
     () => PostgresConfigRepository(
       getIt<AppDatabase>(),
       getIt<ISecureCredentialService>(),
+      getIt<ProcessService>(),
     ),
   );
 
