@@ -5,22 +5,34 @@ import 'package:fluent_ui/fluent_ui.dart';
 class EmailTargetDialog extends StatefulWidget {
   const EmailTargetDialog({
     required this.emailConfigId,
+    required this.defaultNotifyOnSuccess,
+    required this.defaultNotifyOnError,
+    required this.defaultNotifyOnWarning,
     super.key,
     this.initialTarget,
   });
 
   final String emailConfigId;
+  final bool defaultNotifyOnSuccess;
+  final bool defaultNotifyOnError;
+  final bool defaultNotifyOnWarning;
   final EmailNotificationTarget? initialTarget;
 
   static Future<EmailNotificationTarget?> show(
     BuildContext context, {
     required String emailConfigId,
+    required bool defaultNotifyOnSuccess,
+    required bool defaultNotifyOnError,
+    required bool defaultNotifyOnWarning,
     EmailNotificationTarget? initialTarget,
   }) {
     return showDialog<EmailNotificationTarget>(
       context: context,
       builder: (context) => EmailTargetDialog(
         emailConfigId: emailConfigId,
+        defaultNotifyOnSuccess: defaultNotifyOnSuccess,
+        defaultNotifyOnError: defaultNotifyOnError,
+        defaultNotifyOnWarning: defaultNotifyOnWarning,
         initialTarget: initialTarget,
       ),
     );
@@ -34,9 +46,6 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _recipientController;
 
-  bool _notifyOnSuccess = true;
-  bool _notifyOnError = true;
-  bool _notifyOnWarning = true;
   bool _enabled = true;
 
   @override
@@ -46,9 +55,6 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
     _recipientController = TextEditingController(
       text: target?.recipientEmail ?? '',
     );
-    _notifyOnSuccess = target?.notifyOnSuccess ?? true;
-    _notifyOnError = target?.notifyOnError ?? true;
-    _notifyOnWarning = target?.notifyOnWarning ?? true;
     _enabled = target?.enabled ?? true;
   }
 
@@ -68,9 +74,11 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
       id: current?.id,
       emailConfigId: widget.emailConfigId,
       recipientEmail: _recipientController.text.trim(),
-      notifyOnSuccess: _notifyOnSuccess,
-      notifyOnError: _notifyOnError,
-      notifyOnWarning: _notifyOnWarning,
+      notifyOnSuccess:
+          current?.notifyOnSuccess ?? widget.defaultNotifyOnSuccess,
+      notifyOnError: current?.notifyOnError ?? widget.defaultNotifyOnError,
+      notifyOnWarning:
+          current?.notifyOnWarning ?? widget.defaultNotifyOnWarning,
       enabled: _enabled,
       createdAt: current?.createdAt,
     );
@@ -116,26 +124,8 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
               },
             ),
             const SizedBox(height: 20),
-            _TargetNotificationFlags(
-              notifyOnSuccess: _notifyOnSuccess,
-              notifyOnError: _notifyOnError,
-              notifyOnWarning: _notifyOnWarning,
+            _TargetStatusSection(
               enabled: _enabled,
-              onNotifyOnSuccessChanged: (value) {
-                setState(() {
-                  _notifyOnSuccess = value;
-                });
-              },
-              onNotifyOnErrorChanged: (value) {
-                setState(() {
-                  _notifyOnError = value;
-                });
-              },
-              onNotifyOnWarningChanged: (value) {
-                setState(() {
-                  _notifyOnWarning = value;
-                });
-              },
               onEnabledChanged: (value) {
                 setState(() {
                   _enabled = value;
@@ -153,25 +143,13 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
   }
 }
 
-class _TargetNotificationFlags extends StatelessWidget {
-  const _TargetNotificationFlags({
-    required this.notifyOnSuccess,
-    required this.notifyOnError,
-    required this.notifyOnWarning,
+class _TargetStatusSection extends StatelessWidget {
+  const _TargetStatusSection({
     required this.enabled,
-    required this.onNotifyOnSuccessChanged,
-    required this.onNotifyOnErrorChanged,
-    required this.onNotifyOnWarningChanged,
     required this.onEnabledChanged,
   });
 
-  final bool notifyOnSuccess;
-  final bool notifyOnError;
-  final bool notifyOnWarning;
   final bool enabled;
-  final ValueChanged<bool> onNotifyOnSuccessChanged;
-  final ValueChanged<bool> onNotifyOnErrorChanged;
-  final ValueChanged<bool> onNotifyOnWarningChanged;
   final ValueChanged<bool> onEnabledChanged;
 
   @override
@@ -180,24 +158,8 @@ class _TargetNotificationFlags extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Tipos de notificacao'),
-        const SizedBox(height: 10),
-        _TargetToggleField(
-          label: 'Notificar em caso de sucesso',
-          value: notifyOnSuccess,
-          onChanged: onNotifyOnSuccessChanged,
-        ),
-        const SizedBox(height: 10),
-        _TargetToggleField(
-          label: 'Notificar em caso de erro',
-          value: notifyOnError,
-          onChanged: onNotifyOnErrorChanged,
-        ),
-        const SizedBox(height: 10),
-        _TargetToggleField(
-          label: 'Notificar em caso de aviso',
-          value: notifyOnWarning,
-          onChanged: onNotifyOnWarningChanged,
+        const Text(
+          'Os tipos de notificacao (sucesso/erro/aviso) sao definidos no modal da configuracao SMTP.',
         ),
         const SizedBox(height: 10),
         _TargetToggleField(

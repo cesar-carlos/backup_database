@@ -83,6 +83,44 @@ void main() {
       });
 
       expect(horizontalScrollViews, findsOneWidget);
+
+      await tester.pumpAndSettle();
+      final scrollbar = tester.widget<RawScrollbar>(find.byType(RawScrollbar));
+      expect(scrollbar.thumbVisibility, isTrue);
+    });
+
+    testWidgets('fills available width when viewport is wider than minWidth', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildHarness(
+          const SizedBox(
+            width: 900,
+            child: AppDataGrid<_RowData>(
+              minWidth: 600,
+              columns: [
+                AppDataGridColumn<_RowData>(
+                  label: 'Nome',
+                  cellBuilder: _nameCell,
+                ),
+              ],
+              rows: [
+                _RowData(name: 'Base A', status: 'Ativo'),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final tableSize = tester.getSize(find.byType(Table));
+      final viewportSize = tester.getSize(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is SingleChildScrollView &&
+              widget.scrollDirection == Axis.horizontal,
+        ),
+      );
+      expect(tableSize.width, closeTo(viewportSize.width, 0.1));
     });
 
     testWidgets('triggers row action callback', (tester) async {

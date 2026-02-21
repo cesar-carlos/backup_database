@@ -5159,6 +5159,18 @@ class $EmailConfigsTableTable extends EmailConfigsTable
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _smtpPasswordKeyMeta = const VerificationMeta(
+    'smtpPasswordKey',
+  );
+  @override
+  late final GeneratedColumn<String> smtpPasswordKey = GeneratedColumn<String>(
+    'smtp_password_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _useSslMeta = const VerificationMeta('useSsl');
   @override
   late final GeneratedColumn<bool> useSsl = GeneratedColumn<bool>(
@@ -5172,6 +5184,64 @@ class $EmailConfigsTableTable extends EmailConfigsTable
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _authModeMeta = const VerificationMeta(
+    'authMode',
+  );
+  @override
+  late final GeneratedColumn<String> authMode = GeneratedColumn<String>(
+    'auth_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('password'),
+  );
+  static const VerificationMeta _oauthProviderMeta = const VerificationMeta(
+    'oauthProvider',
+  );
+  @override
+  late final GeneratedColumn<String> oauthProvider = GeneratedColumn<String>(
+    'oauth_provider',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _oauthAccountEmailMeta = const VerificationMeta(
+    'oauthAccountEmail',
+  );
+  @override
+  late final GeneratedColumn<String> oauthAccountEmail =
+      GeneratedColumn<String>(
+        'oauth_account_email',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _oauthTokenKeyMeta = const VerificationMeta(
+    'oauthTokenKey',
+  );
+  @override
+  late final GeneratedColumn<String> oauthTokenKey = GeneratedColumn<String>(
+    'oauth_token_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _oauthConnectedAtMeta = const VerificationMeta(
+    'oauthConnectedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> oauthConnectedAt =
+      GeneratedColumn<DateTime>(
+        'oauth_connected_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _recipientsMeta = const VerificationMeta(
     'recipients',
   );
@@ -5292,7 +5362,13 @@ class $EmailConfigsTableTable extends EmailConfigsTable
     smtpPort,
     username,
     password,
+    smtpPasswordKey,
     useSsl,
+    authMode,
+    oauthProvider,
+    oauthAccountEmail,
+    oauthTokenKey,
+    oauthConnectedAt,
     recipients,
     notifyOnSuccess,
     notifyOnError,
@@ -5367,10 +5443,61 @@ class $EmailConfigsTableTable extends EmailConfigsTable
         password.isAcceptableOrUnknown(data['password']!, _passwordMeta),
       );
     }
+    if (data.containsKey('smtp_password_key')) {
+      context.handle(
+        _smtpPasswordKeyMeta,
+        smtpPasswordKey.isAcceptableOrUnknown(
+          data['smtp_password_key']!,
+          _smtpPasswordKeyMeta,
+        ),
+      );
+    }
     if (data.containsKey('use_ssl')) {
       context.handle(
         _useSslMeta,
         useSsl.isAcceptableOrUnknown(data['use_ssl']!, _useSslMeta),
+      );
+    }
+    if (data.containsKey('auth_mode')) {
+      context.handle(
+        _authModeMeta,
+        authMode.isAcceptableOrUnknown(data['auth_mode']!, _authModeMeta),
+      );
+    }
+    if (data.containsKey('oauth_provider')) {
+      context.handle(
+        _oauthProviderMeta,
+        oauthProvider.isAcceptableOrUnknown(
+          data['oauth_provider']!,
+          _oauthProviderMeta,
+        ),
+      );
+    }
+    if (data.containsKey('oauth_account_email')) {
+      context.handle(
+        _oauthAccountEmailMeta,
+        oauthAccountEmail.isAcceptableOrUnknown(
+          data['oauth_account_email']!,
+          _oauthAccountEmailMeta,
+        ),
+      );
+    }
+    if (data.containsKey('oauth_token_key')) {
+      context.handle(
+        _oauthTokenKeyMeta,
+        oauthTokenKey.isAcceptableOrUnknown(
+          data['oauth_token_key']!,
+          _oauthTokenKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('oauth_connected_at')) {
+      context.handle(
+        _oauthConnectedAtMeta,
+        oauthConnectedAt.isAcceptableOrUnknown(
+          data['oauth_connected_at']!,
+          _oauthConnectedAtMeta,
+        ),
       );
     }
     if (data.containsKey('recipients')) {
@@ -5479,10 +5606,34 @@ class $EmailConfigsTableTable extends EmailConfigsTable
         DriftSqlType.string,
         data['${effectivePrefix}password'],
       )!,
+      smtpPasswordKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}smtp_password_key'],
+      )!,
       useSsl: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}use_ssl'],
       )!,
+      authMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}auth_mode'],
+      )!,
+      oauthProvider: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}oauth_provider'],
+      ),
+      oauthAccountEmail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}oauth_account_email'],
+      ),
+      oauthTokenKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}oauth_token_key'],
+      ),
+      oauthConnectedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}oauth_connected_at'],
+      ),
       recipients: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}recipients'],
@@ -5535,7 +5686,13 @@ class EmailConfigsTableData extends DataClass
   final int smtpPort;
   final String username;
   final String password;
+  final String smtpPasswordKey;
   final bool useSsl;
+  final String authMode;
+  final String? oauthProvider;
+  final String? oauthAccountEmail;
+  final String? oauthTokenKey;
+  final DateTime? oauthConnectedAt;
   final String recipients;
   final bool notifyOnSuccess;
   final bool notifyOnError;
@@ -5554,7 +5711,13 @@ class EmailConfigsTableData extends DataClass
     required this.smtpPort,
     required this.username,
     required this.password,
+    required this.smtpPasswordKey,
     required this.useSsl,
+    required this.authMode,
+    this.oauthProvider,
+    this.oauthAccountEmail,
+    this.oauthTokenKey,
+    this.oauthConnectedAt,
     required this.recipients,
     required this.notifyOnSuccess,
     required this.notifyOnError,
@@ -5576,7 +5739,21 @@ class EmailConfigsTableData extends DataClass
     map['smtp_port'] = Variable<int>(smtpPort);
     map['username'] = Variable<String>(username);
     map['password'] = Variable<String>(password);
+    map['smtp_password_key'] = Variable<String>(smtpPasswordKey);
     map['use_ssl'] = Variable<bool>(useSsl);
+    map['auth_mode'] = Variable<String>(authMode);
+    if (!nullToAbsent || oauthProvider != null) {
+      map['oauth_provider'] = Variable<String>(oauthProvider);
+    }
+    if (!nullToAbsent || oauthAccountEmail != null) {
+      map['oauth_account_email'] = Variable<String>(oauthAccountEmail);
+    }
+    if (!nullToAbsent || oauthTokenKey != null) {
+      map['oauth_token_key'] = Variable<String>(oauthTokenKey);
+    }
+    if (!nullToAbsent || oauthConnectedAt != null) {
+      map['oauth_connected_at'] = Variable<DateTime>(oauthConnectedAt);
+    }
     map['recipients'] = Variable<String>(recipients);
     map['notify_on_success'] = Variable<bool>(notifyOnSuccess);
     map['notify_on_error'] = Variable<bool>(notifyOnError);
@@ -5599,7 +5776,21 @@ class EmailConfigsTableData extends DataClass
       smtpPort: Value(smtpPort),
       username: Value(username),
       password: Value(password),
+      smtpPasswordKey: Value(smtpPasswordKey),
       useSsl: Value(useSsl),
+      authMode: Value(authMode),
+      oauthProvider: oauthProvider == null && nullToAbsent
+          ? const Value.absent()
+          : Value(oauthProvider),
+      oauthAccountEmail: oauthAccountEmail == null && nullToAbsent
+          ? const Value.absent()
+          : Value(oauthAccountEmail),
+      oauthTokenKey: oauthTokenKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(oauthTokenKey),
+      oauthConnectedAt: oauthConnectedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(oauthConnectedAt),
       recipients: Value(recipients),
       notifyOnSuccess: Value(notifyOnSuccess),
       notifyOnError: Value(notifyOnError),
@@ -5626,7 +5817,17 @@ class EmailConfigsTableData extends DataClass
       smtpPort: serializer.fromJson<int>(json['smtpPort']),
       username: serializer.fromJson<String>(json['username']),
       password: serializer.fromJson<String>(json['password']),
+      smtpPasswordKey: serializer.fromJson<String>(json['smtpPasswordKey']),
       useSsl: serializer.fromJson<bool>(json['useSsl']),
+      authMode: serializer.fromJson<String>(json['authMode']),
+      oauthProvider: serializer.fromJson<String?>(json['oauthProvider']),
+      oauthAccountEmail: serializer.fromJson<String?>(
+        json['oauthAccountEmail'],
+      ),
+      oauthTokenKey: serializer.fromJson<String?>(json['oauthTokenKey']),
+      oauthConnectedAt: serializer.fromJson<DateTime?>(
+        json['oauthConnectedAt'],
+      ),
       recipients: serializer.fromJson<String>(json['recipients']),
       notifyOnSuccess: serializer.fromJson<bool>(json['notifyOnSuccess']),
       notifyOnError: serializer.fromJson<bool>(json['notifyOnError']),
@@ -5650,7 +5851,13 @@ class EmailConfigsTableData extends DataClass
       'smtpPort': serializer.toJson<int>(smtpPort),
       'username': serializer.toJson<String>(username),
       'password': serializer.toJson<String>(password),
+      'smtpPasswordKey': serializer.toJson<String>(smtpPasswordKey),
       'useSsl': serializer.toJson<bool>(useSsl),
+      'authMode': serializer.toJson<String>(authMode),
+      'oauthProvider': serializer.toJson<String?>(oauthProvider),
+      'oauthAccountEmail': serializer.toJson<String?>(oauthAccountEmail),
+      'oauthTokenKey': serializer.toJson<String?>(oauthTokenKey),
+      'oauthConnectedAt': serializer.toJson<DateTime?>(oauthConnectedAt),
       'recipients': serializer.toJson<String>(recipients),
       'notifyOnSuccess': serializer.toJson<bool>(notifyOnSuccess),
       'notifyOnError': serializer.toJson<bool>(notifyOnError),
@@ -5672,7 +5879,13 @@ class EmailConfigsTableData extends DataClass
     int? smtpPort,
     String? username,
     String? password,
+    String? smtpPasswordKey,
     bool? useSsl,
+    String? authMode,
+    Value<String?> oauthProvider = const Value.absent(),
+    Value<String?> oauthAccountEmail = const Value.absent(),
+    Value<String?> oauthTokenKey = const Value.absent(),
+    Value<DateTime?> oauthConnectedAt = const Value.absent(),
     String? recipients,
     bool? notifyOnSuccess,
     bool? notifyOnError,
@@ -5691,7 +5904,21 @@ class EmailConfigsTableData extends DataClass
     smtpPort: smtpPort ?? this.smtpPort,
     username: username ?? this.username,
     password: password ?? this.password,
+    smtpPasswordKey: smtpPasswordKey ?? this.smtpPasswordKey,
     useSsl: useSsl ?? this.useSsl,
+    authMode: authMode ?? this.authMode,
+    oauthProvider: oauthProvider.present
+        ? oauthProvider.value
+        : this.oauthProvider,
+    oauthAccountEmail: oauthAccountEmail.present
+        ? oauthAccountEmail.value
+        : this.oauthAccountEmail,
+    oauthTokenKey: oauthTokenKey.present
+        ? oauthTokenKey.value
+        : this.oauthTokenKey,
+    oauthConnectedAt: oauthConnectedAt.present
+        ? oauthConnectedAt.value
+        : this.oauthConnectedAt,
     recipients: recipients ?? this.recipients,
     notifyOnSuccess: notifyOnSuccess ?? this.notifyOnSuccess,
     notifyOnError: notifyOnError ?? this.notifyOnError,
@@ -5718,7 +5945,23 @@ class EmailConfigsTableData extends DataClass
       smtpPort: data.smtpPort.present ? data.smtpPort.value : this.smtpPort,
       username: data.username.present ? data.username.value : this.username,
       password: data.password.present ? data.password.value : this.password,
+      smtpPasswordKey: data.smtpPasswordKey.present
+          ? data.smtpPasswordKey.value
+          : this.smtpPasswordKey,
       useSsl: data.useSsl.present ? data.useSsl.value : this.useSsl,
+      authMode: data.authMode.present ? data.authMode.value : this.authMode,
+      oauthProvider: data.oauthProvider.present
+          ? data.oauthProvider.value
+          : this.oauthProvider,
+      oauthAccountEmail: data.oauthAccountEmail.present
+          ? data.oauthAccountEmail.value
+          : this.oauthAccountEmail,
+      oauthTokenKey: data.oauthTokenKey.present
+          ? data.oauthTokenKey.value
+          : this.oauthTokenKey,
+      oauthConnectedAt: data.oauthConnectedAt.present
+          ? data.oauthConnectedAt.value
+          : this.oauthConnectedAt,
       recipients: data.recipients.present
           ? data.recipients.value
           : this.recipients,
@@ -5750,7 +5993,13 @@ class EmailConfigsTableData extends DataClass
           ..write('smtpPort: $smtpPort, ')
           ..write('username: $username, ')
           ..write('password: $password, ')
+          ..write('smtpPasswordKey: $smtpPasswordKey, ')
           ..write('useSsl: $useSsl, ')
+          ..write('authMode: $authMode, ')
+          ..write('oauthProvider: $oauthProvider, ')
+          ..write('oauthAccountEmail: $oauthAccountEmail, ')
+          ..write('oauthTokenKey: $oauthTokenKey, ')
+          ..write('oauthConnectedAt: $oauthConnectedAt, ')
           ..write('recipients: $recipients, ')
           ..write('notifyOnSuccess: $notifyOnSuccess, ')
           ..write('notifyOnError: $notifyOnError, ')
@@ -5764,7 +6013,7 @@ class EmailConfigsTableData extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     configName,
     senderName,
@@ -5774,7 +6023,13 @@ class EmailConfigsTableData extends DataClass
     smtpPort,
     username,
     password,
+    smtpPasswordKey,
     useSsl,
+    authMode,
+    oauthProvider,
+    oauthAccountEmail,
+    oauthTokenKey,
+    oauthConnectedAt,
     recipients,
     notifyOnSuccess,
     notifyOnError,
@@ -5783,7 +6038,7 @@ class EmailConfigsTableData extends DataClass
     enabled,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -5797,7 +6052,13 @@ class EmailConfigsTableData extends DataClass
           other.smtpPort == this.smtpPort &&
           other.username == this.username &&
           other.password == this.password &&
+          other.smtpPasswordKey == this.smtpPasswordKey &&
           other.useSsl == this.useSsl &&
+          other.authMode == this.authMode &&
+          other.oauthProvider == this.oauthProvider &&
+          other.oauthAccountEmail == this.oauthAccountEmail &&
+          other.oauthTokenKey == this.oauthTokenKey &&
+          other.oauthConnectedAt == this.oauthConnectedAt &&
           other.recipients == this.recipients &&
           other.notifyOnSuccess == this.notifyOnSuccess &&
           other.notifyOnError == this.notifyOnError &&
@@ -5819,7 +6080,13 @@ class EmailConfigsTableCompanion
   final Value<int> smtpPort;
   final Value<String> username;
   final Value<String> password;
+  final Value<String> smtpPasswordKey;
   final Value<bool> useSsl;
+  final Value<String> authMode;
+  final Value<String?> oauthProvider;
+  final Value<String?> oauthAccountEmail;
+  final Value<String?> oauthTokenKey;
+  final Value<DateTime?> oauthConnectedAt;
   final Value<String> recipients;
   final Value<bool> notifyOnSuccess;
   final Value<bool> notifyOnError;
@@ -5839,7 +6106,13 @@ class EmailConfigsTableCompanion
     this.smtpPort = const Value.absent(),
     this.username = const Value.absent(),
     this.password = const Value.absent(),
+    this.smtpPasswordKey = const Value.absent(),
     this.useSsl = const Value.absent(),
+    this.authMode = const Value.absent(),
+    this.oauthProvider = const Value.absent(),
+    this.oauthAccountEmail = const Value.absent(),
+    this.oauthTokenKey = const Value.absent(),
+    this.oauthConnectedAt = const Value.absent(),
     this.recipients = const Value.absent(),
     this.notifyOnSuccess = const Value.absent(),
     this.notifyOnError = const Value.absent(),
@@ -5860,7 +6133,13 @@ class EmailConfigsTableCompanion
     this.smtpPort = const Value.absent(),
     this.username = const Value.absent(),
     this.password = const Value.absent(),
+    this.smtpPasswordKey = const Value.absent(),
     this.useSsl = const Value.absent(),
+    this.authMode = const Value.absent(),
+    this.oauthProvider = const Value.absent(),
+    this.oauthAccountEmail = const Value.absent(),
+    this.oauthTokenKey = const Value.absent(),
+    this.oauthConnectedAt = const Value.absent(),
     this.recipients = const Value.absent(),
     this.notifyOnSuccess = const Value.absent(),
     this.notifyOnError = const Value.absent(),
@@ -5883,7 +6162,13 @@ class EmailConfigsTableCompanion
     Expression<int>? smtpPort,
     Expression<String>? username,
     Expression<String>? password,
+    Expression<String>? smtpPasswordKey,
     Expression<bool>? useSsl,
+    Expression<String>? authMode,
+    Expression<String>? oauthProvider,
+    Expression<String>? oauthAccountEmail,
+    Expression<String>? oauthTokenKey,
+    Expression<DateTime>? oauthConnectedAt,
     Expression<String>? recipients,
     Expression<bool>? notifyOnSuccess,
     Expression<bool>? notifyOnError,
@@ -5904,7 +6189,13 @@ class EmailConfigsTableCompanion
       if (smtpPort != null) 'smtp_port': smtpPort,
       if (username != null) 'username': username,
       if (password != null) 'password': password,
+      if (smtpPasswordKey != null) 'smtp_password_key': smtpPasswordKey,
       if (useSsl != null) 'use_ssl': useSsl,
+      if (authMode != null) 'auth_mode': authMode,
+      if (oauthProvider != null) 'oauth_provider': oauthProvider,
+      if (oauthAccountEmail != null) 'oauth_account_email': oauthAccountEmail,
+      if (oauthTokenKey != null) 'oauth_token_key': oauthTokenKey,
+      if (oauthConnectedAt != null) 'oauth_connected_at': oauthConnectedAt,
       if (recipients != null) 'recipients': recipients,
       if (notifyOnSuccess != null) 'notify_on_success': notifyOnSuccess,
       if (notifyOnError != null) 'notify_on_error': notifyOnError,
@@ -5927,7 +6218,13 @@ class EmailConfigsTableCompanion
     Value<int>? smtpPort,
     Value<String>? username,
     Value<String>? password,
+    Value<String>? smtpPasswordKey,
     Value<bool>? useSsl,
+    Value<String>? authMode,
+    Value<String?>? oauthProvider,
+    Value<String?>? oauthAccountEmail,
+    Value<String?>? oauthTokenKey,
+    Value<DateTime?>? oauthConnectedAt,
     Value<String>? recipients,
     Value<bool>? notifyOnSuccess,
     Value<bool>? notifyOnError,
@@ -5948,7 +6245,13 @@ class EmailConfigsTableCompanion
       smtpPort: smtpPort ?? this.smtpPort,
       username: username ?? this.username,
       password: password ?? this.password,
+      smtpPasswordKey: smtpPasswordKey ?? this.smtpPasswordKey,
       useSsl: useSsl ?? this.useSsl,
+      authMode: authMode ?? this.authMode,
+      oauthProvider: oauthProvider ?? this.oauthProvider,
+      oauthAccountEmail: oauthAccountEmail ?? this.oauthAccountEmail,
+      oauthTokenKey: oauthTokenKey ?? this.oauthTokenKey,
+      oauthConnectedAt: oauthConnectedAt ?? this.oauthConnectedAt,
       recipients: recipients ?? this.recipients,
       notifyOnSuccess: notifyOnSuccess ?? this.notifyOnSuccess,
       notifyOnError: notifyOnError ?? this.notifyOnError,
@@ -5991,8 +6294,26 @@ class EmailConfigsTableCompanion
     if (password.present) {
       map['password'] = Variable<String>(password.value);
     }
+    if (smtpPasswordKey.present) {
+      map['smtp_password_key'] = Variable<String>(smtpPasswordKey.value);
+    }
     if (useSsl.present) {
       map['use_ssl'] = Variable<bool>(useSsl.value);
+    }
+    if (authMode.present) {
+      map['auth_mode'] = Variable<String>(authMode.value);
+    }
+    if (oauthProvider.present) {
+      map['oauth_provider'] = Variable<String>(oauthProvider.value);
+    }
+    if (oauthAccountEmail.present) {
+      map['oauth_account_email'] = Variable<String>(oauthAccountEmail.value);
+    }
+    if (oauthTokenKey.present) {
+      map['oauth_token_key'] = Variable<String>(oauthTokenKey.value);
+    }
+    if (oauthConnectedAt.present) {
+      map['oauth_connected_at'] = Variable<DateTime>(oauthConnectedAt.value);
     }
     if (recipients.present) {
       map['recipients'] = Variable<String>(recipients.value);
@@ -6036,7 +6357,13 @@ class EmailConfigsTableCompanion
           ..write('smtpPort: $smtpPort, ')
           ..write('username: $username, ')
           ..write('password: $password, ')
+          ..write('smtpPasswordKey: $smtpPasswordKey, ')
           ..write('useSsl: $useSsl, ')
+          ..write('authMode: $authMode, ')
+          ..write('oauthProvider: $oauthProvider, ')
+          ..write('oauthAccountEmail: $oauthAccountEmail, ')
+          ..write('oauthTokenKey: $oauthTokenKey, ')
+          ..write('oauthConnectedAt: $oauthConnectedAt, ')
           ..write('recipients: $recipients, ')
           ..write('notifyOnSuccess: $notifyOnSuccess, ')
           ..write('notifyOnError: $notifyOnError, ')
@@ -6652,6 +6979,735 @@ class EmailNotificationTargetsTableCompanion
           ..write('enabled: $enabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $EmailTestAuditTableTable extends EmailTestAuditTable
+    with TableInfo<$EmailTestAuditTableTable, EmailTestAuditTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EmailTestAuditTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _configIdMeta = const VerificationMeta(
+    'configId',
+  );
+  @override
+  late final GeneratedColumn<String> configId = GeneratedColumn<String>(
+    'config_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _correlationIdMeta = const VerificationMeta(
+    'correlationId',
+  );
+  @override
+  late final GeneratedColumn<String> correlationId = GeneratedColumn<String>(
+    'correlation_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _recipientEmailMeta = const VerificationMeta(
+    'recipientEmail',
+  );
+  @override
+  late final GeneratedColumn<String> recipientEmail = GeneratedColumn<String>(
+    'recipient_email',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _senderEmailMeta = const VerificationMeta(
+    'senderEmail',
+  );
+  @override
+  late final GeneratedColumn<String> senderEmail = GeneratedColumn<String>(
+    'sender_email',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _smtpServerMeta = const VerificationMeta(
+    'smtpServer',
+  );
+  @override
+  late final GeneratedColumn<String> smtpServer = GeneratedColumn<String>(
+    'smtp_server',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _smtpPortMeta = const VerificationMeta(
+    'smtpPort',
+  );
+  @override
+  late final GeneratedColumn<int> smtpPort = GeneratedColumn<int>(
+    'smtp_port',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _errorTypeMeta = const VerificationMeta(
+    'errorType',
+  );
+  @override
+  late final GeneratedColumn<String> errorType = GeneratedColumn<String>(
+    'error_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _errorMessageMeta = const VerificationMeta(
+    'errorMessage',
+  );
+  @override
+  late final GeneratedColumn<String> errorMessage = GeneratedColumn<String>(
+    'error_message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _attemptsMeta = const VerificationMeta(
+    'attempts',
+  );
+  @override
+  late final GeneratedColumn<int> attempts = GeneratedColumn<int>(
+    'attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    configId,
+    correlationId,
+    recipientEmail,
+    senderEmail,
+    smtpServer,
+    smtpPort,
+    status,
+    errorType,
+    errorMessage,
+    attempts,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'email_test_audit_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<EmailTestAuditTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('config_id')) {
+      context.handle(
+        _configIdMeta,
+        configId.isAcceptableOrUnknown(data['config_id']!, _configIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_configIdMeta);
+    }
+    if (data.containsKey('correlation_id')) {
+      context.handle(
+        _correlationIdMeta,
+        correlationId.isAcceptableOrUnknown(
+          data['correlation_id']!,
+          _correlationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_correlationIdMeta);
+    }
+    if (data.containsKey('recipient_email')) {
+      context.handle(
+        _recipientEmailMeta,
+        recipientEmail.isAcceptableOrUnknown(
+          data['recipient_email']!,
+          _recipientEmailMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_recipientEmailMeta);
+    }
+    if (data.containsKey('sender_email')) {
+      context.handle(
+        _senderEmailMeta,
+        senderEmail.isAcceptableOrUnknown(
+          data['sender_email']!,
+          _senderEmailMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_senderEmailMeta);
+    }
+    if (data.containsKey('smtp_server')) {
+      context.handle(
+        _smtpServerMeta,
+        smtpServer.isAcceptableOrUnknown(data['smtp_server']!, _smtpServerMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_smtpServerMeta);
+    }
+    if (data.containsKey('smtp_port')) {
+      context.handle(
+        _smtpPortMeta,
+        smtpPort.isAcceptableOrUnknown(data['smtp_port']!, _smtpPortMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_smtpPortMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('error_type')) {
+      context.handle(
+        _errorTypeMeta,
+        errorType.isAcceptableOrUnknown(data['error_type']!, _errorTypeMeta),
+      );
+    }
+    if (data.containsKey('error_message')) {
+      context.handle(
+        _errorMessageMeta,
+        errorMessage.isAcceptableOrUnknown(
+          data['error_message']!,
+          _errorMessageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('attempts')) {
+      context.handle(
+        _attemptsMeta,
+        attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  EmailTestAuditTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EmailTestAuditTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      configId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}config_id'],
+      )!,
+      correlationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}correlation_id'],
+      )!,
+      recipientEmail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}recipient_email'],
+      )!,
+      senderEmail: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sender_email'],
+      )!,
+      smtpServer: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}smtp_server'],
+      )!,
+      smtpPort: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}smtp_port'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      errorType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_type'],
+      ),
+      errorMessage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_message'],
+      ),
+      attempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempts'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $EmailTestAuditTableTable createAlias(String alias) {
+    return $EmailTestAuditTableTable(attachedDatabase, alias);
+  }
+}
+
+class EmailTestAuditTableData extends DataClass
+    implements Insertable<EmailTestAuditTableData> {
+  final String id;
+  final String configId;
+  final String correlationId;
+  final String recipientEmail;
+  final String senderEmail;
+  final String smtpServer;
+  final int smtpPort;
+  final String status;
+  final String? errorType;
+  final String? errorMessage;
+  final int attempts;
+  final DateTime createdAt;
+  const EmailTestAuditTableData({
+    required this.id,
+    required this.configId,
+    required this.correlationId,
+    required this.recipientEmail,
+    required this.senderEmail,
+    required this.smtpServer,
+    required this.smtpPort,
+    required this.status,
+    this.errorType,
+    this.errorMessage,
+    required this.attempts,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['config_id'] = Variable<String>(configId);
+    map['correlation_id'] = Variable<String>(correlationId);
+    map['recipient_email'] = Variable<String>(recipientEmail);
+    map['sender_email'] = Variable<String>(senderEmail);
+    map['smtp_server'] = Variable<String>(smtpServer);
+    map['smtp_port'] = Variable<int>(smtpPort);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || errorType != null) {
+      map['error_type'] = Variable<String>(errorType);
+    }
+    if (!nullToAbsent || errorMessage != null) {
+      map['error_message'] = Variable<String>(errorMessage);
+    }
+    map['attempts'] = Variable<int>(attempts);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  EmailTestAuditTableCompanion toCompanion(bool nullToAbsent) {
+    return EmailTestAuditTableCompanion(
+      id: Value(id),
+      configId: Value(configId),
+      correlationId: Value(correlationId),
+      recipientEmail: Value(recipientEmail),
+      senderEmail: Value(senderEmail),
+      smtpServer: Value(smtpServer),
+      smtpPort: Value(smtpPort),
+      status: Value(status),
+      errorType: errorType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorType),
+      errorMessage: errorMessage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorMessage),
+      attempts: Value(attempts),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory EmailTestAuditTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EmailTestAuditTableData(
+      id: serializer.fromJson<String>(json['id']),
+      configId: serializer.fromJson<String>(json['configId']),
+      correlationId: serializer.fromJson<String>(json['correlationId']),
+      recipientEmail: serializer.fromJson<String>(json['recipientEmail']),
+      senderEmail: serializer.fromJson<String>(json['senderEmail']),
+      smtpServer: serializer.fromJson<String>(json['smtpServer']),
+      smtpPort: serializer.fromJson<int>(json['smtpPort']),
+      status: serializer.fromJson<String>(json['status']),
+      errorType: serializer.fromJson<String?>(json['errorType']),
+      errorMessage: serializer.fromJson<String?>(json['errorMessage']),
+      attempts: serializer.fromJson<int>(json['attempts']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'configId': serializer.toJson<String>(configId),
+      'correlationId': serializer.toJson<String>(correlationId),
+      'recipientEmail': serializer.toJson<String>(recipientEmail),
+      'senderEmail': serializer.toJson<String>(senderEmail),
+      'smtpServer': serializer.toJson<String>(smtpServer),
+      'smtpPort': serializer.toJson<int>(smtpPort),
+      'status': serializer.toJson<String>(status),
+      'errorType': serializer.toJson<String?>(errorType),
+      'errorMessage': serializer.toJson<String?>(errorMessage),
+      'attempts': serializer.toJson<int>(attempts),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  EmailTestAuditTableData copyWith({
+    String? id,
+    String? configId,
+    String? correlationId,
+    String? recipientEmail,
+    String? senderEmail,
+    String? smtpServer,
+    int? smtpPort,
+    String? status,
+    Value<String?> errorType = const Value.absent(),
+    Value<String?> errorMessage = const Value.absent(),
+    int? attempts,
+    DateTime? createdAt,
+  }) => EmailTestAuditTableData(
+    id: id ?? this.id,
+    configId: configId ?? this.configId,
+    correlationId: correlationId ?? this.correlationId,
+    recipientEmail: recipientEmail ?? this.recipientEmail,
+    senderEmail: senderEmail ?? this.senderEmail,
+    smtpServer: smtpServer ?? this.smtpServer,
+    smtpPort: smtpPort ?? this.smtpPort,
+    status: status ?? this.status,
+    errorType: errorType.present ? errorType.value : this.errorType,
+    errorMessage: errorMessage.present ? errorMessage.value : this.errorMessage,
+    attempts: attempts ?? this.attempts,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  EmailTestAuditTableData copyWithCompanion(EmailTestAuditTableCompanion data) {
+    return EmailTestAuditTableData(
+      id: data.id.present ? data.id.value : this.id,
+      configId: data.configId.present ? data.configId.value : this.configId,
+      correlationId: data.correlationId.present
+          ? data.correlationId.value
+          : this.correlationId,
+      recipientEmail: data.recipientEmail.present
+          ? data.recipientEmail.value
+          : this.recipientEmail,
+      senderEmail: data.senderEmail.present
+          ? data.senderEmail.value
+          : this.senderEmail,
+      smtpServer: data.smtpServer.present
+          ? data.smtpServer.value
+          : this.smtpServer,
+      smtpPort: data.smtpPort.present ? data.smtpPort.value : this.smtpPort,
+      status: data.status.present ? data.status.value : this.status,
+      errorType: data.errorType.present ? data.errorType.value : this.errorType,
+      errorMessage: data.errorMessage.present
+          ? data.errorMessage.value
+          : this.errorMessage,
+      attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EmailTestAuditTableData(')
+          ..write('id: $id, ')
+          ..write('configId: $configId, ')
+          ..write('correlationId: $correlationId, ')
+          ..write('recipientEmail: $recipientEmail, ')
+          ..write('senderEmail: $senderEmail, ')
+          ..write('smtpServer: $smtpServer, ')
+          ..write('smtpPort: $smtpPort, ')
+          ..write('status: $status, ')
+          ..write('errorType: $errorType, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('attempts: $attempts, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    configId,
+    correlationId,
+    recipientEmail,
+    senderEmail,
+    smtpServer,
+    smtpPort,
+    status,
+    errorType,
+    errorMessage,
+    attempts,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EmailTestAuditTableData &&
+          other.id == this.id &&
+          other.configId == this.configId &&
+          other.correlationId == this.correlationId &&
+          other.recipientEmail == this.recipientEmail &&
+          other.senderEmail == this.senderEmail &&
+          other.smtpServer == this.smtpServer &&
+          other.smtpPort == this.smtpPort &&
+          other.status == this.status &&
+          other.errorType == this.errorType &&
+          other.errorMessage == this.errorMessage &&
+          other.attempts == this.attempts &&
+          other.createdAt == this.createdAt);
+}
+
+class EmailTestAuditTableCompanion
+    extends UpdateCompanion<EmailTestAuditTableData> {
+  final Value<String> id;
+  final Value<String> configId;
+  final Value<String> correlationId;
+  final Value<String> recipientEmail;
+  final Value<String> senderEmail;
+  final Value<String> smtpServer;
+  final Value<int> smtpPort;
+  final Value<String> status;
+  final Value<String?> errorType;
+  final Value<String?> errorMessage;
+  final Value<int> attempts;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const EmailTestAuditTableCompanion({
+    this.id = const Value.absent(),
+    this.configId = const Value.absent(),
+    this.correlationId = const Value.absent(),
+    this.recipientEmail = const Value.absent(),
+    this.senderEmail = const Value.absent(),
+    this.smtpServer = const Value.absent(),
+    this.smtpPort = const Value.absent(),
+    this.status = const Value.absent(),
+    this.errorType = const Value.absent(),
+    this.errorMessage = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  EmailTestAuditTableCompanion.insert({
+    required String id,
+    required String configId,
+    required String correlationId,
+    required String recipientEmail,
+    required String senderEmail,
+    required String smtpServer,
+    required int smtpPort,
+    required String status,
+    this.errorType = const Value.absent(),
+    this.errorMessage = const Value.absent(),
+    this.attempts = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       configId = Value(configId),
+       correlationId = Value(correlationId),
+       recipientEmail = Value(recipientEmail),
+       senderEmail = Value(senderEmail),
+       smtpServer = Value(smtpServer),
+       smtpPort = Value(smtpPort),
+       status = Value(status),
+       createdAt = Value(createdAt);
+  static Insertable<EmailTestAuditTableData> custom({
+    Expression<String>? id,
+    Expression<String>? configId,
+    Expression<String>? correlationId,
+    Expression<String>? recipientEmail,
+    Expression<String>? senderEmail,
+    Expression<String>? smtpServer,
+    Expression<int>? smtpPort,
+    Expression<String>? status,
+    Expression<String>? errorType,
+    Expression<String>? errorMessage,
+    Expression<int>? attempts,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (configId != null) 'config_id': configId,
+      if (correlationId != null) 'correlation_id': correlationId,
+      if (recipientEmail != null) 'recipient_email': recipientEmail,
+      if (senderEmail != null) 'sender_email': senderEmail,
+      if (smtpServer != null) 'smtp_server': smtpServer,
+      if (smtpPort != null) 'smtp_port': smtpPort,
+      if (status != null) 'status': status,
+      if (errorType != null) 'error_type': errorType,
+      if (errorMessage != null) 'error_message': errorMessage,
+      if (attempts != null) 'attempts': attempts,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  EmailTestAuditTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? configId,
+    Value<String>? correlationId,
+    Value<String>? recipientEmail,
+    Value<String>? senderEmail,
+    Value<String>? smtpServer,
+    Value<int>? smtpPort,
+    Value<String>? status,
+    Value<String?>? errorType,
+    Value<String?>? errorMessage,
+    Value<int>? attempts,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return EmailTestAuditTableCompanion(
+      id: id ?? this.id,
+      configId: configId ?? this.configId,
+      correlationId: correlationId ?? this.correlationId,
+      recipientEmail: recipientEmail ?? this.recipientEmail,
+      senderEmail: senderEmail ?? this.senderEmail,
+      smtpServer: smtpServer ?? this.smtpServer,
+      smtpPort: smtpPort ?? this.smtpPort,
+      status: status ?? this.status,
+      errorType: errorType ?? this.errorType,
+      errorMessage: errorMessage ?? this.errorMessage,
+      attempts: attempts ?? this.attempts,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (configId.present) {
+      map['config_id'] = Variable<String>(configId.value);
+    }
+    if (correlationId.present) {
+      map['correlation_id'] = Variable<String>(correlationId.value);
+    }
+    if (recipientEmail.present) {
+      map['recipient_email'] = Variable<String>(recipientEmail.value);
+    }
+    if (senderEmail.present) {
+      map['sender_email'] = Variable<String>(senderEmail.value);
+    }
+    if (smtpServer.present) {
+      map['smtp_server'] = Variable<String>(smtpServer.value);
+    }
+    if (smtpPort.present) {
+      map['smtp_port'] = Variable<int>(smtpPort.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (errorType.present) {
+      map['error_type'] = Variable<String>(errorType.value);
+    }
+    if (errorMessage.present) {
+      map['error_message'] = Variable<String>(errorMessage.value);
+    }
+    if (attempts.present) {
+      map['attempts'] = Variable<int>(attempts.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EmailTestAuditTableCompanion(')
+          ..write('id: $id, ')
+          ..write('configId: $configId, ')
+          ..write('correlationId: $correlationId, ')
+          ..write('recipientEmail: $recipientEmail, ')
+          ..write('senderEmail: $senderEmail, ')
+          ..write('smtpServer: $smtpServer, ')
+          ..write('smtpPort: $smtpPort, ')
+          ..write('status: $status, ')
+          ..write('errorType: $errorType, ')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('attempts: $attempts, ')
+          ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -9570,6 +10626,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $EmailConfigsTableTable(this);
   late final $EmailNotificationTargetsTableTable emailNotificationTargetsTable =
       $EmailNotificationTargetsTableTable(this);
+  late final $EmailTestAuditTableTable emailTestAuditTable =
+      $EmailTestAuditTableTable(this);
   late final $LicensesTableTable licensesTable = $LicensesTableTable(this);
   late final $ServerCredentialsTableTable serverCredentialsTable =
       $ServerCredentialsTableTable(this);
@@ -9603,6 +10661,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final EmailNotificationTargetDao emailNotificationTargetDao =
       EmailNotificationTargetDao(this as AppDatabase);
+  late final EmailTestAuditDao emailTestAuditDao = EmailTestAuditDao(
+    this as AppDatabase,
+  );
   late final LicenseDao licenseDao = LicenseDao(this as AppDatabase);
   late final ServerCredentialDao serverCredentialDao = ServerCredentialDao(
     this as AppDatabase,
@@ -9631,6 +10692,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     backupLogsTable,
     emailConfigsTable,
     emailNotificationTargetsTable,
+    emailTestAuditTable,
     licensesTable,
     serverCredentialsTable,
     connectionLogsTable,
@@ -12690,7 +13752,13 @@ typedef $$EmailConfigsTableTableCreateCompanionBuilder =
       Value<int> smtpPort,
       Value<String> username,
       Value<String> password,
+      Value<String> smtpPasswordKey,
       Value<bool> useSsl,
+      Value<String> authMode,
+      Value<String?> oauthProvider,
+      Value<String?> oauthAccountEmail,
+      Value<String?> oauthTokenKey,
+      Value<DateTime?> oauthConnectedAt,
       Value<String> recipients,
       Value<bool> notifyOnSuccess,
       Value<bool> notifyOnError,
@@ -12712,7 +13780,13 @@ typedef $$EmailConfigsTableTableUpdateCompanionBuilder =
       Value<int> smtpPort,
       Value<String> username,
       Value<String> password,
+      Value<String> smtpPasswordKey,
       Value<bool> useSsl,
+      Value<String> authMode,
+      Value<String?> oauthProvider,
+      Value<String?> oauthAccountEmail,
+      Value<String?> oauthTokenKey,
+      Value<DateTime?> oauthConnectedAt,
       Value<String> recipients,
       Value<bool> notifyOnSuccess,
       Value<bool> notifyOnError,
@@ -12820,8 +13894,38 @@ class $$EmailConfigsTableTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get smtpPasswordKey => $composableBuilder(
+    column: $table.smtpPasswordKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<bool> get useSsl => $composableBuilder(
     column: $table.useSsl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get authMode => $composableBuilder(
+    column: $table.authMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get oauthProvider => $composableBuilder(
+    column: $table.oauthProvider,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get oauthAccountEmail => $composableBuilder(
+    column: $table.oauthAccountEmail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get oauthTokenKey => $composableBuilder(
+    column: $table.oauthTokenKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get oauthConnectedAt => $composableBuilder(
+    column: $table.oauthConnectedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12949,8 +14053,38 @@ class $$EmailConfigsTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get smtpPasswordKey => $composableBuilder(
+    column: $table.smtpPasswordKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get useSsl => $composableBuilder(
     column: $table.useSsl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get authMode => $composableBuilder(
+    column: $table.authMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get oauthProvider => $composableBuilder(
+    column: $table.oauthProvider,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get oauthAccountEmail => $composableBuilder(
+    column: $table.oauthAccountEmail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get oauthTokenKey => $composableBuilder(
+    column: $table.oauthTokenKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get oauthConnectedAt => $composableBuilder(
+    column: $table.oauthConnectedAt,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -13037,8 +14171,36 @@ class $$EmailConfigsTableTableAnnotationComposer
   GeneratedColumn<String> get password =>
       $composableBuilder(column: $table.password, builder: (column) => column);
 
+  GeneratedColumn<String> get smtpPasswordKey => $composableBuilder(
+    column: $table.smtpPasswordKey,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get useSsl =>
       $composableBuilder(column: $table.useSsl, builder: (column) => column);
+
+  GeneratedColumn<String> get authMode =>
+      $composableBuilder(column: $table.authMode, builder: (column) => column);
+
+  GeneratedColumn<String> get oauthProvider => $composableBuilder(
+    column: $table.oauthProvider,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get oauthAccountEmail => $composableBuilder(
+    column: $table.oauthAccountEmail,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get oauthTokenKey => $composableBuilder(
+    column: $table.oauthTokenKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get oauthConnectedAt => $composableBuilder(
+    column: $table.oauthConnectedAt,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get recipients => $composableBuilder(
     column: $table.recipients,
@@ -13144,7 +14306,13 @@ class $$EmailConfigsTableTableTableManager
                 Value<int> smtpPort = const Value.absent(),
                 Value<String> username = const Value.absent(),
                 Value<String> password = const Value.absent(),
+                Value<String> smtpPasswordKey = const Value.absent(),
                 Value<bool> useSsl = const Value.absent(),
+                Value<String> authMode = const Value.absent(),
+                Value<String?> oauthProvider = const Value.absent(),
+                Value<String?> oauthAccountEmail = const Value.absent(),
+                Value<String?> oauthTokenKey = const Value.absent(),
+                Value<DateTime?> oauthConnectedAt = const Value.absent(),
                 Value<String> recipients = const Value.absent(),
                 Value<bool> notifyOnSuccess = const Value.absent(),
                 Value<bool> notifyOnError = const Value.absent(),
@@ -13164,7 +14332,13 @@ class $$EmailConfigsTableTableTableManager
                 smtpPort: smtpPort,
                 username: username,
                 password: password,
+                smtpPasswordKey: smtpPasswordKey,
                 useSsl: useSsl,
+                authMode: authMode,
+                oauthProvider: oauthProvider,
+                oauthAccountEmail: oauthAccountEmail,
+                oauthTokenKey: oauthTokenKey,
+                oauthConnectedAt: oauthConnectedAt,
                 recipients: recipients,
                 notifyOnSuccess: notifyOnSuccess,
                 notifyOnError: notifyOnError,
@@ -13186,7 +14360,13 @@ class $$EmailConfigsTableTableTableManager
                 Value<int> smtpPort = const Value.absent(),
                 Value<String> username = const Value.absent(),
                 Value<String> password = const Value.absent(),
+                Value<String> smtpPasswordKey = const Value.absent(),
                 Value<bool> useSsl = const Value.absent(),
+                Value<String> authMode = const Value.absent(),
+                Value<String?> oauthProvider = const Value.absent(),
+                Value<String?> oauthAccountEmail = const Value.absent(),
+                Value<String?> oauthTokenKey = const Value.absent(),
+                Value<DateTime?> oauthConnectedAt = const Value.absent(),
                 Value<String> recipients = const Value.absent(),
                 Value<bool> notifyOnSuccess = const Value.absent(),
                 Value<bool> notifyOnError = const Value.absent(),
@@ -13206,7 +14386,13 @@ class $$EmailConfigsTableTableTableManager
                 smtpPort: smtpPort,
                 username: username,
                 password: password,
+                smtpPasswordKey: smtpPasswordKey,
                 useSsl: useSsl,
+                authMode: authMode,
+                oauthProvider: oauthProvider,
+                oauthAccountEmail: oauthAccountEmail,
+                oauthTokenKey: oauthTokenKey,
+                oauthConnectedAt: oauthConnectedAt,
                 recipients: recipients,
                 notifyOnSuccess: notifyOnSuccess,
                 notifyOnError: notifyOnError,
@@ -13712,6 +14898,365 @@ typedef $$EmailNotificationTargetsTableTableProcessedTableManager =
       ),
       EmailNotificationTargetsTableData,
       PrefetchHooks Function({bool emailConfigId})
+    >;
+typedef $$EmailTestAuditTableTableCreateCompanionBuilder =
+    EmailTestAuditTableCompanion Function({
+      required String id,
+      required String configId,
+      required String correlationId,
+      required String recipientEmail,
+      required String senderEmail,
+      required String smtpServer,
+      required int smtpPort,
+      required String status,
+      Value<String?> errorType,
+      Value<String?> errorMessage,
+      Value<int> attempts,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$EmailTestAuditTableTableUpdateCompanionBuilder =
+    EmailTestAuditTableCompanion Function({
+      Value<String> id,
+      Value<String> configId,
+      Value<String> correlationId,
+      Value<String> recipientEmail,
+      Value<String> senderEmail,
+      Value<String> smtpServer,
+      Value<int> smtpPort,
+      Value<String> status,
+      Value<String?> errorType,
+      Value<String?> errorMessage,
+      Value<int> attempts,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$EmailTestAuditTableTableFilterComposer
+    extends Composer<_$AppDatabase, $EmailTestAuditTableTable> {
+  $$EmailTestAuditTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get configId => $composableBuilder(
+    column: $table.configId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get correlationId => $composableBuilder(
+    column: $table.correlationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recipientEmail => $composableBuilder(
+    column: $table.recipientEmail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get senderEmail => $composableBuilder(
+    column: $table.senderEmail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get smtpServer => $composableBuilder(
+    column: $table.smtpServer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get smtpPort => $composableBuilder(
+    column: $table.smtpPort,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorType => $composableBuilder(
+    column: $table.errorType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$EmailTestAuditTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $EmailTestAuditTableTable> {
+  $$EmailTestAuditTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configId => $composableBuilder(
+    column: $table.configId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get correlationId => $composableBuilder(
+    column: $table.correlationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get recipientEmail => $composableBuilder(
+    column: $table.recipientEmail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get senderEmail => $composableBuilder(
+    column: $table.senderEmail,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get smtpServer => $composableBuilder(
+    column: $table.smtpServer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get smtpPort => $composableBuilder(
+    column: $table.smtpPort,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorType => $composableBuilder(
+    column: $table.errorType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$EmailTestAuditTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $EmailTestAuditTableTable> {
+  $$EmailTestAuditTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get configId =>
+      $composableBuilder(column: $table.configId, builder: (column) => column);
+
+  GeneratedColumn<String> get correlationId => $composableBuilder(
+    column: $table.correlationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get recipientEmail => $composableBuilder(
+    column: $table.recipientEmail,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get senderEmail => $composableBuilder(
+    column: $table.senderEmail,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get smtpServer => $composableBuilder(
+    column: $table.smtpServer,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get smtpPort =>
+      $composableBuilder(column: $table.smtpPort, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get errorType =>
+      $composableBuilder(column: $table.errorType, builder: (column) => column);
+
+  GeneratedColumn<String> get errorMessage => $composableBuilder(
+    column: $table.errorMessage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get attempts =>
+      $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$EmailTestAuditTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EmailTestAuditTableTable,
+          EmailTestAuditTableData,
+          $$EmailTestAuditTableTableFilterComposer,
+          $$EmailTestAuditTableTableOrderingComposer,
+          $$EmailTestAuditTableTableAnnotationComposer,
+          $$EmailTestAuditTableTableCreateCompanionBuilder,
+          $$EmailTestAuditTableTableUpdateCompanionBuilder,
+          (
+            EmailTestAuditTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $EmailTestAuditTableTable,
+              EmailTestAuditTableData
+            >,
+          ),
+          EmailTestAuditTableData,
+          PrefetchHooks Function()
+        > {
+  $$EmailTestAuditTableTableTableManager(
+    _$AppDatabase db,
+    $EmailTestAuditTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$EmailTestAuditTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$EmailTestAuditTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$EmailTestAuditTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> configId = const Value.absent(),
+                Value<String> correlationId = const Value.absent(),
+                Value<String> recipientEmail = const Value.absent(),
+                Value<String> senderEmail = const Value.absent(),
+                Value<String> smtpServer = const Value.absent(),
+                Value<int> smtpPort = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> errorType = const Value.absent(),
+                Value<String?> errorMessage = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => EmailTestAuditTableCompanion(
+                id: id,
+                configId: configId,
+                correlationId: correlationId,
+                recipientEmail: recipientEmail,
+                senderEmail: senderEmail,
+                smtpServer: smtpServer,
+                smtpPort: smtpPort,
+                status: status,
+                errorType: errorType,
+                errorMessage: errorMessage,
+                attempts: attempts,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String configId,
+                required String correlationId,
+                required String recipientEmail,
+                required String senderEmail,
+                required String smtpServer,
+                required int smtpPort,
+                required String status,
+                Value<String?> errorType = const Value.absent(),
+                Value<String?> errorMessage = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => EmailTestAuditTableCompanion.insert(
+                id: id,
+                configId: configId,
+                correlationId: correlationId,
+                recipientEmail: recipientEmail,
+                senderEmail: senderEmail,
+                smtpServer: smtpServer,
+                smtpPort: smtpPort,
+                status: status,
+                errorType: errorType,
+                errorMessage: errorMessage,
+                attempts: attempts,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$EmailTestAuditTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EmailTestAuditTableTable,
+      EmailTestAuditTableData,
+      $$EmailTestAuditTableTableFilterComposer,
+      $$EmailTestAuditTableTableOrderingComposer,
+      $$EmailTestAuditTableTableAnnotationComposer,
+      $$EmailTestAuditTableTableCreateCompanionBuilder,
+      $$EmailTestAuditTableTableUpdateCompanionBuilder,
+      (
+        EmailTestAuditTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $EmailTestAuditTableTable,
+          EmailTestAuditTableData
+        >,
+      ),
+      EmailTestAuditTableData,
+      PrefetchHooks Function()
     >;
 typedef $$LicensesTableTableCreateCompanionBuilder =
     LicensesTableCompanion Function({
@@ -15228,6 +16773,8 @@ class $AppDatabaseManager {
         _db,
         _db.emailNotificationTargetsTable,
       );
+  $$EmailTestAuditTableTableTableManager get emailTestAuditTable =>
+      $$EmailTestAuditTableTableTableManager(_db, _db.emailTestAuditTable);
   $$LicensesTableTableTableManager get licensesTable =>
       $$LicensesTableTableTableManager(_db, _db.licensesTable);
   $$ServerCredentialsTableTableTableManager get serverCredentialsTable =>

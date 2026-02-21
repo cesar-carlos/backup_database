@@ -39,6 +39,8 @@ Future<void> setupPresentationModule(GetIt getIt) async {
       emailConfigRepository: getIt<IEmailConfigRepository>(),
       emailNotificationTargetRepository:
           getIt<IEmailNotificationTargetRepository>(),
+      emailTestAuditRepository: getIt<IEmailTestAuditRepository>(),
+      oauthSmtpService: getIt<IOAuthSmtpService>(),
       testEmailConfiguration: getIt<TestEmailConfiguration>(),
     ),
   );

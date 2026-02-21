@@ -8,7 +8,7 @@ class EmailConfigGrid extends StatelessWidget {
     required this.selectedConfigId,
     required this.canManage,
     required this.isLoading,
-    required this.isTesting,
+    required this.testingConfigId,
     required this.onCreate,
     required this.onEdit,
     required this.onDelete,
@@ -22,12 +22,12 @@ class EmailConfigGrid extends StatelessWidget {
   final String? selectedConfigId;
   final bool canManage;
   final bool isLoading;
-  final bool isTesting;
+  final String? testingConfigId;
   final VoidCallback onCreate;
   final ValueChanged<EmailConfig> onEdit;
   final ValueChanged<EmailConfig> onDelete;
   final ValueChanged<EmailConfig> onSelect;
-  final VoidCallback onTest;
+  final ValueChanged<EmailConfig> onTest;
   final void Function(EmailConfig config, bool enabled) onToggleEnabled;
 
   @override
@@ -54,15 +54,6 @@ class EmailConfigGrid extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              ActionButton(
-                label: isTesting ? 'Testando...' : 'Testar conexao',
-                icon: FluentIcons.network_tower,
-                isLoading: isTesting,
-                onPressed: canManage && selectedConfigId != null
-                    ? onTest
-                    : null,
-              ),
-              const SizedBox(width: 12),
               Button(
                 onPressed: canManage ? onCreate : null,
                 child: const Row(
@@ -137,6 +128,12 @@ class EmailConfigGrid extends StatelessWidget {
                 ),
               ],
               actions: [
+                AppDataGridAction<EmailConfig>(
+                  icon: FluentIcons.network_tower,
+                  tooltip: 'Testar conexao',
+                  onPressed: onTest,
+                  isEnabled: (row) => canManage && testingConfigId != row.id,
+                ),
                 AppDataGridAction<EmailConfig>(
                   icon: FluentIcons.edit,
                   tooltip: 'Editar',

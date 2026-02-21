@@ -1,13 +1,16 @@
 import 'dart:io';
 
 import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
+import 'package:backup_database/domain/entities/email_test_audit.dart';
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
 import 'package:backup_database/domain/repositories/i_email_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_email_notification_target_repository.dart';
+import 'package:backup_database/domain/repositories/i_email_test_audit_repository.dart';
 import 'package:backup_database/domain/services/i_email_service.dart';
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
@@ -18,17 +21,20 @@ class NotificationService implements INotificationService {
     required IEmailConfigRepository emailConfigRepository,
     required IEmailNotificationTargetRepository
     emailNotificationTargetRepository,
+    required IEmailTestAuditRepository emailTestAuditRepository,
     required IBackupLogRepository backupLogRepository,
     required IEmailService emailService,
     required ILicenseValidationService licenseValidationService,
   }) : _emailConfigRepository = emailConfigRepository,
        _emailNotificationTargetRepository = emailNotificationTargetRepository,
+       _emailTestAuditRepository = emailTestAuditRepository,
        _backupLogRepository = backupLogRepository,
        _emailService = emailService,
        _licenseValidationService = licenseValidationService;
 
   final IEmailConfigRepository _emailConfigRepository;
   final IEmailNotificationTargetRepository _emailNotificationTargetRepository;
+  final IEmailTestAuditRepository _emailTestAuditRepository;
   final IBackupLogRepository _backupLogRepository;
   final IEmailService _emailService;
   final ILicenseValidationService _licenseValidationService;
@@ -66,24 +72,120 @@ class NotificationService implements INotificationService {
     );
   }
 
+  @override
   Future<rd.Result<bool>> testEmailConfiguration(
     EmailConfig config,
   ) async {
-    const subject = 'Teste de Configuracao - Backup Database';
+    final correlationId = _buildTestCorrelationId(config.id);
+    final destinationRecipient = config.recipients
+        .map((email) => email.trim())
+        .where((email) => email.isNotEmpty)
+        .firstOrNull;
+    if (destinationRecipient == null || !destinationRecipient.contains('@')) {
+      const failure = ValidationFailure(
+        message:
+            'Informe um e-mail de destino valido para testar a configuracao',
+      );
+      await _saveEmailTestAudit(
+        config: config,
+        correlationId: correlationId,
+        recipientEmail: '',
+        senderEmail: config.fromEmail.trim().isNotEmpty
+            ? config.fromEmail.trim()
+            : config.username.trim(),
+        failure: failure,
+      );
+      return const rd.Failure(failure);
+    }
+
+    final senderEmail = config.fromEmail.trim().isNotEmpty
+        ? config.fromEmail.trim()
+        : config.username.trim();
+    if (senderEmail.isEmpty || !senderEmail.contains('@')) {
+      const failure = ValidationFailure(
+        message:
+            'Informe um e-mail SMTP valido para realizar o teste de conexao',
+      );
+      await _saveEmailTestAudit(
+        config: config,
+        correlationId: correlationId,
+        recipientEmail: destinationRecipient,
+        senderEmail: senderEmail,
+        failure: failure,
+      );
+      return const rd.Failure(failure);
+    }
+
+    LoggerService.info(
+      '[NotificationService] Iniciando teste SMTP | '
+      'correlationId=$correlationId '
+      'configId=${config.id} '
+      'server=${config.smtpServer}:${config.smtpPort} '
+      'to=$destinationRecipient',
+    );
+
+    final subject = '[SMTP-TEST:$correlationId] ${config.configName}';
     final body =
         '''
-Este e um e-mail de teste do Sistema de Backup.
+Esta e uma mensagem de teste da configuracao SMTP do Backup Database.
+
+Objetivo:
+- Validar servidor, credenciais e entrega para o destinatario configurado.
+
+Configuracao testada:
+- Nome: ${config.configName}
+- Servidor SMTP: ${config.smtpServer}
+- Porta: ${config.smtpPort}
+- Usuario SMTP: ${config.username}
+- Destinatario de teste: $destinationRecipient
+- Correlation ID: $correlationId
 
 Se voce recebeu este e-mail, a configuracao esta funcionando corretamente.
 
 Data/Hora do teste: ${DateTime.now()}
 ''';
 
-    return _emailService.sendEmail(
-      config: config,
+    final sendResult = await _emailService.sendEmail(
+      config: config.copyWith(
+        recipients: [destinationRecipient],
+        fromEmail: senderEmail,
+      ),
       subject: subject,
       body: body,
     );
+
+    sendResult.fold(
+      (_) async {
+        LoggerService.info(
+          '[NotificationService] Teste SMTP aceito | '
+          'correlationId=$correlationId '
+          'to=$destinationRecipient',
+        );
+        await _saveEmailTestAudit(
+          config: config,
+          correlationId: correlationId,
+          recipientEmail: destinationRecipient,
+          senderEmail: senderEmail,
+        );
+      },
+      (failure) async {
+        LoggerService.warning(
+          '[NotificationService] Teste SMTP falhou | '
+          'correlationId=$correlationId '
+          'to=$destinationRecipient '
+          'erro=$failure',
+        );
+        await _saveEmailTestAudit(
+          config: config,
+          correlationId: correlationId,
+          recipientEmail: destinationRecipient,
+          senderEmail: senderEmail,
+          failure: failure,
+        );
+      },
+    );
+
+    return sendResult;
   }
 
   @override
@@ -304,18 +406,15 @@ Data/Hora do teste: ${DateTime.now()}
     String databaseName,
     String warningMessage,
   ) async {
+    if (!config.notifyOnWarning) {
+      return const rd.Success(false);
+    }
+
     var sentAny = false;
     Exception? firstFailure;
 
     for (final target in targets.where((t) => t.enabled)) {
-      if (!target.notifyOnWarning) {
-        continue;
-      }
-
-      final targetConfig = config.copyWith(
-        recipients: [target.recipientEmail],
-        notifyOnWarning: true,
-      );
+      final targetConfig = config.copyWith(recipients: [target.recipientEmail]);
 
       final result = await _emailService.sendBackupWarningNotification(
         config: targetConfig,
@@ -351,13 +450,12 @@ Data/Hora do teste: ${DateTime.now()}
     String? logPath,
   ) {
     if (history.status == BackupStatus.success) {
-      if (!target.notifyOnSuccess) {
+      if (!config.notifyOnSuccess) {
         return Future.value(const rd.Success(false));
       }
       return _emailService.sendBackupSuccessNotification(
         config: config.copyWith(
           recipients: [target.recipientEmail],
-          notifyOnSuccess: true,
         ),
         history: history,
         logPath: logPath,
@@ -365,13 +463,12 @@ Data/Hora do teste: ${DateTime.now()}
     }
 
     if (history.status == BackupStatus.error) {
-      if (!target.notifyOnError) {
+      if (!config.notifyOnError) {
         return Future.value(const rd.Success(false));
       }
       return _emailService.sendBackupErrorNotification(
         config: config.copyWith(
           recipients: [target.recipientEmail],
-          notifyOnError: true,
         ),
         history: history,
         logPath: logPath,
@@ -424,5 +521,79 @@ Data/Hora do teste: ${DateTime.now()}
       return failure;
     }
     return Exception(failure.toString());
+  }
+
+  String _buildTestCorrelationId(String configId) {
+    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final normalizedId = configId.replaceAll('-', '');
+    final suffix = normalizedId.length <= 8
+        ? normalizedId
+        : normalizedId.substring(normalizedId.length - 8);
+    return '$timestamp-$suffix';
+  }
+
+  Future<void> _saveEmailTestAudit({
+    required EmailConfig config,
+    required String correlationId,
+    required String recipientEmail,
+    required String senderEmail,
+    Object? failure,
+  }) async {
+    final normalizedCorrelationId = correlationId.trim();
+    if (normalizedCorrelationId.isEmpty) {
+      return;
+    }
+
+    final normalizedRecipient = recipientEmail.trim();
+    if (normalizedRecipient.isEmpty && failure == null) {
+      return;
+    }
+
+    final audit = EmailTestAudit(
+      configId: config.id,
+      correlationId: normalizedCorrelationId,
+      recipientEmail: normalizedRecipient,
+      senderEmail: senderEmail.trim(),
+      smtpServer: config.smtpServer,
+      smtpPort: config.smtpPort,
+      status: failure == null ? 'success' : 'failure',
+      errorType: _classifyTestFailureType(failure),
+      errorMessage: failure?.toString(),
+    );
+
+    final result = await _emailTestAuditRepository.create(audit);
+    result.fold(
+      (_) => null,
+      (saveFailure) => LoggerService.warning(
+        '[NotificationService] Falha ao persistir auditoria SMTP: $saveFailure',
+      ),
+    );
+  }
+
+  String? _classifyTestFailureType(Object? failure) {
+    if (failure == null) {
+      return null;
+    }
+
+    final text = failure.toString().toLowerCase();
+    if (text.contains('autenticacao') ||
+        text.contains('authentication') ||
+        text.contains('535')) {
+      return 'authentication';
+    }
+    if (text.contains('timeout') ||
+        text.contains('socket') ||
+        text.contains('conectar')) {
+      return 'connectivity';
+    }
+    if (text.contains('rejeitou') || text.contains('rejected')) {
+      return 'smtp_rejection';
+    }
+    if (text.contains('invalido') ||
+        text.contains('validation') ||
+        text.contains('destino')) {
+      return 'validation';
+    }
+    return 'unknown';
   }
 }

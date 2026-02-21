@@ -6,6 +6,10 @@ abstract class IEmailConfigRepository {
   Future<rd.Result<EmailConfig>> getById(String id);
   Future<rd.Result<EmailConfig>> create(EmailConfig config);
   Future<rd.Result<EmailConfig>> update(EmailConfig config);
+  Future<rd.Result<EmailConfig>> saveWithPrimaryTarget({
+    required EmailConfig config,
+    required String primaryRecipientEmail,
+  });
   Future<rd.Result<void>> deleteById(String id);
 
   Future<rd.Result<EmailConfig>> get();

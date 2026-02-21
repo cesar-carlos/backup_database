@@ -3,7 +3,6 @@ import 'package:backup_database/application/providers/notification_provider.dart
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
-import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/notifications/notifications.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -45,9 +44,37 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     final provider = context.read<NotificationProvider>();
+    final initialConfig = initial ?? provider.selectedConfig;
+    String? initialRecipientEmail;
+    if (initialConfig != null) {
+      initialRecipientEmail = await provider.getPrimaryRecipientEmail(
+        initialConfig.id,
+      );
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     final result = await NotificationConfigDialog.show(
       context,
-      initialConfig: initial ?? provider.selectedConfig,
+      initialConfig: initialConfig,
+      initialRecipientEmail: initialRecipientEmail,
+      onTestConnection: provider.testDraftConfiguration,
+      getTestErrorMessage: () => provider.error,
+      onConnectOAuth: (config, providerType) {
+        return provider.connectOAuth(
+          config: config,
+          provider: providerType,
+        );
+      },
+      onReconnectOAuth: (config, providerType) {
+        return provider.reconnectOAuth(
+          config: config,
+          provider: providerType,
+        );
+      },
+      onDisconnectOAuth: provider.disconnectOAuth,
     );
 
     if (result == null || !mounted) {
@@ -100,79 +127,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
-  Future<void> _openTargetModal({EmailNotificationTarget? initial}) async {
-    final provider = context.read<NotificationProvider>();
-    final selected = provider.selectedConfig;
-    if (selected == null) {
-      await MessageModal.showWarning(
-        context,
-        message: 'Selecione uma configuracao SMTP para continuar',
-      );
-      return;
-    }
-
-    final result = await EmailTargetDialog.show(
-      context,
-      emailConfigId: selected.id,
-      initialTarget: initial,
-    );
-
-    if (result == null || !mounted) {
-      return;
-    }
-
-    final success = initial == null
-        ? await provider.addTarget(result)
-        : await provider.updateTarget(result);
-
-    if (!mounted) return;
-
-    if (success) {
-      await MessageModal.showSuccess(
-        context,
-        message: initial == null
-            ? 'Destinatario adicionado com sucesso'
-            : 'Destinatario atualizado com sucesso',
-      );
-    } else {
-      await MessageModal.showError(
-        context,
-        message: provider.error ?? 'Erro ao salvar destinatario',
-      );
-    }
-  }
-
-  Future<void> _deleteTarget(EmailNotificationTarget target) async {
-    final confirmed = await _confirmDialog(
-      title: 'Excluir destinatario',
-      message: 'Deseja excluir o destinatario "${target.recipientEmail}"?',
-    );
-
-    if (!confirmed || !mounted) {
-      return;
-    }
-
-    final provider = context.read<NotificationProvider>();
-    final success = await provider.deleteTargetById(target.id);
-
-    if (!mounted) return;
-
-    if (!success) {
-      await MessageModal.showError(
-        context,
-        message: provider.error ?? 'Erro ao excluir destinatario',
-      );
-    }
-  }
-
-  Future<void> _testConnection() async {
+  Future<void> _testConnection(EmailConfig config) async {
     final licenseProvider = context.read<LicenseProvider>();
     if (!_hasEmailNotificationFeature(licenseProvider)) {
       return;
     }
 
     final provider = context.read<NotificationProvider>();
-    final success = await provider.testConfiguration();
+    final success = await provider.testConfiguration(config.id);
     if (!mounted) return;
 
     if (success) {
@@ -220,17 +182,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return ScaffoldPage(
       header: PageHeader(
         title: const Text('Configuracoes de Notificacoes por E-mail'),
-        commandBar: Consumer2<NotificationProvider, LicenseProvider>(
-          builder: (context, provider, licenseProvider, _) {
+        commandBar: Consumer<LicenseProvider>(
+          builder: (context, licenseProvider, _) {
             return _NotificationsCommandBar(
               hasEmailNotification: _hasEmailNotificationFeature(
                 licenseProvider,
               ),
-              selectedConfig: provider.selectedConfig,
               onRefresh: _refresh,
               onCreateConfig: _openConfigModal,
-              onEditConfig: (config) => _openConfigModal(initial: config),
-              onDeleteConfig: _deleteConfig,
             );
           },
         ),
@@ -262,9 +221,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   onEditConfig: (config) => _openConfigModal(initial: config),
                   onDeleteConfig: _deleteConfig,
                   onTestConnection: _testConnection,
-                  onAddTarget: _openTargetModal,
-                  onEditTarget: (target) => _openTargetModal(initial: target),
-                  onDeleteTarget: _deleteTarget,
                 );
               },
             ),
@@ -278,19 +234,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
 class _NotificationsCommandBar extends StatelessWidget {
   const _NotificationsCommandBar({
     required this.hasEmailNotification,
-    required this.selectedConfig,
     required this.onRefresh,
     required this.onCreateConfig,
-    required this.onEditConfig,
-    required this.onDeleteConfig,
   });
 
   final bool hasEmailNotification;
-  final EmailConfig? selectedConfig;
   final VoidCallback onRefresh;
   final VoidCallback onCreateConfig;
-  final ValueChanged<EmailConfig> onEditConfig;
-  final ValueChanged<EmailConfig> onDeleteConfig;
 
   @override
   Widget build(BuildContext context) {
@@ -305,20 +255,6 @@ class _NotificationsCommandBar extends StatelessWidget {
           icon: const Icon(FluentIcons.add),
           label: const Text('Nova configuracao'),
           onPressed: hasEmailNotification ? onCreateConfig : null,
-        ),
-        CommandBarButton(
-          icon: const Icon(FluentIcons.edit),
-          label: const Text('Editar'),
-          onPressed: hasEmailNotification && selectedConfig != null
-              ? () => onEditConfig(selectedConfig!)
-              : null,
-        ),
-        CommandBarButton(
-          icon: const Icon(FluentIcons.delete),
-          label: const Text('Excluir'),
-          onPressed: hasEmailNotification && selectedConfig != null
-              ? () => onDeleteConfig(selectedConfig!)
-              : null,
         ),
       ],
     );
@@ -366,9 +302,6 @@ class _NotificationsContentSection extends StatelessWidget {
     required this.onEditConfig,
     required this.onDeleteConfig,
     required this.onTestConnection,
-    required this.onAddTarget,
-    required this.onEditTarget,
-    required this.onDeleteTarget,
   });
 
   final NotificationProvider provider;
@@ -377,10 +310,7 @@ class _NotificationsContentSection extends StatelessWidget {
   final VoidCallback onCreateConfig;
   final ValueChanged<EmailConfig> onEditConfig;
   final ValueChanged<EmailConfig> onDeleteConfig;
-  final Future<void> Function() onTestConnection;
-  final Future<void> Function() onAddTarget;
-  final ValueChanged<EmailNotificationTarget> onEditTarget;
-  final ValueChanged<EmailNotificationTarget> onDeleteTarget;
+  final Future<void> Function(EmailConfig config) onTestConnection;
 
   @override
   Widget build(BuildContext context) {
@@ -405,7 +335,7 @@ class _NotificationsContentSection extends StatelessWidget {
           selectedConfigId: provider.selectedConfigId,
           canManage: hasEmailNotification,
           isLoading: provider.isLoading,
-          isTesting: provider.isTesting,
+          testingConfigId: provider.testingConfigId,
           onCreate: onCreateConfig,
           onEdit: onEditConfig,
           onDelete: onDeleteConfig,
@@ -416,16 +346,16 @@ class _NotificationsContentSection extends StatelessWidget {
           },
         ),
         const SizedBox(height: 16),
-        EmailTargetGrid(
-          targets: provider.targets,
-          canManage: hasEmailNotification,
-          hasSelectedConfig: provider.selectedConfig != null,
-          onAdd: onAddTarget,
-          onEdit: onEditTarget,
-          onDelete: onDeleteTarget,
-          onToggleEnabled: (target, enabled) {
-            provider.toggleTargetEnabled(target.id, enabled);
-          },
+        EmailTestHistoryPanel(
+          history: provider.testHistory,
+          configs: provider.configs,
+          isLoading: provider.isHistoryLoading,
+          error: provider.historyError,
+          selectedConfigId: provider.historyConfigIdFilter,
+          period: provider.historyPeriod,
+          onRefresh: provider.refreshTestHistory,
+          onConfigChanged: provider.setHistoryConfigFilter,
+          onPeriodChanged: provider.setHistoryPeriod,
         ),
       ],
     );

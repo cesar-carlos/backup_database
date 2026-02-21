@@ -1,5 +1,6 @@
+import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
-import 'package:backup_database/presentation/widgets/sybase/sybase_config_list_item.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class SybaseConfigList extends StatelessWidget {
@@ -40,23 +41,76 @@ class SybaseConfigList extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: configs.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final config = configs[index];
-        return SybaseConfigListItem(
-          config: config,
-          onEdit: onEdit != null ? () => onEdit!(config) : null,
-          onDuplicate: onDuplicate != null ? () => onDuplicate!(config) : null,
-          onDelete: onDelete != null ? () => onDelete!(config.id) : null,
-          onToggleEnabled: onToggleEnabled != null
-              ? (enabled) => onToggleEnabled!(config.id, enabled)
-              : null,
-        );
-      },
+    return AppCard(
+      child: AppDataGrid<SybaseConfig>(
+        minWidth: 980,
+        columns: [
+          AppDataGridColumn<SybaseConfig>(
+            label: _t(context, 'Nome', 'Name'),
+            width: const FlexColumnWidth(1.8),
+            cellBuilder: (context, row) => Text(row.name),
+          ),
+          AppDataGridColumn<SybaseConfig>(
+            label: _t(context, 'Servidor', 'Server'),
+            width: const FlexColumnWidth(1.9),
+            cellBuilder: (context, row) =>
+                Text('${row.serverName}:${row.portValue}'),
+          ),
+          AppDataGridColumn<SybaseConfig>(
+            label: _t(context, 'Banco', 'Database'),
+            width: const FlexColumnWidth(1.5),
+            cellBuilder: (context, row) => Text(row.databaseNameValue),
+          ),
+          AppDataGridColumn<SybaseConfig>(
+            label: _t(context, 'Usuario', 'User'),
+            width: const FlexColumnWidth(1.5),
+            cellBuilder: (context, row) => Text(row.username),
+          ),
+          AppDataGridColumn<SybaseConfig>(
+            label: _t(context, 'Status', 'Status'),
+            width: const FlexColumnWidth(1.2),
+            cellBuilder: (context, row) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ToggleSwitch(
+                  checked: row.enabled,
+                  onChanged: onToggleEnabled != null
+                      ? (enabled) => onToggleEnabled!(row.id, enabled)
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  row.enabled
+                      ? _t(context, 'Ativo', 'Active')
+                      : _t(context, 'Inativo', 'Inactive'),
+                ),
+              ],
+            ),
+          ),
+        ],
+        actions: [
+          AppDataGridAction<SybaseConfig>(
+            icon: FluentIcons.edit,
+            tooltip: _t(context, 'Editar', 'Edit'),
+            onPressed: (row) => onEdit?.call(row),
+            isEnabled: (_) => onEdit != null,
+          ),
+          AppDataGridAction<SybaseConfig>(
+            icon: FluentIcons.copy,
+            tooltip: _t(context, 'Duplicar', 'Duplicate'),
+            onPressed: (row) => onDuplicate?.call(row),
+            isEnabled: (_) => onDuplicate != null,
+          ),
+          AppDataGridAction<SybaseConfig>(
+            icon: FluentIcons.delete,
+            iconColor: AppColors.error,
+            tooltip: _t(context, 'Excluir', 'Delete'),
+            onPressed: (row) => onDelete?.call(row.id),
+            isEnabled: (_) => onDelete != null,
+          ),
+        ],
+        rows: configs,
+      ),
     );
   }
 }

@@ -1,10 +1,10 @@
 import 'package:backup_database/core/theme/app_colors.dart';
-import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-class SqlServerConfigList extends StatelessWidget {
-  const SqlServerConfigList({
+class PostgresConfigGrid extends StatelessWidget {
+  const PostgresConfigGrid({
     required this.configs,
     super.key,
     this.onEdit,
@@ -12,9 +12,10 @@ class SqlServerConfigList extends StatelessWidget {
     this.onDelete,
     this.onToggleEnabled,
   });
-  final List<SqlServerConfig> configs;
-  final void Function(SqlServerConfig)? onEdit;
-  final void Function(SqlServerConfig)? onDuplicate;
+
+  final List<PostgresConfig> configs;
+  final void Function(PostgresConfig)? onEdit;
+  final void Function(PostgresConfig)? onDuplicate;
   final void Function(String)? onDelete;
   final void Function(String, bool)? onToggleEnabled;
 
@@ -42,31 +43,30 @@ class SqlServerConfigList extends StatelessWidget {
     }
 
     return AppCard(
-      child: AppDataGrid<SqlServerConfig>(
+      child: AppDataGrid<PostgresConfig>(
         minWidth: 980,
         columns: [
-          AppDataGridColumn<SqlServerConfig>(
+          AppDataGridColumn<PostgresConfig>(
             label: _t(context, 'Nome', 'Name'),
             width: const FlexColumnWidth(1.8),
             cellBuilder: (context, row) => Text(row.name),
           ),
-          AppDataGridColumn<SqlServerConfig>(
+          AppDataGridColumn<PostgresConfig>(
             label: _t(context, 'Servidor', 'Server'),
             width: const FlexColumnWidth(1.9),
-            cellBuilder: (context, row) =>
-                Text('${row.server}:${row.portValue}'),
+            cellBuilder: (context, row) => Text('${row.host}:${row.portValue}'),
           ),
-          AppDataGridColumn<SqlServerConfig>(
+          AppDataGridColumn<PostgresConfig>(
             label: _t(context, 'Banco', 'Database'),
             width: const FlexColumnWidth(1.5),
             cellBuilder: (context, row) => Text(row.databaseValue),
           ),
-          AppDataGridColumn<SqlServerConfig>(
+          AppDataGridColumn<PostgresConfig>(
             label: _t(context, 'Usuario', 'User'),
             width: const FlexColumnWidth(1.5),
             cellBuilder: (context, row) => Text(row.username),
           ),
-          AppDataGridColumn<SqlServerConfig>(
+          AppDataGridColumn<PostgresConfig>(
             label: _t(context, 'Status', 'Status'),
             width: const FlexColumnWidth(1.2),
             cellBuilder: (context, row) => Row(
@@ -89,19 +89,19 @@ class SqlServerConfigList extends StatelessWidget {
           ),
         ],
         actions: [
-          AppDataGridAction<SqlServerConfig>(
+          AppDataGridAction<PostgresConfig>(
             icon: FluentIcons.edit,
             tooltip: _t(context, 'Editar', 'Edit'),
             onPressed: (row) => onEdit?.call(row),
             isEnabled: (_) => onEdit != null,
           ),
-          AppDataGridAction<SqlServerConfig>(
+          AppDataGridAction<PostgresConfig>(
             icon: FluentIcons.copy,
             tooltip: _t(context, 'Duplicar', 'Duplicate'),
             onPressed: (row) => onDuplicate?.call(row),
             isEnabled: (_) => onDuplicate != null,
           ),
-          AppDataGridAction<SqlServerConfig>(
+          AppDataGridAction<PostgresConfig>(
             icon: FluentIcons.delete,
             iconColor: AppColors.error,
             tooltip: _t(context, 'Excluir', 'Delete'),

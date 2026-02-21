@@ -19,6 +19,7 @@ export 'i_license_validation_service.dart';
 export 'i_local_destination_service.dart';
 export 'i_nextcloud_destination_service.dart';
 export 'i_notification_service.dart';
+export 'i_oauth_smtp_service.dart';
 export 'i_postgres_backup_service.dart';
 export 'i_schedule_calculator.dart';
 export 'i_scheduler_service.dart';

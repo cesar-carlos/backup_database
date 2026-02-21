@@ -9,6 +9,7 @@ import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/postgres/postgres.dart';
 import 'package:backup_database/presentation/widgets/sql_server/sql_server.dart';
 import 'package:backup_database/presentation/widgets/sybase/sybase.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -43,7 +44,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   Widget build(BuildContext context) {
     return ScaffoldPage(
       header: PageHeader(
-        title: const Text('Configurações de Banco de Dados'),
+        title: const Text('ConfiguraÃ§Ãµes de Banco de Dados'),
         commandBar: CommandBar(
           mainAxisAlignment: MainAxisAlignment.end,
           primaryItems: [
@@ -53,7 +54,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
             ),
             CommandBarButton(
               icon: const Icon(FluentIcons.add),
-              label: const Text('Nova Configuração'),
+              label: const Text('Nova ConfiguraÃ§Ã£o'),
               onPressed: () => _showConfigDialog(null),
             ),
           ],
@@ -132,8 +133,8 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                             child: EmptyState(
                               icon: FluentIcons.database,
                               message:
-                                  'Nenhuma configuração de banco de dados cadastrada',
-                              actionLabel: 'Adicionar Configuração',
+                                  'Nenhuma configuraÃ§Ã£o de banco de dados cadastrada',
+                              actionLabel: 'Adicionar ConfiguraÃ§Ã£o',
                               onAction: () => _showConfigDialog(null),
                             ),
                           );
@@ -223,12 +224,12 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     if (success) {
       MessageModal.showSuccess(
         context,
-        message: 'Configuração duplicada com sucesso!',
+        message: 'ConfiguraÃ§Ã£o duplicada com sucesso!',
       );
     } else {
       MessageModal.showError(
         context,
-        message: provider.error ?? 'Erro ao duplicar configuração',
+        message: provider.error ?? 'Erro ao duplicar configuraÃ§Ã£o',
       );
     }
   }
@@ -242,12 +243,12 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     if (success) {
       MessageModal.showSuccess(
         context,
-        message: 'Configuração duplicada com sucesso!',
+        message: 'ConfiguraÃ§Ã£o duplicada com sucesso!',
       );
     } else {
       MessageModal.showError(
         context,
-        message: provider.error ?? 'Erro ao duplicar configuração Sybase',
+        message: provider.error ?? 'Erro ao duplicar configuraÃ§Ã£o Sybase',
       );
     }
   }
@@ -285,13 +286,13 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
         MessageModal.showSuccess(
           context,
           message: config == null
-              ? 'Configuração criada com sucesso!'
-              : 'Configuração atualizada com sucesso!',
+              ? 'ConfiguraÃ§Ã£o criada com sucesso!'
+              : 'ConfiguraÃ§Ã£o atualizada com sucesso!',
         );
       } else {
         MessageModal.showError(
           context,
-          message: errorMessage ?? 'Erro ao salvar configuração',
+          message: errorMessage ?? 'Erro ao salvar configuraÃ§Ã£o',
         );
       }
     }
@@ -316,13 +317,14 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
         MessageModal.showSuccess(
           context,
           message: config == null
-              ? 'Configuração Sybase criada com sucesso!'
-              : 'Configuração Sybase atualizada com sucesso!',
+              ? 'ConfiguraÃ§Ã£o Sybase criada com sucesso!'
+              : 'ConfiguraÃ§Ã£o Sybase atualizada com sucesso!',
         );
       } else {
         MessageModal.showError(
           context,
-          message: sybaseProvider.error ?? 'Erro ao salvar configuração Sybase',
+          message:
+              sybaseProvider.error ?? 'Erro ao salvar configuraÃ§Ã£o Sybase',
         );
       }
     }
@@ -353,7 +355,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
 
     if (result != null && mounted) {
       if (result is! PostgresConfig) {
-        return; // Se não for PostgresConfig, não processar
+        return; // Se nÃ£o for PostgresConfig, nÃ£o processar
       }
 
       final postgresConfig = result;
@@ -368,15 +370,15 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
         MessageModal.showSuccess(
           context,
           message: config == null
-              ? 'Configuração PostgreSQL criada com sucesso!'
-              : 'Configuração PostgreSQL atualizada com sucesso!',
+              ? 'ConfiguraÃ§Ã£o PostgreSQL criada com sucesso!'
+              : 'ConfiguraÃ§Ã£o PostgreSQL atualizada com sucesso!',
         );
       } else {
         MessageModal.showError(
           context,
           message:
               postgresProvider.error ??
-              'Erro ao salvar configuração PostgreSQL',
+              'Erro ao salvar configuraÃ§Ã£o PostgreSQL',
         );
       }
     }
@@ -391,12 +393,12 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     if (success) {
       MessageModal.showSuccess(
         context,
-        message: 'Configuração duplicada com sucesso!',
+        message: 'ConfiguraÃ§Ã£o duplicada com sucesso!',
       );
     } else {
       MessageModal.showError(
         context,
-        message: provider.error ?? 'Erro ao duplicar configuração PostgreSQL',
+        message: provider.error ?? 'Erro ao duplicar configuraÃ§Ã£o PostgreSQL',
       );
     }
   }
@@ -404,15 +406,15 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   Future<void> _confirmDeletePostgres(String id) async {
     final provider = context.read<PostgresConfigProvider>();
     final configName =
-        provider.getConfigById(id)?.name ?? 'Configuração PostgreSQL';
+        provider.getConfigById(id)?.name ?? 'ConfiguraÃ§Ã£o PostgreSQL';
 
     await _handleDeleteWithDependencies(
       configId: id,
       configName: configName,
       databaseLabel: 'PostgreSQL',
-      confirmMessage: 'Tem certeza que deseja excluir esta configuração?',
-      successMessage: 'Configuração PostgreSQL excluída com sucesso!',
-      fallbackErrorMessage: 'Erro ao excluir configuração PostgreSQL',
+      confirmMessage: 'Tem certeza que deseja excluir esta configuraÃ§Ã£o?',
+      successMessage: 'ConfiguraÃ§Ã£o PostgreSQL excluÃ­da com sucesso!',
+      fallbackErrorMessage: 'Erro ao excluir configuraÃ§Ã£o PostgreSQL',
       onDelete: () => provider.deleteConfig(id),
       readError: () => provider.error,
     );
@@ -421,15 +423,15 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   Future<void> _confirmDeleteSqlServer(String id) async {
     final provider = context.read<SqlServerConfigProvider>();
     final configName =
-        provider.getConfigById(id)?.name ?? 'Configuração SQL Server';
+        provider.getConfigById(id)?.name ?? 'ConfiguraÃ§Ã£o SQL Server';
 
     await _handleDeleteWithDependencies(
       configId: id,
       configName: configName,
       databaseLabel: 'SQL Server',
-      confirmMessage: 'Tem certeza que deseja excluir esta configuração?',
-      successMessage: 'Configuração SQL Server excluída com sucesso!',
-      fallbackErrorMessage: 'Erro ao excluir configuração SQL Server',
+      confirmMessage: 'Tem certeza que deseja excluir esta configuraÃ§Ã£o?',
+      successMessage: 'ConfiguraÃ§Ã£o SQL Server excluÃ­da com sucesso!',
+      fallbackErrorMessage: 'Erro ao excluir configuraÃ§Ã£o SQL Server',
       onDelete: () => provider.deleteConfig(id),
       readError: () => provider.error,
     );
@@ -438,15 +440,15 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   Future<void> _confirmDeleteSybase(String id) async {
     final provider = context.read<SybaseConfigProvider>();
     final configName =
-        provider.getConfigById(id)?.name ?? 'Configuração Sybase';
+        provider.getConfigById(id)?.name ?? 'ConfiguraÃ§Ã£o Sybase';
 
     await _handleDeleteWithDependencies(
       configId: id,
       configName: configName,
       databaseLabel: 'Sybase SQL Anywhere',
-      confirmMessage: 'Tem certeza que deseja excluir esta configuração?',
-      successMessage: 'Configuração Sybase excluída com sucesso!',
-      fallbackErrorMessage: 'Erro ao excluir configuração Sybase',
+      confirmMessage: 'Tem certeza que deseja excluir esta configuraÃ§Ã£o?',
+      successMessage: 'ConfiguraÃ§Ã£o Sybase excluÃ­da com sucesso!',
+      fallbackErrorMessage: 'Erro ao excluir configuraÃ§Ã£o Sybase',
       onDelete: () => provider.deleteConfig(id),
       readError: () => provider.error,
     );
@@ -472,7 +474,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       await MessageModal.showError(
         context,
         message:
-            'Não foi possível validar dependências da configuração. '
+            'NÃ£o foi possÃ­vel validar dependÃªncias da configuraÃ§Ã£o. '
             'Tente novamente.',
       );
       return;
@@ -515,7 +517,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: const Text('Confirmar Exclusão'),
+        title: const Text('Confirmar ExclusÃ£o'),
         content: Text(message),
         actions: [
           CancelButton(onPressed: () => Navigator.of(context).pop(false)),
@@ -538,45 +540,12 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     Function(String)? onDelete,
     Function(String, bool)? onToggleEnabled,
   }) {
-    if (configs.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Text('Nenhuma configuração encontrada'),
-        ),
-      );
-    }
-
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: configs.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final config = configs[index];
-        return ConfigListItem(
-          name: config.name,
-          icon: FluentIcons.database,
-          enabled: config.enabled,
-          onToggleEnabled: onToggleEnabled != null
-              ? (enabled) => onToggleEnabled(config.id, enabled)
-              : null,
-          onEdit: onEdit != null ? () => onEdit(config) : null,
-          onDuplicate: onDuplicate != null ? () => onDuplicate(config) : null,
-          onDelete: onDelete != null ? () => onDelete(config.id) : null,
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Text('${config.host}:${config.port}'),
-              const SizedBox(height: 2),
-              Text('Banco: ${config.database}'),
-              const SizedBox(height: 2),
-              Text('Usuário: ${config.username}'),
-            ],
-          ),
-        );
-      },
+    return PostgresConfigGrid(
+      configs: configs,
+      onEdit: onEdit,
+      onDuplicate: onDuplicate,
+      onDelete: onDelete,
+      onToggleEnabled: onToggleEnabled,
     );
   }
 }

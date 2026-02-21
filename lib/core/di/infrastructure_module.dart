@@ -122,7 +122,12 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // NOTIFICATION SERVICE
   // ========================================================================
 
-  getIt.registerLazySingleton<EmailService>(EmailService.new);
+  getIt.registerLazySingleton<IOAuthSmtpService>(
+    () => OAuthSmtpService(getIt<ISecureCredentialService>()),
+  );
+  getIt.registerLazySingleton<EmailService>(
+    () => EmailService(oauthSmtpService: getIt<IOAuthSmtpService>()),
+  );
   getIt.registerLazySingleton<IEmailService>(getIt.get<EmailService>);
   getIt.registerLazySingleton<LogService>(
     () => LogService(getIt<IBackupLogRepository>()),

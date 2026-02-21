@@ -22,6 +22,44 @@ class AppConstants {
 
   static const int oauthLoopbackPort = 8085;
   static const String oauthRedirectUri = 'http://localhost:8085/oauth2redirect';
+  static const bool enableGoogleSmtpOAuth = bool.fromEnvironment(
+    'ENABLE_GOOGLE_SMTP_OAUTH',
+    defaultValue: true,
+  );
+  static const bool enableMicrosoftSmtpOAuth = bool.fromEnvironment(
+    'ENABLE_MICROSOFT_SMTP_OAUTH',
+    defaultValue: true,
+  );
+  static const String smtpGoogleClientId = String.fromEnvironment(
+    'SMTP_GOOGLE_CLIENT_ID',
+  );
+  static const String smtpGoogleClientSecret = String.fromEnvironment(
+    'SMTP_GOOGLE_CLIENT_SECRET',
+  );
+  static const String smtpMicrosoftClientId = String.fromEnvironment(
+    'SMTP_MICROSOFT_CLIENT_ID',
+  );
+  static const String smtpMicrosoftClientSecret = String.fromEnvironment(
+    'SMTP_MICROSOFT_CLIENT_SECRET',
+  );
+  static const String smtpMicrosoftTenant = String.fromEnvironment(
+    'SMTP_MICROSOFT_TENANT',
+    defaultValue: 'common',
+  );
+  static const List<String> smtpGoogleScopes = [
+    'https://mail.google.com/',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'openid',
+    'profile',
+  ];
+  static const List<String> smtpMicrosoftScopes = [
+    'openid',
+    'profile',
+    'email',
+    'offline_access',
+    'User.Read',
+    'https://outlook.office.com/SMTP.Send',
+  ];
 
   static const int defaultRetentionDays = 30;
   static const int minBackupSizeBytes = 1024;
@@ -32,6 +70,10 @@ class AppConstants {
   static const int defaultSybasePort = 2638;
 
   static const int logRotationDays = 90;
+
+  static const bool allowInsecureSmtp = bool.fromEnvironment(
+    'ALLOW_INSECURE_SMTP',
+  );
 
   static const String receivedBackupsDefaultPathKey =
       'received_backups_default_path';

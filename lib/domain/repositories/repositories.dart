@@ -4,6 +4,7 @@ export 'i_backup_log_repository.dart';
 export 'i_connection_log_repository.dart';
 export 'i_email_config_repository.dart';
 export 'i_email_notification_target_repository.dart';
+export 'i_email_test_audit_repository.dart';
 export 'i_license_repository.dart';
 export 'i_postgres_config_repository.dart';
 export 'i_schedule_repository.dart';

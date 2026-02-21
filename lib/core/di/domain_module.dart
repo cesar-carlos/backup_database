@@ -56,10 +56,16 @@ Future<void> setupDomainModule(GetIt getIt) async {
 
   // System Repositories
   getIt.registerLazySingleton<IEmailConfigRepository>(
-    () => EmailConfigRepository(getIt<AppDatabase>()),
+    () => EmailConfigRepository(
+      getIt<AppDatabase>(),
+      getIt<ISecureCredentialService>(),
+    ),
   );
   getIt.registerLazySingleton<IEmailNotificationTargetRepository>(
     () => EmailNotificationTargetRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IEmailTestAuditRepository>(
+    () => EmailTestAuditRepository(getIt<AppDatabase>()),
   );
   getIt.registerLazySingleton<ILicenseRepository>(
     () => LicenseRepository(getIt<AppDatabase>()),

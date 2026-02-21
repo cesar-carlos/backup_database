@@ -15,7 +15,13 @@ class EmailConfigsTable extends Table {
   IntColumn get smtpPort => integer().withDefault(const Constant(587))();
   TextColumn get username => text().withDefault(const Constant(''))();
   TextColumn get password => text().withDefault(const Constant(''))();
+  TextColumn get smtpPasswordKey => text().withDefault(const Constant(''))();
   BoolColumn get useSsl => boolean().withDefault(const Constant(true))();
+  TextColumn get authMode => text().withDefault(const Constant('password'))();
+  TextColumn get oauthProvider => text().nullable()();
+  TextColumn get oauthAccountEmail => text().nullable()();
+  TextColumn get oauthTokenKey => text().nullable()();
+  DateTimeColumn get oauthConnectedAt => dateTime().nullable()();
   TextColumn get recipients =>
       text().withDefault(const Constant('[]'))(); // JSON array
   BoolColumn get notifyOnSuccess =>

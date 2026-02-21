@@ -21,6 +21,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       emailConfigRepository: getIt<IEmailConfigRepository>(),
       emailNotificationTargetRepository:
           getIt<IEmailNotificationTargetRepository>(),
+      emailTestAuditRepository: getIt<IEmailTestAuditRepository>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
       emailService: getIt<IEmailService>(),
       licenseValidationService: getIt<ILicenseValidationService>(),

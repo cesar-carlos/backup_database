@@ -23,6 +23,7 @@ part 'database.g.dart';
     BackupLogsTable,
     EmailConfigsTable,
     EmailNotificationTargetsTable,
+    EmailTestAuditTable,
     LicensesTable,
     ServerCredentialsTable,
     ConnectionLogsTable,
@@ -40,6 +41,7 @@ part 'database.g.dart';
     BackupLogDao,
     EmailConfigDao,
     EmailNotificationTargetDao,
+    EmailTestAuditDao,
     LicenseDao,
     ServerCredentialDao,
     ConnectionLogDao,
@@ -57,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 23;
 
   @override
   MigrationStrategy get migration {
@@ -739,6 +741,53 @@ class AppDatabase extends _$AppDatabase {
             );
           }
         }
+
+        if (from < 21) {
+          try {
+            await _ensureEmailTestAuditSchema();
+            LoggerService.info(
+              'Migracao v21: tabela de auditoria de teste SMTP criada.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migracao v21 de auditoria de teste SMTP',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 22) {
+          try {
+            await _ensureEmailConfigSmtpPasswordKeyColumn();
+            LoggerService.info(
+              'Migracao v22: coluna smtp_password_key garantida '
+              'em email_configs_table.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migracao v22 de smtp_password_key',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 23) {
+          try {
+            await _ensureEmailConfigOAuthColumns();
+            LoggerService.info(
+              'Migracao v23: colunas OAuth SMTP garantidas '
+              'em email_configs_table.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migracao v23 de OAuth SMTP',
+              e,
+              stackTrace,
+            );
+          }
+        }
       },
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -750,9 +799,130 @@ class AppDatabase extends _$AppDatabase {
         await _migrateSybaseColumnsToSnakeCase();
 
         await _ensureEmailConfigsColumnsExist();
+        await _ensureEmailConfigSmtpPasswordKeyColumn();
+        await _ensureEmailConfigOAuthColumns();
         await _ensureEmailNotificationTargetsSchema();
+        await _ensureEmailTestAuditSchema();
       },
     );
+  }
+
+  Future<void> _ensureEmailConfigSmtpPasswordKeyColumn() async {
+    try {
+      final columns = await customSelect(
+        'PRAGMA table_info(email_configs_table)',
+      ).get();
+      final hasColumn = columns.any(
+        (row) => row.data['name'] == 'smtp_password_key',
+      );
+
+      if (!hasColumn) {
+        await customStatement(
+          "ALTER TABLE email_configs_table ADD COLUMN smtp_password_key TEXT NOT NULL DEFAULT ''",
+        );
+      }
+
+      await customStatement(
+        '''
+        UPDATE email_configs_table
+        SET smtp_password_key = 'email_smtp_password_' || id
+        WHERE smtp_password_key IS NULL OR smtp_password_key = ''
+        ''',
+      );
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao garantir coluna smtp_password_key em email_configs_table',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _ensureEmailConfigOAuthColumns() async {
+    try {
+      final columns = await customSelect(
+        'PRAGMA table_info(email_configs_table)',
+      ).get();
+      final columnNames = columns
+          .map((row) => row.data['name'] as String)
+          .toSet();
+
+      if (!columnNames.contains('auth_mode')) {
+        await customStatement(
+          "ALTER TABLE email_configs_table ADD COLUMN auth_mode TEXT NOT NULL DEFAULT 'password'",
+        );
+      }
+      if (!columnNames.contains('oauth_provider')) {
+        await customStatement(
+          'ALTER TABLE email_configs_table ADD COLUMN oauth_provider TEXT',
+        );
+      }
+      if (!columnNames.contains('oauth_account_email')) {
+        await customStatement(
+          'ALTER TABLE email_configs_table ADD COLUMN oauth_account_email TEXT',
+        );
+      }
+      if (!columnNames.contains('oauth_token_key')) {
+        await customStatement(
+          'ALTER TABLE email_configs_table ADD COLUMN oauth_token_key TEXT',
+        );
+      }
+      if (!columnNames.contains('oauth_connected_at')) {
+        await customStatement(
+          'ALTER TABLE email_configs_table ADD COLUMN oauth_connected_at INTEGER',
+        );
+      }
+
+      await customStatement(
+        '''
+        UPDATE email_configs_table
+        SET auth_mode = COALESCE(NULLIF(auth_mode, ''), 'password')
+        ''',
+      );
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao garantir colunas OAuth SMTP em email_configs_table',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _ensureEmailTestAuditSchema() async {
+    try {
+      await customStatement('''
+        CREATE TABLE IF NOT EXISTS email_test_audit_table (
+          id TEXT PRIMARY KEY NOT NULL,
+          config_id TEXT NOT NULL,
+          correlation_id TEXT NOT NULL,
+          recipient_email TEXT NOT NULL,
+          sender_email TEXT NOT NULL,
+          smtp_server TEXT NOT NULL,
+          smtp_port INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          error_type TEXT,
+          error_message TEXT,
+          attempts INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL
+        )
+      ''');
+
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_email_test_audit_config_created_at
+        ON email_test_audit_table(config_id, created_at DESC)
+      ''');
+
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_email_test_audit_created_at
+        ON email_test_audit_table(created_at DESC)
+      ''');
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao garantir schema de auditoria SMTP',
+        e,
+        stackTrace,
+      );
+    }
   }
 
   Future<void> _ensureSybaseConfigsTableExists(Migrator m) async {
@@ -912,6 +1082,12 @@ class AppDatabase extends _$AppDatabase {
         'smtp_port',
         'username',
         'password',
+        'smtp_password_key',
+        'auth_mode',
+        'oauth_provider',
+        'oauth_account_email',
+        'oauth_token_key',
+        'oauth_connected_at',
         'use_ssl',
         'recipients',
         'notify_on_success',
@@ -974,11 +1150,57 @@ class AppDatabase extends _$AppDatabase {
         );
         LoggerService.info('Coluna password adicionada à email_configs_table');
       }
+      if (!columnNames.contains('smtp_password_key')) {
+        await customStatement(
+          "ALTER TABLE email_configs_table ADD COLUMN smtp_password_key TEXT NOT NULL DEFAULT ''",
+        );
+        LoggerService.info(
+          'Coluna smtp_password_key adicionada à email_configs_table',
+        );
+      }
       if (!columnNames.contains('use_ssl')) {
         await customStatement(
           'ALTER TABLE email_configs_table ADD COLUMN use_ssl INTEGER',
         );
         LoggerService.info('Coluna use_ssl adicionada à email_configs_table');
+      }
+      if (!columnNames.contains('auth_mode')) {
+        await customStatement(
+          "ALTER TABLE email_configs_table ADD COLUMN auth_mode TEXT NOT NULL DEFAULT 'password'",
+        );
+        LoggerService.info('Coluna auth_mode adicionada à email_configs_table');
+      }
+      if (!columnNames.contains('oauth_provider')) {
+        await customStatement(
+          'ALTER TABLE email_configs_table ADD COLUMN oauth_provider TEXT',
+        );
+        LoggerService.info(
+          'Coluna oauth_provider adicionada à email_configs_table',
+        );
+      }
+      if (!columnNames.contains('oauth_account_email')) {
+        await customStatement(
+          'ALTER TABLE email_configs_table ADD COLUMN oauth_account_email TEXT',
+        );
+        LoggerService.info(
+          'Coluna oauth_account_email adicionada à email_configs_table',
+        );
+      }
+      if (!columnNames.contains('oauth_token_key')) {
+        await customStatement(
+          'ALTER TABLE email_configs_table ADD COLUMN oauth_token_key TEXT',
+        );
+        LoggerService.info(
+          'Coluna oauth_token_key adicionada à email_configs_table',
+        );
+      }
+      if (!columnNames.contains('oauth_connected_at')) {
+        await customStatement(
+          'ALTER TABLE email_configs_table ADD COLUMN oauth_connected_at INTEGER',
+        );
+        LoggerService.info(
+          'Coluna oauth_connected_at adicionada à email_configs_table',
+        );
       }
 
       try {
@@ -993,6 +1215,8 @@ class AppDatabase extends _$AppDatabase {
             smtp_port = COALESCE(smtp_port, 587),
             username = COALESCE(username, ''),
             password = COALESCE(password, ''),
+            smtp_password_key = COALESCE(smtp_password_key, ''),
+            auth_mode = COALESCE(NULLIF(auth_mode, ''), 'password'),
             use_ssl = COALESCE(use_ssl, 1),
             recipients = COALESCE(recipients, '[]'),
             notify_on_success = COALESCE(notify_on_success, 1),
@@ -1008,6 +1232,8 @@ class AppDatabase extends _$AppDatabase {
             OR smtp_port IS NULL 
             OR username IS NULL 
             OR password IS NULL 
+            OR smtp_password_key IS NULL
+            OR auth_mode IS NULL
             OR use_ssl IS NULL
             OR recipients IS NULL
             OR notify_on_success IS NULL
