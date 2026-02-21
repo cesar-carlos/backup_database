@@ -117,8 +117,9 @@ class ClientHandler {
           _authHandled = true;
           if (_authentication != null) {
             _authentication.validateAuthRequest(message).then((
-              bool valid,
+              AuthValidationResult validationResult,
             ) async {
+              final valid = validationResult.isValid;
               isAuthenticated = valid;
               final serverId = message.payload['serverId'] as String?;
               try {
@@ -126,15 +127,19 @@ class ClientHandler {
                   clientHost: _remoteAddress,
                   serverId: serverId,
                   success: valid,
-                  errorMessage: valid
-                      ? null
-                      : 'Invalid password or credential not found',
+                  errorMessage: valid ? null : validationResult.errorMessage,
                   clientId: _clientId,
                 );
               } on Object catch (e) {
                 LoggerService.warning('ClientHandler: failed to log auth: $e');
               }
-              await send(createAuthResponse(success: valid));
+              await send(
+                createAuthResponse(
+                  success: valid,
+                  error: validationResult.errorMessage,
+                  errorCode: validationResult.errorCode,
+                ),
+              );
               if (!valid) {
                 disconnect();
                 return;

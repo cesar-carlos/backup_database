@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 
@@ -24,10 +25,15 @@ Message createAuthRequest({
   );
 }
 
-Message createAuthResponse({required bool success, String? error}) {
+Message createAuthResponse({
+  required bool success,
+  String? error,
+  ErrorCode? errorCode,
+}) {
   final payload = <String, dynamic>{
     'success': success,
-    ...? (error != null ? {'error': error} : null),
+    ...?(error != null ? {'error': error} : null),
+    ...?(errorCode != null ? {'errorCode': errorCode.code} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -46,3 +52,14 @@ bool isAuthRequestMessage(Message message) =>
 
 bool isAuthResponseMessage(Message message) =>
     message.header.type == MessageType.authResponse;
+
+String? getAuthErrorMessage(Message message) =>
+    message.payload['error'] as String?;
+
+ErrorCode? getAuthErrorCode(Message message) {
+  final code = message.payload['errorCode'] as String?;
+  if (code == null || code.isEmpty) {
+    return null;
+  }
+  return ErrorCode.fromString(code);
+}

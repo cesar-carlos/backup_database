@@ -22,9 +22,10 @@ class TcpSocketClient implements SocketClientService {
     BinaryProtocol? protocol,
     SocketLoggerService? socketLogger,
     bool Function()? canDisconnectOnTimeout,
-  })  : _protocol = protocol ?? BinaryProtocol(compression: PayloadCompression()),
-        _socketLogger = socketLogger,
-        _canDisconnectOnTimeout = canDisconnectOnTimeout;
+  }) : _protocol =
+           protocol ?? BinaryProtocol(compression: PayloadCompression()),
+       _socketLogger = socketLogger,
+       _canDisconnectOnTimeout = canDisconnectOnTimeout;
 
   final BinaryProtocol _protocol;
   final SocketLoggerService? _socketLogger;
@@ -49,6 +50,7 @@ class TcpSocketClient implements SocketClientService {
   String? _reconnectPassword;
   bool _reconnectEnabled = false;
   bool _disconnectRequested = false;
+  String? _lastErrorMessage;
 
   @override
   bool get isConnected => _status == ConnectionStatus.connected;
@@ -61,6 +63,8 @@ class TcpSocketClient implements SocketClientService {
 
   @override
   Stream<ConnectionStatus> get statusStream => _statusController.stream;
+
+  String? get lastErrorMessage => _lastErrorMessage;
 
   void _setStatus(ConnectionStatus newStatus) {
     if (_status != newStatus) {
@@ -104,6 +108,7 @@ class TcpSocketClient implements SocketClientService {
     String? password,
   ]) async {
     _setStatus(ConnectionStatus.connecting);
+    _lastErrorMessage = null;
     _waitingAuth = false;
     try {
       _socket = await Socket.connect(
@@ -214,8 +219,8 @@ class TcpSocketClient implements SocketClientService {
           _waitingAuth = false;
           final success = message.payload['success'] == true;
           if (!success) {
-            final error =
-                message.payload['error']?.toString() ?? 'Erro desconhecido';
+            final error = getAuthErrorMessage(message) ?? 'Erro desconhecido';
+            _lastErrorMessage = error;
             LoggerService.error('Autenticação FALHOU: $error');
             _setStatus(ConnectionStatus.authenticationFailed);
             _messageController.add(message);
@@ -244,6 +249,7 @@ class TcpSocketClient implements SocketClientService {
 
   void _onError(Object error, [StackTrace? stackTrace]) {
     LoggerService.warning('TcpSocketClient error: $error', error, stackTrace);
+    _lastErrorMessage = error.toString();
     _status = ConnectionStatus.error;
   }
 

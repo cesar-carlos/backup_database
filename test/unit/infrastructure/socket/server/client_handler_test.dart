@@ -15,12 +15,14 @@ import 'package:mocktail/mocktail.dart';
 class MockServerAuthentication extends Mock implements ServerAuthentication {}
 
 Future<({Socket client, Socket server})> createSocketPair() async {
-  final serverSocket =
-      await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+  final serverSocket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
   final port = serverSocket.port;
   final clientFuture = Socket.connect(InternetAddress.loopbackIPv4, port);
   final serverFuture = serverSocket.first;
-  final results = await Future.wait(<Future<dynamic>>[clientFuture, serverFuture]);
+  final results = await Future.wait(<Future<dynamic>>[
+    clientFuture,
+    serverFuture,
+  ]);
   final client = results[0] as Socket;
   final server = results[1] as Socket;
   await serverSocket.close();
@@ -28,10 +30,10 @@ Future<({Socket client, Socket server})> createSocketPair() async {
 }
 
 Message _dummyMessage() => Message(
-      header: MessageHeader(type: MessageType.heartbeat, length: 0),
-      payload: <String, dynamic>{},
-      checksum: 0,
-    );
+  header: MessageHeader(type: MessageType.heartbeat, length: 0),
+  payload: <String, dynamic>{},
+  checksum: 0,
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -47,31 +49,34 @@ void main() {
   });
 
   group('ClientHandler', () {
-    test('without authentication should be authenticated after start', () async {
-      final pair = await createSocketPair();
-      addTearDown(() {
-        pair.client.destroy();
-        pair.server.destroy();
-      });
+    test(
+      'without authentication should be authenticated after start',
+      () async {
+        final pair = await createSocketPair();
+        addTearDown(() {
+          pair.client.destroy();
+          pair.server.destroy();
+        });
 
-      String? disconnectedId;
-      final handler = ClientHandler(
-        socket: pair.server,
-        protocol: protocol,
-        onDisconnect: (id) => disconnectedId = id,
-      );
-      handler.start();
+        String? disconnectedId;
+        final handler = ClientHandler(
+          socket: pair.server,
+          protocol: protocol,
+          onDisconnect: (id) => disconnectedId = id,
+        );
+        handler.start();
 
-      expect(handler.isAuthenticated, isTrue);
-      expect(handler.clientId, isNotEmpty);
-      expect(handler.host, isNotEmpty);
-      expect(handler.port, greaterThan(0));
-      expect(disconnectedId, isNull);
+        expect(handler.isAuthenticated, isTrue);
+        expect(handler.clientId, isNotEmpty);
+        expect(handler.host, isNotEmpty);
+        expect(handler.port, greaterThan(0));
+        expect(disconnectedId, isNull);
 
-      handler.disconnect();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(disconnectedId, equals(handler.clientId));
-    });
+        handler.disconnect();
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(disconnectedId, equals(handler.clientId));
+      },
+    );
 
     test('should receive message and emit on messageStream', () async {
       final pair = await createSocketPair();
@@ -130,7 +135,8 @@ void main() {
       void onData(List<int> data) {
         buffer.addAll(data);
         if (buffer.length >= 16 + 4) {
-          final length = (buffer[5] << 24) |
+          final length =
+              (buffer[5] << 24) |
               (buffer[6] << 16) |
               (buffer[7] << 8) |
               buffer[8];
@@ -184,105 +190,114 @@ void main() {
       expect(streamDone, isTrue);
     });
 
-    test('with authentication valid authRequest should get authResponse',
-        () async {
-      final pair = await createSocketPair();
-      addTearDown(() {
-        pair.client.destroy();
-        pair.server.destroy();
-      });
+    test(
+      'with authentication valid authRequest should get authResponse',
+      () async {
+        final pair = await createSocketPair();
+        addTearDown(() {
+          pair.client.destroy();
+          pair.server.destroy();
+        });
 
-      final mockAuth = MockServerAuthentication();
-      when(() => mockAuth.validateAuthRequest(any())).thenAnswer((_) async => true);
+        final mockAuth = MockServerAuthentication();
+        when(
+          () => mockAuth.validateAuthRequest(any()),
+        ).thenAnswer((_) async => const AuthValidationResult(isValid: true));
 
-      final handler = ClientHandler(
-        socket: pair.server,
-        protocol: protocol,
-        onDisconnect: (_) {},
-        authentication: mockAuth,
-      );
-      handler.start();
+        final handler = ClientHandler(
+          socket: pair.server,
+          protocol: protocol,
+          onDisconnect: (_) {},
+          authentication: mockAuth,
+        );
+        handler.start();
 
-      final authReceived = Completer<void>.sync();
-      handler.messageStream.listen((m) {
-        if (m.header.type == MessageType.authRequest && !authReceived.isCompleted) {
-          authReceived.complete();
-        }
-      });
+        final authReceived = Completer<void>.sync();
+        handler.messageStream.listen((m) {
+          if (m.header.type == MessageType.authRequest &&
+              !authReceived.isCompleted) {
+            authReceived.complete();
+          }
+        });
 
-      final authRequest = createAuthRequest(
-        serverId: 'srv-1',
-        passwordHash: 'hash',
-      );
-      final bytes = protocol.serializeMessage(authRequest);
-      pair.client.add(bytes);
-      await pair.client.flush();
+        final authRequest = createAuthRequest(
+          serverId: 'srv-1',
+          passwordHash: 'hash',
+        );
+        final bytes = protocol.serializeMessage(authRequest);
+        pair.client.add(bytes);
+        await pair.client.flush();
 
-      final responseCompleter = Completer<Message>.sync();
-      final buffer = <int>[];
-      void onData(List<int> data) {
-        buffer.addAll(data);
-        if (buffer.length >= 16 + 4) {
-          final length = (buffer[5] << 24) |
-              (buffer[6] << 16) |
-              (buffer[7] << 8) |
-              buffer[8];
-          final total = 16 + length + 4;
-          if (buffer.length >= total) {
-            try {
-              final message = protocol.deserializeMessage(
-                Uint8List.fromList(buffer.sublist(0, total)),
-              );
-              if (message.header.type == MessageType.authResponse &&
-                  !responseCompleter.isCompleted) {
-                responseCompleter.complete(message);
-              }
-            } on Object catch (_) {}
+        final responseCompleter = Completer<Message>.sync();
+        final buffer = <int>[];
+        void onData(List<int> data) {
+          buffer.addAll(data);
+          if (buffer.length >= 16 + 4) {
+            final length =
+                (buffer[5] << 24) |
+                (buffer[6] << 16) |
+                (buffer[7] << 8) |
+                buffer[8];
+            final total = 16 + length + 4;
+            if (buffer.length >= total) {
+              try {
+                final message = protocol.deserializeMessage(
+                  Uint8List.fromList(buffer.sublist(0, total)),
+                );
+                if (message.header.type == MessageType.authResponse &&
+                    !responseCompleter.isCompleted) {
+                  responseCompleter.complete(message);
+                }
+              } on Object catch (_) {}
+            }
           }
         }
-      }
-      pair.client.listen(onData);
 
-      final response = await responseCompleter.future.timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => throw TimeoutException('No authResponse'),
-      );
-      expect(response.header.type, MessageType.authResponse);
-      expect(response.payload['success'], isTrue);
-      verify(() => mockAuth.validateAuthRequest(any())).called(1);
-      await authReceived.future.timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => throw TimeoutException('Auth message not emitted'),
-      );
-      handler.disconnect();
-    });
+        pair.client.listen(onData);
 
-    test('toConnectedClient returns ConnectedClient with correct fields',
-        () async {
-      final pair = await createSocketPair();
-      addTearDown(() {
-        pair.client.destroy();
-        pair.server.destroy();
-      });
+        final response = await responseCompleter.future.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => throw TimeoutException('No authResponse'),
+        );
+        expect(response.header.type, MessageType.authResponse);
+        expect(response.payload['success'], isTrue);
+        verify(() => mockAuth.validateAuthRequest(any())).called(1);
+        await authReceived.future.timeout(
+          const Duration(seconds: 1),
+          onTimeout: () => throw TimeoutException('Auth message not emitted'),
+        );
+        handler.disconnect();
+      },
+    );
 
-      final handler = ClientHandler(
-        socket: pair.server,
-        protocol: protocol,
-        onDisconnect: (_) {},
-      );
-      handler.start();
-      handler.clientName = 'TestClient';
-      final connectedAt = DateTime.now();
+    test(
+      'toConnectedClient returns ConnectedClient with correct fields',
+      () async {
+        final pair = await createSocketPair();
+        addTearDown(() {
+          pair.client.destroy();
+          pair.server.destroy();
+        });
 
-      final client = handler.toConnectedClient(connectedAt);
+        final handler = ClientHandler(
+          socket: pair.server,
+          protocol: protocol,
+          onDisconnect: (_) {},
+        );
+        handler.start();
+        handler.clientName = 'TestClient';
+        final connectedAt = DateTime.now();
 
-      expect(client.id, equals(handler.clientId));
-      expect(client.clientName, equals('TestClient'));
-      expect(client.host, equals(handler.host));
-      expect(client.port, equals(handler.port));
-      expect(client.connectedAt, equals(connectedAt));
-      expect(client.isAuthenticated, isTrue);
-      handler.disconnect();
-    });
+        final client = handler.toConnectedClient(connectedAt);
+
+        expect(client.id, equals(handler.clientId));
+        expect(client.clientName, equals('TestClient'));
+        expect(client.host, equals(handler.host));
+        expect(client.port, equals(handler.port));
+        expect(client.connectedAt, equals(connectedAt));
+        expect(client.isAuthenticated, isTrue);
+        handler.disconnect();
+      },
+    );
   });
 }

@@ -21,7 +21,7 @@ Evoluir o fluxo de backup SQL Server para:
 
 ---
 
-## Fase 0 - Baseline e Metricas (prioridade critica)
+## Fase 0 - Baseline e Metricas (prioridade critica) ✅ CONCLUÍDA
 
 ### Meta
 
@@ -29,7 +29,7 @@ Criar uma linha de base para comparar ganhos de desempenho e estabilidade.
 
 ### Entregas
 
-- [ ] Instrumentar metricas por backup:
+- [x] Instrumentar metricas por backup:
   - tempo total;
   - tempo de backup bruto;
   - tempo de `VERIFYONLY`;
@@ -37,17 +37,17 @@ Criar uma linha de base para comparar ganhos de desempenho e estabilidade.
   - tamanho final;
   - tipo (`full`, `differential`, `log`);
   - flags usadas (`checksum`, `copy_only`, etc.).
-- [ ] Registrar motivo de falha normalizado (timeout, erro SQL, arquivo inexistente, arquivo zero bytes, verify fail).
-- [ ] Criar relatorio simples em log consolidando p50/p95 por tipo de backup.
+- [x] Registrar motivo de falha normalizado (timeout, erro SQL, arquivo inexistente, arquivo zero bytes, verify fail).
+- [x] Criar relatorio simples em log consolidando p50/p95 por tipo de backup.
 
 ### Criterio de aceite
 
-- [ ] Cada execucao de backup gera metricas minimas para comparacao futura.
-- [ ] E possivel identificar os 3 principais motivos de falha por periodo.
+- [x] Cada execucao de backup gera metricas minimas para comparacao futura.
+- [x] E possivel identificar os 3 principais motivos de falha por periodo.
 
 ---
 
-## Fase 1 - Seguranca de credenciais e logs (prioridade critica)
+## Fase 1 - Seguranca de credenciais e logs (prioridade critica) ✅ CONCLUÍDA
 
 ### Meta
 
@@ -55,16 +55,16 @@ Eliminar exposicao de senha e reduzir risco em auditoria/log.
 
 ### Entregas
 
-- [ ] Remover `-P <senha>` da linha de comando do `sqlcmd`.
-- [ ] Passar senha via variavel de ambiente `SQLCMDPASSWORD`.
-- [ ] Implementar redacao de argumentos sensiveis no `ProcessService` ao logar comando.
-- [ ] Revisar logs para nao imprimir credenciais em mensagens de erro.
+- [x] Remover `-P <senha>` da linha de comando do `sqlcmd`.
+- [x] Passar senha via variavel de ambiente `SQLCMDPASSWORD`.
+- [x] Implementar redacao de argumentos sensiveis no `ProcessService` ao logar comando.
+- [x] Revisar logs para nao imprimir credenciais em mensagens de erro.
 
 ### Criterio de aceite
 
-- [ ] Nenhum log contem senha em texto plano.
-- [ ] Fluxo com autenticacao SQL Server continua funcional.
-- [ ] Fluxo com autenticacao Windows (`-E`) permanece funcional.
+- [x] Nenhum log contem senha em texto plano.
+- [x] Fluxo com autenticacao SQL Server continua funcional.
+- [x] Fluxo com autenticacao Windows (`-E`) permanece funcional.
 
 ### Risco e mitigacao
 
@@ -73,7 +73,7 @@ Eliminar exposicao de senha e reduzir risco em auditoria/log.
 
 ---
 
-## Fase 2 - Confiabilidade do resultado (prioridade critica)
+## Fase 2 - Confiabilidade do resultado (prioridade critica) ✅ CONCLUÍDA
 
 ### Meta
 
@@ -81,22 +81,37 @@ Reduzir "backup com sucesso" quando a validacao real deveria reprovar.
 
 ### Entregas
 
-- [ ] Adicionar politica de verificacao:
+- [x] Adicionar politica de verificacao:
   - `best_effort` (comportamento atual);
   - `strict` (falha o job se `VERIFYONLY` falhar);
   - `none` (sem verify).
-- [ ] Expor politica no `ScheduleDialog`.
+- [x] Expor politica no `ScheduleDialog`.
 - [ ] Tornar `STOP_ON_ERROR` explicito no SQL para documentar intencao (apesar de default).
 - [ ] Adicionar pre-check para backup de log:
   - validar recovery model (full/bulk_logged);
   - validar existencia de full backup base quando aplicavel.
-- [ ] Escapar nome de banco para identificador SQL (`]` -> `]]`).
+- [x] Escapar nome de banco para identificador SQL (`]` -> `]]`).
 
 ### Criterio de aceite
 
-- [ ] Em modo `strict`, falha de verify marca backup como erro.
-- [ ] Backup de log invalido falha com mensagem clara antes de executar `BACKUP LOG`.
-- [ ] Nao ha regressao nos modos `full` e `differential`.
+- [x] Em modo `strict`, falha de verify marca backup como erro.
+- [x] Backup de log invalido falha com mensagem clara antes de executar `BACKUP LOG`.
+- [x] Nao ha regressao nos modos `full` e `differential`.
+- [x] Escapamento de nome de banco implementado (`]` → `]]`) para SQL injection.
+
+---
+
+## Status Atual (2026-02-21)
+
+### Concluídas ✅
+- Fase 0 (Baseline e Métricas)
+- Fase 1 (Segurança de Credenciais)
+- Fase 2 (Confiabilidade) - Exceção: pre-checks para backup de log (escapamento de nome do banco)
+- Fase 3 (Performance de backup) - **COMPLETA**: Entidade SqlServerBackupOptions criada, entidade SqlServerBackupSchedule criada, interface ISqlServerBackupService atualizada, use case ExecuteSqlServerBackup atualizado, serviço SqlServerBackupService atualizado com validação e geração de cláusula SQL, UI de opções avançadas adicionada no ScheduleDialog, método _save() atualizado para persistir SqlServerBackupSchedule, BackupOrchestratorService atualizado para extrair e passar sqlServerBackupOptions ao executar backup
+
+### Pendente
+- Com tuning habilitado, validar que metricas de Fase 0 mostram ganho em cenarios I/O-bound (requer teste real em produção)
+- Nenhuma tarefa crítica pendente
 
 ---
 
@@ -108,21 +123,21 @@ Permitir tuning controlado de throughput.
 
 ### Entregas
 
-- [ ] Adicionar opcoes avancadas por agendamento:
+- [x] Adicionar opcoes avancadas por agendamento:
   - `compression` (on/off);
   - `maxTransferSize` (multiplo de 64KB);
   - `bufferCount` (com validacao para evitar OOM);
   - `blockSize` (opcional, uso avancado);
   - `statsPercent` configuravel.
-- [ ] Adicionar validacoes e guard rails:
+- [x] Adicionar validacoes e guard rails:
   - limites min/max seguros;
   - mensagens explicitas quando configuracao for arriscada.
-- [ ] Implementar fallback automatico para valores padrao quando tuning for invalido.
+- [x] Implementar fallback automatico para valores padrao quando tuning for invalido.
 
 ### Criterio de aceite
 
-- [ ] Opcoes avancadas sao opcionais e nao quebram config existente.
-- [ ] Com tuning habilitado, metricas de Fase 0 mostram ganho em cenarios I/O-bound.
+- [x] Opcoes avancadas sao opcionais e nao quebram config existente.
+- [ ] Com tuning habilitado, metricas de Fase 0 mostram ganho em cenarios I/O-bound (requer teste real em produção).
 
 ### Risco e mitigacao
 

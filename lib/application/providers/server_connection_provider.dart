@@ -313,10 +313,10 @@ class ServerConnectionProvider extends ChangeNotifier {
       await _connectionManager.disconnect();
       return ok;
     } on Object catch (e) {
-      final destination = '${connection.host}:${connection.port}';
-      _error =
-          'Não foi possível conectar a $destination. '
-          'O computador remoto recusou a conexão ou a porta está incorreta.';
+      _error = e is StateError
+          ? e.message
+          : _connectionManager.lastErrorMessage ??
+                'Falha ao conectar no servidor';
       await _connectionManager.disconnect();
       return false;
     } finally {

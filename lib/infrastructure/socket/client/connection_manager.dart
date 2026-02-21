@@ -59,6 +59,7 @@ class ConnectionManager {
   bool get isConnected => _client?.isConnected ?? false;
   ConnectionStatus get status =>
       _client?.status ?? ConnectionStatus.disconnected;
+  String? get lastErrorMessage => _client?.lastErrorMessage;
   Stream<Message>? get messageStream => _client?.messageStream;
   Stream<ConnectionStatus>? get statusStream => _client?.statusStream;
 
@@ -84,6 +85,66 @@ class ConnectionManager {
     _activeHost = host;
     _activePort = port;
     _messageSubscription = _client!.messageStream.listen(_onMessage);
+    final useAuth =
+        serverId != null &&
+        serverId.isNotEmpty &&
+        password != null &&
+        password.isNotEmpty;
+    try {
+      await _awaitConnectionReady(useAuth: useAuth);
+    } on Object {
+      await disconnect();
+      rethrow;
+    }
+  }
+
+  Future<void> _awaitConnectionReady({required bool useAuth}) async {
+    final client = _client;
+    if (client == null) {
+      throw StateError('ConnectionManager not connected');
+    }
+
+    if (!useAuth) {
+      if (!client.isConnected) {
+        throw StateError(
+          client.lastErrorMessage ?? 'Nao foi possivel conectar ao servidor',
+        );
+      }
+      return;
+    }
+
+    final deadline = DateTime.now().add(SocketConfig.connectionTimeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final currentStatus = client.status;
+      if (currentStatus == ConnectionStatus.connected) {
+        return;
+      }
+
+      if (currentStatus == ConnectionStatus.authenticationFailed) {
+        throw StateError(
+          client.lastErrorMessage ?? 'Autenticacao rejeitada pelo servidor',
+        );
+      }
+
+      if (currentStatus == ConnectionStatus.error) {
+        throw StateError(
+          client.lastErrorMessage ?? 'Erro ao conectar no servidor',
+        );
+      }
+
+      if (currentStatus == ConnectionStatus.disconnected) {
+        throw StateError(
+          client.lastErrorMessage ??
+              'Conexao encerrada pelo servidor durante autenticacao',
+        );
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+
+    throw TimeoutException(
+      'Tempo esgotado aguardando resposta de autenticacao do servidor',
+    );
   }
 
   void _onMessage(Message message) {

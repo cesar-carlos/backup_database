@@ -6,6 +6,7 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
@@ -155,13 +156,19 @@ class BackupOrchestratorService {
       // Execute backup based on database type
       if (schedule.databaseType == DatabaseType.sqlServer) {
         final config = configResult.getOrNull()! as SqlServerConfig;
+        final backupOptions = schedule is SqlServerBackupSchedule
+            ? (schedule as SqlServerBackupSchedule).sqlServerBackupOptions
+            : null;
         final backupResult = await _sqlServerBackupService.executeBackup(
           config: config,
           outputDirectory: typeOutputDirectory,
+          scheduleId: schedule.id,
           backupType: backupType,
           truncateLog: schedule.truncateLog,
           enableChecksum: schedule.enableChecksum,
           verifyAfterBackup: schedule.verifyAfterBackup,
+          verifyPolicy: schedule.verifyPolicy,
+          sqlServerBackupOptions: backupOptions,
         );
 
         if (backupResult.isError()) {

@@ -6,6 +6,7 @@ import 'package:backup_database/core/di/service_locator.dart' as di;
 import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/connection/connected_client.dart';
+import 'package:backup_database/domain/services/i_license_validation_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/connection_log_dao.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_credential_dao.dart';
 import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
@@ -23,6 +24,7 @@ class TcpSocketServer implements SocketServerService {
   TcpSocketServer({
     BinaryProtocol? protocol,
     ServerCredentialDao? serverCredentialDao,
+    ILicenseValidationService? licenseValidationService,
     ClientManager? clientManager,
     ConnectionLogDao? connectionLogDao,
     ScheduleMessageHandler? scheduleHandler,
@@ -32,7 +34,10 @@ class TcpSocketServer implements SocketServerService {
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
        _authentication = serverCredentialDao != null
-           ? ServerAuthentication(serverCredentialDao)
+           ? ServerAuthentication(
+               serverCredentialDao,
+               licenseValidationService: licenseValidationService,
+             )
            : null,
        _clientManager = clientManager,
        _connectionLogDao = connectionLogDao,

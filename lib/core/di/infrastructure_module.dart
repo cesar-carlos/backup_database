@@ -210,6 +210,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<TcpSocketServer>(
     () => TcpSocketServer(
       serverCredentialDao: getIt<AppDatabase>().serverCredentialDao,
+      licenseValidationService: getIt<ILicenseValidationService>(),
       clientManager: getIt<ClientManager>(),
       connectionLogDao: getIt<AppDatabase>().connectionLogDao,
       scheduleHandler: getIt<ScheduleMessageHandler>(),

@@ -1,5 +1,6 @@
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
+import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:uuid/uuid.dart';
 
 enum ScheduleType { daily, weekly, monthly, interval }
@@ -23,6 +24,7 @@ class Schedule {
     this.enabled = true,
     this.enableChecksum = false,
     this.verifyAfterBackup = false,
+    this.verifyPolicy = VerifyPolicy.bestEffort,
     this.postBackupScript,
     this.lastRunAt,
     this.nextRunAt,
@@ -49,6 +51,7 @@ class Schedule {
   final bool enabled;
   final bool enableChecksum;
   final bool verifyAfterBackup;
+  final VerifyPolicy verifyPolicy;
   final String? postBackupScript;
   final DateTime? lastRunAt;
   final DateTime? nextRunAt;
@@ -71,6 +74,7 @@ class Schedule {
     bool? enabled,
     bool? enableChecksum,
     bool? verifyAfterBackup,
+    VerifyPolicy? verifyPolicy,
     String? postBackupScript,
     DateTime? lastRunAt,
     DateTime? nextRunAt,
@@ -105,6 +109,7 @@ class Schedule {
       enabled: enabled ?? this.enabled,
       enableChecksum: enableChecksum ?? this.enableChecksum,
       verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,
+      verifyPolicy: verifyPolicy ?? this.verifyPolicy,
       postBackupScript: postBackupScript ?? this.postBackupScript,
       lastRunAt: lastRunAt ?? this.lastRunAt,
       nextRunAt: nextRunAt ?? this.nextRunAt,

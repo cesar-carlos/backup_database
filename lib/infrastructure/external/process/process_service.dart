@@ -26,6 +26,39 @@ class ProcessService {
   static const Duration _executableCacheTtl = Duration(minutes: 10);
   final Map<String, _ExecutableCacheEntry> _executablePathCache = {};
 
+  static const _sensitiveEnvVars = {
+    'SQLCMDPASSWORD',
+    'PGPASSWORD',
+    'DBPASSWORD',
+  };
+
+  String _redactCommand(String executable, List<String> arguments) {
+    final redactedArgs = <String>[];
+    for (var i = 0; i < arguments.length; i++) {
+      final arg = arguments[i];
+      if (arg == '-P' && i + 1 < arguments.length) {
+        redactedArgs.add('-P');
+        redactedArgs.add('***REDACTED***');
+        i++;
+      } else {
+        redactedArgs.add(arg);
+      }
+    }
+    return '$executable ${redactedArgs.join(' ')}';
+  }
+
+  String _redactEnv(Map<String, String>? environment) {
+    if (environment == null || environment.isEmpty) return '';
+
+    final redactedEntries = <String>[];
+    for (final entry in environment.entries) {
+      if (_sensitiveEnvVars.contains(entry.key.toUpperCase())) {
+        redactedEntries.add('${entry.key}=***REDACTED***');
+      }
+    }
+    return redactedEntries.isNotEmpty ? ' ${redactedEntries.join(' ')}' : '';
+  }
+
   Future<rd.Result<ProcessResult>> run({
     required String executable,
     required List<String> arguments,
@@ -36,7 +69,9 @@ class ProcessService {
     final stopwatch = Stopwatch()..start();
 
     try {
-      LoggerService.info('Executando: $executable ${arguments.join(' ')}');
+      final redactedCommand = _redactCommand(executable, arguments);
+      final redactedEnv = _redactEnv(environment);
+      LoggerService.info('Executando: $redactedCommand$redactedEnv');
 
       final mergedEnvironment = <String, String>{};
 

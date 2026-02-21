@@ -9,8 +9,11 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
+import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -52,6 +55,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   bool _isEnabled = true;
   bool _enableChecksum = false;
   bool _verifyAfterBackup = false;
+  VerifyPolicy _verifyPolicy = VerifyPolicy.bestEffort;
+  bool _compression = false;
+
+  int? _maxTransferSize;
+  int? _bufferCount;
+  int _statsPercent = 10;
 
   int _hour = 0;
   int _minute = 0;
@@ -104,6 +113,17 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _isEnabled = widget.schedule!.enabled;
       _enableChecksum = widget.schedule!.enableChecksum;
       _verifyAfterBackup = widget.schedule!.verifyAfterBackup;
+      _verifyPolicy = widget.schedule!.verifyPolicy;
+
+      switch (widget.schedule) {
+        case SqlServerBackupSchedule(:final sqlServerBackupOptions):
+          _compression = sqlServerBackupOptions.compression;
+          _maxTransferSize = sqlServerBackupOptions.maxTransferSize;
+          _bufferCount = sqlServerBackupOptions.bufferCount;
+          _statsPercent = sqlServerBackupOptions.statsPercent;
+        case _:
+      }
+
       _backupFolderController.text = widget.schedule!.backupFolder.isNotEmpty
           ? widget.schedule!.backupFolder
           : _getDefaultBackupFolder();
@@ -679,8 +699,104 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           ),
           const SizedBox(height: 24),
           _buildIntegrityOptions(),
+          if (_databaseType == DatabaseType.sqlServer)
+            _buildAdvancedPerformanceOptions(),
         ],
       ),
+    );
+  }
+
+  Widget _buildAdvancedPerformanceOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionTitle('Performance Avançada (SQL Server)'),
+        const SizedBox(height: 12),
+        InfoLabel(
+          label: 'Compressão Nativa (COMPRESSION)',
+          child: ToggleSwitch(
+            checked: _compression,
+            onChanged: (value) {
+              setState(() {
+                _compression = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Compressão nativa do SQL Server. Requer edição Enterprise do SQL Server 2008+.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<int?>(
+          label: 'Tamanho Máximo de Transferência (MAXTRANSFERSIZE)',
+          value: _maxTransferSize,
+          placeholder: const Text('Usar padrão do SQL Server'),
+          items: const [
+            ComboBoxItem(child: Text('Usar padrão')),
+            ComboBoxItem(value: 4194304, child: Text('4 MB')),
+            ComboBoxItem(value: 16777216, child: Text('16 MB')),
+            ComboBoxItem(value: 67108864, child: Text('64 MB')),
+          ],
+          onChanged: (value) {
+            final newValue = value ?? 4194304;
+            setState(() {
+              _maxTransferSize = newValue;
+            });
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Tamanho máximo de transferência em bytes. Múltiplo de 64KB.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<int?>(
+          label: 'Buffer Count (BUFFERCOUNT)',
+          value: _bufferCount,
+          placeholder: const Text('Usar padrão do SQL Server'),
+          items: const [
+            ComboBoxItem(child: Text('Usar padrão')),
+            ComboBoxItem(value: 50, child: Text('50')),
+            ComboBoxItem(value: 100, child: Text('100')),
+            ComboBoxItem(value: 200, child: Text('200')),
+          ],
+          onChanged: (value) {
+            final newValue = value ?? 10;
+            setState(() {
+              _bufferCount = newValue;
+            });
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Número de buffers de I/O. Valores altos podem causar consumo excessivo de memória.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<int>(
+          label: 'STATS Percentual',
+          value: _statsPercent,
+          placeholder: const Text('10%'),
+          items: const [
+            ComboBoxItem<int>(value: 1, child: Text('1%')),
+            ComboBoxItem<int>(value: 5, child: Text('5%')),
+            ComboBoxItem<int>(value: 10, child: Text('10%')),
+          ],
+          onChanged: (value) {
+            final newValue = value ?? 10;
+            setState(() {
+              _statsPercent = newValue;
+            });
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Porcentagem de progresso para exibir. O SQL Server relata progresso a cada X%.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+      ],
     );
   }
 
@@ -794,12 +910,57 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     ],
                   ],
                 ),
+                if (_verifyAfterBackup) ...[
+                  const SizedBox(height: 16),
+                  AppDropdown<VerifyPolicy>(
+                    label: 'Política de Verificação',
+                    value: _verifyPolicy,
+                    placeholder: const Text('Política de Verificação'),
+                    items: const [
+                      ComboBoxItem<VerifyPolicy>(
+                        value: VerifyPolicy.bestEffort,
+                        child: Text('Melhor Esforço (Best Effort)'),
+                      ),
+                      ComboBoxItem<VerifyPolicy>(
+                        value: VerifyPolicy.strict,
+                        child: Text('Estrito (Strict)'),
+                      ),
+                      ComboBoxItem<VerifyPolicy>(
+                        value: VerifyPolicy.none,
+                        child: Text('Nenhum (None)'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _verifyPolicy = value;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _getVerifyPolicyDescription(_verifyPolicy),
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
+                ],
               ],
             );
           },
         ),
       ],
     );
+  }
+
+  String _getVerifyPolicyDescription(VerifyPolicy policy) {
+    switch (policy) {
+      case VerifyPolicy.bestEffort:
+        return 'Verifica a integridade do backup, mas continua mesmo em caso de falha na verificação.';
+      case VerifyPolicy.strict:
+        return 'Verifica a integridade do backup. Se a verificação falhar, o backup é considerado falho.';
+      case VerifyPolicy.none:
+        return 'Não realiza verificação de integridade do backup.';
+    }
   }
 
   Widget _buildCheckboxWithInfo({
@@ -1700,29 +1861,66 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         scheduleConfigJson = jsonEncode({'intervalMinutes': _intervalMinutes});
     }
 
-    final schedule = Schedule(
-      id: widget.schedule?.id,
-      name: _nameController.text.trim(),
-      databaseConfigId: _selectedDatabaseConfigId!,
-      databaseType: _databaseType,
-      scheduleType: _scheduleType,
-      scheduleConfig: scheduleConfigJson,
-      destinationIds: _selectedDestinationIds,
-      backupFolder: _backupFolderController.text.trim(),
-      backupType: effectiveBackupType,
-      compressBackup: _compressBackup,
-      compressionFormat: effectiveCompressionFormat,
-      enabled: _isEnabled,
-      enableChecksum: effectiveEnableChecksum,
-      verifyAfterBackup: _verifyAfterBackup,
-      postBackupScript: _postBackupScriptController.text.trim().isEmpty
-          ? null
-          : _postBackupScriptController.text.trim(),
-      lastRunAt: widget.schedule?.lastRunAt,
-      nextRunAt: widget.schedule?.nextRunAt,
-      createdAt: widget.schedule?.createdAt,
-      truncateLog: _truncateLog,
+    final sqlServerBackupOptions = SqlServerBackupOptions(
+      compression: _compression,
+      maxTransferSize: _maxTransferSize,
+      bufferCount: _bufferCount,
+      statsPercent: _statsPercent,
     );
+
+    final Schedule schedule;
+    if (_databaseType == DatabaseType.sqlServer) {
+      schedule = SqlServerBackupSchedule(
+        id: widget.schedule?.id,
+        name: _nameController.text.trim(),
+        databaseConfigId: _selectedDatabaseConfigId!,
+        databaseType: _databaseType,
+        scheduleType: _scheduleType,
+        scheduleConfig: scheduleConfigJson,
+        destinationIds: _selectedDestinationIds,
+        backupFolder: _backupFolderController.text.trim(),
+        backupType: effectiveBackupType,
+        compressBackup: _compressBackup,
+        compressionFormat: effectiveCompressionFormat,
+        enabled: _isEnabled,
+        enableChecksum: effectiveEnableChecksum,
+        verifyAfterBackup: _verifyAfterBackup,
+        verifyPolicy: _verifyPolicy,
+        postBackupScript: _postBackupScriptController.text.trim().isEmpty
+            ? null
+            : _postBackupScriptController.text.trim(),
+        lastRunAt: widget.schedule?.lastRunAt,
+        nextRunAt: widget.schedule?.nextRunAt,
+        createdAt: widget.schedule?.createdAt,
+        truncateLog: _truncateLog,
+        sqlServerBackupOptions: sqlServerBackupOptions,
+      );
+    } else {
+      schedule = Schedule(
+        id: widget.schedule?.id,
+        name: _nameController.text.trim(),
+        databaseConfigId: _selectedDatabaseConfigId!,
+        databaseType: _databaseType,
+        scheduleType: _scheduleType,
+        scheduleConfig: scheduleConfigJson,
+        destinationIds: _selectedDestinationIds,
+        backupFolder: _backupFolderController.text.trim(),
+        backupType: effectiveBackupType,
+        compressBackup: _compressBackup,
+        compressionFormat: effectiveCompressionFormat,
+        enabled: _isEnabled,
+        enableChecksum: effectiveEnableChecksum,
+        verifyAfterBackup: _verifyAfterBackup,
+        verifyPolicy: _verifyPolicy,
+        postBackupScript: _postBackupScriptController.text.trim().isEmpty
+            ? null
+            : _postBackupScriptController.text.trim(),
+        lastRunAt: widget.schedule?.lastRunAt,
+        nextRunAt: widget.schedule?.nextRunAt,
+        createdAt: widget.schedule?.createdAt,
+        truncateLog: _truncateLog,
+      );
+    }
 
     if (mounted) {
       Navigator.of(context).pop(schedule);
