@@ -27,7 +27,8 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 ///
 /// Executa DROP TABLE nas tabelas de configuração (SQL Server, Sybase, PostgreSQL)
 /// para forçar recriação limpa na próxima inicialização.
-Future<void> _dropConfigTablesForVersion223() async {
+/// Retorna true se o drop foi executado, false caso contrário.
+Future<bool> _dropConfigTablesForVersion223() async {
   await Future.delayed(const Duration(milliseconds: 500));
 
   final packageInfo = await PackageInfo.fromPlatform();
@@ -42,7 +43,7 @@ Future<void> _dropConfigTablesForVersion223() async {
 
   if (!shouldReset) {
     LoggerService.info('Versão não é 2.2.3, pulando drop de tabelas');
-    return;
+    return false;
   }
 
   try {
@@ -56,7 +57,7 @@ Future<void> _dropConfigTablesForVersion223() async {
 
     if (!await dbFile.exists()) {
       LoggerService.info('Banco de dados não encontrado, nada para dropar');
-      return;
+      return false;
     }
 
     LoggerService.warning('===== INICIANDO DROP DE TABELAS DE CONFIG =====');
@@ -85,9 +86,12 @@ Future<void> _dropConfigTablesForVersion223() async {
       'Tabelas serão recriadas automaticamente pelo Drift '
       'no próximo acesso',
     );
+
+    return true;
   } on Object catch (e, stackTrace) {
     LoggerService.error('===== ERRO AO DROPAR TABELAS =====');
     LoggerService.error('Erro ao dropar tabelas: $e', e, stackTrace);
+    return false;
   }
 }
 
@@ -97,7 +101,7 @@ dynamic openSqliteApi(String dbPath) {
 }
 
 /// Obtém o diretório de dados do aplicativo sem duplicação de pastas
-Future<Directory> _getAppDataDirectory() async {
+Future<Directory> getAppDataDirectory() async {
   // No Windows, o getApplicationDocumentsDirectory pode criar pastas duplicadas
   // Usamos um caminho customizado para evitar isso
   if (Platform.isWindows) {
@@ -122,7 +126,7 @@ Future<void> setupCoreModule(GetIt getIt) async {
   // Drop tabelas de configuração na versão 2.2.3
   await _dropConfigTablesForVersion223();
 
-  final appDataDir = await _getAppDataDirectory();
+  final appDataDir = await getApplicationDocumentsDirectory();
   final logsDirectory = p.join(appDataDir.path, 'logs');
 
   await LoggerService.init(logsDirectory: logsDirectory);

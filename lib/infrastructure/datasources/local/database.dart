@@ -858,7 +858,13 @@ class AppDatabase extends _$AppDatabase {
       },
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
+
+        // Verifica e recria tabelas de configuração de banco se necessário
+        // (útil após drop manual das tabelas)
+        await _ensureSqlServerConfigsTableExistsDirect();
         await _ensureSybaseConfigsTableExistsDirect();
+        await _ensurePostgresConfigsTableExistsDirect();
+
         await _ensureScheduleDestinationsTableExists();
         await _createScheduleDestinationIndexes();
         await _createScheduleDatabaseConfigIntegrityTriggers();
@@ -1010,6 +1016,79 @@ class AppDatabase extends _$AppDatabase {
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
         'Erro ao verificar/criar tabela sybase_configs',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _ensureSqlServerConfigsTableExistsDirect() async {
+    try {
+      final tableExists = await customSelect(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name='sql_server_configs_table'",
+      ).getSingleOrNull();
+
+      if (tableExists == null) {
+        LoggerService.info(
+          'Tabela sql_server_configs não existe, criando via SQL.',
+        );
+        await customStatement('''
+          CREATE TABLE IF NOT EXISTS sql_server_configs_table (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            server TEXT NOT NULL,
+            database TEXT NOT NULL,
+            username TEXT NOT NULL,
+            password TEXT NOT NULL,
+            port INTEGER NOT NULL DEFAULT 1433,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            use_windows_auth INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        LoggerService.info('Tabela sql_server_configs criada com sucesso via SQL');
+      }
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao verificar/criar tabela sql_server_configs',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _ensurePostgresConfigsTableExistsDirect() async {
+    try {
+      final tableExists = await customSelect(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name='postgres_configs_table'",
+      ).getSingleOrNull();
+
+      if (tableExists == null) {
+        LoggerService.info(
+          'Tabela postgres_configs não existe, criando via SQL.',
+        );
+        await customStatement('''
+          CREATE TABLE IF NOT EXISTS postgres_configs_table (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            host TEXT NOT NULL,
+            database TEXT NOT NULL,
+            username TEXT NOT NULL,
+            password TEXT NOT NULL,
+            port INTEGER NOT NULL DEFAULT 5432,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        LoggerService.info('Tabela postgres_configs criada com sucesso via SQL');
+      }
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao verificar/criar tabela postgres_configs',
         e,
         stackTrace,
       );
