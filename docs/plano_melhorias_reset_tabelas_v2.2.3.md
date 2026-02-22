@@ -15,7 +15,7 @@
 | 🟠 P1 | Recriação Através de Drift Schema | ✅ Concluído (commit 02c191a) |
 | 🟠 P1 | Consulta Única ao sqlite_master | ✅ Concluído (implementado com P1.1) |
 | 🟡 P2 | Remover schedules_table do DROP | ✅ Concluído (commit em andamento) |
-| 🟡 P2 | Tratamento Diferenciado de Erros | ⏳ Pendente |
+| 🟡 P2 | Tratamento Diferenciado de Erros | ✅ Concluído (commit em andamento) |
 | 🟠 P1 | Recriação Através de Drift Schema | ⏳ Pendente |
 | 🟠 P1 | Desempenho | Consulta Única ao sqlite_master | ⏳ Pendente |
 | 🟡 P2 | Confiabilidade | Remover schedules_table do DROP | ⏳ Pendente |
@@ -371,6 +371,93 @@ final tablesToDrop = [
 - ✅ Apenas tabelas de configuração de banco são resetadas
 - ✅ Menos dados perdidos em caso de rollback ou erro
 - ✅ Reduz impacto da operação de reset no usuário final
+
+---
+
+### P2.2 Tratamento Diferenciado de Erros ✅
+
+**Status:** Concluído
+
+**Problema Atual:**
+Todos os erros são tratados de forma idêntica, sem distinção entre erros recuperáveis e críticos.
+
+**Solução:**
+Criar enum de tipos de erro e implementar tratamento diferenciado com base na categoria do erro.
+
+**Arquivos Modificados:**
+- `lib/core/di/core_module.dart`:
+  - Adicionado enum `_DropErrorType` com categorias: critical, expected, recoverable
+  - Adicionada função `_categorizeError()` para classificar erros automaticamente
+  - Adicionada função `_getErrorMessage()` para obter mensagem legível
+  - Atualizada função `_handleDropError()` com tratamento diferenciado por tipo de erro
+
+**Implementação:**
+```dart
+// Enum de tipos de erro
+enum _DropErrorType {
+  critical,    // Erro crítico que impede a operação
+  expected,     // Erro esperado (normal)
+  recoverable,  // Erro recuperável (pode tentar novamente)
+}
+
+// Categorização automática de erros
+_DropErrorType _categorizeError(Object error) {
+  if (error is sqlite3.SqliteException) {
+    final code = error.extendedResultCode;
+    // Erros críticos: CONSTRAINT, CORRUPT, NOTADB, FORMAT, FULL
+    if (code == SqliteException.SQLITE_CONSTRAINT ||
+        code == SqliteException.SQLITE_CORRUPT ||
+        code == SqliteException.SQLITE_NOTADB ||
+        code == SqliteException.SQLITE_FORMAT ||
+        code == SqliteException.SQLITE_FULL) {
+      return _DropErrorType.critical;
+    }
+    // Erros recuperáveis: BUSY, LOCKED
+    if (code == SqliteException.SQLITE_BUSY ||
+        code == SqliteException.SQLITE_LOCKED) {
+      return _DropErrorType.recoverable;
+    }
+    return _DropErrorType.expected;
+  }
+  // FileSystemException: access denied é crítico, outros são recuperáveis
+  if (error is FileSystemException) {
+    final fsError = error as FileSystemException;
+    if (fsError.osError?.errorCode == 5 || 32) {
+      return _DropErrorType.critical;
+    }
+    return _DropErrorType.recoverable;
+  }
+  return _DropErrorType.recoverable;
+}
+
+// Tratamento diferenciado por tipo
+void _handleDropError(Object error) {
+  final errorType = _categorizeError(error);
+  switch (errorType) {
+    case _DropErrorType.critical:
+      LoggerService.error(
+        'CRÍTICO: Operação de drop não pode continuar: $error',
+      );
+      break;
+    case _DropErrorType.expected:
+      LoggerService.info(
+        'Esperado: ${_getErrorMessage(errorType)}: $error',
+      );
+      break;
+    case _DropErrorType.recoverable:
+      LoggerService.warning(
+        'Recuperável: ${_getErrorMessage(errorType)}: $error',
+      );
+      break;
+  }
+}
+```
+
+**Benefícios:**
+- ✅ Tratamento diferenciado por severidade de erro
+- ✅ Logs claros indicando tipo de problema
+- ✅ Distingue erros recuperáveis de erros críticos
+- ✅ Melhor experiência de debugging e troubleshooting
 
 ---
 

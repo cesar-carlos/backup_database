@@ -27,6 +27,18 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 const _resetFlagKey = 'reset_v2_2_3_done';
 
+/// Tipos de erro para operação de drop de tabelas.
+enum _DropErrorType {
+  /// Erro crítico que impede a operação de reset
+  critical,
+
+  /// Erro esperado (tabela já dropada, versão diferente, etc)
+  expected,
+
+  /// Erro recuperável (falha temporária que pode ser tratada)
+  recoverable,
+}
+
 Future<bool> _hasAlreadyResetForVersion223() async {
   const storage = FlutterSecureStorage();
   try {
@@ -155,12 +167,70 @@ Future<bool> _dropConfigTablesForVersion223() async {
 }
 
 void _handleDropError(Object error) {
+  final errorType = _categorizeError(error);
+
+  switch (errorType) {
+    case _DropErrorType.critical:
+      LoggerService.error(
+        'CRÍTICO: Operação de drop não pode continuar: $error',
+      );
+      break;
+
+    case _DropErrorType.expected:
+      LoggerService.info(
+        'Esperado: ${_getErrorMessage(errorType)}: $error',
+      );
+      break;
+
+    case _DropErrorType.recoverable:
+      LoggerService.warning(
+        'Recuperável: ${_getErrorMessage(errorType)}: $error',
+      );
+      break;
+  }
+}
+
+_DropErrorType _categorizeError(Object error) {
   if (error is sqlite3.SqliteException) {
-    LoggerService.error('Erro ao dropar tabelas: ${error.message}');
-  } else if (error is FileSystemException) {
-    LoggerService.error('Erro ao acessar arquivo: ${error.message}');
-  } else {
-    LoggerService.error('Erro inesperado: $error');
+    final sqliteError = error as sqlite3.SqliteException;
+    final code = sqliteError.extendedResultCode;
+
+    if (code == sqlite3.SqlError.SQLITE_CONSTRAINT ||
+        code == sqlite3.SqlError.SQLITE_CORRUPT ||
+        code == sqlite3.SqlError.SQLITE_NOTADB ||
+        code == sqlite3.SqlError.SQLITE_FORMAT ||
+        code == sqlite3.SqlError.SQLITE_FULL) {
+      return _DropErrorType.critical;
+    }
+
+    if (code == sqlite3.SqlError.SQLITE_BUSY ||
+        code == sqlite3.SqlError.SQLITE_LOCKED) {
+      return _DropErrorType.recoverable;
+    }
+
+    return _DropErrorType.expected;
+  }
+
+  if (error is FileSystemException) {
+    final fsError = error as FileSystemException;
+    if (fsError.osError?.errorCode == 5 || // ERROR_ACCESS_DENIED
+        fsError.osError?.errorCode == 32) { // ERROR_SHARING_VIOLATION
+      return _DropErrorType.critical;
+    }
+    return _DropErrorType.recoverable;
+  }
+
+  return _DropErrorType.recoverable;
+}
+
+String _getErrorMessage(_DropErrorType type) {
+  switch (type) {
+    case _DropErrorType.critical:
+      return 'Erro fatal';
+    case _DropErrorType.expected:
+      return 'Condição normal';
+    case _DropErrorType.recoverable:
+      return 'Erro recuperável';
   }
 }
 
