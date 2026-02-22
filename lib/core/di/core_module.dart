@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -23,6 +24,34 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
+
+const _resetFlagKey = 'reset_v2_2_3_done';
+
+/// Verifica se o reset já foi executado para a versão 2.2.3.
+///
+/// Usa flutter_secure_storage para evitar resets múltiplos acidentais.
+Future<bool> _hasAlreadyResetForVersion223() async {
+  const storage = FlutterSecureStorage();
+  try {
+    final flag = await storage.read(key: _resetFlagKey);
+    return flag == 'true';
+  } catch (e) {
+    LoggerService.warning('Erro ao ler flag de reset: $e');
+    return false;
+  }
+}
+
+/// Marca o reset como concluído para a versão 2.2.3.
+///
+Future<void> _markResetCompletedForVersion223() async {
+  const storage = FlutterSecureStorage();
+  try {
+    await storage.write(key: _resetFlagKey, value: 'true');
+    LoggerService.info('Flag de reset v2.2.3 marcada como concluída');
+  } catch (e) {
+    LoggerService.warning('Erro ao gravar flag de reset: $e');
+  }
+}
 
 /// Drop das tabelas de configuração de banco de dados para a versão 2.2.3.
 ///
@@ -38,6 +67,13 @@ Future<bool> _dropConfigTablesForVersion223() async {
   LoggerService.info('===== CONFIG TABLES DROP CHECK =====');
   LoggerService.info('Versão do app: $version');
   LoggerService.info('Target version: 2.2.3');
+
+  // Verifica se o reset já foi feito (P0.2 - Flag de Reset em Secure Storage)
+  final hasAlreadyReset = await _hasAlreadyResetForVersion223();
+  if (hasAlreadyReset) {
+    LoggerService.info('Reset v2.2.3 já foi executado anteriormente');
+    return false;
+  }
 
   // Validação exata usando pub_semver - evita versões futuras como 2.2.30, 2.2.31, etc.
   final targetVersion = Version.parse('2.2.3');
@@ -104,6 +140,9 @@ Future<bool> _dropConfigTablesForVersion223() async {
       'Tabelas serão recriadas automaticamente pelo Drift '
       'no próximo acesso',
     );
+
+    // Marca o reset como concluído (P0.2 - Flag de Reset em Secure Storage)
+    await _markResetCompletedForVersion223();
 
     return true;
   } on Object catch (e, stackTrace) {
