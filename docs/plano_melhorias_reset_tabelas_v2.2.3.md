@@ -11,7 +11,8 @@
 |-----------|---------|--------|
 | 🔴 P0 | Validação Exata da Versão | ✅ Concluído (commit 095b513) |
 | 🔴 P0 | Flag de Reset em Secure Storage | ✅ Concluído (commit 095b513) |
-| 🔴 P0 | Backup Antes de DROP com Rollback | ✅ Concluído (commit em andamento) |
+| 🔴 P0 | Backup Antes de DROP com Rollback | ✅ Concluído (commit da4a3a4) |
+| 🟠 P1 | Recriação Através de Drift Schema | ✅ Concluído (commit em andamento) |
 | 🟠 P1 | Recriação Através de Drift Schema | ⏳ Pendente |
 | 🟠 P1 | Desempenho | Consulta Única ao sqlite_master | ⏳ Pendente |
 | 🟡 P2 | Confiabilidade | Remover schedules_table do DROP | ⏳ Pendente |
@@ -218,21 +219,82 @@ try {
 
 ## 🟠 P1: Melhorias de Alta Prioridade
 
-### P1.1 Recriação Através de Drift Schema ⏳
+### P1.1 Recriação Através de Drift Schema ✅
 
-**Status:** Em desenvolvimento
-**Estimativa:** 8 horas
+**Status:** Concluído
 
 **Problema Atual:**
 As tabelas são recriadas via SQL manual hardcoded no `beforeOpen` do AppDatabase, divergindo do schema definido em Drift.
 
-**Arquivos a Modificar:**
+**Solução:**
+Remover as funções que usam SQL manual e implementar verificação de tabelas ausentes com reset de versão do schema para forçar Drift a recriar tabelas via `onCreate`.
+
+**Arquivos Modificados:**
 - `lib/infrastructure/datasources/local/database.dart`:
-  - Remover funções `_ensureSqlServerConfigsTableExistsDirect()`
-  - Remover funções `_ensureSybaseConfigsTableExistsDirect()`
-  - Remover funções `_ensurePostgresConfigsTableExistsDirect()`
-  - Remover funções `_ensureSchedulesTableExistsDirect()`
-  - Modificar `beforeOpen` para chamar apenas verificação de tabelas principais existentes
+  - Removidas funções `_ensureSqlServerConfigsTableExistsDirect()`, `_ensureSybaseConfigsTableExistsDirect()`, `_ensurePostgresConfigsTableExistsDirect()`, `_ensureSchedulesTableExistsDirect()`
+  - Adicionada função `_ensureConfigTablesRecreatedByDrift()` que verifica tabelas ausentes e reseta versão do schema
+  - Atualizado `beforeOpen` para chamar nova função em vez das funções diretas
+
+**Implementação:**
+```dart
+// Nova função que usa Drift para recriar tabelas
+Future<void> _ensureConfigTablesRecreatedByDrift() async {
+  try {
+    final tables = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type='table' "
+      "AND name IN ('sql_server_configs_table', 'sybase_configs_table', "
+      "'postgres_configs_table', 'schedules_table')",
+    ).get();
+    final existingTableNames = tables
+        .map((row) => row.data['name'] as String)
+        .toSet();
+
+    final missingTables = [
+      'sql_server_configs_table',
+      'sybase_configs_table',
+      'postgres_configs_table',
+      'schedules_table',
+    ].where((table) => !existingTableNames.contains(table)).toList();
+
+    if (missingTables.isNotEmpty) {
+      final missingTablesStr = missingTables.join(', ');
+      LoggerService.warning(
+        'Tabelas de configuração ausentes: $missingTablesStr',
+      );
+      LoggerService.info(
+        'Resetando versão do schema para forçar recriação via Drift',
+      );
+
+      await customStatement('PRAGMA user_version = 0');
+      LoggerService.info('Versão do schema resetada para 0');
+    }
+  } on Object catch (e, stackTrace) {
+    LoggerService.warning(
+      'Erro ao verificar/recriar tabelas de configuração',
+      e,
+      stackTrace,
+    );
+  }
+}
+
+// Atualizado beforeOpen
+beforeOpen: (details) async {
+  await customStatement('PRAGMA foreign_keys = ON');
+
+  // P1.1: Verifica e recria tabelas de configuração via schema Drift
+  // Se as tabelas foram dropadas (pelo reset v2.2.3), reseta
+  // a versão do schema para forçar Drift a recriá-las via onCreate.
+  await _ensureConfigTablesRecreatedByDrift();
+
+  // ... restante do código
+}
+```
+
+**Benefícios:**
+- ✅ Tabelas recriadas usando schema Drift (garante consistência)
+- ✅ Remove código SQL manual que pode divergir do schema
+- ✅ Código mais limpo e manutenível
+- ✅ OnCreate do Drift garante que todas as tabelas são criadas corretamente
 
 ---
 

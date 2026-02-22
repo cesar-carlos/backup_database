@@ -859,12 +859,10 @@ class AppDatabase extends _$AppDatabase {
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
 
-        // Verifica e recria tabelas de configuração de banco e agendamentos
-        // (útil após drop manual das tabelas)
-        await _ensureSqlServerConfigsTableExistsDirect();
-        await _ensureSybaseConfigsTableExistsDirect();
-        await _ensurePostgresConfigsTableExistsDirect();
-        await _ensureSchedulesTableExistsDirect();
+        // P1.1: Verifica e recria tabelas de configuração via schema Drift
+        // Se as tabelas foram dropadas (pelo reset v2.2.3), reseta
+        // a versão do schema para forçar Drift a recriá-las via onCreate.
+        await _ensureConfigTablesRecreatedByDrift();
 
         await _ensureScheduleDestinationsTableExists();
         await _createScheduleDestinationIndexes();
@@ -1023,157 +1021,46 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<void> _ensureSqlServerConfigsTableExistsDirect() async {
+  /// P1.1: Verifica e recria tabelas de configuração via schema Drift.
+  ///
+  /// Se as tabelas foram dropadas (pelo reset v2.2.3), reseta
+  /// a versão do schema para forçar Drift a recriá-las via onCreate.
+  Future<void> _ensureConfigTablesRecreatedByDrift() async {
     try {
-      final tableExists = await customSelect(
+      final tables = await customSelect(
         "SELECT name FROM sqlite_master WHERE type='table' "
-        "AND name='sql_server_configs_table'",
-      ).getSingleOrNull();
+        "AND name IN ('sql_server_configs_table', 'sybase_configs_table', "
+        "'postgres_configs_table', 'schedules_table')",
+      ).get();
+      final existingTableNames = tables
+          .map((row) => row.data['name'] as String)
+          .toSet();
 
-      if (tableExists == null) {
-        LoggerService.info(
-          'Tabela sql_server_configs não existe, criando via SQL.',
+      final missingTables = [
+        'sql_server_configs_table',
+        'sybase_configs_table',
+        'postgres_configs_table',
+        'schedules_table',
+      ].where((table) => !existingTableNames.contains(table)).toList();
+
+      if (missingTables.isNotEmpty) {
+        final missingTablesStr = missingTables.join(', ');
+        LoggerService.warning(
+          'Tabelas de configuração ausentes: $missingTablesStr',
         );
-        await customStatement('''
-          CREATE TABLE IF NOT EXISTS sql_server_configs_table (
-            id TEXT PRIMARY KEY NOT NULL,
-            name TEXT NOT NULL,
-            server TEXT NOT NULL,
-            database TEXT NOT NULL,
-            username TEXT NOT NULL,
-            password TEXT NOT NULL,
-            port INTEGER NOT NULL DEFAULT 1433,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            use_windows_auth INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-          )
-        ''');
-        LoggerService.info('Tabela sql_server_configs criada com sucesso via SQL');
+        LoggerService.info(
+          'Resetando versão do schema para forçar recriação via Drift',
+        );
+
+        await customStatement('PRAGMA user_version = 0');
+        LoggerService.info('Versão do schema resetada para 0');
       }
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
-        'Erro ao verificar/criar tabela sql_server_configs',
+        'Erro ao verificar/recriar tabelas de configuração',
         e,
         stackTrace,
       );
-    }
-  }
-
-  Future<void> _ensurePostgresConfigsTableExistsDirect() async {
-    try {
-      final tableExists = await customSelect(
-        "SELECT name FROM sqlite_master WHERE type='table' "
-        "AND name='postgres_configs_table'",
-      ).getSingleOrNull();
-
-      if (tableExists == null) {
-        LoggerService.info(
-          'Tabela postgres_configs não existe, criando via SQL.',
-        );
-        await customStatement('''
-          CREATE TABLE IF NOT EXISTS postgres_configs_table (
-            id TEXT PRIMARY KEY NOT NULL,
-            name TEXT NOT NULL,
-            host TEXT NOT NULL,
-            database TEXT NOT NULL,
-            username TEXT NOT NULL,
-            password TEXT NOT NULL,
-            port INTEGER NOT NULL DEFAULT 5432,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-          )
-        ''');
-        LoggerService.info('Tabela postgres_configs criada com sucesso via SQL');
-      }
-    } on Object catch (e, stackTrace) {
-      LoggerService.warning(
-        'Erro ao verificar/criar tabela postgres_configs',
-        e,
-        stackTrace,
-      );
-    }
-  }
-
-  Future<void> _ensureSchedulesTableExistsDirect() async {
-    try {
-      final tableExists = await customSelect(
-        "SELECT name FROM sqlite_master WHERE type='table' "
-        "AND name='schedules_table'",
-      ).getSingleOrNull();
-
-      if (tableExists == null) {
-        LoggerService.info(
-          'Tabela schedules não existe, criando via SQL.',
-        );
-        await customStatement('''
-          CREATE TABLE IF NOT EXISTS schedules_table (
-            id TEXT PRIMARY KEY NOT NULL,
-            name TEXT NOT NULL,
-            database_config_id TEXT NOT NULL,
-            database_type TEXT NOT NULL,
-            schedule_type TEXT NOT NULL DEFAULT 'daily',
-            schedule_config TEXT NOT NULL,
-            destination_ids TEXT NOT NULL DEFAULT '[]',
-            backup_folder TEXT NOT NULL DEFAULT '',
-            backup_type TEXT NOT NULL DEFAULT 'full',
-            truncate_log INTEGER NOT NULL DEFAULT 1,
-            compress_backup INTEGER NOT NULL DEFAULT 1,
-            compression_format TEXT NOT NULL DEFAULT 'zip',
-            enabled INTEGER NOT NULL DEFAULT 1,
-            enable_checksum INTEGER NOT NULL DEFAULT 0,
-            verify_after_backup INTEGER NOT NULL DEFAULT 0,
-            post_backup_script TEXT,
-            last_run_at INTEGER,
-            next_run_at INTEGER,
-            backup_timeout_seconds INTEGER NOT NULL DEFAULT 7200,
-            verify_timeout_seconds INTEGER NOT NULL DEFAULT 1800,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-          )
-        ''');
-        LoggerService.info('Tabela schedules criada com sucesso via SQL');
-      }
-    } on Object catch (e, stackTrace) {
-      LoggerService.warning(
-        'Erro ao verificar/criar tabela schedules',
-        e,
-        stackTrace,
-      );
-    }
-  }
-
-  Future<void> _ensureSybaseConfigsTableExistsDirect() async {
-    try {
-      final tableExists = await customSelect(
-        "SELECT name FROM sqlite_master WHERE type='table' "
-        "AND name='sybase_configs'",
-      ).getSingleOrNull();
-
-      if (tableExists == null) {
-        LoggerService.info(
-          'Tabela sybase_configs não existe, criando via SQL.',
-        );
-        await customStatement('''
-          CREATE TABLE IF NOT EXISTS sybase_configs (
-            id TEXT PRIMARY KEY NOT NULL,
-            name TEXT NOT NULL,
-            server_name TEXT NOT NULL,
-            database_name TEXT NOT NULL DEFAULT '',
-            database_file TEXT NOT NULL DEFAULT '',
-            port INTEGER NOT NULL DEFAULT 2638,
-            username TEXT NOT NULL,
-            password TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-          )
-        ''');
-        LoggerService.info('Tabela sybase_configs criada com sucesso via SQL');
-      }
-    } on Object catch (e, stackTrace) {
-      LoggerService.error('Erro ao criar tabela sybase_configs', e, stackTrace);
     }
   }
 

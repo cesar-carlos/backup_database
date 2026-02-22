@@ -43,7 +43,7 @@ Future<void> _markResetCompletedForVersion223() async {
   try {
     await storage.write(key: _resetFlagKey, value: 'true');
     LoggerService.info('Flag de reset v2.2.3 marcada como concluída');
-  } catch (e) {
+  } catch (e) {   
     LoggerService.warning('Erro ao gravar flag de reset: $e');
   }
 }
