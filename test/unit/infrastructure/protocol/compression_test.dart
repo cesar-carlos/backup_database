@@ -12,7 +12,9 @@ void main() {
 
   group('PayloadCompression', () {
     test('compress then decompress returns original data', () {
-      final original = Uint8List.fromList(List<int>.generate(2000, (i) => i % 256));
+      final original = Uint8List.fromList(
+        List<int>.generate(2000, (i) => i % 256),
+      );
       final compressed = compression.compress(original);
       final decompressed = compression.decompress(compressed);
       expect(decompressed, orderedEquals(original));
@@ -25,7 +27,9 @@ void main() {
     });
 
     test('decompress(compress(data)) preserves length', () {
-      final data = Uint8List.fromList([1, 2, 3, 4, 5] + List<int>.filled(1500, 10));
+      final data = Uint8List.fromList(
+        [1, 2, 3, 4, 5] + List<int>.filled(1500, 10),
+      );
       final roundTrip = compression.decompress(compression.compress(data));
       expect(roundTrip.length, data.length);
       expect(roundTrip, orderedEquals(data));

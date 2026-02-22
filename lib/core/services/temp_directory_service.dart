@@ -98,7 +98,9 @@ class TempDirectoryService {
     await prefs.remove(_customTempPathKey);
     _prefsCache = prefs;
     _downloadsDirCache = null;
-    LoggerService.info('Pasta temp customizada removida. Usando temp do sistema.');
+    LoggerService.info(
+      'Pasta temp customizada removida. Usando temp do sistema.',
+    );
   }
 
   /// Valida se o diretório existe e tem permissão de escrita.
@@ -116,7 +118,10 @@ class TempDirectoryService {
 
       // Verifica permissão de escrita criando arquivo de teste
       final testFile = File(
-        p.join(dir.path, '.write_test_${DateTime.now().millisecondsSinceEpoch}'),
+        p.join(
+          dir.path,
+          '.write_test_${DateTime.now().millisecondsSinceEpoch}',
+        ),
       );
       await testFile.writeAsString('test');
       await testFile.delete();

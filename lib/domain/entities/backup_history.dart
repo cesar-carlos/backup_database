@@ -1,3 +1,4 @@
+import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:uuid/uuid.dart';
 
 enum BackupStatus { success, error, warning, running }
@@ -16,6 +17,7 @@ class BackupHistory {
     this.errorMessage,
     this.finishedAt,
     this.durationSeconds,
+    this.metrics,
   }) : id = id ?? const Uuid().v4();
   final String id;
   final String? scheduleId;
@@ -29,6 +31,7 @@ class BackupHistory {
   final DateTime startedAt;
   final DateTime? finishedAt;
   final int? durationSeconds;
+  BackupMetrics? metrics;
 
   BackupHistory copyWith({
     String? id,
@@ -43,6 +46,7 @@ class BackupHistory {
     DateTime? startedAt,
     DateTime? finishedAt,
     int? durationSeconds,
+    BackupMetrics? metrics,
   }) {
     return BackupHistory(
       id: id ?? this.id,
@@ -57,6 +61,7 @@ class BackupHistory {
       startedAt: startedAt ?? this.startedAt,
       finishedAt: finishedAt ?? this.finishedAt,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+      metrics: metrics ?? this.metrics,
     );
   }
 

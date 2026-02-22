@@ -34,7 +34,7 @@ void main() {
     name: 'Backup Diario',
     databaseConfigId: configId,
     databaseType: DatabaseType.sqlServer,
-    scheduleType: ScheduleType.daily,
+    scheduleType: ScheduleType.daily.name,
     scheduleConfig: '{"hour": 0, "minute": 0}',
     destinationIds: const ['dest-1'],
     backupFolder: r'C:\backup',

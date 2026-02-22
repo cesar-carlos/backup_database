@@ -12,9 +12,9 @@ class FileTransferDao extends DatabaseAccessor<AppDatabase>
   Future<List<FileTransfersTableData>> getAll() =>
       select(fileTransfersTable).get();
 
-  Future<FileTransfersTableData?> getById(String id) =>
-      (select(fileTransfersTable)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+  Future<FileTransfersTableData?> getById(String id) => (select(
+    fileTransfersTable,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<int> insertTransfer(FileTransfersTableCompanion transfer) =>
       into(fileTransfersTable).insert(transfer);
@@ -26,16 +26,17 @@ class FileTransferDao extends DatabaseAccessor<AppDatabase>
       (delete(fileTransfersTable)..where((t) => t.id.equals(id))).go();
 
   Future<List<FileTransfersTableData>> getBySchedule(String scheduleId) =>
-      (select(fileTransfersTable)
-        ..where((t) => t.scheduleId.equals(scheduleId))).get();
+      (select(
+        fileTransfersTable,
+      )..where((t) => t.scheduleId.equals(scheduleId))).get();
 
-  Future<List<FileTransfersTableData>> getCompletedTransfers() =>
-      (select(fileTransfersTable)
-        ..where((t) => t.status.equals('completed'))).get();
+  Future<List<FileTransfersTableData>> getCompletedTransfers() => (select(
+    fileTransfersTable,
+  )..where((t) => t.status.equals('completed'))).get();
 
-  Future<List<FileTransfersTableData>> getFailedTransfers() =>
-      (select(fileTransfersTable)
-        ..where((t) => t.status.equals('failed'))).get();
+  Future<List<FileTransfersTableData>> getFailedTransfers() => (select(
+    fileTransfersTable,
+  )..where((t) => t.status.equals('failed'))).get();
 
   Future<int> updateProgress(String id, int currentChunk) {
     return (update(fileTransfersTable)..where((t) => t.id.equals(id))).write(

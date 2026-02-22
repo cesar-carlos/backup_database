@@ -349,7 +349,11 @@ Este é um e-mail automático do Sistema de Backup.
     }
 
     if (error is SmtpMessageValidationException) {
-      LoggerService.error('Mensagem SMTP invalida (configId=$configId)', error, stackTrace);
+      LoggerService.error(
+        'Mensagem SMTP invalida (configId=$configId)',
+        error,
+        stackTrace,
+      );
       return rd.Failure(
         ValidationFailure(
           message:

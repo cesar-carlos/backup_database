@@ -12,6 +12,8 @@ abstract class ISybaseBackupService {
     String? dbbackupPath,
     bool truncateLog,
     bool verifyAfterBackup,
+    Duration? backupTimeout,
+    Duration? verifyTimeout,
   });
 
   Future<Result<bool>> testConnection(SybaseConfig config);

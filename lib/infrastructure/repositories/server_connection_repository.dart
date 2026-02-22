@@ -41,7 +41,9 @@ class ServerConnectionRepository implements IServerConnectionRepository {
   Future<rd.Result<ServerConnection>> save(ServerConnection connection) async {
     try {
       final data = _toData(connection);
-      await _database.serverConnectionDao.insertConnection(data.toCompanion(true));
+      await _database.serverConnectionDao.insertConnection(
+        data.toCompanion(true),
+      );
       return rd.Success(connection);
     } on Object catch (e) {
       return rd.Failure(
@@ -51,10 +53,14 @@ class ServerConnectionRepository implements IServerConnectionRepository {
   }
 
   @override
-  Future<rd.Result<ServerConnection>> update(ServerConnection connection) async {
+  Future<rd.Result<ServerConnection>> update(
+    ServerConnection connection,
+  ) async {
     try {
       final data = _toData(connection);
-      await _database.serverConnectionDao.updateConnection(data.toCompanion(true));
+      await _database.serverConnectionDao.updateConnection(
+        data.toCompanion(true),
+      );
       return rd.Success(connection);
     } on Object catch (e) {
       return rd.Failure(
@@ -78,8 +84,8 @@ class ServerConnectionRepository implements IServerConnectionRepository {
   @override
   Stream<List<ServerConnection>> watchAll() {
     return _database.serverConnectionDao.watchAll().map(
-          (list) => list.map(_toEntity).toList(),
-        );
+      (list) => list.map(_toEntity).toList(),
+    );
   }
 
   ServerConnection _toEntity(ServerConnectionsTableData data) {

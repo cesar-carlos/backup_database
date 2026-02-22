@@ -91,7 +91,6 @@ Future<void> setupDomainModule(GetIt getIt) async {
   );
 
   getIt.registerLazySingleton<IScheduleCalculator>(ScheduleCalculator.new);
-  getIt.registerLazySingleton<IStorageChecker>(StorageChecker.new);
   getIt.registerLazySingleton<IFileValidator>(FileValidator.new);
 
   // ========================================================================

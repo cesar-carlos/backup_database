@@ -9,18 +9,20 @@ class ScheduleDestinationDao extends DatabaseAccessor<AppDatabase>
     with _$ScheduleDestinationDaoMixin {
   ScheduleDestinationDao(super.db);
 
-  Future<List<ScheduleDestinationsTableData>> getByScheduleId(String scheduleId) {
-    return (select(scheduleDestinationsTable)
-          ..where((t) => t.scheduleId.equals(scheduleId)))
-        .get();
+  Future<List<ScheduleDestinationsTableData>> getByScheduleId(
+    String scheduleId,
+  ) {
+    return (select(
+      scheduleDestinationsTable,
+    )..where((t) => t.scheduleId.equals(scheduleId))).get();
   }
 
   Future<List<ScheduleDestinationsTableData>> getByDestinationId(
     String destinationId,
   ) {
-    return (select(scheduleDestinationsTable)
-          ..where((t) => t.destinationId.equals(destinationId)))
-        .get();
+    return (select(
+      scheduleDestinationsTable,
+    )..where((t) => t.destinationId.equals(destinationId))).get();
   }
 
   Future<int> insertRelation(ScheduleDestinationsTableCompanion relation) {
@@ -31,14 +33,14 @@ class ScheduleDestinationDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<int> deleteByScheduleId(String scheduleId) {
-    return (delete(scheduleDestinationsTable)
-          ..where((t) => t.scheduleId.equals(scheduleId)))
-        .go();
+    return (delete(
+      scheduleDestinationsTable,
+    )..where((t) => t.scheduleId.equals(scheduleId))).go();
   }
 
   Future<int> deleteByDestinationId(String destinationId) {
-    return (delete(scheduleDestinationsTable)
-          ..where((t) => t.destinationId.equals(destinationId)))
-        .go();
+    return (delete(
+      scheduleDestinationsTable,
+    )..where((t) => t.destinationId.equals(destinationId))).go();
   }
 }

@@ -7,6 +7,36 @@ enum ScheduleType { daily, weekly, monthly, interval }
 
 enum DatabaseType { sqlServer, sybase, postgresql }
 
+extension ScheduleTypeExtension on ScheduleType {
+  String toValue() {
+    switch (this) {
+      case ScheduleType.daily:
+        return 'daily';
+      case ScheduleType.weekly:
+        return 'weekly';
+      case ScheduleType.monthly:
+        return 'monthly';
+      case ScheduleType.interval:
+        return 'interval';
+    }
+  }
+}
+
+ScheduleType scheduleTypeFromString(String value) {
+  switch (value) {
+    case 'daily':
+      return ScheduleType.daily;
+    case 'weekly':
+      return ScheduleType.weekly;
+    case 'monthly':
+      return ScheduleType.monthly;
+    case 'interval':
+      return ScheduleType.interval;
+    default:
+      return ScheduleType.daily;
+  }
+}
+
 class Schedule {
   Schedule({
     required this.name,
@@ -26,44 +56,47 @@ class Schedule {
     this.verifyAfterBackup = false,
     this.verifyPolicy = VerifyPolicy.bestEffort,
     this.postBackupScript,
+    this.backupTimeout = const Duration(hours: 2),
+    this.verifyTimeout = const Duration(minutes: 30),
     this.lastRunAt,
     this.nextRunAt,
-    DateTime? createdAt,
-    DateTime? updatedAt,
+    this.createdAt,
+    this.updatedAt,
+    this.isConvertedDifferential = false,
   }) : id = id ?? const Uuid().v4(),
-       compressionFormat =
-           compressionFormat ??
-           (compressBackup ? CompressionFormat.zip : CompressionFormat.none),
-       createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
+       compressionFormat = compressionFormat ?? CompressionFormat.none;
+
   final String id;
   final String name;
   final String databaseConfigId;
   final DatabaseType databaseType;
-  final ScheduleType scheduleType;
+  final String scheduleType;
   final String scheduleConfig;
   final List<String> destinationIds;
   final String backupFolder;
   final BackupType backupType;
   final bool truncateLog;
   final bool compressBackup;
-  final CompressionFormat compressionFormat;
+  final CompressionFormat? compressionFormat;
   final bool enabled;
   final bool enableChecksum;
   final bool verifyAfterBackup;
   final VerifyPolicy verifyPolicy;
   final String? postBackupScript;
+  final Duration backupTimeout;
+  final Duration verifyTimeout;
   final DateTime? lastRunAt;
   final DateTime? nextRunAt;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final bool isConvertedDifferential;
 
   Schedule copyWith({
     String? id,
     String? name,
     String? databaseConfigId,
     DatabaseType? databaseType,
-    ScheduleType? scheduleType,
+    String? scheduleType,
     String? scheduleConfig,
     List<String>? destinationIds,
     String? backupFolder,
@@ -76,10 +109,13 @@ class Schedule {
     bool? verifyAfterBackup,
     VerifyPolicy? verifyPolicy,
     String? postBackupScript,
+    Duration? backupTimeout,
+    Duration? verifyTimeout,
     DateTime? lastRunAt,
     DateTime? nextRunAt,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isConvertedDifferential,
   }) {
     return Schedule(
       id: id ?? this.id,
@@ -93,28 +129,20 @@ class Schedule {
       backupType: backupType ?? this.backupType,
       truncateLog: truncateLog ?? this.truncateLog,
       compressBackup: compressBackup ?? this.compressBackup,
-      compressionFormat: () {
-        final willCompress = compressBackup ?? this.compressBackup;
-        if (!willCompress) {
-          return CompressionFormat.none;
-        }
-        if (compressionFormat != null) {
-          return compressionFormat;
-        }
-        if (this.compressionFormat == CompressionFormat.none) {
-          return CompressionFormat.zip;
-        }
-        return this.compressionFormat;
-      }(),
+      compressionFormat: compressionFormat ?? this.compressionFormat,
       enabled: enabled ?? this.enabled,
       enableChecksum: enableChecksum ?? this.enableChecksum,
       verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,
       verifyPolicy: verifyPolicy ?? this.verifyPolicy,
       postBackupScript: postBackupScript ?? this.postBackupScript,
+      backupTimeout: backupTimeout ?? this.backupTimeout,
+      verifyTimeout: verifyTimeout ?? this.verifyTimeout,
       lastRunAt: lastRunAt ?? this.lastRunAt,
       nextRunAt: nextRunAt ?? this.nextRunAt,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? DateTime.now(),
+      updatedAt: updatedAt ?? this.updatedAt,
+      isConvertedDifferential:
+          isConvertedDifferential ?? this.isConvertedDifferential,
     );
   }
 
@@ -125,82 +153,4 @@ class Schedule {
 
   @override
   int get hashCode => id.hashCode;
-}
-
-class DailyScheduleConfig {
-  const DailyScheduleConfig({required this.hour, required this.minute});
-
-  factory DailyScheduleConfig.fromJson(Map<String, dynamic> json) {
-    return DailyScheduleConfig(
-      hour: json['hour'] as int,
-      minute: json['minute'] as int,
-    );
-  }
-  final int hour;
-  final int minute;
-
-  Map<String, dynamic> toJson() => {'hour': hour, 'minute': minute};
-}
-
-class WeeklyScheduleConfig {
-  const WeeklyScheduleConfig({
-    required this.daysOfWeek,
-    required this.hour,
-    required this.minute,
-  });
-
-  factory WeeklyScheduleConfig.fromJson(Map<String, dynamic> json) {
-    return WeeklyScheduleConfig(
-      daysOfWeek: (json['daysOfWeek'] as List).cast<int>(),
-      hour: json['hour'] as int,
-      minute: json['minute'] as int,
-    );
-  }
-  final List<int> daysOfWeek;
-  final int hour;
-  final int minute;
-
-  Map<String, dynamic> toJson() => {
-    'daysOfWeek': daysOfWeek,
-    'hour': hour,
-    'minute': minute,
-  };
-}
-
-class MonthlyScheduleConfig {
-  const MonthlyScheduleConfig({
-    required this.daysOfMonth,
-    required this.hour,
-    required this.minute,
-  });
-
-  factory MonthlyScheduleConfig.fromJson(Map<String, dynamic> json) {
-    return MonthlyScheduleConfig(
-      daysOfMonth: (json['daysOfMonth'] as List).cast<int>(),
-      hour: json['hour'] as int,
-      minute: json['minute'] as int,
-    );
-  }
-  final List<int> daysOfMonth;
-  final int hour;
-  final int minute;
-
-  Map<String, dynamic> toJson() => {
-    'daysOfMonth': daysOfMonth,
-    'hour': hour,
-    'minute': minute,
-  };
-}
-
-class IntervalScheduleConfig {
-  const IntervalScheduleConfig({required this.intervalMinutes});
-
-  factory IntervalScheduleConfig.fromJson(Map<String, dynamic> json) {
-    return IntervalScheduleConfig(
-      intervalMinutes: json['intervalMinutes'] as int,
-    );
-  }
-  final int intervalMinutes;
-
-  Map<String, dynamic> toJson() => {'intervalMinutes': intervalMinutes};
 }

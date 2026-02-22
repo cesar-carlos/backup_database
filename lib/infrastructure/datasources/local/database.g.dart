@@ -94,6 +94,21 @@ class $SqlServerConfigsTableTable extends SqlServerConfigsTable
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _useWindowsAuthMeta = const VerificationMeta(
+    'useWindowsAuth',
+  );
+  @override
+  late final GeneratedColumn<bool> useWindowsAuth = GeneratedColumn<bool>(
+    'use_windows_auth',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("use_windows_auth" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -126,6 +141,7 @@ class $SqlServerConfigsTableTable extends SqlServerConfigsTable
     password,
     port,
     enabled,
+    useWindowsAuth,
     createdAt,
     updatedAt,
   ];
@@ -198,6 +214,15 @@ class $SqlServerConfigsTableTable extends SqlServerConfigsTable
         enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
       );
     }
+    if (data.containsKey('use_windows_auth')) {
+      context.handle(
+        _useWindowsAuthMeta,
+        useWindowsAuth.isAcceptableOrUnknown(
+          data['use_windows_auth']!,
+          _useWindowsAuthMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -258,6 +283,10 @@ class $SqlServerConfigsTableTable extends SqlServerConfigsTable
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
       )!,
+      useWindowsAuth: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}use_windows_auth'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -285,6 +314,7 @@ class SqlServerConfigsTableData extends DataClass
   final String password;
   final int port;
   final bool enabled;
+  final bool useWindowsAuth;
   final DateTime createdAt;
   final DateTime updatedAt;
   const SqlServerConfigsTableData({
@@ -296,6 +326,7 @@ class SqlServerConfigsTableData extends DataClass
     required this.password,
     required this.port,
     required this.enabled,
+    required this.useWindowsAuth,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -310,6 +341,7 @@ class SqlServerConfigsTableData extends DataClass
     map['password'] = Variable<String>(password);
     map['port'] = Variable<int>(port);
     map['enabled'] = Variable<bool>(enabled);
+    map['use_windows_auth'] = Variable<bool>(useWindowsAuth);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -325,6 +357,7 @@ class SqlServerConfigsTableData extends DataClass
       password: Value(password),
       port: Value(port),
       enabled: Value(enabled),
+      useWindowsAuth: Value(useWindowsAuth),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -344,6 +377,7 @@ class SqlServerConfigsTableData extends DataClass
       password: serializer.fromJson<String>(json['password']),
       port: serializer.fromJson<int>(json['port']),
       enabled: serializer.fromJson<bool>(json['enabled']),
+      useWindowsAuth: serializer.fromJson<bool>(json['useWindowsAuth']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -360,6 +394,7 @@ class SqlServerConfigsTableData extends DataClass
       'password': serializer.toJson<String>(password),
       'port': serializer.toJson<int>(port),
       'enabled': serializer.toJson<bool>(enabled),
+      'useWindowsAuth': serializer.toJson<bool>(useWindowsAuth),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -374,6 +409,7 @@ class SqlServerConfigsTableData extends DataClass
     String? password,
     int? port,
     bool? enabled,
+    bool? useWindowsAuth,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => SqlServerConfigsTableData(
@@ -385,6 +421,7 @@ class SqlServerConfigsTableData extends DataClass
     password: password ?? this.password,
     port: port ?? this.port,
     enabled: enabled ?? this.enabled,
+    useWindowsAuth: useWindowsAuth ?? this.useWindowsAuth,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -400,6 +437,9 @@ class SqlServerConfigsTableData extends DataClass
       password: data.password.present ? data.password.value : this.password,
       port: data.port.present ? data.port.value : this.port,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      useWindowsAuth: data.useWindowsAuth.present
+          ? data.useWindowsAuth.value
+          : this.useWindowsAuth,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -416,6 +456,7 @@ class SqlServerConfigsTableData extends DataClass
           ..write('password: $password, ')
           ..write('port: $port, ')
           ..write('enabled: $enabled, ')
+          ..write('useWindowsAuth: $useWindowsAuth, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -432,6 +473,7 @@ class SqlServerConfigsTableData extends DataClass
     password,
     port,
     enabled,
+    useWindowsAuth,
     createdAt,
     updatedAt,
   );
@@ -447,6 +489,7 @@ class SqlServerConfigsTableData extends DataClass
           other.password == this.password &&
           other.port == this.port &&
           other.enabled == this.enabled &&
+          other.useWindowsAuth == this.useWindowsAuth &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -461,6 +504,7 @@ class SqlServerConfigsTableCompanion
   final Value<String> password;
   final Value<int> port;
   final Value<bool> enabled;
+  final Value<bool> useWindowsAuth;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -473,6 +517,7 @@ class SqlServerConfigsTableCompanion
     this.password = const Value.absent(),
     this.port = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.useWindowsAuth = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -486,6 +531,7 @@ class SqlServerConfigsTableCompanion
     required String password,
     this.port = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.useWindowsAuth = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -506,6 +552,7 @@ class SqlServerConfigsTableCompanion
     Expression<String>? password,
     Expression<int>? port,
     Expression<bool>? enabled,
+    Expression<bool>? useWindowsAuth,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -519,6 +566,7 @@ class SqlServerConfigsTableCompanion
       if (password != null) 'password': password,
       if (port != null) 'port': port,
       if (enabled != null) 'enabled': enabled,
+      if (useWindowsAuth != null) 'use_windows_auth': useWindowsAuth,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -534,6 +582,7 @@ class SqlServerConfigsTableCompanion
     Value<String>? password,
     Value<int>? port,
     Value<bool>? enabled,
+    Value<bool>? useWindowsAuth,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -547,6 +596,7 @@ class SqlServerConfigsTableCompanion
       password: password ?? this.password,
       port: port ?? this.port,
       enabled: enabled ?? this.enabled,
+      useWindowsAuth: useWindowsAuth ?? this.useWindowsAuth,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -580,6 +630,9 @@ class SqlServerConfigsTableCompanion
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
     }
+    if (useWindowsAuth.present) {
+      map['use_windows_auth'] = Variable<bool>(useWindowsAuth.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -603,6 +656,7 @@ class SqlServerConfigsTableCompanion
           ..write('password: $password, ')
           ..write('port: $port, ')
           ..write('enabled: $enabled, ')
+          ..write('useWindowsAuth: $useWindowsAuth, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -2567,6 +2621,28 @@ class $SchedulesTableTable extends SchedulesTable
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _backupTimeoutSecondsMeta =
+      const VerificationMeta('backupTimeoutSeconds');
+  @override
+  late final GeneratedColumn<int> backupTimeoutSeconds = GeneratedColumn<int>(
+    'backup_timeout_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(7200),
+  );
+  static const VerificationMeta _verifyTimeoutSecondsMeta =
+      const VerificationMeta('verifyTimeoutSeconds');
+  @override
+  late final GeneratedColumn<int> verifyTimeoutSeconds = GeneratedColumn<int>(
+    'verify_timeout_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1800),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2609,6 +2685,8 @@ class $SchedulesTableTable extends SchedulesTable
     postBackupScript,
     lastRunAt,
     nextRunAt,
+    backupTimeoutSeconds,
+    verifyTimeoutSeconds,
     createdAt,
     updatedAt,
   ];
@@ -2779,6 +2857,24 @@ class $SchedulesTableTable extends SchedulesTable
         nextRunAt.isAcceptableOrUnknown(data['next_run_at']!, _nextRunAtMeta),
       );
     }
+    if (data.containsKey('backup_timeout_seconds')) {
+      context.handle(
+        _backupTimeoutSecondsMeta,
+        backupTimeoutSeconds.isAcceptableOrUnknown(
+          data['backup_timeout_seconds']!,
+          _backupTimeoutSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('verify_timeout_seconds')) {
+      context.handle(
+        _verifyTimeoutSecondsMeta,
+        verifyTimeoutSeconds.isAcceptableOrUnknown(
+          data['verify_timeout_seconds']!,
+          _verifyTimeoutSecondsMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2876,6 +2972,14 @@ class $SchedulesTableTable extends SchedulesTable
         DriftSqlType.dateTime,
         data['${effectivePrefix}next_run_at'],
       ),
+      backupTimeoutSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}backup_timeout_seconds'],
+      )!,
+      verifyTimeoutSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}verify_timeout_seconds'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -2913,6 +3017,8 @@ class SchedulesTableData extends DataClass
   final String? postBackupScript;
   final DateTime? lastRunAt;
   final DateTime? nextRunAt;
+  final int backupTimeoutSeconds;
+  final int verifyTimeoutSeconds;
   final DateTime createdAt;
   final DateTime updatedAt;
   const SchedulesTableData({
@@ -2934,6 +3040,8 @@ class SchedulesTableData extends DataClass
     this.postBackupScript,
     this.lastRunAt,
     this.nextRunAt,
+    required this.backupTimeoutSeconds,
+    required this.verifyTimeoutSeconds,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -2964,6 +3072,8 @@ class SchedulesTableData extends DataClass
     if (!nullToAbsent || nextRunAt != null) {
       map['next_run_at'] = Variable<DateTime>(nextRunAt);
     }
+    map['backup_timeout_seconds'] = Variable<int>(backupTimeoutSeconds);
+    map['verify_timeout_seconds'] = Variable<int>(verifyTimeoutSeconds);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -2995,6 +3105,8 @@ class SchedulesTableData extends DataClass
       nextRunAt: nextRunAt == null && nullToAbsent
           ? const Value.absent()
           : Value(nextRunAt),
+      backupTimeoutSeconds: Value(backupTimeoutSeconds),
+      verifyTimeoutSeconds: Value(verifyTimeoutSeconds),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -3024,6 +3136,12 @@ class SchedulesTableData extends DataClass
       postBackupScript: serializer.fromJson<String?>(json['postBackupScript']),
       lastRunAt: serializer.fromJson<DateTime?>(json['lastRunAt']),
       nextRunAt: serializer.fromJson<DateTime?>(json['nextRunAt']),
+      backupTimeoutSeconds: serializer.fromJson<int>(
+        json['backupTimeoutSeconds'],
+      ),
+      verifyTimeoutSeconds: serializer.fromJson<int>(
+        json['verifyTimeoutSeconds'],
+      ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -3050,6 +3168,8 @@ class SchedulesTableData extends DataClass
       'postBackupScript': serializer.toJson<String?>(postBackupScript),
       'lastRunAt': serializer.toJson<DateTime?>(lastRunAt),
       'nextRunAt': serializer.toJson<DateTime?>(nextRunAt),
+      'backupTimeoutSeconds': serializer.toJson<int>(backupTimeoutSeconds),
+      'verifyTimeoutSeconds': serializer.toJson<int>(verifyTimeoutSeconds),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -3074,6 +3194,8 @@ class SchedulesTableData extends DataClass
     Value<String?> postBackupScript = const Value.absent(),
     Value<DateTime?> lastRunAt = const Value.absent(),
     Value<DateTime?> nextRunAt = const Value.absent(),
+    int? backupTimeoutSeconds,
+    int? verifyTimeoutSeconds,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => SchedulesTableData(
@@ -3097,6 +3219,8 @@ class SchedulesTableData extends DataClass
         : this.postBackupScript,
     lastRunAt: lastRunAt.present ? lastRunAt.value : this.lastRunAt,
     nextRunAt: nextRunAt.present ? nextRunAt.value : this.nextRunAt,
+    backupTimeoutSeconds: backupTimeoutSeconds ?? this.backupTimeoutSeconds,
+    verifyTimeoutSeconds: verifyTimeoutSeconds ?? this.verifyTimeoutSeconds,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -3146,6 +3270,12 @@ class SchedulesTableData extends DataClass
           : this.postBackupScript,
       lastRunAt: data.lastRunAt.present ? data.lastRunAt.value : this.lastRunAt,
       nextRunAt: data.nextRunAt.present ? data.nextRunAt.value : this.nextRunAt,
+      backupTimeoutSeconds: data.backupTimeoutSeconds.present
+          ? data.backupTimeoutSeconds.value
+          : this.backupTimeoutSeconds,
+      verifyTimeoutSeconds: data.verifyTimeoutSeconds.present
+          ? data.verifyTimeoutSeconds.value
+          : this.verifyTimeoutSeconds,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -3172,6 +3302,8 @@ class SchedulesTableData extends DataClass
           ..write('postBackupScript: $postBackupScript, ')
           ..write('lastRunAt: $lastRunAt, ')
           ..write('nextRunAt: $nextRunAt, ')
+          ..write('backupTimeoutSeconds: $backupTimeoutSeconds, ')
+          ..write('verifyTimeoutSeconds: $verifyTimeoutSeconds, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -3179,7 +3311,7 @@ class SchedulesTableData extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     name,
     databaseConfigId,
@@ -3198,9 +3330,11 @@ class SchedulesTableData extends DataClass
     postBackupScript,
     lastRunAt,
     nextRunAt,
+    backupTimeoutSeconds,
+    verifyTimeoutSeconds,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3223,6 +3357,8 @@ class SchedulesTableData extends DataClass
           other.postBackupScript == this.postBackupScript &&
           other.lastRunAt == this.lastRunAt &&
           other.nextRunAt == this.nextRunAt &&
+          other.backupTimeoutSeconds == this.backupTimeoutSeconds &&
+          other.verifyTimeoutSeconds == this.verifyTimeoutSeconds &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -3246,6 +3382,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
   final Value<String?> postBackupScript;
   final Value<DateTime?> lastRunAt;
   final Value<DateTime?> nextRunAt;
+  final Value<int> backupTimeoutSeconds;
+  final Value<int> verifyTimeoutSeconds;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -3268,6 +3406,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.postBackupScript = const Value.absent(),
     this.lastRunAt = const Value.absent(),
     this.nextRunAt = const Value.absent(),
+    this.backupTimeoutSeconds = const Value.absent(),
+    this.verifyTimeoutSeconds = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3291,6 +3431,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     this.postBackupScript = const Value.absent(),
     this.lastRunAt = const Value.absent(),
     this.nextRunAt = const Value.absent(),
+    this.backupTimeoutSeconds = const Value.absent(),
+    this.verifyTimeoutSeconds = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -3322,6 +3464,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Expression<String>? postBackupScript,
     Expression<DateTime>? lastRunAt,
     Expression<DateTime>? nextRunAt,
+    Expression<int>? backupTimeoutSeconds,
+    Expression<int>? verifyTimeoutSeconds,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -3345,6 +3489,10 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       if (postBackupScript != null) 'post_backup_script': postBackupScript,
       if (lastRunAt != null) 'last_run_at': lastRunAt,
       if (nextRunAt != null) 'next_run_at': nextRunAt,
+      if (backupTimeoutSeconds != null)
+        'backup_timeout_seconds': backupTimeoutSeconds,
+      if (verifyTimeoutSeconds != null)
+        'verify_timeout_seconds': verifyTimeoutSeconds,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -3370,6 +3518,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     Value<String?>? postBackupScript,
     Value<DateTime?>? lastRunAt,
     Value<DateTime?>? nextRunAt,
+    Value<int>? backupTimeoutSeconds,
+    Value<int>? verifyTimeoutSeconds,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -3393,6 +3543,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
       postBackupScript: postBackupScript ?? this.postBackupScript,
       lastRunAt: lastRunAt ?? this.lastRunAt,
       nextRunAt: nextRunAt ?? this.nextRunAt,
+      backupTimeoutSeconds: backupTimeoutSeconds ?? this.backupTimeoutSeconds,
+      verifyTimeoutSeconds: verifyTimeoutSeconds ?? this.verifyTimeoutSeconds,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -3456,6 +3608,12 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
     if (nextRunAt.present) {
       map['next_run_at'] = Variable<DateTime>(nextRunAt.value);
     }
+    if (backupTimeoutSeconds.present) {
+      map['backup_timeout_seconds'] = Variable<int>(backupTimeoutSeconds.value);
+    }
+    if (verifyTimeoutSeconds.present) {
+      map['verify_timeout_seconds'] = Variable<int>(verifyTimeoutSeconds.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -3489,6 +3647,8 @@ class SchedulesTableCompanion extends UpdateCompanion<SchedulesTableData> {
           ..write('postBackupScript: $postBackupScript, ')
           ..write('lastRunAt: $lastRunAt, ')
           ..write('nextRunAt: $nextRunAt, ')
+          ..write('backupTimeoutSeconds: $backupTimeoutSeconds, ')
+          ..write('verifyTimeoutSeconds: $verifyTimeoutSeconds, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -3975,6 +4135,17 @@ class $BackupHistoryTableTable extends BackupHistoryTable
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _metricsMeta = const VerificationMeta(
+    'metrics',
+  );
+  @override
+  late final GeneratedColumn<String> metrics = GeneratedColumn<String>(
+    'metrics',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3989,6 +4160,7 @@ class $BackupHistoryTableTable extends BackupHistoryTable
     startedAt,
     finishedAt,
     durationSeconds,
+    metrics,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4097,6 +4269,12 @@ class $BackupHistoryTableTable extends BackupHistoryTable
         ),
       );
     }
+    if (data.containsKey('metrics')) {
+      context.handle(
+        _metricsMeta,
+        metrics.isAcceptableOrUnknown(data['metrics']!, _metricsMeta),
+      );
+    }
     return context;
   }
 
@@ -4154,6 +4332,10 @@ class $BackupHistoryTableTable extends BackupHistoryTable
         DriftSqlType.int,
         data['${effectivePrefix}duration_seconds'],
       ),
+      metrics: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}metrics'],
+      ),
     );
   }
 
@@ -4177,6 +4359,7 @@ class BackupHistoryTableData extends DataClass
   final DateTime startedAt;
   final DateTime? finishedAt;
   final int? durationSeconds;
+  final String? metrics;
   const BackupHistoryTableData({
     required this.id,
     this.scheduleId,
@@ -4190,6 +4373,7 @@ class BackupHistoryTableData extends DataClass
     required this.startedAt,
     this.finishedAt,
     this.durationSeconds,
+    this.metrics,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4213,6 +4397,9 @@ class BackupHistoryTableData extends DataClass
     }
     if (!nullToAbsent || durationSeconds != null) {
       map['duration_seconds'] = Variable<int>(durationSeconds);
+    }
+    if (!nullToAbsent || metrics != null) {
+      map['metrics'] = Variable<String>(metrics);
     }
     return map;
   }
@@ -4239,6 +4426,9 @@ class BackupHistoryTableData extends DataClass
       durationSeconds: durationSeconds == null && nullToAbsent
           ? const Value.absent()
           : Value(durationSeconds),
+      metrics: metrics == null && nullToAbsent
+          ? const Value.absent()
+          : Value(metrics),
     );
   }
 
@@ -4260,6 +4450,7 @@ class BackupHistoryTableData extends DataClass
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       finishedAt: serializer.fromJson<DateTime?>(json['finishedAt']),
       durationSeconds: serializer.fromJson<int?>(json['durationSeconds']),
+      metrics: serializer.fromJson<String?>(json['metrics']),
     );
   }
   @override
@@ -4278,6 +4469,7 @@ class BackupHistoryTableData extends DataClass
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'finishedAt': serializer.toJson<DateTime?>(finishedAt),
       'durationSeconds': serializer.toJson<int?>(durationSeconds),
+      'metrics': serializer.toJson<String?>(metrics),
     };
   }
 
@@ -4294,6 +4486,7 @@ class BackupHistoryTableData extends DataClass
     DateTime? startedAt,
     Value<DateTime?> finishedAt = const Value.absent(),
     Value<int?> durationSeconds = const Value.absent(),
+    Value<String?> metrics = const Value.absent(),
   }) => BackupHistoryTableData(
     id: id ?? this.id,
     scheduleId: scheduleId.present ? scheduleId.value : this.scheduleId,
@@ -4309,6 +4502,7 @@ class BackupHistoryTableData extends DataClass
     durationSeconds: durationSeconds.present
         ? durationSeconds.value
         : this.durationSeconds,
+    metrics: metrics.present ? metrics.value : this.metrics,
   );
   BackupHistoryTableData copyWithCompanion(BackupHistoryTableCompanion data) {
     return BackupHistoryTableData(
@@ -4340,6 +4534,7 @@ class BackupHistoryTableData extends DataClass
       durationSeconds: data.durationSeconds.present
           ? data.durationSeconds.value
           : this.durationSeconds,
+      metrics: data.metrics.present ? data.metrics.value : this.metrics,
     );
   }
 
@@ -4357,7 +4552,8 @@ class BackupHistoryTableData extends DataClass
           ..write('errorMessage: $errorMessage, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt, ')
-          ..write('durationSeconds: $durationSeconds')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('metrics: $metrics')
           ..write(')'))
         .toString();
   }
@@ -4376,6 +4572,7 @@ class BackupHistoryTableData extends DataClass
     startedAt,
     finishedAt,
     durationSeconds,
+    metrics,
   );
   @override
   bool operator ==(Object other) =>
@@ -4392,7 +4589,8 @@ class BackupHistoryTableData extends DataClass
           other.errorMessage == this.errorMessage &&
           other.startedAt == this.startedAt &&
           other.finishedAt == this.finishedAt &&
-          other.durationSeconds == this.durationSeconds);
+          other.durationSeconds == this.durationSeconds &&
+          other.metrics == this.metrics);
 }
 
 class BackupHistoryTableCompanion
@@ -4409,6 +4607,7 @@ class BackupHistoryTableCompanion
   final Value<DateTime> startedAt;
   final Value<DateTime?> finishedAt;
   final Value<int?> durationSeconds;
+  final Value<String?> metrics;
   final Value<int> rowid;
   const BackupHistoryTableCompanion({
     this.id = const Value.absent(),
@@ -4423,6 +4622,7 @@ class BackupHistoryTableCompanion
     this.startedAt = const Value.absent(),
     this.finishedAt = const Value.absent(),
     this.durationSeconds = const Value.absent(),
+    this.metrics = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   BackupHistoryTableCompanion.insert({
@@ -4438,6 +4638,7 @@ class BackupHistoryTableCompanion
     required DateTime startedAt,
     this.finishedAt = const Value.absent(),
     this.durationSeconds = const Value.absent(),
+    this.metrics = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        databaseName = Value(databaseName),
@@ -4459,6 +4660,7 @@ class BackupHistoryTableCompanion
     Expression<DateTime>? startedAt,
     Expression<DateTime>? finishedAt,
     Expression<int>? durationSeconds,
+    Expression<String>? metrics,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -4474,6 +4676,7 @@ class BackupHistoryTableCompanion
       if (startedAt != null) 'started_at': startedAt,
       if (finishedAt != null) 'finished_at': finishedAt,
       if (durationSeconds != null) 'duration_seconds': durationSeconds,
+      if (metrics != null) 'metrics': metrics,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -4491,6 +4694,7 @@ class BackupHistoryTableCompanion
     Value<DateTime>? startedAt,
     Value<DateTime?>? finishedAt,
     Value<int?>? durationSeconds,
+    Value<String?>? metrics,
     Value<int>? rowid,
   }) {
     return BackupHistoryTableCompanion(
@@ -4506,6 +4710,7 @@ class BackupHistoryTableCompanion
       startedAt: startedAt ?? this.startedAt,
       finishedAt: finishedAt ?? this.finishedAt,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+      metrics: metrics ?? this.metrics,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -4549,6 +4754,9 @@ class BackupHistoryTableCompanion
     if (durationSeconds.present) {
       map['duration_seconds'] = Variable<int>(durationSeconds.value);
     }
+    if (metrics.present) {
+      map['metrics'] = Variable<String>(metrics.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -4570,6 +4778,7 @@ class BackupHistoryTableCompanion
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt, ')
           ..write('durationSeconds: $durationSeconds, ')
+          ..write('metrics: $metrics, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -10735,6 +10944,7 @@ typedef $$SqlServerConfigsTableTableCreateCompanionBuilder =
       required String password,
       Value<int> port,
       Value<bool> enabled,
+      Value<bool> useWindowsAuth,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -10749,6 +10959,7 @@ typedef $$SqlServerConfigsTableTableUpdateCompanionBuilder =
       Value<String> password,
       Value<int> port,
       Value<bool> enabled,
+      Value<bool> useWindowsAuth,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -10800,6 +11011,11 @@ class $$SqlServerConfigsTableTableFilterComposer
 
   ColumnFilters<bool> get enabled => $composableBuilder(
     column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get useWindowsAuth => $composableBuilder(
+    column: $table.useWindowsAuth,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10863,6 +11079,11 @@ class $$SqlServerConfigsTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get useWindowsAuth => $composableBuilder(
+    column: $table.useWindowsAuth,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -10906,6 +11127,11 @@ class $$SqlServerConfigsTableTableAnnotationComposer
 
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<bool> get useWindowsAuth => $composableBuilder(
+    column: $table.useWindowsAuth,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -10968,6 +11194,7 @@ class $$SqlServerConfigsTableTableTableManager
                 Value<String> password = const Value.absent(),
                 Value<int> port = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<bool> useWindowsAuth = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -10980,6 +11207,7 @@ class $$SqlServerConfigsTableTableTableManager
                 password: password,
                 port: port,
                 enabled: enabled,
+                useWindowsAuth: useWindowsAuth,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -10994,6 +11222,7 @@ class $$SqlServerConfigsTableTableTableManager
                 required String password,
                 Value<int> port = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<bool> useWindowsAuth = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -11006,6 +11235,7 @@ class $$SqlServerConfigsTableTableTableManager
                 password: password,
                 port: port,
                 enabled: enabled,
+                useWindowsAuth: useWindowsAuth,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -12083,6 +12313,8 @@ typedef $$SchedulesTableTableCreateCompanionBuilder =
       Value<String?> postBackupScript,
       Value<DateTime?> lastRunAt,
       Value<DateTime?> nextRunAt,
+      Value<int> backupTimeoutSeconds,
+      Value<int> verifyTimeoutSeconds,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -12107,6 +12339,8 @@ typedef $$SchedulesTableTableUpdateCompanionBuilder =
       Value<String?> postBackupScript,
       Value<DateTime?> lastRunAt,
       Value<DateTime?> nextRunAt,
+      Value<int> backupTimeoutSeconds,
+      Value<int> verifyTimeoutSeconds,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -12253,6 +12487,16 @@ class $$SchedulesTableTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get backupTimeoutSeconds => $composableBuilder(
+    column: $table.backupTimeoutSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get verifyTimeoutSeconds => $composableBuilder(
+    column: $table.verifyTimeoutSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -12390,6 +12634,16 @@ class $$SchedulesTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get backupTimeoutSeconds => $composableBuilder(
+    column: $table.backupTimeoutSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get verifyTimeoutSeconds => $composableBuilder(
+    column: $table.verifyTimeoutSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -12490,6 +12744,16 @@ class $$SchedulesTableTableAnnotationComposer
   GeneratedColumn<DateTime> get nextRunAt =>
       $composableBuilder(column: $table.nextRunAt, builder: (column) => column);
 
+  GeneratedColumn<int> get backupTimeoutSeconds => $composableBuilder(
+    column: $table.backupTimeoutSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get verifyTimeoutSeconds => $composableBuilder(
+    column: $table.verifyTimeoutSeconds,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -12572,6 +12836,8 @@ class $$SchedulesTableTableTableManager
                 Value<String?> postBackupScript = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
                 Value<DateTime?> nextRunAt = const Value.absent(),
+                Value<int> backupTimeoutSeconds = const Value.absent(),
+                Value<int> verifyTimeoutSeconds = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -12594,6 +12860,8 @@ class $$SchedulesTableTableTableManager
                 postBackupScript: postBackupScript,
                 lastRunAt: lastRunAt,
                 nextRunAt: nextRunAt,
+                backupTimeoutSeconds: backupTimeoutSeconds,
+                verifyTimeoutSeconds: verifyTimeoutSeconds,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -12618,6 +12886,8 @@ class $$SchedulesTableTableTableManager
                 Value<String?> postBackupScript = const Value.absent(),
                 Value<DateTime?> lastRunAt = const Value.absent(),
                 Value<DateTime?> nextRunAt = const Value.absent(),
+                Value<int> backupTimeoutSeconds = const Value.absent(),
+                Value<int> verifyTimeoutSeconds = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -12640,6 +12910,8 @@ class $$SchedulesTableTableTableManager
                 postBackupScript: postBackupScript,
                 lastRunAt: lastRunAt,
                 nextRunAt: nextRunAt,
+                backupTimeoutSeconds: backupTimeoutSeconds,
+                verifyTimeoutSeconds: verifyTimeoutSeconds,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -13143,6 +13415,7 @@ typedef $$BackupHistoryTableTableCreateCompanionBuilder =
       required DateTime startedAt,
       Value<DateTime?> finishedAt,
       Value<int?> durationSeconds,
+      Value<String?> metrics,
       Value<int> rowid,
     });
 typedef $$BackupHistoryTableTableUpdateCompanionBuilder =
@@ -13159,6 +13432,7 @@ typedef $$BackupHistoryTableTableUpdateCompanionBuilder =
       Value<DateTime> startedAt,
       Value<DateTime?> finishedAt,
       Value<int?> durationSeconds,
+      Value<String?> metrics,
       Value<int> rowid,
     });
 
@@ -13228,6 +13502,11 @@ class $$BackupHistoryTableTableFilterComposer
 
   ColumnFilters<int> get durationSeconds => $composableBuilder(
     column: $table.durationSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metrics => $composableBuilder(
+    column: $table.metrics,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -13300,6 +13579,11 @@ class $$BackupHistoryTableTableOrderingComposer
     column: $table.durationSeconds,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get metrics => $composableBuilder(
+    column: $table.metrics,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$BackupHistoryTableTableAnnotationComposer
@@ -13362,6 +13646,9 @@ class $$BackupHistoryTableTableAnnotationComposer
     column: $table.durationSeconds,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get metrics =>
+      $composableBuilder(column: $table.metrics, builder: (column) => column);
 }
 
 class $$BackupHistoryTableTableTableManager
@@ -13416,6 +13703,7 @@ class $$BackupHistoryTableTableTableManager
                 Value<DateTime> startedAt = const Value.absent(),
                 Value<DateTime?> finishedAt = const Value.absent(),
                 Value<int?> durationSeconds = const Value.absent(),
+                Value<String?> metrics = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BackupHistoryTableCompanion(
                 id: id,
@@ -13430,6 +13718,7 @@ class $$BackupHistoryTableTableTableManager
                 startedAt: startedAt,
                 finishedAt: finishedAt,
                 durationSeconds: durationSeconds,
+                metrics: metrics,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -13446,6 +13735,7 @@ class $$BackupHistoryTableTableTableManager
                 required DateTime startedAt,
                 Value<DateTime?> finishedAt = const Value.absent(),
                 Value<int?> durationSeconds = const Value.absent(),
+                Value<String?> metrics = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BackupHistoryTableCompanion.insert(
                 id: id,
@@ -13460,6 +13750,7 @@ class $$BackupHistoryTableTableTableManager
                 startedAt: startedAt,
                 finishedAt: finishedAt,
                 durationSeconds: durationSeconds,
+                metrics: metrics,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -25,6 +25,7 @@ class ProcessResult {
 class ProcessService {
   static const Duration _executableCacheTtl = Duration(minutes: 10);
   final Map<String, _ExecutableCacheEntry> _executablePathCache = {};
+  final Map<String, Process> _runningProcesses = {};
 
   static const _sensitiveEnvVars = {
     'SQLCMDPASSWORD',
@@ -65,6 +66,7 @@ class ProcessService {
     String? workingDirectory,
     Map<String, String>? environment,
     Duration? timeout,
+    String? tag,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -435,6 +437,10 @@ class ProcessService {
         runInShell: shouldUseShell,
       );
 
+      if (tag != null && tag.isNotEmpty) {
+        _runningProcesses[tag] = process;
+      }
+
       final stdoutBuffer = StringBuffer();
       final stderrBuffer = StringBuffer();
       String? stdoutError;
@@ -504,6 +510,10 @@ class ProcessService {
       }
 
       stopwatch.stop();
+
+      if (tag != null && tag.isNotEmpty) {
+        _runningProcesses.remove(tag);
+      }
 
       final stdout = stdoutBuffer.toString();
       var stderr = stderrBuffer.toString();
@@ -660,6 +670,15 @@ class ProcessService {
           originalError: e,
         ),
       );
+    }
+  }
+
+  void cancelByTag(String tag) {
+    final process = _runningProcesses[tag];
+    if (process != null) {
+      LoggerService.info('Cancelando processo com tag: $tag');
+      process.kill();
+      _runningProcesses.remove(tag);
     }
   }
 }

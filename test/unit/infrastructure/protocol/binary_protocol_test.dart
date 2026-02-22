@@ -8,24 +8,27 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('BinaryProtocol', () {
-    test('should serialize and deserialize message round-trip without compression', () {
-      final protocol = BinaryProtocol();
-      final message = Message(
-        header: MessageHeader(
-          type: MessageType.heartbeat,
-          length: 10,
-        ),
-        payload: <String, dynamic>{'ts': 1234567890},
-        checksum: 0,
-      );
+    test(
+      'should serialize and deserialize message round-trip without compression',
+      () {
+        final protocol = BinaryProtocol();
+        final message = Message(
+          header: MessageHeader(
+            type: MessageType.heartbeat,
+            length: 10,
+          ),
+          payload: <String, dynamic>{'ts': 1234567890},
+          checksum: 0,
+        );
 
-      final bytes = protocol.serializeMessage(message);
-      expect(bytes.length, greaterThanOrEqualTo(16 + 4));
+        final bytes = protocol.serializeMessage(message);
+        expect(bytes.length, greaterThanOrEqualTo(16 + 4));
 
-      final restored = protocol.deserializeMessage(bytes);
-      expect(restored.header.type, message.header.type);
-      expect(restored.payload['ts'], message.payload['ts']);
-    });
+        final restored = protocol.deserializeMessage(bytes);
+        expect(restored.header.type, message.header.type);
+        expect(restored.payload['ts'], message.payload['ts']);
+      },
+    );
 
     test('should throw ProtocolException when data too short', () {
       final protocol = BinaryProtocol();
@@ -68,27 +71,30 @@ void main() {
       );
     });
 
-    test('should serialize and deserialize with compression when payload large', () {
-      final protocol = BinaryProtocol(compression: PayloadCompression());
-      final largePayload = <String, dynamic>{
-        'data': 'x' * 2000,
-      };
-      final payloadJson = '{"data":"${'x' * 2000}"}';
-      final message = Message(
-        header: MessageHeader(
-          type: MessageType.fileChunk,
-          length: payloadJson.length,
-        ),
-        payload: largePayload,
-        checksum: 0,
-      );
+    test(
+      'should serialize and deserialize with compression when payload large',
+      () {
+        final protocol = BinaryProtocol(compression: PayloadCompression());
+        final largePayload = <String, dynamic>{
+          'data': 'x' * 2000,
+        };
+        final payloadJson = '{"data":"${'x' * 2000}"}';
+        final message = Message(
+          header: MessageHeader(
+            type: MessageType.fileChunk,
+            length: payloadJson.length,
+          ),
+          payload: largePayload,
+          checksum: 0,
+        );
 
-      final bytes = protocol.serializeMessage(message);
-      final restored = protocol.deserializeMessage(bytes);
+        final bytes = protocol.serializeMessage(message);
+        final restored = protocol.deserializeMessage(bytes);
 
-      expect(restored.header.type, MessageType.fileChunk);
-      expect(restored.payload['data'], largePayload['data']);
-    });
+        expect(restored.header.type, MessageType.fileChunk);
+        expect(restored.payload['data'], largePayload['data']);
+      },
+    );
 
     test('calculateChecksum should match Crc32 of payload', () {
       final protocol = BinaryProtocol();

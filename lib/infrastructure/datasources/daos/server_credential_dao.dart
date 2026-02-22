@@ -12,13 +12,13 @@ class ServerCredentialDao extends DatabaseAccessor<AppDatabase>
   Future<List<ServerCredentialsTableData>> getAll() =>
       select(serverCredentialsTable).get();
 
-  Future<ServerCredentialsTableData?> getById(String id) =>
-      (select(serverCredentialsTable)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+  Future<ServerCredentialsTableData?> getById(String id) => (select(
+    serverCredentialsTable,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
-  Future<ServerCredentialsTableData?> getByServerId(String serverId) =>
-      (select(serverCredentialsTable)..where((t) => t.serverId.equals(serverId)))
-          .getSingleOrNull();
+  Future<ServerCredentialsTableData?> getByServerId(String serverId) => (select(
+    serverCredentialsTable,
+  )..where((t) => t.serverId.equals(serverId))).getSingleOrNull();
 
   Future<int> insertCredential(ServerCredentialsTableCompanion credential) =>
       into(serverCredentialsTable).insert(credential);
@@ -29,12 +29,14 @@ class ServerCredentialDao extends DatabaseAccessor<AppDatabase>
   Future<int> deleteCredential(String id) =>
       (delete(serverCredentialsTable)..where((t) => t.id.equals(id))).go();
 
-  Future<List<ServerCredentialsTableData>> getActive() =>
-      (select(serverCredentialsTable)..where((t) => t.isActive.equals(true)))
-          .get();
+  Future<List<ServerCredentialsTableData>> getActive() => (select(
+    serverCredentialsTable,
+  )..where((t) => t.isActive.equals(true))).get();
 
   Future<int> updateLastUsed(String id) {
-    return (update(serverCredentialsTable)..where((t) => t.id.equals(id))).write(
+    return (update(
+      serverCredentialsTable,
+    )..where((t) => t.id.equals(id))).write(
       ServerCredentialsTableCompanion(
         lastUsedAt: Value(DateTime.now()),
       ),

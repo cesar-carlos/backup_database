@@ -6,13 +6,16 @@ import 'package:path/path.dart' as p;
 
 class FileTransferLockService implements IFileTransferLockService {
   FileTransferLockService({required String lockBasePath})
-      : _lockBasePath = p.normalize(p.absolute(lockBasePath));
+    : _lockBasePath = p.normalize(p.absolute(lockBasePath));
 
   final String _lockBasePath;
 
   File _getLockFile(String filePath) {
     // Usa hash do caminho como nome do arquivo de lock para evitar caracteres inválidos
-    final hash = filePath.hashCode.toUnsigned(16).toRadixString(16).padLeft(8, '0');
+    final hash = filePath.hashCode
+        .toUnsigned(16)
+        .toRadixString(16)
+        .padLeft(8, '0');
     return File(p.join(_lockBasePath, '$hash.lock'));
   }
 

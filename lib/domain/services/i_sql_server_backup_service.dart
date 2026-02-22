@@ -17,11 +17,18 @@ abstract class ISqlServerBackupService {
     bool verifyAfterBackup,
     VerifyPolicy verifyPolicy,
     SqlServerBackupOptions? sqlServerBackupOptions,
+    Duration? backupTimeout,
+    Duration? verifyTimeout,
   });
 
   Future<Result<bool>> testConnection(SqlServerConfig config);
 
   Future<Result<List<String>>> listDatabases({
+    required SqlServerConfig config,
+    Duration? timeout,
+  });
+
+  Future<Result<List<String>>> listBackupFiles({
     required SqlServerConfig config,
     Duration? timeout,
   });

@@ -281,7 +281,9 @@ class SchedulerProvider extends ChangeNotifier {
     }
   }
 
-  Future<List<Schedule>?> getSchedulesByDestination(String destinationId) async {
+  Future<List<Schedule>?> getSchedulesByDestination(
+    String destinationId,
+  ) async {
     try {
       final result = await _repository.getByDestinationId(destinationId);
       return result.fold((schedules) => schedules, (failure) => null);

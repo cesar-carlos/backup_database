@@ -132,7 +132,11 @@ class BackupProgressProvider extends ChangeNotifier
   }) {
     final stepEnum = _stepFromString(step);
     if (stepEnum == null) return;
-    _updateProgressWithStep(step: stepEnum, message: message, progress: progress);
+    _updateProgressWithStep(
+      step: stepEnum,
+      message: message,
+      progress: progress,
+    );
   }
 
   static BackupStep? _stepFromString(String step) {

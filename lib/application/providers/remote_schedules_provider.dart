@@ -1,7 +1,8 @@
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
-import 'package:backup_database/core/utils/error_mapper.dart' show mapExceptionToMessage;
+import 'package:backup_database/core/utils/error_mapper.dart'
+    show mapExceptionToMessage;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
@@ -12,8 +13,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     this._connectionManager, {
     RemoteFileTransferProvider? transferProvider,
     TempDirectoryService? tempDirectoryService,
-  })  : _transferProvider = transferProvider,
-        _tempDirectoryService = tempDirectoryService ?? getIt<TempDirectoryService>();
+  }) : _transferProvider = transferProvider,
+       _tempDirectoryService =
+           tempDirectoryService ?? getIt<TempDirectoryService>();
 
   final ConnectionManager _connectionManager;
   final RemoteFileTransferProvider? _transferProvider;
@@ -140,10 +142,12 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _backupMessage = 'Verificando permissões na pasta temporária...';
     notifyListeners();
 
-    final hasPermission = await _tempDirectoryService.validateDownloadsDirectory();
+    final hasPermission = await _tempDirectoryService
+        .validateDownloadsDirectory();
     if (!hasPermission) {
       final downloadsDir = await _tempDirectoryService.getDownloadsDirectory();
-      _error = 'Sem permissão de escrita na pasta temporária:\n${downloadsDir.path}\n\n'
+      _error =
+          'Sem permissão de escrita na pasta temporária:\n${downloadsDir.path}\n\n'
           'Execute o aplicativo como Administrador ou configure outra pasta em Configurações > Geral.';
       _isExecuting = false;
       _executingScheduleId = null;
@@ -175,10 +179,14 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         LoggerService.info('===== BACKUP CONCLUÍDO NO SERVIDOR =====');
         LoggerService.info('BackupPath recebido: "$backupPath"');
         LoggerService.info('BackupPath está vazio? ${backupPath.isEmpty}');
-        LoggerService.info('_transferProvider é null? ${_transferProvider == null}');
+        LoggerService.info(
+          '_transferProvider é null? ${_transferProvider == null}',
+        );
 
         if (backupPath.isEmpty || _transferProvider == null) {
-          LoggerService.warning('⚠️ DOWNLOAD CANCELADO: backupPath.isEmpty=${backupPath.isEmpty}, _transferProvider==null=${_transferProvider == null}');
+          LoggerService.warning(
+            '⚠️ DOWNLOAD CANCELADO: backupPath.isEmpty=${backupPath.isEmpty}, _transferProvider==null=${_transferProvider == null}',
+          );
           _error = null;
           _isExecuting = false;
           _executingScheduleId = null;
@@ -213,7 +221,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
             _isTransferringFile = true;
             notifyListeners();
-            LoggerService.debug('[TransferProgress] $step: ${(progress * 100).toStringAsFixed(1)}%');
+            LoggerService.debug(
+              '[TransferProgress] $step: ${(progress * 100).toStringAsFixed(1)}%',
+            );
           },
         );
 
@@ -264,7 +274,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       return false;
     }
 
-    final result = await _connectionManager.cancelSchedule(_executingScheduleId!);
+    final result = await _connectionManager.cancelSchedule(
+      _executingScheduleId!,
+    );
 
     return result.fold(
       (_) {

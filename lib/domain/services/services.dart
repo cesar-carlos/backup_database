@@ -17,6 +17,7 @@ export 'i_google_drive_destination_service.dart';
 export 'i_ipc_service.dart';
 export 'i_license_validation_service.dart';
 export 'i_local_destination_service.dart';
+export 'i_metrics_analysis_service.dart';
 export 'i_nextcloud_destination_service.dart';
 export 'i_notification_service.dart';
 export 'i_oauth_smtp_service.dart';

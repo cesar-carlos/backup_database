@@ -14,5 +14,7 @@ abstract class IFileTransferLockService {
 
   /// Remove locks expirados (locks mantidos por muito tempo sem serem liberados).
   /// Útil para limpeza de locks "órfãos" (ex: cliente que crashou durante download).
-  Future<void> cleanupExpiredLocks({Duration maxAge = const Duration(minutes: 30)});
+  Future<void> cleanupExpiredLocks({
+    Duration maxAge = const Duration(minutes: 30),
+  });
 }

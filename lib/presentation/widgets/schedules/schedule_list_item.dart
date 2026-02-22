@@ -46,22 +46,22 @@ class ScheduleListItem extends StatelessWidget {
               child: ProgressRing(strokeWidth: 2),
             )
           : onRunNow != null || onTransferDestinations != null
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (onTransferDestinations != null)
-                      IconButton(
-                        icon: const Icon(FluentIcons.fabric_folder),
-                        onPressed: onTransferDestinations,
-                      ),
-                    if (onRunNow != null)
-                      IconButton(
-                        icon: const Icon(FluentIcons.play),
-                        onPressed: effectivelyDisabled ? null : onRunNow,
-                      ),
-                  ],
-                )
-              : null,
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onTransferDestinations != null)
+                  IconButton(
+                    icon: const Icon(FluentIcons.fabric_folder),
+                    onPressed: onTransferDestinations,
+                  ),
+                if (onRunNow != null)
+                  IconButton(
+                    icon: const Icon(FluentIcons.play),
+                    onPressed: effectivelyDisabled ? null : onRunNow,
+                  ),
+              ],
+            )
+          : null,
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -72,14 +72,18 @@ class ScheduleListItem extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: _getScheduleTypeColor(
-                    schedule.scheduleType,
+                    scheduleTypeFromString(schedule.scheduleType),
                   ).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  texts.scheduleTypeName(schedule.scheduleType),
+                  texts.scheduleTypeName(
+                    scheduleTypeFromString(schedule.scheduleType),
+                  ),
                   style: FluentTheme.of(context).typography.caption?.copyWith(
-                    color: _getScheduleTypeColor(schedule.scheduleType),
+                    color: _getScheduleTypeColor(
+                      scheduleTypeFromString(schedule.scheduleType),
+                    ),
                   ),
                 ),
               ),

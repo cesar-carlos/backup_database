@@ -43,6 +43,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   final _intervalMinutesController = TextEditingController();
   final _backupFolderController = TextEditingController();
   final _postBackupScriptController = TextEditingController();
+  final _backupTimeoutMinutesController = TextEditingController();
+  final _verifyTimeoutMinutesController = TextEditingController();
 
   DatabaseType _databaseType = DatabaseType.sqlServer;
   String? _selectedDatabaseConfigId;
@@ -58,8 +60,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   VerifyPolicy _verifyPolicy = VerifyPolicy.bestEffort;
   bool _compression = false;
 
+  Duration _backupTimeout = const Duration(hours: 2);
+  Duration _verifyTimeout = const Duration(minutes: 30);
+
   int? _maxTransferSize;
   int? _bufferCount;
+  int? _blockSize;
+  int _stripingCount = 1;
   int _statsPercent = 10;
 
   int _hour = 0;
@@ -96,12 +103,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     super.initState();
     _intervalMinutesController.text = _intervalMinutes.toString();
     _backupFolderController.text = _getDefaultBackupFolder();
+    _backupTimeoutMinutesController.text = _backupTimeout.inMinutes.toString();
+    _verifyTimeoutMinutesController.text = _verifyTimeout.inMinutes.toString();
 
     if (widget.schedule != null) {
       _nameController.text = widget.schedule!.name;
       _databaseType = widget.schedule!.databaseType;
       _selectedDatabaseConfigId = widget.schedule!.databaseConfigId;
-      _scheduleType = widget.schedule!.scheduleType;
+      _scheduleType = scheduleTypeFromString(widget.schedule!.scheduleType);
       _backupType = _normalizeBackupTypeForDatabase(
         _databaseType,
         widget.schedule!.backupType,
@@ -109,17 +118,25 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _truncateLog = widget.schedule!.truncateLog;
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
-      _compressionFormat = widget.schedule!.compressionFormat;
+      _compressionFormat = widget.schedule!.compressionFormat ?? CompressionFormat.zip;
       _isEnabled = widget.schedule!.enabled;
       _enableChecksum = widget.schedule!.enableChecksum;
       _verifyAfterBackup = widget.schedule!.verifyAfterBackup;
       _verifyPolicy = widget.schedule!.verifyPolicy;
+      _backupTimeout = widget.schedule!.backupTimeout;
+      _verifyTimeout = widget.schedule!.verifyTimeout;
+      _backupTimeoutMinutesController.text = _backupTimeout.inMinutes
+          .toString();
+      _verifyTimeoutMinutesController.text = _verifyTimeout.inMinutes
+          .toString();
 
       switch (widget.schedule) {
         case SqlServerBackupSchedule(:final sqlServerBackupOptions):
           _compression = sqlServerBackupOptions.compression;
           _maxTransferSize = sqlServerBackupOptions.maxTransferSize;
           _bufferCount = sqlServerBackupOptions.bufferCount;
+          _blockSize = sqlServerBackupOptions.blockSize;
+          _stripingCount = sqlServerBackupOptions.stripingCount;
           _statsPercent = sqlServerBackupOptions.statsPercent;
         case _:
       }
@@ -366,11 +383,16 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     LicenseFeatures.logBackup,
                   );
 
+              final isSybaseConvertedDifferential = _databaseType == DatabaseType.sybase &&
+                  isEditing &&
+                  (widget.schedule?.isConvertedDifferential ?? false);
+
               List<BackupType> allTypes;
               if (_databaseType == DatabaseType.sybase) {
                 allTypes = [
                   BackupType.full,
                   BackupType.log,
+                  if (isSybaseConvertedDifferential) BackupType.differential,
                 ];
               } else if (_databaseType == DatabaseType.postgresql) {
                 allTypes = [
@@ -395,6 +417,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                   final isDifferentialBlocked =
                       type == BackupType.differential && !hasDifferential;
                   final isLogBlocked = type == BackupType.log && !hasLog;
+                  final isSybaseConvertedType =
+                      _databaseType == DatabaseType.sybase &&
+                      type == BackupType.differential;
                   final isBlocked = isDifferentialBlocked || isLogBlocked;
 
                   return ComboBoxItem<BackupType>(
@@ -409,7 +434,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                 child: Text(
                                   isBlocked
                                       ? '${type.displayName} (Requer licença)'
-                                      : type.displayName,
+                                      : isSybaseConvertedType
+                                          ? '${type.displayName} (convertido)'
+                                          : type.displayName,
                                   textAlign: TextAlign.start,
                                   style: TextStyle(
                                     color: isBlocked
@@ -417,6 +444,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                               .resources
                                               .controlStrokeColorDefault
                                               .withValues(alpha: 0.4)
+                                        : isSybaseConvertedType
+                                            ? FluentTheme.of(context).accentColor.defaultBrushFor(
+                                                FluentTheme.of(context).brightness,
+                                              )
+                                            : null,
+                                    fontStyle: isSybaseConvertedType
+                                        ? FontStyle.italic
                                         : null,
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -431,6 +465,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                       .resources
                                       .controlStrokeColorDefault
                                       .withValues(alpha: 0.4),
+                                ),
+                              ],
+                              if (isSybaseConvertedType) ...[
+                                const SizedBox(width: 8),
+                                Icon(
+                                  FluentIcons.switch_widget,
+                                  size: 14,
+                                  color: FluentTheme.of(context).accentColor,
                                 ),
                               ],
                             ],
@@ -698,6 +740,74 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             ),
           ),
           const SizedBox(height: 24),
+          _buildSectionTitle('Timeouts (Segurança Operacional)'),
+          const SizedBox(height: 12),
+          InfoLabel(
+            label: 'Timeout de Backup',
+            child: Row(
+              children: [
+                Expanded(
+                  child: InfoLabel(
+                    label: 'Minutos',
+                    child: NumericField(
+                      controller: _backupTimeoutMinutesController,
+                      label: '',
+                      minValue: 1,
+                      maxValue: 1440,
+                      onChanged: (value) {
+                        final minutes = int.tryParse(value) ?? 120;
+                        setState(() {
+                          _backupTimeout = Duration(minutes: minutes);
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Máximo: 24 horas',
+                  style: FluentTheme.of(context).typography.caption,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          InfoLabel(
+            label: 'Timeout de Verificação',
+            child: Row(
+              children: [
+                Expanded(
+                  child: InfoLabel(
+                    label: 'Minutos',
+                    child: NumericField(
+                      controller: _verifyTimeoutMinutesController,
+                      label: '',
+                      minValue: 1,
+                      maxValue: 1440,
+                      onChanged: (value) {
+                        final minutes = int.tryParse(value) ?? 30;
+                        setState(() {
+                          _verifyTimeout = Duration(minutes: minutes);
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Máximo: 24 horas',
+                  style: FluentTheme.of(context).typography.caption,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Define o tempo máximo de espera para execução do backup e verificação de integridade. '
+            'Zero significa espera infinita.',
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          const SizedBox(height: 24),
           _buildIntegrityOptions(),
           if (_databaseType == DatabaseType.sqlServer)
             _buildAdvancedPerformanceOptions(),
@@ -873,9 +983,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                   children: [
                     Expanded(
                       child: _buildCheckboxWithInfo(
-                                label: hasVerifyIntegrity
-                                    ? 'Verify After Backup'
-                                    : 'Verify After Backup (Requer licença)',
+                        label: hasVerifyIntegrity
+                            ? 'Verify After Backup'
+                            : 'Verify After Backup (Requer licença)',
                         value: _verifyAfterBackup,
                         onChanged: hasVerifyIntegrity
                             ? (value) {
@@ -884,17 +994,17 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                 });
                               }
                             : null,
-                                infoText: hasVerifyIntegrity
-                                    ? (_databaseType == DatabaseType.sqlServer
-                                          ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
-                                                'Garante que o backup pode ser restaurado sem restaurar os dados.'
-                                          : _databaseType == DatabaseType.postgresql
-                                          ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
-                                                'Garante que o backup está íntegro e pode ser restaurado.'
-                                          : 'Verifica a integridade do backup após criação usando dbvalid (preferencial) '
-                                                'e dbverify (fallback). Garante que o backup está íntegro e pode ser restaurado.')
-                                    : 'Este recurso requer uma licença válida. '
-                                          'Acesse Configurações > Licenciamento para mais informações.',
+                        infoText: hasVerifyIntegrity
+                            ? (_databaseType == DatabaseType.sqlServer
+                                  ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
+                                        'Garante que o backup pode ser restaurado sem restaurar os dados.'
+                                  : _databaseType == DatabaseType.postgresql
+                                  ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
+                                        'Garante que o backup está íntegro e pode ser restaurado.'
+                                  : 'Verifica a integridade do backup após criação usando dbvalid (preferencial) '
+                                        'e dbverify (fallback). Garante que o backup está íntegro e pode ser restaurado.')
+                            : 'Este recurso requer uma licença válida. '
+                                  'Acesse Configurações > Licenciamento para mais informações.',
                       ),
                     ),
                     if (!hasVerifyIntegrity) ...[
@@ -1585,9 +1695,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         case BackupType.fullSingle:
           return 'Backup lógico completo usando pg_dump. Banco ONLINE. Inclui apenas a base de dados especificada na configuração. Formato .backup.';
         case BackupType.log:
+        case BackupType.convertedLog:
           return 'Captura de WAL para PITR usando pg_receivewal em modo one-shot (ate um LSN alvo). Pode usar replication slot dedicado quando habilitado por ambiente.';
         case BackupType.differential:
+        case BackupType.convertedDifferential:
           return 'Backup incremental usando pg_basebackup. Requer backup FULL anterior com manifest. (PostgreSQL 17+)';
+        case BackupType.convertedFullSingle:
+          return 'Backup lógico completo usando pg_dump. Banco ONLINE. Inclui apenas a base de dados especificada na configuração. Formato .backup.';
       }
     }
     if (_databaseType == DatabaseType.sybase) {
@@ -1595,10 +1709,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         case BackupType.full:
           return 'Backup completo do banco de dados via BACKUP DATABASE/dbbackup.';
         case BackupType.log:
+        case BackupType.convertedLog:
           return 'Backup do log de transações. Pode ser executado frequentemente e requer backup Full anterior.';
         case BackupType.differential:
-          return 'Sybase SQL Anywhere não suporta backup diferencial nativo; este tipo é convertido para Full.';
+        case BackupType.convertedDifferential:
+          return 'Sybase SQL Anywhere não suporta backup diferencial nativo; este tipo é convertido automaticamente para Full.';
         case BackupType.fullSingle:
+        case BackupType.convertedFullSingle:
           return 'Sybase trata este tipo como backup Full.';
       }
     }
@@ -1611,6 +1728,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         return 'Backup apenas das alterações desde o último backup completo. Requer backup Full anterior.';
       case BackupType.log:
         return 'Backup do log de transações. Pode ser executado frequentemente. Requer backup Full anterior.';
+      case BackupType.convertedDifferential:
+        return 'Backup convertido de Differential para Full.';
+      case BackupType.convertedFullSingle:
+        return 'Backup convertido de Full Single para Full.';
+      case BackupType.convertedLog:
+        return 'Backup convertido de Log para Log.';
     }
   }
 
@@ -1861,10 +1984,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         scheduleConfigJson = jsonEncode({'intervalMinutes': _intervalMinutes});
     }
 
+    final scheduleTypeString = _scheduleType.toValue();
+
     final sqlServerBackupOptions = SqlServerBackupOptions(
       compression: _compression,
       maxTransferSize: _maxTransferSize,
       bufferCount: _bufferCount,
+      blockSize: _blockSize,
+      stripingCount: _stripingCount,
       statsPercent: _statsPercent,
     );
 
@@ -1875,7 +2002,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         name: _nameController.text.trim(),
         databaseConfigId: _selectedDatabaseConfigId!,
         databaseType: _databaseType,
-        scheduleType: _scheduleType,
+        scheduleType: scheduleTypeString,
         scheduleConfig: scheduleConfigJson,
         destinationIds: _selectedDestinationIds,
         backupFolder: _backupFolderController.text.trim(),
@@ -1893,7 +2020,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         nextRunAt: widget.schedule?.nextRunAt,
         createdAt: widget.schedule?.createdAt,
         truncateLog: _truncateLog,
+        backupTimeout: _backupTimeout,
+        verifyTimeout: _verifyTimeout,
         sqlServerBackupOptions: sqlServerBackupOptions,
+        isConvertedDifferential: widget.schedule?.isConvertedDifferential ?? false,
       );
     } else {
       schedule = Schedule(
@@ -1901,7 +2031,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         name: _nameController.text.trim(),
         databaseConfigId: _selectedDatabaseConfigId!,
         databaseType: _databaseType,
-        scheduleType: _scheduleType,
+        scheduleType: scheduleTypeString,
         scheduleConfig: scheduleConfigJson,
         destinationIds: _selectedDestinationIds,
         backupFolder: _backupFolderController.text.trim(),
@@ -1919,6 +2049,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         nextRunAt: widget.schedule?.nextRunAt,
         createdAt: widget.schedule?.createdAt,
         truncateLog: _truncateLog,
+        backupTimeout: _backupTimeout,
+        verifyTimeout: _verifyTimeout,
+        isConvertedDifferential: _databaseType == DatabaseType.sybase &&
+            _backupType == BackupType.differential,
       );
     }
 

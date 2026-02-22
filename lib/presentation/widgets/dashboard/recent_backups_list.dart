@@ -51,7 +51,7 @@ class RecentBackupsList extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    BackupType.fromString(backup.backupType).displayName,
+                    backupTypeFromString(backup.backupType).displayName,
                     style: TextStyle(
                       fontSize: 12,
                       color: _getBackupTypeColor(backup.backupType),
@@ -114,27 +114,33 @@ class RecentBackupsList extends StatelessWidget {
   }
 
   IconData _getBackupTypeIcon(String backupType) {
-    final type = BackupType.fromString(backupType);
+    final type = backupTypeFromString(backupType);
     switch (type) {
       case BackupType.full:
       case BackupType.fullSingle:
+      case BackupType.convertedFullSingle:
         return FluentIcons.database;
       case BackupType.differential:
+      case BackupType.convertedDifferential:
         return FluentIcons.database_sync;
       case BackupType.log:
+      case BackupType.convertedLog:
         return FluentIcons.database_view;
     }
   }
 
   Color _getBackupTypeColor(String backupType) {
-    final type = BackupType.fromString(backupType);
+    final type = backupTypeFromString(backupType);
     switch (type) {
       case BackupType.full:
       case BackupType.fullSingle:
+      case BackupType.convertedFullSingle:
         return AppColors.primary;
       case BackupType.differential:
+      case BackupType.convertedDifferential:
         return Colors.blue;
       case BackupType.log:
+      case BackupType.convertedLog:
         return Colors.orange;
     }
   }

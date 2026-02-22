@@ -39,7 +39,8 @@ class LocalDestinationService implements ILocalDestinationService {
             : error?.toString() ?? 'Erro desconhecido';
         return rd.Failure(
           FileSystemFailure(
-            message: 'Arquivo de origem inválido: $sourceFilePath\n'
+            message:
+                'Arquivo de origem inválido: $sourceFilePath\n'
                 'O arquivo pode estar ainda sendo baixado ou travado pelo sistema.\n'
                 'Detalhes: $message',
           ),
@@ -355,13 +356,17 @@ class LocalDestinationService implements ILocalDestinationService {
         } else {
           return rd.Failure(
             FileSystemFailure(
-              message: 'Arquivo travado ou inacessível após $maxAttempts tentativas',
+              message:
+                  'Arquivo travado ou inacessível após $maxAttempts tentativas',
               originalError: e,
             ),
           );
         }
       } on Object catch (e) {
-        LoggerService.error('[ValidateFile] Erro inesperado ao validar arquivo', e);
+        LoggerService.error(
+          '[ValidateFile] Erro inesperado ao validar arquivo',
+          e,
+        );
         return rd.Failure(
           FileSystemFailure(
             message: 'Erro inesperado ao validar arquivo: $e',
@@ -373,7 +378,8 @@ class LocalDestinationService implements ILocalDestinationService {
 
     return const rd.Failure(
       FileSystemFailure(
-        message: 'Arquivo inválido (0 bytes) após $maxAttempts tentativas. '
+        message:
+            'Arquivo inválido (0 bytes) após $maxAttempts tentativas. '
             'O arquivo pode estar ainda sendo baixado.',
       ),
     );

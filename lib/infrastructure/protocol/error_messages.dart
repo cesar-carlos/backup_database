@@ -11,7 +11,7 @@ Message createErrorMessage({
 }) {
   final payload = <String, dynamic>{
     'error': errorMessage,
-    ...? (errorCode != null ? {'errorCode': errorCode.code} : null),
+    ...?(errorCode != null ? {'errorCode': errorCode.code} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;

@@ -11,7 +11,8 @@ import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart';
 
 /// Implementation of [IBackupCompressionOrchestrator].
-class BackupCompressionOrchestratorImpl implements IBackupCompressionOrchestrator {
+class BackupCompressionOrchestratorImpl
+    implements IBackupCompressionOrchestrator {
   const BackupCompressionOrchestratorImpl({
     required ICompressionService compressionService,
   }) : _compressionService = compressionService;
@@ -42,7 +43,8 @@ class BackupCompressionOrchestratorImpl implements IBackupCompressionOrchestrato
       String? compressionOutputPath;
 
       // Special naming for Sybase full backups
-      if (databaseType == DatabaseType.sybase && backupType == BackupType.full) {
+      if (databaseType == DatabaseType.sybase &&
+          backupType == BackupType.full) {
         final ts = DateTime.now().toIso8601String().replaceAll(':', '-');
         final baseName = p.basename(backupPath);
         final extension = format == CompressionFormat.rar ? '.rar' : '.zip';
@@ -82,7 +84,8 @@ class BackupCompressionOrchestratorImpl implements IBackupCompressionOrchestrato
 
         return Failure(
           core_errors.BackupCompressionFailure(
-            message: 'Erro ao comprimir backup. Verifique permissões da pasta de destino.',
+            message:
+                'Erro ao comprimir backup. Verifique permissões da pasta de destino.',
             originalError: failure,
           ),
         );
@@ -92,7 +95,8 @@ class BackupCompressionOrchestratorImpl implements IBackupCompressionOrchestrato
 
       return Failure(
         core_errors.BackupCompressionFailure(
-          message: 'Erro ao comprimir backup: $e. Verifique permissões da pasta de destino.',
+          message:
+              'Erro ao comprimir backup: $e. Verifique permissões da pasta de destino.',
           originalError: e,
         ),
       );

@@ -14,7 +14,9 @@ abstract class DestinationUseCase<TConfig, TResult extends Object> {
   rd.Result<void> validateParams(String sourceFilePath, TConfig config) {
     if (sourceFilePath.isEmpty) {
       return const rd.Failure(
-        ValidationFailure(message: 'Caminho do arquivo de origem não pode ser vazio'),
+        ValidationFailure(
+          message: 'Caminho do arquivo de origem não pode ser vazio',
+        ),
       );
     }
 

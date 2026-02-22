@@ -44,7 +44,7 @@ class SqlServerBackupOptions {
   /// Verifica se as opções são válidas.
   ///
   /// Retorna `true` se todas as validações passarem.
-  /// Retorna `false` e [errorMessage] se houver problemas.
+  /// Retorna `false` com mensagem de erro se houver problemas.
   ({bool isValid, String? errorMessage}) validate() {
     final errors = <String>[];
 
@@ -96,15 +96,12 @@ class SqlServerBackupOptions {
       return (isValid: true, errorMessage: null);
     }
 
-
     return (isValid: false, errorMessage: errors.join('; '));
   }
 
   /// Valores padrão seguros para uso em produção.
   static const SqlServerBackupOptions safeDefaults = SqlServerBackupOptions(
-    compression: false,
     maxTransferSize: 4194304, // 4MB
-    statsPercent: 10,
   );
 
   /// Gera a cláusula WITH das opções não nulas para uso em SQL.

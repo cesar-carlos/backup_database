@@ -247,7 +247,7 @@ class OAuthSmtpService implements IOAuthSmtpService {
       result = const rd.Failure(
         ServerFailure(
           message:
-                'Falha ao atualizar token OAuth SMTP. Reconecte a conta e tente novamente.',
+              'Falha ao atualizar token OAuth SMTP. Reconecte a conta e tente novamente.',
         ),
       );
     } finally {

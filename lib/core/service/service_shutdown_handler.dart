@@ -18,8 +18,7 @@ class ServiceShutdownHandler {
   ServiceShutdownHandler._();
 
   /// Retorna a instância singleton do ServiceShutdownHandler.
-  factory ServiceShutdownHandler() =>
-      _instance ??= ServiceShutdownHandler._();
+  factory ServiceShutdownHandler() => _instance ??= ServiceShutdownHandler._();
 
   final List<ShutdownCallback> _shutdownCallbacks = [];
   bool _isShuttingDown = false;

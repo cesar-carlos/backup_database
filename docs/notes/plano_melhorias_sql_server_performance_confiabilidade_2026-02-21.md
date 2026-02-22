@@ -11,306 +11,56 @@ Evoluir o fluxo de backup SQL Server para:
 
 ## Escopo principal
 
-- `lib/infrastructure/external/process/sql_server_backup_service.dart`
-- `lib/infrastructure/external/process/process_service.dart`
-- `lib/presentation/widgets/sql_server/sql_server_config_dialog.dart`
-- `lib/presentation/widgets/schedules/schedule_dialog.dart`
-- `lib/domain/entities/schedule.dart`
-- `lib/application/services/backup_orchestrator_service.dart`
-- `lib/application/services/scheduler_service.dart`
-
----
-
-## Fase 0 - Baseline e Metricas (prioridade critica) ✅ CONCLUÍDA
-
-### Meta
-
-Criar uma linha de base para comparar ganhos de desempenho e estabilidade.
+### Fase 0 - Baseline e Métricas (prioridade crítica) 🔄 EM ANDAMENTO
 
 ### Entregas
 
-- [x] Instrumentar metricas por backup:
-  - tempo total;
-  - tempo de backup bruto;
-  - tempo de `VERIFYONLY`;
-  - taxa MB/s media;
-  - tamanho final;
-  - tipo (`full`, `differential`, `log`);
-  - flags usadas (`checksum`, `copy_only`, etc.).
-- [x] Registrar motivo de falha normalizado (timeout, erro SQL, arquivo inexistente, arquivo zero bytes, verify fail).
-- [x] Criar relatorio simples em log consolidando p50/p95 por tipo de backup.
-
-### Criterio de aceite
-
-- [x] Cada execucao de backup gera metricas minimas para comparacao futura.
-- [x] E possivel identificar os 3 principais motivos de falha por periodo.
-
----
-
-## Fase 1 - Seguranca de credenciais e logs (prioridade critica) ✅ CONCLUÍDA
-
-### Meta
-
-Eliminar exposicao de senha e reduzir risco em auditoria/log.
-
-### Entregas
-
-- [x] Remover `-P <senha>` da linha de comando do `sqlcmd`.
-- [x] Passar senha via variavel de ambiente `SQLCMDPASSWORD`.
-- [x] Implementar redacao de argumentos sensiveis no `ProcessService` ao logar comando.
-- [x] Revisar logs para nao imprimir credenciais em mensagens de erro.
-
-### Criterio de aceite
-
-- [x] Nenhum log contem senha em texto plano.
-- [x] Fluxo com autenticacao SQL Server continua funcional.
-- [x] Fluxo com autenticacao Windows (`-E`) permanece funcional.
-
-### Risco e mitigacao
-
-- Risco: quebra de autenticacao em ambientes especificos.
-  - Mitigacao: teste de regressao com SQL Auth e Windows Auth antes de merge.
-
----
-
-## Fase 2 - Confiabilidade do resultado (prioridade critica) ✅ CONCLUÍDA
-
-### Meta
-
-Reduzir "backup com sucesso" quando a validacao real deveria reprovar.
-
-### Entregas
-
-- [x] Adicionar politica de verificacao:
-  - `best_effort` (comportamento atual);
-  - `strict` (falha o job se `VERIFYONLY` falhar);
-  - `none` (sem verify).
-- [x] Expor politica no `ScheduleDialog`.
-- [ ] Tornar `STOP_ON_ERROR` explicito no SQL para documentar intencao (apesar de default).
-- [ ] Adicionar pre-check para backup de log:
-  - validar recovery model (full/bulk_logged);
-  - validar existencia de full backup base quando aplicavel.
-- [x] Escapar nome de banco para identificador SQL (`]` -> `]]`).
-
-### Criterio de aceite
-
-- [x] Em modo `strict`, falha de verify marca backup como erro.
-- [x] Backup de log invalido falha com mensagem clara antes de executar `BACKUP LOG`.
-- [x] Nao ha regressao nos modos `full` e `differential`.
-- [x] Escapamento de nome de banco implementado (`]` → `]]`) para SQL injection.
-
----
-
-## Status Atual (2026-02-21)
-
-### Concluídas ✅
-- Fase 0 (Baseline e Métricas)
-- Fase 1 (Segurança de Credenciais)
-- Fase 2 (Confiabilidade) - Exceção: pre-checks para backup de log (escapamento de nome do banco)
-- Fase 3 (Performance de backup) - **COMPLETA**: Entidade SqlServerBackupOptions criada, entidade SqlServerBackupSchedule criada, interface ISqlServerBackupService atualizada, use case ExecuteSqlServerBackup atualizado, serviço SqlServerBackupService atualizado com validação e geração de cláusula SQL, UI de opções avançadas adicionada no ScheduleDialog, método _save() atualizado para persistir SqlServerBackupSchedule, BackupOrchestratorService atualizado para extrair e passar sqlServerBackupOptions ao executar backup
-
-### Pendente
-- Com tuning habilitado, validar que metricas de Fase 0 mostram ganho em cenarios I/O-bound (requer teste real em produção)
-- Nenhuma tarefa crítica pendente
-
----
-
-## Fase 3 - Performance de backup (prioridade alta)
-
-### Meta
-
-Permitir tuning controlado de throughput.
-
-### Entregas
-
-- [x] Adicionar opcoes avancadas por agendamento:
-  - `compression` (on/off);
-  - `maxTransferSize` (multiplo de 64KB);
-  - `bufferCount` (com validacao para evitar OOM);
-  - `blockSize` (opcional, uso avancado);
-  - `statsPercent` configuravel.
-- [x] Adicionar validacoes e guard rails:
-  - limites min/max seguros;
-  - mensagens explicitas quando configuracao for arriscada.
-- [x] Implementar fallback automatico para valores padrao quando tuning for invalido.
-
-### Criterio de aceite
-
-- [x] Opcoes avancadas sao opcionais e nao quebram config existente.
-- [ ] Com tuning habilitado, metricas de Fase 0 mostram ganho em cenarios I/O-bound (requer teste real em produção).
-
-### Risco e mitigacao
-
-- Risco: combinacao ruim de `BUFFERCOUNT` e `MAXTRANSFERSIZE` causar consumo excessivo de memoria.
-  - Mitigacao: limite conservador por default + validacao forte na UI.
-
----
-
-## Fase 4 - Paralelismo de dispositivos e resiliencia de midia (prioridade alta)
-
-### Meta
-
-Aumentar throughput e disponibilidade de midia.
-
-### Entregas
-
-- [ ] Suportar backup striping (`TO DISK = ..., DISK = ...`) com 2-4 arquivos.
-- [ ] Definir estrategia de nomenclatura para stripes (`_part01`, `_part02`, ...).
-- [ ] Suportar restore verify em conjuntos multi-arquivo.
-- [ ] (Opcional enterprise) Planejar suporte futuro a mirrored media sets.
-
-### Criterio de aceite
-
-- [ ] Backup em multiplos arquivos funciona em full/differential/log.
-- [ ] Verificacao e validacao de arquivos consideram todos os stripes.
-
----
-
-## Fase 5 - UX e autenticacao (prioridade media)
-
-### Meta
-
-Alinhar UI com capacidades reais do backend.
-
-### Entregas
-
-- [ ] Adicionar seletor de autenticacao no dialog:
-  - SQL Server Auth;
-  - Windows Auth.
-- [ ] Em Windows Auth, remover obrigatoriedade de usuario/senha.
-- [ ] Ajustar fluxo de teste de conexao/listagem de bancos para ambos os modos.
-
-### Criterio de aceite
-
-- [ ] Usuario consegue salvar e testar conexao com `-E` sem hacks.
-- [ ] Mensagens de validacao ficam coerentes com o modo escolhido.
-
----
-
-## Fase 6 - Controle operacional (prioridade media)
-
-### Meta
-
-Melhorar governanca de execucao e previsibilidade.
-
-### Entregas
-
-- [ ] Tornar timeout de backup/verify configuravel por agendamento ou perfil.
-- [ ] Implementar cancelamento efetivo do processo em execucao (nao apenas cooperativo).
-- [ ] Adicionar preflight de armazenamento:
-  - teste de permissao de escrita;
-  - validacao de espaco livre minimo.
-
-### Criterio de aceite
-
-- [ ] Cancelar backup interrompe processo de fato.
-- [ ] Timeouts podem ser ajustados sem alterar codigo.
-
----
-
-## Fase 7 - Criptografia de backup (prioridade media)
-
-### Meta
-
-Elevar protecao de dados em repouso no arquivo de backup.
-
-### Entregas
-
-- [ ] Adicionar suporte opcional a `WITH ENCRYPTION`.
-- [ ] Definir modelo de chave/certificado suportado.
-- [ ] Criar validacao e mensagem de erro quando certificado/chave nao estiver disponivel.
-- [ ] Documentar runbook de backup/restore de certificados.
-
-### Criterio de aceite
-
-- [ ] Backup criptografado e restauravel em ambiente que possua o certificado/chave.
-- [ ] Falhas de configuracao retornam erro acionavel (sem erro generico).
-
----
-
-## Fase 8 - Testes e gate de qualidade (prioridade critica)
-
-### Meta
-
-Fechar riscos de regressao com cobertura automatizada.
-
-### Entregas
-
-- [ ] Testes unitarios `SqlServerBackupService`:
-  - parsing de erro (`Msg/Level`, `sqlcmd: error`);
-  - modo verify `best_effort` vs `strict`;
-  - `truncateLog` com e sem `COPY_ONLY`;
-  - geracao de SQL com opcoes avancadas;
-  - validacao de arquivo nao criado / zero bytes.
-- [ ] Testes de seguranca:
-  - assert de redacao de senha em logs;
-  - assert de uso de `SQLCMDPASSWORD`.
-- [ ] Testes de UI:
-  - alternancia SQL Auth / Windows Auth;
-  - validacoes coerentes por modo.
-
-### Criterio de aceite
-
-- [ ] Cobertura minima definida para modulo SQL Server.
-- [ ] Sem regressao de comportamento atual nos cenarios legados.
-
----
-
-## Ordem recomendada de execucao
-
-1. Fase 0
-2. Fase 1
-3. Fase 2
-4. Fase 8 (parcial, junto com Fases 1 e 2)
-5. Fase 3
-6. Fase 4
-7. Fase 5
-8. Fase 6
-9. Fase 7
-10. Fase 8 (gate final completo)
-
----
-
-## Roadmap sugerido (sprints)
-
-### Sprint 1 (seguranca + confiabilidade minima)
-
-- Fase 0
-- Fase 1
-- Fase 2 (sem UI avancada)
-- Fase 8 parcial
-
-### Sprint 2 (performance)
-
-- Fase 3
-- Fase 4 (striping baseline)
-- Fase 8 parcial
-
-### Sprint 3 (operacao + UX + criptografia)
-
-- Fase 5
-- Fase 6
-- Fase 7
-- Fase 8 final
-
----
-
-## Dependencias externas e observacoes
-
-- Alguns recursos (ex: mirrored media sets) dependem de edicao/licenciamento do SQL Server.
-- Opcoes de tuning (`BUFFERCOUNT`, `MAXTRANSFERSIZE`) exigem validacao conservadora para evitar OOM.
-- Criptografia requer governanca de certificados/chaves fora do aplicativo.
-
----
-
-## Referencias oficiais usadas para este plano
-
-- BACKUP (T-SQL): https://learn.microsoft.com/en-us/sql/t-sql/statements/backup-transact-sql?view=sql-server-ver17
-- sqlcmd utility: https://learn.microsoft.com/en-us/sql/tools/sqlcmd/sqlcmd-utility?view=sql-server-ver17
-- RESTORE VERIFYONLY: https://learn.microsoft.com/en-us/sql/t-sql/statements/restore-statements-verifyonly-transact-sql?view=sql-server-ver17
-- Backup compression: https://learn.microsoft.com/en-us/sql/relational-databases/backup-restore/backup-compression-sql-server?view=sql-server-ver17
-- Copy-only backups: https://learn.microsoft.com/en-us/sql/relational-databases/backup-restore/copy-only-backups-sql-server?view=sql-server-ver17
-- Backup encryption: https://learn.microsoft.com/en-us/sql/relational-databases/backup-restore/backup-encryption?view=sql-server-ver17
-- Backup devices: https://learn.microsoft.com/en-us/sql/relational-databases/backup-restore/backup-devices-sql-server?view=sql-server-ver17
-- Possiveis erros de midia/checksum: https://learn.microsoft.com/en-us/sql/relational-databases/backup-restore/possible-media-errors-during-backup-and-restore-sql-server?view=sql-server-ver17
-
+- [x] Cada execução de backup gera métricas minimas para comparação futura (historico com duracao/tamanho/tipo e flags).
+- [x] BackupMetrics entity criada.
+- [x] BackupFlags entity criada.
+- [x] BackupHistory entity atualizada com campo metrics opcional.
+- [x] BackupHistoryTable atualizada com coluna metrics.
+- [x] IMetricsAnalysisService interface criada.
+- [x] MetricsAnalysisService implementado e registrado no DI.
+- [x] Lint zerado para os novos componentes de métricas.
+- [ ] SqlServerBackupService atualizado para registrar métricas.
+- [ ] Sybase/Postgres services atualizados para registrar métricas.
+
+### Observações
+
+O MetricsAnalysisService foi criado e está funcional. Ele gera relatórios de métricas por tipo de backup, permitindo análise de performance p50/p95. O próximo passo é integrar a coleta de métricas nos serviços de backup (SqlServer, Sybase, Postgres).
+
+### Próximos passos
+
+1. Integrar coleta de métricas no SqlServerBackupService (track backup/verify durations, criar BackupMetrics).
+2. Integrar métricas no BackupExecutionResult.
+3. Atualizar Sybase/Postgres backup services para consistência.
+4. Implementar relatórios p50/p95 no MetricsAnalysisService.
+
+## Status Atual (revalidado no código em 2026-02-21)
+
+### Concluidas
+
+- Fase 1 (Seguranca de credenciais e logs).
+- Fase 2 (Confiabilidade do resultado - STOP_ON_ERROR explicito no SQL).
+- Fase 3 (Performance de backup com opcoes avancadas).
+- Fase 4 (Paralelismo de dispositivos - striping com SQL multi-disk, naming `_partNN`, verify multi-arquivo).
+- Fase 5 (UX e autenticacao) no fluxo principal SQL Server.
+- Fase 6 - Cancelamento efetivo de processos (ProcessService.cancelByTag implementado).
+- Fase 6 (Controle operacional parcial):
+  - Validação de armazenamento (espaço livre e permissão de escrita).
+  - Fase 8 - Lint zerado, ProcessService com suporte a tag/cancelByTag.
+
+### Em andamento
+
+- Fase 0 (Métricas e baseline) - Infraestrutura de métricas criada, integração com serviços de backup pendente.
+
+### Pendentes
+
+- Fase 0 (Métricas e baseline) - integração de serviços de backup:
+  - Modificar SqlServerBackupService para registrar métricas de forma consistente.
+  - Modificar SybaseBackupService para registrar métricas.
+  - Modificar PostgresBackupService para registrar métricas.
+  - Criar relatórios p50/p95 por tipo de backup no MetricsAnalysisService.
+- Fase 7 - Criptografia de backup (não iniciada).
+- Fase 8 - Testes unitários pendentes (parcial).

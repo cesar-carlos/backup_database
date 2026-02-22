@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -24,6 +24,8 @@ class SybaseBackupService implements ISybaseBackupService {
     String? dbbackupPath,
     bool truncateLog = true,
     bool verifyAfterBackup = false,
+    Duration? backupTimeout,
+    Duration? verifyTimeout,
   }) async {
     try {
       LoggerService.info(
@@ -58,7 +60,8 @@ class SybaseBackupService implements ISybaseBackupService {
         // diretório destino. Criamos uma pasta única por execução para evitar
         // sobrescrita e facilitar a descoberta do arquivo gerado (quando existir).
         final folderName =
-            customFileName ?? '${config.databaseNameValue}_${typeSlug}_$timestamp';
+            customFileName ??
+            '${config.databaseNameValue}_${typeSlug}_$timestamp';
         backupPath = p.join(outputDirectory, folderName);
       }
 
@@ -112,6 +115,15 @@ class SybaseBackupService implements ISybaseBackupService {
             );
             backupSql =
                 "BACKUP DATABASE DIRECTORY '$escapedBackupPath' TRANSACTION LOG ONLY";
+          case BackupType.convertedDifferential:
+          case BackupType.convertedFullSingle:
+          case BackupType.convertedLog:
+            return const rd.Failure(
+              BackupFailure(
+                message: 'Sybase SQL Anywhere não suporta tipos convertidos. '
+                      'Use o tipo de backup nativo correspondente.',
+              ),
+            );
         }
 
         final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];

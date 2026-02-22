@@ -91,11 +91,13 @@ class BackupOrchestratorService {
         ? BackupType.full
         : schedule.backupType;
 
-    final typeFolderName = backupType.displayName;
+    final typeFolderName = getBackupTypeDisplayName(backupType);
     final typeOutputDirectory = p.join(outputDirectory, typeFolderName);
 
     // Validate output directory
-    final validationResult = await _validateBackupDirectory(typeOutputDirectory);
+    final validationResult = await _validateBackupDirectory(
+      typeOutputDirectory,
+    );
     if (validationResult.isError()) {
       final failure = validationResult.exceptionOrNull()!;
       LoggerService.error('Directory validation failed', failure);
@@ -104,7 +106,7 @@ class BackupOrchestratorService {
 
     LoggerService.info(
       'Diretório de backup por tipo: $typeOutputDirectory '
-      '(Tipo: ${backupType.displayName})',
+      '(Tipo: ${getBackupTypeDisplayName(backupType)})',
     );
 
     var history = BackupHistory(
@@ -138,7 +140,8 @@ class BackupOrchestratorService {
 
       if (configResult.isError()) {
         final failure = configResult.exceptionOrNull();
-        final errorMessage = 'DatabaseType: ${schedule.databaseType}, '
+        final errorMessage =
+            'DatabaseType: ${schedule.databaseType}, '
             'ConfigId: ${schedule.databaseConfigId}';
         LoggerService.error(
           'Failed to get database configuration: $errorMessage',
@@ -146,7 +149,8 @@ class BackupOrchestratorService {
         );
         return rd.Failure(
           ConfigNotFoundFailure(
-            message: 'Configuration not found for ${schedule.databaseType.name} '
+            message:
+                'Configuration not found for ${schedule.databaseType.name} '
                 '(id: ${schedule.databaseConfigId})',
             originalError: failure,
           ),
@@ -157,7 +161,7 @@ class BackupOrchestratorService {
       if (schedule.databaseType == DatabaseType.sqlServer) {
         final config = configResult.getOrNull()! as SqlServerConfig;
         final backupOptions = schedule is SqlServerBackupSchedule
-            ? (schedule as SqlServerBackupSchedule).sqlServerBackupOptions
+            ? schedule.sqlServerBackupOptions
             : null;
         final backupResult = await _sqlServerBackupService.executeBackup(
           config: config,
@@ -236,7 +240,7 @@ class BackupOrchestratorService {
 
         final compressionResult = await _compressionOrchestrator.compressBackup(
           backupPath: backupPath,
-          format: schedule.compressionFormat,
+          format: schedule.compressionFormat ?? CompressionFormat.none,
           databaseType: schedule.databaseType,
           backupType: backupType,
           progressNotifier: _progressNotifier,

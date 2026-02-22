@@ -52,6 +52,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   final _portController = TextEditingController(text: '1433');
 
   DatabaseType _selectedType = DatabaseType.sqlServer;
+  bool _useWindowsAuth = false;
   bool _isEnabled = true;
   bool _isTestingConnection = false;
   bool _isLoadingDatabases = false;
@@ -104,6 +105,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       _passwordController.text = widget.config!.password;
       _portController.text = widget.config!.portValue.toString();
       _isEnabled = widget.config!.enabled;
+      _useWindowsAuth = widget.config!.useWindowsAuth;
       _selectedDatabase = widget.config!.databaseValue;
 
       if (_selectedType == DatabaseType.sybase) {
@@ -240,6 +242,30 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 else if (_selectedType == DatabaseType.postgresql)
                   _buildPostgresFields(context),
 
+                if (_selectedType == DatabaseType.sqlServer) ...[
+                  const SizedBox(height: 16),
+                  InfoLabel(
+                    label: _t('Tipo de autenticação', 'Authentication type'),
+                    child: ToggleSwitch(
+                      checked: _useWindowsAuth,
+                      onChanged: (value) {
+                        setState(() {
+                          _useWindowsAuth = value;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _t(
+                      'Windows Authentication usa credenciais do Windows (integrated security)',
+                      'Windows Auth uses Windows credentials (integrated security)',
+                    ),
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 const SizedBox(height: 16),
 
                 AppTextField(
@@ -252,6 +278,10 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                       : 'DBA ou usuário do Sybase',
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
+                      if (_selectedType == DatabaseType.sqlServer &&
+                          _useWindowsAuth) {
+                        return null;
+                      }
                       return _t(
                         'Usuario e obrigatorio',
                         'Username is required',
@@ -259,6 +289,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                     }
                     return null;
                   },
+                  enabled:
+                      _selectedType != DatabaseType.sqlServer ||
+                      !_useWindowsAuth,
                   prefixIcon: const Icon(FluentIcons.contact),
                 ),
                 const SizedBox(height: 16),
@@ -266,6 +299,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 PasswordField(
                   controller: _passwordController,
                   hint: _t('Senha do usuario', 'User password'),
+                  enabled:
+                      _selectedType != DatabaseType.sqlServer ||
+                      !_useWindowsAuth,
                 ),
                 const SizedBox(height: 24),
 
@@ -945,8 +981,8 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
     if (_serverController.text.trim().isEmpty ||
         _portController.text.trim().isEmpty ||
-        _usernameController.text.trim().isEmpty ||
-        _passwordController.text.isEmpty) {
+        (!_useWindowsAuth && _usernameController.text.trim().isEmpty) ||
+        (!_useWindowsAuth && _passwordController.text.isEmpty)) {
       MessageModal.showWarning(
         context,
         message: _t(
@@ -977,6 +1013,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         database: DatabaseName('master'),
         username: _usernameController.text.trim(),
         password: _passwordController.text,
+        useWindowsAuth: _useWindowsAuth,
       );
 
       final connectionResult = await _backupService.testConnection(tempConfig);
@@ -1148,6 +1185,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         password: _passwordController.text,
         port: PortNumber(port),
         enabled: _isEnabled,
+        useWindowsAuth: _useWindowsAuth,
         createdAt: widget.config?.createdAt,
         updatedAt: widget.config?.updatedAt,
       );

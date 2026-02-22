@@ -21,7 +21,9 @@ class ValidateBackupDirectory {
   Future<Result<void>> call(String path) async {
     if (path.isEmpty) {
       return const Failure(
-        core_errors.ValidationFailure(message: 'Directory path cannot be empty'),
+        core_errors.ValidationFailure(
+          message: 'Directory path cannot be empty',
+        ),
       );
     }
 

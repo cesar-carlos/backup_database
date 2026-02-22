@@ -252,7 +252,6 @@ bool isBackupCompleteMessage(Message message) =>
 bool isBackupFailedMessage(Message message) =>
     message.header.type == MessageType.backupFailed;
 
-
 // ============================================================================
 // CANCEL SCHEDULE
 // ============================================================================

@@ -7,6 +7,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/entities/disk_space_info.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
@@ -17,9 +18,13 @@ import 'package:backup_database/domain/services/i_backup_progress_notifier.dart'
 import 'package:backup_database/domain/services/i_destination_orchestrator.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/domain/services/i_schedule_calculator.dart';
+import 'package:backup_database/domain/services/i_storage_checker.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:result_dart/result_dart.dart' as rd;
+
+class _MockStorageChecker extends Mock implements IStorageChecker {}
 
 class _MockScheduleRepository extends Mock implements IScheduleRepository {}
 
@@ -46,6 +51,8 @@ class _MockScheduleCalculator extends Mock implements IScheduleCalculator {}
 class _MockBackupProgressNotifier extends Mock
     implements IBackupProgressNotifier {}
 
+class _MockProcessService extends Mock implements ProcessService {}
+
 void main() {
   late _MockScheduleRepository scheduleRepository;
   late _MockDestinationRepository destinationRepository;
@@ -57,6 +64,8 @@ void main() {
   late _MockNotificationService notificationService;
   late _MockScheduleCalculator scheduleCalculator;
   late _MockBackupProgressNotifier progressNotifier;
+  late _MockStorageChecker storageChecker;
+  late _MockProcessService processService;
   late SchedulerService service;
   late Directory tempDir;
 
@@ -69,7 +78,7 @@ void main() {
         name: 'Fallback',
         databaseConfigId: 'db-fallback',
         databaseType: DatabaseType.sqlServer,
-        scheduleType: ScheduleType.daily,
+        scheduleType: ScheduleType.daily.name,
         scheduleConfig: '{"hour": 0, "minute": 0}',
         destinationIds: const [],
         backupFolder: r'C:\temp',
@@ -111,7 +120,7 @@ void main() {
       name: 'Backup Diario',
       databaseConfigId: 'db-1',
       databaseType: DatabaseType.sqlServer,
-      scheduleType: ScheduleType.daily,
+      scheduleType: ScheduleType.daily.name,
       scheduleConfig: '{"hour": 0, "minute": 0}',
       destinationIds: const [],
       backupFolder: tempDir.path,
@@ -144,6 +153,22 @@ void main() {
     notificationService = _MockNotificationService();
     scheduleCalculator = _MockScheduleCalculator();
     progressNotifier = _MockBackupProgressNotifier();
+    storageChecker = _MockStorageChecker();
+    processService = _MockProcessService();
+
+    when(
+      () => storageChecker.checkSpace(any()),
+    ).thenAnswer(
+      (_) async => const rd.Success(
+        DiskSpaceInfo(
+          totalBytes: 10 * 1024 * 1024 * 1024,
+          freeBytes: 5 * 1024 * 1024 * 1024,
+          usedBytes: 5 * 1024 * 1024 * 1024,
+          usedPercentage: 50,
+        ),
+      ),
+    );
+    when(() => processService.cancelByTag(any())).thenReturn(null);
 
     service = SchedulerService(
       scheduleRepository: scheduleRepository,
@@ -156,6 +181,7 @@ void main() {
       notificationService: notificationService,
       scheduleCalculator: scheduleCalculator,
       progressNotifier: progressNotifier,
+      storageChecker: storageChecker,
     );
   });
 
@@ -223,6 +249,7 @@ void main() {
 
         final cancelResult = await service.cancelExecution(scheduleId);
         expect(cancelResult.isSuccess(), isTrue);
+        verify(() => processService.cancelByTag(scheduleId)).called(1);
 
         backupCompleter.complete(rd.Success(history));
         final executionResult = await execution;
@@ -246,6 +273,43 @@ void main() {
         contains('Nao ha backup em execucao'),
       );
     });
+
+    test(
+      'executeNow falha quando espaco livre minimo nao e atendido',
+      () async {
+        final schedule = buildSchedule();
+
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () => storageChecker.checkSpace(any()),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            DiskSpaceInfo(
+              totalBytes: 10 * 1024 * 1024 * 1024,
+              freeBytes: 100 * 1024 * 1024,
+              usedBytes: 9900 * 1024 * 1024,
+              usedPercentage: 99,
+            ),
+          ),
+        );
+
+        final result = await service.executeNow(scheduleId);
+
+        expect(result.isError(), isTrue);
+        expect(
+          result.exceptionOrNull().toString(),
+          contains('Espaco livre insuficiente na pasta de backup'),
+        );
+        verifyNever(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+          ),
+        );
+      },
+    );
   });
 
   group('SchedulerService notifications', () {
@@ -294,7 +358,9 @@ void main() {
         final result = await service.executeNow(scheduleId);
 
         expect(result.isSuccess(), isTrue);
-        verify(() => notificationService.notifyBackupComplete(history)).called(1);
+        verify(
+          () => notificationService.notifyBackupComplete(history),
+        ).called(1);
       },
     );
 

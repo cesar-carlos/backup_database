@@ -11,6 +11,8 @@ abstract class IPostgresBackupService {
     String? customFileName,
     bool verifyAfterBackup,
     String? pgBasebackupPath,
+    Duration? backupTimeout,
+    Duration? verifyTimeout,
   });
 
   Future<Result<bool>> testConnection(PostgresConfig config);

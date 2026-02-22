@@ -28,6 +28,8 @@ class PostgresBackupService implements IPostgresBackupService {
     String? customFileName,
     bool verifyAfterBackup = false,
     String? pgBasebackupPath,
+    Duration? backupTimeout,
+    Duration? verifyTimeout,
   }) async {
     LoggerService.info(
       'Iniciando backup PostgreSQL: ${config.databaseValue} (Tipo: ${backupType.displayName})',
@@ -238,6 +240,16 @@ class PostgresBackupService implements IPostgresBackupService {
         return _executeLogBackup(
           config: config,
           backupPath: backupPath,
+        );
+
+      case BackupType.convertedDifferential:
+      case BackupType.convertedFullSingle:
+      case BackupType.convertedLog:
+        return const rd.Failure(
+          BackupFailure(
+            message: 'PostgreSQL não suporta tipos convertidos de backup do Sybase. '
+                'Use um tipo de backup nativo do PostgreSQL.',
+          ),
         );
     }
   }

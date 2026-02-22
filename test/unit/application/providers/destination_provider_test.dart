@@ -30,7 +30,7 @@ void main() {
     name: 'Backup Diario',
     databaseConfigId: 'db-1',
     databaseType: DatabaseType.sqlServer,
-    scheduleType: ScheduleType.daily,
+    scheduleType: ScheduleType.daily.name,
     scheduleConfig: '{}',
     destinationIds: const [destinationId],
     backupFolder: r'C:\backup',
@@ -57,7 +57,9 @@ void main() {
 
       expect(result, isFalse);
       expect(provider.error, contains('agendamentos vinculados'));
-      verify(() => scheduleRepository.getByDestinationId(destinationId)).called(1);
+      verify(
+        () => scheduleRepository.getByDestinationId(destinationId),
+      ).called(1);
       verifyNever(() => destinationRepository.delete(any()));
     });
 
@@ -74,7 +76,9 @@ void main() {
 
       expect(result, isFalse);
       expect(provider.error, contains('Nao foi possivel validar dependencias'));
-      verify(() => scheduleRepository.getByDestinationId(destinationId)).called(1);
+      verify(
+        () => scheduleRepository.getByDestinationId(destinationId),
+      ).called(1);
       verifyNever(() => destinationRepository.delete(any()));
     });
 
@@ -91,7 +95,9 @@ void main() {
       expect(result, isTrue);
       expect(provider.error, isNull);
       expect(provider.destinations, isEmpty);
-      verify(() => scheduleRepository.getByDestinationId(destinationId)).called(1);
+      verify(
+        () => scheduleRepository.getByDestinationId(destinationId),
+      ).called(1);
       verify(() => destinationRepository.delete(destinationId)).called(1);
     });
   });

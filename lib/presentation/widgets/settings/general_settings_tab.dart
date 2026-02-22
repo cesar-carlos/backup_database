@@ -29,8 +29,8 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
   final TempDirectoryService _tempService = getIt<TempDirectoryService>();
 
   String _t(String pt, String en) {
-    final isPt = Localizations.localeOf(context).languageCode.toLowerCase() ==
-        'pt';
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
     return isPt ? pt : en;
   }
 
@@ -236,8 +236,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                     subtitle: _isLoadingTempPath
                         ? Text(_t('Carregando...', 'Loading...'))
                         : Text(
-                            _tempDownloadsPath ??
-                                _t('Desconhecida', 'Unknown'),
+                            _tempDownloadsPath ?? _t('Desconhecida', 'Unknown'),
                           ),
                     trailing: _isLoadingTempPath
                         ? const SizedBox(

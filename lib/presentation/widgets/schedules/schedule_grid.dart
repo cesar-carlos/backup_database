@@ -44,8 +44,12 @@ class ScheduleGrid extends StatelessWidget {
             label: 'Tipo',
             width: const FlexColumnWidth(1.2),
             cellBuilder: (context, row) => _TagChip(
-              label: texts.scheduleTypeName(row.scheduleType),
-              color: _getScheduleTypeColor(row.scheduleType),
+              label: texts.scheduleTypeName(
+                scheduleTypeFromString(row.scheduleType),
+              ),
+              color: _getScheduleTypeColor(
+                scheduleTypeFromString(row.scheduleType),
+              ),
             ),
           ),
           AppDataGridColumn<Schedule>(

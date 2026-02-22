@@ -15,6 +15,7 @@ import 'package:backup_database/domain/services/i_destination_orchestrator.dart'
 import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
+import 'package:backup_database/domain/services/i_storage_checker.dart';
 import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -29,6 +30,7 @@ class SchedulerService implements ISchedulerService {
     required IBackupCleanupService cleanupService,
     required INotificationService notificationService,
     required IScheduleCalculator scheduleCalculator,
+    required IStorageChecker storageChecker,
     required IBackupProgressNotifier progressNotifier,
     ITransferStagingService? transferStagingService,
   }) : _scheduleRepository = scheduleRepository,
@@ -40,6 +42,7 @@ class SchedulerService implements ISchedulerService {
        _cleanupService = cleanupService,
        _notificationService = notificationService,
        _scheduleCalculator = scheduleCalculator,
+       _storageChecker = storageChecker,
        _progressNotifier = progressNotifier,
        _transferStagingService = transferStagingService;
 
@@ -52,6 +55,7 @@ class SchedulerService implements ISchedulerService {
   final IBackupCleanupService _cleanupService;
   final INotificationService _notificationService;
   final IScheduleCalculator _scheduleCalculator;
+  final IStorageChecker _storageChecker;
   final IBackupProgressNotifier _progressNotifier;
   final ITransferStagingService? _transferStagingService;
 
@@ -197,6 +201,11 @@ class SchedulerService implements ISchedulerService {
             '${schedule.backupFolder}';
         LoggerService.error(errorMessage);
         return rd.Failure(ValidationFailure(message: errorMessage));
+      }
+
+      final spaceCheckResult = await _checkFreeSpace(backupDir, schedule);
+      if (spaceCheckResult.isError()) {
+        return spaceCheckResult;
       }
 
       final outputDirectory = backupDir.path;
@@ -579,7 +588,9 @@ class SchedulerService implements ISchedulerService {
         status: BackupStatus.warning,
         errorMessage: message,
         finishedAt: finishedAt,
-        durationSeconds: finishedAt.difference(backupHistory.startedAt).inSeconds,
+        durationSeconds: finishedAt
+            .difference(backupHistory.startedAt)
+            .inSeconds,
       );
       await _backupHistoryRepository.update(canceledHistory);
     }
@@ -630,7 +641,9 @@ class SchedulerService implements ISchedulerService {
 
     if (!_executingSchedules.contains(scheduleId)) {
       return const rd.Failure(
-        ValidationFailure(message: 'Nao ha backup em execucao para este schedule'),
+        ValidationFailure(
+          message: 'Nao ha backup em execucao para este schedule',
+        ),
       );
     }
 
@@ -678,6 +691,41 @@ class SchedulerService implements ISchedulerService {
       );
       return false;
     }
+  }
+
+  Future<rd.Result<void>> _checkFreeSpace(
+    Directory directory,
+    Schedule schedule,
+  ) async {
+    const defaultMinFreeBytes = 5 * 1024 * 1024;
+
+    final result = await _storageChecker.checkSpace(directory.path);
+
+    return result.fold(
+      (spaceInfo) {
+        if (!spaceInfo.hasEnoughSpace(defaultMinFreeBytes)) {
+          final errorMessage =
+              'Espaço livre insuficiente na pasta de backup. '
+              'Disponível: ${_formatBytes(spaceInfo.freeBytes)}, '
+              'Mínimo necessário: ${_formatBytes(defaultMinFreeBytes)}';
+          LoggerService.error(errorMessage);
+          return rd.Failure(ValidationFailure(message: errorMessage));
+        }
+
+        LoggerService.info(
+          'Verificação de espaço livre concluída: '
+          '${_formatBytes(spaceInfo.freeBytes)} livres',
+        );
+        return const rd.Success(rd.unit);
+      },
+      rd.Failure.new,
+    );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
   Future<void> _log(String historyId, String levelStr, String message) async {

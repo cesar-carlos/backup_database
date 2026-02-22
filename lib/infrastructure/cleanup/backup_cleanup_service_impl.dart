@@ -16,8 +16,7 @@ import 'package:backup_database/domain/services/i_nextcloud_destination_service.
 import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-class BackupCleanupServiceImpl
-    implements IBackupCleanupService {
+class BackupCleanupServiceImpl implements IBackupCleanupService {
   const BackupCleanupServiceImpl({
     required ILocalDestinationService localDestinationService,
     required IFtpService ftpDestinationService,
@@ -81,8 +80,7 @@ class BackupCleanupServiceImpl
         return;
       }
 
-      final configJson =
-          jsonDecode(destination.config) as Map<String, dynamic>;
+      final configJson = jsonDecode(destination.config) as Map<String, dynamic>;
 
       switch (destination.type) {
         case DestinationType.local:
@@ -185,8 +183,9 @@ class BackupCleanupServiceImpl
       refreshToken: configJson['refreshToken'] as String? ?? '',
       retentionDays: configJson['retentionDays'] as int? ?? 30,
     );
-    final cleanResult = await _googleDriveDestinationService
-        .cleanOldBackups(config: config);
+    final cleanResult = await _googleDriveDestinationService.cleanOldBackups(
+      config: config,
+    );
     cleanResult.fold((_) {}, (exception) async {
       LoggerService.error(
         'Erro ao limpar backups Google Drive em ${destination.name}',
@@ -222,8 +221,9 @@ class BackupCleanupServiceImpl
       folderName: configJson['folderName'] as String? ?? 'Backups',
       retentionDays: configJson['retentionDays'] as int? ?? 30,
     );
-    final cleanResult = await _dropboxDestinationService
-        .cleanOldBackups(config: config);
+    final cleanResult = await _dropboxDestinationService.cleanOldBackups(
+      config: config,
+    );
     cleanResult.fold((_) {}, (exception) async {
       LoggerService.error(
         'Erro ao limpar backups Dropbox em ${destination.name}',
@@ -255,8 +255,9 @@ class BackupCleanupServiceImpl
     String backupHistoryId,
   ) async {
     final config = NextcloudDestinationConfig.fromJson(configJson);
-    final cleanResult = await _nextcloudDestinationService
-        .cleanOldBackups(config: config);
+    final cleanResult = await _nextcloudDestinationService.cleanOldBackups(
+      config: config,
+    );
     cleanResult.fold((_) {}, (exception) async {
       LoggerService.error(
         'Erro ao limpar backups Nextcloud em ${destination.name}',

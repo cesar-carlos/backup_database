@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 
 class TransferStagingService implements ITransferStagingService {
   TransferStagingService({required String transferBasePath})
-      : _transferBasePath = p.normalize(p.absolute(transferBasePath));
+    : _transferBasePath = p.normalize(p.absolute(transferBasePath));
 
   final String _transferBasePath;
 
@@ -44,7 +44,9 @@ class TransferStagingService implements ITransferStagingService {
 
   @override
   Future<void> cleanupStaging(String scheduleId) async {
-    final scheduleDir = Directory(p.join(_transferBasePath, 'remote', scheduleId));
+    final scheduleDir = Directory(
+      p.join(_transferBasePath, 'remote', scheduleId),
+    );
     if (!await scheduleDir.exists()) {
       LoggerService.debug(
         'TransferStagingService: schedule directory not found for cleanup: $scheduleId',
@@ -67,7 +69,9 @@ class TransferStagingService implements ITransferStagingService {
   }
 
   @override
-  Future<void> cleanupOldBackups({Duration maxAge = const Duration(days: 7)}) async {
+  Future<void> cleanupOldBackups({
+    Duration maxAge = const Duration(days: 7),
+  }) async {
     final remoteDir = Directory(p.join(_transferBasePath, 'remote'));
     if (!await remoteDir.exists()) {
       LoggerService.debug(
@@ -81,8 +85,10 @@ class TransferStagingService implements ITransferStagingService {
       var deletedCount = 0;
       var totalSize = 0;
 
-      await for (final entity
-          in remoteDir.list(followLinks: false, recursive: true)) {
+      await for (final entity in remoteDir.list(
+        followLinks: false,
+        recursive: true,
+      )) {
         if (entity is File) {
           final stat = await entity.stat();
           final age = now.difference(stat.modified);

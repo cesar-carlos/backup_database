@@ -148,6 +148,7 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
       password: password,
       port: PortNumber(data.port),
       enabled: data.enabled,
+      useWindowsAuth: data.useWindowsAuth,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     );
@@ -163,6 +164,7 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
       password: const Value(''),
       port: Value(config.portValue),
       enabled: Value(config.enabled),
+      useWindowsAuth: Value(config.useWindowsAuth),
       createdAt: Value(config.createdAt),
       updatedAt: Value(config.updatedAt),
     );

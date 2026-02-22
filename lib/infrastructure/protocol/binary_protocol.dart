@@ -57,10 +57,10 @@ class BinaryProtocol {
     buffer.setUint8(offset, flag1);
     offset += 1;
     buffer.buffer.asUint8List().setRange(
-          _headerSize,
-          _headerSize + payloadLength,
-          payloadBytes,
-        );
+      _headerSize,
+      _headerSize + payloadLength,
+      payloadBytes,
+    );
     buffer.setUint32(_headerSize + payloadLength, checksum);
 
     return buffer.buffer.asUint8List();
@@ -154,9 +154,7 @@ class BinaryProtocol {
       final chunkIndex = payload['chunkIndex'];
       final dataSize = payload['data'] is String
           ? (payload['data'] as String).length
-          : (payload['data'] is List
-              ? (payload['data'] as List).length
-              : 0);
+          : (payload['data'] is List ? (payload['data'] as List).length : 0);
       LoggerService.info(
         '[BinaryProtocol] Chunk desserializado: index=$chunkIndex, dataSize=$dataSize, payloadLength=${payloadJson.length}',
       );

@@ -8,22 +8,27 @@ Map<String, dynamic> scheduleToMap(Schedule schedule) {
     'name': schedule.name,
     'databaseConfigId': schedule.databaseConfigId,
     'databaseType': schedule.databaseType.name,
-    'scheduleType': schedule.scheduleType.name,
+    'scheduleType': schedule.scheduleType,
     'scheduleConfig': schedule.scheduleConfig,
     'destinationIds': schedule.destinationIds,
     'backupFolder': schedule.backupFolder,
     'backupType': schedule.backupType.name,
     'truncateLog': schedule.truncateLog,
     'compressBackup': schedule.compressBackup,
-    'compressionFormat': schedule.compressionFormat.name,
+    'compressionFormat': schedule.compressionFormat?.name,
     'enabled': schedule.enabled,
     'enableChecksum': schedule.enableChecksum,
     'verifyAfterBackup': schedule.verifyAfterBackup,
-    if (schedule.postBackupScript != null) 'postBackupScript': schedule.postBackupScript,
-    if (schedule.lastRunAt != null) 'lastRunAt': schedule.lastRunAt!.toIso8601String(),
-    if (schedule.nextRunAt != null) 'nextRunAt': schedule.nextRunAt!.toIso8601String(),
-    'createdAt': schedule.createdAt.toIso8601String(),
-    'updatedAt': schedule.updatedAt.toIso8601String(),
+    if (schedule.postBackupScript != null)
+      'postBackupScript': schedule.postBackupScript,
+    if (schedule.lastRunAt != null)
+      'lastRunAt': schedule.lastRunAt!.toIso8601String(),
+    if (schedule.nextRunAt != null)
+      'nextRunAt': schedule.nextRunAt!.toIso8601String(),
+    if (schedule.createdAt != null)
+      'createdAt': schedule.createdAt!.toIso8601String(),
+    if (schedule.updatedAt != null)
+      'updatedAt': schedule.updatedAt!.toIso8601String(),
   };
 }
 
@@ -33,7 +38,7 @@ Schedule scheduleFromMap(Map<String, dynamic> map) {
     name: map['name'] as String,
     databaseConfigId: map['databaseConfigId'] as String,
     databaseType: DatabaseType.values.byName(map['databaseType'] as String),
-    scheduleType: ScheduleType.values.byName(map['scheduleType'] as String),
+    scheduleType: map['scheduleType'] as String,
     scheduleConfig: map['scheduleConfig'] as String,
     destinationIds: (map['destinationIds'] as List<dynamic>).cast<String>(),
     backupFolder: map['backupFolder'] as String,

@@ -96,7 +96,7 @@ class ScheduleCalculator implements IScheduleCalculator {
   DateTime? getNextRunTime(Schedule schedule, {DateTime? from}) {
     final now = from ?? DateTime.now();
 
-    switch (schedule.scheduleType) {
+    switch (scheduleTypeFromString(schedule.scheduleType)) {
       case ScheduleType.daily:
         return _getNextDailyRun(schedule.scheduleConfig, now);
       case ScheduleType.weekly:

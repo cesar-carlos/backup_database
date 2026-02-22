@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
@@ -395,8 +395,9 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
 
     final password = passwordResult.getOrElse((_) => '');
 
-    final effectiveDatabaseName =
-        databaseName.isNotEmpty ? databaseName : serverName;
+    final effectiveDatabaseName = databaseName.isNotEmpty
+        ? databaseName
+        : serverName;
 
     return SybaseConfig(
       id: id,

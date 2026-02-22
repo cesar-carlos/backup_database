@@ -650,7 +650,9 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         LoggerService.info('Nenhum destino vinculado, pulando upload');
 
         // Limpar arquivo temporário mesmo sem destinos vinculados
-        LoggerService.info('===== LIMPANDO ARQUIVO TEMPORÁRIO (sem destinos) =====');
+        LoggerService.info(
+          '===== LIMPANDO ARQUIVO TEMPORÁRIO (sem destinos) =====',
+        );
         try {
           final tempFile = File(outputFilePath);
           if (await tempFile.exists()) {

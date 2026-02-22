@@ -95,7 +95,7 @@ class DestinationDependencyDialog extends StatelessWidget {
                                 children: [
                                   _Tag(
                                     label: _getScheduleTypeLabel(
-                                      schedule.scheduleType,
+                                      scheduleTypeFromString(schedule.scheduleType),
                                       texts,
                                     ),
                                     color: AppColors.scheduleDaily,
@@ -124,8 +124,9 @@ class DestinationDependencyDialog extends StatelessWidget {
       ),
       actions: [
         CancelButton(
-          onPressed: () =>
-              Navigator.of(context).pop(DestinationDependencyDialogAction.close),
+          onPressed: () => Navigator.of(
+            context,
+          ).pop(DestinationDependencyDialogAction.close),
         ),
         ActionButton(
           label: texts.goToSchedules,

@@ -58,7 +58,9 @@ class ServerCredentialRepository implements IServerCredentialRepository {
   Future<rd.Result<ServerCredential>> save(ServerCredential credential) async {
     try {
       final data = _toData(credential);
-      await _database.serverCredentialDao.insertCredential(data.toCompanion(true));
+      await _database.serverCredentialDao.insertCredential(
+        data.toCompanion(true),
+      );
       return rd.Success(credential);
     } on Object catch (e) {
       return rd.Failure(
@@ -68,10 +70,14 @@ class ServerCredentialRepository implements IServerCredentialRepository {
   }
 
   @override
-  Future<rd.Result<ServerCredential>> update(ServerCredential credential) async {
+  Future<rd.Result<ServerCredential>> update(
+    ServerCredential credential,
+  ) async {
     try {
       final data = _toData(credential);
-      await _database.serverCredentialDao.updateCredential(data.toCompanion(true));
+      await _database.serverCredentialDao.updateCredential(
+        data.toCompanion(true),
+      );
       return rd.Success(credential);
     } on Object catch (e) {
       return rd.Failure(
@@ -119,8 +125,8 @@ class ServerCredentialRepository implements IServerCredentialRepository {
   @override
   Stream<List<ServerCredential>> watchAll() {
     return _database.serverCredentialDao.watchAll().map(
-          (list) => list.map(_toEntity).toList(),
-        );
+      (list) => list.map(_toEntity).toList(),
+    );
   }
 
   ServerCredential _toEntity(ServerCredentialsTableData data) {

@@ -12,8 +12,8 @@ class MessageHeader {
     this.requestId = 0,
     List<int>? flags,
     List<int>? reserved,
-  })  : flags = flags ?? List.filled(3, 0),
-        reserved = reserved ?? List.filled(7, 0);
+  }) : flags = flags ?? List.filled(3, 0),
+       reserved = reserved ?? List.filled(7, 0);
 
   final int magic;
   final int version;
@@ -24,14 +24,14 @@ class MessageHeader {
   final List<int> reserved;
 
   Map<String, dynamic> toJson() => {
-        'magic': magic,
-        'version': version,
-        'length': length,
-        'type': type.name,
-        'requestId': requestId,
-        'flags': flags,
-        'reserved': reserved,
-      };
+    'magic': magic,
+    'version': version,
+    'length': length,
+    'type': type.name,
+    'requestId': requestId,
+    'flags': flags,
+    'reserved': reserved,
+  };
 
   factory MessageHeader.fromJson(Map<String, dynamic> json) {
     return MessageHeader(
@@ -43,13 +43,11 @@ class MessageHeader {
         orElse: () => MessageType.error,
       ),
       requestId: json['requestId'] as int? ?? 0,
-      flags: (json['flags'] as List<dynamic>?)
-              ?.map((e) => e as int)
-              .toList() ??
+      flags:
+          (json['flags'] as List<dynamic>?)?.map((e) => e as int).toList() ??
           List.filled(3, 0),
-      reserved: (json['reserved'] as List<dynamic>?)
-              ?.map((e) => e as int)
-              .toList() ??
+      reserved:
+          (json['reserved'] as List<dynamic>?)?.map((e) => e as int).toList() ??
           List.filled(7, 0),
     );
   }
@@ -67,10 +65,10 @@ class Message {
   final int checksum;
 
   Map<String, dynamic> toJson() => {
-        'header': header.toJson(),
-        'payload': payload,
-        'checksum': checksum,
-      };
+    'header': header.toJson(),
+    'payload': payload,
+    'checksum': checksum,
+  };
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(

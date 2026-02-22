@@ -26,6 +26,10 @@ class SchedulesTable extends Table {
   TextColumn get postBackupScript => text().nullable()();
   DateTimeColumn get lastRunAt => dateTime().nullable()();
   DateTimeColumn get nextRunAt => dateTime().nullable()();
+  IntColumn get backupTimeoutSeconds =>
+      integer().withDefault(const Constant(7200))();
+  IntColumn get verifyTimeoutSeconds =>
+      integer().withDefault(const Constant(1800))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 

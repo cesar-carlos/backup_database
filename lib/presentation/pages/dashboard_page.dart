@@ -5,6 +5,7 @@ import 'package:backup_database/application/providers/server_connection_provider
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/dashboard/dashboard.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -318,7 +319,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   String _getScheduleDescription(Schedule schedule) {
-    switch (schedule.scheduleType) {
+    switch (scheduleTypeFromString(schedule.scheduleType)) {
       case ScheduleType.daily:
         final config = DailyScheduleConfig.fromJson(
           jsonDecode(schedule.scheduleConfig) as Map<String, dynamic>,

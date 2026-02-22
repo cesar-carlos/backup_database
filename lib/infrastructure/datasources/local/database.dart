@@ -59,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 24;
 
   @override
   MigrationStrategy get migration {
@@ -783,6 +783,73 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migracao v23 de OAuth SMTP',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 24) {
+          try {
+            final schedulesColumns = await customSelect(
+              'PRAGMA table_info(schedules_table)',
+            ).get();
+            final columnNames = schedulesColumns
+                .map((row) => row.data['name'] as String)
+                .toSet();
+
+            if (!columnNames.contains('backup_timeout_seconds')) {
+              await customStatement(
+                'ALTER TABLE schedules_table ADD COLUMN backup_timeout_seconds '
+                'INTEGER NOT NULL DEFAULT 7200',
+              );
+              LoggerService.info(
+                'Migração v24: Coluna backup_timeout_seconds adicionada à '
+                'schedules_table',
+              );
+            }
+
+            if (!columnNames.contains('verify_timeout_seconds')) {
+              await customStatement(
+                'ALTER TABLE schedules_table ADD COLUMN verify_timeout_seconds '
+                'INTEGER NOT NULL DEFAULT 1800',
+              );
+              LoggerService.info(
+                'Migração v24: Coluna verify_timeout_seconds adicionada à '
+                'schedules_table',
+              );
+            }
+
+            if (!columnNames.contains('created_at')) {
+              await customStatement(
+                'ALTER TABLE schedules_table ADD COLUMN created_at '
+                'INTEGER NOT NULL DEFAULT 0',
+              );
+              await customStatement(
+                'UPDATE schedules_table SET created_at = '
+                "strftime('%s', 'now') * 1000000 WHERE created_at = 0",
+              );
+              LoggerService.info(
+                'Migração v24: Coluna created_at adicionada à schedules_table',
+              );
+            }
+
+            if (!columnNames.contains('updated_at')) {
+              await customStatement(
+                'ALTER TABLE schedules_table ADD COLUMN updated_at '
+                'INTEGER NOT NULL DEFAULT 0',
+              );
+              await customStatement(
+                'UPDATE schedules_table SET updated_at = '
+                "strftime('%s', 'now') * 1000000 WHERE updated_at = 0",
+              );
+              LoggerService.info(
+                'Migração v24: Coluna updated_at adicionada à schedules_table',
+              );
+            }
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v24 para timeout e timestamp columns',
               e,
               stackTrace,
             );

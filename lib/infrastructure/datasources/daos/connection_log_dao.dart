@@ -18,12 +18,14 @@ class ConnectionLogDao extends DatabaseAccessor<AppDatabase>
     String? clientId,
   }) {
     final companion = ConnectionLogsTableCompanion.insert(
-      id: Uuid().v4(), // ignore: prefer_const_constructors - runtime id and timestamp
+      // ignore: prefer_const_constructors - Uuid generates runtime ID
+      id: Uuid().v4(),
       clientHost: clientHost,
       serverId: serverId != null ? Value(serverId) : const Value.absent(),
       success: success,
-      errorMessage:
-          errorMessage != null ? Value(errorMessage) : const Value.absent(),
+      errorMessage: errorMessage != null
+          ? Value(errorMessage)
+          : const Value.absent(),
       timestamp: DateTime.now(),
       clientId: clientId != null ? Value(clientId) : const Value.absent(),
     );
@@ -33,9 +35,9 @@ class ConnectionLogDao extends DatabaseAccessor<AppDatabase>
   Future<List<ConnectionLogsTableData>> getAll() =>
       select(connectionLogsTable).get();
 
-  Future<ConnectionLogsTableData?> getById(String id) =>
-      (select(connectionLogsTable)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+  Future<ConnectionLogsTableData?> getById(String id) => (select(
+    connectionLogsTable,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<int> insertLog(ConnectionLogsTableCompanion log) =>
       into(connectionLogsTable).insert(log);
@@ -46,16 +48,19 @@ class ConnectionLogDao extends DatabaseAccessor<AppDatabase>
   Future<List<ConnectionLogsTableData>> getSuccessfulConnections() =>
       (select(connectionLogsTable)..where((t) => t.success.equals(true))).get();
 
-  Future<List<ConnectionLogsTableData>> getFailedConnections() =>
-      (select(connectionLogsTable)..where((t) => t.success.equals(false))).get();
+  Future<List<ConnectionLogsTableData>> getFailedConnections() => (select(
+    connectionLogsTable,
+  )..where((t) => t.success.equals(false))).get();
 
   Future<List<ConnectionLogsTableData>> getRecentLogs(int limit) =>
       (select(connectionLogsTable)
-        ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
-        ..limit(limit)).get();
+            ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
+            ..limit(limit))
+          .get();
 
-  Future<int> deleteOldLogs(DateTime beforeDate) =>
-      (delete(connectionLogsTable)..where((t) => t.timestamp.isSmallerThanValue(beforeDate))).go();
+  Future<int> deleteOldLogs(DateTime beforeDate) => (delete(
+    connectionLogsTable,
+  )..where((t) => t.timestamp.isSmallerThanValue(beforeDate))).go();
 
   Stream<List<ConnectionLogsTableData>> watchAll() =>
       select(connectionLogsTable).watch();

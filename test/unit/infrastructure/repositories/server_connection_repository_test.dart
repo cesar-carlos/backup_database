@@ -82,18 +82,20 @@ void main() {
       );
     });
 
-    test('getById should return NotFoundFailure when id does not exist',
-        () async {
-      final result = await repository.getById('non-existent');
-      expect(result.isError(), isTrue);
-      result.fold(
-        (_) => fail('Should not succeed'),
-        (f) {
-          expect(f, isA<Failure>());
-          expect((f as Failure).message, contains('não encontrada'));
-        },
-      );
-    });
+    test(
+      'getById should return NotFoundFailure when id does not exist',
+      () async {
+        final result = await repository.getById('non-existent');
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Should not succeed'),
+          (f) {
+            expect(f, isA<Failure>());
+            expect((f as Failure).message, contains('não encontrada'));
+          },
+        );
+      },
+    );
 
     test('update should persist changes', () async {
       final c = connection();

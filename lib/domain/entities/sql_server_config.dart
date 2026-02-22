@@ -12,9 +12,10 @@ class SqlServerConfig {
     String? id,
     PortNumber? port,
     this.enabled = true,
+    this.useWindowsAuth = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
+  }) : id = id ?? const Uuid().v4(),
        port = port ?? PortNumber(1433),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
@@ -27,6 +28,7 @@ class SqlServerConfig {
   final String password;
   final PortNumber port;
   final bool enabled;
+  final bool useWindowsAuth;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -42,6 +44,7 @@ class SqlServerConfig {
     String? password,
     PortNumber? port,
     bool? enabled,
+    bool? useWindowsAuth,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -54,6 +57,7 @@ class SqlServerConfig {
       password: password ?? this.password,
       port: port ?? this.port,
       enabled: enabled ?? this.enabled,
+      useWindowsAuth: useWindowsAuth ?? this.useWindowsAuth,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );

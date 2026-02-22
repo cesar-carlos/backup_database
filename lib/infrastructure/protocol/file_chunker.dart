@@ -25,11 +25,11 @@ class FileChunk {
       '[FileChunk.toJson] Chunk $chunkIndex: ${data.length} bytes → Base64 ${base64Data.length} chars',
     );
     return <String, dynamic>{
-        'chunkIndex': chunkIndex,
-        'totalChunks': totalChunks,
-        'data': base64Data,
-        'checksum': checksum,
-      };
+      'chunkIndex': chunkIndex,
+      'totalChunks': totalChunks,
+      'data': base64Data,
+      'checksum': checksum,
+    };
   }
 
   factory FileChunk.fromJson(Map<String, dynamic> json) {
@@ -41,17 +41,29 @@ class FileChunk {
     final Uint8List data;
     if (dataRaw is Uint8List) {
       data = dataRaw;
-      LoggerService.debug('[FileChunk.fromJson] Usando Uint8List direto: ${data.length} bytes');
+      LoggerService.debug(
+        '[FileChunk.fromJson] Usando Uint8List direto: ${data.length} bytes',
+      );
     } else if (dataRaw is String) {
-      LoggerService.debug('[FileChunk.fromJson] Decodificando String Base64 (${dataRaw.length} chars)');
+      LoggerService.debug(
+        '[FileChunk.fromJson] Decodificando String Base64 (${dataRaw.length} chars)',
+      );
       data = base64Decode(dataRaw);
-      LoggerService.debug('[FileChunk.fromJson] Decodificado para ${data.length} bytes');
+      LoggerService.debug(
+        '[FileChunk.fromJson] Decodificado para ${data.length} bytes',
+      );
     } else if (dataRaw is List<dynamic>) {
-      LoggerService.debug('[FileChunk.fromJson] Convertendo List<dynamic> (${dataRaw.length} elementos)');
+      LoggerService.debug(
+        '[FileChunk.fromJson] Convertendo List<dynamic> (${dataRaw.length} elementos)',
+      );
       data = Uint8List.fromList(dataRaw.cast<int>());
-      LoggerService.debug('[FileChunk.fromJson] Convertido para ${data.length} bytes');
+      LoggerService.debug(
+        '[FileChunk.fromJson] Convertido para ${data.length} bytes',
+      );
     } else {
-      throw ArgumentError('data must be Uint8List, String, or List<int>, got ${dataRaw.runtimeType}');
+      throw ArgumentError(
+        'data must be Uint8List, String, or List<int>, got ${dataRaw.runtimeType}',
+      );
     }
 
     return FileChunk(
@@ -72,8 +84,12 @@ class FileChunker {
 
   Future<List<FileChunk>> chunkFile(String filePath, [int? size]) async {
     final useChunkSize = size ?? chunkSize;
-    LoggerService.info('[FileChunker.chunkFile] Processando arquivo: $filePath');
-    LoggerService.info('[FileChunker.chunkFile] Chunk size: $useChunkSize bytes');
+    LoggerService.info(
+      '[FileChunker.chunkFile] Processando arquivo: $filePath',
+    );
+    LoggerService.info(
+      '[FileChunker.chunkFile] Chunk size: $useChunkSize bytes',
+    );
 
     final file = File(filePath);
     if (!await file.exists()) {
@@ -82,14 +98,20 @@ class FileChunker {
 
     final bytes = await file.readAsBytes();
     final totalFileSize = bytes.length;
-    LoggerService.info('[FileChunker.chunkFile] Arquivo lido: $totalFileSize bytes');
+    LoggerService.info(
+      '[FileChunker.chunkFile] Arquivo lido: $totalFileSize bytes',
+    );
 
     final chunks = <FileChunk>[];
     final totalChunks = (bytes.length / useChunkSize).ceil();
-    LoggerService.info('[FileChunker.chunkFile] Serão criados $totalChunks chunks');
+    LoggerService.info(
+      '[FileChunker.chunkFile] Serão criados $totalChunks chunks',
+    );
 
     for (var i = 0; i < bytes.length; i += useChunkSize) {
-      final end = (i + useChunkSize < bytes.length) ? i + useChunkSize : bytes.length;
+      final end = (i + useChunkSize < bytes.length)
+          ? i + useChunkSize
+          : bytes.length;
       final chunkData = Uint8List.fromList(bytes.sublist(i, end));
       final checksum = Crc32.calculateUint8List(chunkData);
 
@@ -115,13 +137,16 @@ class FileChunker {
   }
 
   Future<void> assembleChunks(List<FileChunk> chunks, String outputPath) async {
-    LoggerService.info('[FileChunker] Iniciando montagem de arquivo: $outputPath');
+    LoggerService.info(
+      '[FileChunker] Iniciando montagem de arquivo: $outputPath',
+    );
     LoggerService.info('[FileChunker] Chunks recebidos: ${chunks.length}');
 
     if (chunks.isEmpty) {
       throw ArgumentError('chunks must not be empty');
     }
-    final sorted = List<FileChunk>.from(chunks)..sort((a, b) => a.chunkIndex.compareTo(b.chunkIndex));
+    final sorted = List<FileChunk>.from(chunks)
+      ..sort((a, b) => a.chunkIndex.compareTo(b.chunkIndex));
     final totalChunks = sorted.first.totalChunks;
     if (sorted.length != totalChunks) {
       throw ArgumentError(
@@ -164,7 +189,9 @@ class FileChunker {
 
     LoggerService.info('[FileChunker] Verificando arquivo final...');
     final fileSize = await file.length();
-    LoggerService.info('[FileChunker] Tamanho final do arquivo: $fileSize bytes (esperado: $totalBytes bytes)');
+    LoggerService.info(
+      '[FileChunker] Tamanho final do arquivo: $fileSize bytes (esperado: $totalBytes bytes)',
+    );
 
     if (fileSize != totalBytes) {
       throw FileSystemException(

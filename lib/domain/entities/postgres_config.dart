@@ -14,7 +14,7 @@ class PostgresConfig {
     this.enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
+  }) : id = id ?? const Uuid().v4(),
        port = port ?? PortNumber(5432),
        createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();

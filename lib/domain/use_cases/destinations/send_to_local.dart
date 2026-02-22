@@ -4,7 +4,8 @@ import 'package:backup_database/domain/services/i_local_destination_service.dart
 import 'package:backup_database/domain/use_cases/destinations/destination_use_case.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-class SendToLocal extends DestinationUseCase<LocalDestinationConfig, LocalUploadResult> {
+class SendToLocal
+    extends DestinationUseCase<LocalDestinationConfig, LocalUploadResult> {
   SendToLocal(this._service);
   final ILocalDestinationService _service;
 

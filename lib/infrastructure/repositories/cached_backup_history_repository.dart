@@ -9,10 +9,10 @@ class CachedBackupHistoryRepository implements IBackupHistoryRepository {
   CachedBackupHistoryRepository({
     required IBackupHistoryRepository repository,
     Duration? cacheTtl,
-  })  : _repository = repository,
-        _cache = QueryCache<List<BackupHistory>>(
-          ttl: cacheTtl ?? const Duration(minutes: 2),
-        );
+  }) : _repository = repository,
+       _cache = QueryCache<List<BackupHistory>>(
+         ttl: cacheTtl ?? const Duration(minutes: 2),
+       );
 
   final IBackupHistoryRepository _repository;
   final QueryCache<List<BackupHistory>> _cache;
@@ -69,7 +69,9 @@ class CachedBackupHistoryRepository implements IBackupHistoryRepository {
   }
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getBySchedule(String scheduleId) async {
+  Future<rd.Result<List<BackupHistory>>> getBySchedule(
+    String scheduleId,
+  ) async {
     final cacheKey = 'schedule_$scheduleId';
     final cached = _cache.get(cacheKey);
     if (cached != null) {

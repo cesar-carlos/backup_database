@@ -12,9 +12,9 @@ class ServerConnectionDao extends DatabaseAccessor<AppDatabase>
   Future<List<ServerConnectionsTableData>> getAll() =>
       select(serverConnectionsTable).get();
 
-  Future<ServerConnectionsTableData?> getById(String id) =>
-      (select(serverConnectionsTable)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+  Future<ServerConnectionsTableData?> getById(String id) => (select(
+    serverConnectionsTable,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<int> insertConnection(ServerConnectionsTableCompanion connection) =>
       into(serverConnectionsTable).insert(connection);
@@ -25,12 +25,14 @@ class ServerConnectionDao extends DatabaseAccessor<AppDatabase>
   Future<int> deleteConnection(String id) =>
       (delete(serverConnectionsTable)..where((t) => t.id.equals(id))).go();
 
-  Future<List<ServerConnectionsTableData>> getOnlineConnections() =>
-      (select(serverConnectionsTable)..where((t) => t.isOnline.equals(true)))
-          .get();
+  Future<List<ServerConnectionsTableData>> getOnlineConnections() => (select(
+    serverConnectionsTable,
+  )..where((t) => t.isOnline.equals(true))).get();
 
   Future<int> updateOnlineStatus(String id, bool isOnline) {
-    return (update(serverConnectionsTable)..where((t) => t.id.equals(id))).write(
+    return (update(
+      serverConnectionsTable,
+    )..where((t) => t.id.equals(id))).write(
       ServerConnectionsTableCompanion(
         isOnline: Value(isOnline),
         lastConnectedAt: Value(DateTime.now()),

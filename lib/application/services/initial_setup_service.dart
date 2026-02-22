@@ -38,7 +38,8 @@ class InitialSetupService {
     final plainPassword = _randomPassword();
     final passwordHash = PasswordHasher.hash(plainPassword, serverId);
     final credential = ServerCredential(
-      id: Uuid().v4(), // ignore: prefer_const_constructors - runtime id and timestamp
+      // ignore: prefer_const_constructors - Uuid generates runtime ID
+      id: Uuid().v4(),
       serverId: serverId,
       passwordHash: passwordHash,
       name: _defaultCredentialName,
@@ -82,7 +83,10 @@ class InitialSetupService {
     const chars =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#%';
     final r = Random.secure();
-    return List.generate(_defaultPasswordLength, (_) => chars[r.nextInt(chars.length)]).join();
+    return List.generate(
+      _defaultPasswordLength,
+      (_) => chars[r.nextInt(chars.length)],
+    ).join();
   }
 }
 

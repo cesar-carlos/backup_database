@@ -1,9 +1,11 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
@@ -57,15 +59,20 @@ class SqlServerBackupService implements ISqlServerBackupService {
   Future<rd.Result<BackupExecutionResult>> executeBackup({
     required SqlServerConfig config,
     required String outputDirectory,
+    required String scheduleId,
     BackupType backupType = BackupType.full,
     String? customFileName,
     bool truncateLog = true,
     bool enableChecksum = false,
     bool verifyAfterBackup = false,
+    VerifyPolicy verifyPolicy = VerifyPolicy.none,
+    SqlServerBackupOptions? sqlServerBackupOptions,
+    Duration? backupTimeout,
+    Duration? verifyTimeout,
   }) async {
     try {
       LoggerService.info(
-        'Iniciando backup SQL Server: ${config.databaseValue} (Tipo: ${backupType.displayName})',
+        'Iniciando backup SQL Server: ${config.databaseValue} (Tipo: ${getBackupTypeDisplayName(backupType)})',
       );
 
       final outputDir = Directory(outputDirectory);
@@ -75,7 +82,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final extension = backupType == BackupType.log ? '.trn' : '.bak';
-      final typeSlug = backupType.name;
+      final typeSlug = getBackupTypeName(backupType);
       final fileName =
           customFileName ??
           '${config.databaseValue}_${typeSlug}_$timestamp$extension';
@@ -112,6 +119,15 @@ class SqlServerBackupService implements ISqlServerBackupService {
               'WITH $copyOnlyClause$checksumClause NOFORMAT, INIT, '
               "NAME = N'${config.databaseValue}-Transaction Log Backup', "
               'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
+        case BackupType.convertedDifferential:
+        case BackupType.convertedFullSingle:
+        case BackupType.convertedLog:
+          return const rd.Failure(
+            BackupFailure(
+              message: 'SQL Server não suporta tipos convertidos de backup do Sybase. '
+                    'Use um tipo de backup nativo do SQL Server.',
+            ),
+          );
       }
 
       final arguments = [..._baseSqlcmdArgs(config), '-Q', query];
@@ -120,7 +136,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
       final result = await _processService.run(
         executable: 'sqlcmd',
         arguments: arguments,
-        timeout: const Duration(hours: 2),
+        timeout: backupTimeout ?? const Duration(hours: 2),
       );
 
       stopwatch.stop();
@@ -218,7 +234,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           final verifyResult = await _processService.run(
             executable: 'sqlcmd',
             arguments: verifyArguments,
-            timeout: const Duration(minutes: 30),
+            timeout: verifyTimeout ?? const Duration(minutes: 30),
           );
 
           verifyResult.fold(
@@ -341,6 +357,51 @@ class SqlServerBackupService implements ISqlServerBackupService {
       LoggerService.error('Erro ao listar bancos de dados', e);
       return rd.Failure(
         NetworkFailure(message: 'Erro ao listar bancos de dados: $e'),
+      );
+    }
+  }
+
+  @override
+  Future<rd.Result<List<String>>> listBackupFiles({
+    required SqlServerConfig config,
+    Duration? timeout,
+  }) async {
+    try {
+      final query =
+          "RESTORE FILELISTONLY FROM DISK = N'${config.databaseValue}'";
+
+      final arguments = [..._baseSqlcmdArgs(config), '-Q', query];
+
+      final result = await _processService.run(
+        executable: 'sqlcmd',
+        arguments: arguments,
+        timeout: timeout ?? const Duration(minutes: 1),
+      );
+
+      return result.fold(
+        (processResult) {
+          if (!processResult.isSuccess) {
+            return rd.Failure(
+              BackupFailure(
+                message:
+                    'Falha ao listar arquivos de backup: ${processResult.stderr}',
+              ),
+            );
+          }
+
+          final files = processResult.stdout
+              .split('\n')
+              .where((line) => line.trim().isNotEmpty)
+              .toList();
+
+          return rd.Success(files);
+        },
+        rd.Failure.new,
+      );
+    } on Exception catch (e, stackTrace) {
+      LoggerService.error('Erro ao listar arquivos de backup', e, stackTrace);
+      return rd.Failure(
+        BackupFailure(message: 'Erro ao listar arquivos: $e'),
       );
     }
   }

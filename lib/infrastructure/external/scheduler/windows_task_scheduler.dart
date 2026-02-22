@@ -142,7 +142,7 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
   }
 
   String _getScheduleType(Schedule schedule) {
-    switch (schedule.scheduleType) {
+    switch (scheduleTypeFromString(schedule.scheduleType)) {
       case ScheduleType.daily:
         return 'DAILY';
       case ScheduleType.weekly:
@@ -161,7 +161,7 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
       final configJson =
           jsonDecode(schedule.scheduleConfig) as Map<String, dynamic>;
 
-      switch (schedule.scheduleType) {
+      switch (scheduleTypeFromString(schedule.scheduleType)) {
         case ScheduleType.daily:
           final config = parser.DailyScheduleConfig.fromJson(configJson);
           args.addAll([

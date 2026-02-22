@@ -15,6 +15,7 @@ class BackupHistoryTable extends Table {
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get finishedAt => dateTime().nullable()();
   IntColumn get durationSeconds => integer().nullable()();
+  TextColumn get metrics => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};

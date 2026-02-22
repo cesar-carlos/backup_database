@@ -77,18 +77,20 @@ void main() {
       );
     });
 
-    test('getById should return NotFoundFailure when id does not exist',
-        () async {
-      final result = await repository.getById('non-existent');
-      expect(result.isError(), isTrue);
-      result.fold(
-        (_) => fail('Should not succeed'),
-        (f) {
-          expect(f, isA<Failure>());
-          expect((f as Failure).message, contains('não encontrada'));
-        },
-      );
-    });
+    test(
+      'getById should return NotFoundFailure when id does not exist',
+      () async {
+        final result = await repository.getById('non-existent');
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Should not succeed'),
+          (f) {
+            expect(f, isA<Failure>());
+            expect((f as Failure).message, contains('não encontrada'));
+          },
+        );
+      },
+    );
 
     test('getByServerId should return credential after save', () async {
       final c = credential(serverId: 'my-server');
@@ -104,11 +106,13 @@ void main() {
       );
     });
 
-    test('getByServerId should return NotFoundFailure when serverId does not exist',
-        () async {
-      final result = await repository.getByServerId('no-such-server');
-      expect(result.isError(), isTrue);
-    });
+    test(
+      'getByServerId should return NotFoundFailure when serverId does not exist',
+      () async {
+        final result = await repository.getByServerId('no-such-server');
+        expect(result.isError(), isTrue);
+      },
+    );
 
     test('update should persist changes', () async {
       final c = credential();
@@ -141,8 +145,11 @@ void main() {
 
     test('getActive should return only active credentials', () async {
       final active = credential(id: 'a', serverId: 's1', name: 'Active');
-      final inactive = credential(id: 'b', serverId: 's2', name: 'Inactive')
-          .copyWith(isActive: false);
+      final inactive = credential(
+        id: 'b',
+        serverId: 's2',
+        name: 'Inactive',
+      ).copyWith(isActive: false);
       await repository.save(active);
       await repository.save(inactive);
 

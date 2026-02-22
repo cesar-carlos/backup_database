@@ -9,7 +9,9 @@ class EmailAddress {
 
     final trimmed = email.trim();
     if (trimmed != email) {
-      throw const EmailAddressException('Email cannot have leading/trailing whitespace');
+      throw const EmailAddressException(
+        'Email cannot have leading/trailing whitespace',
+      );
     }
 
     final emailRegex = RegExp(
@@ -31,7 +33,9 @@ class EmailAddress {
       throw const EmailAddressException('Local part cannot be empty');
     }
     if (localPart.length > 64) {
-      throw const EmailAddressException('Local part too long (max 64 characters)');
+      throw const EmailAddressException(
+        'Local part too long (max 64 characters)',
+      );
     }
     if (domain.isEmpty) {
       throw const EmailAddressException('Domain cannot be empty');

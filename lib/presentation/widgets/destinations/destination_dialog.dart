@@ -72,8 +72,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
   bool get isEditing => widget.destination != null;
 
   String _t(String pt, String en) {
-    final isPt = Localizations.localeOf(context).languageCode.toLowerCase() ==
-        'pt';
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
     return isPt ? pt : en;
   }
 
@@ -183,7 +183,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
         Icon(_getTypeIcon(_selectedType), color: AppColors.primary),
         const SizedBox(width: 12),
         Text(
-          isEditing ? _t('Editar destino', 'Edit destination') : _t('Novo destino', 'New destination'),
+          isEditing
+              ? _t('Editar destino', 'Edit destination')
+              : _t('Novo destino', 'New destination'),
           style: FluentTheme.of(context).typography.title,
         ),
       ],
@@ -519,7 +521,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
           prefixIcon: const Icon(FluentIcons.cloud),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t('Nome da pasta e obrigatorio', 'Folder name is required');
+              return _t(
+                'Nome da pasta e obrigatorio',
+                'Folder name is required',
+              );
             }
             return null;
           },
@@ -592,6 +597,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       setState(() => _nextcloudAllowInvalidCertificates = true);
     }
   }
+
   Widget _buildRetentionSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -845,6 +851,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       ],
     );
   }
+
   Widget _buildGoogleDriveFields() {
     final googleAuth = getIt<GoogleAuthProvider>();
 
@@ -957,7 +964,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
                           'Conectado como ${googleAuth.currentEmail ?? 'usuario'}',
                           'Connected as ${googleAuth.currentEmail ?? 'user'}',
                         )
-                      : _t('Nao conectado ao Google', 'Not connected to Google'),
+                      : _t(
+                          'Nao conectado ao Google',
+                          'Not connected to Google',
+                        ),
                   style: FluentTheme.of(
                     context,
                   ).typography.body?.copyWith(fontWeight: FontWeight.w500),
@@ -1098,7 +1108,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
     );
 
     if ((result ?? false) && mounted) {
-      _showSuccess(_t('Credenciais OAuth configuradas!', 'OAuth credentials configured!'));
+      _showSuccess(
+        _t('Credenciais OAuth configuradas!', 'OAuth credentials configured!'),
+      );
     }
   }
 
@@ -1149,7 +1161,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
           enabled: dropboxAuth.isSignedIn,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t('Nome da pasta e obrigatorio', 'Folder name is required');
+              return _t(
+                'Nome da pasta e obrigatorio',
+                'Folder name is required',
+              );
             }
             return null;
           },
@@ -1229,7 +1244,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
                           'Conectado como ${dropboxAuth.currentEmail ?? 'usuario'}',
                           'Connected as ${dropboxAuth.currentEmail ?? 'user'}',
                         )
-                      : _t('Nao conectado ao Dropbox', 'Not connected to Dropbox'),
+                      : _t(
+                          'Nao conectado ao Dropbox',
+                          'Not connected to Dropbox',
+                        ),
                   style: FluentTheme.of(
                     context,
                   ).typography.body?.copyWith(fontWeight: FontWeight.w500),
@@ -1384,9 +1402,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
     );
 
     if ((result ?? false) && mounted) {
-      _showSuccess(_t('Credenciais OAuth configuradas!', 'OAuth credentials configured!'));
+      _showSuccess(
+        _t('Credenciais OAuth configuradas!', 'OAuth credentials configured!'),
+      );
     }
   }
+
   IconData _getTypeIcon(DestinationType type) {
     switch (type) {
       case DestinationType.local:
@@ -1426,7 +1447,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Future<void> _selectLocalFolder() async {
     final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: _t('Selecionar pasta de destino', 'Select destination folder'),
+      dialogTitle: _t(
+        'Selecionar pasta de destino',
+        'Select destination folder',
+      ),
     );
     if (result != null) {
       setState(() {
@@ -1598,6 +1622,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       });
     }
   }
+
   void _showSuccess(String message) {
     MessageModal.showSuccess(context, message: message);
   }
@@ -1713,6 +1738,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     Navigator.of(context).pop(destination);
   }
 }
+
 class _OAuthConfigDialog extends StatefulWidget {
   const _OAuthConfigDialog({
     required this.googleAuth,
@@ -1733,8 +1759,8 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
   bool _isLoading = false;
 
   String _t(String pt, String en) {
-    final isPt = Localizations.localeOf(context).languageCode.toLowerCase() ==
-        'pt';
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
     return isPt ? pt : en;
   }
 
@@ -1913,6 +1939,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
     );
   }
 }
+
 class _DropboxOAuthConfigDialog extends StatefulWidget {
   const _DropboxOAuthConfigDialog({
     required this.dropboxAuth,
@@ -1934,8 +1961,8 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
   bool _isLoading = false;
 
   String _t(String pt, String en) {
-    final isPt = Localizations.localeOf(context).languageCode.toLowerCase() ==
-        'pt';
+    final isPt =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
     return isPt ? pt : en;
   }
 

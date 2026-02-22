@@ -5,6 +5,7 @@ import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:get_it/get_it.dart';
 
 /// Sets up application layer dependencies.
@@ -71,10 +72,15 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       destinationOrchestrator: getIt<IDestinationOrchestrator>(),
       cleanupService: getIt<IBackupCleanupService>(),
       notificationService: getIt<INotificationService>(),
+      scheduleCalculator: getIt<IScheduleCalculator>(),
+      storageChecker: getIt<IStorageChecker>(),
       progressNotifier: getIt<IBackupProgressNotifier>(),
       transferStagingService: getIt<ITransferStagingService>(),
-      scheduleCalculator: getIt<IScheduleCalculator>(),
     ),
+  );
+
+  getIt.registerLazySingleton<IMetricsAnalysisService>(
+    () => MetricsAnalysisService(getIt<IBackupHistoryRepository>()),
   );
 
   // ========================================================================
