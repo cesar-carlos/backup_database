@@ -65,7 +65,10 @@ class StorageChecker implements IStorageChecker {
       }
 
       final firstLine = lines[0].trim();
+      LoggerService.debug('First line from output: "$firstLine"');
+
       final matches = RegExp(r'(\d+(?:[.,]\d+)?)\s*(B|KB|MB|GB|TB)').allMatches(firstLine).toList();
+      LoggerService.debug('Regex matches found: ${matches.length}');
 
       if (matches.length < 3) {
         return rd.Failure(
@@ -75,9 +78,15 @@ class StorageChecker implements IStorageChecker {
         );
       }
 
+      LoggerService.debug('Match 0: ${matches[0].group(0)} -> number: ${matches[0].group(1)}, unit: ${matches[0].group(2)}');
+      LoggerService.debug('Match 1: ${matches[1].group(0)} -> number: ${matches[1].group(1)}, unit: ${matches[1].group(2)}');
+      LoggerService.debug('Match 2: ${matches[2].group(0)} -> number: ${matches[2].group(1)}, unit: ${matches[2].group(2)}');
+
       final freeBytes = _parseMatch(matches[0]);
       final usedBytes = _parseMatch(matches[1]);
       final totalBytes = _parseMatch(matches[2]);
+
+      LoggerService.debug('Parsed bytes - Free: $freeBytes, Used: $usedBytes, Total: $totalBytes');
 
       if (freeBytes <= 0 || usedBytes < 0 || totalBytes <= 0) {
         return const rd.Failure(
@@ -124,29 +133,38 @@ class StorageChecker implements IStorageChecker {
   }
 
   int _parseMatch(RegExpMatch match) {
-    final numValue = double.tryParse(match.group(1)!) ?? 0;
+    final fullMatch = match.group(0);
+    final numStr = match.group(1);
     final unit = match.group(2);
+
+    LoggerService.debug('Parsing match - full: $fullMatch, numStr: $numStr, unit: $unit');
+
+    final numValue = double.tryParse(numStr ?? '');
+
+    if (numValue == null) {
+      LoggerService.warning('Falha ao parsear número: "$numStr"');
+      return 0;
+    }
 
     if (numValue < 0 || numValue.isNaN || numValue.isInfinite) {
       LoggerService.warning('Valor numérico inválido parseado: $numValue');
       return 0;
     }
 
-    switch (unit) {
-      case 'B':
-        return numValue.toInt();
-      case 'KB':
-        return (numValue * 1024).toInt();
-      case 'MB':
-        return (numValue * 1024 * 1024).toInt();
-      case 'GB':
-        return (numValue * 1024 * 1024 * 1024).toInt();
-      case 'TB':
-        return (numValue * 1024 * 1024 * 1024 * 1024).toInt();
-      default:
-        LoggerService.warning('Unidade desconhecida: $unit');
-        return 0;
-    }
+    final bytes = switch (unit) {
+      'B' => numValue.toInt(),
+      'KB' => (numValue * 1024).toInt(),
+      'MB' => (numValue * 1024 * 1024).toInt(),
+      'GB' => (numValue * 1024 * 1024 * 1024).toInt(),
+      'TB' => (numValue * 1024 * 1024 * 1024 * 1024).toInt(),
+      _ => () {
+          LoggerService.warning('Unidade desconhecida: $unit');
+          return 0;
+        }(),
+    };
+
+    LoggerService.debug('Converted $numValue $unit to $bytes bytes');
+    return bytes;
   }
 
   String _formatBytes(int bytes) {
