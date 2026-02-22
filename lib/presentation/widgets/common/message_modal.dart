@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart' show ScaffoldMessenger, SnackBar, Text;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 enum MessageType { success, info, warning, error }
 
@@ -11,11 +15,13 @@ class MessageModal extends StatelessWidget {
     super.key,
     this.buttonLabel,
     this.type = MessageType.success,
+    this.onCopy,
   });
   final String title;
   final String message;
   final String? buttonLabel;
   final MessageType type;
+  final VoidCallback? onCopy;
 
   static Future<void> show(
     BuildContext context, {
@@ -23,6 +29,7 @@ class MessageModal extends StatelessWidget {
     required String message,
     String? buttonLabel,
     MessageType type = MessageType.success,
+    VoidCallback? onCopy,
   }) {
     return showDialog<void>(
       context: context,
@@ -31,6 +38,7 @@ class MessageModal extends StatelessWidget {
         message: message,
         buttonLabel: buttonLabel,
         type: type,
+        onCopy: onCopy,
       ),
     );
   }
@@ -40,6 +48,7 @@ class MessageModal extends StatelessWidget {
     required String message,
     String? title,
     String? buttonLabel,
+    VoidCallback? onCopy,
   }) {
     final texts = WidgetTexts.fromContext(context);
     return show(
@@ -47,6 +56,7 @@ class MessageModal extends StatelessWidget {
       title: title ?? texts.success,
       message: message,
       buttonLabel: buttonLabel,
+      onCopy: onCopy,
     );
   }
 
@@ -55,6 +65,7 @@ class MessageModal extends StatelessWidget {
     required String message,
     String? title,
     String? buttonLabel,
+    VoidCallback? onCopy,
   }) {
     final texts = WidgetTexts.fromContext(context);
     return show(
@@ -63,6 +74,7 @@ class MessageModal extends StatelessWidget {
       message: message,
       buttonLabel: buttonLabel,
       type: MessageType.info,
+      onCopy: onCopy,
     );
   }
 
@@ -71,6 +83,7 @@ class MessageModal extends StatelessWidget {
     required String message,
     String? title,
     String? buttonLabel,
+    VoidCallback? onCopy,
   }) {
     final texts = WidgetTexts.fromContext(context);
     return show(
@@ -79,6 +92,7 @@ class MessageModal extends StatelessWidget {
       message: message,
       buttonLabel: buttonLabel,
       type: MessageType.warning,
+      onCopy: onCopy,
     );
   }
 
@@ -87,6 +101,7 @@ class MessageModal extends StatelessWidget {
     required String message,
     String? title,
     String? buttonLabel,
+    VoidCallback? onCopy,
   }) {
     final texts = WidgetTexts.fromContext(context);
     return show(
@@ -95,6 +110,66 @@ class MessageModal extends StatelessWidget {
       message: message,
       buttonLabel: buttonLabel,
       type: MessageType.error,
+      onCopy: onCopy,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final texts = WidgetTexts.fromContext(context);
+    final color = _getColor();
+    final icon = _getIcon();
+    final showErrorType = type == MessageType.error;
+
+    final copyButton = (onCopy != null || showErrorType)
+        ? Button(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: message));
+              onCopy?.call();
+              final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+              if (context.mounted && scaffoldMessenger != null) {
+                scaffoldMessenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Texto copiado'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: const Text('Copiar'),
+          )
+        : null;
+
+    return ContentDialog(
+      title: Row(
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: FluentTheme.of(context).typography.title?.copyWith(
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 600,
+        child: SelectableText(
+          message,
+          style: FluentTheme.of(context).typography.body,
+        ),
+      ),
+      actions: [
+        ...copyButton != null ? [copyButton] : const [],
+        Button(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(buttonLabel ?? texts.ok),
+        ),
+      ],
     );
   }
 
@@ -122,42 +197,5 @@ class MessageModal extends StatelessWidget {
       case MessageType.error:
         return FluentIcons.error;
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final texts = WidgetTexts.fromContext(context);
-    final color = _getColor();
-    final icon = _getIcon();
-
-    return ContentDialog(
-      title: Row(
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: FluentTheme.of(context).typography.title?.copyWith(
-                color: color,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 600,
-        child: SingleChildScrollView(
-          child: Text(message, style: FluentTheme.of(context).typography.body),
-        ),
-      ),
-      actions: [
-        Button(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(buttonLabel ?? texts.ok),
-        ),
-      ],
-    );
   }
 }

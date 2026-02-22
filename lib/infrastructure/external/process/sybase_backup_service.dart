@@ -120,8 +120,9 @@ class SybaseBackupService implements ISybaseBackupService {
           case BackupType.convertedLog:
             return const rd.Failure(
               BackupFailure(
-                message: 'Sybase SQL Anywhere não suporta tipos convertidos. '
-                      'Use o tipo de backup nativo correspondente.',
+                message:
+                    'Sybase SQL Anywhere não suporta tipos convertidos. '
+                    'Use o tipo de backup nativo correspondente.',
               ),
             );
         }

@@ -100,7 +100,9 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
                                 children: [
                                   _Tag(
                                     label: _getScheduleTypeLabel(
-                                      scheduleTypeFromString(schedule.scheduleType),
+                                      scheduleTypeFromString(
+                                        schedule.scheduleType,
+                                      ),
                                       texts,
                                     ),
                                     color: AppColors.scheduleDaily,

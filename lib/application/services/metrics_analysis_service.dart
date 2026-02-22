@@ -36,32 +36,41 @@ class MetricsAnalysisService implements IMetricsAnalysisService {
             );
 
             final metrics = history.metrics;
-            final flags = metrics?.flags ?? const BackupFlags(
-              compression: false,
-              verifyPolicy: 'none',
-              stripingCount: 1,
-              withChecksum: false,
-              stopOnError: true,
-            );
+            final flags =
+                metrics?.flags ??
+                const BackupFlags(
+                  compression: false,
+                  verifyPolicy: 'none',
+                  stripingCount: 1,
+                  withChecksum: false,
+                  stopOnError: true,
+                );
 
-            metricsByType[type]!.add(BackupMetrics(
-              totalDuration: duration,
-              backupDuration: duration,
-              verifyDuration: Duration.zero,
-              backupSizeBytes: sizeInBytes,
-              backupSpeedMbPerSec: _calculateSpeedMbPerSec(sizeInBytes, duration.inSeconds),
-              backupType: type.name,
-              flags: flags,
-            ));
+            metricsByType[type]!.add(
+              BackupMetrics(
+                totalDuration: duration,
+                backupDuration: duration,
+                verifyDuration: Duration.zero,
+                backupSizeBytes: sizeInBytes,
+                backupSpeedMbPerSec: _calculateSpeedMbPerSec(
+                  sizeInBytes,
+                  duration.inSeconds,
+                ),
+                backupType: type.name,
+                flags: flags,
+              ),
+            );
           }
         }
 
-        return rd.Success(BackupMetricsReport(
-          startDate: startDate,
-          endDate: endDate,
-          metricsByType: metricsByType,
-          totalBackups: backups.length,
-        ));
+        return rd.Success(
+          BackupMetricsReport(
+            startDate: startDate,
+            endDate: endDate,
+            metricsByType: metricsByType,
+            totalBackups: backups.length,
+          ),
+        );
       },
       rd.Failure.new,
     );

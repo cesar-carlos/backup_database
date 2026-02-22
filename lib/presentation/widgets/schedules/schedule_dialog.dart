@@ -118,7 +118,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _truncateLog = widget.schedule!.truncateLog;
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
-      _compressionFormat = widget.schedule!.compressionFormat ?? CompressionFormat.zip;
+      _compressionFormat =
+          widget.schedule!.compressionFormat ?? CompressionFormat.zip;
       _isEnabled = widget.schedule!.enabled;
       _enableChecksum = widget.schedule!.enableChecksum;
       _verifyAfterBackup = widget.schedule!.verifyAfterBackup;
@@ -383,7 +384,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     LicenseFeatures.logBackup,
                   );
 
-              final isSybaseConvertedDifferential = _databaseType == DatabaseType.sybase &&
+              final isSybaseConvertedDifferential =
+                  _databaseType == DatabaseType.sybase &&
                   isEditing &&
                   (widget.schedule?.isConvertedDifferential ?? false);
 
@@ -435,8 +437,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                   isBlocked
                                       ? '${type.displayName} (Requer licença)'
                                       : isSybaseConvertedType
-                                          ? '${type.displayName} (convertido)'
-                                          : type.displayName,
+                                      ? '${type.displayName} (convertido)'
+                                      : type.displayName,
                                   textAlign: TextAlign.start,
                                   style: TextStyle(
                                     color: isBlocked
@@ -445,10 +447,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                               .controlStrokeColorDefault
                                               .withValues(alpha: 0.4)
                                         : isSybaseConvertedType
-                                            ? FluentTheme.of(context).accentColor.defaultBrushFor(
-                                                FluentTheme.of(context).brightness,
-                                              )
-                                            : null,
+                                        ? FluentTheme.of(
+                                            context,
+                                          ).accentColor.defaultBrushFor(
+                                            FluentTheme.of(context).brightness,
+                                          )
+                                        : null,
                                     fontStyle: isSybaseConvertedType
                                         ? FontStyle.italic
                                         : null,
@@ -2023,7 +2027,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         backupTimeout: _backupTimeout,
         verifyTimeout: _verifyTimeout,
         sqlServerBackupOptions: sqlServerBackupOptions,
-        isConvertedDifferential: widget.schedule?.isConvertedDifferential ?? false,
+        isConvertedDifferential:
+            widget.schedule?.isConvertedDifferential ?? false,
       );
     } else {
       schedule = Schedule(
@@ -2051,7 +2056,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         truncateLog: _truncateLog,
         backupTimeout: _backupTimeout,
         verifyTimeout: _verifyTimeout,
-        isConvertedDifferential: _databaseType == DatabaseType.sybase &&
+        isConvertedDifferential:
+            _databaseType == DatabaseType.sybase &&
             _backupType == BackupType.differential,
       );
     }

@@ -247,7 +247,8 @@ class PostgresBackupService implements IPostgresBackupService {
       case BackupType.convertedLog:
         return const rd.Failure(
           BackupFailure(
-            message: 'PostgreSQL não suporta tipos convertidos de backup do Sybase. '
+            message:
+                'PostgreSQL não suporta tipos convertidos de backup do Sybase. '
                 'Use um tipo de backup nativo do PostgreSQL.',
           ),
         );

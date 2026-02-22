@@ -1728,7 +1728,7 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  /// Ensures [created_at] and [updated_at] columns exist in all tables that
+  /// Ensures created_at and updated_at columns exist in all tables that
   /// require them. This covers all tables where these columns were added after
   /// initial schema creation, preventing null-check errors on existing databases.
   Future<void> _ensureTimestampColumnsForAllTables() async {

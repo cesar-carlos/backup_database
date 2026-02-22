@@ -124,8 +124,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
         case BackupType.convertedLog:
           return const rd.Failure(
             BackupFailure(
-              message: 'SQL Server não suporta tipos convertidos de backup do Sybase. '
-                    'Use um tipo de backup nativo do SQL Server.',
+              message:
+                  'SQL Server não suporta tipos convertidos de backup do Sybase. '
+                  'Use um tipo de backup nativo do SQL Server.',
             ),
           );
       }

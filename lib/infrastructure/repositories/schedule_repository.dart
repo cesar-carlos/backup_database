@@ -85,7 +85,8 @@ class ScheduleRepository implements IScheduleRepository {
       if (e.toString().contains('foreign key constraint failed')) {
         return const rd.Failure(
           DatabaseFailure(
-            message: 'Erro ao criar agendamento: um ou mais destinos '
+            message:
+                'Erro ao criar agendamento: um ou mais destinos '
                 'selecionados não existem. Por favor, selecione destinos válidos.',
           ),
         );
@@ -328,8 +329,9 @@ class ScheduleRepository implements IScheduleRepository {
     final uniqueDestinationIds = destinationIds.toSet();
 
     for (final destinationId in uniqueDestinationIds) {
-      final destinationExists = await _database.backupDestinationDao
-          .getById(destinationId);
+      final destinationExists = await _database.backupDestinationDao.getById(
+        destinationId,
+      );
       if (destinationExists == null) {
         LoggerService.warning(
           '[ScheduleRepository] Skipping non-existent destination: $destinationId',

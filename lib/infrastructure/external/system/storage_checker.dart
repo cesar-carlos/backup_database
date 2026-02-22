@@ -7,15 +7,37 @@ import 'package:backup_database/domain/services/i_storage_checker.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class StorageChecker implements IStorageChecker {
+  static const _minPathLength = 2;
+
   @override
   Future<rd.Result<DiskSpaceInfo>> checkSpace(String path) async {
     try {
-      final drive = path.substring(0, 2);
+      if (path.length < _minPathLength) {
+        return const rd.Failure(
+          FileSystemFailure(
+            message: 'Caminho inválido para verificar espaço em disco',
+          ),
+        );
+      }
+
+      final drive = path[0];
+      final validDrive = RegExp(r'^[A-Za-z]$').hasMatch(drive);
+
+      if (!validDrive) {
+        return rd.Failure(
+          FileSystemFailure(
+            message: 'Formato de unidade inválido: $drive',
+          ),
+        );
+      }
+
+      final psScript = '''
+[CultureInfo]::GetCultureInfo('en-US'); \$d = Get-PSDrive -Name $drive; "{0:N2} GB {1:N2} GB {2:N2} GB" -f (\$d.Free/1GB), ((\$d.Size-\$d.Free)/1GB), (\$d.Size/1GB)
+''';
 
       final result = await Process.run(
-        'wmic',
-        ['logicaldisk', 'where', 'DeviceID="$drive"', 'get', 'Size,FreeSpace'],
-        runInShell: true,
+        'powershell',
+        ['-NoProfile', '-Command', psScript],
       );
 
       if (result.exitCode != 0) {
@@ -27,12 +49,14 @@ class StorageChecker implements IStorageChecker {
       }
 
       final output = result.stdout.toString().trim();
+      LoggerService.debug('PowerShell output: "$output"');
+
       final lines = output
           .split('\n')
           .where((l) => l.trim().isNotEmpty)
           .toList();
 
-      if (lines.length < 2) {
+      if (lines.isEmpty) {
         return const rd.Failure(
           FileSystemFailure(
             message: 'Não foi possível obter informações do disco',
@@ -40,18 +64,37 @@ class StorageChecker implements IStorageChecker {
         );
       }
 
-      final values = lines[1].trim().split(RegExp(r'\s+'));
-      if (values.length < 2) {
-        return const rd.Failure(
+      final firstLine = lines[0].trim();
+      final matches = RegExp(r'(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)').allMatches(firstLine).toList();
+
+      if (matches.length < 3) {
+        return rd.Failure(
           FileSystemFailure(
-            message: 'Formato de saída inesperado',
+            message: 'Formato de saída inesperado: "$firstLine"',
           ),
         );
       }
 
-      final freeBytes = int.tryParse(values[0]) ?? 0;
-      final totalBytes = int.tryParse(values[1]) ?? 0;
-      final usedBytes = totalBytes - freeBytes;
+      final freeBytes = _parseMatch(matches[0]);
+      final usedBytes = _parseMatch(matches[1]);
+      final totalBytes = _parseMatch(matches[2]);
+
+      if (freeBytes <= 0 || usedBytes < 0 || totalBytes <= 0) {
+        return const rd.Failure(
+          FileSystemFailure(
+            message: 'Valores de espaço em disco inválidos detectados',
+          ),
+        );
+      }
+
+      final calculatedUsed = totalBytes - freeBytes;
+      final tolerance = totalBytes * 0.01;
+      if ((calculatedUsed - usedBytes).abs() > tolerance) {
+        LoggerService.warning(
+          'Inconsistência nos valores: total=$totalBytes, free=$freeBytes, used=$usedBytes, calculated=$calculatedUsed',
+        );
+      }
+
       final usedPercentage = totalBytes > 0
           ? (usedBytes / totalBytes) * 100
           : 0.0;
@@ -77,6 +120,32 @@ class StorageChecker implements IStorageChecker {
           originalError: e,
         ),
       );
+    }
+  }
+
+  int _parseMatch(RegExpMatch match) {
+    final numValue = double.tryParse(match.group(1)!) ?? 0;
+    final unit = match.group(2);
+
+    if (numValue < 0 || numValue.isNaN || numValue.isInfinite) {
+      LoggerService.warning('Valor numérico inválido parseado: $numValue');
+      return 0;
+    }
+
+    switch (unit) {
+      case 'B':
+        return numValue.toInt();
+      case 'KB':
+        return (numValue * 1024).toInt();
+      case 'MB':
+        return (numValue * 1024 * 1024).toInt();
+      case 'GB':
+        return (numValue * 1024 * 1024 * 1024).toInt();
+      case 'TB':
+        return (numValue * 1024 * 1024 * 1024 * 1024).toInt();
+      default:
+        LoggerService.warning('Unidade desconhecida: $unit');
+        return 0;
     }
   }
 
