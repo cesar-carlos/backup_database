@@ -46,7 +46,8 @@ Future<void> _dropConfigTablesForVersion223() async {
   }
 
   try {
-    final appDataDir = await _getAppDataDirectory();
+    // Usa o mesmo caminho que AppDatabase usa (getApplicationDocumentsDirectory)
+    final appDataDir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(appDataDir.path, 'backup_database.db');
     final dbFile = File(dbPath);
 
