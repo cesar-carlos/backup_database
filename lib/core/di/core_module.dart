@@ -27,9 +27,6 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 const _resetFlagKey = 'reset_v2_2_3_done';
 
-/// Verifica se o reset já foi executado para a versão 2.2.3.
-///
-/// Usa flutter_secure_storage para evitar resets múltiplos acidentais.
 Future<bool> _hasAlreadyResetForVersion223() async {
   const storage = FlutterSecureStorage();
   try {
@@ -41,8 +38,6 @@ Future<bool> _hasAlreadyResetForVersion223() async {
   }
 }
 
-/// Marca o reset como concluído para a versão 2.2.3.
-///
 Future<void> _markResetCompletedForVersion223() async {
   const storage = FlutterSecureStorage();
   try {
@@ -53,11 +48,6 @@ Future<void> _markResetCompletedForVersion223() async {
   }
 }
 
-/// Drop das tabelas de configuração de banco de dados para a versão 2.2.3.
-///
-/// Executa DROP TABLE nas tabelas de configuração (SQL Server, Sybase, PostgreSQL)
-/// para forçar recriação limpa na próxima inicialização.
-/// Retorna true se o drop foi executado, false caso contrário.
 Future<bool> _dropConfigTablesForVersion223() async {
   await Future.delayed(const Duration(milliseconds: 500));
 
@@ -68,14 +58,6 @@ Future<bool> _dropConfigTablesForVersion223() async {
   LoggerService.info('Versão do app: $version');
   LoggerService.info('Target version: 2.2.3');
 
-  // Verifica se o reset já foi feito (P0.2 - Flag de Reset em Secure Storage)
-  final hasAlreadyReset = await _hasAlreadyResetForVersion223();
-  if (hasAlreadyReset) {
-    LoggerService.info('Reset v2.2.3 já foi executado anteriormente');
-    return false;
-  }
-
-  // Validação exata usando pub_semver - evita versões futuras como 2.2.30, 2.2.31, etc.
   final targetVersion = Version.parse('2.2.3');
   Version? currentVersion;
 
@@ -99,79 +81,98 @@ Future<bool> _dropConfigTablesForVersion223() async {
     return false;
   }
 
+  final hasAlreadyReset = await _hasAlreadyResetForVersion223();
+  if (hasAlreadyReset) {
+    LoggerService.info('Reset v2.2.3 já foi executado anteriormente');
+    return false;
+  }
+
+  sqlite3.Database? database;
+
   try {
-    // Usa o mesmo caminho que AppDatabase usa (getApplicationDocumentsDirectory)
     final appDataDir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(appDataDir.path, 'backup_database.db');
     final dbFile = File(dbPath);
 
-    LoggerService.info('Caminho do banco de dados: $dbPath');
-    LoggerService.info('Arquivo existe: ${await dbFile.exists()}');
-
     if (!await dbFile.exists()) {
-      LoggerService.info('Banco de dados não encontrado, nada para dropar');
       return false;
     }
 
-    LoggerService.warning('===== INICIANDO DROP DE TABELAS DE CONFIG =====');
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final backupSuffix = '_backup_v2_2_3_$timestamp';
 
-    final database = await openSqliteApi(dbPath);
+    database = sqlite3.sqlite3.open(dbPath);
 
-    final tablesToDrop = [
-      'sql_server_configs_table',
-      'sybase_configs_table',
-      'postgres_configs_table',
-      'schedules_table',
-    ];
+    try {
+      LoggerService.warning('===== CRIANDO BACKUP DAS TABELAS =====');
 
-    for (final tableName in tablesToDrop) {
-      try {
-        database.execute('DROP TABLE IF EXISTS $tableName');
-        LoggerService.warning('Tabela dropada: $tableName');
-      } on Object catch (e) {
-        LoggerService.warning('Erro ao dropar tabela $tableName: $e');
+      final tablesToDrop = [
+        'sql_server_configs_table',
+        'sybase_configs_table',
+        'postgres_configs_table',
+        'schedules_table',
+      ];
+
+      for (final tableName in tablesToDrop) {
+        final backupTableName = '${tableName}$backupSuffix';
+        database.execute('ALTER TABLE $tableName RENAME TO $backupTableName');
+        LoggerService.info('Backup criado: $backupTableName');
       }
+
+      LoggerService.warning('===== INICIANDO DROP DE TABELAS DE CONFIG =====');
+
+      for (final tableName in tablesToDrop) {
+        try {
+          database.execute('DROP TABLE IF EXISTS $tableName');
+          LoggerService.warning('Tabela dropada: $tableName');
+        } catch (e) {
+          LoggerService.warning('Erro ao dropar tabela $tableName: $e');
+        }
+      }
+
+      database.dispose();
+      database = null;
+
+      LoggerService.warning('===== DROP DE TABELAS CONCLUÍDO, BACKUPS DISPONÍVEIS =====');
+
+      await _markResetCompletedForVersion223();
+
+      LoggerService.info(
+        'Tabelas serão recriadas automaticamente pelo Drift '
+        'no próximo acesso. Backups disponíveis para rollback.',
+      );
+
+      return true;
+    } catch (e) {
+      _handleDropError(e);
+      return false;
     }
-
-    database.dispose();
-
-    LoggerService.warning('===== DROP DE TABELAS CONCLUÍDO =====');
-    LoggerService.info(
-      'Tabelas serão recriadas automaticamente pelo Drift '
-      'no próximo acesso',
-    );
-
-    // Marca o reset como concluído (P0.2 - Flag de Reset em Secure Storage)
-    await _markResetCompletedForVersion223();
-
-    return true;
-  } on Object catch (e, stackTrace) {
-    LoggerService.error('===== ERRO AO DROPAR TABELAS =====');
-    LoggerService.error('Erro ao dropar tabelas: $e', e, stackTrace);
+  } catch (e) {
+    _handleDropError(e);
     return false;
+  } finally {
+    database?.dispose();
   }
 }
 
-/// Abre o banco de dados SQLite diretamente usando sqlite3.
-dynamic openSqliteApi(String dbPath) {
-  return sqlite3.sqlite3.open(dbPath);
+void _handleDropError(Object error) {
+  if (error is sqlite3.SqliteException) {
+    LoggerService.error('Erro ao dropar tabelas: ${error.message}');
+  } else if (error is FileSystemException) {
+    LoggerService.error('Erro ao acessar arquivo: ${error.message}');
+  } else {
+    LoggerService.error('Erro inesperado: $error');
+  }
 }
 
 /// Obtém o diretório de dados do aplicativo sem duplicação de pastas
 Future<Directory> getAppDataDirectory() async {
-  // No Windows, o getApplicationDocumentsDirectory pode criar pastas duplicadas
-  // Usamos um caminho customizado para evitar isso
   if (Platform.isWindows) {
-    // Obtém o AppData Roaming diretamente
     final appData = Platform.environment['APPDATA'];
     if (appData != null) {
-      // Cria diretório: C:\Users\<usuario>\AppData\Roaming\Backup Database
-      final customPath = p.join(appData, 'Backup Database');
-      return Directory(customPath);
+      return Directory(p.join(appData, 'Backup Database'));
     }
   }
-
-  // Para outras plataformas, usa o padrão
   return getApplicationDocumentsDirectory();
 }
 
@@ -180,7 +181,6 @@ Future<Directory> getAppDataDirectory() async {
 /// This module registers fundamental services like logging,
 /// encryption, database, HTTP client, and system utilities.
 Future<void> setupCoreModule(GetIt getIt) async {
-  // Drop tabelas de configuração na versão 2.2.3
   await _dropConfigTablesForVersion223();
 
   final appDataDir = await getApplicationDocumentsDirectory();
@@ -210,8 +210,8 @@ Future<void> setupCoreModule(GetIt getIt) async {
 
   // Security & Encryption
   getIt.registerLazySingleton<IDeviceKeyService>(DeviceKeyService.new);
-
   final deviceKeyResult = await getIt<IDeviceKeyService>().getDeviceKey();
+
   if (deviceKeyResult.isSuccess()) {
     final deviceKey = deviceKeyResult.getOrNull()!;
     EncryptionService.initializeWithDeviceKey(deviceKey);

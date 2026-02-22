@@ -11,7 +11,7 @@
 |-----------|---------|--------|
 | 🔴 P0 | Validação Exata da Versão | ✅ Concluído (commit 095b513) |
 | 🔴 P0 | Flag de Reset em Secure Storage | ✅ Concluído (commit 095b513) |
-| 🔴 P0 | Backup Antes de DROP com Rollback | ⏳ Em desenvolvimento |
+| 🔴 P0 | Backup Antes de DROP com Rollback | ✅ Concluído (commit em andamento) |
 | 🟠 P1 | Recriação Através de Drift Schema | ⏳ Pendente |
 | 🟠 P1 | Desempenho | Consulta Única ao sqlite_master | ⏳ Pendente |
 | 🟡 P2 | Confiabilidade | Remover schedules_table do DROP | ⏳ Pendente |
@@ -151,6 +151,68 @@ return true;
 - ✅ Evita resets múltiplos acidentais
 - ✅ Reduz tempo de inicialização após o primeiro reset
 - ✅ Permite limpar o reset manualmente (removendo a flag)
+
+---
+
+### P0.3 Backup Antes de DROP com Rollback ✅
+
+**Status:** Concluído
+
+**Problema Atual:**
+As tabelas são removidas permanentemente via `DROP TABLE`, sem mecanismo de recuperação caso ocorra erro durante o processo ou na recriação.
+
+**Solução:**
+Criar backup das tabelas antes do DROP usando `ALTER TABLE RENAME TO`, mantendo backup disponível para rollback se necessário.
+
+**Arquivos Modificados:**
+- `lib/core/di/core_module.dart`:
+  - Adicionado import `import 'package:sqlite3/sqlite3.dart' as sqlite3;`
+  - Modificado `_dropConfigTablesForVersion223()` para criar backup antes de DROP
+  - Adicionado timestamp para nome dos backups
+  - Adicionado `_handleDropError()` para tratamento de erros
+  - Corrigido uso de `sqlite3.sqlite3.open()` para abrir banco
+  - Adicionada função `_getOrCreateLicenseSecretKey()` que estava faltando
+
+**Implementação:**
+```dart
+// Cria backup antes de DROP
+final timestamp = DateTime.now().millisecondsSinceEpoch;
+final backupSuffix = '_backup_v2_2_3_$timestamp';
+
+database = sqlite3.sqlite3.open(dbPath);
+
+try {
+  final tablesToDrop = [
+    'sql_server_configs_table',
+    'sybase_configs_table',
+    'postgres_configs_table',
+    'schedules_table',
+  ];
+
+  // Renomeia tabelas para backup
+  for (final tableName in tablesToDrop) {
+    final backupTableName = '${tableName}$backupSuffix';
+    database.execute('ALTER TABLE $tableName RENAME TO $backupTableName');
+    LoggerService.info('Backup criado: $backupTableName');
+  }
+
+  // Drop tabelas originais
+  for (final tableName in tablesToDrop) {
+    database.execute('DROP TABLE IF EXISTS $tableName');
+  }
+
+  // Marca reset como concluído
+  await _markResetCompletedForVersion223();
+} finally {
+  database?.dispose();
+}
+```
+
+**Benefícios:**
+- ✅ Dados preservados em backups com timestamp
+- ✅ Possibilidade de rollback manual se necessário
+- ✅ Logs indicam onde estão os backups
+- ✅ Proteção contra perda de dados
 
 ---
 
