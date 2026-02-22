@@ -865,6 +865,8 @@ class AppDatabase extends _$AppDatabase {
 
         await _migrateSybaseColumnsToSnakeCase();
 
+        await _ensureTimestampColumnsForAllTables();
+
         await _ensureEmailConfigsColumnsExist();
         await _ensureEmailConfigSmtpPasswordKeyColumn();
         await _ensureEmailConfigOAuthColumns();
@@ -1717,37 +1719,89 @@ class AppDatabase extends _$AppDatabase {
           'Coluna verify_timeout_seconds adicionada à schedules_table',
         );
       }
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao garantir colunas de timeout em schedules_table',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Ensures [created_at] and [updated_at] columns exist in all tables that
+  /// require them. This covers all tables where these columns were added after
+  /// initial schema creation, preventing null-check errors on existing databases.
+  Future<void> _ensureTimestampColumnsForAllTables() async {
+    const tablesWithBoth = [
+      'sql_server_configs_table',
+      'sybase_configs_table',
+      'postgres_configs_table',
+      'licenses_table',
+      'backup_destinations_table',
+      'server_connections_table',
+      'email_configs_table',
+      'schedules_table',
+    ];
+
+    const tablesWithCreatedAtOnly = [
+      'server_credentials_table',
+      'backup_logs_table',
+    ];
+
+    for (final table in tablesWithBoth) {
+      await _ensureTableTimestampColumns(table, addUpdatedAt: true);
+    }
+    for (final table in tablesWithCreatedAtOnly) {
+      await _ensureTableTimestampColumns(table, addUpdatedAt: false);
+    }
+  }
+
+  Future<void> _ensureTableTimestampColumns(
+    String tableName, {
+    required bool addUpdatedAt,
+  }) async {
+    try {
+      final tableExists = await customSelect(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='$tableName'",
+      ).getSingleOrNull();
+
+      if (tableExists == null) return;
+
+      final columns = await customSelect(
+        'PRAGMA table_info($tableName)',
+      ).get();
+      final columnNames = columns
+          .map((row) => row.data['name'] as String)
+          .toSet();
 
       if (!columnNames.contains('created_at')) {
         await customStatement(
-          'ALTER TABLE schedules_table ADD COLUMN created_at '
+          'ALTER TABLE $tableName ADD COLUMN created_at '
           'INTEGER NOT NULL DEFAULT 0',
         );
         await customStatement(
-          'UPDATE schedules_table SET created_at = '
-          "strftime('%s', 'now') * 1000000 WHERE created_at = 0",
+          'UPDATE $tableName SET created_at = '
+          "CAST(strftime('%s', 'now') AS INTEGER) * 1000000 "
+          'WHERE created_at = 0',
         );
-        LoggerService.info(
-          'Coluna created_at adicionada à schedules_table',
-        );
+        LoggerService.info('Coluna created_at adicionada à $tableName');
       }
 
-      if (!columnNames.contains('updated_at')) {
+      if (addUpdatedAt && !columnNames.contains('updated_at')) {
         await customStatement(
-          'ALTER TABLE schedules_table ADD COLUMN updated_at '
+          'ALTER TABLE $tableName ADD COLUMN updated_at '
           'INTEGER NOT NULL DEFAULT 0',
         );
         await customStatement(
-          'UPDATE schedules_table SET updated_at = '
-          "strftime('%s', 'now') * 1000000 WHERE updated_at = 0",
+          'UPDATE $tableName SET updated_at = '
+          "CAST(strftime('%s', 'now') AS INTEGER) * 1000000 "
+          'WHERE updated_at = 0',
         );
-        LoggerService.info(
-          'Coluna updated_at adicionada à schedules_table',
-        );
+        LoggerService.info('Coluna updated_at adicionada à $tableName');
       }
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
-        'Erro ao garantir colunas de timeout e timestamp em schedules_table',
+        'Erro ao garantir colunas de timestamp em $tableName',
         e,
         stackTrace,
       );
