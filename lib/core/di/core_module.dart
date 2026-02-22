@@ -17,9 +17,51 @@ import 'package:backup_database/infrastructure/security/secure_credential_servic
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
+
+/// Reset do banco de dados para a versão 2.2.2.
+///
+/// Deleta o arquivo do banco de dados existente para forçar
+/// recriação limpa na próxima inicialização.
+Future<void> _resetDatabaseForVersion222() async {
+  final packageInfo = await PackageInfo.fromPlatform();
+  final version = packageInfo.version;
+
+  if (version != '2.2.2') {
+    return;
+  }
+
+  try {
+    final appDataDir = await _getAppDataDirectory();
+    final dbPath = p.join(appDataDir.path, 'backup_database.db');
+    final dbFile = File(dbPath);
+
+    if (await dbFile.exists()) {
+      LoggerService.warning('Resetando banco de dados para versão 2.2.2...');
+      await dbFile.delete();
+      LoggerService.info('Banco de dados deletado: $dbPath');
+
+      // Deletar também arquivos auxiliares do SQLite
+      final shmFile = File('$dbPath-shm');
+      final walFile = File('$dbPath-wal');
+
+      if (await shmFile.exists()) {
+        await shmFile.delete();
+        LoggerService.info('Arquivo -shm deletado');
+      }
+
+      if (await walFile.exists()) {
+        await walFile.delete();
+        LoggerService.info('Arquivo -wal deletado');
+      }
+    }
+  } catch (e, stackTrace) {
+    LoggerService.error('Erro ao resetar banco de dados: $e', e, stackTrace);
+  }
+}
 
 /// Obtém o diretório de dados do aplicativo sem duplicação de pastas
 Future<Directory> _getAppDataDirectory() async {
@@ -44,6 +86,9 @@ Future<Directory> _getAppDataDirectory() async {
 /// This module registers fundamental services like logging,
 /// encryption, database, HTTP client, and system utilities.
 Future<void> setupCoreModule(GetIt getIt) async {
+  // Resetar banco de dados na versão 2.2.2
+  await _resetDatabaseForVersion222();
+
   final appDataDir = await _getAppDataDirectory();
   final logsDirectory = p.join(appDataDir.path, 'logs');
 
