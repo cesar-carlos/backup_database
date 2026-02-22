@@ -27,22 +27,39 @@ import 'package:result_dart/result_dart.dart' as rd;
 /// Deleta o arquivo do banco de dados existente para forçar
 /// recriação limpa na próxima inicialização.
 Future<void> _resetDatabaseForVersion222() async {
+  // Adiciona um pequeno delay para garantir inicialização completa
+  await Future.delayed(const Duration(milliseconds: 500));
+
   final packageInfo = await PackageInfo.fromPlatform();
   final version = packageInfo.version;
 
-  if (version != '2.2.2') {
+  LoggerService.info('===== DATABASE RESET CHECK =====');
+  LoggerService.info('Versão do app: $version');
+  LoggerService.info('Target version: 2.2.2');
+
+  // Usa startsWith para ser mais flexível (ex: "2.2.2+1" também funciona)
+  final shouldReset = version.startsWith('2.2.2');
+  LoggerService.info('Deve resetar banco: $shouldReset');
+
+  if (!shouldReset) {
+    LoggerService.info('Versão não é 2.2.2, pulando reset do banco de dados');
     return;
   }
 
   try {
     final appDataDir = await _getAppDataDirectory();
+    LoggerService.info('Diretório de dados: ${appDataDir.path}');
+
     final dbPath = p.join(appDataDir.path, 'backup_database.db');
     final dbFile = File(dbPath);
 
+    LoggerService.info('Caminho do banco de dados: $dbPath');
+    LoggerService.info('Arquivo existe: ${await dbFile.exists()}');
+
     if (await dbFile.exists()) {
-      LoggerService.warning('Resetando banco de dados para versão 2.2.2...');
+      LoggerService.warning('===== INICIANDO RESET DO BANCO DE DADOS =====');
       await dbFile.delete();
-      LoggerService.info('Banco de dados deletado: $dbPath');
+      LoggerService.warning('Banco de dados deletado: $dbPath');
 
       // Deletar também arquivos auxiliares do SQLite
       final shmFile = File('$dbPath-shm');
@@ -50,15 +67,20 @@ Future<void> _resetDatabaseForVersion222() async {
 
       if (await shmFile.exists()) {
         await shmFile.delete();
-        LoggerService.info('Arquivo -shm deletado');
+        LoggerService.warning('Arquivo -shm deletado');
       }
 
       if (await walFile.exists()) {
         await walFile.delete();
-        LoggerService.info('Arquivo -wal deletado');
+        LoggerService.warning('Arquivo -wal deletado');
       }
+
+      LoggerService.warning('===== RESET DO BANCO DE DADOS CONCLUÍDO =====');
+    } else {
+      LoggerService.info('Banco de dados não encontrado, nada para deletar');
     }
   } catch (e, stackTrace) {
+    LoggerService.error('===== ERRO AO RESETAR BANCO DE DADOS =====');
     LoggerService.error('Erro ao resetar banco de dados: $e', e, stackTrace);
   }
 }
