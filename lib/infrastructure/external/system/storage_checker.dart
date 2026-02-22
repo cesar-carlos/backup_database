@@ -32,7 +32,7 @@ class StorageChecker implements IStorageChecker {
       }
 
       final psScript = '''
-\$d = Get-PSDrive -Name $drive; "{0:N2} GB {1:N2} GB {2:N2} GB" -f (\$d.Free/1GB), ((\$d.Size-\$d.Free)/1GB), (\$d.Size/1GB)
+\$d = Get-PSDrive -Name $drive; \$free = \$d.Free/1GB; \$used = (\$d.Size-\$d.Free)/1GB; \$total = \$d.Size/1GB; "{0:N2} GB {1:N2} GB {2:N2} GB" -f \$free, \$used, \$total
 ''';
 
       final result = await Process.run(
