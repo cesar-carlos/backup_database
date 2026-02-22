@@ -16,13 +16,12 @@ import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
-import 'package:drift/drift.dart';
 import 'package:get_it/get_it.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
-import 'package:sqlite3/sqlite3.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 /// Drop das tabelas de configuração de banco de dados para a versão 2.2.3.
 ///
@@ -92,8 +91,8 @@ Future<void> _dropConfigTablesForVersion222() async {
 }
 
 /// Abre o banco de dados SQLite diretamente usando sqlite3.
-Future<CommonDatabase> openSqliteApi(String dbPath) async {
-  return sqlite3.open(dbPath);
+dynamic openSqliteApi(String dbPath) {
+  return sqlite3.sqlite3.open(dbPath);
 }
 
 /// Obtém o diretório de dados do aplicativo sem duplicação de pastas
