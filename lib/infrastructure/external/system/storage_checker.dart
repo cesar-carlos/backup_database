@@ -32,7 +32,7 @@ class StorageChecker implements IStorageChecker {
       }
 
       final psScript = '''
-\$d = Get-PSDrive -Name $drive; \$free = \$d.Free/1GB; \$used = (\$d.Size-\$d.Free)/1GB; \$total = \$d.Size/1GB; "{0:N2} GB {1:N2} GB {2:N2} GB" -f \$free, \$used, \$total
+\$disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$drive:'"; \$freeGB = [math]::Round(\$disk.FreeSpace/1GB, 2); \$usedGB = [math]::Round((\$disk.Size-\$disk.FreeSpace)/1GB, 2); \$totalGB = [math]::Round(\$disk.Size/1GB, 2); "{0:N2} GB {1:N2} GB {2:N2} GB" -f \$freeGB, \$usedGB, \$totalGB
 ''';
 
       final result = await Process.run(
@@ -70,7 +70,7 @@ class StorageChecker implements IStorageChecker {
       final matches = RegExp(r'(\d+(?:[.,]\d+)?)\s*(B|KB|MB|GB|TB)').allMatches(firstLine).toList();
       LoggerService.debug('Regex matches found: ${matches.length}');
 
-      if (matches.length < 3) {
+      if (matches.length != 3) {
         return rd.Failure(
           FileSystemFailure(
             message: 'Formato de saída inesperado: "$firstLine"',
