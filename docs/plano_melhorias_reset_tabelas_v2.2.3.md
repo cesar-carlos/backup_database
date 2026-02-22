@@ -12,7 +12,10 @@
 | 🔴 P0 | Validação Exata da Versão | ✅ Concluído (commit 095b513) |
 | 🔴 P0 | Flag de Reset em Secure Storage | ✅ Concluído (commit 095b513) |
 | 🔴 P0 | Backup Antes de DROP com Rollback | ✅ Concluído (commit da4a3a4) |
-| 🟠 P1 | Recriação Através de Drift Schema | ✅ Concluído (commit em andamento) |
+| 🟠 P1 | Recriação Através de Drift Schema | ✅ Concluído (commit 02c191a) |
+| 🟠 P1 | Consulta Única ao sqlite_master | ✅ Concluído (implementado com P1.1) |
+| 🟡 P2 | Remover schedules_table do DROP | ✅ Concluído (commit em andamento) |
+| 🟡 P2 | Tratamento Diferenciado de Erros | ⏳ Pendente |
 | 🟠 P1 | Recriação Através de Drift Schema | ⏳ Pendente |
 | 🟠 P1 | Desempenho | Consulta Única ao sqlite_master | ⏳ Pendente |
 | 🟡 P2 | Confiabilidade | Remover schedules_table do DROP | ⏳ Pendente |
@@ -298,10 +301,9 @@ beforeOpen: (details) async {
 
 ---
 
-### P1.2 Consulta Única ao sqlite_master ⏳
+### P1.2 Consulta Única ao sqlite_master ✅
 
-**Status:** Pendente
-**Estimativa:** 2 horas
+**Status:** Concluído (implementado junto com P1.1)
 
 **Problema Atual:**
 4 consultas separadas ao `sqlite_master`, uma para cada tabela de configuração.
@@ -309,20 +311,18 @@ beforeOpen: (details) async {
 **Solução:**
 Usar uma única consulta com `IN` para verificar todas as tabelas de uma vez.
 
+**Arquivos Modificados:**
+- `lib/infrastructure/datasources/local/database.dart`:
+  - A função `_ensureConfigTablesRecreatedByDrift()` (implementada em P1.1) já usa consulta única com IN
+
 **Implementação:**
 ```dart
-final tablesToCheck = [
-  'sql_server_configs_table',
-  'sybase_configs_table',
-  'postgres_configs_table',
-  'schedules_table',
-];
-
-final inClause = tablesToCheck.map((t) => "'$t'").join(',');
-final query = "SELECT name FROM sqlite_master WHERE type='table' AND name IN ($inClause)";
-
-final existingTables = await database.select(query).get();
-final tablesToDrop = existingTables.map((row) => row.read<String>('name')).toList();
+// P1.2: Consulta única com IN (já implementada em P1.1)
+final tables = await customSelect(
+  "SELECT name FROM sqlite_master WHERE type='table' "
+  "AND name IN ('sql_server_configs_table', 'sybase_configs_table', "
+  "'postgres_configs_table', 'schedules_table')",
+).get();
 ```
 
 **Benefícios:**
@@ -334,10 +334,9 @@ final tablesToDrop = existingTables.map((row) => row.read<String>('name')).toLis
 
 ## 🟡 P2: Melhorias de Média Prioridade
 
-### P2.1 Remover schedules_table do DROP ⏳
+### P2.1 Remover schedules_table do DROP ✅
 
-**Status:** Pendente
-**Estimativa:** 1 hora
+**Status:** Concluído
 
 **Problema Atual:**
 `schedules_table` está sendo dropada para evitar problemas de dependência, mas isso causa perda de dados importantes do usuário.
@@ -345,9 +344,33 @@ final tablesToDrop = existingTables.map((row) => row.read<String>('name')).toLis
 **Solução:**
 Remover `schedules_table` da lista inicial de DROP. A tabela não será dropada, apenas as 3 tabelas de configuração de banco.
 
-**Arquivos a Modificar:**
+**Arquivos Modificados:**
 - `lib/core/di/core_module.dart`:
-  - Remover `'schedules_table'` da lista `tablesToDrop`
+  - Removido `'schedules_table'` da lista `tablesToDrop`
+
+**Implementação:**
+```dart
+// Antes: schedules_table estava sendo dropada
+final tablesToDrop = [
+  'sql_server_configs_table',
+  'sybase_configs_table',
+  'postgres_configs_table',
+  'schedules_table',  // Removido
+];
+
+// Após: apenas tabelas de configuração de banco
+final tablesToDrop = [
+  'sql_server_configs_table',
+  'sybase_configs_table',
+  'postgres_configs_table',
+];
+```
+
+**Benefícios:**
+- ✅ Agendamentos do usuário são preservados
+- ✅ Apenas tabelas de configuração de banco são resetadas
+- ✅ Menos dados perdidos em caso de rollback ou erro
+- ✅ Reduz impacto da operação de reset no usuário final
 
 ---
 

@@ -110,7 +110,6 @@ Future<bool> _dropConfigTablesForVersion223() async {
         'sql_server_configs_table',
         'sybase_configs_table',
         'postgres_configs_table',
-        'schedules_table',
       ];
 
       for (final tableName in tablesToDrop) {
