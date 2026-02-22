@@ -27,7 +27,7 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 ///
 /// Executa DROP TABLE nas tabelas de configuração (SQL Server, Sybase, PostgreSQL)
 /// para forçar recriação limpa na próxima inicialização.
-Future<void> _dropConfigTablesForVersion222() async {
+Future<void> _dropConfigTablesForVersion223() async {
   await Future.delayed(const Duration(milliseconds: 500));
 
   final packageInfo = await PackageInfo.fromPlatform();
@@ -72,7 +72,7 @@ Future<void> _dropConfigTablesForVersion222() async {
       try {
         database.execute('DROP TABLE IF EXISTS $tableName');
         LoggerService.warning('Tabela dropada: $tableName');
-      } catch (e) {
+      } on Object catch (e) {
         LoggerService.warning('Erro ao dropar tabela $tableName: $e');
       }
     }
@@ -84,7 +84,7 @@ Future<void> _dropConfigTablesForVersion222() async {
       'Tabelas serão recriadas automaticamente pelo Drift '
       'no próximo acesso',
     );
-  } catch (e, stackTrace) {
+  } on Object catch (e, stackTrace) {
     LoggerService.error('===== ERRO AO DROPAR TABELAS =====');
     LoggerService.error('Erro ao dropar tabelas: $e', e, stackTrace);
   }
@@ -119,7 +119,7 @@ Future<Directory> _getAppDataDirectory() async {
 /// encryption, database, HTTP client, and system utilities.
 Future<void> setupCoreModule(GetIt getIt) async {
   // Drop tabelas de configuração na versão 2.2.3
-  await _dropConfigTablesForVersion222();
+  await _dropConfigTablesForVersion223();
 
   final appDataDir = await _getAppDataDirectory();
   final logsDirectory = p.join(appDataDir.path, 'logs');
