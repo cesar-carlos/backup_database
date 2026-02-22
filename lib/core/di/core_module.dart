@@ -27,7 +27,15 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 const _resetFlagKey = 'reset_v2_2_3_done';
 
-/// Tipos de erro para operação de drop de tabelas.
+/// P3.2: Fases da operação de reset de tabelas para logging estruturado.
+enum _ResetPhase {
+  validation,
+  backupCreation,
+  dropExecution,
+  cleanup,
+}
+
+/// P3.1 e P3.2: Tipos de erro para operação de drop de tabelas.
 enum _DropErrorType {
   /// Erro crítico que impede a operação de reset
   critical,
@@ -39,12 +47,39 @@ enum _DropErrorType {
   recoverable,
 }
 
+/// P3.2: Classe para medição de tempo das operações de reset.
+class _ResetPerformanceMetrics {
+  final Map<_ResetPhase, Stopwatch> _stopwatches = {};
+
+  void start(_ResetPhase phase) {
+    _stopwatches[phase] = Stopwatch()..start();
+  }
+
+  void stop(_ResetPhase phase) {
+    _stopwatches[phase]?.stop();
+  }
+
+  int getElapsedMs(_ResetPhase phase) {
+    return _stopwatches[phase]?.elapsedMilliseconds ?? 0;
+  }
+
+  Duration getElapsed(_ResetPhase phase) {
+    return Duration(milliseconds: getElapsedMs(phase));
+  }
+
+  void dispose() {
+    for (final stopwatch in _stopwatches.values) {
+      stopwatch.stop();
+    }
+  }
+}
+
 Future<bool> _hasAlreadyResetForVersion223() async {
   const storage = FlutterSecureStorage();
   try {
     final flag = await storage.read(key: _resetFlagKey);
     return flag == 'true';
-  } catch (e) {
+  } on Exception catch (e) {
     LoggerService.warning('Erro ao ler flag de reset: $e');
     return false;
   }
@@ -55,7 +90,7 @@ Future<void> _markResetCompletedForVersion223() async {
   try {
     await storage.write(key: _resetFlagKey, value: 'true');
     LoggerService.info('Flag de reset v2.2.3 marcada como concluída');
-  } catch (e) {   
+  } on Exception catch (e) {
     LoggerService.warning('Erro ao gravar flag de reset: $e');
   }
 }
@@ -66,6 +101,10 @@ Future<bool> _dropConfigTablesForVersion223() async {
   final packageInfo = await PackageInfo.fromPlatform();
   final version = packageInfo.version;
 
+  final metrics = _ResetPerformanceMetrics();
+
+  // P3.2: FASE 1 - Validação
+  metrics.start(_ResetPhase.validation);
   LoggerService.info('===== CONFIG TABLES DROP CHECK =====');
   LoggerService.info('Versão do app: $version');
   LoggerService.info('Target version: 2.2.3');
@@ -75,7 +114,7 @@ Future<bool> _dropConfigTablesForVersion223() async {
 
   try {
     currentVersion = Version.parse(version.split('+').first);
-  } catch (e) {
+  } on Exception catch (e) {
     LoggerService.warning('Versão inválida: $version');
     return false;
   }
@@ -93,11 +132,17 @@ Future<bool> _dropConfigTablesForVersion223() async {
     return false;
   }
 
+  final validationElapsedMs = metrics.getElapsedMs(_ResetPhase.validation);
+  LoggerService.info('Tempo validação: ${validationElapsedMs}ms');
+
   final hasAlreadyReset = await _hasAlreadyResetForVersion223();
   if (hasAlreadyReset) {
     LoggerService.info('Reset v2.2.3 já foi executado anteriormente');
     return false;
   }
+
+  final flagCheckElapsedMs = metrics.getElapsedMs(_ResetPhase.validation);
+  LoggerService.info('Tempo verificação de flag: ${flagCheckElapsedMs}ms');
 
   sqlite3.Database? database;
 
@@ -113,10 +158,19 @@ Future<bool> _dropConfigTablesForVersion223() async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final backupSuffix = '_backup_v2_2_3_$timestamp';
 
+    // P3.2: FASE 2 - Abertura do banco
+    metrics.start(_ResetPhase.cleanup);
+    LoggerService.info('FASE 2: Abertura do banco');
     database = sqlite3.sqlite3.open(dbPath);
 
+    metrics.stop(_ResetPhase.cleanup);
+    final dbOpenElapsedMs = metrics.getElapsedMs(_ResetPhase.cleanup);
+    LoggerService.info('Tempo abertura do banco: ${dbOpenElapsedMs}ms');
+
     try {
-      LoggerService.warning('===== CRIANDO BACKUP DAS TABELAS =====');
+      // P3.2: FASE 3 - Criação de backups
+      metrics.start(_ResetPhase.backupCreation);
+      LoggerService.info('FASE 3: Criação de backups');
 
       final tablesToDrop = [
         'sql_server_configs_table',
@@ -125,21 +179,37 @@ Future<bool> _dropConfigTablesForVersion223() async {
       ];
 
       for (final tableName in tablesToDrop) {
-        final backupTableName = '${tableName}$backupSuffix';
+        final backupTableName = '$tableName$backupSuffix';
         database.execute('ALTER TABLE $tableName RENAME TO $backupTableName');
         LoggerService.info('Backup criado: $backupTableName');
       }
 
+      metrics.stop(_ResetPhase.backupCreation);
+      final backupElapsedMs = metrics.getElapsedMs(_ResetPhase.backupCreation);
+      LoggerService.info('Tempo criação de backups: ${backupElapsedMs}ms');
+
       LoggerService.warning('===== INICIANDO DROP DE TABELAS DE CONFIG =====');
+
+      // P3.1: Transação SQLite - Iniciar transação
+      metrics.start(_ResetPhase.dropExecution);
+      database.execute('BEGIN IMMEDIATE TRANSACTION');
+      LoggerService.info('FASE 4: DROP de tabelas - Transação iniciada');
 
       for (final tableName in tablesToDrop) {
         try {
           database.execute('DROP TABLE IF EXISTS $tableName');
           LoggerService.warning('Tabela dropada: $tableName');
-        } catch (e) {
+        } on Exception catch (e) {
           LoggerService.warning('Erro ao dropar tabela $tableName: $e');
         }
       }
+
+      // P3.1: Transação SQLite - Commit da transação
+      database.execute('COMMIT');
+
+      metrics.stop(_ResetPhase.dropExecution);
+      final dropElapsedMs = metrics.getElapsedMs(_ResetPhase.dropExecution);
+      LoggerService.info('Tempo DROP de tabelas: ${dropElapsedMs}ms');
 
       database.dispose();
       database = null;
@@ -153,20 +223,53 @@ Future<bool> _dropConfigTablesForVersion223() async {
         'no próximo acesso. Backups disponíveis para rollback.',
       );
 
+      metrics.stop(_ResetPhase.cleanup);
+      final cleanupElapsedMs = metrics.getElapsedMs(_ResetPhase.cleanup);
+      LoggerService.info('Tempo conclusão: ${cleanupElapsedMs}ms');
+
+      // P3.2: Logging estruturado - Resumo de performance
+      final validationTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.validation));
+      final flagCheckTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.validation));
+      final dbOpenTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.cleanup));
+      final backupTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.backupCreation));
+      final dropTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.dropExecution));
+      final cleanupTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.cleanup));
+      final totalTime = validationTime + flagCheckTime + dbOpenTime + backupTime + dropTime + cleanupTime;
+
+      LoggerService.info('===== RESUMO DE PERFORMANCE =====');
+      LoggerService.info('Validação: ${validationTime.inMilliseconds}');
+      LoggerService.info('Verificação de flag: ${flagCheckTime.inMilliseconds}');
+      LoggerService.info('Abertura do banco: ${dbOpenTime.inMilliseconds}');
+      LoggerService.info('Criação de backups: ${backupTime.inMilliseconds}');
+      LoggerService.info('DROP de tabelas: ${dropTime.inMilliseconds}');
+      LoggerService.info('Conclusão: ${cleanupTime.inMilliseconds}');
+      LoggerService.info('TOTAL: ${totalTime.inMilliseconds}');
+
+      metrics.dispose();
+
       return true;
-    } catch (e) {
-      _handleDropError(e);
+    } on Object catch (e) {
+      // P3.1: Transação SQLite - Rollback em caso de erro
+      database?.execute('ROLLBACK');
+
+      final rollbackElapsedMs = metrics.getElapsedMs(_ResetPhase.dropExecution);
+      LoggerService.warning(
+        'Tempo rollback de transação: $rollbackElapsedMs',
+      );
+
+      _handleDropError(e, metrics);
       return false;
     }
-  } catch (e) {
-    _handleDropError(e);
+  } on Object catch (e) {
+    _handleDropError(e, metrics);
     return false;
   } finally {
     database?.dispose();
+    metrics.dispose();
   }
 }
 
-void _handleDropError(Object error) {
+void _handleDropError(Object error, [_ResetPerformanceMetrics? metrics]) {
   final errorType = _categorizeError(error);
 
   switch (errorType) {
@@ -174,25 +277,21 @@ void _handleDropError(Object error) {
       LoggerService.error(
         'CRÍTICO: Operação de drop não pode continuar: $error',
       );
-      break;
 
     case _DropErrorType.expected:
       LoggerService.info(
         'Esperado: ${_getErrorMessage(errorType)}: $error',
       );
-      break;
 
     case _DropErrorType.recoverable:
       LoggerService.warning(
         'Recuperável: ${_getErrorMessage(errorType)}: $error',
       );
-      break;
   }
 }
 
 _DropErrorType _categorizeError(Object error) {
-  if (error is sqlite3.SqliteException) {
-    final sqliteError = error as sqlite3.SqliteException;
+  if (error case final sqlite3.SqliteException sqliteError) {
     final code = sqliteError.extendedResultCode;
 
     if (code == sqlite3.SqlError.SQLITE_CONSTRAINT ||
@@ -211,8 +310,7 @@ _DropErrorType _categorizeError(Object error) {
     return _DropErrorType.expected;
   }
 
-  if (error is FileSystemException) {
-    final fsError = error as FileSystemException;
+  if (error case final FileSystemException fsError) {
     if (fsError.osError?.errorCode == 5 || // ERROR_ACCESS_DENIED
         fsError.osError?.errorCode == 32) { // ERROR_SHARING_VIOLATION
       return _DropErrorType.critical;

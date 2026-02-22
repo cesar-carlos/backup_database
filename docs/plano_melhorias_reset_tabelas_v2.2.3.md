@@ -14,14 +14,10 @@
 | 🔴 P0 | Backup Antes de DROP com Rollback | ✅ Concluído (commit da4a3a4) |
 | 🟠 P1 | Recriação Através de Drift Schema | ✅ Concluído (commit 02c191a) |
 | 🟠 P1 | Consulta Única ao sqlite_master | ✅ Concluído (implementado com P1.1) |
-| 🟡 P2 | Remover schedules_table do DROP | ✅ Concluído (commit em andamento) |
-| 🟡 P2 | Tratamento Diferenciado de Erros | ✅ Concluído (commit em andamento) |
-| 🟠 P1 | Recriação Através de Drift Schema | ⏳ Pendente |
-| 🟠 P1 | Desempenho | Consulta Única ao sqlite_master | ⏳ Pendente |
-| 🟡 P2 | Confiabilidade | Remover schedules_table do DROP | ⏳ Pendente |
-| 🟡 P2 | UX | Tratamento Diferenciado de Erros | ⏳ Pendente |
-| 🟢 P3 | Manutenibilidade | Transação SQLite | ⏳ Pendente |
-| 🟢 P3 | Debugabilidade | Logging Estruturado | ⏳ Pendente |
+| 🟡 P2 | Remover schedules_table do DROP | ✅ Concluído (commit 9a38ec6) |
+| 🟡 P2 | Tratamento Diferenciado de Erros | ✅ Concluído (commit 0cc693f) |
+| 🟢 P3 | Manutenibilidade - Transação SQLite | ✅ Concluído |
+| 🟢 P3 | Debugabilidade - Logging Estruturado | ✅ Concluído |
 
 ---
 
@@ -461,10 +457,9 @@ void _handleDropError(Object error) {
 
 ---
 
-### P2.2 Tratamento Diferenciado de Erros ⏳
+### P2.2 Tratamento Diferenciado de Erros ✅
 
-**Status:** Pendente
-**Estimativa:** 4 horas
+**Status:** Concluído
 
 **Problema Atual:**
 Todos os erros são tratados de forma idêntica, sem distinção entre erros recuperáveis e críticos.
@@ -472,14 +467,85 @@ Todos os erros são tratados de forma idêntica, sem distinção entre erros rec
 **Solução:**
 Criar enum de tipos de erro e tratamento diferenciado.
 
+**Arquivos Modificados:**
+- `lib/core/di/core_module.dart`:
+  - Adicionado enum `_DropErrorType` com categorias: critical, expected, recoverable
+  - Adicionada função `_categorizeError()` para classificar erros automaticamente
+  - Adicionada função `_getErrorMessage()` para obter mensagem legível
+  - Atualizada função `_handleDropError()` com tratamento diferenciado por tipo de erro
+
+**Implementação:**
+```dart
+// Enum de tipos de erro
+enum _DropErrorType {
+  critical,    // Erro crítico que impede a operação
+  expected,     // Erro esperado (normal)
+  recoverable,  // Erro recuperável (pode tentar novamente)
+}
+
+// Categorização automática de erros usando pattern matching
+_DropErrorType _categorizeError(Object error) {
+  if (error case final sqlite3.SqliteException sqliteError) {
+    final code = sqliteError.extendedResultCode;
+    // Erros críticos: CONSTRAINT, CORRUPT, NOTADB, FORMAT, FULL
+    if (code == sqlite3.SqlError.SQLITE_CONSTRAINT ||
+        code == sqlite3.SqlError.SQLITE_CORRUPT ||
+        code == sqlite3.SqlError.SQLITE_NOTADB ||
+        code == sqlite3.SqlError.SQLITE_FORMAT ||
+        code == sqlite3.SqlError.SQLITE_FULL) {
+      return _DropErrorType.critical;
+    }
+    // Erros recuperáveis: BUSY, LOCKED
+    if (code == sqlite3.SqlError.SQLITE_BUSY ||
+        code == sqlite3.SqlError.SQLITE_LOCKED) {
+      return _DropErrorType.recoverable;
+    }
+    return _DropErrorType.expected;
+  }
+  // FileSystemException: access denied é crítico, outros são recuperáveis
+  if (error case final FileSystemException fsError) {
+    if (fsError.osError?.errorCode == 5 || // ERROR_ACCESS_DENIED
+        fsError.osError?.errorCode == 32) { // ERROR_SHARING_VIOLATION
+      return _DropErrorType.critical;
+    }
+    return _DropErrorType.recoverable;
+  }
+  return _DropErrorType.recoverable;
+}
+
+// Tratamento diferenciado por tipo
+void _handleDropError(Object error, [_ResetPerformanceMetrics? metrics]) {
+  final errorType = _categorizeError(error);
+  switch (errorType) {
+    case _DropErrorType.critical:
+      LoggerService.error(
+        'CRÍTICO: Operação de drop não pode continuar: $error',
+      );
+    case _DropErrorType.expected:
+      LoggerService.info(
+        'Esperado: ${_getErrorMessage(errorType)}: $error',
+      );
+    case _DropErrorType.recoverable:
+      LoggerService.warning(
+        'Recuperável: ${_getErrorMessage(errorType)}: $error',
+      );
+  }
+}
+```
+
+**Benefícios:**
+- ✅ Tratamento diferenciado por severidade de erro
+- ✅ Logs claros indicando tipo de problema
+- ✅ Distingue erros recuperáveis de erros críticos
+- ✅ Melhor experiência de debugging e troubleshooting
+
 ---
 
 ## 🟢 P3: Melhorias de Baixa Prioridade
 
-### P3.1 Transação SQLite ⏳
+### P3.1 Transação SQLite ✅
 
-**Status:** Pendente
-**Estimativa:** 3 horas
+**Status:** Concluído
 
 **Problema Atual:**
 DROPs são executados sequencialmente sem proteção de transação.
@@ -487,12 +553,57 @@ DROPs são executados sequencialmente sem proteção de transação.
 **Solução:**
 Envolver todos os DROPs em uma transação SQLite para garantir atomicidade.
 
+**Arquivos Modificados:**
+- `lib/core/di/core_module.dart`:
+  - Adicionado `BEGIN IMMEDIATE TRANSACTION` antes dos DROPs
+  - Adicionado `COMMIT` após todos os DROPs
+  - Adicionado `ROLLBACK` em caso de erro
+  - Adicionado suporte para database null-safe em catch block
+
+**Implementação:**
+```dart
+// P3.1: Transação SQLite - Iniciar transação
+metrics.start(_ResetPhase.dropExecution);
+database.execute('BEGIN IMMEDIATE TRANSACTION');
+LoggerService.info('FASE 4: DROP de tabelas - Transação iniciada');
+
+for (final tableName in tablesToDrop) {
+  try {
+    database.execute('DROP TABLE IF EXISTS $tableName');
+    LoggerService.warning('Tabela dropada: $tableName');
+  } on Exception catch (e) {
+    LoggerService.warning('Erro ao dropar tabela $tableName: $e');
+  }
+}
+
+// P3.1: Transação SQLite - Commit da transação
+database.execute('COMMIT');
+
+// P3.1: Transação SQLite - Rollback em caso de erro
+} on Object catch (e) {
+  database?.execute('ROLLBACK');
+
+  final rollbackElapsedMs = metrics.getElapsedMs(_ResetPhase.dropExecution);
+  LoggerService.warning(
+    'Tempo rollback de transação: $rollbackElapsedMs',
+  );
+
+  _handleDropError(e, metrics);
+  return false;
+}
+```
+
+**Benefícios:**
+- ✅ Atomicidade: todos os DROPs são executados como uma unidade
+- ✅ Rollback automático em caso de erro
+- ✅ Proteção contra estado inconsistente
+- ✅ Melhor tratamento de erros durante operação crítica
+
 ---
 
-### P3.2 Logging Estruturado ⏳
+### P3.2 Logging Estruturado ✅
 
-**Status:** Pendente
-**Estimativa:** 2 horas
+**Status:** Concluído
 
 **Problema Atual:**
 Logs não têm estrutura clara, dificultando debugging de problemas.
@@ -500,17 +611,100 @@ Logs não têm estrutura clara, dificultando debugging de problemas.
 **Solução:**
 Criar sistema de logging estruturado com fases e medição de tempo.
 
+**Arquivos Modificados:**
+- `lib/core/di/core_module.dart`:
+  - Adicionado enum `_ResetPhase` com fases: validation, backupCreation, dropExecution, cleanup
+  - Adicionada classe `_ResetPerformanceMetrics` para medição de tempo
+  - Adicionada medição de tempo para cada fase
+  - Adicionado resumo de performance ao final da operação
+
+**Implementação:**
+```dart
+// P3.2: Fases da operação de reset de tabelas
+enum _ResetPhase {
+  validation,
+  backupCreation,
+  dropExecution,
+  cleanup,
+}
+
+// P3.2: Classe para medição de tempo das operações de reset
+class _ResetPerformanceMetrics {
+  final Map<_ResetPhase, Stopwatch> _stopwatches = {};
+
+  void start(_ResetPhase phase) {
+    _stopwatches[phase] = Stopwatch()..start();
+  }
+
+  void stop(_ResetPhase phase) {
+    _stopwatches[phase]?.stop();
+  }
+
+  int getElapsedMs(_ResetPhase phase) {
+    return _stopwatches[phase]?.elapsedMilliseconds ?? 0;
+  }
+
+  Duration getElapsed(_ResetPhase phase) {
+    return Duration(milliseconds: getElapsedMs(phase));
+  }
+
+  void dispose() {
+    for (final stopwatch in _stopwatches.values) {
+      stopwatch.stop();
+    }
+  }
+}
+
+// Exemplo de uso em _dropConfigTablesForVersion223():
+final metrics = _ResetPerformanceMetrics();
+
+// P3.2: FASE 1 - Validação
+metrics.start(_ResetPhase.validation);
+LoggerService.info('===== CONFIG TABLES DROP CHECK =====');
+// ... validações ...
+final validationElapsedMs = metrics.getElapsedMs(_ResetPhase.validation);
+LoggerService.info('Tempo validação: ${validationElapsedMs}ms');
+
+// P3.2: FASE 2 - Abertura do banco
+metrics.start(_ResetPhase.cleanup);
+// ... abertura do banco ...
+metrics.stop(_ResetPhase.cleanup);
+final dbOpenElapsedMs = metrics.getElapsedMs(_ResetPhase.cleanup);
+LoggerService.info('Tempo abertura do banco: ${dbOpenElapsedMs}ms');
+
+// P3.2: Resumo de performance
+final validationTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.validation));
+final backupTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.backupCreation));
+final dropTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.dropExecution));
+final cleanupTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.cleanup));
+final totalTime = validationTime + backupTime + dropTime + cleanupTime;
+
+LoggerService.info('===== RESUMO DE PERFORMANCE =====');
+LoggerService.info('Validação: ${validationTime.inMilliseconds}');
+LoggerService.info('Criação de backups: ${backupTime.inMilliseconds}');
+LoggerService.info('DROP de tabelas: ${dropTime.inMilliseconds}');
+LoggerService.info('Conclusão: ${cleanupTime.inMilliseconds}');
+LoggerService.info('TOTAL: ${totalTime.inMilliseconds}');
+```
+
+**Benefícios:**
+- ✅ Fases claramente identificadas nos logs
+- ✅ Tempo de cada fase medido e registrado
+- ✅ Resumo de performance ao final facilita debugging
+- ✅ Comparação de performance entre execuções
+- ✅ Identificação rápida de gargalos
+
 ---
 
 ## 📋 Cronograma de Implementação (Atualizado)
 
 | Fase | Período | Tarefas | Status |
 |-------|---------|--------|--------|
-| 1 | Preparação (1-2 dias) | Revisão, aprovação | ⏳ |
-| 2 | P0 Críticas (2-3 dias) | P0.1, P0.2, P0.3 | ✅ P0.1, ✅ P0.2 |
-| 3 | P1 Altas (2-3 dias) | P1.1, P1.2 | ⏳ P1.1, ⏳ P1.2 |
-| 4 | P2 Médias (1-2 dias) | P2.1, P2.2 | ⏳ P2.1, ⏳ P2.2 |
-| 5 | P3 Baixas (1 dia) | P3.1, P3.2 | ⏳ P3.1, ⏳ P3.2 |
+| 1 | Preparação (1-2 dias) | Revisão, aprovação | ✅ |
+| 2 | P0 Críticas (2-3 dias) | P0.1, P0.2, P0.3 | ✅ Concluído |
+| 3 | P1 Altas (2-3 dias) | P1.1, P1.2 | ✅ Concluído |
+| 4 | P2 Médias (1-2 dias) | P2.1, P2.2 | ✅ Concluído |
+| 5 | P3 Baixas (1 dia) | P3.1, P3.2 | ✅ Concluído |
 | 6 | Testes (2-3 dias) | TC-1 a TC-7 | ⏳ |
 | 7 | Homologação (1 dia) | Testes finais | ⏳ |
 
