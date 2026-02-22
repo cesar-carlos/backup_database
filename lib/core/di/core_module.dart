@@ -16,73 +16,84 @@ import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart';
 import 'package:get_it/get_it.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
+import 'package:sqlite3/sqlite3.dart';
 
-/// Reset do banco de dados para a versão 2.2.2.
+/// Drop das tabelas de configuração de banco de dados para a versão 2.2.3.
 ///
-/// Deleta o arquivo do banco de dados existente para forçar
-/// recriação limpa na próxima inicialização.
-Future<void> _resetDatabaseForVersion222() async {
-  // Adiciona um pequeno delay para garantir inicialização completa
+/// Executa DROP TABLE nas tabelas de configuração (SQL Server, Sybase, PostgreSQL)
+/// para forçar recriação limpa na próxima inicialização.
+Future<void> _dropConfigTablesForVersion222() async {
   await Future.delayed(const Duration(milliseconds: 500));
 
   final packageInfo = await PackageInfo.fromPlatform();
   final version = packageInfo.version;
 
-  LoggerService.info('===== DATABASE RESET CHECK =====');
+  LoggerService.info('===== CONFIG TABLES DROP CHECK =====');
   LoggerService.info('Versão do app: $version');
-  LoggerService.info('Target version: 2.2.2');
+  LoggerService.info('Target version: 2.2.3');
 
-  // Usa startsWith para ser mais flexível (ex: "2.2.2+1" também funciona)
-  final shouldReset = version.startsWith('2.2.2');
-  LoggerService.info('Deve resetar banco: $shouldReset');
+  final shouldReset = version.startsWith('2.2.3');
+  LoggerService.info('Deve dropar tabelas: $shouldReset');
 
   if (!shouldReset) {
-    LoggerService.info('Versão não é 2.2.2, pulando reset do banco de dados');
+    LoggerService.info('Versão não é 2.2.3, pulando drop de tabelas');
     return;
   }
 
   try {
     final appDataDir = await _getAppDataDirectory();
-    LoggerService.info('Diretório de dados: ${appDataDir.path}');
-
     final dbPath = p.join(appDataDir.path, 'backup_database.db');
     final dbFile = File(dbPath);
 
     LoggerService.info('Caminho do banco de dados: $dbPath');
     LoggerService.info('Arquivo existe: ${await dbFile.exists()}');
 
-    if (await dbFile.exists()) {
-      LoggerService.warning('===== INICIANDO RESET DO BANCO DE DADOS =====');
-      await dbFile.delete();
-      LoggerService.warning('Banco de dados deletado: $dbPath');
-
-      // Deletar também arquivos auxiliares do SQLite
-      final shmFile = File('$dbPath-shm');
-      final walFile = File('$dbPath-wal');
-
-      if (await shmFile.exists()) {
-        await shmFile.delete();
-        LoggerService.warning('Arquivo -shm deletado');
-      }
-
-      if (await walFile.exists()) {
-        await walFile.delete();
-        LoggerService.warning('Arquivo -wal deletado');
-      }
-
-      LoggerService.warning('===== RESET DO BANCO DE DADOS CONCLUÍDO =====');
-    } else {
-      LoggerService.info('Banco de dados não encontrado, nada para deletar');
+    if (!await dbFile.exists()) {
+      LoggerService.info('Banco de dados não encontrado, nada para dropar');
+      return;
     }
+
+    LoggerService.warning('===== INICIANDO DROP DE TABELAS DE CONFIG =====');
+
+    final database = await openSqliteApi(dbPath);
+
+    final tablesToDrop = [
+      'sql_server_configs_table',
+      'sybase_configs_table',
+      'postgres_configs_table',
+    ];
+
+    for (final tableName in tablesToDrop) {
+      try {
+        database.execute('DROP TABLE IF EXISTS $tableName');
+        LoggerService.warning('Tabela dropada: $tableName');
+      } catch (e) {
+        LoggerService.warning('Erro ao dropar tabela $tableName: $e');
+      }
+    }
+
+    database.dispose();
+
+    LoggerService.warning('===== DROP DE TABELAS CONCLUÍDO =====');
+    LoggerService.info(
+      'Tabelas serão recriadas automaticamente pelo Drift '
+      'no próximo acesso',
+    );
   } catch (e, stackTrace) {
-    LoggerService.error('===== ERRO AO RESETAR BANCO DE DADOS =====');
-    LoggerService.error('Erro ao resetar banco de dados: $e', e, stackTrace);
+    LoggerService.error('===== ERRO AO DROPAR TABELAS =====');
+    LoggerService.error('Erro ao dropar tabelas: $e', e, stackTrace);
   }
+}
+
+/// Abre o banco de dados SQLite diretamente usando sqlite3.
+Future<CommonDatabase> openSqliteApi(String dbPath) async {
+  return sqlite3.open(dbPath);
 }
 
 /// Obtém o diretório de dados do aplicativo sem duplicação de pastas
@@ -108,8 +119,8 @@ Future<Directory> _getAppDataDirectory() async {
 /// This module registers fundamental services like logging,
 /// encryption, database, HTTP client, and system utilities.
 Future<void> setupCoreModule(GetIt getIt) async {
-  // Resetar banco de dados na versão 2.2.2
-  await _resetDatabaseForVersion222();
+  // Drop tabelas de configuração na versão 2.2.3
+  await _dropConfigTablesForVersion222();
 
   final appDataDir = await _getAppDataDirectory();
   final logsDirectory = p.join(appDataDir.path, 'logs');
