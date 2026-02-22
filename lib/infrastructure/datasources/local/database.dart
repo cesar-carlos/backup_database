@@ -870,6 +870,7 @@ class AppDatabase extends _$AppDatabase {
         await _ensureEmailConfigOAuthColumns();
         await _ensureEmailNotificationTargetsSchema();
         await _ensureEmailTestAuditSchema();
+        await _ensureSchedulesTimeoutAndTimestampColumns();
       },
     );
   }
@@ -1682,6 +1683,71 @@ class AppDatabase extends _$AppDatabase {
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
         'Erro ao criar triggers de integridade schedule/configuracao',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _ensureSchedulesTimeoutAndTimestampColumns() async {
+    try {
+      final schedulesColumns = await customSelect(
+        'PRAGMA table_info(schedules_table)',
+      ).get();
+      final columnNames = schedulesColumns
+          .map((row) => row.data['name'] as String)
+          .toSet();
+
+      if (!columnNames.contains('backup_timeout_seconds')) {
+        await customStatement(
+          'ALTER TABLE schedules_table ADD COLUMN backup_timeout_seconds '
+          'INTEGER NOT NULL DEFAULT 7200',
+        );
+        LoggerService.info(
+          'Coluna backup_timeout_seconds adicionada à schedules_table',
+        );
+      }
+
+      if (!columnNames.contains('verify_timeout_seconds')) {
+        await customStatement(
+          'ALTER TABLE schedules_table ADD COLUMN verify_timeout_seconds '
+          'INTEGER NOT NULL DEFAULT 1800',
+        );
+        LoggerService.info(
+          'Coluna verify_timeout_seconds adicionada à schedules_table',
+        );
+      }
+
+      if (!columnNames.contains('created_at')) {
+        await customStatement(
+          'ALTER TABLE schedules_table ADD COLUMN created_at '
+          'INTEGER NOT NULL DEFAULT 0',
+        );
+        await customStatement(
+          'UPDATE schedules_table SET created_at = '
+          "strftime('%s', 'now') * 1000000 WHERE created_at = 0",
+        );
+        LoggerService.info(
+          'Coluna created_at adicionada à schedules_table',
+        );
+      }
+
+      if (!columnNames.contains('updated_at')) {
+        await customStatement(
+          'ALTER TABLE schedules_table ADD COLUMN updated_at '
+          'INTEGER NOT NULL DEFAULT 0',
+        );
+        await customStatement(
+          'UPDATE schedules_table SET updated_at = '
+          "strftime('%s', 'now') * 1000000 WHERE updated_at = 0",
+        );
+        LoggerService.info(
+          'Coluna updated_at adicionada à schedules_table',
+        );
+      }
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao garantir colunas de timeout e timestamp em schedules_table',
         e,
         stackTrace,
       );
