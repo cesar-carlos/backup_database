@@ -1,7 +1,7 @@
 name: backup_database
 description: Sistema de backup automático para SQL Server e Sybase ASA
 publish_to: "none"
-version: 2.2.3
+version: D
 
 environment:
   sdk: ^3.10.1
@@ -66,6 +66,7 @@ dev_dependencies:
   pubspec_dependency_sorter: ^1.0.5
   very_good_analysis: ^10.0.0
   coverage: ^1.15.0
+  pub_semver: ^2.1.5
   sqlite3: ^2.9.4
 
 flutter:

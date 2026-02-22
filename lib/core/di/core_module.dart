@@ -20,6 +20,7 @@ import 'package:get_it/get_it.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:pub_semver/pub_semver.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -38,11 +39,27 @@ Future<bool> _dropConfigTablesForVersion223() async {
   LoggerService.info('Versão do app: $version');
   LoggerService.info('Target version: 2.2.3');
 
-  final shouldReset = version.startsWith('2.2.3');
-  LoggerService.info('Deve dropar tabelas: $shouldReset');
+  // Validação exata usando pub_semver - evita versões futuras como 2.2.30, 2.2.31, etc.
+  final targetVersion = Version.parse('2.2.3');
+  Version? currentVersion;
+
+  try {
+    currentVersion = Version.parse(version.split('+').first);
+  } catch (e) {
+    LoggerService.warning('Versão inválida: $version');
+    return false;
+  }
+
+  final shouldReset = currentVersion == targetVersion;
+
+  LoggerService.info(
+    'Versão parseada: $currentVersion, '
+    'Target: $targetVersion, '
+    'Reset: $shouldReset',
+  );
 
   if (!shouldReset) {
-    LoggerService.info('Versão não é 2.2.3, pulando drop de tabelas');
+    LoggerService.info('Versão não é exatamente 2.2.3, pulando drop de tabelas');
     return false;
   }
 
