@@ -859,11 +859,12 @@ class AppDatabase extends _$AppDatabase {
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
 
-        // Verifica e recria tabelas de configuração de banco se necessário
+        // Verifica e recria tabelas de configuração de banco e agendamentos
         // (útil após drop manual das tabelas)
         await _ensureSqlServerConfigsTableExistsDirect();
         await _ensureSybaseConfigsTableExistsDirect();
         await _ensurePostgresConfigsTableExistsDirect();
+        await _ensureSchedulesTableExistsDirect();
 
         await _ensureScheduleDestinationsTableExists();
         await _createScheduleDestinationIndexes();
@@ -1089,6 +1090,54 @@ class AppDatabase extends _$AppDatabase {
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
         'Erro ao verificar/criar tabela postgres_configs',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _ensureSchedulesTableExistsDirect() async {
+    try {
+      final tableExists = await customSelect(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name='schedules_table'",
+      ).getSingleOrNull();
+
+      if (tableExists == null) {
+        LoggerService.info(
+          'Tabela schedules não existe, criando via SQL.',
+        );
+        await customStatement('''
+          CREATE TABLE IF NOT EXISTS schedules_table (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            database_config_id TEXT NOT NULL,
+            database_type TEXT NOT NULL,
+            schedule_type TEXT NOT NULL DEFAULT 'daily',
+            schedule_config TEXT NOT NULL,
+            destination_ids TEXT NOT NULL DEFAULT '[]',
+            backup_folder TEXT NOT NULL DEFAULT '',
+            backup_type TEXT NOT NULL DEFAULT 'full',
+            truncate_log INTEGER NOT NULL DEFAULT 1,
+            compress_backup INTEGER NOT NULL DEFAULT 1,
+            compression_format TEXT NOT NULL DEFAULT 'zip',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            enable_checksum INTEGER NOT NULL DEFAULT 0,
+            verify_after_backup INTEGER NOT NULL DEFAULT 0,
+            post_backup_script TEXT,
+            last_run_at INTEGER,
+            next_run_at INTEGER,
+            backup_timeout_seconds INTEGER NOT NULL DEFAULT 7200,
+            verify_timeout_seconds INTEGER NOT NULL DEFAULT 1800,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
+        LoggerService.info('Tabela schedules criada com sucesso via SQL');
+      }
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao verificar/criar tabela schedules',
         e,
         stackTrace,
       );
