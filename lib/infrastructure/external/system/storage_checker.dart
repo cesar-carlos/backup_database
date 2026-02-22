@@ -139,7 +139,8 @@ class StorageChecker implements IStorageChecker {
 
     LoggerService.debug('Parsing match - full: $fullMatch, numStr: $numStr, unit: $unit');
 
-    final numValue = double.tryParse(numStr ?? '');
+    final normalizedNumStr = (numStr ?? '').replaceAll(',', '.');
+    final numValue = double.tryParse(normalizedNumStr);
 
     if (numValue == null) {
       LoggerService.warning('Falha ao parsear número: "$numStr"');
