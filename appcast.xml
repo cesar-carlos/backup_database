@@ -2,12 +2,18 @@
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
     <item>
+      <title>Version 2.2.2</title>
+      <pubDate>Sun, 22 Feb 2026 21:23:45 +0000</pubDate>
+      <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.2.2&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.2.2/BackupDatabase-Setup-2.2.2.exe" sparkle:version="2.2.2" sparkle:os="windows" length="38117555" type="application/octet-stream" />
+    </item>
+  <item>
       <title>Version 2.2.1</title>
       <pubDate>Sun, 22 Feb 2026 21:04:09 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.2.1&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
       <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.2.1/BackupDatabase-Setup-2.2.1.exe" sparkle:version="2.2.1" sparkle:os="windows" length="38119188" type="application/octet-stream" />
     </item>
-  <item>
+    <item>
       <title>Version 2.1.3</title>
       <pubDate>Wed, 14 Jan 2026 14:05:27 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.1.3&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
@@ -189,6 +195,12 @@
       <pubDate>Sun, 22 Feb 2026 21:04:09 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.2.1&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
       <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.2.1/BackupDatabase-Setup-2.2.1.exe" sparkle:version="2.2.1" sparkle:os="windows" length="38119188" type="application/octet-stream" />
+    </item>
+    <item>
+      <title>Version 2.2.2</title>
+      <pubDate>Sun, 22 Feb 2026 21:23:45 +0000</pubDate>
+      <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.2.2&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.2.2/BackupDatabase-Setup-2.2.2.exe" sparkle:version="2.2.2" sparkle:os="windows" length="38117555" type="application/octet-stream" />
     </item>
   </channel>
 </rss>
