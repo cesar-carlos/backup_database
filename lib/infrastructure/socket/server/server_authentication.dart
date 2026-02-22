@@ -57,7 +57,7 @@ class ServerAuthentication {
     if (licenseValidationService != null) {
       try {
         final licenseResult = await licenseValidationService.isFeatureAllowed(
-          LicenseFeatures.remoteControl,
+          LicenseFeatures.serverConnection,
         );
         if (licenseResult.isError()) {
           final failure = licenseResult.exceptionOrNull();
@@ -72,15 +72,15 @@ class ServerAuthentication {
           );
         }
 
-        final isRemoteControlAllowed = licenseResult.getOrElse((_) => false);
-        if (!isRemoteControlAllowed) {
+        final isServerConnectionAllowed = licenseResult.getOrElse((_) => false);
+        if (!isServerConnectionAllowed) {
           LoggerService.warning(
-            'ServerAuthentication: remote control denied by license',
+            'ServerAuthentication: server connection denied by license',
           );
           return const AuthValidationResult(
             isValid: false,
             errorMessage:
-                'Conexao remota bloqueada: licenca nao permite controle remoto',
+                'Conexao remota bloqueada: licenca nao permite conexao ao servidor',
             errorCode: ErrorCode.licenseDenied,
           );
         }

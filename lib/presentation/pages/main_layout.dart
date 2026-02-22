@@ -33,7 +33,7 @@ class _MainLayoutState extends State<MainLayout> {
       const NavigationItem(
         icon: FluentIcons.view_dashboard,
         selectedIcon: FluentIcons.view_dashboard,
-        label: 'Dashboard',
+        label: 'Painel',
         route: RouteNames.dashboard,
       ),
       const NavigationItem(

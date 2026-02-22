@@ -126,7 +126,7 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
             i: widget.columns[i].width,
           if (hasActions)
             widget.columns.length: FixedColumnWidth(
-              math.max(76, (widget.actions.length * 36) + 16).toDouble(),
+              math.max(76, ((widget.actions.length * 36) + 16) * 0.83).toDouble(),
             ),
         };
         final viewportWidth = constraints.maxWidth.isFinite

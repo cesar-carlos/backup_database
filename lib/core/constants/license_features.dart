@@ -3,6 +3,7 @@ class LicenseFeatures {
   static const String logBackup = 'log_backup';
   static const String intervalSchedule = 'interval_schedule';
   static const String remoteControl = 'remote_control';
+  static const String serverConnection = 'server_connection';
   static const String googleDrive = 'google_drive';
   static const String dropbox = 'dropbox';
   static const String nextcloud = 'nextcloud';
@@ -16,6 +17,7 @@ class LicenseFeatures {
     logBackup,
     intervalSchedule,
     remoteControl,
+    serverConnection,
     googleDrive,
     dropbox,
     nextcloud,

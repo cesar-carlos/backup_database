@@ -29,11 +29,11 @@ class ScheduleGrid extends StatelessWidget {
     final texts = WidgetTexts.fromContext(context);
     return AppCard(
       child: AppDataGrid<Schedule>(
-        minWidth: 1120,
+        minWidth: 900,
         columns: [
           AppDataGridColumn<Schedule>(
-            label: 'Agendamento',
-            width: const FlexColumnWidth(2.2),
+            label: texts.scheduleLabel,
+            width: const FlexColumnWidth(1.8),
             cellBuilder: (context, row) => Text(
               row.name,
               overflow: TextOverflow.ellipsis,
@@ -41,42 +41,34 @@ class ScheduleGrid extends StatelessWidget {
             ),
           ),
           AppDataGridColumn<Schedule>(
-            label: 'Tipo',
-            width: const FlexColumnWidth(1.2),
+            label: texts.typeLabel,
+            width: const FlexColumnWidth(0.95),
             cellBuilder: (context, row) => _TagChip(
               label: texts.scheduleTypeName(
                 scheduleTypeFromString(row.scheduleType),
               ),
-              color: _getScheduleTypeColor(
+              color: getScheduleTypeColor(
                 scheduleTypeFromString(row.scheduleType),
               ),
             ),
           ),
           AppDataGridColumn<Schedule>(
-            label: 'Banco',
-            width: const FlexColumnWidth(1.2),
-            cellBuilder: (context, row) => _TagChip(
-              label: _getDatabaseTypeName(row.databaseType),
-              color: _getDatabaseTypeColor(row.databaseType),
-            ),
-          ),
-          AppDataGridColumn<Schedule>(
             label: texts.nextRunLabel,
-            width: const FlexColumnWidth(1.5),
+            width: const FlexColumnWidth(0.95),
             cellBuilder: (context, row) => Text(
               row.nextRunAt != null ? _dateFormat.format(row.nextRunAt!) : '-',
             ),
           ),
           AppDataGridColumn<Schedule>(
             label: texts.lastRunLabel,
-            width: const FlexColumnWidth(1.5),
+            width: const FlexColumnWidth(0.95),
             cellBuilder: (context, row) => Text(
               row.lastRunAt != null ? _dateFormat.format(row.lastRunAt!) : '-',
             ),
           ),
           AppDataGridColumn<Schedule>(
-            label: 'Status',
-            width: const FlexColumnWidth(1.3),
+            label: texts.statusLabel,
+            width: const FlexColumnWidth(1.2),
             cellBuilder: (context, row) => Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -85,7 +77,7 @@ class ScheduleGrid extends StatelessWidget {
                   onChanged: (enabled) => onToggleEnabled(row, enabled),
                 ),
                 const SizedBox(width: 8),
-                Text(row.enabled ? 'Ativo' : 'Inativo'),
+                Text(row.enabled ? texts.active : texts.inactive),
               ],
             ),
           ),
@@ -119,7 +111,7 @@ class ScheduleGrid extends StatelessWidget {
     );
   }
 
-  Color _getScheduleTypeColor(ScheduleType type) {
+  Color getScheduleTypeColor(ScheduleType type) {
     switch (type) {
       case ScheduleType.daily:
         return AppColors.scheduleDaily;
@@ -132,7 +124,7 @@ class ScheduleGrid extends StatelessWidget {
     }
   }
 
-  String _getDatabaseTypeName(DatabaseType type) {
+  String getDatabaseTypeName(DatabaseType type) {
     switch (type) {
       case DatabaseType.sqlServer:
         return 'SQL Server';
@@ -143,7 +135,7 @@ class ScheduleGrid extends StatelessWidget {
     }
   }
 
-  Color _getDatabaseTypeColor(DatabaseType type) {
+  Color getDatabaseTypeColor(DatabaseType type) {
     switch (type) {
       case DatabaseType.sqlServer:
         return AppColors.databaseSqlServer;

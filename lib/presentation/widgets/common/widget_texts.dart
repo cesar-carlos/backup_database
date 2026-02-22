@@ -19,6 +19,9 @@ class WidgetTexts {
     required this.inactive,
     required this.nextRunLabel,
     required this.lastRunLabel,
+    required this.scheduleLabel,
+    required this.typeLabel,
+    required this.statusLabel,
   });
 
   final String cancel;
@@ -37,6 +40,9 @@ class WidgetTexts {
   final String inactive;
   final String nextRunLabel;
   final String lastRunLabel;
+  final String scheduleLabel;
+  final String typeLabel;
+  final String statusLabel;
 
   factory WidgetTexts.fromContext(BuildContext context) {
     return WidgetTexts.fromLocale(Localizations.localeOf(context));
@@ -53,15 +59,18 @@ class WidgetTexts {
         selectPrefix: 'Selecione',
         ok: 'OK',
         success: 'Sucesso',
-        information: 'Informacao',
-        attention: 'Atencao',
+        information: 'Informação',
+        attention: 'Atenção',
         error: 'Erro',
-        deletionBlockedByDependencies: 'Exclusao bloqueada por dependencias',
+        deletionBlockedByDependencies: 'Exclusão bloqueada por dependências',
         goToSchedules: 'Ir para Agendamentos',
         active: 'Ativo',
         inactive: 'Desativado',
-        nextRunLabel: 'Proxima execucao',
-        lastRunLabel: 'Ultima execucao',
+        nextRunLabel: 'Próxima execução',
+        lastRunLabel: 'Última execução',
+        scheduleLabel: 'Agendamento',
+        typeLabel: 'Tipo',
+        statusLabel: 'Status',
       );
     }
 
@@ -82,6 +91,9 @@ class WidgetTexts {
       inactive: 'Disabled',
       nextRunLabel: 'Next run',
       lastRunLabel: 'Last run',
+      scheduleLabel: 'Schedule',
+      typeLabel: 'Type',
+      statusLabel: 'Status',
     );
   }
 
@@ -100,7 +112,7 @@ class WidgetTexts {
     }
   }
 
-  String get _daily => _isPt ? 'Diario' : 'Daily';
+  String get _daily => _isPt ? 'Diário' : 'Daily';
   String get _weekly => _isPt ? 'Semanal' : 'Weekly';
   String get _monthly => _isPt ? 'Mensal' : 'Monthly';
   String get _interval => _isPt ? 'Intervalo' : 'Interval';

@@ -35,7 +35,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final isClientMode = currentAppMode == AppMode.client;
 
     return ScaffoldPage(
-      header: const PageHeader(title: Text('Dashboard')),
+      header: const PageHeader(title: Text('Painel')),
       content: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
         child: Column(
