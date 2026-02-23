@@ -15,7 +15,7 @@ Evoluir o fluxo de backup SQL Server para:
 
 ### Entregas
 
-- [x] Cada execução de backup gera métricas minimas para comparação futura (historico com duracao/tamanho/tipo e flags).
+- [x] Cada execução de backup gera métricas mínimas para comparação futura (histórico com duração/tamanho/tipo e flags).
 - [x] BackupMetrics entity criada.
 - [x] BackupFlags entity criada.
 - [x] BackupHistory entity atualizada com campo metrics opcional.
@@ -23,19 +23,26 @@ Evoluir o fluxo de backup SQL Server para:
 - [x] IMetricsAnalysisService interface criada.
 - [x] MetricsAnalysisService implementado e registrado no DI.
 - [x] Lint zerado para os novos componentes de métricas.
-- [ ] SqlServerBackupService atualizado para registrar métricas.
-- [ ] Sybase/Postgres services atualizados para registrar métricas.
+- [x] BackupExecutionResult atualizada com campo metrics opcional.
+- [x] SqlServerBackupService atualizado para registrar métricas (backup/verify durations separados, BackupMetrics criado).
+- [ ] SybaseBackupService atualizado para registrar métricas.
+- [ ] PostgresBackupService atualizado para registrar métricas.
+- [ ] Relatórios p50/p95 implementados no MetricsAnalysisService.
 
 ### Observações
 
-O MetricsAnalysisService foi criado e está funcional. Ele gera relatórios de métricas por tipo de backup, permitindo análise de performance p50/p95. O próximo passo é integrar a coleta de métricas nos serviços de backup (SqlServer, Sybase, Postgres).
+O SqlServerBackupService foi atualizado para:
+- Medir duração de backup e verificação separadamente
+- Criar BackupMetrics entity com todas as métricas relevantes (totalDuration, backupDuration, verifyDuration, backupSizeBytes, backupSpeedMbPerSec, backupType, flags)
+- Incluir BackupMetrics no BackupExecutionResult retornado
+
+O MetricsAnalysisService foi criado e está funcional. Ele gera relatórios de métricas por tipo de backup, permitindo análise de performance p50/p95.
 
 ### Próximos passos
 
-1. Integrar coleta de métricas no SqlServerBackupService (track backup/verify durations, criar BackupMetrics).
-2. Integrar métricas no BackupExecutionResult.
-3. Atualizar Sybase/Postgres backup services para consistência.
-4. Implementar relatórios p50/p95 no MetricsAnalysisService.
+1. Integrar coleta de métricas no SybaseBackupService (track backup/verify durations, criar BackupMetrics).
+2. Integrar coleta de métricas no PostgresBackupService (track backup/verify durations, criar BackupMetrics).
+3. Implementar relatórios p50/p95 no MetricsAnalysisService.
 
 ## Status Atual (revalidado no código em 2026-02-21)
 

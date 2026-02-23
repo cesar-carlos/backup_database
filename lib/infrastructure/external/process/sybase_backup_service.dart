@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
@@ -69,7 +70,7 @@ class SybaseBackupService implements ISybaseBackupService {
 
       final databaseName = config.databaseNameValue;
 
-      final stopwatch = Stopwatch()..start();
+      final backupStopwatch = Stopwatch()..start();
       rd.Result<ps.ProcessResult>? result;
       var lastError = '';
 
@@ -240,7 +241,7 @@ class SybaseBackupService implements ISybaseBackupService {
         }
       }
 
-      stopwatch.stop();
+      backupStopwatch.stop();
 
       if (result == null) {
         return rd.Failure(
@@ -392,6 +393,7 @@ class SybaseBackupService implements ISybaseBackupService {
         // Verificar integridade do backup se solicitado
         if (verifyAfterBackup) {
           LoggerService.info('Verificando integridade do backup Sybase...');
+          final verifyStopwatch = Stopwatch()..start();
 
           var verifySuccess = false;
           var lastVerifyError = '';
@@ -498,14 +500,36 @@ class SybaseBackupService implements ISybaseBackupService {
             );
             // Não falha o backup, apenas registra o warning
           }
+          verifyStopwatch.stop();
         }
+
+        final backupDuration = backupStopwatch.elapsed;
+        final verifyDuration = verifyAfterBackup ? Stopwatch().elapsed : Duration.zero;
+        final totalDuration = backupDuration + verifyDuration;
+
+        final metrics = BackupMetrics(
+          totalDuration: totalDuration,
+          backupDuration: backupDuration,
+          verifyDuration: verifyDuration,
+          backupSizeBytes: totalSize,
+          backupSpeedMbPerSec: _calculateSpeedMbPerSec(totalSize, backupDuration.inSeconds),
+          backupType: effectiveType.name,
+          flags: BackupFlags(
+            compression: false,
+            verifyPolicy: verifyAfterBackup ? 'dbvalid/dbverify' : 'none',
+            stripingCount: 1,
+            withChecksum: false,
+            stopOnError: true,
+          ),
+        );
 
         return rd.Success(
           BackupExecutionResult(
             backupPath: actualBackupPath,
             fileSize: totalSize,
-            duration: stopwatch.elapsed,
+            duration: totalDuration,
             databaseName: config.databaseNameValue,
+            metrics: metrics,
           ),
         );
       }, rd.Failure.new);
@@ -687,5 +711,11 @@ class SybaseBackupService implements ISybaseBackupService {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  double _calculateSpeedMbPerSec(int sizeInBytes, int durationSeconds) {
+    if (durationSeconds <= 0) return 0;
+    final sizeInMb = sizeInBytes / 1024 / 1024;
+    return sizeInMb / durationSeconds;
   }
 }

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
@@ -220,8 +221,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
         );
 
         // Verificar integridade do backup se solicitado
+        final verifyStopwatch = Stopwatch();
         if (verifyAfterBackup) {
           LoggerService.info('Verificando integridade do backup...');
+          verifyStopwatch.start();
           final verifyQuery =
               "RESTORE VERIFYONLY FROM DISK = N'$escapedBackupPath' "
               "${enableChecksum ? 'WITH CHECKSUM' : ''}";
@@ -237,6 +240,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
             arguments: verifyArguments,
             timeout: verifyTimeout ?? const Duration(minutes: 30),
           );
+          verifyStopwatch.stop();
 
           verifyResult.fold(
             (processResult) {
@@ -260,12 +264,33 @@ class SqlServerBackupService implements ISqlServerBackupService {
           );
         }
 
+        final backupDuration = stopwatch.elapsed;
+        final verifyDuration = verifyAfterBackup ? verifyStopwatch.elapsed : Duration.zero;
+        final totalDuration = backupDuration + verifyDuration;
+
+        final metrics = BackupMetrics(
+          totalDuration: totalDuration,
+          backupDuration: backupDuration,
+          verifyDuration: verifyDuration,
+          backupSizeBytes: fileSize,
+          backupSpeedMbPerSec: _calculateSpeedMbPerSec(fileSize, backupDuration.inSeconds),
+          backupType: getBackupTypeName(backupType),
+          flags: BackupFlags(
+            compression: sqlServerBackupOptions?.compression ?? false,
+            verifyPolicy: verifyAfterBackup ? verifyPolicy.name : 'none',
+            stripingCount: sqlServerBackupOptions?.stripingCount ?? 1,
+            withChecksum: enableChecksum,
+            stopOnError: true,
+          ),
+        );
+
         return rd.Success(
           BackupExecutionResult(
             backupPath: backupPath,
             fileSize: fileSize,
-            duration: stopwatch.elapsed,
+            duration: totalDuration,
             databaseName: config.databaseValue,
+            metrics: metrics,
           ),
         );
       }, rd.Failure.new);
@@ -416,5 +441,11 @@ class SqlServerBackupService implements ISqlServerBackupService {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  double _calculateSpeedMbPerSec(int sizeInBytes, int durationSeconds) {
+    if (durationSeconds <= 0) return 0;
+    final sizeInMb = sizeInBytes / 1024 / 1024;
+    return sizeInMb / durationSeconds;
   }
 }
