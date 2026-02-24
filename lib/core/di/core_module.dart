@@ -11,6 +11,7 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/datasources/local/database_migration_224.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
@@ -350,6 +351,8 @@ Future<Directory> getAppDataDirectory() async {
 Future<void> setupCoreModule(GetIt getIt) async {
   await _dropConfigTablesForVersion223();
 
+  final exportData224 = await runFullDatabaseMigration224();
+
   final appDataDir = await getApplicationDocumentsDirectory();
   final logsDirectory = p.join(appDataDir.path, 'logs');
 
@@ -374,6 +377,11 @@ Future<void> setupCoreModule(GetIt getIt) async {
   getIt.registerLazySingleton<AppDatabase>(
     () => AppDatabase(databaseName: databaseName),
   );
+
+  if (exportData224 != null) {
+    final db = getIt<AppDatabase>();
+    await importMigration224Data(db, exportData224);
+  }
 
   // Security & Encryption
   getIt.registerLazySingleton<IDeviceKeyService>(DeviceKeyService.new);
