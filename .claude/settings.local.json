@@ -71,5 +71,6 @@
       "Bash(git pull:*)",
       "Bash(flutter pub run build_runner build:*)"
     ]
-  }
+  },
+  "prefersReducedMotion": true
 }

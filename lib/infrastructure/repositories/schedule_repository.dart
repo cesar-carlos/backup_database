@@ -82,12 +82,24 @@ class ScheduleRepository implements IScheduleRepository {
         e,
         stackTrace,
       );
-      if (e.toString().contains('foreign key constraint failed')) {
+      final errorStr = e.toString();
+      if (errorStr.contains('foreign key constraint failed')) {
         return const rd.Failure(
           DatabaseFailure(
             message:
                 'Erro ao criar agendamento: um ou mais destinos '
                 'selecionados não existem. Por favor, selecione destinos válidos.',
+          ),
+        );
+      }
+      if (errorStr.contains('Configuracao SQL Server inexistente') ||
+          errorStr.contains('Configuracao Sybase inexistente') ||
+          errorStr.contains('Configuracao PostgreSQL inexistente')) {
+        return const rd.Failure(
+          DatabaseFailure(
+            message:
+                'A configuração de banco selecionada não existe mais. '
+                'Recarregue a página de configurações e selecione uma configuração válida.',
           ),
         );
       }

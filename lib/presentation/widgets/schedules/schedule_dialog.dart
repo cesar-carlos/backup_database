@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/constants/schedule_dialog_strings.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
@@ -259,7 +260,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           const Icon(FluentIcons.calendar, color: AppColors.primary),
           const SizedBox(width: 12),
           Text(
-            isEditing ? 'Editar Agendamento' : 'Novo Agendamento',
+            isEditing
+                ? ScheduleDialogStrings.editSchedule
+                : ScheduleDialogStrings.newSchedule,
             style: FluentTheme.of(context).typography.title,
           ),
         ],
@@ -279,17 +282,17 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                   },
                   tabs: [
                     Tab(
-                      text: const Text('Geral'),
+                      text: const Text(ScheduleDialogStrings.tabGeneral),
                       icon: const Icon(FluentIcons.settings),
                       body: _buildGeneralTab(),
                     ),
                     Tab(
-                      text: const Text('Configurações'),
+                      text: const Text(ScheduleDialogStrings.tabSettings),
                       icon: const Icon(FluentIcons.folder),
                       body: _buildSettingsTab(),
                     ),
                     Tab(
-                      text: const Text('Script SQL'),
+                      text: const Text(ScheduleDialogStrings.tabScriptSql),
                       icon: const Icon(FluentIcons.code),
                       body: _buildScriptTab(),
                     ),
@@ -647,11 +650,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildSectionTitle('Destinos'),
+          _buildSectionTitle(ScheduleDialogStrings.destinations),
           const SizedBox(height: 12),
           _buildDestinationSelector(),
           const SizedBox(height: 24),
-          _buildSectionTitle('Pasta de Backup'),
+          _buildSectionTitle(ScheduleDialogStrings.backupFolderSection),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,12 +662,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               Expanded(
                 child: AppTextField(
                   controller: _backupFolderController,
-                  label: 'Pasta para Armazenar Backup',
-                  hint: r'C:\Backups',
+                  label: ScheduleDialogStrings.backupFolderLabel,
+                  hint: ScheduleDialogStrings.backupFolderHint,
                   prefixIcon: const Icon(FluentIcons.folder),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Pasta de backup é obrigatória';
+                      return ScheduleDialogStrings.backupFolderRequired;
                     }
                     return null;
                   },
@@ -682,14 +685,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Pasta onde o arquivo de backup será gerado antes de enviar aos destinos',
+            ScheduleDialogStrings.backupFolderDescription,
             style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 24),
-          _buildSectionTitle('Opções'),
+          _buildSectionTitle(ScheduleDialogStrings.options),
           const SizedBox(height: 12),
           InfoLabel(
-            label: 'Compactar backup',
+            label: ScheduleDialogStrings.compressBackup,
             child: ToggleSwitch(
               checked: _compressBackup,
               onChanged: (value) {
@@ -707,19 +710,19 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           if (_compressBackup) ...[
             const SizedBox(height: 16),
             AppDropdown<CompressionFormat>(
-              label: 'Formato de compressão',
+              label: ScheduleDialogStrings.compressionFormat,
               value: _compressionFormat,
-              placeholder: const Text('Formato de compressão'),
+              placeholder: const Text(
+                ScheduleDialogStrings.compressionFormatPlaceholder,
+              ),
               items: const [
                 ComboBoxItem<CompressionFormat>(
                   value: CompressionFormat.zip,
-                  child: Text('ZIP (compressão rápida, menor taxa)'),
+                  child: Text(ScheduleDialogStrings.compressionFormatZip),
                 ),
                 ComboBoxItem<CompressionFormat>(
                   value: CompressionFormat.rar,
-                  child: Text(
-                    'RAR (compressão maior, mais processamento)',
-                  ),
+                  child: Text(ScheduleDialogStrings.compressionFormatRar),
                 ),
               ],
               onChanged: (value) {
@@ -733,7 +736,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           ],
           const SizedBox(height: 16),
           InfoLabel(
-            label: 'Agendamento habilitado',
+            label: ScheduleDialogStrings.schedulingEnabled,
             child: ToggleSwitch(
               checked: _isEnabled,
               onChanged: (value) {
@@ -744,15 +747,17 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             ),
           ),
           const SizedBox(height: 24),
-          _buildSectionTitle('Timeouts (Segurança Operacional)'),
+          _buildSectionTitle(ScheduleDialogStrings.timeoutsSection),
           const SizedBox(height: 12),
           InfoLabel(
-            label: 'Timeout de Backup',
+            label: ScheduleDialogStrings.backupTimeout,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Expanded(
+                SizedBox(
+                  width: 120,
                   child: InfoLabel(
-                    label: 'Minutos',
+                    label: ScheduleDialogStrings.minutes,
                     child: NumericField(
                       controller: _backupTimeoutMinutesController,
                       label: '',
@@ -767,22 +772,27 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Máximo: 24 horas',
-                  style: FluentTheme.of(context).typography.caption,
+                const SizedBox(width: 12),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    ScheduleDialogStrings.max24Hours,
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           InfoLabel(
-            label: 'Timeout de Verificação',
+            label: ScheduleDialogStrings.verifyTimeout,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Expanded(
+                SizedBox(
+                  width: 120,
                   child: InfoLabel(
-                    label: 'Minutos',
+                    label: ScheduleDialogStrings.minutes,
                     child: NumericField(
                       controller: _verifyTimeoutMinutesController,
                       label: '',
@@ -797,18 +807,20 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Máximo: 24 horas',
-                  style: FluentTheme.of(context).typography.caption,
+                const SizedBox(width: 12),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    ScheduleDialogStrings.max24Hours,
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            'Define o tempo máximo de espera para execução do backup e verificação de integridade. '
-            'Zero significa espera infinita.',
+            ScheduleDialogStrings.timeoutsDescription,
             style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 24),
@@ -1921,6 +1933,25 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       MessageModal.showWarning(
         context,
         message: 'Selecione pelo menos um destino',
+      );
+      return;
+    }
+
+    await _loadData();
+    if (!mounted) return;
+
+    final configExists = _databaseType == DatabaseType.sqlServer
+        ? _sqlServerConfigs.any((c) => c.id == _selectedDatabaseConfigId)
+        : _databaseType == DatabaseType.sybase
+            ? _sybaseConfigs.any((c) => c.id == _selectedDatabaseConfigId)
+            : _postgresConfigs.any((c) => c.id == _selectedDatabaseConfigId);
+
+    if (!configExists) {
+      MessageModal.showError(
+        context,
+        message:
+            'A configuração de banco selecionada não existe mais. '
+            'Por favor, selecione outra configuração.',
       );
       return;
     }

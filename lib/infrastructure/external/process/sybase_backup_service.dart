@@ -57,9 +57,9 @@ class SybaseBackupService implements ISybaseBackupService {
       if (effectiveType == BackupType.full) {
         backupPath = p.join(outputDirectory, config.databaseNameValue);
       } else {
-        // Para backup de log, as ferramentas do SQL Anywhere costumam receber um
-        // diretório destino. Criamos uma pasta única por execução para evitar
-        // sobrescrita e facilitar a descoberta do arquivo gerado (quando existir).
+        
+        
+        
         final folderName =
             customFileName ??
             '${config.databaseNameValue}_${typeSlug}_$timestamp';
@@ -108,8 +108,8 @@ class SybaseBackupService implements ISybaseBackupService {
             backupSql =
                 "BACKUP DATABASE DIRECTORY '$escapedBackupPath' $logClause";
           case BackupType.differential:
-            // Sybase SQL Anywhere não tem differential nativo
-            // Usa backup incremental de transaction log
+            
+            
             LoggerService.info(
               'Sybase não suporta differential nativo. '
               'Usando backup incremental de transaction log.',
@@ -197,10 +197,10 @@ class SybaseBackupService implements ISybaseBackupService {
 
           if (effectiveType == BackupType.log ||
               effectiveType == BackupType.differential) {
-            // Referência (ASA/SQL Anywhere): -t = transaction log only;
-            // -r renomeia backups anteriores e cria um novo; -x remove backups
-            // anteriores e cria um novo.
-            // Para differential, usamos incremental de transaction log
+            
+            
+            
+            
             arguments.add('-t');
             arguments.add(truncateLog ? '-x' : '-r');
           }
@@ -340,7 +340,7 @@ class SybaseBackupService implements ISybaseBackupService {
           );
         }
 
-        // Para backup de log, tentar resolver o arquivo gerado dentro do diretório.
+        
         if (effectiveType == BackupType.log && await backupDir.exists()) {
           final resolvedLogFile = await _tryFindLogFile(backupDir);
           if (resolvedLogFile != null) {
@@ -349,7 +349,7 @@ class SybaseBackupService implements ISybaseBackupService {
           }
         }
 
-        // Para backup de log, aguardar um pouco mais para garantir que o arquivo seja fechado pelo Sybase
+        
         final resolvedBackupFile = File(actualBackupPath);
         if (effectiveType == BackupType.log &&
             await resolvedBackupFile.exists()) {
@@ -357,7 +357,7 @@ class SybaseBackupService implements ISybaseBackupService {
             'Aguardando arquivo de log ser liberado pelo Sybase...',
           );
 
-          // Tentar abrir o arquivo várias vezes para garantir que está acessível
+          
           var fileAccessible = false;
           for (var attempt = 0; attempt < 5; attempt++) {
             try {
@@ -380,7 +380,7 @@ class SybaseBackupService implements ISybaseBackupService {
             }
           }
 
-          // Aguardar um pouco mais mesmo se conseguiu abrir, para garantir que está totalmente liberado
+          
           if (fileAccessible) {
             await Future.delayed(const Duration(milliseconds: 500));
           }
@@ -390,7 +390,7 @@ class SybaseBackupService implements ISybaseBackupService {
           'Backup Sybase concluído: $actualBackupPath (${_formatBytes(totalSize)})',
         );
 
-        // Verificar integridade do backup se solicitado
+        
         if (verifyAfterBackup) {
           LoggerService.info('Verificando integridade do backup Sybase...');
           final verifyStopwatch = Stopwatch()..start();
@@ -398,8 +398,8 @@ class SybaseBackupService implements ISybaseBackupService {
           var verifySuccess = false;
           var lastVerifyError = '';
 
-          // Preferir validar o ARQUIVO do backup (offline), quando houver.
-          // Para backup full, o destino é um diretório com o .db copiado.
+          
+          
           if (effectiveType == BackupType.full) {
             final dir = Directory(actualBackupPath);
             if (await dir.exists()) {
@@ -446,8 +446,8 @@ class SybaseBackupService implements ISybaseBackupService {
             }
           }
 
-          // Fallback: caso não seja possível validar o arquivo do backup (ou não seja full),
-          // tenta dbverify por conexão (melhor que nada, mas valida o banco acessível via conexão).
+          
+          
           if (!verifySuccess) {
             final connectionStrategies = <String>[
               'ENG=${config.serverName};DBN=${config.databaseNameValue};UID=${config.username};PWD=${config.password}',
@@ -498,7 +498,7 @@ class SybaseBackupService implements ISybaseBackupService {
             LoggerService.warning(
               'Verificação de integridade falhou: $lastVerifyError',
             );
-            // Não falha o backup, apenas registra o warning
+            
           }
           verifyStopwatch.stop();
         }

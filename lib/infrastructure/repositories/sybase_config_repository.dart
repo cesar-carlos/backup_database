@@ -24,7 +24,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     try {
       if (!await _tableExists()) {
         LoggerService.warning(
-          'Tabela sybase_configs não existe, retornando lista vazia',
+          'Tabela sybase_configs_table não existe, retornando lista vazia',
         );
         return const rd.Success(<SybaseConfig>[]);
       }
@@ -40,7 +40,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           username, password, 
           COALESCE(enabled, 1) as enabled,
           created_at, updated_at
-        FROM sybase_configs
+        FROM sybase_configs_table
         ''',
             readsFrom: {_database.sybaseConfigsTable},
           )
@@ -88,13 +88,13 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     try {
       final result = await _database
           .customSelect(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='sybase_configs'",
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='sybase_configs_table'",
           )
           .getSingleOrNull();
       return result != null;
     } on Object catch (e) {
       LoggerService.warning(
-        'Erro ao verificar se tabela sybase_configs existe: $e',
+        'Erro ao verificar se tabela sybase_configs_table existe: $e',
       );
       return false;
     }
@@ -105,7 +105,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     try {
       if (!await _tableExists()) {
         LoggerService.warning(
-          'Tabela sybase_configs não existe ao buscar por ID: $id',
+          'Tabela sybase_configs_table não existe ao buscar por ID: $id',
         );
         return const rd.Failure(
           NotFoundFailure(
@@ -127,7 +127,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           username, password, 
           COALESCE(enabled, 1) as enabled,
           created_at, updated_at
-        FROM sybase_configs
+        FROM sybase_configs_table
         WHERE id = ?
         ''',
             readsFrom: {_database.sybaseConfigsTable},
@@ -196,7 +196,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
 
       await _database.customStatement(
         '''
-        INSERT INTO sybase_configs (
+        INSERT INTO sybase_configs_table (
           id, name, server_name, database_name, database_file, port,
           username, password, enabled, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -243,7 +243,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
 
       await _database.customStatement(
         '''
-        UPDATE sybase_configs SET
+        UPDATE sybase_configs_table SET
           name = ?, server_name = ?, database_name = ?, database_file = ?,
           port = ?, username = ?, password = ?, enabled = ?, updated_at = ?
         WHERE id = ?
@@ -287,7 +287,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       await _secureCredentialService.deletePassword(key: passwordKey);
 
       await _database.customStatement(
-        'DELETE FROM sybase_configs WHERE id = ?',
+        'DELETE FROM sybase_configs_table WHERE id = ?',
         [id],
       );
 
@@ -326,7 +326,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           username, password, 
           COALESCE(enabled, 1) as enabled,
           created_at, updated_at
-        FROM sybase_configs
+        FROM sybase_configs_table
         WHERE enabled = 1
         ''',
             readsFrom: {_database.sybaseConfigsTable},

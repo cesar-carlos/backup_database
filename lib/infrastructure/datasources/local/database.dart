@@ -73,7 +73,7 @@ class AppDatabase extends _$AppDatabase {
         if (from < 2) {
           try {
             final columns = await customSelect(
-              'PRAGMA table_info(sybase_configs)',
+              'PRAGMA table_info(sybase_configs_table)',
             ).get();
             final hasPortColumn = columns.any(
               (row) => row.data['name'] == 'port',
@@ -94,7 +94,7 @@ class AppDatabase extends _$AppDatabase {
         if (from < 3) {
           try {
             final columns = await customSelect(
-              'PRAGMA table_info(sybase_configs)',
+              'PRAGMA table_info(sybase_configs_table)',
             ).get();
             final hasDatabaseNameColumn = columns.any(
               (row) => row.data['name'] == 'database_name',
@@ -107,7 +107,7 @@ class AppDatabase extends _$AppDatabase {
               );
 
               await customStatement(
-                'UPDATE sybase_configs SET database_name = server_name '
+                'UPDATE sybase_configs_table SET database_name = server_name '
                 "WHERE database_name IS NULL OR database_name = ''",
               );
             }
@@ -1004,17 +1004,17 @@ class AppDatabase extends _$AppDatabase {
     try {
       final tableExists = await customSelect(
         "SELECT name FROM sqlite_master WHERE type='table' "
-        "AND name='sybase_configs'",
+        "AND name='sybase_configs_table'",
       ).getSingleOrNull();
 
       if (tableExists == null) {
-        LoggerService.info('Criando tabela sybase_configs...');
+        LoggerService.info('Criando tabela sybase_configs_table...');
         await m.createTable(sybaseConfigsTable);
-        LoggerService.info('Tabela sybase_configs criada com sucesso');
+        LoggerService.info('Tabela sybase_configs_table criada com sucesso');
       }
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
-        'Erro ao verificar/criar tabela sybase_configs',
+        'Erro ao verificar/criar tabela sybase_configs_table',
         e,
         stackTrace,
       );
@@ -1067,7 +1067,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _migrateSybaseColumnsToSnakeCase() async {
     try {
       final columns = await customSelect(
-        'PRAGMA table_info(sybase_configs)',
+        'PRAGMA table_info(sybase_configs_table)',
       ).get();
 
       final columnNames = columns
@@ -1086,11 +1086,11 @@ class AppDatabase extends _$AppDatabase {
 
       if (hasCamelCaseColumns && !hasSnakeCaseColumns) {
         LoggerService.info(
-          'Migrando colunas sybase_configs de camelCase para snake_case...',
+          'Migrando colunas sybase_configs_table de camelCase para snake_case...',
         );
 
         await customStatement('''
-          CREATE TABLE sybase_configs_new (
+          CREATE TABLE sybase_configs_table_new (
             id TEXT PRIMARY KEY NOT NULL,
             name TEXT NOT NULL,
             server_name TEXT NOT NULL,
@@ -1106,7 +1106,7 @@ class AppDatabase extends _$AppDatabase {
         ''');
 
         await customStatement('''
-          INSERT INTO sybase_configs_new (
+          INSERT INTO sybase_configs_table_new (
             id, name, server_name, database_name, database_file, port,
             username, password, enabled, created_at, updated_at
           )
@@ -1118,21 +1118,21 @@ class AppDatabase extends _$AppDatabase {
             username, password,
             COALESCE(enabled, 1),
             createdAt, updatedAt
-          FROM sybase_configs
+          FROM sybase_configs_table
         ''');
 
-        await customStatement('DROP TABLE sybase_configs');
+        await customStatement('DROP TABLE sybase_configs_table');
         await customStatement(
-          'ALTER TABLE sybase_configs_new RENAME TO sybase_configs',
+          'ALTER TABLE sybase_configs_table_new RENAME TO sybase_configs_table',
         );
 
         LoggerService.info(
-          'Migração de colunas sybase_configs concluída com sucesso',
+          'Migração de colunas sybase_configs_table concluída com sucesso',
         );
       }
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
-        'Erro ao migrar colunas sybase_configs para snake_case',
+        'Erro ao migrar colunas sybase_configs_table para snake_case',
         e,
         stackTrace,
       );
@@ -1605,8 +1605,11 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> _createScheduleDatabaseConfigIntegrityTriggers() async {
     try {
+      await customStatement(
+        'DROP TRIGGER IF EXISTS trg_schedules_validate_config_insert',
+      );
       await customStatement('''
-        CREATE TRIGGER IF NOT EXISTS trg_schedules_validate_config_insert
+        CREATE TRIGGER trg_schedules_validate_config_insert
         BEFORE INSERT ON schedules_table
         BEGIN
           SELECT RAISE(ABORT, 'database_type invalido em schedules_table')
@@ -1620,7 +1623,7 @@ class AppDatabase extends _$AppDatabase {
 
           SELECT RAISE(ABORT, 'Configuracao Sybase inexistente para agendamento')
           WHERE NEW.database_type = 'sybase' AND NOT EXISTS (
-            SELECT 1 FROM sybase_configs c
+            SELECT 1 FROM sybase_configs_table c
             WHERE c.id = NEW.database_config_id
           );
 
@@ -1632,8 +1635,11 @@ class AppDatabase extends _$AppDatabase {
         END;
       ''');
 
+      await customStatement(
+        'DROP TRIGGER IF EXISTS trg_schedules_validate_config_update',
+      );
       await customStatement('''
-        CREATE TRIGGER IF NOT EXISTS trg_schedules_validate_config_update
+        CREATE TRIGGER trg_schedules_validate_config_update
         BEFORE UPDATE OF database_type, database_config_id ON schedules_table
         BEGIN
           SELECT RAISE(ABORT, 'database_type invalido em schedules_table')
@@ -1647,7 +1653,7 @@ class AppDatabase extends _$AppDatabase {
 
           SELECT RAISE(ABORT, 'Configuracao Sybase inexistente para agendamento')
           WHERE NEW.database_type = 'sybase' AND NOT EXISTS (
-            SELECT 1 FROM sybase_configs c
+            SELECT 1 FROM sybase_configs_table c
             WHERE c.id = NEW.database_config_id
           );
 
@@ -1659,8 +1665,11 @@ class AppDatabase extends _$AppDatabase {
         END;
       ''');
 
+      await customStatement(
+        'DROP TRIGGER IF EXISTS trg_sql_server_configs_restrict_delete',
+      );
       await customStatement('''
-        CREATE TRIGGER IF NOT EXISTS trg_sql_server_configs_restrict_delete
+        CREATE TRIGGER trg_sql_server_configs_restrict_delete
         BEFORE DELETE ON sql_server_configs_table
         BEGIN
           SELECT RAISE(ABORT, 'Configuracao em uso por agendamentos')
@@ -1672,9 +1681,12 @@ class AppDatabase extends _$AppDatabase {
         END;
       ''');
 
+      await customStatement(
+        'DROP TRIGGER IF EXISTS trg_sybase_configs_restrict_delete',
+      );
       await customStatement('''
-        CREATE TRIGGER IF NOT EXISTS trg_sybase_configs_restrict_delete
-        BEFORE DELETE ON sybase_configs
+        CREATE TRIGGER trg_sybase_configs_restrict_delete
+        BEFORE DELETE ON sybase_configs_table
         BEGIN
           SELECT RAISE(ABORT, 'Configuracao em uso por agendamentos')
           WHERE EXISTS (
@@ -1685,8 +1697,11 @@ class AppDatabase extends _$AppDatabase {
         END;
       ''');
 
+      await customStatement(
+        'DROP TRIGGER IF EXISTS trg_postgres_configs_restrict_delete',
+      );
       await customStatement('''
-        CREATE TRIGGER IF NOT EXISTS trg_postgres_configs_restrict_delete
+        CREATE TRIGGER trg_postgres_configs_restrict_delete
         BEFORE DELETE ON postgres_configs_table
         BEGIN
           SELECT RAISE(ABORT, 'Configuracao em uso por agendamentos')
