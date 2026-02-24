@@ -28,7 +28,7 @@ class DestinationGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       child: AppDataGrid<BackupDestination>(
-        minWidth: 1080,
+        minWidth: 900,
         columns: [
           AppDataGridColumn<BackupDestination>(
             label: _t(context, 'Destino', 'Destination'),
@@ -53,7 +53,7 @@ class DestinationGrid extends StatelessWidget {
           ),
           AppDataGridColumn<BackupDestination>(
             label: _t(context, 'Tipo', 'Type'),
-            width: const FlexColumnWidth(1.4),
+            width: const FlexColumnWidth(0.95),
             cellBuilder: (context, row) => _TypeChip(
               label: _getTypeName(context, row.type),
               color: _getTypeColor(row.type),
