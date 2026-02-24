@@ -103,7 +103,7 @@ Se você viu avisos sobre dependências faltando durante a instalação:
 1. **Se você já tem SQL Server instalado**:
 
    - Verifique se `sqlcmd.exe` está no PATH
-   - Consulte [PATH_SETUP.md](PATH_SETUP.md) para instruções
+   - Consulte [path_setup.md](../path_setup.md) para instruções
 
 2. **Se você não tem SQL Server instalado**:
    - Baixe e instale o **SQL Server Command Line Utilities**
@@ -115,7 +115,7 @@ Se você viu avisos sobre dependências faltando durante a instalação:
 1. **Instale o Sybase SQL Anywhere** (se ainda não tiver)
 2. **Localize a pasta `Bin64`** na instalação
 3. **Adicione o caminho ao PATH** do sistema
-4. Consulte [PATH_SETUP.md](PATH_SETUP.md) para instruções detalhadas
+4. Consulte [path_setup.md](../path_setup.md) para instruções detalhadas
 
 ### 4.3 Verificar Instalação
 
@@ -250,7 +250,7 @@ Para desinstalar o Backup Database:
 Após a instalação bem-sucedida:
 
 1. ✅ Leia a [documentação de requisitos](REQUIREMENTS.md)
-2. ✅ Configure o PATH se necessário ([PATH_SETUP.md](PATH_SETUP.md))
+2. ✅ Configure o PATH se necessário ([path_setup.md](../path_setup.md))
 3. ✅ Se o antivírus bloquear conexões, adicione uma exceção para a pasta de instalação e para `backup_database.exe` (se necessário)
 4. ✅ Configure suas conexões de banco de dados
 5. ✅ Crie seus primeiros agendamentos de backup
