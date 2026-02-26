@@ -22,12 +22,20 @@ class ServiceModeInitializer {
     ISingleInstanceService? singleInstanceService;
 
     try {
-      await dotenv.load();
+      try {
+        await dotenv.load();
+        LoggerService.info('Variáveis de ambiente carregadas');
+      } on Object catch (e) {
+        LoggerService.warning(
+          'Arquivo .env não encontrado ou inválido: $e. '
+          'O serviço continuará com configurações padrão. '
+          'Copie .env.example para .env na pasta do aplicativo se necessário.',
+        );
+      }
       setAppMode(getAppMode(Platform.executableArguments));
       LoggerService.info(
         'Modo do aplicativo (servico): ${currentAppMode.name}',
       );
-      LoggerService.info('Variáveis de ambiente carregadas');
 
       singleInstanceService = SingleInstanceService();
       final isFirstServiceInstance = await singleInstanceService.checkAndLock(

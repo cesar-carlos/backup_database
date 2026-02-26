@@ -1,4 +1,4 @@
-﻿#pragma codePage(65001)
+#pragma codePage(65001)
 #define MyAppName "Backup Database"
 #define MyAppVersion "2.2.5"
 #define MyAppPublisher "Backup Database"
@@ -430,10 +430,22 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   ModeFile: TStringList;
   ModeFilePath: String;
+  EnvExamplePath: String;
+  EnvPath: String;
 begin
   // Write .install_mode only after files are installed, when {app} is defined
   if CurStep = ssPostInstall then
   begin
+    EnvExamplePath := ExpandConstant('{app}\.env.example');
+    EnvPath := ExpandConstant('{app}\.env');
+    if FileExists(EnvExamplePath) and not FileExists(EnvPath) then
+    begin
+      if FileCopy(EnvExamplePath, EnvPath, False) then
+        Log('Copied .env.example to .env for service mode')
+      else
+        Log('Warning: Failed to copy .env.example to .env');
+    end;
+
     if SelectedMode = '' then
       SelectedMode := 'server';
     ModeFilePath := ExpandConstant('{app}\.install_mode');

@@ -458,7 +458,10 @@ class WindowsServiceService implements IWindowsServiceService {
                   '(${pollingTimeout.inSeconds}s).\n\n'
                   'Tente:\n'
                   '1. Atualizar o status\n'
-                  '2. Verificar os logs em $_logPath',
+                  '2. Verificar os logs em $_logPath '
+                  '(service_stdout.log e service_stderr.log)\n'
+                  '3. Se o serviço falha ao iniciar: verifique se existe '
+                  'arquivo .env na pasta do aplicativo (copie de .env.example)',
             ),
           );
         }

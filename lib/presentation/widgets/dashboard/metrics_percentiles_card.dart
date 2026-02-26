@@ -24,7 +24,7 @@ class MetricsPercentilesCard extends StatelessWidget {
     return Card(
       padding: const EdgeInsets.all(16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             'Métricas de performance (p50 / p95)',
@@ -36,43 +36,52 @@ class MetricsPercentilesCard extends StatelessWidget {
             style: typography.caption,
           ),
           const SizedBox(height: 16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Table(
-              columnWidths: const {
-                0: FixedColumnWidth(100),
-                1: FixedColumnWidth(48),
-                2: FixedColumnWidth(90),
-                3: FixedColumnWidth(90),
-                4: FixedColumnWidth(90),
-                5: FixedColumnWidth(90),
-                6: FixedColumnWidth(90),
-                7: FixedColumnWidth(90),
-              },
-              border: TableBorder.all(color: AppColors.grey600.withValues(alpha: 0.5)),
-              children: [
-                TableRow(
-                  decoration: BoxDecoration(
-                    color: theme.brightness.isDark
-                        ? theme.resources.cardBackgroundFillColorDefault
-                        : theme.resources.subtleFillColorSecondary,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: Table(
+                    columnWidths: const {
+                      0: FixedColumnWidth(100),
+                      1: FixedColumnWidth(48),
+                      2: FlexColumnWidth(),
+                      3: FlexColumnWidth(),
+                      4: FlexColumnWidth(),
+                      5: FlexColumnWidth(),
+                      6: FlexColumnWidth(),
+                      7: FlexColumnWidth(),
+                    },
+                    border: TableBorder.all(
+                      color: AppColors.grey600.withValues(alpha: 0.5),
+                    ),
+                    children: [
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: theme.brightness.isDark
+                              ? theme.resources.cardBackgroundFillColorDefault
+                              : theme.resources.subtleFillColorSecondary,
+                        ),
+                        children: [
+                          _headerCell(context, 'Tipo'),
+                          _headerCell(context, 'N'),
+                          _headerCell(context, 'P50 Duração'),
+                          _headerCell(context, 'P95 Duração'),
+                          _headerCell(context, 'P50 Tamanho'),
+                          _headerCell(context, 'P95 Tamanho'),
+                          _headerCell(context, 'P50 Veloc.'),
+                          _headerCell(context, 'P95 Veloc.'),
+                        ],
+                      ),
+                      ...percentiles.entries.map(
+                        (e) => _percentileRow(context, e.key, e.value),
+                      ),
+                    ],
                   ),
-                  children: [
-                    _headerCell(context, 'Tipo'),
-                    _headerCell(context, 'N'),
-                    _headerCell(context, 'P50 Duração'),
-                    _headerCell(context, 'P95 Duração'),
-                    _headerCell(context, 'P50 Tamanho'),
-                    _headerCell(context, 'P95 Tamanho'),
-                    _headerCell(context, 'P50 Veloc.'),
-                    _headerCell(context, 'P95 Veloc.'),
-                  ],
                 ),
-                ...percentiles.entries.map(
-                  (e) => _percentileRow(context, e.key, e.value),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ],
       ),
