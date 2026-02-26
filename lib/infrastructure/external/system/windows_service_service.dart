@@ -22,6 +22,7 @@ class WindowsServiceService implements IWindowsServiceService {
   static const Duration _serviceDelay = Duration(seconds: 2);
   static const Duration _startPollingInterval = Duration(seconds: 1);
   static const Duration _startPollingTimeout = Duration(seconds: 30);
+  static const Duration _startPollingInitialDelay = Duration(seconds: 3);
   static const int _successExitCode = 0;
   static const int _serviceNotFoundExitCode = 3;
   static const String _nssmExeName = 'nssm.exe';
@@ -31,7 +32,25 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _programDataEnv = 'ProgramData';
   static const String _defaultProgramData = r'C:\ProgramData';
   static const String _runningState = 'RUNNING';
+  static const String _runningStatePt = 'EM EXECUÇÃO';
+  static const String _runningStatePtNoAccent = 'EM EXECUCAO';
   static const String _localSystemAccount = 'LocalSystem';
+  static const String _logPath = r'C:\ProgramData\BackupDatabase\logs';
+  static final RegExp _runningStateRegex = RegExp(
+    r'(?:STATE|ESTADO)\s*:\s*4\b',
+    caseSensitive: false,
+  );
+  static final RegExp _stateCodeRegex = RegExp(
+    r'(?:STATE|ESTADO)\s*:\s*(\d+)',
+    caseSensitive: false,
+  );
+
+  static const String _accessDeniedSolution =
+      'Solução:\n'
+      '1. Feche o aplicativo\n'
+      '2. Clique com botão direito no ícone do aplicativo\n'
+      '3. Selecione "Executar como administrador"\n'
+      '4. Tente novamente';
   static const int _serviceNotInstalledWinError = 1060;
   static const int _serviceNotInstalledBatchError = 36;
   static const int _accessDeniedWinError = 5;
@@ -55,11 +74,14 @@ class WindowsServiceService implements IWindowsServiceService {
       return result.fold(
         (processResult) {
           if (processResult.exitCode == _successExitCode) {
-            final isRunning = processResult.stdout.contains(_runningState);
+            final stdout = processResult.stdout;
+            final isRunning = _isRunningState(stdout);
+            final stateCode = _parseStateCode(stdout);
             return rd.Success(
               WindowsServiceStatus(
                 isInstalled: true,
                 isRunning: isRunning,
+                stateCode: stateCode,
                 serviceName: _serviceName,
                 displayName: _displayName,
               ),
@@ -68,7 +90,10 @@ class WindowsServiceService implements IWindowsServiceService {
 
           if (_isServiceNotInstalledResponse(processResult)) {
             return const rd.Success(
-              WindowsServiceStatus(isInstalled: false, isRunning: false),
+              WindowsServiceStatus(
+                isInstalled: false,
+                isRunning: false,
+              ),
             );
           }
 
@@ -171,12 +196,8 @@ class WindowsServiceService implements IWindowsServiceService {
             return const rd.Failure(
               ServerFailure(
                 message:
-                    'Acesso negado. É necessário executar o aplicativo como Administrador para instalar o serviço.\n\n'
-                    'Solução:\n'
-                    '1. Feche o aplicativo\n'
-                    '2. Clique com botão direito no ícone do aplicativo\n'
-                    '3. Selecione "Executar como administrador"\n'
-                    '4. Tente instalar o serviço novamente',
+                    'Acesso negado. É necessário executar o aplicativo como '
+                    'Administrador para instalar o serviço.\n\n$_accessDeniedSolution',
               ),
             );
           }
@@ -327,12 +348,8 @@ class WindowsServiceService implements IWindowsServiceService {
             return const rd.Failure(
               ServerFailure(
                 message:
-                    'Acesso negado. É necessário executar o aplicativo como Administrador para remover o serviço.\n\n'
-                    'Solução:\n'
-                    '1. Feche o aplicativo\n'
-                    '2. Clique com botão direito no ícone do aplicativo\n'
-                    '3. Selecione "Executar como administrador"\n'
-                    '4. Tente remover o serviço novamente',
+                    'Acesso negado. É necessário executar o aplicativo como '
+                    'Administrador para remover o serviço.\n\n$_accessDeniedSolution',
               ),
             );
           }
@@ -359,6 +376,7 @@ class WindowsServiceService implements IWindowsServiceService {
   Future<rd.Result<void>> startServiceWithTimeout({
     Duration pollingTimeout = _startPollingTimeout,
     Duration pollingInterval = _startPollingInterval,
+    Duration? initialDelay,
   }) async {
     if (!Platform.isWindows) {
       return const rd.Failure(
@@ -375,9 +393,15 @@ class WindowsServiceService implements IWindowsServiceService {
         return const rd.Success(unit);
       }
 
+      final isPaused = status?.stateCode?.isPaused ?? false;
+      final scCommand = isPaused ? 'continue' : 'start';
+      if (isPaused) {
+        LoggerService.info('Serviço em PAUSED, usando sc continue');
+      }
+
       final result = await _processService.run(
         executable: _scExeName,
-        arguments: ['start', _serviceName],
+        arguments: [scCommand, _serviceName],
         timeout: _longTimeout,
       );
 
@@ -403,6 +427,7 @@ class WindowsServiceService implements IWindowsServiceService {
           final runningAfterPoll = await _pollUntilRunning(
             timeout: pollingTimeout,
             interval: pollingInterval,
+            initialDelay: initialDelay ?? _startPollingInitialDelay,
           );
 
           if (runningAfterPoll) {
@@ -421,8 +446,7 @@ class WindowsServiceService implements IWindowsServiceService {
                     'Tente:\n'
                     '1. Atualizar o status\n'
                     '2. Reiniciar o serviço\n'
-                    '3. Verificar os logs em '
-                    r'C:\ProgramData\BackupDatabase\logs',
+                    '3. Verificar os logs em $_logPath',
               ),
             );
           }
@@ -434,8 +458,7 @@ class WindowsServiceService implements IWindowsServiceService {
                   '(${pollingTimeout.inSeconds}s).\n\n'
                   'Tente:\n'
                   '1. Atualizar o status\n'
-                  '2. Verificar os logs em '
-                  r'C:\ProgramData\BackupDatabase\logs',
+                  '2. Verificar os logs em $_logPath',
             ),
           );
         }
@@ -452,12 +475,8 @@ class WindowsServiceService implements IWindowsServiceService {
           return const rd.Failure(
             ServerFailure(
               message:
-                  'Acesso negado. É necessário executar o aplicativo como Administrador para iniciar o serviço.\n\n'
-                  'Solução:\n'
-                  '1. Feche o aplicativo\n'
-                  '2. Clique com botão direito no ícone do aplicativo\n'
-                  '3. Selecione "Executar como administrador"\n'
-                  '4. Tente iniciar o serviço novamente',
+                  'Acesso negado. É necessário executar o aplicativo como '
+                  'Administrador para iniciar o serviço.\n\n$_accessDeniedSolution',
             ),
           );
         }
@@ -472,23 +491,54 @@ class WindowsServiceService implements IWindowsServiceService {
     }
   }
 
+  /// Verifica se a saída do sc query indica estado RUNNING.
+  /// Suporta locale EN (RUNNING) e PT-BR (EM EXECUÇÃO), além do código 4.
+  bool _isRunningState(String stdout) {
+    final upper = stdout.toUpperCase();
+    return upper.contains(_runningState) ||
+        upper.contains(_runningStatePt.toUpperCase()) ||
+        upper.contains(_runningStatePtNoAccent) ||
+        _runningStateRegex.hasMatch(stdout);
+  }
+
+  WindowsServiceStateCode? _parseStateCode(String stdout) {
+    final match = _stateCodeRegex.firstMatch(stdout);
+    if (match == null) return null;
+    final code = int.tryParse(match.group(1) ?? '');
+    return code != null ? WindowsServiceStateCode.fromCode(code) : null;
+  }
+
   /// Verifica em loop se o serviço entrou em estado RUNNING.
   /// Retorna `true` assim que detectar, ou `false` se o [timeout] esgotar.
   Future<bool> _pollUntilRunning({
     required Duration timeout,
     required Duration interval,
+    Duration initialDelay = Duration.zero,
   }) async {
+    if (initialDelay > Duration.zero) {
+      await Future.delayed(initialDelay);
+    }
     final deadline = DateTime.now().add(timeout);
+    rd.Result<WindowsServiceStatus>? lastStatusResult;
 
     while (DateTime.now().isBefore(deadline)) {
       await Future.delayed(interval);
-      final statusResult = await getStatus();
-      final status = statusResult.getOrNull();
+      lastStatusResult = await getStatus();
+      final status = lastStatusResult.getOrNull();
       if (status?.isRunning ?? false) {
         return true;
       }
     }
 
+    if (lastStatusResult != null) {
+      final lastStatus = lastStatusResult.getOrNull();
+      LoggerService.warning(
+        'Timeout ao aguardar RUNNING. Último status: '
+        'isInstalled=${lastStatus?.isInstalled}, '
+        'isRunning=${lastStatus?.isRunning}, '
+        'stateCode=${lastStatus?.stateCode?.name}',
+      );
+    }
     return false;
   }
 
@@ -540,12 +590,8 @@ class WindowsServiceService implements IWindowsServiceService {
           return const rd.Failure(
             ServerFailure(
               message:
-                  'Acesso negado. É necessário executar o aplicativo como Administrador para parar o serviço.\n\n'
-                  'Solução:\n'
-                  '1. Feche o aplicativo\n'
-                  '2. Clique com botão direito no ícone do aplicativo\n'
-                  '3. Selecione "Executar como administrador"\n'
-                  '4. Tente parar o serviço novamente',
+                  'Acesso negado. É necessário executar o aplicativo como '
+                  'Administrador para parar o serviço.\n\n$_accessDeniedSolution',
             ),
           );
         }

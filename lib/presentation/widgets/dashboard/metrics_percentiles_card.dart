@@ -40,14 +40,14 @@ class MetricsPercentilesCard extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Table(
               columnWidths: const {
-                0: FlexColumnWidth(1.8),
-                1: FlexColumnWidth(0.6),
-                2: FlexColumnWidth(1.2),
-                3: FlexColumnWidth(1.2),
-                4: FlexColumnWidth(1.2),
-                5: FlexColumnWidth(1.2),
-                6: FlexColumnWidth(),
-                7: FlexColumnWidth(),
+                0: FixedColumnWidth(100),
+                1: FixedColumnWidth(48),
+                2: FixedColumnWidth(90),
+                3: FixedColumnWidth(90),
+                4: FixedColumnWidth(90),
+                5: FixedColumnWidth(90),
+                6: FixedColumnWidth(90),
+                7: FixedColumnWidth(90),
               },
               border: TableBorder.all(color: AppColors.grey600.withValues(alpha: 0.5)),
               children: [

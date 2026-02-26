@@ -71,6 +71,9 @@ class AppConstants {
 
   static const int logRotationDays = 90;
 
+  static const String windowsServiceLogPath =
+      r'C:\ProgramData\BackupDatabase\logs';
+
   static const bool allowInsecureSmtp = bool.fromEnvironment(
     'ALLOW_INSECURE_SMTP',
   );

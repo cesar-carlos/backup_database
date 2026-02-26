@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/windows_service_provider.dart';
+import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -34,7 +35,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _t('Servico do Windows', 'Windows Service'),
+                _t('Serviço do Windows', 'Windows Service'),
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -79,7 +80,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t('Status do servico', 'Service status'),
+              _t('Status do serviço', 'Service status'),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
@@ -124,11 +125,15 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(FluentIcons.error_badge, color: Colors.red, size: 20),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(provider.error!, style: TextStyle(color: Colors.red)),
+              child: SelectableText(
+                provider.error!,
+                style: TextStyle(color: Colors.red, fontSize: 13),
+              ),
             ),
           ],
         ),
@@ -147,7 +152,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t('Acoes', 'Actions'),
+              _t('Ações', 'Actions'),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
@@ -165,7 +170,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                       children: [
                         const Icon(FluentIcons.download, size: 16),
                         const SizedBox(width: 8),
-                        Text(_t('Instalar servico', 'Install service')),
+                        Text(_t('Instalar serviço', 'Install service')),
                       ],
                     ),
                   ),
@@ -179,11 +184,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                       children: [
                         const Icon(FluentIcons.delete, size: 16),
                         const SizedBox(width: 8),
-                        Text(_t('Remover servico', 'Remove service')),
+                        Text(_t('Remover serviço', 'Remove service')),
                       ],
                     ),
                   ),
-                  if (provider.isRunning)
+                  if (provider.isRunning) ...[
                     Button(
                       onPressed: provider.isLoading
                           ? null
@@ -196,8 +201,21 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                           Text(_t('Parar', 'Stop')),
                         ],
                       ),
-                    )
-                  else
+                    ),
+                    Button(
+                      onPressed: provider.isLoading
+                          ? null
+                          : () => _restartService(context, provider),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(FluentIcons.sync, size: 16),
+                          const SizedBox(width: 8),
+                          Text(_t('Reiniciar', 'Restart')),
+                        ],
+                      ),
+                    ),
+                  ] else
                     Button(
                       onPressed: provider.isLoading
                           ? null
@@ -241,7 +259,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t('Informacoes', 'Information'),
+              _t('Informações', 'Information'),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
@@ -256,9 +274,9 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             const SizedBox(height: 8),
             _buildInfoItem(
               context,
-              _t('Inicializacao automatica', 'Automatic startup'),
+              _t('Inicialização automática', 'Automatic startup'),
               _t(
-                'O servico iniciara automaticamente com o Windows.',
+                'O serviço iniciará automaticamente com o Windows.',
                 'The service will start automatically with Windows.',
               ),
             ),
@@ -266,7 +284,8 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             _buildInfoItem(
               context,
               _t('Logs', 'Logs'),
-              r'Os logs sao salvos em: C:\ProgramData\BackupDatabase\logs\',
+              '${_t('Os logs são salvos em', 'Logs are saved at')}: '
+              '${AppConstants.windowsServiceLogPath}\\',
             ),
           ],
         ),
@@ -306,7 +325,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   }
 
   String _getStatusText(WindowsServiceProvider provider) {
-    if (provider.isLoading) return _t('Verificando...', 'Checking...');
+    if (provider.isLoading) {
+      return provider.isStarting
+          ? _t('Aguardando serviço iniciar...', 'Waiting for service to start...')
+          : _t('Verificando...', 'Checking...');
+    }
     if (provider.isInstalled) {
       return provider.isRunning
           ? _t('Instalado e em execução', 'Installed and running')
@@ -322,7 +345,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Instalar servico', 'Install service')),
+        title: Text(_t('Instalar serviço', 'Install service')),
         content: Text(
           _t(
             'Deseja instalar o Backup Database como serviço do Windows?\n\nO serviço será configurado para:\n- Iniciar automaticamente com o Windows\n- Executar sem usuário logado\n- Rodar com conta LocalSystem\n\nRequisitos:\n- Configure os backups antes de instalar\n- Certifique-se de ter permissões de administrador',
@@ -355,12 +378,12 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             content: Text(
               success
                   ? _t(
-                      'Servico instalado com sucesso!\n\nO servico foi configurado e iniciara automaticamente com o Windows.',
+                      'Serviço instalado com sucesso!\n\nO serviço foi configurado e iniciará automaticamente com o Windows.',
                       'Service installed successfully!\n\nThe service was configured and will start automatically with Windows.',
                     )
                   : provider.error ??
                         _t(
-                          'Erro desconhecido ao instalar servico.',
+                          'Erro desconhecido ao instalar serviço.',
                           'Unknown error while installing service.',
                         ),
             ),
@@ -383,7 +406,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Remover servico', 'Remove service')),
+        title: Text(_t('Remover serviço', 'Remove service')),
         content: Text(
           _t(
             'Deseja realmente remover o serviço do Windows?\n\nOs agendamentos e configurações não serão perdidos, mas o serviço não executará mais automaticamente.',
@@ -416,12 +439,12 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             content: Text(
               success
                   ? _t(
-                      'Servico removido com sucesso!',
+                      'Serviço removido com sucesso!',
                       'Service removed successfully!',
                     )
                   : provider.error ??
                         _t(
-                          'Erro desconhecido ao remover servico.',
+                          'Erro desconhecido ao remover serviço.',
                           'Unknown error while removing service.',
                         ),
             ),
@@ -451,11 +474,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           content: Text(
             success
                 ? _t(
-                    'Servico iniciado com sucesso!',
+                    'Serviço iniciado com sucesso!',
                     'Service started successfully!',
                   )
                 : provider.error ??
-                      _t('Erro ao iniciar servico.', 'Error starting service.'),
+                      _t('Erro ao iniciar serviço.', 'Error starting service.'),
           ),
           actions: [
             FilledButton(
@@ -468,6 +491,67 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     }
   }
 
+  Future<void> _restartService(
+    BuildContext context,
+    WindowsServiceProvider provider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => ContentDialog(
+        title: Text(_t('Reiniciar serviço', 'Restart service')),
+        content: Text(
+          _t(
+            'Deseja reiniciar o serviço?\n\nO serviço será parado e iniciado novamente. Os backups em execução serão interrompidos.',
+            'Do you want to restart the service?\n\nThe service will be stopped and started again. Running backups will be interrupted.',
+          ),
+        ),
+        actions: [
+          Button(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(_t('Cancelar', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(_t('Reiniciar', 'Restart')),
+          ),
+        ],
+      ),
+    );
+
+    if ((confirmed ?? false) && context.mounted) {
+      final success = await provider.restartService();
+
+      if (context.mounted) {
+        await showDialog(
+          context: context,
+          builder: (context) => ContentDialog(
+            title: Text(
+              success ? _t('Sucesso', 'Success') : _t('Erro', 'Error'),
+            ),
+            content: Text(
+              success
+                  ? _t(
+                      'Serviço reiniciado com sucesso!',
+                      'Service restarted successfully!',
+                    )
+                  : provider.error ??
+                        _t(
+                          'Erro ao reiniciar serviço.',
+                          'Error restarting service.',
+                        ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(_t('OK', 'OK')),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _stopService(
     BuildContext context,
     WindowsServiceProvider provider,
@@ -475,7 +559,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Parar servico', 'Stop service')),
+        title: Text(_t('Parar serviço', 'Stop service')),
         content: Text(
           _t(
             'Deseja parar o serviço?\n\nOs backups agendados não serão executados até que o serviço seja iniciado novamente.',
@@ -508,11 +592,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             content: Text(
               success
                   ? _t(
-                      'Servico parado com sucesso!',
+                      'Serviço parado com sucesso!',
                       'Service stopped successfully!',
                     )
                   : provider.error ??
-                        _t('Erro ao parar servico.', 'Error stopping service.'),
+                        _t('Erro ao parar serviço.', 'Error stopping service.'),
             ),
             actions: [
               FilledButton(

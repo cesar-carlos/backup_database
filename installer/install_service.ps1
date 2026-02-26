@@ -97,6 +97,10 @@ if (-not (Test-Path $logPath)) {
 & $NssmPath set $ServiceName AppStdout "$logPath\service_stdout.log"
 & $NssmPath set $ServiceName AppStderr "$logPath\service_stderr.log"
 
+# Configurar auto-restart em caso de crash
+& $NssmPath set $ServiceName AppExit Default Restart
+& $NssmPath set $ServiceName AppRestartDelay 60000
+
 # Configurar usuário do serviço (se fornecido)
 if (-not [string]::IsNullOrEmpty($ServiceUser) -and $null -ne $ServicePassword) {
     $credential = New-Object System.Management.Automation.PSCredential($ServiceUser, $ServicePassword)

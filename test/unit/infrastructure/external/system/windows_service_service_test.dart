@@ -26,6 +26,20 @@ const _stoppedQueryResult = ProcessResult(
   duration: Duration(milliseconds: 10),
 );
 
+const _runningQueryResultPt = ProcessResult(
+  exitCode: 0,
+  stdout: 'ESTADO             : 4  EM EXECUÇÃO',
+  stderr: '',
+  duration: Duration(milliseconds: 10),
+);
+
+const _pausedQueryResult = ProcessResult(
+  exitCode: 0,
+  stdout: 'STATE              : 7  PAUSED',
+  stderr: '',
+  duration: Duration(milliseconds: 10),
+);
+
 const _notInstalledQueryResult = ProcessResult(
   exitCode: 1060,
   stdout: '[SC] OpenService FAILED 1060',
@@ -59,6 +73,19 @@ void _stubStart(
   ).thenAnswer((_) async => rd.Success(result));
 }
 
+void _stubContinue(
+  MockProcessService mock,
+  ProcessResult result,
+) {
+  when(
+    () => mock.run(
+      executable: 'sc',
+      arguments: ['continue', 'BackupDatabaseService'],
+      timeout: _longTimeout,
+    ),
+  ).thenAnswer((_) async => rd.Success(result));
+}
+
 void main() {
   group('WindowsServiceService.getStatus', () {
     late MockProcessService mockProcessService;
@@ -73,6 +100,24 @@ void main() {
       'should return installed and running when sc query succeeds',
       () async {
         _stubQuery(mockProcessService, _runningQueryResult);
+
+        final result = await windowsServiceService.getStatus();
+
+        result.fold(
+          (status) {
+            expect(status.isInstalled, isTrue);
+            expect(status.isRunning, isTrue);
+          },
+          (failure) => fail('Expected success, got failure: $failure'),
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'should return installed and running when sc query returns PT-BR (EM EXECUÇÃO)',
+      () async {
+        _stubQuery(mockProcessService, _runningQueryResultPt);
 
         final result = await windowsServiceService.getStatus();
 
@@ -235,7 +280,49 @@ void main() {
           ),
         );
 
-        final result = await windowsServiceService.startService();
+        final result = await windowsServiceService.startServiceWithTimeout(
+          pollingTimeout: const Duration(seconds: 5),
+          pollingInterval: const Duration(milliseconds: 10),
+          initialDelay: Duration.zero,
+        );
+
+        expect(result.isSuccess(), isTrue);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'should return success when service is PAUSED and continue reaches RUNNING',
+      () async {
+        var queryCallCount = 0;
+        when(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['query', 'BackupDatabaseService'],
+            timeout: _shortTimeout,
+          ),
+        ).thenAnswer((_) async {
+          queryCallCount++;
+          return queryCallCount == 1
+              ? const rd.Success(_pausedQueryResult)
+              : const rd.Success(_runningQueryResult);
+        });
+
+        _stubContinue(
+          mockProcessService,
+          const ProcessResult(
+            exitCode: 0,
+            stdout: 'SERVICE_NAME: BackupDatabaseService\n  STATE: 5  CONTINUE_PENDING',
+            stderr: '',
+            duration: Duration(milliseconds: 50),
+          ),
+        );
+
+        final result = await windowsServiceService.startServiceWithTimeout(
+          pollingTimeout: const Duration(seconds: 5),
+          pollingInterval: const Duration(milliseconds: 10),
+          initialDelay: Duration.zero,
+        );
 
         expect(result.isSuccess(), isTrue);
       },
@@ -271,7 +358,11 @@ void main() {
           ),
         );
 
-        final result = await windowsServiceService.startService();
+        final result = await windowsServiceService.startServiceWithTimeout(
+          pollingTimeout: const Duration(seconds: 5),
+          pollingInterval: const Duration(milliseconds: 10),
+          initialDelay: Duration.zero,
+        );
 
         expect(result.isSuccess(), isTrue);
       },
@@ -305,6 +396,7 @@ void main() {
         final result = await windowsServiceService.startServiceWithTimeout(
           pollingTimeout: const Duration(milliseconds: 50),
           pollingInterval: const Duration(milliseconds: 10),
+          initialDelay: Duration.zero,
         );
 
         result.fold(
@@ -345,6 +437,7 @@ void main() {
         final result = await windowsServiceService.startServiceWithTimeout(
           pollingTimeout: const Duration(milliseconds: 50),
           pollingInterval: const Duration(milliseconds: 10),
+          initialDelay: Duration.zero,
         );
 
         result.fold(
