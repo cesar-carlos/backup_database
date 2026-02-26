@@ -7,6 +7,7 @@ import 'package:win32/win32.dart';
 
 class ServiceModeDetector {
   static const int _serviceSessionId = 0;
+  static const String _serviceArgFlag = '--mode=server';
 
   static bool _isServiceMode = false;
   static bool _checked = false;
@@ -21,6 +22,13 @@ class ServiceModeDetector {
     if (!Platform.isWindows) {
       _isServiceMode = false;
       return false;
+    }
+
+    // Camada 1: argumento explícito (mais confiável quando injetado pelo NSSM).
+    if (_hasServiceArgument(Platform.executableArguments)) {
+      _isServiceMode = true;
+      LoggerService.info('Modo Servico detectado (argumento --mode=server)');
+      return true;
     }
 
     try {
@@ -53,6 +61,7 @@ class ServiceModeDetector {
         calloc.free(sessionId);
       }
 
+      // Camada 3: variáveis de ambiente injetadas pelo NSSM.
       if (!_isServiceMode) {
         final serviceEnv =
             Platform.environment['SERVICE_NAME'] ??
@@ -75,4 +84,8 @@ class ServiceModeDetector {
 
   static bool isServiceSessionIdForTest(int sessionId) =>
       sessionId == _serviceSessionId;
+
+  /// Verifica se a lista de argumentos contém a flag de modo serviço.
+  static bool _hasServiceArgument(List<String> args) =>
+      args.contains(_serviceArgFlag);
 }

@@ -94,7 +94,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     final config = widget.initialConfig;
     _draftConfigId = config?.id ?? const Uuid().v4();
     _configNameController = TextEditingController(
-      text: config?.configName ?? 'Configuracao SMTP',
+      text: config?.configName ?? 'Configuração SMTP',
     );
     _smtpServerController = TextEditingController(
       text: config?.smtpServer ?? 'smtp.gmail.com',
@@ -112,15 +112,15 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     _passwordController = TextEditingController(text: config?.password ?? '');
     _configNameSchema = z.string().min(
       1,
-      message: 'Nome da configuracao e obrigatorio',
+      message: 'Nome da configuração é obrigatório',
     );
     _smtpServerSchema = z.string().min(
       1,
-      message: 'Servidor SMTP e obrigatorio',
+      message: 'Servidor SMTP é obrigatório',
     );
     _emailSchema = z
         .string()
-        .min(1, message: 'E-mail e obrigatorio')
+        .min(1, message: 'E-mail é obrigatório')
         .email(message: 'E-mail invalido');
     _recipientEmailSchema = z.string().email(
       message: 'E-mail de destino invalido',
@@ -351,7 +351,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
 
     await MessageModal.showSuccess(
       context,
-      message: 'Conexao OAuth SMTP removida. Modo senha reativado.',
+      message: 'Conexão OAuth SMTP removida. Modo senha reativado.',
     );
   }
 
@@ -416,8 +416,8 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
           Expanded(
             child: Text(
               _isEditing
-                  ? 'Editar configuracao de e-mail'
-                  : 'Nova configuracao de e-mail',
+                  ? 'Editar configuração de e-mail'
+                  : 'Nova configuração de e-mail',
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -545,14 +545,14 @@ class _SmtpAuthenticationSection extends StatelessWidget {
         const Divider(),
         const SizedBox(height: 10),
         Text(
-          'Autenticacao SMTP',
+          'Autenticação SMTP',
           style: FluentTheme.of(context).typography.subtitle?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 12),
         InfoLabel(
-          label: 'Modo de autenticacao',
+          label: 'Modo de autenticação',
           child: ComboBox<SmtpAuthMode>(
             value: authMode,
             isExpanded: true,
@@ -644,7 +644,7 @@ class _SmtpSettingsSection extends StatelessWidget {
       children: [
         AppTextField(
           controller: configNameController,
-          label: 'Nome da configuracao',
+          label: 'Nome da configuração',
           hint: 'SMTP Principal',
           validator: configNameValidator,
         ),
@@ -667,7 +667,7 @@ class _SmtpSettingsSection extends StatelessWidget {
         const SizedBox(height: 16),
         AppTextField(
           controller: emailController,
-          label: 'E-mail (usuario SMTP)',
+          label: 'E-mail (usuário SMTP)',
           keyboardType: TextInputType.emailAddress,
           hint: 'seu-email@exemplo.com',
           validator: emailValidator,
@@ -727,7 +727,7 @@ class _NotificationBehaviorSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Os tipos de aviso sao configurados nesta configuracao SMTP.',
+          'Os tipos de aviso são configurados nesta configuração SMTP.',
         ),
         const SizedBox(height: 16),
         _NotificationToggleField(

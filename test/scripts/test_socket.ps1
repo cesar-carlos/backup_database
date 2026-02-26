@@ -49,7 +49,7 @@ if (-not (Test-Path ".env")) {
     exit 1
 }
 
-$envContent = Get-Content ".env"
+$envContent = Get-Content ".env" -Encoding UTF8
 
 if ($envContent -match "SINGLE_INSTANCE_ENABLED=true") {
     Write-ColorOutput Red "✗ SINGLE_INSTANCE_ENABLED está true"

@@ -116,9 +116,7 @@ class WindowsServiceProvider extends ChangeNotifier {
     );
 
     _isLoading = false;
-    if (success) {
-      await checkStatus();
-    }
+    await _refreshStatusSilently();
     notifyListeners();
     return success;
   }
@@ -143,10 +141,18 @@ class WindowsServiceProvider extends ChangeNotifier {
     );
 
     _isLoading = false;
-    if (success) {
-      await checkStatus();
-    }
+    await _refreshStatusSilently();
     notifyListeners();
     return success;
+  }
+
+  Future<void> _refreshStatusSilently() async {
+    final result = await _service.getStatus();
+    result.fold(
+      (status) {
+        _status = status;
+      },
+      (_) {},
+    );
   }
 }

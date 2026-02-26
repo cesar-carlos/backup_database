@@ -611,9 +611,10 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                         const SizedBox(height: 16),
                         Button(
                           onPressed: () async {
-                            final success = await _clipboardService.copyToClipboard(
-                              generatedLicenseController.text,
-                            );
+                            final success = await _clipboardService
+                                .copyToClipboard(
+                                  generatedLicenseController.text,
+                                );
                             if (!mounted) return;
                             if (success) {
                               setDialogState(() {

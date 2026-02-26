@@ -36,6 +36,9 @@ class WindowsEventLogService {
   bool _isAvailable = false;
 
   /// Inicializa o serviço verificando se eventcreate está disponível.
+  ///
+  /// Usa `eventcreate /?` para detectar disponibilidade sem criar nenhum
+  /// evento real, evitando poluição no Event Viewer a cada inicialização.
   Future<void> initialize() async {
     if (!Platform.isWindows) {
       LoggerService.debug(
@@ -47,34 +50,30 @@ class WindowsEventLogService {
     }
 
     try {
-      // Tenta executar eventcreate para verificar se está disponível
+      // Verifica disponibilidade com '/?'. O exit code pode ser não-zero em
+      // algumas versões do Windows, então consideramos disponível se o processo
+      // for executado (independente do exit code).
       final result = await _processService.run(
         executable: 'eventcreate',
-        arguments: [
-          '/ID',
-          '1',
-          '/T',
-          'INFO',
-          '/SO',
-          sourceName,
-          '/D',
-          'Backup Database Event Log Service initialized',
-        ],
+        arguments: ['/?'],
         timeout: const Duration(seconds: 5),
       );
 
-      _isAvailable = result.isSuccess();
+      // Se o processo rodou (mesmo com exit code != 0), eventcreate existe.
+      _isAvailable = result.fold(
+        (processResult) => true,
+        (_) => false,
+      );
+
       if (_isAvailable) {
         LoggerService.info('✅ WindowsEventLogService inicializado');
       } else {
         LoggerService.warning(
-          'WindowsEventLogService: eventcreate não disponível',
+          'WindowsEventLogService: eventcreate não disponível ou não encontrado',
         );
       }
     } on Object catch (e) {
-      LoggerService.debug(
-        'WindowsEventLogService não disponível: $e',
-      );
+      LoggerService.debug('WindowsEventLogService não disponível: $e');
       _isAvailable = false;
     }
   }

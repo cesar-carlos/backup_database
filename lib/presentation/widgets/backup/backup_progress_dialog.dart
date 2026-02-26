@@ -206,7 +206,7 @@ class _BackupProgressTexts {
 
     if (language == 'pt') {
       return const _BackupProgressTexts(
-        title: 'Backup em execucao',
+        title: 'Backup em execução',
         elapsedLabel: 'Tempo decorrido',
         closeButton: 'Fechar',
         minuteShort: 'm',

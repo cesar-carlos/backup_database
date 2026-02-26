@@ -151,7 +151,7 @@ class DestinationsPage extends StatelessWidget {
       await MessageModal.showError(
         context,
         message:
-            'Nao foi possivel validar dependencias do destino. Tente novamente.',
+            'Não foi possível validar dependências do destino. Tente novamente.',
       );
       return;
     }

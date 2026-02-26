@@ -104,7 +104,7 @@ class NotificationService implements INotificationService {
     if (senderEmail.isEmpty || !senderEmail.contains('@')) {
       const failure = ValidationFailure(
         message:
-            'Informe um e-mail SMTP valido para realizar o teste de conexao',
+            'Informe um e-mail SMTP válido para realizar o teste de conexão',
       );
       await _saveEmailTestAudit(
         config: config,
@@ -132,15 +132,15 @@ Esta é uma mensagem de teste da configuração SMTP do Backup Database.
 Objetivo:
 - Validar servidor, credenciais e entrega para o destinatario configurado.
 
-Configuracao testada:
+Configuração testada:
 - Nome: ${config.configName}
 - Servidor SMTP: ${config.smtpServer}
 - Porta: ${config.smtpPort}
-- Usuario SMTP: ${config.username}
+- Usuário SMTP: ${config.username}
 - Destinatario de teste: $destinationRecipient
 - Correlation ID: $correlationId
 
-Se voce recebeu este e-mail, a configuracao esta funcionando corretamente.
+Se você recebeu este e-mail, a configuração está funcionando corretamente.
 
 Data/Hora do teste: ${DateTime.now()}
 ''';
@@ -227,12 +227,12 @@ Data/Hora do teste: ${DateTime.now()}
       final allowed = hasEmailNotification.getOrElse((_) => false);
       if (!allowed) {
         LoggerService.info(
-          'Notificacao por email bloqueada - licenca nao possui permissao',
+          'Notificação por email bloqueada - licença não possui permissão',
         );
       }
       return allowed;
     } on Object catch (e) {
-      LoggerService.warning('Erro ao verificar licenca para notificacao: $e');
+      LoggerService.warning('Erro ao verificar licença para notificação: $e');
       return true;
     }
   }

@@ -38,7 +38,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (!_hasEmailNotificationFeature(licenseProvider)) {
       await MessageModal.showWarning(
         context,
-        message: 'Este recurso exige licenca com notificacao por e-mail',
+        message: 'Este recurso exige licença com notificação por e-mail',
       );
       return;
     }
@@ -86,21 +86,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (success) {
       await MessageModal.showSuccess(
         context,
-        message: 'Configuracao salva com sucesso',
+        message: 'Configuração salva com sucesso',
       );
     } else {
       await MessageModal.showError(
         context,
-        message: provider.error ?? 'Erro ao salvar configuracao',
+        message: provider.error ?? 'Erro ao salvar configuração',
       );
     }
   }
 
   Future<void> _deleteConfig(EmailConfig config) async {
     final confirmed = await _confirmDialog(
-      title: 'Excluir configuracao',
+      title: 'Excluir configuração',
       message:
-          'Deseja realmente excluir a configuracao "${config.configName}"?',
+          'Deseja realmente excluir a configuração "${config.configName}"?',
     );
 
     if (!confirmed || !mounted) {
@@ -115,12 +115,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (success) {
       await MessageModal.showSuccess(
         context,
-        message: 'Configuracao removida com sucesso',
+        message: 'Configuração removida com sucesso',
       );
     } else {
       await MessageModal.showError(
         context,
-        message: provider.error ?? 'Erro ao remover configuracao',
+        message: provider.error ?? 'Erro ao remover configuração',
       );
     }
   }
@@ -226,7 +226,7 @@ class _NotificationsCommandBar extends StatelessWidget {
         ),
         CommandBarButton(
           icon: const Icon(FluentIcons.add),
-          label: const Text('Nova configuracao'),
+          label: const Text('Nova configuração'),
           onPressed: hasEmailNotification ? onCreateConfig : null,
         ),
       ],
@@ -250,10 +250,10 @@ class _LicenseRequirementInfoCard extends StatelessWidget {
     return AppCard(
       child: InfoBar(
         severity: InfoBarSeverity.warning,
-        title: const Text('Recurso requer licenca'),
+        title: const Text('Recurso requer licença'),
         content: const Text(
           'As notificacoes por e-mail sao um recurso premium. '
-          'E necessaria uma licenca valida com permissao para este recurso.',
+          'É necessária uma licença válida com permissão para este recurso.',
         ),
         action: Button(
           child: const Text('Ver licenciamento'),
@@ -289,7 +289,7 @@ class _NotificationsContentSection extends StatelessWidget {
       return AppCard(
         child: InfoBar(
           severity: InfoBarSeverity.error,
-          title: const Text('Erro ao carregar configuracao'),
+          title: const Text('Erro ao carregar configuração'),
           content: Text(provider.error!),
           action: Button(
             onPressed: onRefresh,

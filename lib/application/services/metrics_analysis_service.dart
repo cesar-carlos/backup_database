@@ -63,17 +63,56 @@ class MetricsAnalysisService implements IMetricsAnalysisService {
           }
         }
 
+        final percentilesByType =
+            _computePercentilesByType(metricsByType);
+
         return rd.Success(
           BackupMetricsReport(
             startDate: startDate,
             endDate: endDate,
             metricsByType: metricsByType,
             totalBackups: backups.length,
+            percentilesByType: percentilesByType,
           ),
         );
       },
       rd.Failure.new,
     );
+  }
+
+  Map<BackupType, BackupMetricsPercentiles> _computePercentilesByType(
+    Map<BackupType, List<BackupMetrics>> metricsByType,
+  ) {
+    final result = <BackupType, BackupMetricsPercentiles>{};
+    for (final entry in metricsByType.entries) {
+      final list = entry.value;
+      if (list.isEmpty) continue;
+
+      final durations =
+          list.map((m) => m.totalDuration.inSeconds).toList()..sort();
+      final sizes = list.map((m) => m.backupSizeBytes).toList()..sort();
+      final speeds = list.map((m) => m.backupSpeedMbPerSec).toList()..sort();
+
+      final p50Idx = _percentileIndex(list.length, 0.5);
+      final p95Idx = _percentileIndex(list.length, 0.95);
+
+      result[entry.key] = BackupMetricsPercentiles(
+        sampleCount: list.length,
+        p50DurationSeconds: durations[p50Idx],
+        p95DurationSeconds: durations[p95Idx],
+        p50SizeBytes: sizes[p50Idx],
+        p95SizeBytes: sizes[p95Idx],
+        p50SpeedMbPerSec: speeds[p50Idx],
+        p95SpeedMbPerSec: speeds[p95Idx],
+      );
+    }
+    return result;
+  }
+
+  int _percentileIndex(int length, double p) {
+    if (length <= 1) return 0;
+    final index = (p * (length - 1)).round();
+    return index.clamp(0, length - 1);
   }
 
   BackupType _getBackupType(BackupHistory history) {

@@ -55,7 +55,7 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'A configuracao "$configName" ($databaseLabel) nao pode ser '
+              'A configuração "$configName" ($databaseLabel) não pode ser '
               'excluida porque possui agendamentos vinculados.',
               style: FluentTheme.of(context).typography.body,
             ),

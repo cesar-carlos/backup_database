@@ -3,6 +3,7 @@ import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/domain/services/i_metrics_analysis_service.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
 
@@ -11,11 +12,16 @@ class DashboardProvider extends ChangeNotifier {
     this._backupHistoryRepository,
     this._scheduleRepository, {
     ConnectionManager? connectionManager,
-  }) : _connectionManager = connectionManager;
+    IMetricsAnalysisService? metricsAnalysisService,
+  })  : _connectionManager = connectionManager,
+        _metricsAnalysisService = metricsAnalysisService;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;
   final ConnectionManager? _connectionManager;
+  final IMetricsAnalysisService? _metricsAnalysisService;
+
+  static const int _metricsReportDays = 30;
 
   int _totalBackups = 0;
   int _backupsToday = 0;
@@ -24,6 +30,7 @@ class DashboardProvider extends ChangeNotifier {
   List<BackupHistory> _recentBackups = [];
   List<Schedule> _activeSchedulesList = [];
   Map<String, dynamic>? _serverMetrics;
+  BackupMetricsReport? _metricsReport;
   bool _isLoading = false;
   String? _error;
 
@@ -34,6 +41,7 @@ class DashboardProvider extends ChangeNotifier {
   List<BackupHistory> get recentBackups => _recentBackups;
   List<Schedule> get activeSchedulesList => _activeSchedulesList;
   Map<String, dynamic>? get serverMetrics => _serverMetrics;
+  BackupMetricsReport? get metricsReport => _metricsReport;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -41,6 +49,7 @@ class DashboardProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     _serverMetrics = null;
+    _metricsReport = null;
     notifyListeners();
 
     try {
@@ -50,6 +59,7 @@ class DashboardProvider extends ChangeNotifier {
         _loadFailedToday(),
         _loadActiveSchedules(),
         _loadRecentBackups(),
+        _loadMetricsReport(),
       ]);
       if (_connectionManager?.isConnected ?? false) {
         await _loadServerMetrics();
@@ -60,6 +70,24 @@ class DashboardProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _loadMetricsReport() async {
+    final service = _metricsAnalysisService;
+    if (service == null) return;
+
+    final endDate = DateTime.now();
+    final startDate = endDate.subtract(const Duration(days: _metricsReportDays));
+
+    final result = await service.generateReport(
+      startDate: startDate,
+      endDate: endDate,
+    );
+
+    result.fold(
+      (report) => _metricsReport = report,
+      (_) => _metricsReport = null,
+    );
   }
 
   Future<void> _loadServerMetrics() async {

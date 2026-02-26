@@ -129,7 +129,9 @@ Future<bool> _dropConfigTablesForVersion223() async {
   );
 
   if (!shouldReset) {
-    LoggerService.info('Versão não é exatamente 2.2.3, pulando drop de tabelas');
+    LoggerService.info(
+      'Versão não é exatamente 2.2.3, pulando drop de tabelas',
+    );
     return false;
   }
 
@@ -215,7 +217,9 @@ Future<bool> _dropConfigTablesForVersion223() async {
       database.dispose();
       database = null;
 
-      LoggerService.warning('===== DROP DE TABELAS CONCLUÍDO, BACKUPS DISPONÍVEIS =====');
+      LoggerService.warning(
+        '===== DROP DE TABELAS CONCLUÍDO, BACKUPS DISPONÍVEIS =====',
+      );
 
       await _markResetCompletedForVersion223();
 
@@ -229,17 +233,37 @@ Future<bool> _dropConfigTablesForVersion223() async {
       LoggerService.info('Tempo conclusão: ${cleanupElapsedMs}ms');
 
       // P3.2: Logging estruturado - Resumo de performance
-      final validationTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.validation));
-      final flagCheckTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.validation));
-      final dbOpenTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.cleanup));
-      final backupTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.backupCreation));
-      final dropTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.dropExecution));
-      final cleanupTime = Duration(milliseconds: metrics.getElapsedMs(_ResetPhase.cleanup));
-      final totalTime = validationTime + flagCheckTime + dbOpenTime + backupTime + dropTime + cleanupTime;
+      final validationTime = Duration(
+        milliseconds: metrics.getElapsedMs(_ResetPhase.validation),
+      );
+      final flagCheckTime = Duration(
+        milliseconds: metrics.getElapsedMs(_ResetPhase.validation),
+      );
+      final dbOpenTime = Duration(
+        milliseconds: metrics.getElapsedMs(_ResetPhase.cleanup),
+      );
+      final backupTime = Duration(
+        milliseconds: metrics.getElapsedMs(_ResetPhase.backupCreation),
+      );
+      final dropTime = Duration(
+        milliseconds: metrics.getElapsedMs(_ResetPhase.dropExecution),
+      );
+      final cleanupTime = Duration(
+        milliseconds: metrics.getElapsedMs(_ResetPhase.cleanup),
+      );
+      final totalTime =
+          validationTime +
+          flagCheckTime +
+          dbOpenTime +
+          backupTime +
+          dropTime +
+          cleanupTime;
 
       LoggerService.info('===== RESUMO DE PERFORMANCE =====');
       LoggerService.info('Validação: ${validationTime.inMilliseconds}');
-      LoggerService.info('Verificação de flag: ${flagCheckTime.inMilliseconds}');
+      LoggerService.info(
+        'Verificação de flag: ${flagCheckTime.inMilliseconds}',
+      );
       LoggerService.info('Abertura do banco: ${dbOpenTime.inMilliseconds}');
       LoggerService.info('Criação de backups: ${backupTime.inMilliseconds}');
       LoggerService.info('DROP de tabelas: ${dropTime.inMilliseconds}');
@@ -313,7 +337,8 @@ _DropErrorType _categorizeError(Object error) {
 
   if (error case final FileSystemException fsError) {
     if (fsError.osError?.errorCode == 5 || // ERROR_ACCESS_DENIED
-        fsError.osError?.errorCode == 32) { // ERROR_SHARING_VIOLATION
+        fsError.osError?.errorCode == 32) {
+      // ERROR_SHARING_VIOLATION
       return _DropErrorType.critical;
     }
     return _DropErrorType.recoverable;

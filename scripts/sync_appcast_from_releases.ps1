@@ -24,7 +24,7 @@ catch {
 
 # Criar ou carregar appcast.xml
 if (Test-Path $appcastFile) {
-    [xml]$appcast = Get-Content $appcastFile
+    [xml]$appcast = Get-Content $appcastFile -Encoding UTF8
     $channel = $appcast.rss.channel
     
     # Limpar todos os itens existentes

@@ -168,9 +168,9 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           Expanded(
             child: Text(
               isEditing
-                  ? _t('Editar configuracao', 'Edit configuration')
+                  ? _t('Editar configuração', 'Edit configuration')
                   : _t(
-                      'Nova configuracao de banco de dados',
+                      'Nova configuração de banco de dados',
                       'New database configuration',
                     ),
               style: FluentTheme.of(context).typography.title,
@@ -219,7 +219,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
                 AppTextField(
                   controller: _nameController,
-                  label: _t('Nome da configuracao', 'Configuration name'),
+                  label: _t('Nome da configuração', 'Configuration name'),
                   hint: _selectedType == DatabaseType.sqlServer
                       ? 'Ex: Produção SQL Server'
                       : _selectedType == DatabaseType.postgresql
@@ -227,7 +227,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                       : 'Ex: Produção Sybase',
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return _t('Nome e obrigatorio', 'Name is required');
+                      return _t('Nome é obrigatório', 'Name is required');
                     }
                     return null;
                   },
@@ -283,7 +283,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                         return null;
                       }
                       return _t(
-                        'Usuario e obrigatorio',
+                        'Usuário é obrigatório',
                         'Username is required',
                       );
                     }
@@ -319,7 +319,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 const SizedBox(height: 8),
                 Text(
                   _t(
-                    'Configuracao ativa para uso em agendamentos',
+                    'Configuração ativa para uso em agendamentos',
                     'Configuration active for schedules',
                   ),
                   style: FluentTheme.of(context).typography.caption,
@@ -332,7 +332,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       actions: [
         const CancelButton(),
         ActionButton(
-          label: _t('Testar conexao', 'Test connection'),
+          label: _t('Testar conexão', 'Test connection'),
           icon: FluentIcons.check_mark,
           onPressed: _testConnection,
           isLoading: _isTestingConnection,
@@ -357,7 +357,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 hint: r'localhost ou IP\INSTANCIA',
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return _t('Servidor e obrigatorio', 'Server is required');
+                    return _t('Servidor é obrigatório', 'Server is required');
                   }
                   return null;
                 },
@@ -387,13 +387,13 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 controller: _databaseController,
                 label: _t('Nome do banco de dados', 'Database name'),
                 hint: _t(
-                  'Digite ou clique em "Testar conexao" para carregar',
+                  'Digite ou clique em "Testar conexão" para carregar',
                   'Type or click "Test connection" to load',
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return _t(
-                      'Nome do banco e obrigatorio',
+                      'Nome do banco é obrigatório',
                       'Database name is required',
                     );
                   }
@@ -422,7 +422,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                     Expanded(
                       child: Text(
                         _t(
-                          'Preencha servidor, porta, usuario e senha, depois clique em "Testar conexao" para carregar os bancos no dropdown',
+                          'Preencha servidor, porta, usuário e senha, depois clique em "Testar conexão" para carregar os bancos no dropdown',
                           'Fill server, port, username and password, then click "Test connection" to load databases in the dropdown',
                         ),
                         style: FluentTheme.of(context).typography.caption,
@@ -507,7 +507,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return _t(
-                      'Engine Name e obrigatorio',
+                      'Engine Name é obrigatório',
                       'Engine Name is required',
                     );
                   }
@@ -541,7 +541,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return _t(
-                'Nome do banco de dados e obrigatorio',
+                'Nome do banco de dados é obrigatório',
                 'Database name is required',
               );
             }
@@ -592,7 +592,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 hint: _t('localhost ou IP', 'localhost or IP'),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return _t('Host e obrigatorio', 'Host is required');
+                    return _t('Host é obrigatório', 'Host is required');
                   }
                   return null;
                 },
@@ -622,11 +622,11 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 controller: _databaseController,
                 label: _t('Nome do banco de dados', 'Database name'),
                 hint:
-                    "Digite ou clique em _t('Testar conexao', 'Test connection') para carregar",
+                    "Digite ou clique em _t('Testar conexão', 'Test connection') para carregar",
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return _t(
-                      'Nome do banco de dados e obrigatorio',
+                      'Nome do banco de dados é obrigatório',
                       'Database name is required',
                     );
                   }
@@ -655,7 +655,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                     Expanded(
                       child: Text(
                         _t(
-                          'Preencha host, porta, usuario e senha, depois clique em "Testar conexao" para carregar os bancos no dropdown',
+                          'Preencha host, porta, usuário e senha, depois clique em "Testar conexão" para carregar os bancos no dropdown',
                           'Fill host, port, username and password, then click "Test connection" to load databases in the dropdown',
                         ),
                         style: FluentTheme.of(context).typography.caption,
@@ -780,7 +780,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             MessageModal.showSuccess(
               context,
               message: _t(
-                'Conexao testada com sucesso!',
+                'Conexão testada com sucesso!',
                 'Connection tested successfully!',
               ),
             );
@@ -790,13 +790,13 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             final errorMessage = f.message.isNotEmpty
                 ? f.message
                 : _t(
-                    'Erro desconhecido ao testar conexao',
+                    'Erro desconhecido ao testar conexão',
                     'Unknown error testing connection',
                   );
 
             MessageModal.showError(
               context,
-              title: _t('Erro ao testar conexao', 'Error testing connection'),
+              title: _t('Erro ao testar conexão', 'Error testing connection'),
               message: errorMessage,
             );
           },
@@ -810,7 +810,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
         MessageModal.showError(
           context,
-          title: _t('Erro ao testar conexao', 'Error testing connection'),
+          title: _t('Erro ao testar conexão', 'Error testing connection'),
           message: errorMessage.isNotEmpty
               ? errorMessage
               : _t('Erro desconhecido', 'Unknown error'),
@@ -895,11 +895,11 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                     context,
                     message: databases.isEmpty
                         ? _t(
-                            'Conexao OK, mas nenhum banco encontrado',
+                            'Conexão OK, mas nenhum banco encontrado',
                             'Connection OK, but no database found',
                           )
                         : _t(
-                            'Conexao OK! ${databases.length} banco(s) encontrado(s). Selecione um no dropdown.',
+                            'Conexão OK! ${databases.length} banco(s) encontrado(s). Selecione um no dropdown.',
                             'Connection OK! ${databases.length} database(s) found. Select one from dropdown.',
                           ),
                   );
@@ -917,7 +917,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   MessageModal.showWarning(
                     context,
                     message: _t(
-                      'Conexao OK, mas erro ao listar bancos: $message',
+                      'Conexão OK, mas erro ao listar bancos: $message',
                       'Connection OK, but error listing databases: $message',
                     ),
                   );
@@ -961,7 +961,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
 
               MessageModal.showError(
                 context,
-                title: _t('Erro ao testar conexao', 'Error testing connection'),
+                title: _t('Erro ao testar conexão', 'Error testing connection'),
                 message: message,
               );
             }
@@ -1021,7 +1021,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
       await connectionResult.fold(
         (success) async {
           if (!success) {
-            throw Exception(_t('Conexao falhou', 'Connection failed'));
+            throw Exception(_t('Conexão falhou', 'Connection failed'));
           }
 
           final databasesResult = await _backupService.listDatabases(
@@ -1046,11 +1046,11 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                   context,
                   message: databases.isEmpty
                       ? _t(
-                          'Conexao OK, mas nenhum banco encontrado',
+                          'Conexão OK, mas nenhum banco encontrado',
                           'Connection OK, but no database found',
                         )
                       : _t(
-                          'Conexao OK! ${databases.length} banco(s) encontrado(s). Selecione um no dropdown.',
+                          'Conexão OK! ${databases.length} banco(s) encontrado(s). Selecione um no dropdown.',
                           'Connection OK! ${databases.length} database(s) found. Select one from dropdown.',
                         ),
                 );
@@ -1068,7 +1068,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 MessageModal.showWarning(
                   context,
                   message: _t(
-                    'Conexao OK, mas erro ao listar bancos: $message',
+                    'Conexão OK, mas erro ao listar bancos: $message',
                     'Connection OK, but error listing databases: $message',
                   ),
                 );
@@ -1087,7 +1087,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 : failure.toString();
             MessageModal.showError(
               context,
-              title: _t('Erro ao testar conexao', 'Error testing connection'),
+              title: _t('Erro ao testar conexão', 'Error testing connection'),
               message: message,
             );
           }

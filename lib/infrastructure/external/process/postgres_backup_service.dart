@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
@@ -108,12 +109,21 @@ class PostgresBackupService implements IPostgresBackupService {
               LoggerService.info(
                 'Backup WAL concluido sem novos segmentos para captura.',
               );
+              final duration = stopwatch.elapsed;
+              final metrics = _buildPostgresMetrics(
+                backupDuration: duration,
+                verifyDuration: Duration.zero,
+                totalSize: 0,
+                backupType: backupType,
+                verifyAfterBackup: false,
+              );
               return rd.Success(
                 BackupExecutionResult(
                   backupPath: effectiveBackupPath,
                   fileSize: 0,
-                  duration: stopwatch.elapsed,
+                  duration: duration,
                   databaseName: config.databaseValue,
+                  metrics: metrics,
                 ),
               );
             }
@@ -130,10 +140,17 @@ class PostgresBackupService implements IPostgresBackupService {
             'Backup PostgreSQL concluído: $effectiveBackupPath (${_formatBytes(totalSize)})',
           );
 
+          final backupDuration = stopwatch.elapsed;
+          var verifyDuration = Duration.zero;
+
           if (verifyAfterBackup && backupType != BackupType.log) {
+            final verifyStopwatch = Stopwatch()..start();
             final verifyResult = backupType == BackupType.fullSingle
                 ? await _verifyFullSingleBackup(effectiveBackupPath)
                 : await _verifyBackup(effectiveBackupPath);
+            verifyStopwatch.stop();
+            verifyDuration = verifyStopwatch.elapsed;
+
             verifyResult.fold(
               (_) {
                 LoggerService.info(
@@ -151,12 +168,22 @@ class PostgresBackupService implements IPostgresBackupService {
             );
           }
 
+          final totalDuration = backupDuration + verifyDuration;
+          final metrics = _buildPostgresMetrics(
+            backupDuration: backupDuration,
+            verifyDuration: verifyDuration,
+            totalSize: totalSize,
+            backupType: backupType,
+            verifyAfterBackup: verifyAfterBackup,
+          );
+
           return rd.Success(
             BackupExecutionResult(
               backupPath: effectiveBackupPath,
               fileSize: totalSize,
-              duration: stopwatch.elapsed,
+              duration: totalDuration,
               databaseName: config.databaseValue,
+              metrics: metrics,
             ),
           );
         }, rd.Failure.new);
@@ -1443,6 +1470,40 @@ class PostgresBackupService implements IPostgresBackupService {
         );
       }
     }, rd.Failure.new);
+  }
+
+  BackupMetrics _buildPostgresMetrics({
+    required Duration backupDuration,
+    required Duration verifyDuration,
+    required int totalSize,
+    required BackupType backupType,
+    required bool verifyAfterBackup,
+  }) {
+    final totalDuration = backupDuration + verifyDuration;
+    return BackupMetrics(
+      totalDuration: totalDuration,
+      backupDuration: backupDuration,
+      verifyDuration: verifyDuration,
+      backupSizeBytes: totalSize,
+      backupSpeedMbPerSec: _calculateSpeedMbPerSec(
+        totalSize,
+        backupDuration.inSeconds,
+      ),
+      backupType: backupType.name,
+      flags: BackupFlags(
+        compression: false,
+        verifyPolicy: verifyAfterBackup ? 'verify' : 'none',
+        stripingCount: 1,
+        withChecksum: false,
+        stopOnError: true,
+      ),
+    );
+  }
+
+  double _calculateSpeedMbPerSec(int sizeInBytes, int durationSeconds) {
+    if (durationSeconds <= 0) return 0;
+    final sizeInMb = sizeInBytes / 1024 / 1024;
+    return sizeInMb / durationSeconds;
   }
 
   String _formatBytes(int bytes) {

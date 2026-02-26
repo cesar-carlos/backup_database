@@ -265,7 +265,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
         }
 
         final backupDuration = stopwatch.elapsed;
-        final verifyDuration = verifyAfterBackup ? verifyStopwatch.elapsed : Duration.zero;
+        final verifyDuration = verifyAfterBackup
+            ? verifyStopwatch.elapsed
+            : Duration.zero;
         final totalDuration = backupDuration + verifyDuration;
 
         final metrics = BackupMetrics(
@@ -273,7 +275,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
           backupDuration: backupDuration,
           verifyDuration: verifyDuration,
           backupSizeBytes: fileSize,
-          backupSpeedMbPerSec: _calculateSpeedMbPerSec(fileSize, backupDuration.inSeconds),
+          backupSpeedMbPerSec: _calculateSpeedMbPerSec(
+            fileSize,
+            backupDuration.inSeconds,
+          ),
           backupType: getBackupTypeName(backupType),
           flags: BackupFlags(
             compression: sqlServerBackupOptions?.compression ?? false,

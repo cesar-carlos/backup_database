@@ -227,7 +227,7 @@ class NotificationProvider extends ChangeNotifier {
         },
       );
     } on Object catch (e) {
-      _error = 'Erro ao salvar configuracao: $e';
+      _error = 'Erro ao salvar configuração: $e';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -258,7 +258,7 @@ class NotificationProvider extends ChangeNotifier {
         },
       );
     } on Object catch (e) {
-      _error = 'Erro ao remover configuracao: $e';
+      _error = 'Erro ao remover configuração: $e';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -268,7 +268,7 @@ class NotificationProvider extends ChangeNotifier {
   Future<bool> deleteSelectedConfig() async {
     final selected = selectedConfig;
     if (selected == null) {
-      _error = 'Nenhuma configuracao selecionada';
+      _error = 'Nenhuma configuração selecionada';
       notifyListeners();
       return false;
     }
@@ -305,7 +305,7 @@ class NotificationProvider extends ChangeNotifier {
         },
       );
     } on Object catch (e) {
-      _error = _formatTestErrorMessage('Erro ao testar configuracao: $e');
+      _error = _formatTestErrorMessage('Erro ao testar configuração: $e');
       return false;
     } finally {
       _endTesting(config.id);
@@ -332,7 +332,7 @@ class NotificationProvider extends ChangeNotifier {
         },
       );
     } on Object catch (e) {
-      _error = _formatTestErrorMessage('Erro ao testar configuracao: $e');
+      _error = _formatTestErrorMessage('Erro ao testar configuração: $e');
       return false;
     } finally {
       _endTesting(config.id);
@@ -343,7 +343,7 @@ class NotificationProvider extends ChangeNotifier {
   Future<bool> toggleConfigEnabled(String configId, bool enabled) async {
     final config = _findConfigById(configId);
     if (config == null) {
-      _error = 'Configuracao nao encontrada';
+      _error = 'Configuração não encontrada';
       notifyListeners();
       return false;
     }
@@ -538,7 +538,7 @@ class NotificationProvider extends ChangeNotifier {
   Future<bool> toggleTargetEnabled(String targetId, bool enabled) async {
     final target = _findTargetById(targetId);
     if (target == null) {
-      _error = 'Destinatario nao encontrado';
+      _error = 'Destinatário não encontrado';
       notifyListeners();
       return false;
     }
@@ -680,12 +680,12 @@ class NotificationProvider extends ChangeNotifier {
   String _formatTestErrorMessage(String rawMessage) {
     final message = rawMessage.trim();
     if (message.isEmpty) {
-      return 'Falha ao testar configuracao SMTP';
+      return 'Falha ao testar configuração SMTP';
     }
 
     final lower = message.toLowerCase();
-    if (lower.contains('autenticacao smtp')) {
-      return 'Falha de autenticacao SMTP. Verifique usuario, senha e porta/SSL.\n$message';
+    if (lower.contains('autenticação smtp')) {
+      return 'Falha de autenticação SMTP. Verifique usuário, senha e porta/SSL.\n$message';
     }
     if (lower.contains('nao foi possivel conectar') ||
         lower.contains('socket') ||
@@ -697,7 +697,7 @@ class NotificationProvider extends ChangeNotifier {
     }
     if (lower.contains('e-mail de destino') ||
         lower.contains('mensagem de e-mail invalida')) {
-      return 'Falha de validacao da mensagem de teste.\n$message';
+      return 'Falha de validação da mensagem de teste.\n$message';
     }
 
     return message;
@@ -706,7 +706,7 @@ class NotificationProvider extends ChangeNotifier {
   bool _beginTesting(String configId) {
     if (_testingConfigIds.contains(configId)) {
       _error =
-          'Ja existe um teste de conexao em execucao para esta configuracao';
+          'Já existe um teste de conexão em execução para esta configuração';
       notifyListeners();
       return false;
     }

@@ -44,7 +44,7 @@ Write-Host ""
 if (Test-Path ".env.server") {
     Write-Host "Verificando .env.server:" -ForegroundColor Cyan
     Write-Host ""
-    $content = Get-Content ".env.server" -Raw
+    $content = Get-Content ".env.server" -Raw -Encoding UTF8
 
     if ($content -match "SINGLE_INSTANCE_ENABLED=false") {
         Write-Host "[OK] SINGLE_INSTANCE_ENABLED=false" -ForegroundColor Green
@@ -67,7 +67,7 @@ Write-Host ""
 if (Test-Path ".env.client") {
     Write-Host "Verificando .env.client:" -ForegroundColor Cyan
     Write-Host ""
-    $content = Get-Content ".env.client" -Raw
+    $content = Get-Content ".env.client" -Raw -Encoding UTF8
 
     if ($content -match "SINGLE_INSTANCE_ENABLED=false") {
         Write-Host "[OK] SINGLE_INSTANCE_ENABLED=false" -ForegroundColor Green

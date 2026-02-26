@@ -80,6 +80,7 @@ Future<void> setupPresentationModule(GetIt getIt) async {
       getIt<IBackupHistoryRepository>(),
       getIt<IScheduleRepository>(),
       connectionManager: getIt<ConnectionManager>(),
+      metricsAnalysisService: getIt<IMetricsAnalysisService>(),
     ),
   );
 

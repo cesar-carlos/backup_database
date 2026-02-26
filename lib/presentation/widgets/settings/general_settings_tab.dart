@@ -303,7 +303,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                     subtitle: Text(
                       autoUpdateProvider.lastCheckDate != null
                           ? _t(
-                              'Ultima verificacao: ${DateFormat('dd/MM/yyyy HH:mm').format(autoUpdateProvider.lastCheckDate!)}',
+                              'Última verificação: ${DateFormat('dd/MM/yyyy HH:mm').format(autoUpdateProvider.lastCheckDate!)}',
                               'Last check: ${DateFormat('dd/MM/yyyy HH:mm').format(autoUpdateProvider.lastCheckDate!)}',
                             )
                           : _t('Nunca verificado', 'Never checked'),
@@ -370,7 +370,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                         ),
                 ),
                 ListTile(
-                  title: Text(_t('Licenca', 'License')),
+                  title: Text(_t('Licença', 'License')),
                   subtitle: const Text('MIT License'),
                 ),
               ],

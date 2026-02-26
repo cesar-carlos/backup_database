@@ -94,6 +94,12 @@ class ServiceHealthChecker {
   bool _isRunning = false;
   HealthCheckResult? _lastResult;
 
+  // Backoff / circuit-breaker state
+  int _consecutiveErrors = 0;
+  int _skipCyclesRemaining = 0;
+  static const int _backoffThreshold = 3;
+  static const int _maxBackoffSkipCycles = 8;
+
   Future<void> start() async {
     if (_isRunning) {
       LoggerService.warning('HealthChecker já está rodando');
@@ -118,6 +124,8 @@ class ServiceHealthChecker {
     _isRunning = false;
     _checkTimer?.cancel();
     _checkTimer = null;
+    _consecutiveErrors = 0;
+    _skipCyclesRemaining = 0;
 
     LoggerService.info('🩺 ServiceHealthChecker parado');
   }
@@ -127,6 +135,27 @@ class ServiceHealthChecker {
   }
 
   Future<HealthCheckResult> _performHealthCheck() async {
+    // Circuit-breaker: pular ciclos quando houver falhas consecutivas.
+    if (_skipCyclesRemaining > 0) {
+      _skipCyclesRemaining--;
+      LoggerService.debug(
+        '🩺 Verificação de saúde adiada (backoff: '
+        '${_skipCyclesRemaining + 1} ciclos restantes)',
+      );
+      return _lastResult ??
+          HealthCheckResult(
+            status: HealthStatus.warning,
+            timestamp: DateTime.now(),
+            issues: const [
+              HealthIssue(
+                severity: HealthStatus.warning,
+                category: 'system',
+                message: 'Verificação em backoff após falhas consecutivas',
+              ),
+            ],
+          );
+    }
+
     LoggerService.debug('Executando verificação de saúde...');
 
     final issues = <HealthIssue>[];
@@ -161,12 +190,41 @@ class ServiceHealthChecker {
 
       _lastResult = result;
 
+      // Ciclo bem-sucedido: reset dos contadores de backoff.
+      if (_consecutiveErrors > 0) {
+        LoggerService.info(
+          '🩺 Verificação de saúde recuperada após '
+          '$_consecutiveErrors erro(s) consecutivo(s)',
+        );
+        _consecutiveErrors = 0;
+        _skipCyclesRemaining = 0;
+      }
+
       await _publishOperationalAlerts(result);
       _logHealthResult(result);
 
       return result;
     } on Object catch (e, s) {
-      LoggerService.error('Erro durante verificação de saúde', e, s);
+      _consecutiveErrors++;
+
+      // Calcula quantos ciclos pular (backoff progressivo até o limite).
+      final skipCycles = _consecutiveErrors >= _backoffThreshold
+          ? (_consecutiveErrors - _backoffThreshold + 1).clamp(
+              1,
+              _maxBackoffSkipCycles,
+            )
+          : 0;
+
+      if (skipCycles > 0) {
+        _skipCyclesRemaining = skipCycles;
+        LoggerService.warning(
+          '⚠️ Verificação de saúde falhou $_consecutiveErrors vez(es) '
+          'consecutiva(s). Próxima execução após $skipCycles ciclo(s) '
+          '(≈${skipCycles * checkInterval.inMinutes}min).',
+        );
+      } else {
+        LoggerService.error('Erro durante verificação de saúde', e, s);
+      }
 
       final criticalResult = HealthCheckResult(
         status: HealthStatus.critical,

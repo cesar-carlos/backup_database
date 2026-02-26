@@ -43,7 +43,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               const SizedBox(height: 8),
               Text(
                 _t(
-                  'Instale o aplicativo como servico do Windows para executar backups automaticamente, mesmo sem usuario logado.',
+                  'Instale o aplicativo como serviço do Windows para executar backups automaticamente, mesmo sem usuário logado.',
                   'Install the app as a Windows service to run backups automatically, even with no logged-in user.',
                 ),
                 style: TextStyle(
@@ -247,9 +247,9 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             const SizedBox(height: 12),
             _buildInfoItem(
               context,
-              _t('Funciona sem usuario logado', 'Works without logged-in user'),
+              _t('Funciona sem usuário logado', 'Works without logged-in user'),
               _t(
-                'O servico executara backups mesmo quando nenhum usuario estiver conectado.',
+                'O serviço executará backups mesmo quando nenhum usuário estiver conectado.',
                 'The service will run backups even when no user is logged in.',
               ),
             ),
@@ -309,10 +309,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     if (provider.isLoading) return _t('Verificando...', 'Checking...');
     if (provider.isInstalled) {
       return provider.isRunning
-          ? _t('Instalado e em execucao', 'Installed and running')
+          ? _t('Instalado e em execução', 'Installed and running')
           : _t('Instalado', 'Installed');
     }
-    return _t('Nao instalado', 'Not installed');
+    return _t('Não instalado', 'Not installed');
   }
 
   Future<void> _installService(
@@ -325,7 +325,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         title: Text(_t('Instalar servico', 'Install service')),
         content: Text(
           _t(
-            'Deseja instalar o Backup Database como servico do Windows?\n\nO servico sera configurado para:\n- Iniciar automaticamente com o Windows\n- Executar sem usuario logado\n- Rodar com conta LocalSystem\n\nRequisitos:\n- Configure os backups antes de instalar\n- Certifique-se de ter permissoes de administrador',
+            'Deseja instalar o Backup Database como serviço do Windows?\n\nO serviço será configurado para:\n- Iniciar automaticamente com o Windows\n- Executar sem usuário logado\n- Rodar com conta LocalSystem\n\nRequisitos:\n- Configure os backups antes de instalar\n- Certifique-se de ter permissões de administrador',
             'Do you want to install Backup Database as a Windows service?\n\nThe service will be configured to:\n- Start automatically with Windows\n- Run without logged-in user\n- Run under LocalSystem account\n\nRequirements:\n- Configure backups before installing\n- Ensure you have administrator permissions',
           ),
         ),
@@ -386,7 +386,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         title: Text(_t('Remover servico', 'Remove service')),
         content: Text(
           _t(
-            'Deseja realmente remover o servico do Windows?\n\nOs agendamentos e configuracoes nao serao perdidos, mas o servico nao executara mais automaticamente.',
+            'Deseja realmente remover o serviço do Windows?\n\nOs agendamentos e configurações não serão perdidos, mas o serviço não executará mais automaticamente.',
             'Do you really want to remove the Windows service?\n\nSchedules and settings will not be lost, but the service will no longer run automatically.',
           ),
         ),
@@ -478,7 +478,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         title: Text(_t('Parar servico', 'Stop service')),
         content: Text(
           _t(
-            'Deseja parar o servico?\n\nOs backups agendados nao serao executados ate que o servico seja iniciado novamente.',
+            'Deseja parar o serviço?\n\nOs backups agendados não serão executados até que o serviço seja iniciado novamente.',
             'Do you want to stop the service?\n\nScheduled backups will not run until the service is started again.',
           ),
         ),

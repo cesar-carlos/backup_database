@@ -67,9 +67,16 @@ class ServiceModeInitializer {
         // Para de aceitar novos schedules
         schedulerService?.stop();
 
-        // Aguarda backups em execução terminarem
+        // Aguarda backups em execução terminarem respeitando o timeout do SCM
+        final budgetForBackups = timeout > const Duration(seconds: 5)
+            ? timeout - const Duration(seconds: 5)
+            : timeout;
+
         final allCompleted =
-            await schedulerService?.waitForRunningBackups() ?? false;
+            await schedulerService?.waitForRunningBackups(
+              timeout: budgetForBackups,
+            ) ??
+            false;
 
         if (!allCompleted) {
           LoggerService.warning(

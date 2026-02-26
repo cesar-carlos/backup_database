@@ -9,7 +9,7 @@ param(
     [string]$DisplayName = "Backup Database Service",
     [string]$Description = "Serviço de backup automático para SQL Server e Sybase",
     [string]$ServiceUser = "",
-    [string]$ServicePassword = ""
+    [SecureString]$ServicePassword
 )
 
 # Verificar se está executando como administrador
@@ -64,7 +64,7 @@ if ($existingService) {
 
 # Instalar o serviço
 Write-Host "Instalando serviço..." -ForegroundColor Green
-& $NssmPath install $ServiceName "`"$AppPath`"" --minimized
+& $NssmPath install $ServiceName "`"$AppPath`"" --minimized --mode=server
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERRO: Falha ao instalar serviço!" -ForegroundColor Red
@@ -74,13 +74,13 @@ if ($LASTEXITCODE -ne 0) {
 
 # Configurar diretório de trabalho
 Write-Host "Configurando diretório de trabalho..." -ForegroundColor Green
-& $NssmPath set $ServiceName AppDirectory "`"$AppDirectory`"
+& $NssmPath set $ServiceName AppDirectory $AppDirectory
 
 # Configurar nome de exibição
-& $NssmPath set $ServiceName DisplayName "`"$DisplayName`"
+& $NssmPath set $ServiceName DisplayName $DisplayName
 
 # Configurar descrição
-& $NssmPath set $ServiceName Description "`"$Description`"
+& $NssmPath set $ServiceName Description $Description
 
 # Configurar para iniciar automaticamente
 & $NssmPath set $ServiceName Start SERVICE_AUTO_START
@@ -94,16 +94,46 @@ if (-not (Test-Path $logPath)) {
     New-Item -ItemType Directory -Path $logPath -Force | Out-Null
 }
 
-& $NssmPath set $ServiceName AppStdout "`"$logPath\service_stdout.log`"
-& $NssmPath set $ServiceName AppStderr "`"$logPath\service_stderr.log`"
+& $NssmPath set $ServiceName AppStdout "$logPath\service_stdout.log"
+& $NssmPath set $ServiceName AppStderr "$logPath\service_stderr.log"
 
 # Configurar usuário do serviço (se fornecido)
-if (-not [string]::IsNullOrEmpty($ServiceUser) -and -not [string]::IsNullOrEmpty($ServicePassword)) {
+if (-not [string]::IsNullOrEmpty($ServiceUser) -and $null -ne $ServicePassword) {
+    $credential = New-Object System.Management.Automation.PSCredential($ServiceUser, $ServicePassword)
+    $plainPassword = $credential.GetNetworkCredential().Password
+
+    if ([string]::IsNullOrEmpty($plainPassword)) {
+        Write-Host "Senha vazia detectada. Usando LocalSystem..." -ForegroundColor Yellow
+        & $NssmPath set $ServiceName ObjectName LocalSystem
+    }
+
     Write-Host "Configurando usuário do serviço..." -ForegroundColor Green
-    & $NssmPath set $ServiceName ObjectName "`"$ServiceUser`"" "`"$ServicePassword`"
+    & $NssmPath set $ServiceName ObjectName $ServiceUser $plainPassword
 } else {
     Write-Host "Configurando para rodar como LocalSystem..." -ForegroundColor Green
     & $NssmPath set $ServiceName ObjectName LocalSystem
+}
+
+# Verificação pós-instalação
+Write-Host ""
+Write-Host "Verificando instalação do serviço..." -ForegroundColor Green
+
+$verifyService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if (-not $verifyService) {
+    Write-Host "ERRO: Serviço '$ServiceName' não encontrado após instalação!" -ForegroundColor Red
+    Write-Host "Verifique o log do NSSM e tente novamente." -ForegroundColor Yellow
+    Read-Host "Pressione Enter para sair"
+    exit 1
+}
+
+$scQuery = sc.exe query $ServiceName 2>&1
+Write-Host "Status atual do serviço:" -ForegroundColor Cyan
+Write-Host $scQuery -ForegroundColor Gray
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "AVISO: sc query retornou código $LASTEXITCODE — verifique o status manualmente." -ForegroundColor Yellow
+} else {
+    Write-Host "✓ Serviço criado e registrado com sucesso." -ForegroundColor Green
 }
 
 Write-Host ""

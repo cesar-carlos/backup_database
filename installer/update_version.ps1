@@ -23,7 +23,7 @@ try {
     }
 
     # Ler versao do pubspec.yaml
-    $pubspecContent = Get-Content $pubspecPath -Raw
+    $pubspecContent = Get-Content $pubspecPath -Raw -Encoding UTF8
     if ($pubspecContent -match 'version:\s*([^\s]+)') {
         $fullVersion = $matches[1].Trim()
         # Extrair apenas a parte da versao (sem build number) para .env
@@ -40,7 +40,7 @@ try {
     }
 
     # Atualizar setup.iss
-    $setupIssLines = Get-Content $setupIssPath
+    $setupIssLines = Get-Content $setupIssPath -Encoding UTF8
     $setupIssUpdated = $false
     $newSetupIssLines = @()
 
@@ -64,7 +64,7 @@ try {
 
     # Atualizar .env (se existir)
     if (Test-Path $envPath) {
-        $envLines = Get-Content $envPath
+        $envLines = Get-Content $envPath -Encoding UTF8
         $envUpdated = $false
         $newEnvLines = @()
         

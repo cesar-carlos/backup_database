@@ -441,18 +441,16 @@ class ProcessService {
         _runningProcesses[tag] = process;
       }
 
-      final stdoutBuffer = StringBuffer();
-      final stderrBuffer = StringBuffer();
+      final stdoutBytes = <int>[];
+      final stderrBytes = <int>[];
       String? stdoutError;
       String? stderrError;
 
       final stdoutFuture = process.stdout
-          .transform(const Utf8Decoder(allowMalformed: true))
           .listen(
-            (data) {
+            (chunk) {
               try {
-                stdoutBuffer.write(data);
-                LoggerService.debug('STDOUT: $data');
+                stdoutBytes.addAll(chunk);
               } on Object catch (e) {
                 stdoutError = 'Erro ao processar stdout: $e';
                 LoggerService.warning(stdoutError!);
@@ -466,12 +464,10 @@ class ProcessService {
           .asFuture();
 
       final stderrFuture = process.stderr
-          .transform(const Utf8Decoder(allowMalformed: true))
           .listen(
-            (data) {
+            (chunk) {
               try {
-                stderrBuffer.write(data);
-                LoggerService.debug('STDERR: $data');
+                stderrBytes.addAll(chunk);
               } on Object catch (e) {
                 stderrError = 'Erro ao processar stderr: $e';
                 LoggerService.warning(stderrError!);
@@ -515,14 +511,21 @@ class ProcessService {
         _runningProcesses.remove(tag);
       }
 
-      final stdout = stdoutBuffer.toString();
-      var stderr = stderrBuffer.toString();
+      final stdout = _decodeProcessOutput(stdoutBytes);
+      var stderr = _decodeProcessOutput(stderrBytes);
 
       if (stdoutError != null) {
         stderr = '${stderr.isEmpty ? '' : '$stderr\n'}$stdoutError';
       }
       if (stderrError != null) {
         stderr = '${stderr.isEmpty ? '' : '$stderr\n'}$stderrError';
+      }
+
+      if (stdout.isNotEmpty) {
+        LoggerService.debug('STDOUT: $stdout');
+      }
+      if (stderr.isNotEmpty) {
+        LoggerService.debug('STDERR: $stderr');
       }
 
       final result = ProcessResult(
@@ -680,6 +683,44 @@ class ProcessService {
       process.kill();
       _runningProcesses.remove(tag);
     }
+  }
+
+  String _decodeProcessOutput(List<int> bytes) {
+    if (bytes.isEmpty) {
+      return '';
+    }
+
+    final utf8Text = utf8.decode(bytes, allowMalformed: true);
+    final utf8Score = _decodeQualityScore(utf8Text);
+
+    if (!Platform.isWindows) {
+      return utf8Text;
+    }
+
+    final systemText = _decodeWithSystemEncoding(bytes);
+    final systemScore = _decodeQualityScore(systemText);
+
+    return systemScore < utf8Score ? systemText : utf8Text;
+  }
+
+  String _decodeWithSystemEncoding(List<int> bytes) {
+    try {
+      return systemEncoding.decode(bytes);
+    } on Object {
+      return utf8.decode(bytes, allowMalformed: true);
+    }
+  }
+
+  int _decodeQualityScore(String text) {
+    const replacementCodePoint = 0xFFFD;
+    const garbledMarker = 'Ã';
+    var score = 0;
+    for (final codePoint in text.runes) {
+      if (codePoint == replacementCodePoint) {
+        score += 2;
+      }
+    }
+    return score + garbledMarker.allMatches(text).length;
   }
 }
 

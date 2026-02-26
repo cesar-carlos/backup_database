@@ -71,7 +71,8 @@ Future<Map<String, dynamic>?> runFullDatabaseMigration224() async {
     db.dispose();
     db = null;
 
-    final backupPath = '${dbPath}_backup_v2_2_4_${DateTime.now().millisecondsSinceEpoch}';
+    final backupPath =
+        '${dbPath}_backup_v2_2_4_${DateTime.now().millisecondsSinceEpoch}';
     LoggerService.info('Criando backup em $backupPath');
     await dbFile.copy(backupPath);
 
@@ -79,7 +80,9 @@ Future<Map<String, dynamic>?> runFullDatabaseMigration224() async {
     await dbFile.delete();
 
     await _markMigration224Done();
-    LoggerService.info('Migração 2.2.4: export concluído, import será feito após criação do banco');
+    LoggerService.info(
+      'Migração 2.2.4: export concluído, import será feito após criação do banco',
+    );
     return exportData;
   } on Object catch (e, stackTrace) {
     LoggerService.error('Erro na migração 2.2.4', e, stackTrace);
@@ -135,16 +138,34 @@ Future<void> importMigration224Data(
   await database.customStatement('PRAGMA foreign_keys = OFF');
 
   try {
-    await _importSqlServerConfigs(database, data['sql_server_configs'] as List<dynamic>);
-    await _importSybaseConfigs(database, data['sybase_configs'] as List<dynamic>);
-    await _importPostgresConfigs(database, data['postgres_configs'] as List<dynamic>);
+    await _importSqlServerConfigs(
+      database,
+      data['sql_server_configs'] as List<dynamic>,
+    );
+    await _importSybaseConfigs(
+      database,
+      data['sybase_configs'] as List<dynamic>,
+    );
+    await _importPostgresConfigs(
+      database,
+      data['postgres_configs'] as List<dynamic>,
+    );
     await _importDestinations(database, data['destinations'] as List<dynamic>);
     await _importEmailConfigs(database, data['email_configs'] as List<dynamic>);
-    await _importEmailTargets(database, data['email_notification_targets'] as List<dynamic>);
+    await _importEmailTargets(
+      database,
+      data['email_notification_targets'] as List<dynamic>,
+    );
     await _importLicenses(database, data['licenses'] as List<dynamic>);
     await _importSchedules(database, data['schedules'] as List<dynamic>);
-    await _importScheduleDestinations(database, data['schedule_destinations'] as List<dynamic>);
-    await _importBackupHistory(database, data['backup_history'] as List<dynamic>);
+    await _importScheduleDestinations(
+      database,
+      data['schedule_destinations'] as List<dynamic>,
+    );
+    await _importBackupHistory(
+      database,
+      data['backup_history'] as List<dynamic>,
+    );
     await _importBackupLogs(database, data['backup_logs'] as List<dynamic>);
   } finally {
     await database.customStatement('PRAGMA foreign_keys = ON');

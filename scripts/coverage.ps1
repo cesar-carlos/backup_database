@@ -30,7 +30,7 @@ function Test-IsIgnoredFile([string]$path) {
 }
 
 function Filter-LcovFile([string]$inputPath, [string]$outputPath) {
-  $lines = Get-Content $inputPath
+  $lines = Get-Content $inputPath -Encoding UTF8
   $result = New-Object System.Collections.Generic.List[string]
   $currentFile = $null
   $currentBlock = New-Object System.Collections.Generic.List[string]
@@ -66,11 +66,11 @@ function Filter-LcovFile([string]$inputPath, [string]$outputPath) {
     }
   }
 
-  $result | Set-Content $outputPath
+  $result | Set-Content $outputPath -Encoding UTF8
 }
 
 function Get-LcovCoverage([string]$lcovPath) {
-  $lines = Get-Content $lcovPath
+  $lines = Get-Content $lcovPath -Encoding UTF8
   $total = 0
   $hit = 0
   foreach ($line in $lines) {

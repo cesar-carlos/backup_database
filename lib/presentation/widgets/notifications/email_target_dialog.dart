@@ -115,7 +115,7 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
               hint: 'destino@exemplo.com',
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'E-mail e obrigatorio';
+                  return 'E-mail é obrigatório';
                 }
                 if (!value.contains('@')) {
                   return 'E-mail invalido';
@@ -159,7 +159,7 @@ class _TargetStatusSection extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         const Text(
-          'Os tipos de notificacao (sucesso/erro/aviso) sao definidos no modal da configuracao SMTP.',
+          'Os tipos de notificação (sucesso/erro/aviso) são definidos no modal da configuração SMTP.',
         ),
         const SizedBox(height: 10),
         _TargetToggleField(

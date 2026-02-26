@@ -107,7 +107,7 @@ class ConnectionManager {
     if (!useAuth) {
       if (!client.isConnected) {
         throw StateError(
-          client.lastErrorMessage ?? 'Nao foi possivel conectar ao servidor',
+          client.lastErrorMessage ?? 'Não foi possível conectar ao servidor',
         );
       }
       return;
@@ -122,7 +122,7 @@ class ConnectionManager {
 
       if (currentStatus == ConnectionStatus.authenticationFailed) {
         throw StateError(
-          client.lastErrorMessage ?? 'Autenticacao rejeitada pelo servidor',
+          client.lastErrorMessage ?? 'Autenticação rejeitada pelo servidor',
         );
       }
 
@@ -135,7 +135,7 @@ class ConnectionManager {
       if (currentStatus == ConnectionStatus.disconnected) {
         throw StateError(
           client.lastErrorMessage ??
-              'Conexao encerrada pelo servidor durante autenticacao',
+              'Conexão encerrada pelo servidor durante autenticação',
         );
       }
 
@@ -143,7 +143,7 @@ class ConnectionManager {
     }
 
     throw TimeoutException(
-      'Tempo esgotado aguardando resposta de autenticacao do servidor',
+      'Tempo esgotado aguardando resposta de autenticação do servidor',
     );
   }
 

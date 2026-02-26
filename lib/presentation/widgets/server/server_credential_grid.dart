@@ -33,7 +33,7 @@ class ServerCredentialGrid extends StatelessWidget {
             cellBuilder: (context, row) => SelectableText(row.serverId),
           ),
           AppDataGridColumn<ServerCredential>(
-            label: 'Descricao',
+            label: 'Descrição',
             width: const FlexColumnWidth(2.8),
             cellBuilder: (context, row) => Text(
               (row.description?.trim().isNotEmpty ?? false)

@@ -25,8 +25,10 @@ class ScheduleDialogStrings {
   static const String compressBackup = 'Compactar backup';
   static const String compressionFormat = 'Formato de compressão';
   static const String compressionFormatPlaceholder = 'Formato de compressão';
-  static const String compressionFormatZip = 'ZIP (compressão rápida, menor taxa)';
-  static const String compressionFormatRar = 'RAR (compressão maior, mais processamento)';
+  static const String compressionFormatZip =
+      'ZIP (compressão rápida, menor taxa)';
+  static const String compressionFormatRar =
+      'RAR (compressão maior, mais processamento)';
   static const String schedulingEnabled = 'Agendamento habilitado';
 
   static const String timeoutsSection = 'Timeouts (Segurança Operacional)';

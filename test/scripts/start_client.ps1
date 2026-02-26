@@ -36,7 +36,7 @@ Write-ColorOutput Cyan "Configuração do cliente carregada (.env.client)"
 Write-Output ""
 
 # Verificar SINGLE_INSTANCE_ENABLED
-$envContent = Get-Content ".env"
+$envContent = Get-Content ".env" -Encoding UTF8
 if ($envContent -match "SINGLE_INSTANCE_ENABLED=false") {
     Write-ColorOutput Green "✓ Single instance desabilitado (permite múltiplas instâncias)"
 } else {

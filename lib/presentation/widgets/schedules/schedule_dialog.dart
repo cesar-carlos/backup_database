@@ -1943,8 +1943,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     final configExists = _databaseType == DatabaseType.sqlServer
         ? _sqlServerConfigs.any((c) => c.id == _selectedDatabaseConfigId)
         : _databaseType == DatabaseType.sybase
-            ? _sybaseConfigs.any((c) => c.id == _selectedDatabaseConfigId)
-            : _postgresConfigs.any((c) => c.id == _selectedDatabaseConfigId);
+        ? _sybaseConfigs.any((c) => c.id == _selectedDatabaseConfigId)
+        : _postgresConfigs.any((c) => c.id == _selectedDatabaseConfigId);
 
     if (!configExists) {
       MessageModal.showError(

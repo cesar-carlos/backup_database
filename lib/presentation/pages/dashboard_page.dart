@@ -238,6 +238,10 @@ class _DashboardPageState extends State<DashboardPage> {
                         ],
                       ),
                     ],
+                    if (!isClientMode && provider.metricsReport != null) ...[
+                      const SizedBox(height: 24),
+                      MetricsPercentilesCard(report: provider.metricsReport!),
+                    ],
                     // Show local schedules only in Server/Unified mode
                     if (!isClientMode) ...[
                       const SizedBox(height: 32),

@@ -73,7 +73,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     if (name.isEmpty) {
       MessageModal.showError(
         context,
-        message: _t('Informe o nome da conexao.', 'Enter connection name.'),
+        message: _t('Informe o nome da conexão.', 'Enter connection name.'),
       );
       return;
     }
@@ -201,7 +201,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     return ContentDialog(
       title: Text(
         _isEditing
-            ? _t('Editar conexao', 'Edit connection')
+            ? _t('Editar conexão', 'Edit connection')
             : _t('Adicionar servidor', 'Add server'),
       ),
       content: SingleChildScrollView(
@@ -215,7 +215,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                 label: _t('Nome', 'Name'),
                 child: TextBox(
                   controller: _nameController,
-                  placeholder: _t('Nome da conexao', 'Connection name'),
+                  placeholder: _t('Nome da conexão', 'Connection name'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -276,7 +276,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                     height: 16,
                     child: ProgressRing(strokeWidth: 2),
                   )
-                : Text(_t('Testar conexao', 'Test connection')),
+                : Text(_t('Testar conexão', 'Test connection')),
           ),
         ),
         FilledButton(

@@ -549,14 +549,14 @@ class SchedulerService implements ISchedulerService {
     if (_executingSchedules.isNotEmpty) {
       return const rd.Failure(
         ValidationFailure(
-          message: 'Ja existe um backup em execucao no servidor.',
+          message: 'Já existe um backup em execução no servidor.',
         ),
       );
     }
 
     if (_executingSchedules.contains(schedule.id)) {
       return const rd.Failure(
-        ValidationFailure(message: 'Este agendamento ja esta em execucao.'),
+        ValidationFailure(message: 'Este agendamento já está em execução.'),
       );
     }
 
@@ -642,7 +642,7 @@ class SchedulerService implements ISchedulerService {
     if (!_executingSchedules.contains(scheduleId)) {
       return const rd.Failure(
         ValidationFailure(
-          message: 'Nao ha backup em execucao para este schedule',
+          message: 'Não há backup em execução para este schedule',
         ),
       );
     }

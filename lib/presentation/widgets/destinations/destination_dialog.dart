@@ -329,7 +329,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         Flexible(
                           child: Text(
                             isBlocked
-                                ? '${_getTypeName(type)} (${_t('Requer licenca', 'License required')})'
+                                ? '${_getTypeName(type)} (${_t('Requer licença', 'License required')})'
                                 : _getTypeName(type),
                             textAlign: TextAlign.start,
                             style: TextStyle(
@@ -378,7 +378,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       MessageModal.showWarning(
                         context,
                         message: _t(
-                          'Este destino requer uma licenca valida. Acesse Configuracoes > Licenciamento para mais informacoes.',
+                          'Este destino requer uma licença válida. Acesse Configurações > Licenciamento para mais informações.',
                           'This destination requires a valid license. Go to Settings > Licensing for more information.',
                         ),
                       );
@@ -406,7 +406,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       prefixIcon: const Icon(FluentIcons.tag),
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return _t('Nome e obrigatorio', 'Name is required');
+          return _t('Nome é obrigatório', 'Name is required');
         }
         return null;
       },
@@ -457,7 +457,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           prefixIcon: const Icon(FluentIcons.contact),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t('Usuario e obrigatorio', 'Username is required');
+              return _t('Usuário é obrigatório', 'Username is required');
             }
             return null;
           },
@@ -497,7 +497,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           validator: (value) {
             if (value == null || value.isEmpty) {
               return _nextcloudAuthMode == NextcloudAuthMode.appPassword
-                  ? _t('App Password e obrigatorio', 'App Password is required')
+                  ? _t('App Password é obrigatório', 'App Password is required')
                   : _t(
                       'Senha do usuario e obrigatoria',
                       'User password is required',
@@ -522,7 +522,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return _t(
-                'Nome da pasta e obrigatorio',
+                'Nome da pasta é obrigatório',
                 'Folder name is required',
               );
             }
@@ -555,7 +555,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         ActionButton(
-          label: _t('Testar conexao Nextcloud', 'Test Nextcloud connection'),
+          label: _t('Testar conexão Nextcloud', 'Test Nextcloud connection'),
           icon: FluentIcons.network_tower,
           onPressed: _testNextcloudConnection,
           isLoading: _isTestingNextcloudConnection,
@@ -573,10 +573,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Atencao', 'Attention')),
+        title: Text(_t('Atenção', 'Attention')),
         content: Text(
           _t(
-            'Permitir certificado invalido reduz a seguranca da conexao.\nHabilite apenas se o servidor usa certificado self-signed ou CA interna.',
+            'Permitir certificado inválido reduz a segurança da conexão.\nHabilite apenas se o servidor usa certificado self-signed ou CA interna.',
             'Allowing invalid certificate reduces connection security.\nEnable only if server uses self-signed cert or internal CA.',
           ),
         ),
@@ -698,12 +698,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t('Conexao FTP segura (SSL/TLS)', 'Secure FTP connection (SSL/TLS)'),
+          _t('Conexão FTP segura (SSL/TLS)', 'Secure FTP connection (SSL/TLS)'),
           style: FluentTheme.of(context).typography.caption,
         ),
         const SizedBox(height: 16),
         ActionButton(
-          label: _t('Testar conexao FTP', 'Test FTP connection'),
+          label: _t('Testar conexão FTP', 'Test FTP connection'),
           icon: FluentIcons.network_tower,
           onPressed: _testFtpConnection,
           isLoading: _isTestingFtpConnection,
@@ -760,7 +760,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 prefixIcon: const Icon(FluentIcons.folder),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return _t('Caminho e obrigatorio', 'Path is required');
+                    return _t('Caminho é obrigatório', 'Path is required');
                   }
                   return null;
                 },
@@ -794,7 +794,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 prefixIcon: const Icon(FluentIcons.server),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return _t('Servidor e obrigatorio', 'Server is required');
+                    return _t('Servidor é obrigatório', 'Server is required');
                   }
                   return null;
                 },
@@ -821,7 +821,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           prefixIcon: const Icon(FluentIcons.contact),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t('Usuario e obrigatorio', 'Username is required');
+              return _t('Usuário é obrigatório', 'Username is required');
             }
             return null;
           },
@@ -841,7 +841,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return _t(
-                'Caminho remoto e obrigatorio',
+                'Caminho remoto é obrigatório',
                 'Remote path is required',
               );
             }
@@ -886,7 +886,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       enabled: googleAuth.isSignedIn,
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return _t('Nome da pasta e obrigatorio', 'Folder name is required');
+          return _t('Nome da pasta é obrigatório', 'Folder name is required');
         }
         return null;
       },
@@ -1053,7 +1053,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
               const SizedBox(width: 8),
               Text(
-                _t('Configuracao OAuth', 'OAuth configuration'),
+                _t('Configuração OAuth', 'OAuth configuration'),
                 style: FluentTheme.of(
                   context,
                 ).typography.subtitle?.copyWith(color: AppColors.primary),
@@ -1162,7 +1162,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return _t(
-                'Nome da pasta e obrigatorio',
+                'Nome da pasta é obrigatório',
                 'Folder name is required',
               );
             }
@@ -1336,7 +1336,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
               const SizedBox(width: 8),
               Text(
-                _t('Configuracao OAuth', 'OAuth configuration'),
+                _t('Configuração OAuth', 'OAuth configuration'),
                 style: FluentTheme.of(
                   context,
                 ).typography.subtitle?.copyWith(color: AppColors.primary),
@@ -1461,7 +1461,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Future<void> _testFtpConnection() async {
     if (_ftpHostController.text.trim().isEmpty) {
-      _showError(_t('Servidor FTP e obrigatorio', 'FTP server is required'));
+      _showError(_t('Servidor FTP é obrigatório', 'FTP server is required'));
       return;
     }
     if (_ftpPortController.text.trim().isEmpty) {
@@ -1469,7 +1469,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       return;
     }
     if (_ftpUsernameController.text.trim().isEmpty) {
-      _showError(_t('Usuario e obrigatorio', 'Username is required'));
+      _showError(_t('Usuário é obrigatório', 'Username is required'));
       return;
     }
     if (_ftpPasswordController.text.trim().isEmpty) {
@@ -1510,7 +1510,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           if (success) {
             _showSuccess(
               _t(
-                'Conexao FTP estabelecida com sucesso!',
+                'Conexão FTP estabelecida com sucesso!',
                 'FTP connection established successfully!',
               ),
             );
@@ -1529,7 +1529,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               : failure.toString();
           _showError(
             _t(
-              'Erro ao testar conexao FTP:\n$message',
+              'Erro ao testar conexão FTP:\n$message',
               'Error testing FTP connection:\n$message',
             ),
           );
@@ -1552,13 +1552,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
       return;
     }
     if (_nextcloudUsernameController.text.trim().isEmpty) {
-      _showError(_t('Usuario e obrigatorio', 'Username is required'));
+      _showError(_t('Usuário é obrigatório', 'Username is required'));
       return;
     }
     if (_nextcloudAppPasswordController.text.trim().isEmpty) {
       _showError(
         _nextcloudAuthMode == NextcloudAuthMode.appPassword
-            ? _t('App Password e obrigatorio', 'App Password is required')
+            ? _t('App Password é obrigatório', 'App Password is required')
             : _t('Senha do usuario e obrigatoria', 'User password is required'),
       );
       return;
@@ -1589,7 +1589,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           if (success) {
             _showSuccess(
               _t(
-                'Conexao Nextcloud estabelecida com sucesso!',
+                'Conexão Nextcloud estabelecida com sucesso!',
                 'Nextcloud connection established successfully!',
               ),
             );
@@ -1608,7 +1608,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               : failure.toString();
           _showError(
             _t(
-              'Erro ao testar conexao Nextcloud:\n$message',
+              'Erro ao testar conexão Nextcloud:\n$message',
               'Error testing Nextcloud connection:\n$message',
             ),
           );
@@ -1671,7 +1671,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       if (!hasNextcloud) {
         _showError(
           _t(
-            'Este destino requer uma licenca valida. Acesse Configuracoes > Licenciamento.',
+            'Este destino requer uma licença válida. Acesse Configurações > Licenciamento.',
             'This destination requires a valid license. Go to Settings > Licensing.',
           ),
         );
@@ -1784,7 +1784,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
     if (_clientIdController.text.trim().isEmpty) {
       MessageModal.showError(
         context,
-        message: _t('Client ID e obrigatorio', 'Client ID is required'),
+        message: _t('Client ID é obrigatório', 'Client ID is required'),
       );
       return;
     }
@@ -1841,7 +1841,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
               enabled: !_isLoading,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return _t('Client ID e obrigatorio', 'Client ID is required');
+                  return _t('Client ID é obrigatório', 'Client ID is required');
                 }
                 return null;
               },
@@ -1926,7 +1926,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           const SizedBox(height: 4),
           Text(
             _t(
-              'Nota: localhost e o seu proprio computador. O app cria um servidor temporario automaticamente durante a autenticacao.',
+              'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
               'Note: localhost is your own machine. The app creates a temporary local server during authentication.',
             ),
             style: FluentTheme.of(context).typography.caption?.copyWith(
@@ -1986,7 +1986,7 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
     if (_clientIdController.text.trim().isEmpty) {
       MessageModal.showError(
         context,
-        message: _t('Client ID e obrigatorio', 'Client ID is required'),
+        message: _t('Client ID é obrigatório', 'Client ID is required'),
       );
       return;
     }
@@ -2043,7 +2043,7 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
               enabled: !_isLoading,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return _t('App Key e obrigatorio', 'App Key is required');
+                  return _t('App Key é obrigatório', 'App Key is required');
                 }
                 return null;
               },
@@ -2128,7 +2128,7 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           const SizedBox(height: 4),
           Text(
             _t(
-              'Nota: localhost e o seu proprio computador. O app cria um servidor temporario automaticamente durante a autenticacao.',
+              'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
               'Note: localhost is your own machine. The app creates a temporary local server during authentication.',
             ),
             style: FluentTheme.of(context).typography.caption?.copyWith(

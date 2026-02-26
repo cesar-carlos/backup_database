@@ -20,6 +20,8 @@ class WindowsServiceService implements IWindowsServiceService {
   static const Duration _shortTimeout = Duration(seconds: 10);
   static const Duration _longTimeout = Duration(seconds: 30);
   static const Duration _serviceDelay = Duration(seconds: 2);
+  static const Duration _startPollingInterval = Duration(seconds: 1);
+  static const Duration _startPollingTimeout = Duration(seconds: 30);
   static const int _successExitCode = 0;
   static const int _serviceNotFoundExitCode = 3;
   static const String _nssmExeName = 'nssm.exe';
@@ -33,6 +35,7 @@ class WindowsServiceService implements IWindowsServiceService {
   static const int _serviceNotInstalledWinError = 1060;
   static const int _serviceNotInstalledBatchError = 36;
   static const int _accessDeniedWinError = 5;
+  static const int _serviceAlreadyRunningWinError = 1056;
 
   @override
   Future<rd.Result<WindowsServiceStatus>> getStatus() async {
@@ -142,7 +145,13 @@ class WindowsServiceService implements IWindowsServiceService {
 
       final installResult = await _processService.run(
         executable: nssmPath,
-        arguments: ['install', _serviceName, appPath, '--minimized'],
+        arguments: [
+          'install',
+          _serviceName,
+          appPath,
+          '--minimized',
+          '--mode=server',
+        ],
         timeout: _longTimeout,
       );
 
@@ -342,7 +351,15 @@ class WindowsServiceService implements IWindowsServiceService {
   }
 
   @override
-  Future<rd.Result<void>> startService() async {
+  Future<rd.Result<void>> startService() => startServiceWithTimeout();
+
+  /// Inicia o serviço com parâmetros de polling configuráveis.
+  ///
+  /// Exposto para testes — use [startService] no código de produção.
+  Future<rd.Result<void>> startServiceWithTimeout({
+    Duration pollingTimeout = _startPollingTimeout,
+    Duration pollingInterval = _startPollingInterval,
+  }) async {
     if (!Platform.isWindows) {
       return const rd.Failure(
         ValidationFailure(message: 'Windows Service só é suportado no Windows'),
@@ -365,38 +382,69 @@ class WindowsServiceService implements IWindowsServiceService {
       );
 
       return result.fold((processResult) async {
-        await Future.delayed(_serviceDelay);
-
-        final statusAfterResult = await getStatus();
-        final statusAfter = statusAfterResult.getOrNull();
-
-        if (statusAfter?.isRunning ?? false) {
-          LoggerService.info('Serviço iniciado com sucesso');
-          return const rd.Success(unit);
-        }
-
         final errorMessage = processResult.stderr.isNotEmpty
             ? processResult.stderr
             : processResult.stdout;
 
-        final isSuccessMessage =
+        final isAlreadyRunning = _isServiceAlreadyRunningResponse(
+          processResult,
+          errorMessage,
+        );
+
+        // Erro 1056 ou sucesso: ambos levam ao polling — o serviço pode já estar
+        // subindo ou já estava ativo. Polling decide o resultado real.
+        final shouldPoll =
+            processResult.exitCode == _successExitCode ||
+            isAlreadyRunning ||
             errorMessage.contains('SERVICE_ALREADY_RUNNING') ||
             errorMessage.contains('já está em execução');
 
-        if (processResult.exitCode == _successExitCode || isSuccessMessage) {
-          await Future.delayed(_serviceDelay);
-          final finalStatusResult = await getStatus();
-          final finalStatus = finalStatusResult.getOrNull();
+        if (shouldPoll) {
+          final runningAfterPoll = await _pollUntilRunning(
+            timeout: pollingTimeout,
+            interval: pollingInterval,
+          );
 
-          if (finalStatus?.isRunning ?? false) {
-            LoggerService.info('Serviço iniciado com sucesso');
+          if (runningAfterPoll) {
+            final label = isAlreadyRunning ? 'já estava em' : 'entrou em';
+            LoggerService.info('Serviço $label execução');
             return const rd.Success(unit);
           }
+
+          if (isAlreadyRunning) {
+            return rd.Failure(
+              ServerFailure(
+                message:
+                    'O Windows reportou que o serviço já está em execução '
+                    '(erro 1056), mas o status não retornou RUNNING '
+                    'após ${pollingTimeout.inSeconds}s de verificação.\n\n'
+                    'Tente:\n'
+                    '1. Atualizar o status\n'
+                    '2. Reiniciar o serviço\n'
+                    '3. Verificar os logs em '
+                    r'C:\ProgramData\BackupDatabase\logs',
+              ),
+            );
+          }
+
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Serviço não atingiu estado RUNNING dentro do tempo esperado '
+                  '(${pollingTimeout.inSeconds}s).\n\n'
+                  'Tente:\n'
+                  '1. Atualizar o status\n'
+                  '2. Verificar os logs em '
+                  r'C:\ProgramData\BackupDatabase\logs',
+            ),
+          );
         }
 
         final isAccessDenied =
+            processResult.exitCode == _accessDeniedWinError ||
             errorMessage.contains('Acesso negado') ||
             errorMessage.contains('Access denied') ||
+            errorMessage.contains('Access is denied') ||
             errorMessage.contains('FALHA 5') ||
             errorMessage.contains('FAILURE 5');
 
@@ -422,6 +470,26 @@ class WindowsServiceService implements IWindowsServiceService {
       LoggerService.error('Erro ao iniciar serviço', e, stackTrace);
       return rd.Failure(ServerFailure(message: 'Erro ao iniciar serviço: $e'));
     }
+  }
+
+  /// Verifica em loop se o serviço entrou em estado RUNNING.
+  /// Retorna `true` assim que detectar, ou `false` se o [timeout] esgotar.
+  Future<bool> _pollUntilRunning({
+    required Duration timeout,
+    required Duration interval,
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+
+    while (DateTime.now().isBefore(deadline)) {
+      await Future.delayed(interval);
+      final statusResult = await getStatus();
+      final status = statusResult.getOrNull();
+      if (status?.isRunning ?? false) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   @override
@@ -542,6 +610,23 @@ class WindowsServiceService implements IWindowsServiceService {
         output.contains('acesso negado') ||
         output.contains('falha 5') ||
         output.contains('failure 5');
+  }
+
+  bool _isServiceAlreadyRunningResponse(
+    ProcessResult processResult,
+    String output,
+  ) {
+    if (processResult.exitCode == _serviceAlreadyRunningWinError) {
+      return true;
+    }
+
+    final normalizedOutput = output.toLowerCase();
+    return normalizedOutput.contains('1056') ||
+        normalizedOutput.contains('already running') ||
+        normalizedOutput.contains('já está em execução') ||
+        normalizedOutput.contains('ja esta em execucao') ||
+        normalizedOutput.contains('uma copia deste serv') ||
+        normalizedOutput.contains('uma cópia deste serv');
   }
 
   String _getProcessOutput(ProcessResult processResult) {

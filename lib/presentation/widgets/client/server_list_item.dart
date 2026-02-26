@@ -77,7 +77,7 @@ class ServerListItem extends StatelessWidget {
                       if (connection.lastConnectedAt != null) ...[
                         const SizedBox(height: 4),
                         Text(
-                          '${_t(context, 'Ultima conexao', 'Last connection')}: ${_formatDate(context, connection.lastConnectedAt!)}',
+                          '${_t(context, 'Última conexão', 'Last connection')}: ${_formatDate(context, connection.lastConnectedAt!)}',
                           style: FluentTheme.of(context).typography.caption,
                         ),
                       ],
@@ -95,7 +95,7 @@ class ServerListItem extends StatelessWidget {
                         Tooltip(
                           message: _t(
                             context,
-                            'Testar conexao',
+                            'Testar conexão',
                             'Test connection',
                           ),
                           child: IconButton(
@@ -127,7 +127,7 @@ class ServerListItem extends StatelessWidget {
                         Tooltip(
                           message: _t(
                             context,
-                            'Log desta conexao',
+                            'Log desta conexão',
                             'Connection log',
                           ),
                           child: IconButton(
@@ -141,14 +141,14 @@ class ServerListItem extends StatelessWidget {
                         Button(
                           onPressed: onEdit,
                           child: Text(
-                            _t(context, 'Esta conexao', 'This connection'),
+                            _t(context, 'Esta conexão', 'This connection'),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Tooltip(
                           message: _t(
                             context,
-                            'Editar conexao',
+                            'Editar conexão',
                             'Edit connection',
                           ),
                           child: IconButton(

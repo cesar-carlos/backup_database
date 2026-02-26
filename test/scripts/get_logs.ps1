@@ -92,7 +92,7 @@ Current .env Configuration
 "@ | Out-File -FilePath $configPath -Encoding UTF8
 
 if (Test-Path ".env") {
-    Get-Content ".env" | Out-File -FilePath $configPath -Append -Encoding UTF8
+    Get-Content ".env" -Encoding UTF8 | Out-File -FilePath $configPath -Append -Encoding UTF8
     Write-ColorOutput Green "✓ Configuração atual salva"
 } else {
     "No .env file found" | Out-File -FilePath $configPath -Append -Encoding UTF8

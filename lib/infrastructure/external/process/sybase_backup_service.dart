@@ -57,9 +57,6 @@ class SybaseBackupService implements ISybaseBackupService {
       if (effectiveType == BackupType.full) {
         backupPath = p.join(outputDirectory, config.databaseNameValue);
       } else {
-        
-        
-        
         final folderName =
             customFileName ??
             '${config.databaseNameValue}_${typeSlug}_$timestamp';
@@ -108,8 +105,6 @@ class SybaseBackupService implements ISybaseBackupService {
             backupSql =
                 "BACKUP DATABASE DIRECTORY '$escapedBackupPath' $logClause";
           case BackupType.differential:
-            
-            
             LoggerService.info(
               'Sybase não suporta differential nativo. '
               'Usando backup incremental de transaction log.',
@@ -197,10 +192,6 @@ class SybaseBackupService implements ISybaseBackupService {
 
           if (effectiveType == BackupType.log ||
               effectiveType == BackupType.differential) {
-            
-            
-            
-            
             arguments.add('-t');
             arguments.add(truncateLog ? '-x' : '-r');
           }
@@ -340,7 +331,6 @@ class SybaseBackupService implements ISybaseBackupService {
           );
         }
 
-        
         if (effectiveType == BackupType.log && await backupDir.exists()) {
           final resolvedLogFile = await _tryFindLogFile(backupDir);
           if (resolvedLogFile != null) {
@@ -349,7 +339,6 @@ class SybaseBackupService implements ISybaseBackupService {
           }
         }
 
-        
         final resolvedBackupFile = File(actualBackupPath);
         if (effectiveType == BackupType.log &&
             await resolvedBackupFile.exists()) {
@@ -357,7 +346,6 @@ class SybaseBackupService implements ISybaseBackupService {
             'Aguardando arquivo de log ser liberado pelo Sybase...',
           );
 
-          
           var fileAccessible = false;
           for (var attempt = 0; attempt < 5; attempt++) {
             try {
@@ -380,7 +368,6 @@ class SybaseBackupService implements ISybaseBackupService {
             }
           }
 
-          
           if (fileAccessible) {
             await Future.delayed(const Duration(milliseconds: 500));
           }
@@ -390,7 +377,6 @@ class SybaseBackupService implements ISybaseBackupService {
           'Backup Sybase concluído: $actualBackupPath (${_formatBytes(totalSize)})',
         );
 
-        
         if (verifyAfterBackup) {
           LoggerService.info('Verificando integridade do backup Sybase...');
           final verifyStopwatch = Stopwatch()..start();
@@ -398,8 +384,6 @@ class SybaseBackupService implements ISybaseBackupService {
           var verifySuccess = false;
           var lastVerifyError = '';
 
-          
-          
           if (effectiveType == BackupType.full) {
             final dir = Directory(actualBackupPath);
             if (await dir.exists()) {
@@ -446,8 +430,6 @@ class SybaseBackupService implements ISybaseBackupService {
             }
           }
 
-          
-          
           if (!verifySuccess) {
             final connectionStrategies = <String>[
               'ENG=${config.serverName};DBN=${config.databaseNameValue};UID=${config.username};PWD=${config.password}',
@@ -498,13 +480,14 @@ class SybaseBackupService implements ISybaseBackupService {
             LoggerService.warning(
               'Verificação de integridade falhou: $lastVerifyError',
             );
-            
           }
           verifyStopwatch.stop();
         }
 
         final backupDuration = backupStopwatch.elapsed;
-        final verifyDuration = verifyAfterBackup ? Stopwatch().elapsed : Duration.zero;
+        final verifyDuration = verifyAfterBackup
+            ? Stopwatch().elapsed
+            : Duration.zero;
         final totalDuration = backupDuration + verifyDuration;
 
         final metrics = BackupMetrics(
@@ -512,7 +495,10 @@ class SybaseBackupService implements ISybaseBackupService {
           backupDuration: backupDuration,
           verifyDuration: verifyDuration,
           backupSizeBytes: totalSize,
-          backupSpeedMbPerSec: _calculateSpeedMbPerSec(totalSize, backupDuration.inSeconds),
+          backupSpeedMbPerSec: _calculateSpeedMbPerSec(
+            totalSize,
+            backupDuration.inSeconds,
+          ),
           backupType: effectiveType.name,
           flags: BackupFlags(
             compression: false,

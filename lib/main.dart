@@ -56,7 +56,7 @@ Future<void> _runApp() async {
     }
   } else {
     LoggerService.info(
-      'Single instance check desabilitado via configuracao',
+      'Single instance check desabilitado via configuração',
     );
   }
 
@@ -159,7 +159,7 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
     }
   } else {
     LoggerService.info(
-      'IPC Server nao iniciado: single instance desabilitado via configuracao',
+      'IPC Server não iniciado: single instance desabilitado via configuração',
     );
   }
 
@@ -196,7 +196,7 @@ Future<void> _startScheduler() async {
         .shouldSkipSchedulerInUiMode();
     if (shouldSkipScheduler) {
       LoggerService.info(
-        'Scheduler local nao iniciado: servico do Windows em execucao',
+        'Scheduler local não iniciado: serviço do Windows em execução',
       );
       return;
     }

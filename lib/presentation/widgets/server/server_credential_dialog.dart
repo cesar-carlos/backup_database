@@ -116,7 +116,7 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
   String? _validatePassword(String? value) {
     if (_isEditing && (value == null || value.isEmpty)) return null;
     if (value == null || value.isEmpty) {
-      return _t('Senha e obrigatoria', 'Password is required');
+      return _t('Senha é obrigatória', 'Password is required');
     }
     if (value.length < _minPasswordLength) {
       return _t(
@@ -134,7 +134,7 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
       return null;
     }
     if (value != _passwordController.text) {
-      return _t('As senhas nao coincidem', 'Passwords do not match');
+      return _t('As senhas não coincidem', 'Passwords do not match');
     }
     return null;
   }
@@ -193,7 +193,7 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
     if (password != confirm) {
       MessageModal.showError(
         context,
-        message: _t('As senhas nao coincidem.', 'Passwords do not match.'),
+        message: _t('As senhas não coincidem.', 'Passwords do not match.'),
       );
       return;
     }
@@ -339,10 +339,10 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
               ),
               const SizedBox(height: 16),
               InfoLabel(
-                label: _t('Descricao (opcional)', 'Description (optional)'),
+                label: _t('Descrição (opcional)', 'Description (optional)'),
                 child: TextBox(
                   controller: _descriptionController,
-                  placeholder: _t('Observacoes', 'Notes'),
+                  placeholder: _t('Observações', 'Notes'),
                   maxLines: 2,
                 ),
               ),

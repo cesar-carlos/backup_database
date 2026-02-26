@@ -127,7 +127,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
           MessageModal.showSuccess(
             context,
             message: _t(
-              'Conexao testada com sucesso!',
+              'Conexão testada com sucesso!',
               'Connection tested successfully!',
             ),
           );
@@ -137,13 +137,13 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
           final errorMessage = f.message.isNotEmpty
               ? f.message
               : _t(
-                  'Erro desconhecido ao testar conexao',
+                  'Erro desconhecido ao testar conexão',
                   'Unknown error testing connection',
                 );
 
           MessageModal.showError(
             context,
-            title: _t('Erro ao testar conexao', 'Error testing connection'),
+            title: _t('Erro ao testar conexão', 'Error testing connection'),
             message: errorMessage,
           );
         },
@@ -157,7 +157,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
       MessageModal.showError(
         context,
-        title: _t('Erro ao testar conexao', 'Error testing connection'),
+        title: _t('Erro ao testar conexão', 'Error testing connection'),
         message: errorMessage.isNotEmpty
             ? errorMessage
             : _t('Erro desconhecido', 'Unknown error'),
@@ -210,10 +210,10 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
             child: Text(
               isEditing
                   ? _t(
-                      'Editar configuracao Sybase',
+                      'Editar configuração Sybase',
                       'Edit Sybase configuration',
                     )
-                  : _t('Nova configuracao Sybase', 'New Sybase configuration'),
+                  : _t('Nova configuração Sybase', 'New Sybase configuration'),
               style: FluentTheme.of(context).typography.title,
             ),
           ),
@@ -230,11 +230,11 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
               children: [
                 AppTextField(
                   controller: _nameController,
-                  label: _t('Nome da configuracao', 'Configuration name'),
-                  hint: _t('Ex: Producao Sybase', 'Ex: Production Sybase'),
+                  label: _t('Nome da configuração', 'Configuration name'),
+                  hint: _t('Ex: Produção Sybase', 'Ex: Production Sybase'),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return _t('Nome e obrigatorio', 'Name is required');
+                      return _t('Nome é obrigatório', 'Name is required');
                     }
                     return null;
                   },
@@ -258,7 +258,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return _t(
-                              'Engine Name e obrigatorio',
+                              'Engine Name é obrigatório',
                               'Engine Name is required',
                             );
                           }
@@ -310,7 +310,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return _t(
-                        'Nome do banco de dados e obrigatorio',
+                        'Nome do banco de dados é obrigatório',
                         'Database name is required',
                       );
                     }
@@ -356,7 +356,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return _t(
-                        'Usuario e obrigatorio',
+                        'Usuário é obrigatório',
                         'Username is required',
                       );
                     }
@@ -381,7 +381,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                 const SizedBox(height: 8),
                 Text(
                   _t(
-                    'Permitir uso desta configuracao em agendamentos',
+                    'Permitir uso desta configuração em agendamentos',
                     'Allow this configuration in schedules',
                   ),
                   style: FluentTheme.of(context).typography.caption,
@@ -394,7 +394,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       actions: [
         const CancelButton(),
         ActionButton(
-          label: _t('Testar conexao', 'Test connection'),
+          label: _t('Testar conexão', 'Test connection'),
           icon: FluentIcons.check_mark,
           onPressed: _testConnection,
           isLoading: _isTestingConnection,

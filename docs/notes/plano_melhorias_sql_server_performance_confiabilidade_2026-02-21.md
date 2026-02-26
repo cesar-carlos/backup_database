@@ -11,7 +11,7 @@ Evoluir o fluxo de backup SQL Server para:
 
 ## Escopo principal
 
-### Fase 0 - Baseline e Métricas (prioridade crítica) 🔄 EM ANDAMENTO
+### Fase 0 - Baseline e Métricas (prioridade crítica) ✅ CONCLUÍDA
 
 ### Entregas
 
@@ -25,9 +25,9 @@ Evoluir o fluxo de backup SQL Server para:
 - [x] Lint zerado para os novos componentes de métricas.
 - [x] BackupExecutionResult atualizada com campo metrics opcional.
 - [x] SqlServerBackupService atualizado para registrar métricas (backup/verify durations separados, BackupMetrics criado).
-- [ ] SybaseBackupService atualizado para registrar métricas.
-- [ ] PostgresBackupService atualizado para registrar métricas.
-- [ ] Relatórios p50/p95 implementados no MetricsAnalysisService.
+- [x] SybaseBackupService atualizado para registrar métricas (backup/verify/total duration, BackupMetrics, BackupFlags).
+- [x] PostgresBackupService atualizado para registrar métricas (backupDuration, verifyDuration, totalDuration, BackupMetrics e BackupFlags no BackupExecutionResult).
+- [x] Relatórios p50/p95 implementados no MetricsAnalysisService (BackupMetricsPercentiles e percentilesByType no BackupMetricsReport; p50/p95 de duração, tamanho e velocidade por tipo).
 
 ### Observações
 
@@ -36,18 +36,22 @@ O SqlServerBackupService foi atualizado para:
 - Criar BackupMetrics entity com todas as métricas relevantes (totalDuration, backupDuration, verifyDuration, backupSizeBytes, backupSpeedMbPerSec, backupType, flags)
 - Incluir BackupMetrics no BackupExecutionResult retornado
 
-O MetricsAnalysisService foi criado e está funcional. Ele gera relatórios de métricas por tipo de backup, permitindo análise de performance p50/p95.
+O SybaseBackupService já registra BackupMetrics (backupDuration, verifyDuration, totalDuration, flags). Opcional: conferir se verifyDuration usa o mesmo stopwatch da verificação (evitar Stopwatch() novo).
+
+O PostgresBackupService foi atualizado para: medir backupDuration (stopwatch do execute) e verifyDuration (stopwatch na verificação); construir BackupMetrics com _buildPostgresMetrics e incluir em todos os BackupExecutionResult (incl. backup log vazio).
+
+O MetricsAnalysisService gera relatórios com métricas por tipo e percentis p50/p95 (duração, tamanho, velocidade) em BackupMetricsReport.percentilesByType (BackupMetricsPercentiles por BackupType).
 
 ### Próximos passos
 
-1. Integrar coleta de métricas no SybaseBackupService (track backup/verify durations, criar BackupMetrics).
-2. Integrar coleta de métricas no PostgresBackupService (track backup/verify durations, criar BackupMetrics).
-3. Implementar relatórios p50/p95 no MetricsAnalysisService.
+1. ~~(Opcional) Consumir percentilesByType na UI~~ Feito: Dashboard exibe card "Métricas de performance (p50/p95)" com tabela por tipo de backup (P50/P95 duração, tamanho, velocidade); dados dos últimos 30 dias.
+2. Fase 7 (criptografia) e Fase 8 (testes) conforme prioridade.
 
-## Status Atual (revalidado no código em 2026-02-21)
+## Status Atual (revalidado no código em 2026-02-26; Fase 0 concluída)
 
 ### Concluidas
 
+- Fase 0 (Métricas e baseline) - BackupMetrics em SqlServer, Sybase e Postgres; MetricsAnalysisService com generateReport e percentilesByType (p50/p95 por tipo).
 - Fase 1 (Seguranca de credenciais e logs).
 - Fase 2 (Confiabilidade do resultado - STOP_ON_ERROR explicito no SQL).
 - Fase 3 (Performance de backup com opcoes avancadas).
@@ -60,14 +64,9 @@ O MetricsAnalysisService foi criado e está funcional. Ele gera relatórios de m
 
 ### Em andamento
 
-- Fase 0 (Métricas e baseline) - Infraestrutura de métricas criada, integração com serviços de backup pendente.
+- Nenhum (Fase 0 concluída).
 
 ### Pendentes
 
-- Fase 0 (Métricas e baseline) - integração de serviços de backup:
-  - Modificar SqlServerBackupService para registrar métricas de forma consistente.
-  - Modificar SybaseBackupService para registrar métricas.
-  - Modificar PostgresBackupService para registrar métricas.
-  - Criar relatórios p50/p95 por tipo de backup no MetricsAnalysisService.
 - Fase 7 - Criptografia de backup (não iniciada).
 - Fase 8 - Testes unitários pendentes (parcial).

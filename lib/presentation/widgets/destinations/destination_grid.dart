@@ -60,7 +60,7 @@ class DestinationGrid extends StatelessWidget {
             ),
           ),
           AppDataGridColumn<BackupDestination>(
-            label: _t(context, 'Configuracao', 'Configuration'),
+            label: _t(context, 'Configuração', 'Configuration'),
             width: const FlexColumnWidth(3),
             cellBuilder: (context, row) => Tooltip(
               message: _getConfigSummary(context, row),
