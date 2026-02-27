@@ -62,6 +62,7 @@ void main() {
       ),
     );
     registerFallbackValue(ftpDestination);
+    registerFallbackValue(const LocalDestinationConfig(path: 'C:/test'));
   });
 
   setUp(() {

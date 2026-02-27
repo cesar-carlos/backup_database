@@ -221,7 +221,7 @@ void main() {
       expect(secondResult.isError(), isTrue);
       expect(
         secondResult.exceptionOrNull().toString(),
-        contains('Ja existe um backup em execucao'),
+        contains('Já existe um backup em execução'),
       );
 
       backupCompleter.complete(
@@ -277,7 +277,7 @@ void main() {
       expect(result.isError(), isTrue);
       expect(
         result.exceptionOrNull().toString(),
-        contains('Nao ha backup em execucao'),
+        contains('Não há backup em execução'),
       );
     });
 
@@ -307,7 +307,7 @@ void main() {
         expect(result.isError(), isTrue);
         expect(
           result.exceptionOrNull().toString(),
-          contains('Espaco livre insuficiente na pasta de backup'),
+          contains('Espaço livre insuficiente na pasta de backup'),
         );
         verifyNever(
           () => backupOrchestratorService.executeBackup(

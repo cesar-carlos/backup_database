@@ -176,7 +176,7 @@ void main() {
         expect(result, isFalse);
         expect(
           provider.error,
-          contains('Informe ao menos um e-mail destinatario'),
+          contains('Informe ao menos um e-mail destinatário'),
         );
         verifyNever(
           () => emailConfigRepository.saveWithPrimaryTarget(
@@ -249,7 +249,7 @@ void main() {
         expect(result, isFalse);
         expect(
           provider.error,
-          contains('Nenhuma configuracao de e-mail definida'),
+          contains('Nenhuma configuração de e-mail definida'),
         );
         verifyNever(() => testEmailConfiguration(any()));
       },
@@ -274,7 +274,7 @@ void main() {
         );
 
         expect(result, isFalse);
-        expect(provider.error, contains('Destinatario nao encontrado'));
+        expect(provider.error, contains('Destinatário não encontrado'));
       },
     );
 
@@ -290,7 +290,7 @@ void main() {
         final secondCall = await provider.testDraftConfiguration(configA);
 
         expect(secondCall, isFalse);
-        expect(provider.error, contains('teste de conexao em execucao'));
+        expect(provider.error, contains('teste de conexão em execução'));
         expect(provider.isConfigUnderTest(configA.id), isTrue);
 
         completer.complete(const rd.Success(true));

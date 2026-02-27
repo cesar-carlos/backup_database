@@ -24,20 +24,61 @@ class SqlServerBackupService implements ISqlServerBackupService {
       '${config.server},${config.portValue}',
       '-d',
       config.databaseValue,
-      // Fail fast for automation: return non-zero exit code on error.
       '-b',
-      // Send error messages to STDERR (helps logging and parsing).
       '-r',
       '1',
     ];
 
-    if (config.username.isNotEmpty) {
-      args.addAll(['-U', config.username, '-P', config.password]);
-    } else {
+    if (config.useWindowsAuth || config.username.isEmpty) {
       args.add('-E');
+    } else {
+      args.addAll(['-U', config.username]);
     }
 
     return args;
+  }
+
+  Map<String, String>? _sqlcmdEnvironment(SqlServerConfig config) {
+    if (config.useWindowsAuth || config.username.isEmpty) {
+      return null;
+    }
+    return {'SQLCMDPASSWORD': config.password};
+  }
+
+  String _escapeSqlIdentifier(String value) =>
+      value.replaceAll(']', ']]');
+
+  Future<rd.Result<BackupExecutionResult>?> _checkRecoveryModel(
+    SqlServerConfig config,
+  ) async {
+    const query =
+        "SELECT recovery_model_desc FROM sys.databases WHERE name = DB_NAME()";
+    final args = [..._baseSqlcmdArgs(config), '-Q', query, '-h', '-1', '-W'];
+    final result = await _processService.run(
+      executable: 'sqlcmd',
+      arguments: args,
+      environment: _sqlcmdEnvironment(config),
+      timeout: const Duration(seconds: 10),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (!processResult.isSuccess) return null;
+        final model =
+            processResult.stdout.trim().toUpperCase().split(RegExp(r'\s+')).first;
+        if (model == 'SIMPLE') {
+          return rd.Failure(
+            const ValidationFailure(
+              message:
+                  'Backup de log de transações não permitido: banco em modo SIMPLE. '
+                  'Altere para FULL ou BULK_LOGGED.',
+            ),
+          );
+        }
+        return null;
+      },
+      (_) => null,
+    );
   }
 
   bool _hasSqlcmdErrorOutput(String combinedOutputLower) {
@@ -81,6 +122,13 @@ class SqlServerBackupService implements ISqlServerBackupService {
         await outputDir.create(recursive: true);
       }
 
+      if (backupType == BackupType.log) {
+        final preCheckResult = await _checkRecoveryModel(config);
+        if (preCheckResult != null) {
+          return preCheckResult;
+        }
+      }
+
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final extension = backupType == BackupType.log ? '.trn' : '.bak';
       final typeSlug = getBackupTypeName(backupType);
@@ -92,34 +140,43 @@ class SqlServerBackupService implements ISqlServerBackupService {
       final normalizedPath = backupPath.replaceAll(r'\', '/');
 
       final escapedBackupPath = normalizedPath.replaceAll("'", "''");
+      final escapedDbName = _escapeSqlIdentifier(config.databaseValue);
 
+      final opts = sqlServerBackupOptions;
       final checksumClause = enableChecksum ? 'CHECKSUM, ' : '';
+      final stopOnErrorClause = enableChecksum ? 'STOP_ON_ERROR, ' : '';
+      final optionsClause = opts != null ? opts.buildWithClause() : '';
+      final statsValue = opts?.statsPercent ?? 10;
+
       String query;
 
       switch (backupType) {
         case BackupType.full:
         case BackupType.fullSingle:
           query =
-              'BACKUP DATABASE [${config.databaseValue}] '
+              'BACKUP DATABASE [$escapedDbName] '
               "TO DISK = N'$escapedBackupPath' "
-              'WITH $checksumClause NOFORMAT, INIT, '
+              'WITH $checksumClause$stopOnErrorClause$optionsClause'
+              'NOFORMAT, INIT, '
               "NAME = N'${config.databaseValue}-Full Database Backup', "
-              'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
+              'SKIP, NOREWIND, NOUNLOAD, STATS = $statsValue';
         case BackupType.differential:
           query =
-              'BACKUP DATABASE [${config.databaseValue}] '
+              'BACKUP DATABASE [$escapedDbName] '
               "TO DISK = N'$escapedBackupPath' "
-              'WITH DIFFERENTIAL, $checksumClause NOFORMAT, INIT, '
+              'WITH DIFFERENTIAL, $checksumClause$stopOnErrorClause$optionsClause'
+              'NOFORMAT, INIT, '
               "NAME = N'${config.databaseValue}-Differential Database Backup', "
-              'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
+              'SKIP, NOREWIND, NOUNLOAD, STATS = $statsValue';
         case BackupType.log:
           final copyOnlyClause = truncateLog ? '' : 'COPY_ONLY, ';
           query =
-              'BACKUP LOG [${config.databaseValue}] '
+              'BACKUP LOG [$escapedDbName] '
               "TO DISK = N'$escapedBackupPath' "
-              'WITH $copyOnlyClause$checksumClause NOFORMAT, INIT, '
+              'WITH $copyOnlyClause$checksumClause$stopOnErrorClause$optionsClause'
+              'NOFORMAT, INIT, '
               "NAME = N'${config.databaseValue}-Transaction Log Backup', "
-              'SKIP, NOREWIND, NOUNLOAD, STATS = 10';
+              'SKIP, NOREWIND, NOUNLOAD, STATS = $statsValue';
         case BackupType.convertedDifferential:
         case BackupType.convertedFullSingle:
         case BackupType.convertedLog:
@@ -138,6 +195,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
       final result = await _processService.run(
         executable: 'sqlcmd',
         arguments: arguments,
+        environment: _sqlcmdEnvironment(config),
         timeout: backupTimeout ?? const Duration(hours: 2),
       );
 
@@ -238,10 +296,13 @@ class SqlServerBackupService implements ISqlServerBackupService {
           final verifyResult = await _processService.run(
             executable: 'sqlcmd',
             arguments: verifyArguments,
+            environment: _sqlcmdEnvironment(config),
             timeout: verifyTimeout ?? const Duration(minutes: 30),
           );
           verifyStopwatch.stop();
 
+          var verifyFailed = false;
+          String? verifyErrorMsg;
           verifyResult.fold(
             (processResult) {
               if (processResult.isSuccess) {
@@ -249,19 +310,31 @@ class SqlServerBackupService implements ISqlServerBackupService {
                   'Verificação de integridade concluída com sucesso',
                 );
               } else {
+                verifyFailed = true;
+                verifyErrorMsg = processResult.stderr;
                 LoggerService.warning(
                   'Verificação de integridade falhou: ${processResult.stderr}',
                 );
-                // Não falha o backup, apenas registra o warning
               }
             },
             (failure) {
+              verifyFailed = true;
+              verifyErrorMsg =
+                  failure is Failure ? failure.message : failure.toString();
               LoggerService.warning(
-                'Erro ao verificar integridade do backup: ${failure is Failure ? failure.message : failure.toString()}',
+                'Erro ao verificar integridade do backup: $verifyErrorMsg',
               );
-              // Não falha o backup, apenas registra o warning
             },
           );
+
+          if (verifyFailed && verifyPolicy == VerifyPolicy.strict) {
+            return rd.Failure(
+              BackupFailure(
+                message:
+                    'Verificação de integridade falhou: ${verifyErrorMsg ?? "erro desconhecido"}',
+              ),
+            );
+          }
         }
 
         final backupDuration = stopwatch.elapsed;
@@ -320,6 +393,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
       final result = await _processService.run(
         executable: 'sqlcmd',
         arguments: arguments,
+        environment: _sqlcmdEnvironment(config),
         timeout: const Duration(seconds: 10),
       );
 
@@ -357,6 +431,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
       final result = await _processService.run(
         executable: 'sqlcmd',
         arguments: arguments,
+        environment: _sqlcmdEnvironment(config),
         timeout: timeout ?? const Duration(seconds: 15),
       );
 
@@ -406,6 +481,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
       final result = await _processService.run(
         executable: 'sqlcmd',
         arguments: arguments,
+        environment: _sqlcmdEnvironment(config),
         timeout: timeout ?? const Duration(minutes: 1),
       );
 
