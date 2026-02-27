@@ -245,19 +245,23 @@ class _LicenseRequirementInfoCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return AppCard(
-      child: InfoBar(
-        severity: InfoBarSeverity.warning,
-        title: const Text('Recurso requer licença'),
-        content: const Text(
-          'As notificacoes por e-mail sao um recurso premium. '
-          'É necessária uma licença válida com permissão para este recurso.',
-        ),
-        action: Button(
-          child: const Text('Ver licenciamento'),
-          onPressed: () {
-            context.go(RouteNames.settings);
-          },
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: SizedBox(
+        width: double.infinity,
+        child: InfoBar(
+          severity: InfoBarSeverity.warning,
+          title: const Text('Recurso requer licença'),
+          content: const Text(
+            'As notificacoes por e-mail sao um recurso premium. '
+            'É necessária uma licença válida com permissão para este recurso.',
+          ),
+          action: Button(
+            child: const Text('Ver licenciamento'),
+            onPressed: () {
+              context.go(RouteNames.settings);
+            },
+          ),
         ),
       ),
     );
