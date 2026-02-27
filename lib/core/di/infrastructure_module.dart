@@ -37,7 +37,10 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     () => ToolVerificationService(getIt<ProcessService>()),
   );
   getIt.registerLazySingleton<IWindowsServiceService>(
-    () => WindowsServiceService(getIt<ProcessService>()),
+    () => WindowsServiceService(
+      getIt<ProcessService>(),
+      metricsCollector: getIt<IMetricsCollector>(),
+    ),
   );
 
   // ========================================================================
@@ -161,6 +164,10 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     () => WindowsEventLogService(
       processService: getIt<ProcessService>(),
     ),
+  );
+
+  getIt.registerLazySingleton<IWindowsServiceEventLogger>(
+    () => getIt<WindowsEventLogService>(),
   );
 
   // ========================================================================

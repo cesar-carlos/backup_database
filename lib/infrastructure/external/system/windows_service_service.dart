@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:result_dart/result_dart.dart'
@@ -9,20 +11,50 @@ import 'package:result_dart/result_dart.dart'
     show Failure, Result, Success;
 import 'package:result_dart/result_dart.dart' show unit;
 
+/// Parâmetros centralizados de timeout e polling para operações do serviço.
+class WindowsServiceTimingConfig {
+  const WindowsServiceTimingConfig({
+    this.shortTimeout = const Duration(seconds: 10),
+    this.longTimeout = const Duration(seconds: 30),
+    this.serviceDelay = const Duration(seconds: 2),
+    this.startPollingInterval = const Duration(seconds: 1),
+    this.startPollingTimeout = const Duration(seconds: 30),
+    this.startPollingInitialDelay = const Duration(seconds: 3),
+    this.retryMaxAttempts = 3,
+    this.retryInitialDelay = const Duration(milliseconds: 500),
+    this.retryBackoffMultiplier = 2,
+  });
+
+  final Duration shortTimeout;
+  final Duration longTimeout;
+  final Duration serviceDelay;
+  final Duration startPollingInterval;
+  final Duration startPollingTimeout;
+  final Duration startPollingInitialDelay;
+  final int retryMaxAttempts;
+  final Duration retryInitialDelay;
+  final int retryBackoffMultiplier;
+
+  static const WindowsServiceTimingConfig defaultConfig =
+      WindowsServiceTimingConfig();
+}
+
 class WindowsServiceService implements IWindowsServiceService {
-  WindowsServiceService(this._processService);
+  WindowsServiceService(
+    this._processService, {
+    WindowsServiceTimingConfig? timingConfig,
+    IMetricsCollector? metricsCollector,
+  })  : _timing = timingConfig ?? WindowsServiceTimingConfig.defaultConfig,
+        _metrics = metricsCollector;
+
   final ProcessService _processService;
+  final WindowsServiceTimingConfig _timing;
+  final IMetricsCollector? _metrics;
+
   static const String _serviceName = 'BackupDatabaseService';
   static const String _displayName = 'Backup Database Service';
   static const String _description =
       'Serviço de backup automático para SQL Server e Sybase';
-
-  static const Duration _shortTimeout = Duration(seconds: 10);
-  static const Duration _longTimeout = Duration(seconds: 30);
-  static const Duration _serviceDelay = Duration(seconds: 2);
-  static const Duration _startPollingInterval = Duration(seconds: 1);
-  static const Duration _startPollingTimeout = Duration(seconds: 30);
-  static const Duration _startPollingInitialDelay = Duration(seconds: 3);
   static const int _successExitCode = 0;
   static const int _serviceNotFoundExitCode = 3;
   static const String _nssmExeName = 'nssm.exe';
@@ -51,10 +83,129 @@ class WindowsServiceService implements IWindowsServiceService {
       '2. Clique com botão direito no ícone do aplicativo\n'
       '3. Selecione "Executar como administrador"\n'
       '4. Tente novamente';
+
+  static const String _troubleshootingAdminLogs =
+      'Tente:\n'
+      '1. Executar como Administrador\n'
+      '2. Verificar logs em $_logPath\n'
+      '3. Atualizar o status e tentar novamente';
+
+  static const String _troubleshootingWithEnv =
+      'Tente:\n'
+      '1. Executar como Administrador\n'
+      '2. Verificar se existe .env na pasta do aplicativo (copie de .env.example)\n'
+      '3. Verificar logs em $_logPath (service_stdout.log, service_stderr.log)\n'
+      '4. Atualizar o status e tentar novamente';
   static const int _serviceNotInstalledWinError = 1060;
   static const int _serviceNotInstalledBatchError = 36;
   static const int _accessDeniedWinError = 5;
   static const int _serviceAlreadyRunningWinError = 1056;
+
+  Future<rd.Result<void>> _runInstallPreflight(String appDir) async {
+    final statusResult = await getStatus();
+    final statusFailure = statusResult.exceptionOrNull();
+    if (statusFailure != null) {
+      final msg = (statusFailure is Failure
+              ? statusFailure.message
+              : statusFailure.toString())
+          .toLowerCase();
+      if (msg.contains('acesso negado') ||
+          msg.contains('access denied') ||
+          msg.contains('administrator')) {
+        return rd.Failure(
+          statusFailure is Failure
+              ? statusFailure
+              : ServerFailure(message: statusFailure.toString()),
+        );
+      }
+    }
+
+    final envPath = '$appDir\\.env';
+    if (!File(envPath).existsSync()) {
+      LoggerService.warning(
+        'Arquivo .env não encontrado em $appDir. '
+        'Copie .env.example para .env. O serviço pode falhar ao iniciar.',
+      );
+    }
+
+    try {
+      final logDir = Directory(_logPath);
+      logDir.createSync(recursive: true);
+      final testFile = File('$_logPath\\.preflight_write_test');
+      testFile.writeAsStringSync('');
+      testFile.deleteSync();
+    } on Object catch (e) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Diretório de logs não é gravável: $_logPath\n\n'
+              'Erro: $e\n\n'
+              'Tente:\n'
+              '1. Executar como Administrador\n'
+              '2. Verificar permissões da pasta $_logPath',
+        ),
+      );
+    }
+
+    return const rd.Success(unit);
+  }
+
+  bool _isRetryableProcessFailure(Object failure) {
+    final msg = failure.toString().toLowerCase();
+    return msg.contains('timeout') ||
+        msg.contains('timed out') ||
+        msg.contains('scm') ||
+        msg.contains('service control manager') ||
+        msg.contains('busy') ||
+        msg.contains('temporarily');
+  }
+
+  Future<rd.Result<ProcessResult>> _runScWithRetry({
+    required List<String> arguments,
+    required Duration timeout,
+    String operationName = 'sc',
+  }) async {
+    var attempt = 0;
+    var delay = _timing.retryInitialDelay;
+    rd.Result<ProcessResult>? lastResult;
+
+    while (true) {
+      attempt++;
+      lastResult = await _processService.run(
+        executable: _scExeName,
+        arguments: arguments,
+        timeout: timeout,
+      );
+
+      if (lastResult.isSuccess()) {
+        return lastResult;
+      }
+
+      final failure = lastResult.exceptionOrNull()!;
+      final isLastAttempt = attempt >= _timing.retryMaxAttempts;
+      final canRetry = _isRetryableProcessFailure(failure);
+
+      LoggerService.warning(
+        '$operationName falhou (tentativa $attempt/${_timing.retryMaxAttempts}): $failure',
+        failure,
+      );
+
+      if (isLastAttempt || !canRetry) {
+        return lastResult;
+      }
+
+      _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceScRetries);
+
+      LoggerService.info(
+        'Retentando $operationName em ${delay.inMilliseconds}ms '
+        '(tentativa ${attempt + 1}/${_timing.retryMaxAttempts})',
+      );
+      await Future.delayed(delay);
+      delay = Duration(
+        milliseconds: delay.inMilliseconds * _timing.retryBackoffMultiplier,
+      );
+    }
+  }
 
   @override
   Future<rd.Result<WindowsServiceStatus>> getStatus() async {
@@ -65,10 +216,10 @@ class WindowsServiceService implements IWindowsServiceService {
     }
 
     try {
-      final result = await _processService.run(
-        executable: _scExeName,
+      final result = await _runScWithRetry(
         arguments: ['query', _serviceName],
-        timeout: _shortTimeout,
+        timeout: _timing.shortTimeout,
+        operationName: 'sc query',
       );
 
       return result.fold(
@@ -101,7 +252,8 @@ class WindowsServiceService implements IWindowsServiceService {
             return const rd.Failure(
               ServerFailure(
                 message:
-                    'Acesso negado ao consultar status do serviço. Execute o aplicativo como Administrador.',
+                    'Acesso negado ao consultar status do serviço. '
+                    'Execute o aplicativo como Administrador.\n\n$_accessDeniedSolution',
               ),
             );
           }
@@ -111,7 +263,7 @@ class WindowsServiceService implements IWindowsServiceService {
             ServerFailure(
               message:
                   'Falha ao consultar status do serviço (exit code: ${processResult.exitCode}). '
-                  'Saída: $errorOutput',
+                  'Saída: $errorOutput\n\n$_troubleshootingAdminLogs',
             ),
           );
         },
@@ -119,7 +271,8 @@ class WindowsServiceService implements IWindowsServiceService {
           return rd.Failure(
             ServerFailure(
               message:
-                  'Erro ao executar comando para consultar status do serviço: $failure',
+                  'Erro ao executar comando para consultar status do serviço: '
+                  '$failure\n\n$_troubleshootingAdminLogs',
             ),
           );
         },
@@ -127,7 +280,9 @@ class WindowsServiceService implements IWindowsServiceService {
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar status do serviço', e, stackTrace);
       return rd.Failure(
-        ServerFailure(message: 'Erro ao verificar status do serviço: $e'),
+        ServerFailure(
+          message: 'Erro ao verificar status do serviço: $e\n\n$_troubleshootingAdminLogs',
+        ),
       );
     }
   }
@@ -149,12 +304,24 @@ class WindowsServiceService implements IWindowsServiceService {
       final nssmPath = '$appDir\\$_toolsSubdir\\$_nssmExeName';
 
       if (!File(nssmPath).existsSync()) {
-        return const rd.Failure(
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallFailure);
+        return rd.Failure(
           ValidationFailure(
             message:
-                'NSSM não encontrado. Verifique se o aplicativo foi instalado corretamente.',
+                'NSSM não encontrado em $nssmPath.\n\n'
+                'Tente:\n'
+                '1. Reinstalar o aplicativo (o instalador deve incluir nssm.exe em tools/)\n'
+                '2. Executar como Administrador\n'
+                '3. Verificar se a pasta do aplicativo está corrompida ou incompleta',
           ),
         );
+      }
+
+      final preflightResult = await _runInstallPreflight(appDir);
+      final preflightFailure = preflightResult.exceptionOrNull();
+      if (preflightFailure != null) {
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallFailure);
+        return rd.Failure(preflightFailure as Failure);
       }
 
       LoggerService.info('Instalando serviço do Windows...');
@@ -165,7 +332,7 @@ class WindowsServiceService implements IWindowsServiceService {
       if (existingStatus?.isInstalled ?? false) {
         LoggerService.info('Serviço já existe. Removendo versão anterior...');
         await uninstallService();
-        await Future.delayed(_serviceDelay);
+        await Future.delayed(_timing.serviceDelay);
       }
 
       final installResult = await _processService.run(
@@ -177,47 +344,86 @@ class WindowsServiceService implements IWindowsServiceService {
           '--minimized',
           '--mode=server',
         ],
-        timeout: _longTimeout,
+        timeout: _timing.longTimeout,
       );
 
-      return installResult.fold((processResult) async {
-        if (processResult.exitCode != _successExitCode) {
-          final errorMessage = processResult.stderr.isNotEmpty
-              ? processResult.stderr
-              : processResult.stdout;
+      return await installResult.fold<Future<rd.Result<void>>>(
+        (processResult) async {
+          if (processResult.exitCode != _successExitCode) {
+            final errorMessage = processResult.stderr.isNotEmpty
+                ? processResult.stderr
+                : processResult.stdout;
 
-          final isAccessDenied =
-              errorMessage.contains('Acesso negado') ||
-              errorMessage.contains('Access denied') ||
-              errorMessage.contains('FALHA 5') ||
-              errorMessage.contains('FAILURE 5');
+            final isAccessDenied =
+                errorMessage.contains('Acesso negado') ||
+                errorMessage.contains('Access denied') ||
+                errorMessage.contains('FALHA 5') ||
+                errorMessage.contains('FAILURE 5');
 
-          if (isAccessDenied) {
-            return const rd.Failure(
+            if (isAccessDenied) {
+              _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallFailure);
+              return const rd.Failure(
+                ServerFailure(
+                  message:
+                      'Acesso negado. É necessário executar o aplicativo como '
+                      'Administrador para instalar o serviço.\n\n$_accessDeniedSolution',
+                ),
+              );
+            }
+
+            _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallFailure);
+            return rd.Failure(
               ServerFailure(
                 message:
-                    'Acesso negado. É necessário executar o aplicativo como '
-                    'Administrador para instalar o serviço.\n\n$_accessDeniedSolution',
+                    'Erro ao instalar serviço: $errorMessage\n\n$_troubleshootingAdminLogs',
               ),
             );
           }
 
-          return rd.Failure(
-            ServerFailure(message: 'Erro ao instalar serviço: $errorMessage'),
-          );
-        }
+          await _configureService(nssmPath, serviceUser, servicePassword);
 
-        await _configureService(nssmPath, serviceUser, servicePassword);
-
-        LoggerService.info('Serviço instalado com sucesso');
-        LoggerService.info(
-          'Auto-restart configurado: Reiniciará automaticamente após crash (60s delay)',
+        final postStatus = await getStatus();
+        return postStatus.fold(
+          (status) {
+            if (!status.isInstalled) {
+              LoggerService.warning(
+                'Instalação concluiu mas serviço não aparece como instalado',
+              );
+              _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallFailure);
+              return rd.Failure(
+                ServerFailure(
+                  message:
+                      'O comando de instalação foi executado, mas o serviço '
+                      'não está registrado.\n\n$_troubleshootingWithEnv',
+                ),
+              );
+            }
+            _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallSuccess);
+            LoggerService.info('Serviço instalado com sucesso');
+            LoggerService.info(
+              'Auto-restart configurado: Reiniciará automaticamente após crash (60s delay)',
+            );
+            return const rd.Success(unit);
+          },
+          (f) {
+            _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallFailure);
+            return rd.Failure(f);
+          },
         );
-        return const rd.Success(unit);
-      }, rd.Failure.new);
+        },
+        (f) {
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallFailure);
+          return Future.value(rd.Failure(f));
+        },
+      );
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao instalar serviço', e, stackTrace);
-      return rd.Failure(ServerFailure(message: 'Erro ao instalar serviço: $e'));
+      _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceInstallFailure);
+      return rd.Failure(
+        ServerFailure(
+          message: 'Erro ao instalar serviço: $e\n\n$_troubleshootingAdminLogs',
+        ),
+      );
     }
   }
 
@@ -257,7 +463,7 @@ class WindowsServiceService implements IWindowsServiceService {
       final result = await _processService.run(
         executable: nssmPath,
         arguments: config,
-        timeout: _shortTimeout,
+        timeout: _timing.shortTimeout,
       );
 
       result.fold(
@@ -282,7 +488,7 @@ class WindowsServiceService implements IWindowsServiceService {
       await _processService.run(
         executable: nssmPath,
         arguments: ['set', _serviceName, 'ObjectName', _localSystemAccount],
-        timeout: _shortTimeout,
+        timeout: _timing.shortTimeout,
       );
     } else if (servicePassword != null) {
       await _processService.run(
@@ -294,7 +500,7 @@ class WindowsServiceService implements IWindowsServiceService {
           serviceUser,
           servicePassword,
         ],
-        timeout: _shortTimeout,
+        timeout: _timing.shortTimeout,
       );
     }
   }
@@ -312,58 +518,106 @@ class WindowsServiceService implements IWindowsServiceService {
       final nssmPath = '$appDir\\$_toolsSubdir\\$_nssmExeName';
 
       if (!File(nssmPath).existsSync()) {
-        return const rd.Failure(
-          ValidationFailure(message: 'NSSM não encontrado'),
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceUninstallFailure);
+        return rd.Failure(
+          ValidationFailure(
+            message:
+                'NSSM não encontrado em $nssmPath.\n\n'
+                'Tente:\n'
+                '1. Remover manualmente via services.msc (Services)\n'
+                '2. Ou reinstalar o aplicativo e executar como Administrador',
+          ),
         );
       }
 
       await _processService.run(
         executable: _scExeName,
         arguments: ['stop', _serviceName],
-        timeout: _longTimeout,
+        timeout: _timing.longTimeout,
       );
 
-      await Future.delayed(_serviceDelay);
+      await Future.delayed(_timing.serviceDelay);
 
       final removeResult = await _processService.run(
         executable: nssmPath,
         arguments: ['remove', _serviceName, 'confirm'],
-        timeout: _longTimeout,
+        timeout: _timing.longTimeout,
       );
 
-      return removeResult.fold((processResult) {
-        if (processResult.exitCode != _successExitCode &&
-            processResult.exitCode != _serviceNotFoundExitCode) {
-          final errorMessage = processResult.stderr.isNotEmpty
-              ? processResult.stderr
-              : processResult.stdout;
+      return await removeResult.fold<Future<rd.Result<void>>>(
+        (processResult) async {
+          if (processResult.exitCode != _successExitCode &&
+              processResult.exitCode != _serviceNotFoundExitCode) {
+            final errorMessage = processResult.stderr.isNotEmpty
+                ? processResult.stderr
+                : processResult.stdout;
 
-          final isAccessDenied =
-              errorMessage.contains('Acesso negado') ||
-              errorMessage.contains('Access denied') ||
-              errorMessage.contains('FALHA 5') ||
-              errorMessage.contains('FAILURE 5');
+            final isAccessDenied =
+                errorMessage.contains('Acesso negado') ||
+                errorMessage.contains('Access denied') ||
+                errorMessage.contains('FALHA 5') ||
+                errorMessage.contains('FAILURE 5');
 
-          if (isAccessDenied) {
-            return const rd.Failure(
+            if (isAccessDenied) {
+              _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceUninstallFailure);
+              return const rd.Failure(
+                ServerFailure(
+                  message:
+                      'Acesso negado. É necessário executar o aplicativo como '
+                      'Administrador para remover o serviço.\n\n$_accessDeniedSolution',
+                ),
+              );
+            }
+
+            _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceUninstallFailure);
+            return rd.Failure(
               ServerFailure(
                 message:
-                    'Acesso negado. É necessário executar o aplicativo como '
-                    'Administrador para remover o serviço.\n\n$_accessDeniedSolution',
+                    'Erro ao remover serviço: $errorMessage\n\n$_troubleshootingAdminLogs',
               ),
             );
           }
 
-          return rd.Failure(
-            ServerFailure(message: 'Erro ao remover serviço: $errorMessage'),
+          final postStatus = await getStatus();
+          return postStatus.fold(
+            (status) {
+              if (status.isInstalled) {
+                LoggerService.warning(
+                  'Remoção concluiu mas serviço ainda aparece como instalado',
+                );
+                _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceUninstallFailure);
+                return rd.Failure(
+                  ServerFailure(
+                    message:
+                        'O comando de remoção foi executado, mas o serviço '
+                        'ainda está registrado. Tente atualizar o status ou '
+                        'remover manualmente via services.msc.',
+                  ),
+                );
+              }
+              _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceUninstallSuccess);
+              LoggerService.info('Serviço removido com sucesso');
+              return const rd.Success(unit);
+            },
+            (f) {
+              _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceUninstallFailure);
+              return rd.Failure(f);
+            },
           );
-        }
-        LoggerService.info('Serviço removido com sucesso');
-        return const rd.Success(unit);
-      }, rd.Failure.new);
+        },
+        (f) {
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceUninstallFailure);
+          return Future.value(rd.Failure(f));
+        },
+      );
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao remover serviço', e, stackTrace);
-      return rd.Failure(ServerFailure(message: 'Erro ao remover serviço: $e'));
+      _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceUninstallFailure);
+      return rd.Failure(
+        ServerFailure(
+          message: 'Erro ao remover serviço: $e\n\n$_troubleshootingAdminLogs',
+        ),
+      );
     }
   }
 
@@ -374,8 +628,8 @@ class WindowsServiceService implements IWindowsServiceService {
   ///
   /// Exposto para testes — use [startService] no código de produção.
   Future<rd.Result<void>> startServiceWithTimeout({
-    Duration pollingTimeout = _startPollingTimeout,
-    Duration pollingInterval = _startPollingInterval,
+    Duration? pollingTimeout,
+    Duration? pollingInterval,
     Duration? initialDelay,
   }) async {
     if (!Platform.isWindows) {
@@ -389,8 +643,37 @@ class WindowsServiceService implements IWindowsServiceService {
       final status = statusResult.getOrNull();
 
       if (status?.isRunning ?? false) {
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartSuccess);
         LoggerService.info('Serviço já está em execução');
         return const rd.Success(unit);
+      }
+
+      final isStartPending =
+          status?.stateCode == WindowsServiceStateCode.startPending;
+      if (isStartPending) {
+        LoggerService.info('Serviço em START_PENDING, aguardando RUNNING');
+        final runningAfterPoll = await _pollUntilRunning(
+          timeout: pollingTimeout ?? _timing.startPollingTimeout,
+          interval: pollingInterval ?? _timing.startPollingInterval,
+          initialDelay: initialDelay ?? _timing.startPollingInitialDelay,
+          onConvergence: (d) => _metrics?.recordHistogram(
+            ObservabilityMetrics.windowsServiceStartConvergenceSeconds,
+            d.inMilliseconds / 1000,
+          ),
+        );
+        if (runningAfterPoll) {
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartSuccess);
+          LoggerService.info('Serviço entrou em execução');
+          return const rd.Success(unit);
+        }
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartFailure);
+        return rd.Failure(
+          ServerFailure(
+            message:
+                'Serviço permaneceu em START_PENDING e não atingiu RUNNING '
+                'dentro do tempo esperado.\n\n$_troubleshootingWithEnv',
+          ),
+        );
       }
 
       final isPaused = status?.stateCode?.isPaused ?? false;
@@ -399,10 +682,10 @@ class WindowsServiceService implements IWindowsServiceService {
         LoggerService.info('Serviço em PAUSED, usando sc continue');
       }
 
-      final result = await _processService.run(
-        executable: _scExeName,
+      final result = await _runScWithRetry(
         arguments: [scCommand, _serviceName],
-        timeout: _longTimeout,
+        timeout: _timing.longTimeout,
+        operationName: 'sc $scCommand',
       );
 
       return result.fold((processResult) async {
@@ -424,25 +707,38 @@ class WindowsServiceService implements IWindowsServiceService {
             errorMessage.contains('já está em execução');
 
         if (shouldPoll) {
+          final effectiveTimeout =
+              pollingTimeout ?? _timing.startPollingTimeout;
+          final effectiveInterval =
+              pollingInterval ?? _timing.startPollingInterval;
+          final effectiveInitialDelay =
+              initialDelay ?? _timing.startPollingInitialDelay;
+
           final runningAfterPoll = await _pollUntilRunning(
-            timeout: pollingTimeout,
-            interval: pollingInterval,
-            initialDelay: initialDelay ?? _startPollingInitialDelay,
+            timeout: effectiveTimeout,
+            interval: effectiveInterval,
+            initialDelay: effectiveInitialDelay,
+            onConvergence: (d) => _metrics?.recordHistogram(
+              ObservabilityMetrics.windowsServiceStartConvergenceSeconds,
+              d.inMilliseconds / 1000,
+            ),
           );
 
           if (runningAfterPoll) {
+            _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartSuccess);
             final label = isAlreadyRunning ? 'já estava em' : 'entrou em';
             LoggerService.info('Serviço $label execução');
             return const rd.Success(unit);
           }
 
           if (isAlreadyRunning) {
+            _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartFailure);
             return rd.Failure(
               ServerFailure(
                 message:
                     'O Windows reportou que o serviço já está em execução '
                     '(erro 1056), mas o status não retornou RUNNING '
-                    'após ${pollingTimeout.inSeconds}s de verificação.\n\n'
+                    'após ${effectiveTimeout.inSeconds}s de verificação.\n\n'
                     'Tente:\n'
                     '1. Atualizar o status\n'
                     '2. Reiniciar o serviço\n'
@@ -451,11 +747,12 @@ class WindowsServiceService implements IWindowsServiceService {
             );
           }
 
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartFailure);
           return rd.Failure(
             ServerFailure(
               message:
                   'Serviço não atingiu estado RUNNING dentro do tempo esperado '
-                  '(${pollingTimeout.inSeconds}s).\n\n'
+                  '(${effectiveTimeout.inSeconds}s).\n\n'
                   'Tente:\n'
                   '1. Atualizar o status\n'
                   '2. Verificar os logs em $_logPath '
@@ -475,6 +772,7 @@ class WindowsServiceService implements IWindowsServiceService {
             errorMessage.contains('FAILURE 5');
 
         if (isAccessDenied) {
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartFailure);
           return const rd.Failure(
             ServerFailure(
               message:
@@ -484,13 +782,25 @@ class WindowsServiceService implements IWindowsServiceService {
           );
         }
 
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartFailure);
         return rd.Failure(
-          ServerFailure(message: 'Erro ao iniciar serviço: $errorMessage'),
+          ServerFailure(
+            message:
+                'Erro ao iniciar serviço: $errorMessage\n\n$_troubleshootingWithEnv',
+          ),
         );
-      }, rd.Failure.new);
+      }, (f) {
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartFailure);
+        return rd.Failure(f);
+      });
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao iniciar serviço', e, stackTrace);
-      return rd.Failure(ServerFailure(message: 'Erro ao iniciar serviço: $e'));
+      _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStartFailure);
+      return rd.Failure(
+        ServerFailure(
+          message: 'Erro ao iniciar serviço: $e\n\n$_troubleshootingWithEnv',
+        ),
+      );
     }
   }
 
@@ -513,11 +823,14 @@ class WindowsServiceService implements IWindowsServiceService {
 
   /// Verifica em loop se o serviço entrou em estado RUNNING.
   /// Retorna `true` assim que detectar, ou `false` se o [timeout] esgotar.
+  /// Se [onConvergence] for fornecido, é chamado com a duração ao atingir RUNNING.
   Future<bool> _pollUntilRunning({
     required Duration timeout,
     required Duration interval,
     Duration initialDelay = Duration.zero,
+    void Function(Duration)? onConvergence,
   }) async {
+    final stopwatch = Stopwatch()..start();
     if (initialDelay > Duration.zero) {
       await Future.delayed(initialDelay);
     }
@@ -529,6 +842,7 @@ class WindowsServiceService implements IWindowsServiceService {
       lastStatusResult = await getStatus();
       final status = lastStatusResult.getOrNull();
       if (status?.isRunning ?? false) {
+        onConvergence?.call(stopwatch.elapsed);
         return true;
       }
     }
@@ -545,6 +859,27 @@ class WindowsServiceService implements IWindowsServiceService {
     return false;
   }
 
+  /// Verifica em loop se o serviço entrou em estado parado (não RUNNING).
+  /// Se [onConvergence] for fornecido, é chamado com a duração ao parar.
+  Future<bool> _pollUntilStopped({
+    required Duration timeout,
+    required Duration interval,
+    void Function(Duration)? onConvergence,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      await Future.delayed(interval);
+      final statusResult = await getStatus();
+      final status = statusResult.getOrNull();
+      if (status?.isRunning != true) {
+        onConvergence?.call(stopwatch.elapsed);
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   Future<rd.Result<void>> stopService() async {
     if (!Platform.isWindows) {
@@ -557,24 +892,51 @@ class WindowsServiceService implements IWindowsServiceService {
       final statusResult = await getStatus();
       final status = statusResult.getOrNull();
 
-      if (status?.isRunning != true) {
+      final isStartPending =
+          status?.stateCode == WindowsServiceStateCode.startPending;
+      final isStopPending =
+          status?.stateCode == WindowsServiceStateCode.stopPending;
+
+      if (status?.isRunning != true && !isStartPending) {
+        if (isStopPending) {
+          LoggerService.info('Serviço em STOP_PENDING, aguardando parada');
+          final stoppedAfterPoll = await _pollUntilStopped(
+            timeout: _timing.longTimeout,
+            interval: _timing.startPollingInterval,
+            onConvergence: (d) => _metrics?.recordHistogram(
+              ObservabilityMetrics.windowsServiceStopConvergenceSeconds,
+              d.inMilliseconds / 1000,
+            ),
+          );
+          if (stoppedAfterPoll) {
+            _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStopSuccess);
+            LoggerService.info('Serviço parado com sucesso');
+            return const rd.Success(unit);
+          }
+        }
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStopSuccess);
         LoggerService.info('Serviço já está parado');
         return const rd.Success(unit);
       }
 
-      final result = await _processService.run(
-        executable: _scExeName,
+      if (isStartPending) {
+        LoggerService.info('Serviço em START_PENDING, enviando comando stop');
+      }
+
+      final result = await _runScWithRetry(
         arguments: ['stop', _serviceName],
-        timeout: _longTimeout,
+        timeout: _timing.longTimeout,
+        operationName: 'sc stop',
       );
 
       return result.fold((processResult) async {
-        await Future.delayed(_serviceDelay);
+        await Future.delayed(_timing.serviceDelay);
 
         final statusAfterResult = await getStatus();
         final statusAfter = statusAfterResult.getOrNull();
 
         if (statusAfter?.isRunning != true) {
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStopSuccess);
           LoggerService.info('Serviço parado com sucesso');
           return const rd.Success(unit);
         }
@@ -590,6 +952,7 @@ class WindowsServiceService implements IWindowsServiceService {
             errorMessage.contains('FAILURE 5');
 
         if (isAccessDenied) {
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStopFailure);
           return const rd.Failure(
             ServerFailure(
               message:
@@ -600,23 +963,36 @@ class WindowsServiceService implements IWindowsServiceService {
         }
 
         if (processResult.exitCode == _successExitCode) {
-          await Future.delayed(_serviceDelay);
+          await Future.delayed(_timing.serviceDelay);
           final finalStatusResult = await getStatus();
           final finalStatus = finalStatusResult.getOrNull();
 
           if (finalStatus?.isRunning != true) {
+            _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStopSuccess);
             LoggerService.info('Serviço parado com sucesso');
             return const rd.Success(unit);
           }
         }
 
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStopFailure);
         return rd.Failure(
-          ServerFailure(message: 'Erro ao parar serviço: $errorMessage'),
+          ServerFailure(
+            message:
+                'Erro ao parar serviço: $errorMessage\n\n$_troubleshootingAdminLogs',
+          ),
         );
-      }, rd.Failure.new);
+      }, (f) {
+        _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStopFailure);
+        return rd.Failure(f);
+      });
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao parar serviço', e, stackTrace);
-      return rd.Failure(ServerFailure(message: 'Erro ao parar serviço: $e'));
+      _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceStopFailure);
+      return rd.Failure(
+        ServerFailure(
+          message: 'Erro ao parar serviço: $e\n\n$_troubleshootingAdminLogs',
+        ),
+      );
     }
   }
 
@@ -630,9 +1006,22 @@ class WindowsServiceService implements IWindowsServiceService {
 
     final stopResult = await stopService();
     return stopResult.fold((_) async {
-      await Future.delayed(_serviceDelay);
-      return startService();
-    }, rd.Failure.new);
+      await Future.delayed(_timing.serviceDelay);
+      final startResult = await startService();
+      return startResult.fold(
+        (_) {
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceRestartSuccess);
+          return rd.Success(unit);
+        },
+        (f) {
+          _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceRestartFailure);
+          return rd.Failure(f);
+        },
+      );
+    }, (f) {
+      _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceRestartFailure);
+      return Future.value(rd.Failure(f));
+    });
   }
 
   bool _isServiceNotInstalledResponse(ProcessResult processResult) {

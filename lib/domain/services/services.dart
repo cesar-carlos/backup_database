@@ -37,5 +37,6 @@ export 'i_sybase_backup_service.dart';
 export 'i_task_scheduler_service.dart';
 export 'i_transfer_staging_service.dart';
 export 'i_windows_message_box.dart';
+export 'i_windows_service_event_logger.dart';
 export 'i_windows_service_service.dart';
 export 'upload_progress_callback.dart';

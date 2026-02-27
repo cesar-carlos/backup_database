@@ -47,6 +47,20 @@ const _notInstalledQueryResult = ProcessResult(
   duration: Duration(milliseconds: 10),
 );
 
+const _startPendingQueryResult = ProcessResult(
+  exitCode: 0,
+  stdout: 'STATE              : 2  START_PENDING',
+  stderr: '',
+  duration: Duration(milliseconds: 10),
+);
+
+const _stopPendingQueryResult = ProcessResult(
+  exitCode: 0,
+  stdout: 'STATE              : 3  STOP_PENDING',
+  stderr: '',
+  duration: Duration(milliseconds: 10),
+);
+
 void _stubQuery(
   MockProcessService mock,
   ProcessResult result,
@@ -81,6 +95,19 @@ void _stubContinue(
     () => mock.run(
       executable: 'sc',
       arguments: ['continue', 'BackupDatabaseService'],
+      timeout: _longTimeout,
+    ),
+  ).thenAnswer((_) async => rd.Success(result));
+}
+
+void _stubStop(
+  MockProcessService mock,
+  ProcessResult result,
+) {
+  when(
+    () => mock.run(
+      executable: 'sc',
+      arguments: ['stop', 'BackupDatabaseService'],
       timeout: _longTimeout,
     ),
   ).thenAnswer((_) async => rd.Success(result));
@@ -499,6 +526,331 @@ void main() {
               contains('Acesso negado'),
             );
           },
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+  });
+
+  group('WindowsServiceService.stopService', () {
+    late MockProcessService mockProcessService;
+    late WindowsServiceService windowsServiceService;
+
+    setUp(() {
+      mockProcessService = MockProcessService();
+      windowsServiceService = WindowsServiceService(mockProcessService);
+    });
+
+    test(
+      'should return success when service was running and stops',
+      () async {
+        var queryCallCount = 0;
+        when(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['query', 'BackupDatabaseService'],
+            timeout: _shortTimeout,
+          ),
+        ).thenAnswer((_) async {
+          queryCallCount++;
+          return queryCallCount == 1
+              ? const rd.Success(_runningQueryResult)
+              : const rd.Success(_stoppedQueryResult);
+        });
+
+        _stubStop(
+          mockProcessService,
+          const ProcessResult(
+            exitCode: 0,
+            stdout: 'STATE: 3  STOP_PENDING',
+            stderr: '',
+            duration: Duration(milliseconds: 50),
+          ),
+        );
+
+        final result = await windowsServiceService.stopService();
+
+        expect(result.isSuccess(), isTrue);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'should return success when service already stopped',
+      () async {
+        _stubQuery(mockProcessService, _stoppedQueryResult);
+
+        final result = await windowsServiceService.stopService();
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['stop', 'BackupDatabaseService'],
+            timeout: any(named: 'timeout'),
+          ),
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'should return failure when access is denied',
+      () async {
+        _stubQuery(mockProcessService, _runningQueryResult);
+
+        _stubStop(
+          mockProcessService,
+          const ProcessResult(
+            exitCode: 5,
+            stdout: '',
+            stderr: 'Access is denied.',
+            duration: Duration(milliseconds: 10),
+          ),
+        );
+
+        final result = await windowsServiceService.stopService();
+
+        result.fold(
+          (success) => fail('Expected failure, got success'),
+          (failure) {
+            expect(failure, isA<ServerFailure>());
+            expect(
+              (failure as ServerFailure).message.toLowerCase(),
+              contains('denied'),
+            );
+          },
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+  });
+
+  group('WindowsServiceService.restartService', () {
+    late MockProcessService mockProcessService;
+    late WindowsServiceService windowsServiceService;
+
+    setUp(() {
+      mockProcessService = MockProcessService();
+      windowsServiceService = WindowsServiceService(mockProcessService);
+    });
+
+    test(
+      'should return success when stop then start both succeed',
+      () async {
+        var queryCallCount = 0;
+        when(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['query', 'BackupDatabaseService'],
+            timeout: _shortTimeout,
+          ),
+        ).thenAnswer((_) async {
+          queryCallCount++;
+          if (queryCallCount <= 2) {
+            return queryCallCount == 1
+                ? const rd.Success(_runningQueryResult)
+                : const rd.Success(_stoppedQueryResult);
+          }
+          return queryCallCount == 3
+              ? const rd.Success(_stoppedQueryResult)
+              : const rd.Success(_runningQueryResult);
+        });
+
+        _stubStop(
+          mockProcessService,
+          const ProcessResult(
+            exitCode: 0,
+            stdout: 'STATE: 3  STOP_PENDING',
+            stderr: '',
+            duration: Duration(milliseconds: 50),
+          ),
+        );
+
+        _stubStart(
+          mockProcessService,
+          const ProcessResult(
+            exitCode: 0,
+            stdout: 'STATE: 2  START_PENDING',
+            stderr: '',
+            duration: Duration(milliseconds: 50),
+          ),
+        );
+
+        final result = await windowsServiceService.restartService();
+
+        expect(result.isSuccess(), isTrue);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'should return failure when stop fails',
+      () async {
+        _stubQuery(mockProcessService, _runningQueryResult);
+
+        _stubStop(
+          mockProcessService,
+          const ProcessResult(
+            exitCode: 5,
+            stdout: '',
+            stderr: 'Access is denied.',
+            duration: Duration(milliseconds: 10),
+          ),
+        );
+
+        final result = await windowsServiceService.restartService();
+
+        result.fold(
+          (success) => fail('Expected failure, got success'),
+          (failure) {
+            expect(failure, isA<ServerFailure>());
+            expect(
+              (failure as ServerFailure).message.toLowerCase(),
+              contains('denied'),
+            );
+          },
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+  });
+
+  group('WindowsServiceService.installService', () {
+    late MockProcessService mockProcessService;
+    late WindowsServiceService windowsServiceService;
+
+    setUp(() {
+      mockProcessService = MockProcessService();
+      windowsServiceService = WindowsServiceService(mockProcessService);
+    });
+
+    test(
+      'should return failure when NSSM is not found in tools directory',
+      () async {
+        final result = await windowsServiceService.installService();
+
+        result.fold(
+          (_) => fail('Expected failure when NSSM not found'),
+          (failure) {
+            expect(failure, isA<ValidationFailure>());
+            expect(
+              (failure as ValidationFailure).message.toLowerCase(),
+              contains('nssm'),
+            );
+          },
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+  });
+
+  group('WindowsServiceService.uninstallService', () {
+    late MockProcessService mockProcessService;
+    late WindowsServiceService windowsServiceService;
+
+    setUp(() {
+      mockProcessService = MockProcessService();
+      windowsServiceService = WindowsServiceService(mockProcessService);
+    });
+
+    test(
+      'should return failure when NSSM is not found in tools directory',
+      () async {
+        final result = await windowsServiceService.uninstallService();
+
+        result.fold(
+          (_) => fail('Expected failure when NSSM not found'),
+          (failure) {
+            expect(failure, isA<ValidationFailure>());
+            expect(
+              (failure as ValidationFailure).message.toLowerCase(),
+              contains('nssm'),
+            );
+          },
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+  });
+
+  group('WindowsServiceService idempotência', () {
+    late MockProcessService mockProcessService;
+    late WindowsServiceService windowsServiceService;
+
+    setUp(() {
+      mockProcessService = MockProcessService();
+      windowsServiceService = WindowsServiceService(mockProcessService);
+    });
+
+    test(
+      'startService when START_PENDING should only poll until RUNNING without calling sc start',
+      () async {
+        var queryCallCount = 0;
+        when(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['query', 'BackupDatabaseService'],
+            timeout: _shortTimeout,
+          ),
+        ).thenAnswer((_) async {
+          queryCallCount++;
+          return queryCallCount == 1
+              ? const rd.Success(_startPendingQueryResult)
+              : const rd.Success(_runningQueryResult);
+        });
+
+        final result = await windowsServiceService.startServiceWithTimeout(
+          pollingTimeout: const Duration(seconds: 5),
+          pollingInterval: const Duration(milliseconds: 10),
+          initialDelay: Duration.zero,
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['start', 'BackupDatabaseService'],
+            timeout: any(named: 'timeout'),
+          ),
+        );
+        verifyNever(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['continue', 'BackupDatabaseService'],
+            timeout: any(named: 'timeout'),
+          ),
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'stopService when STOP_PENDING should only poll until stopped without calling sc stop',
+      () async {
+        var queryCallCount = 0;
+        when(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['query', 'BackupDatabaseService'],
+            timeout: _shortTimeout,
+          ),
+        ).thenAnswer((_) async {
+          queryCallCount++;
+          return queryCallCount == 1
+              ? const rd.Success(_stopPendingQueryResult)
+              : const rd.Success(_stoppedQueryResult);
+        });
+
+        final result = await windowsServiceService.stopService();
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['stop', 'BackupDatabaseService'],
+            timeout: any(named: 'timeout'),
+          ),
         );
       },
       skip: !Platform.isWindows,

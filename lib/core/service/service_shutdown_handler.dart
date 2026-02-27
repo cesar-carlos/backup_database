@@ -95,35 +95,44 @@ class ServiceShutdownHandler {
     LoggerService.info('═══════════════════════════════════════');
     LoggerService.info('🛑 INICIANDO SHUTDOWN GRACIOSO');
     LoggerService.info('═══════════════════════════════════════');
-    LoggerService.info('Timeout: ${timeout.inSeconds} segundos');
-    LoggerService.info('Callbacks registrados: ${_shutdownCallbacks.length}');
+    LoggerService.info(
+      'Orçamento total: ${timeout.inSeconds}s | '
+      'Callbacks: ${_shutdownCallbacks.length}',
+    );
     LoggerService.info('');
 
-    // Executa callbacks em ordem inversa (stack behavior)
+    var callbacksExecuted = 0;
+    var callbacksSkippedByTimeout = 0;
+
     for (var i = _shutdownCallbacks.length - 1; i >= 0; i--) {
       final callback = _shutdownCallbacks[i];
       final elapsed = DateTime.now().difference(startTime);
       final remaining = timeout - elapsed;
 
       if (remaining <= Duration.zero) {
+        callbacksSkippedByTimeout = _shutdownCallbacks.length - i;
         LoggerService.warning(
-          '⚠️ Timeout atingido, ignorando callbacks restantes',
+          '⚠️ Timeout atingido (orçamento esgotado após ${elapsed.inSeconds}s). '
+          'Ignorando $callbacksSkippedByTimeout callback(s) restante(s)',
         );
         break;
       }
 
+      callbacksExecuted++;
       final callbackName = callback.hashCode.toRadixString(16);
       LoggerService.info(
-        '[$callbackName] Executando (${remaining.inSeconds}s restantes)',
+        '[$callbackName] Etapa $callbacksExecuted: orçamento ${remaining.inSeconds}s',
       );
 
       try {
         final stopwatch = Stopwatch()..start();
         await callback(remaining);
         stopwatch.stop();
+        final stillRemaining = timeout - DateTime.now().difference(startTime);
 
         LoggerService.info(
-          '[$callbackName] ✅ Concluído em ${stopwatch.elapsedMilliseconds}ms',
+          '[$callbackName] ✅ Concluído em ${stopwatch.elapsedMilliseconds}ms '
+          '(${stillRemaining.inSeconds}s restantes)',
         );
       } on Object catch (e, s) {
         LoggerService.error(
@@ -138,8 +147,12 @@ class ServiceShutdownHandler {
 
     final totalElapsed = DateTime.now().difference(startTime);
     LoggerService.info('═══════════════════════════════════════');
-    LoggerService.info('✅ SHUTDOWN CONCLUÍDO');
-    LoggerService.info('Tempo total: ${totalElapsed.inSeconds}s');
+    LoggerService.info(
+      '✅ SHUTDOWN CONCLUÍDO | '
+      'Tempo: ${totalElapsed.inSeconds}s | '
+      'Executados: $callbacksExecuted'
+      '${callbacksSkippedByTimeout > 0 ? " | Ignorados (timeout): $callbacksSkippedByTimeout" : ""}',
+    );
     LoggerService.info('═══════════════════════════════════════');
     LoggerService.info('');
   }

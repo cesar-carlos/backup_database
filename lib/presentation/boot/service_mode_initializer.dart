@@ -91,6 +91,10 @@ class ServiceModeInitializer {
             '⚠️ Alguns backups não terminaram a tempo, '
             'mas o serviço será encerrado',
           );
+          await eventLog?.logShutdownBackupsIncomplete(
+            timeout: budgetForBackups,
+            details: 'Backups em execução foram interrompidos pelo timeout.',
+          );
         }
 
         // Log no Event Viewer

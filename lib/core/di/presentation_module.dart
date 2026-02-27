@@ -108,7 +108,10 @@ Future<void> setupPresentationModule(GetIt getIt) async {
   );
 
   getIt.registerFactory<WindowsServiceProvider>(
-    () => WindowsServiceProvider(getIt<IWindowsServiceService>()),
+    () => WindowsServiceProvider(
+      getIt<IWindowsServiceService>(),
+      getIt<IWindowsServiceEventLogger>(),
+    ),
   );
 
   getIt.registerFactory<ServerCredentialProvider>(

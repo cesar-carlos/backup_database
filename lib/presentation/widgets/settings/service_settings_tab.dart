@@ -124,15 +124,32 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(FluentIcons.error_badge, color: Colors.red, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: SelectableText(
-                provider.error!,
-                style: TextStyle(color: Colors.red, fontSize: 13),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(FluentIcons.error_badge, color: Colors.red, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SelectableText(
+                    provider.error!,
+                    style: TextStyle(color: Colors.red, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Button(
+              onPressed: provider.isLoading ? null : () => provider.checkStatus(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(FluentIcons.refresh, size: 16),
+                  const SizedBox(width: 8),
+                  Text(_t('Atualizar status', 'Refresh status')),
+                ],
               ),
             ),
           ],
@@ -326,9 +343,22 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
 
   String _getStatusText(WindowsServiceProvider provider) {
     if (provider.isLoading) {
-      return provider.isStarting
-          ? _t('Aguardando serviço iniciar...', 'Waiting for service to start...')
-          : _t('Verificando...', 'Checking...');
+      return switch (provider.operation) {
+        WindowsServiceOperation.install =>
+          _t('Instalando...', 'Installing...'),
+        WindowsServiceOperation.uninstall =>
+          _t('Removendo...', 'Removing...'),
+        WindowsServiceOperation.start =>
+          _t('Iniciando...', 'Starting...'),
+        WindowsServiceOperation.stop =>
+          _t('Parando...', 'Stopping...'),
+        WindowsServiceOperation.restart =>
+          _t('Reiniciando...', 'Restarting...'),
+        WindowsServiceOperation.check =>
+          _t('Verificando...', 'Checking...'),
+        WindowsServiceOperation.none =>
+          _t('Verificando...', 'Checking...'),
+      };
     }
     if (provider.isInstalled) {
       return provider.isRunning

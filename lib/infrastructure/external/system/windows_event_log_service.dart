@@ -1,8 +1,36 @@
 import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
     as ps;
+
+/// Catálogo de Event IDs para troubleshooting no Event Viewer.
+///
+/// IDs estáveis entre versões. Ranges:
+/// - 1001-1999: Backups (sucesso/início)
+/// - 2001-2999: Backups (falha)
+/// - 3001-3099: Serviço Windows (lifecycle)
+/// - 4001-4999: Saúde/verificações
+/// - 5001-5999: Erros críticos
+class WindowsServiceEventIds {
+  WindowsServiceEventIds._();
+
+  static const int installStarted = 3010;
+  static const int installSucceeded = 3011;
+  static const int installFailed = 3012;
+  static const int startStarted = 3013;
+  static const int startSucceeded = 3014;
+  static const int startFailed = 3015;
+  static const int startTimeout = 3016;
+  static const int stopStarted = 3017;
+  static const int stopSucceeded = 3018;
+  static const int stopFailed = 3019;
+  static const int stopTimeout = 3020;
+  static const int uninstallStarted = 3021;
+  static const int uninstallSucceeded = 3022;
+  static const int uninstallFailed = 3023;
+}
 
 /// Níveis de evento para Windows Event Log.
 enum EventLogEntryType {
@@ -23,7 +51,7 @@ enum EventLogEntryType {
 ///
 /// Apenas Windows é suportado. Em outras plataformas, os eventos
 /// são ignorados silenciosamente.
-class WindowsEventLogService {
+class WindowsEventLogService implements IWindowsServiceEventLogger {
   WindowsEventLogService({
     required ps.ProcessService processService,
     this.sourceName = 'BackupDatabase',
@@ -220,6 +248,149 @@ class WindowsEventLogService {
       type: EventLogEntryType.information,
       eventId: 3002,
       message: 'Serviço de backup parado',
+    );
+  }
+
+  /// Escreve um evento quando o shutdown ocorreu com backups em execução
+  /// que não concluíram antes do timeout.
+  Future<void> logShutdownBackupsIncomplete({
+    required Duration timeout,
+    String? details,
+  }) async {
+    final message = details != null
+        ? 'Shutdown: backups não concluíram antes do timeout (${timeout.inSeconds}s).\n$details'
+        : 'Shutdown: backups não concluíram antes do timeout (${timeout.inSeconds}s).';
+
+    await writeEvent(
+      type: EventLogEntryType.warning,
+      eventId: 3003,
+      message: message,
+    );
+  }
+
+  @override
+  Future<void> logInstallStarted() async {
+    await writeEvent(
+      type: EventLogEntryType.information,
+      eventId: WindowsServiceEventIds.installStarted,
+      message: 'Instalação do serviço iniciada',
+    );
+  }
+
+  @override
+  Future<void> logInstallSucceeded() async {
+    await writeEvent(
+      type: EventLogEntryType.information,
+      eventId: WindowsServiceEventIds.installSucceeded,
+      message: 'Serviço instalado com sucesso',
+    );
+  }
+
+  @override
+  Future<void> logInstallFailed({required String error}) async {
+    await writeEvent(
+      type: EventLogEntryType.error,
+      eventId: WindowsServiceEventIds.installFailed,
+      message: 'Falha na instalação do serviço: $error',
+    );
+  }
+
+  @override
+  Future<void> logStartStarted() async {
+    await writeEvent(
+      type: EventLogEntryType.information,
+      eventId: WindowsServiceEventIds.startStarted,
+      message: 'Início do serviço solicitado',
+    );
+  }
+
+  @override
+  Future<void> logStartSucceeded() async {
+    await writeEvent(
+      type: EventLogEntryType.information,
+      eventId: WindowsServiceEventIds.startSucceeded,
+      message: 'Serviço iniciado com sucesso',
+    );
+  }
+
+  @override
+  Future<void> logStartFailed({required String error}) async {
+    await writeEvent(
+      type: EventLogEntryType.error,
+      eventId: WindowsServiceEventIds.startFailed,
+      message: 'Falha ao iniciar serviço: $error',
+    );
+  }
+
+  @override
+  Future<void> logStartTimeout({required Duration timeout}) async {
+    await writeEvent(
+      type: EventLogEntryType.warning,
+      eventId: WindowsServiceEventIds.startTimeout,
+      message: 'Timeout ao iniciar serviço (${timeout.inSeconds}s)',
+    );
+  }
+
+  @override
+  Future<void> logStopStarted() async {
+    await writeEvent(
+      type: EventLogEntryType.information,
+      eventId: WindowsServiceEventIds.stopStarted,
+      message: 'Parada do serviço solicitada',
+    );
+  }
+
+  @override
+  Future<void> logStopSucceeded() async {
+    await writeEvent(
+      type: EventLogEntryType.information,
+      eventId: WindowsServiceEventIds.stopSucceeded,
+      message: 'Serviço parado com sucesso',
+    );
+  }
+
+  @override
+  Future<void> logStopFailed({required String error}) async {
+    await writeEvent(
+      type: EventLogEntryType.error,
+      eventId: WindowsServiceEventIds.stopFailed,
+      message: 'Falha ao parar serviço: $error',
+    );
+  }
+
+  @override
+  Future<void> logStopTimeout({required Duration timeout}) async {
+    await writeEvent(
+      type: EventLogEntryType.warning,
+      eventId: WindowsServiceEventIds.stopTimeout,
+      message: 'Timeout ao parar serviço (${timeout.inSeconds}s)',
+    );
+  }
+
+  @override
+  Future<void> logUninstallStarted() async {
+    await writeEvent(
+      type: EventLogEntryType.information,
+      eventId: WindowsServiceEventIds.uninstallStarted,
+      message: 'Remoção do serviço iniciada',
+    );
+  }
+
+  @override
+  Future<void> logUninstallSucceeded() async {
+    await writeEvent(
+      type: EventLogEntryType.information,
+      eventId: WindowsServiceEventIds.uninstallSucceeded,
+      message: 'Serviço removido com sucesso',
+    );
+  }
+
+  @override
+  Future<void> logUninstallFailed({required String error}) async {
+    await writeEvent(
+      type: EventLogEntryType.error,
+      eventId: WindowsServiceEventIds.uninstallFailed,
+      message: 'Falha ao remover serviço: $error',
     );
   }
 
