@@ -59,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 26;
+  int get schemaVersion => 27;
 
   @override
   MigrationStrategy get migration {
@@ -882,6 +882,33 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v26 para sybase_configs_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 27) {
+          try {
+            final historyColumns = await customSelect(
+              'PRAGMA table_info(backup_history_table)',
+            ).get();
+            final hasMetricsColumn = historyColumns.any(
+              (row) => row.data['name'] == 'metrics',
+            );
+
+            if (!hasMetricsColumn) {
+              await customStatement(
+                'ALTER TABLE backup_history_table ADD COLUMN metrics TEXT',
+              );
+              LoggerService.info(
+                'Migração v27: Coluna metrics adicionada à '
+                'backup_history_table.',
+              );
+            }
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v27 para backup_history_table metrics',
               e,
               stackTrace,
             );
