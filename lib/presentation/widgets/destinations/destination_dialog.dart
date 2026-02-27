@@ -72,6 +72,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   bool get isEditing => widget.destination != null;
 
   String _t(String pt, String en) {
+    if (!mounted) return en;
     final isPt =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
     return isPt ? pt : en;
@@ -1498,6 +1499,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
       final ftpService = getIt<IFtpService>();
       final result = await ftpService.testConnection(config);
 
+      if (!mounted) return;
+
       result.fold(
         (success) {
           if (success) {
@@ -1529,11 +1532,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
         },
       );
     } on Object catch (e) {
-      _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
+      if (mounted) _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
     } finally {
-      setState(() {
-        _isTestingFtpConnection = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isTestingFtpConnection = false;
+        });
+      }
     }
   }
 
@@ -1577,6 +1582,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
       final nextcloudService = getIt<nextcloud.NextcloudDestinationService>();
       final result = await nextcloudService.testConnection(config);
 
+      if (!mounted) return;
+
       result.fold(
         (success) {
           if (success) {
@@ -1608,19 +1615,23 @@ class _DestinationDialogState extends State<DestinationDialog> {
         },
       );
     } on Object catch (e) {
-      _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
+      if (mounted) _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
     } finally {
-      setState(() {
-        _isTestingNextcloudConnection = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isTestingNextcloudConnection = false;
+        });
+      }
     }
   }
 
   void _showSuccess(String message) {
+    if (!mounted) return;
     MessageModal.showSuccess(context, message: message);
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     MessageModal.showError(context, message: message);
   }
 
