@@ -58,6 +58,7 @@ class LocalDestinationConfig {
     required this.path,
     this.createSubfoldersByDate = true,
     this.retentionDays = 30,
+    this.protectedBackupIdShortPrefixes = const {},
   });
 
   factory LocalDestinationConfig.fromJson(Map<String, dynamic> json) {
@@ -70,6 +71,7 @@ class LocalDestinationConfig {
   final String path;
   final bool createSubfoldersByDate;
   final int retentionDays;
+  final Set<String> protectedBackupIdShortPrefixes;
 
   Map<String, dynamic> toJson() => {
     'path': path,
@@ -87,6 +89,7 @@ class FtpDestinationConfig {
     this.port = 21,
     this.useFtps = false,
     this.retentionDays = 30,
+    this.protectedBackupIdShortPrefixes = const {},
   });
 
   factory FtpDestinationConfig.fromJson(Map<String, dynamic> json) {
@@ -107,6 +110,7 @@ class FtpDestinationConfig {
   final String remotePath;
   final bool useFtps;
   final int retentionDays;
+  final Set<String> protectedBackupIdShortPrefixes;
 
   Map<String, dynamic> toJson() => {
     'host': host,
@@ -126,6 +130,7 @@ class GoogleDriveDestinationConfig {
     required this.accessToken,
     required this.refreshToken,
     this.retentionDays = 30,
+    this.protectedBackupIdShortPrefixes = const {},
   });
 
   factory GoogleDriveDestinationConfig.fromJson(Map<String, dynamic> json) {
@@ -142,6 +147,7 @@ class GoogleDriveDestinationConfig {
   final String accessToken;
   final String refreshToken;
   final int retentionDays;
+  final Set<String> protectedBackupIdShortPrefixes;
 
   Map<String, dynamic> toJson() => {
     'folderId': folderId,
@@ -157,6 +163,7 @@ class DropboxDestinationConfig {
     required this.folderPath,
     this.folderName = 'Backups',
     this.retentionDays = 30,
+    this.protectedBackupIdShortPrefixes = const {},
   });
 
   factory DropboxDestinationConfig.fromJson(Map<String, dynamic> json) {
@@ -169,6 +176,7 @@ class DropboxDestinationConfig {
   final String folderPath;
   final String folderName;
   final int retentionDays;
+  final Set<String> protectedBackupIdShortPrefixes;
 
   Map<String, dynamic> toJson() => {
     'folderPath': folderPath,
@@ -189,6 +197,7 @@ class NextcloudDestinationConfig {
     this.folderName = 'Backups',
     this.allowInvalidCertificates = false,
     this.retentionDays = 30,
+    this.protectedBackupIdShortPrefixes = const {},
   });
 
   factory NextcloudDestinationConfig.fromJson(Map<String, dynamic> json) {
@@ -218,6 +227,7 @@ class NextcloudDestinationConfig {
   final String folderName;
   final bool allowInvalidCertificates;
   final int retentionDays;
+  final Set<String> protectedBackupIdShortPrefixes;
 
   Map<String, dynamic> toJson() => {
     'serverUrl': serverUrl,

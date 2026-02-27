@@ -13,6 +13,7 @@ class SybaseConfig {
     this.databaseFile = '',
     PortNumber? port,
     this.enabled = true,
+    this.isReplicationEnvironment = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : id = id ?? const Uuid().v4(),
@@ -29,6 +30,7 @@ class SybaseConfig {
   final String username;
   final String password;
   final bool enabled;
+  final bool isReplicationEnvironment;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -45,6 +47,7 @@ class SybaseConfig {
     String? username,
     String? password,
     bool? enabled,
+    bool? isReplicationEnvironment,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -58,6 +61,8 @@ class SybaseConfig {
       username: username ?? this.username,
       password: password ?? this.password,
       enabled: enabled ?? this.enabled,
+      isReplicationEnvironment:
+          isReplicationEnvironment ?? this.isReplicationEnvironment,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );

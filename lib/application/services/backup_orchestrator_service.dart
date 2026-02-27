@@ -1,3 +1,4 @@
+import 'package:backup_database/core/constants/backup_constants.dart';
 import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
@@ -11,6 +12,8 @@ import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/sybase_backup_options.dart';
+import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
@@ -21,8 +24,10 @@ import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_script_execution_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
+import 'package:backup_database/domain/services/i_storage_checker.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/domain/use_cases/backup/get_database_config.dart';
+import 'package:backup_database/domain/use_cases/backup/validate_sybase_log_backup_preflight.dart';
 import 'package:backup_database/domain/use_cases/storage/validate_backup_directory.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
@@ -44,6 +49,8 @@ class BackupOrchestratorService {
     required IBackupProgressNotifier progressNotifier,
     required GetDatabaseConfig getDatabaseConfig,
     required ValidateBackupDirectory validateBackupDirectory,
+    required ValidateSybaseLogBackupPreflight validateSybaseLogBackupPreflight,
+    required IStorageChecker storageChecker,
   }) : _sqlServerConfigRepository = sqlServerConfigRepository,
        _sybaseConfigRepository = sybaseConfigRepository,
        _postgresConfigRepository = postgresConfigRepository,
@@ -58,7 +65,9 @@ class BackupOrchestratorService {
        _notificationService = notificationService,
        _progressNotifier = progressNotifier,
        _getDatabaseConfig = getDatabaseConfig,
-       _validateBackupDirectory = validateBackupDirectory;
+       _validateBackupDirectory = validateBackupDirectory,
+       _validateSybaseLogBackupPreflight = validateSybaseLogBackupPreflight,
+       _storageChecker = storageChecker;
   final ISqlServerConfigRepository _sqlServerConfigRepository;
   final ISybaseConfigRepository _sybaseConfigRepository;
   final IPostgresConfigRepository _postgresConfigRepository;
@@ -74,6 +83,8 @@ class BackupOrchestratorService {
   final IBackupProgressNotifier _progressNotifier;
   final GetDatabaseConfig _getDatabaseConfig;
   final ValidateBackupDirectory _validateBackupDirectory;
+  final ValidateSybaseLogBackupPreflight _validateSybaseLogBackupPreflight;
+  final IStorageChecker _storageChecker;
 
   Future<rd.Result<BackupHistory>> executeBackup({
     required Schedule schedule,
@@ -108,6 +119,23 @@ class BackupOrchestratorService {
       return rd.Failure(failure);
     }
 
+    // Validate minimum free disk space
+    final spaceResult = await _storageChecker.checkSpace(typeOutputDirectory);
+    if (spaceResult.isError()) {
+      final failure = spaceResult.exceptionOrNull()!;
+      LoggerService.error('Free space check failed', failure);
+      return rd.Failure(failure);
+    }
+    final spaceInfo = spaceResult.getOrNull()!;
+    if (!spaceInfo.hasEnoughSpace(BackupConstants.minFreeSpaceForBackupBytes)) {
+      final errorMessage =
+          'Espaço livre insuficiente no destino do backup. '
+          'Disponível: ${_formatBytes(spaceInfo.freeBytes)}, '
+          'Mínimo necessário: ${_formatBytes(BackupConstants.minFreeSpaceForBackupBytes)}';
+      LoggerService.error(errorMessage);
+      return rd.Failure(ValidationFailure(message: errorMessage));
+    }
+
     LoggerService.info(
       'Diretório de backup por tipo: $typeOutputDirectory '
       '(Tipo: ${getBackupTypeDisplayName(backupType)})',
@@ -140,6 +168,7 @@ class BackupOrchestratorService {
     try {
       String backupPath;
       int fileSize;
+      SybaseLogBackupPreflightResult? sybaseLogPreflight;
 
       // Get database configuration using centralized use case
       final configResult = await _getDatabaseConfig(
@@ -192,13 +221,50 @@ class BackupOrchestratorService {
 
         backupExecutionResult = backupResult.getOrNull()!;
       } else if (schedule.databaseType == DatabaseType.sybase) {
+        if (backupType == BackupType.log) {
+          final preflightResult =
+              await _validateSybaseLogBackupPreflight(schedule);
+          if (preflightResult.isError()) {
+            return rd.Failure(preflightResult.exceptionOrNull()!);
+          }
+          final preflight = preflightResult.getOrNull()!;
+          if (!preflight.canProceed) {
+            LoggerService.error('Preflight Sybase log: ${preflight.error}');
+            return rd.Failure(
+              ValidationFailure(message: preflight.error ?? 'Preflight falhou'),
+            );
+          }
+          if (preflight.warning != null) {
+            LoggerService.warning('Preflight Sybase log: ${preflight.warning}');
+          }
+          sybaseLogPreflight = preflight;
+        }
+
         final config = configResult.getOrNull()! as SybaseConfig;
+        final sybaseOptions = schedule is SybaseBackupSchedule
+            ? schedule.sybaseBackupOptions
+            : null;
+        if (config.isReplicationEnvironment &&
+            backupType == BackupType.log &&
+            _effectiveSybaseLogMode(sybaseOptions, schedule.truncateLog) ==
+                SybaseLogBackupMode.truncate) {
+          const message =
+              'Backup de log com modo Truncar (TRUNCATE) não é permitido em '
+              'ambientes de replicação (SQL Remote, MobiLink). '
+              'Use modo Renomear ou Apenas na configuração do agendamento.';
+          LoggerService.error(message);
+          return const rd.Failure(ValidationFailure(message: message));
+        }
         final backupResult = await _sybaseBackupService.executeBackup(
           config: config,
           outputDirectory: typeOutputDirectory,
           backupType: backupType,
           truncateLog: schedule.truncateLog,
           verifyAfterBackup: schedule.verifyAfterBackup,
+          verifyPolicy: schedule.verifyPolicy,
+          backupTimeout: schedule.backupTimeout,
+          verifyTimeout: schedule.verifyTimeout,
+          sybaseBackupOptions: sybaseOptions,
         );
 
         if (backupResult.isError()) {
@@ -322,6 +388,10 @@ class BackupOrchestratorService {
         totalDuration: totalDuration,
         finalFileSize: fileSize,
         backupType: backupType,
+        scheduleBackupType: schedule.backupType,
+        databaseType: schedule.databaseType,
+        history: history,
+        sybaseLogPreflight: sybaseLogPreflight,
       );
       history = history.copyWith(
         backupPath: backupPath,
@@ -334,11 +404,11 @@ class BackupOrchestratorService {
 
       final updateResult = await _backupHistoryRepository
           .updateHistoryAndLogIfRunning(
-        history: history,
-        logStep: LogStepConstants.backupSuccess,
-        logLevel: LogLevel.info,
-        logMessage: 'Backup finalizado com sucesso',
-      );
+            history: history,
+            logStep: LogStepConstants.backupSuccess,
+            logLevel: LogLevel.info,
+            logMessage: 'Backup finalizado com sucesso',
+          );
       updateResult.fold(
         (_) {},
         (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
@@ -359,14 +429,15 @@ class BackupOrchestratorService {
 
       final updateResult = await _backupHistoryRepository
           .updateHistoryAndLogIfRunning(
-        history: history,
-        logStep: LogStepConstants.backupError,
-        logLevel: LogLevel.error,
-        logMessage: 'Erro no backup: $e',
-      );
+            history: history,
+            logStep: LogStepConstants.backupError,
+            logLevel: LogLevel.error,
+            logMessage: 'Erro no backup: $e',
+          );
       updateResult.fold(
         (_) {},
-        (err) => LoggerService.warning('Erro ao atualizar histórico e log: $err'),
+        (err) =>
+            LoggerService.warning('Erro ao atualizar histórico e log: $err'),
       );
 
       await _notificationService.notifyBackupComplete(history);
@@ -432,14 +503,49 @@ class BackupOrchestratorService {
     required Duration totalDuration,
     required int finalFileSize,
     required BackupType backupType,
+    BackupType? scheduleBackupType,
+    DatabaseType? databaseType,
+    BackupHistory? history,
+    SybaseLogBackupPreflightResult? sybaseLogPreflight,
   }) {
     final base = backupExecutionResult.metrics;
+    var mergedSybaseOptions = base?.sybaseOptions != null
+        ? Map<String, dynamic>.from(base!.sybaseOptions!)
+        : null;
+
+    if (databaseType == DatabaseType.sybase &&
+        scheduleBackupType != null &&
+        scheduleBackupType != backupType) {
+      mergedSybaseOptions ??= {};
+      mergedSybaseOptions['requestedBackupType'] = scheduleBackupType.name;
+    }
+
+    if (databaseType == DatabaseType.sybase) {
+      mergedSybaseOptions ??= {};
+      if (backupType == BackupType.log &&
+          sybaseLogPreflight?.baseFull != null &&
+          sybaseLogPreflight?.nextLogSequence != null) {
+        final baseFull = sybaseLogPreflight!.baseFull!;
+        mergedSybaseOptions['baseFullId'] = baseFull.id;
+        mergedSybaseOptions['chainStartAt'] =
+            (baseFull.finishedAt ?? baseFull.startedAt).toIso8601String();
+        mergedSybaseOptions['logSequence'] = sybaseLogPreflight.nextLogSequence;
+      } else if ((backupType == BackupType.full ||
+              backupType == BackupType.fullSingle) &&
+          history != null) {
+        mergedSybaseOptions['baseFullId'] = history.id;
+        mergedSybaseOptions['chainStartAt'] =
+            history.startedAt.toIso8601String();
+      }
+    }
+
     if (base != null) {
       return base.copyWith(
         compressionDuration: compressionDuration,
         totalDuration: totalDuration,
         backupSizeBytes: finalFileSize,
         backupSpeedMbPerSec: _speedMbPerSec(finalFileSize, totalDuration),
+        sybaseOptions: mergedSybaseOptions ?? base.sybaseOptions,
       );
     }
     const defaultFlags = BackupFlags(
@@ -461,9 +567,25 @@ class BackupOrchestratorService {
     );
   }
 
+  static SybaseLogBackupMode _effectiveSybaseLogMode(
+    SybaseBackupOptions? options,
+    bool truncateLog,
+  ) {
+    if (options?.logBackupMode != null) return options!.logBackupMode!;
+    return truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only;
+  }
+
   double _speedMbPerSec(int sizeBytes, Duration duration) {
     if (duration.inSeconds <= 0) return 0;
     final sizeMb = sizeBytes / 1024 / 1024;
     return sizeMb / duration.inSeconds;
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 }

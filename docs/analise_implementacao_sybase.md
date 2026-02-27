@@ -78,11 +78,13 @@ class SybaseConfig {
 
 ### 2. **Differential (Diferencial)**
 
-- **Comportamento**: Convertido automaticamente para Full
-- **Motivo**: Sybase SQL Anywhere não suporta backup diferencial nativo via comandos de linha
-- **Implementação**: `backupType == BackupType.differential` → tratado como `BackupType.full`
-- **UI atual**: Opção não é exibida para Sybase no agendamento
-- **Compatibilidade**: Agendamentos legados com `Differential` são normalizados para `Full` ao editar/salvar
+- **Comportamento**: Convertido automaticamente para Log (Incremental / Transaction Log)
+- **Motivo**: Sybase SQL Anywhere não suporta backup diferencial nativo; o equivalente é incremental (transaction log)
+- **Implementação**: `backupType == BackupType.differential` → tratado como `BackupType.log` em runtime
+- **UI atual**:
+  - **Novos agendamentos**: Differential _não_ aparece na lista de tipos
+  - **Agendamentos legados** com `isConvertedDifferential = true`: aparece como "Incremental (Transaction Log)"
+- **Compatibilidade**: Agendamentos legados mantêm o tipo até próxima edição; ao salvar, o valor persiste
 
 ### 3. **Log (Transação)**
 
@@ -90,7 +92,7 @@ class SybaseConfig {
 - **Comando SQL (ONLY)**: `BACKUP DATABASE DIRECTORY '<path>' TRANSACTION LOG ONLY`
 - **Comando dbbackup (TRUNCATE)**: `dbbackup -t -x -c '<connection>' -y <path>`
 - **Comando dbbackup (ONLY)**: `dbbackup -t -r -c '<connection>' -y <path>`
-- **Saída**: arquivo de log dentro de um diretório por execução
+- **Saída**: pasta por execução (`<databaseName>_log_<timestamp>/`) contendo arquivo `.trn` ou `.log` gerado pelo Sybase; o código resolve o arquivo internamente via `_tryFindLogFile`
 - **Truncate Log**: Opção para liberar espaço após backup
 - **Status**: Banco ONLINE durante o backup
 
@@ -162,7 +164,7 @@ Se `dbisql` falhar, tenta `dbbackup` com as seguintes estratégias:
 - **Propósito**: Executar comandos SQL diretamente
 - **Uso**: Backup via comando `BACKUP DATABASE`
 - **Argumentos**: `-c '<connection>' -nogui '<sql_command>'`
-- **Timeout**: 2 horas
+- **Timeout**: Configurável via `backupTimeout` (padrão: 2 horas)
 
 ### 2. **dbbackup**
 
@@ -175,21 +177,20 @@ Se `dbisql` falhar, tenta `dbbackup` com as seguintes estratégias:
   - `-t -r`: Backup de log sem truncate
   - `-c '<connection>'`: String de conexão
   - `-y <path>`: Caminho de destino
-- **Timeout**: 2 horas
+- **Timeout**: Configurável via `backupTimeout` (padrão: 2 horas)
 
 ### 3. **dbvalid**
 
 - **Propósito**: Verificar integridade de arquivo `.db` de backup (preferencial)
 - **Uso**: Quando `verifyAfterBackup = true` e há backup Full com `.db` disponível
 - **Argumentos**: `-c 'UID=<user>;PWD=<pass>;DBF=<backup_file.db>'`
-- **Timeout**: 30 minutos
+- **Timeout**: Configurável via `verifyTimeout` (padrão: 30 minutos)
 
-### 4. **dbverify** (fallback)
+### 4. **dbverify** (fallback suprimido)
 
-- **Propósito**: Verificação por conexão ativa ao banco
-- **Uso**: Fallback quando `dbvalid` não é aplicável/falha
-- **Argumentos**: `-c '<connection>' -d <databaseName>`
-- **Timeout**: 30 minutos
+- **Propósito**: Verificação por conexão ativa ao banco (valida banco fonte, não o arquivo de backup)
+- **Estado**: Fallback **suprimido** até investigação em ambiente real. Quando `dbvalid` falha, o sistema reporta `verifyPolicy: 'dbvalid_falhou'` e `verificationMethod` em `sybaseOptions`.
+- **Motivo**: `dbverify` não consta na documentação oficial do SQL Anywhere (12, 16, 17); valida banco fonte, não o arquivo de backup — pode mascarar backup corrompido.
 
 ---
 
@@ -217,25 +218,21 @@ Se `dbisql` falhar, tenta `dbbackup` com as seguintes estratégias:
 
 ## ✅ Verificação de Integridade
 
-### dbvalid + dbverify (fallback)
+### Fluxo por tipo de backup
 
-Quando `verifyAfterBackup = true`, o sistema tenta:
+**Backup Full** (`verifyAfterBackup = true`):
 
-1. `dbvalid` no arquivo `.db` do backup Full (validação offline preferencial)
-2. `dbverify` por conexão (fallback)
+1. `dbvalid` no arquivo `.db` do backup (validação offline)
+2. Se falhar: fallback `dbverify` **suprimido**; reporta `verifyPolicy: 'dbvalid_falhou'` e `verificationMethod` em `sybaseOptions`
+3. Métricas: `verifyPolicy: 'dbvalid'` (sucesso) ou `'dbvalid_falhou'` (falha); `verifyDuration` reflete tempo real
 
-```dart
-dbvalid -c 'UID=<user>;PWD=<pass>;DBF=<backup_file.db>'
-dbverify -c '<connection>' -d <databaseName>
-```
+**Backup Log** (`verifyAfterBackup = true`):
 
-**Estratégias de Conexão** (em ordem):
+- Verificação _não disponível_ para arquivo de log (dbvalid exige `.db`)
+- Sistema registra explicitamente: `verifyPolicy: 'log_unavailable'`
+- Log: "Verificação não disponível para backup de log; resultado registrado como indisponível"
 
-1. `ENG=<serverName>;DBN=<databaseName>;UID=<username>;PWD=<password>`
-2. `ENG=<databaseName>;DBN=<databaseName>;UID=<username>;PWD=<password>`
-3. `ENG=<serverName>;UID=<username>;PWD=<password>`
-
-**Observação**: Se a verificação falhar em modo atual, o backup não é marcado como falha; é registrado warning.
+**Observação**: Se a verificação falhar em modo `best_effort`, o backup não é marcado como falha; é registrado warning. Em modo `strict`, o backup falha.
 
 ---
 
@@ -282,6 +279,8 @@ Future<Result<BackupExecutionResult>> executeBackup({
   String? dbbackupPath,                 // Caminho do dbbackup (opcional)
   bool truncateLog = true,              // Truncar log após backup
   bool verifyAfterBackup = false,       // Verificar integridade
+  Duration? backupTimeout,              // Timeout do backup (padrão: 2h)
+  Duration? verifyTimeout,              // Timeout da verificação (padrão: 30min)
 })
 ```
 
@@ -355,6 +354,37 @@ Para backups de log (`.trn`/`.log`):
 3. **dbvalid**: Verificação de integridade de backup Full (recomendada)
 4. **dbverify**: Verificação por conexão (fallback/opcional)
 
+### Investigação dbverify
+
+O utilitário `dbverify` **não consta** na documentação oficial do SQL Anywhere (versões 12, 16, 17). A documentação lista apenas `dbvalid`, `sa_validate` e `VALIDATE statement`. **dbverify foi confirmado no ambiente** (2026-02-27); resultado em `docs/notes/investigacao_dbverify_resultado.md`. **Fallback reativado**: quando dbvalid falha, tenta dbverify com mesma connection string (DBF=path). Antes de depender do fallback em produção:
+
+#### Procedimento de investigação (executar em ambiente com SQL Anywhere instalado)
+
+1. **Localizar binários**  
+   Em cada versão alvo (11, 12, 16, 17), verificar se existe `dbverify.exe` em:
+   - `C:\Program Files\SQL Anywhere <versão>\Bin64\`
+   - Ou equivalente em instalação customizada
+
+2. **Testar existência e sintaxe**
+
+   ```cmd
+   cd "C:\Program Files\SQL Anywhere 16\Bin64"
+   dbverify -?
+   ```
+
+   - Se existir: anotar sintaxe e opções disponíveis
+   - Se não existir: confirmar ausência e documentar
+
+3. **Testar validação (se existir)**
+   - Executar backup Full de um banco de teste
+   - Executar `dbverify -c "<conn>" -d <database>` no banco fonte
+   - Verificar se valida o banco em execução ou o arquivo de backup
+
+4. **Decisão documentada**
+   - Usar template: `docs/notes/investigacao_dbverify_resultado_TEMPLATE.md`
+   - **Existir e validar backup**: reativar fallback no código
+   - **Existir mas validar apenas banco fonte** ou **Não existir**: manter fallback suprimido (estado atual)
+
 ### Caminhos de Instalação Padrão
 
 #### Sybase SQL Anywhere 16 (64-bit)
@@ -418,17 +448,18 @@ As ferramentas devem estar no PATH do sistema ou do usuário. Consulte `docs/pat
 
 ### 4. Verificação de Integridade (Opcional)
 
-- Se `verifyAfterBackup = true`, tenta `dbvalid` no arquivo do backup Full
-- Em caso de falha/indisponibilidade, tenta `dbverify` com 3 estratégias de conexão
-- Registra warning se falhar (não falha o backup)
+- **Backup Full**: Se `verifyAfterBackup = true`, tenta `dbvalid` no arquivo `.db`; em caso de falha, reporta `dbvalid_falhou` (fallback dbverify suprimido até investigação)
+- **Backup Log**: Verificação não disponível; registra `verifyPolicy: 'log_unavailable'`
+- Registra warning se falhar (modo `best_effort`; não falha o backup)
 
 ### 5. Retorno
 
 - Retorna `BackupExecutionResult` com:
   - `backupPath`: Caminho do backup criado
   - `fileSize`: Tamanho total em bytes
-  - `duration`: Duração da execução
+  - `duration`: Duração total da execução
   - `databaseName`: Nome do banco de dados
+  - `metrics`: `BackupMetrics` com `totalDuration`, `backupDuration`, `verifyDuration`, `backupSizeBytes`, `backupType`, `flags.verifyPolicy`
 
 ---
 
@@ -438,18 +469,21 @@ As ferramentas devem estar no PATH do sistema ou do usuário. Consulte `docs/pat
 
 O `BackupOrchestratorService` integra o backup Sybase com:
 
-- Compressão (ZIP/RAR)
-- Histórico de backups
-- Logs de execução
-- Notificações por e-mail
+- **Execução** do backup via `SybaseBackupService.executeBackup`
+- **Compressão** (ZIP/RAR)
+- **Histórico** de backups
+- **Logs** de execução
+- **Notificações** por e-mail
 
 ### SchedulerService
 
 O `SchedulerService` integra com:
 
-- Envio para destinos (Local, FTP, Google Drive, etc.)
-- Tratamento de falhas de upload por destino
-- Status final da execução considerando envio
+- **Envio** para destinos (Local, FTP, Google Drive, etc.)
+- **Tratamento** de falhas de upload por destino
+- **Status final** da execução considerando envio
+
+**Responsabilidades**: O envio para destinos é controlado pelo Scheduler, não pelo Orchestrator.
 
 ### ScheduleDialog
 
@@ -473,7 +507,7 @@ Na UI, o usuário pode configurar:
 | Backup Differential     | ❌ (convertido para Full) | ✅                      | ✅                              |
 | Backup Log              | ✅                        | ✅                      | ✅                              |
 | Banco ONLINE            | ✅                        | ✅                      | ✅                              |
-| Verificação Integridade | ✅ (dbvalid + dbverify)   | ✅ (RESTORE VERIFYONLY) | ✅ (pg_verifybackup/pg_restore) |
+| Verificação Integridade | ✅ (dbvalid)              | ✅ (RESTORE VERIFYONLY) | ✅ (pg_verifybackup/pg_restore) |
 | Compressão              | ✅ (ZIP/RAR)              | ✅ (ZIP/RAR)            | ✅ (ZIP/RAR)                    |
 
 ---
@@ -482,7 +516,7 @@ Na UI, o usuário pode configurar:
 
 1. **Backup Differential**: Não suportado nativamente, convertido para Full
 2. **Múltiplas Estratégias**: Necessário devido à variação nas configurações de conexão do Sybase
-3. **Timeout**: 2 horas para backup, 30 minutos para verificação
+3. **Timeout**: Configurável via `backupTimeout` (padrão 2h) e `verifyTimeout` (padrão 30min)
 4. **Arquivo de Log**: Requer aguardo adicional para liberação pelo Sybase
 
 ---
@@ -517,8 +551,20 @@ final effectiveType = (backupType == BackupType.differential ||
 
 - Documentação Sybase SQL Anywhere
 - `docs/path_setup.md` - Configuração de PATH
+- `docs/notes/procedimento_restore_drill_sybase_2026-02-27.md` - Procedimento manual de restore drill
 - `lib/infrastructure/external/process/sybase_backup_service.dart` - Implementação principal
 - `lib/domain/entities/sybase_config.dart` - Entidade de configuração
+
+---
+
+## 🔄 Restore Drill
+
+Procedimento manual para validar que backups podem ser restaurados e verificados:
+
+- **Documento**: `docs/notes/procedimento_restore_drill_sybase_2026-02-27.md`
+- **Drill Full**: executar `dbvalid` no arquivo `.db` do backup
+- **Drill Full+Log**: copiar backup, aplicar log, executar `dbvalid`
+- **Painel**: chip "Restore drill" em `SybaseBackupHealthCard` (placeholder até automação)
 
 ---
 
@@ -530,7 +576,7 @@ final effectiveType = (backupType == BackupType.differential ||
 - [x] Múltiplas estratégias de conexão
 - [x] Suporte a Full e Log backups
 - [x] Tratamento de Differential (convertido para Full)
-- [x] Verificação de integridade (dbvalid + fallback dbverify)
+- [x] Verificação de integridade (dbvalid; fallback dbverify suprimido)
 - [x] Teste de conexão
 - [x] Tratamento de erros específicos
 - [x] Integração com BackupOrchestratorService
@@ -541,4 +587,4 @@ final effectiveType = (backupType == BackupType.differential ||
 
 ---
 
-**Última atualização**: 21 de fevereiro de 2026
+**Última atualização**: 27 de fevereiro de 2026

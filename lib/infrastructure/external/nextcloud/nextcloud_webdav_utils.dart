@@ -67,6 +67,34 @@ class NextcloudWebdavUtils {
     return folderNames;
   }
 
+  static List<String> parseDirectChildNamesFromPropfind({
+    required String xmlStr,
+    required String requestedPath,
+  }) {
+    if (xmlStr.trim().isEmpty) return const [];
+
+    final requestedName = extractLastSegment(requestedPath);
+    final document = xml.XmlDocument.parse(xmlStr);
+    final responses = document.findAllElements('response', namespace: 'DAV:');
+
+    final names = <String>[];
+    for (final res in responses) {
+      final href = res
+          .findElements('href', namespace: 'DAV:')
+          .firstOrNull
+          ?.innerText;
+      if (href == null || href.isEmpty) continue;
+
+      final name = extractLastSegment(href);
+      if (name.isEmpty) continue;
+      if (requestedName.isNotEmpty && name == requestedName) continue;
+
+      names.add(name);
+    }
+
+    return names;
+  }
+
   static String extractLastSegment(String hrefOrPath) {
     final cleaned = hrefOrPath.endsWith('/')
         ? hrefOrPath.substring(0, hrefOrPath.length - 1)

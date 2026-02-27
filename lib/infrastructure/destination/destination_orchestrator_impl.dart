@@ -6,6 +6,7 @@ import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/retry_utils.dart';
+import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_destination_orchestrator.dart';
 import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
@@ -17,6 +18,7 @@ import 'package:backup_database/domain/services/i_nextcloud_destination_service.
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
+import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 class DestinationOrchestratorImpl implements IDestinationOrchestrator {
@@ -49,6 +51,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     required String sourceFilePath,
     required BackupDestination destination,
     bool Function()? isCancelled,
+    String? backupId,
   }) async {
     try {
       if (isCancelled != null && isCancelled()) {
@@ -79,6 +82,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             sourceFilePath,
             destination,
             configJson,
+            backupId,
           );
 
         case DestinationType.ftp:
@@ -87,6 +91,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             destination,
             configJson,
             isCancelled,
+            backupId,
           );
 
         case DestinationType.googleDrive:
@@ -95,6 +100,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             destination,
             configJson,
             isCancelled,
+            backupId,
           );
 
         case DestinationType.dropbox:
@@ -103,6 +109,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             destination,
             configJson,
             isCancelled,
+            backupId,
           );
 
         case DestinationType.nextcloud:
@@ -111,6 +118,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             destination,
             configJson,
             isCancelled,
+            backupId,
           );
       }
     } on Object catch (e) {
@@ -129,6 +137,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     required String sourceFilePath,
     required List<BackupDestination> destinations,
     bool Function()? isCancelled,
+    String? backupId,
   }) async {
     if (destinations.isEmpty) {
       return [];
@@ -160,6 +169,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           sourceFilePath: sourceFilePath,
           destination: entry.value,
           isCancelled: isCancelled,
+          backupId: backupId,
         ),
       );
 
@@ -176,6 +186,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String sourceFilePath,
     BackupDestination destination,
     Map<String, dynamic> configJson,
+    String? backupId,
   ) async {
     final config = LocalDestinationConfig(
       path: configJson['path'] as String,
@@ -197,9 +208,17 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       '(${config.path})',
     );
 
+    final customFileName = backupId != null
+        ? SybaseBackupPathSuffix.buildDestinationName(
+            p.basename(sourceFilePath),
+            backupId,
+          )
+        : null;
+
     final uploadResult = await _localDestinationService.upload(
       sourceFilePath: sourceFilePath,
       config: config,
+      customFileName: customFileName,
     );
 
     return uploadResult.fold(
@@ -227,6 +246,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     BackupDestination destination,
     Map<String, dynamic> configJson,
     bool Function()? isCancelled,
+    String? backupId,
   ) async {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
     if (!breaker.allowsRequest) {
@@ -266,9 +286,16 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             ),
           );
         }
+        final customFileName = backupId != null
+            ? SybaseBackupPathSuffix.buildDestinationName(
+                p.basename(sourceFilePath),
+                backupId,
+              )
+            : null;
         return _sendToFtp.call(
           sourceFilePath: sourceFilePath,
           config: config,
+          customFileName: customFileName,
           isCancelled: isCancelled,
         );
       },
@@ -301,6 +328,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     BackupDestination destination,
     Map<String, dynamic> configJson,
     bool Function()? isCancelled,
+    String? backupId,
   ) async {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
     if (!breaker.allowsRequest) {
@@ -333,9 +361,16 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             ),
           );
         }
+        final customFileName = backupId != null
+            ? SybaseBackupPathSuffix.buildDestinationName(
+                p.basename(sourceFilePath),
+                backupId,
+              )
+            : null;
         return _googleDriveDestinationService.upload(
           sourceFilePath: sourceFilePath,
           config: config,
+          customFileName: customFileName,
         );
       },
       operationName: 'Upload Google Drive ${destination.name}',
@@ -357,6 +392,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     BackupDestination destination,
     Map<String, dynamic> configJson,
     bool Function()? isCancelled,
+    String? backupId,
   ) async {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
     if (!breaker.allowsRequest) {
@@ -387,9 +423,16 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             ),
           );
         }
+        final customFileName = backupId != null
+            ? SybaseBackupPathSuffix.buildDestinationName(
+                p.basename(sourceFilePath),
+                backupId,
+              )
+            : null;
         return _sendToDropbox.call(
           sourceFilePath: sourceFilePath,
           config: config,
+          customFileName: customFileName,
         );
       },
       operationName: 'Upload Dropbox ${destination.name}',
@@ -411,6 +454,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     BackupDestination destination,
     Map<String, dynamic> configJson,
     bool Function()? isCancelled,
+    String? backupId,
   ) async {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
     if (!breaker.allowsRequest) {
@@ -438,9 +482,16 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             ),
           );
         }
+        final customFileName = backupId != null
+            ? SybaseBackupPathSuffix.buildDestinationName(
+                p.basename(sourceFilePath),
+                backupId,
+              )
+            : null;
         return _sendToNextcloud.call(
           sourceFilePath: sourceFilePath,
           config: config,
+          customFileName: customFileName,
         );
       },
       operationName: 'Upload Nextcloud ${destination.name}',

@@ -12,6 +12,7 @@ class BackupMetrics {
     this.compressionDuration = Duration.zero,
     this.uploadDuration = Duration.zero,
     this.cleanupDuration = Duration.zero,
+    this.sybaseOptions,
   });
 
   final Duration totalDuration;
@@ -24,6 +25,7 @@ class BackupMetrics {
   final Duration compressionDuration;
   final Duration uploadDuration;
   final Duration cleanupDuration;
+  final Map<String, dynamic>? sybaseOptions;
 
   BackupMetrics copyWith({
     Duration? totalDuration,
@@ -36,6 +38,7 @@ class BackupMetrics {
     Duration? compressionDuration,
     Duration? uploadDuration,
     Duration? cleanupDuration,
+    Map<String, dynamic>? sybaseOptions,
   }) {
     return BackupMetrics(
       totalDuration: totalDuration ?? this.totalDuration,
@@ -48,6 +51,7 @@ class BackupMetrics {
       compressionDuration: compressionDuration ?? this.compressionDuration,
       uploadDuration: uploadDuration ?? this.uploadDuration,
       cleanupDuration: cleanupDuration ?? this.cleanupDuration,
+      sybaseOptions: sybaseOptions ?? this.sybaseOptions,
     );
   }
 
@@ -68,6 +72,8 @@ class BackupMetrics {
           'withChecksum': flags.withChecksum,
           'stopOnError': flags.stopOnError,
         },
+        if (sybaseOptions != null && sybaseOptions!.isNotEmpty)
+          'sybaseOptions': sybaseOptions,
       };
 
   static BackupMetrics? fromJson(String? jsonStr) {
@@ -100,6 +106,15 @@ class BackupMetrics {
               withChecksum: false,
               stopOnError: true,
             );
+      final sybaseOptionsMap = map['sybaseOptions'] as Map?;
+      final sybaseOptions = sybaseOptionsMap != null
+          ? Map<String, dynamic>.from(
+              sybaseOptionsMap.map(
+                (k, v) => MapEntry(k.toString(), v),
+              ),
+            )
+          : null;
+
       return BackupMetrics(
         totalDuration: Duration(milliseconds: totalMs),
         backupDuration: Duration(milliseconds: backupMs),
@@ -112,6 +127,7 @@ class BackupMetrics {
             (map['backupSpeedMbPerSec'] as num?)?.toDouble() ?? 0,
         backupType: map['backupType'] as String? ?? 'full',
         flags: flags,
+        sybaseOptions: sybaseOptions,
       );
     } on Object {
       return null;

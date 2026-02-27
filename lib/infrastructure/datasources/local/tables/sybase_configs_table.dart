@@ -10,6 +10,8 @@ class SybaseConfigsTable extends Table {
   TextColumn get username => text()();
   TextColumn get password => text()(); // Criptografado
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  BoolColumn get isReplicationEnvironment =>
+      boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 

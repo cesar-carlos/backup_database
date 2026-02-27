@@ -5,6 +5,7 @@ import 'package:backup_database/core/constants/destination_retry_constants.dart'
 import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -571,6 +572,43 @@ class DropboxDestinationService implements IDropboxDestinationService {
     }
   }
 
+  Future<bool> _folderHasProtectedFile(
+    Dio dio,
+    String folderPath,
+    Set<String> protectedShortIds,
+  ) async {
+    if (protectedShortIds.isEmpty) return false;
+
+    try {
+      final entries = await _executeWithTokenRefresh(() async {
+        final response = await dio.post(
+          '/2/files/list_folder',
+          data: {'path': folderPath},
+        );
+        final data = response.data as Map<String, dynamic>?;
+        return data?['entries'] as List<dynamic>? ?? [];
+      });
+
+      for (final entry in entries) {
+        final entryData = entry as Map<String, dynamic>;
+        final tag = entryData['.tag'] as String?;
+        if (tag != 'file') continue;
+
+        final name = entryData['name'] as String?;
+        if (name != null &&
+            SybaseBackupPathSuffix.isPathProtected(name, protectedShortIds)) {
+          return true;
+        }
+      }
+    } on Object catch (e, s) {
+      LoggerService.debug(
+        'Erro ao listar pasta Dropbox: $folderPath — $e',
+        s,
+      );
+    }
+    return false;
+  }
+
   @override
   Future<rd.Result<bool>> testConnection(
     DropboxDestinationConfig config,
@@ -649,6 +687,18 @@ class DropboxDestinationService implements IDropboxDestinationService {
         try {
           final folderDate = DateFormat('yyyy-MM-dd').parse(folderName);
           if (folderDate.isBefore(cutoffDate)) {
+            final hasProtectedFile = await _folderHasProtectedFile(
+              dio,
+              folderPath,
+              config.protectedBackupIdShortPrefixes,
+            );
+            if (hasProtectedFile) {
+              LoggerService.debug(
+                'Pasta Dropbox protegida (retenção Sybase): $folderName',
+              );
+              continue;
+            }
+
             await _executeWithTokenRefresh(() async {
               await dio.post('/2/files/delete_v2', data: {'path': folderPath});
             });

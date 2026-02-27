@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
+import 'package:backup_database/core/constants/backup_constants.dart';
 import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/core/errors/failure.dart';
@@ -12,7 +13,8 @@ import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
-import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/entities/schedule.dart'
+    show DatabaseType, Schedule;
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/i_backup_cleanup_service.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
@@ -132,8 +134,7 @@ class SchedulerService implements ISchedulerService {
     if (_executingSchedules.isNotEmpty) return;
 
     final now = DateTime.now();
-    final result =
-        await _scheduleRepository.getEnabledDueForExecution(now);
+    final result = await _scheduleRepository.getEnabledDueForExecution(now);
 
     result.fold((schedules) async {
       if (schedules.isEmpty) return;
@@ -240,7 +241,10 @@ class SchedulerService implements ISchedulerService {
         final message = failure is Failure
             ? failure.message
             : failure.toString();
-        LoggerService.error('Execução bloqueada por licença: $message', failure);
+        LoggerService.error(
+          'Execução bloqueada por licença: $message',
+          failure,
+        );
         return rd.Failure(failure);
       }
 
@@ -289,11 +293,11 @@ class SchedulerService implements ISchedulerService {
         );
         final updateResult = await _backupHistoryRepository
             .updateHistoryAndLogIfRunning(
-          history: failedHistory,
-          logStep: LogStepConstants.backupFileNotFound,
-          logLevel: LogLevel.error,
-          logMessage: errorMessage,
-        );
+              history: failedHistory,
+              logStep: LogStepConstants.backupFileNotFound,
+              logLevel: LogLevel.error,
+              logMessage: errorMessage,
+            );
         updateResult.fold(
           (_) {},
           (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
@@ -348,11 +352,11 @@ class SchedulerService implements ISchedulerService {
         );
         final updateResult = await _backupHistoryRepository
             .updateHistoryAndLogIfRunning(
-          history: failedHistory,
-          logStep: LogStepConstants.backupFileNotFound,
-          logLevel: LogLevel.error,
-          logMessage: errorMessage,
-        );
+              history: failedHistory,
+              logStep: LogStepConstants.backupFileNotFound,
+              logLevel: LogLevel.error,
+              logMessage: errorMessage,
+            );
         updateResult.fold(
           (_) {},
           (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
@@ -366,11 +370,16 @@ class SchedulerService implements ISchedulerService {
       }
 
       final uploadStopwatch = Stopwatch()..start();
-      final sendResults = await _destinationOrchestrator.uploadToAllDestinations(
-        sourceFilePath: backupHistory.backupPath,
-        destinations: destinations,
-        isCancelled: () => _cancelRequestedSchedules.contains(schedule.id),
-      );
+      final backupIdForPath = schedule.databaseType == DatabaseType.sybase
+          ? backupHistory.id
+          : null;
+      final sendResults = await _destinationOrchestrator
+          .uploadToAllDestinations(
+            sourceFilePath: backupHistory.backupPath,
+            destinations: destinations,
+            isCancelled: () => _cancelRequestedSchedules.contains(schedule.id),
+            backupId: backupIdForPath,
+          );
       uploadStopwatch.stop();
       final uploadDuration = uploadStopwatch.elapsed;
       _metricsCollector?.recordHistogram(
@@ -421,11 +430,12 @@ class SchedulerService implements ISchedulerService {
         );
         final updateResult = await _backupHistoryRepository
             .updateHistoryAndLogIfRunning(
-          history: failedHistory,
-          logStep: LogStepConstants.uploadFailed,
-          logLevel: LogLevel.error,
-          logMessage: 'Falha ao enviar backup para destinos:\n$errorMessage',
-        );
+              history: failedHistory,
+              logStep: LogStepConstants.uploadFailed,
+              logLevel: LogLevel.error,
+              logMessage:
+                  'Falha ao enviar backup para destinos:\n$errorMessage',
+            );
         updateResult.fold(
           (_) {},
           (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
@@ -565,6 +575,7 @@ class SchedulerService implements ISchedulerService {
       await _cleanupService.cleanOldBackups(
         destinations: destinations,
         backupHistoryId: backupHistory.id,
+        schedule: schedule,
       );
       cleanupStopwatch.stop();
       final cleanupDuration = cleanupStopwatch.elapsed;
@@ -575,9 +586,12 @@ class SchedulerService implements ISchedulerService {
         cleanupDuration,
       );
       if (updatedMetrics != null) {
-        final historyWithMetrics = backupHistory.copyWith(metrics: updatedMetrics);
-        final updateResult =
-            await _backupHistoryRepository.update(historyWithMetrics);
+        final historyWithMetrics = backupHistory.copyWith(
+          metrics: updatedMetrics,
+        );
+        final updateResult = await _backupHistoryRepository.update(
+          historyWithMetrics,
+        );
         updateResult.fold(
           (_) {},
           (e) => LoggerService.warning(
@@ -701,11 +715,11 @@ class SchedulerService implements ISchedulerService {
       );
       final updateResult = await _backupHistoryRepository
           .updateHistoryAndLogIfRunning(
-        history: canceledHistory,
-        logStep: LogStepConstants.backupCancelled,
-        logLevel: LogLevel.warning,
-        logMessage: message,
-      );
+            history: canceledHistory,
+            logStep: LogStepConstants.backupCancelled,
+            logLevel: LogLevel.warning,
+            logMessage: message,
+          );
       updateResult.fold(
         (_) {},
         (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
@@ -818,17 +832,18 @@ class SchedulerService implements ISchedulerService {
     Directory directory,
     Schedule schedule,
   ) async {
-    const defaultMinFreeBytes = 5 * 1024 * 1024;
-
     final result = await _storageChecker.checkSpace(directory.path);
 
     return result.fold(
       (spaceInfo) {
-        if (!spaceInfo.hasEnoughSpace(defaultMinFreeBytes)) {
+        if (!spaceInfo.hasEnoughSpace(
+          BackupConstants.minFreeSpaceForBackupBytes,
+        )) {
           final errorMessage =
               'Espaço livre insuficiente na pasta de backup. '
               'Disponível: ${_formatBytes(spaceInfo.freeBytes)}, '
-              'Mínimo necessário: ${_formatBytes(defaultMinFreeBytes)}';
+              'Mínimo necessário: '
+              '${_formatBytes(BackupConstants.minFreeSpaceForBackupBytes)}';
           LoggerService.error(errorMessage);
           return rd.Failure(ValidationFailure(message: errorMessage));
         }

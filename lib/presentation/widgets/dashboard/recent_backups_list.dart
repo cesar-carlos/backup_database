@@ -60,6 +60,13 @@ class RecentBackupsList extends StatelessWidget {
                   ),
                 ],
               ),
+              if (_hasSybaseDetails(backup)) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _buildSybaseDetailsText(context, backup),
+                  style: FluentTheme.of(context).typography.caption,
+                ),
+              ],
             ],
           ),
           trailing: Text(
@@ -126,6 +133,60 @@ class RecentBackupsList extends StatelessWidget {
       case BackupType.log:
       case BackupType.convertedLog:
         return FluentIcons.database_view;
+    }
+  }
+
+  bool _hasSybaseDetails(BackupHistory backup) =>
+      backup.databaseType.toLowerCase() == 'sybase' &&
+      backup.metrics != null;
+
+  String _buildSybaseDetailsText(BuildContext context, BackupHistory backup) {
+    final parts = <String>[];
+    final requestedType =
+        backup.metrics?.sybaseOptions?['requestedBackupType'] as String?;
+    if (requestedType != null &&
+        requestedType != backup.backupType &&
+        requestedType.isNotEmpty) {
+      final requestedDisplay =
+          backupTypeFromString(requestedType).displayName;
+      final effectiveDisplay =
+          backupTypeFromString(backup.backupType).displayName;
+      parts.add(_t(
+        context,
+        'Solicitado: $requestedDisplay → Efetivo: $effectiveDisplay',
+        'Requested: $requestedDisplay → Effective: $effectiveDisplay',
+      ));
+    }
+    final method = backup.metrics?.sybaseOptions?['backupMethod'] as String?;
+    if (method != null) {
+      parts.add(_t(context, 'Ferramenta: $method', 'Tool: $method'));
+    }
+    final verify = backup.metrics?.flags.verifyPolicy;
+    if (verify != null && verify != 'none') {
+      final verifyLabel = _formatVerifyPolicy(context, verify);
+      parts.add(_t(
+        context,
+        'Verificação: $verifyLabel',
+        'Verify: $verifyLabel',
+      ));
+    }
+    return parts.join(' • ');
+  }
+
+  String _formatVerifyPolicy(BuildContext context, String policy) {
+    switch (policy) {
+      case 'log_unavailable':
+        return _t(context, 'indisponível (log)', 'unavailable (log)');
+      case 'dbvalid':
+        return 'dbvalid';
+      case 'dbverify':
+        return 'dbverify';
+      case 'dbvalid_falhou':
+        return _t(context, 'dbvalid falhou', 'dbvalid failed');
+      case 'dbvalid/dbverify':
+        return 'dbvalid';
+      default:
+        return policy;
     }
   }
 

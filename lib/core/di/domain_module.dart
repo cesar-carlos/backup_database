@@ -133,6 +133,11 @@ Future<void> setupDomainModule(GetIt getIt) async {
   getIt.registerLazySingleton<ValidateBackupDirectory>(
     ValidateBackupDirectory.new,
   );
+  getIt.registerLazySingleton<ValidateSybaseLogBackupPreflight>(
+    () => ValidateSybaseLogBackupPreflight(
+      getIt<IBackupHistoryRepository>(),
+    ),
+  );
 
   // Scheduling Use Cases
   getIt.registerLazySingleton<CreateSchedule>(

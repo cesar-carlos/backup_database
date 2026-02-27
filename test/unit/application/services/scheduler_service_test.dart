@@ -350,9 +350,25 @@ void main() {
           () => notificationService.notifyBackupComplete(any()),
         ).thenAnswer((_) async => const rd.Success(true));
         when(
+          () => destinationOrchestrator.uploadToAllDestinations(
+            sourceFilePath: any(named: 'sourceFilePath'),
+            destinations: any(named: 'destinations'),
+            isCancelled: any(named: 'isCancelled'),
+            backupId: any(named: 'backupId'),
+          ),
+        ).thenAnswer((invocation) async {
+          final dests = invocation.namedArguments[#destinations]
+              as List<BackupDestination>;
+          return List.generate(
+            dests.length,
+            (_) => const rd.Success(()),
+          );
+        });
+        when(
           () => cleanupService.cleanOldBackups(
             destinations: any(named: 'destinations'),
             backupHistoryId: any(named: 'backupHistoryId'),
+            schedule: any(named: 'schedule'),
           ),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
         when(
@@ -414,6 +430,8 @@ void main() {
           () => destinationOrchestrator.uploadToAllDestinations(
             sourceFilePath: any(named: 'sourceFilePath'),
             destinations: any(named: 'destinations'),
+            isCancelled: any(named: 'isCancelled'),
+            backupId: any(named: 'backupId'),
           ),
         ).thenAnswer(
           (_) async => [

@@ -7,6 +7,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/nextcloud_failure.dart';
 import 'package:backup_database/core/utils/file_stream_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -252,6 +253,20 @@ class NextcloudDestinationService implements INextcloudDestinationService {
           final folderDate = DateFormat('yyyy-MM-dd').parse(folderName);
           if (folderDate.isBefore(cutoffDate)) {
             final folderPath = _joinRemote(baseFolderPath, folderName);
+
+            final hasProtectedFile = await _folderHasProtectedFile(
+              dio: dio,
+              config: config,
+              folderPath: folderPath,
+              protectedShortIds: config.protectedBackupIdShortPrefixes,
+            );
+            if (hasProtectedFile) {
+              LoggerService.debug(
+                'Pasta Nextcloud protegida (retenção Sybase): $folderName',
+              );
+              continue;
+            }
+
             final deleteUrl = NextcloudWebdavUtils.buildDavUrl(
               serverUrl: config.serverUrl,
               username: config.username,
@@ -373,6 +388,61 @@ class NextcloudDestinationService implements INextcloudDestinationService {
       }
       rethrow;
     }
+  }
+
+  Future<bool> _folderHasProtectedFile({
+    required Dio dio,
+    required NextcloudDestinationConfig config,
+    required String folderPath,
+    required Set<String> protectedShortIds,
+  }) async {
+    if (protectedShortIds.isEmpty) return false;
+
+    try {
+      final url = NextcloudWebdavUtils.buildDavUrl(
+        serverUrl: config.serverUrl,
+        username: config.username,
+        path: folderPath,
+      );
+
+      const propfindBody = '''
+<?xml version="1.0" encoding="utf-8" ?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:resourcetype />
+  </d:prop>
+</d:propfind>
+''';
+
+      final response = await dio.requestUri(
+        url,
+        data: propfindBody,
+        options: Options(
+          method: 'PROPFIND',
+          headers: {'Depth': '1', 'Content-Type': 'application/xml'},
+        ),
+      );
+
+      final data = response.data;
+      final xmlStr = data is String ? data : data?.toString() ?? '';
+      if (xmlStr.isEmpty) return false;
+
+      final names = NextcloudWebdavUtils.parseDirectChildNamesFromPropfind(
+        xmlStr: xmlStr,
+        requestedPath: url.path,
+      );
+
+      for (final name in names) {
+        if (SybaseBackupPathSuffix.isPathProtected(name, protectedShortIds)) {
+          return true;
+        }
+      }
+    } on Object catch (e) {
+      LoggerService.debug(
+        'Nextcloud: erro ao listar pasta $folderPath — $e',
+      );
+    }
+    return false;
   }
 
   Future<List<String>> _listCollections({

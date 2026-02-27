@@ -183,9 +183,14 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
 
       rd.Result<void>? result;
       var lastError = '';
+      var strategyIndex = 0;
 
       for (final connStr in dbisqlConnections) {
-        LoggerService.debug('Tentando executar script com: $connStr');
+        strategyIndex++;
+        LoggerService.debug(
+          'Tentando executar script com estratégia '
+          '$strategyIndex/${dbisqlConnections.length}',
+        );
 
         final dbisqlArgs = ['-c', connStr, '-nogui', script];
 
@@ -199,7 +204,8 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
           (processResult) {
             if (processResult.isSuccess) {
               LoggerService.info(
-                'Script SQL executado com sucesso no Sybase com: $connStr',
+                'Script SQL executado com sucesso no Sybase '
+                'com estratégia $strategyIndex',
               );
               result = const rd.Success(unit);
             } else {

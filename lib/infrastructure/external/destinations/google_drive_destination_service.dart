@@ -8,6 +8,7 @@ import 'package:backup_database/core/errors/failure.dart'
 import 'package:backup_database/core/errors/google_drive_failure.dart';
 import 'package:backup_database/core/utils/file_stream_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -365,6 +366,18 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
           if (folderDate.isBefore(cutoffDate)) {
             final folderId = folder.id as String?;
             if (folderId == null) continue;
+
+            final hasProtectedFile = await _folderHasProtectedFile(
+              folderId,
+              config.protectedBackupIdShortPrefixes,
+            );
+            if (hasProtectedFile) {
+              LoggerService.debug(
+                'Pasta Google Drive protegida (retenção Sybase): $folderName',
+              );
+              continue;
+            }
+
             await _executeWithTokenRefresh(() async {
               final clientResult = await _getAuthenticatedClient();
               if (clientResult.isError()) {
@@ -399,6 +412,39 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
         ),
       );
     }
+  }
+
+  Future<bool> _folderHasProtectedFile(
+    String folderId,
+    Set<String> protectedShortIds,
+  ) async {
+    if (protectedShortIds.isEmpty) return false;
+
+    final result = await _executeWithTokenRefresh(() async {
+      final clientResult = await _getAuthenticatedClient();
+      if (clientResult.isError()) {
+        throw clientResult.exceptionOrNull()!;
+      }
+
+      final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
+      final query =
+          "'$folderId' in parents and trashed = false";
+
+      return driveApi.files.list(
+        q: query,
+        spaces: 'drive',
+        $fields: 'files(name)',
+      );
+    });
+
+    for (final file in result.files ?? []) {
+      final name = file.name as String?;
+      if (name != null &&
+          SybaseBackupPathSuffix.isPathProtected(name, protectedShortIds)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<rd.Result<List<drive.File>>> listBackups({

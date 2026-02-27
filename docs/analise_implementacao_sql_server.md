@@ -15,20 +15,24 @@ A documentacao antiga estava desatualizada em pontos importantes, principalmente
 ## O que esta implementado no codigo
 
 1. Configuracao SQL Server
+
 - entidade: `SqlServerConfig`
 - provider: `SqlServerConfigProvider`
 - repositorio: `SqlServerConfigRepository`
 - persistencia local: tabela `sql_server_configs_table`
 
 2. Seguranca de senha
+
 - senha e salva via `ISecureCredentialService`;
 - tabela local guarda `password` vazio (`''`);
 - senha real e lida por chave segura `sql_server_password_<id>`.
 
 3. Validacao de ferramenta
+
 - `SqlServerConfigProvider` valida `sqlcmd` em `createConfig` e `updateConfig` via `ToolVerificationService.verifySqlCmd`.
 
 4. Integracao de execucao
+
 - `BackupOrchestratorService` chama `ISqlServerBackupService.executeBackup`;
 - compressao e script pos-backup continuam no orchestrator;
 - envio para destinos e notificacao final ocorrem no `SchedulerService`.
@@ -36,17 +40,20 @@ A documentacao antiga estava desatualizada em pontos importantes, principalmente
 ## Estrategias de backup (comportamento real)
 
 ### 1) Full
+
 - comando: `BACKUP DATABASE`
 - extensao: `.bak`
 - clausulas: `NOFORMAT, INIT, SKIP, NOREWIND, NOUNLOAD, STATS = 10`
 - opcional: `CHECKSUM` quando `enableChecksum=true`
 
 ### 2) Differential
+
 - comando: `BACKUP DATABASE ... WITH DIFFERENTIAL`
 - extensao: `.bak`
 - mesmas opcoes de integridade/logistica do full
 
 ### 3) Log
+
 - comando: `BACKUP LOG`
 - extensao: `.trn`
 - `truncateLog=true`: sem `COPY_ONLY`
@@ -54,6 +61,7 @@ A documentacao antiga estava desatualizada em pontos importantes, principalmente
 - opcional: `CHECKSUM`
 
 ### 4) Full Single
+
 - no servico SQL Server, existe branch para `BackupType.fullSingle`;
 - no fluxo real de agendamento, para bancos nao-PostgreSQL, o orchestrator converte `fullSingle` para `full`;
 - na UI de agendamento SQL Server, `fullSingle` nao e ofertado.
@@ -86,11 +94,13 @@ Comportamento:
 ## Teste de conexao e listagem de bancos
 
 1. Teste de conexao
+
 - query: `SELECT @@VERSION`
 - timeout do sqlcmd: `-t 5`
 - timeout do processo: 10 segundos
 
 2. Listagem de bancos
+
 - query:
   `SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb') ORDER BY name`
 - argumentos adicionais: `-h -1`, `-W`, `-t 10`

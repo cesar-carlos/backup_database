@@ -14,17 +14,20 @@ Porem, o documento anterior superestimava o estado atual em alguns pontos:
 ## O que esta implementado no codigo
 
 1. Configuracao PostgreSQL
+
 - entidade: `PostgresConfig`
 - provider: `PostgresConfigProvider`
 - repositorio: `PostgresConfigRepository`
 - persistencia local: tabela `postgres_configs_table`
 
 2. Seguranca de senha
+
 - senha e salva via `ISecureCredentialService`
 - tabela local guarda `password` vazio (`''`)
 - senha real e buscada por chave segura (`postgres_password_<id>`)
 
 3. Integracao de execucao
+
 - `BackupOrchestratorService` chama `IPostgresBackupService`
 - compressao continua no orchestrator apos gerar backup bruto
 - UI de agendamento permite os tipos PostgreSQL: `full`, `fullSingle`, `differential`, `log`
@@ -32,12 +35,14 @@ Porem, o documento anterior superestimava o estado atual em alguns pontos:
 ## Estrategias (comportamento real)
 
 ### 1) Full
+
 - ferramenta: `pg_basebackup`
 - argumentos principais: `-D`, `-P`, `--manifest-checksums=sha256`, `--wal-method=stream`
 - saida: diretorio
 - verificacao opcional: `pg_verifybackup -D <backupPath>` (quando `verifyAfterBackup=true`)
 
 ### 2) Full Single
+
 - ferramenta: `pg_dump`
 - argumentos principais: `-F c`, `-f <arquivo.backup>`, `--no-owner`, `--no-privileges`
 - escopo: banco configurado (`config.database`)
@@ -45,6 +50,7 @@ Porem, o documento anterior superestimava o estado atual em alguns pontos:
 - verificacao opcional: `pg_restore -l <arquivo.backup>`
 
 ### 3) Differential (incremental)
+
 - tentativa: `pg_basebackup --incremental=<manifest anterior>`
 - requisito tecnico: encontrar FULL anterior com `backup_manifest`
 - busca de FULL anterior: pasta atual + pasta irma `Full`
@@ -52,6 +58,7 @@ Porem, o documento anterior superestimava o estado atual em alguns pontos:
 - no fallback, o path final e ajustado para sufixo `_full_` (nao permanece `_incremental_`)
 
 ### 4) Log
+
 - ferramenta: `pg_receivewal`
 - modo: one-shot com `--endpos=<LSN atual>` e `--no-loop`
 - preparacao: consulta LSN atual via `psql` (`SELECT pg_current_wal_lsn();`)

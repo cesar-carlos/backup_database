@@ -9,6 +9,7 @@ O PATH é uma variável de ambiente do Windows que contém uma lista de diretór
 ## Por que configurar o PATH?
 
 O Backup Database precisa executar comandos externos:
+
 - **sqlcmd** - Para backups do SQL Server
 - **dbbackup** - Para backups do Sybase SQL Anywhere
 
@@ -61,26 +62,31 @@ setx /M PATH "%PATH%;C:\Caminho\Para\Ferramenta"
 ### SQL Server (sqlcmd.exe)
 
 #### SQL Server 2019+ (SQL Server Management Studio):
+
 ```
 C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn
 ```
 
 #### SQL Server 2017:
+
 ```
 C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\130\Tools\Binn
 ```
 
 #### SQL Server 2016:
+
 ```
 C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\130\Tools\Binn
 ```
 
 #### SQL Server Command Line Utilities (instalação standalone):
+
 ```
 C:\Program Files\Microsoft SQL Server Client SDK\ODBC\170\Tools\Binn
 ```
 
 #### Para encontrar o caminho exato:
+
 1. Abra o **Explorador de Arquivos**
 2. Navegue até `C:\Program Files\Microsoft SQL Server\`
 3. Procure por `sqlcmd.exe` usando a busca do Windows
@@ -89,26 +95,31 @@ C:\Program Files\Microsoft SQL Server Client SDK\ODBC\170\Tools\Binn
 ### Sybase SQL Anywhere (dbbackup.exe)
 
 #### Sybase SQL Anywhere 17:
+
 ```
 C:\Program Files\SAP\SQL Anywhere 17\Bin64
 ```
 
 #### Sybase SQL Anywhere 16:
+
 ```
 C:\Program Files\SAP\SQL Anywhere 16\Bin64
 ```
 
 #### Sybase SQL Anywhere 12:
+
 ```
 C:\Program Files\SQL Anywhere 12\Bin64
 ```
 
 #### Sybase SQL Anywhere 11:
+
 ```
 C:\Program Files\SQL Anywhere 11\Bin64
 ```
 
 #### Para encontrar o caminho exato:
+
 1. Abra o **Explorador de Arquivos**
 2. Navegue até `C:\Program Files\` (ou `C:\Program Files (x86)\`)
 3. Procure por pastas que contenham "SQL Anywhere" ou "SAP"
@@ -141,12 +152,14 @@ dbbackup -?
 ## Configuração por Usuário vs Sistema
 
 ### PATH do Sistema (Recomendado)
+
 - **Localização**: Variáveis do sistema → `Path`
 - **Acesso**: Todos os usuários do computador
 - **Requer**: Privilégios de administrador
 - **Uso**: Quando múltiplos usuários precisam usar as ferramentas
 
 ### PATH do Usuário
+
 - **Localização**: Variáveis do usuário → `Path`
 - **Acesso**: Apenas o usuário atual
 - **Requer**: Privilégios de usuário normal
@@ -157,6 +170,7 @@ dbbackup -?
 ### Problema: "sqlcmd não é reconhecido"
 
 **Soluções:**
+
 1. Verifique se o SQL Server está instalado
 2. Verifique se o caminho está correto no PATH
 3. Reinicie o terminal após adicionar ao PATH
@@ -165,6 +179,7 @@ dbbackup -?
 ### Problema: "dbbackup não é reconhecido"
 
 **Soluções:**
+
 1. Verifique se o Sybase SQL Anywhere está instalado
 2. Verifique se está usando o caminho `Bin64` (não apenas `Bin`)
 3. Reinicie o terminal após adicionar ao PATH
@@ -173,12 +188,14 @@ dbbackup -?
 ### Problema: "Acesso negado" ao editar PATH
 
 **Solução:**
+
 - Execute o PowerShell ou CMD como **Administrador**
 - Ou use o Método 1 (Interface Gráfica) com privilégios de administrador
 
 ### Problema: PATH foi adicionado mas ainda não funciona
 
 **Soluções:**
+
 1. **Feche completamente** todos os terminais e aplicações
 2. **Reinicie o Backup Database** se estiver rodando
 3. Verifique se não há espaços extras ou caracteres inválidos no caminho

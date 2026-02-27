@@ -39,6 +39,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           COALESCE(port, 2638) as port,
           username, password, 
           COALESCE(enabled, 1) as enabled,
+          COALESCE(is_replication_environment, 0) as is_replication_environment,
           created_at, updated_at
         FROM sybase_configs_table
         ''',
@@ -126,6 +127,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           COALESCE(port, 2638) as port,
           username, password, 
           COALESCE(enabled, 1) as enabled,
+          COALESCE(is_replication_environment, 0) as is_replication_environment,
           created_at, updated_at
         FROM sybase_configs_table
         WHERE id = ?
@@ -198,8 +200,9 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         '''
         INSERT INTO sybase_configs_table (
           id, name, server_name, database_name, database_file, port,
-          username, password, enabled, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          username, password, enabled, is_replication_environment,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         [
           config.id,
@@ -211,6 +214,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           config.username,
           '',
           if (config.enabled) 1 else 0,
+          if (config.isReplicationEnvironment) 1 else 0,
           config.createdAt.millisecondsSinceEpoch,
           config.updatedAt.millisecondsSinceEpoch,
         ],
@@ -245,7 +249,8 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         '''
         UPDATE sybase_configs_table SET
           name = ?, server_name = ?, database_name = ?, database_file = ?,
-          port = ?, username = ?, password = ?, enabled = ?, updated_at = ?
+          port = ?, username = ?, password = ?, enabled = ?,
+          is_replication_environment = ?, updated_at = ?
         WHERE id = ?
         ''',
         [
@@ -257,6 +262,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           config.username,
           '',
           if (config.enabled) 1 else 0,
+          if (config.isReplicationEnvironment) 1 else 0,
           DateTime.now().millisecondsSinceEpoch,
           config.id,
         ],
@@ -325,6 +331,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
           COALESCE(port, 2638) as port,
           username, password, 
           COALESCE(enabled, 1) as enabled,
+          COALESCE(is_replication_environment, 0) as is_replication_environment,
           created_at, updated_at
         FROM sybase_configs_table
         WHERE enabled = 1
@@ -381,10 +388,12 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     final port = row.read<int>('port');
     final username = row.read<String>('username');
     final enabledInt = row.read<int>('enabled');
+    final isReplicationInt = row.read<int>('is_replication_environment');
     final createdAtInt = row.read<int>('created_at');
     final updatedAtInt = row.read<int>('updated_at');
 
     final enabled = enabledInt == 1;
+    final isReplicationEnvironment = isReplicationInt == 1;
     final createdAt = DateTime.fromMillisecondsSinceEpoch(createdAtInt);
     final updatedAt = DateTime.fromMillisecondsSinceEpoch(updatedAtInt);
 
@@ -409,6 +418,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       username: username,
       password: password,
       enabled: enabled,
+      isReplicationEnvironment: isReplicationEnvironment,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

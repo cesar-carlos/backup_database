@@ -46,6 +46,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   final _passwordController = TextEditingController();
 
   bool _isEnabled = true;
+  bool _isReplicationEnvironment = false;
   bool _isTestingConnection = false;
 
   late final ISybaseBackupService _backupService;
@@ -71,6 +72,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       _usernameController.text = widget.config!.username;
       _passwordController.text = widget.config!.password;
       _isEnabled = widget.config!.enabled;
+      _isReplicationEnvironment = widget.config!.isReplicationEnvironment;
     }
   }
 
@@ -116,6 +118,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
         port: PortNumber(port),
         username: _usernameController.text.trim(),
         password: _passwordController.text,
+        isReplicationEnvironment: _isReplicationEnvironment,
       );
 
       final result = await _backupService.testConnection(testConfig);
@@ -187,6 +190,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       username: _usernameController.text.trim(),
       password: _passwordController.text,
       enabled: _isEnabled,
+      isReplicationEnvironment: _isReplicationEnvironment,
       createdAt: widget.config?.createdAt,
       updatedAt: widget.config?.updatedAt,
     );
@@ -385,6 +389,56 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                     'Allow this configuration in schedules',
                   ),
                   style: FluentTheme.of(context).typography.caption,
+                ),
+                const SizedBox(height: 16),
+                InfoLabel(
+                  label: _t(
+                    'Ambiente de replicação (SQL Remote, MobiLink)',
+                    'Replication environment (SQL Remote, MobiLink)',
+                  ),
+                  child: ToggleSwitch(
+                    checked: _isReplicationEnvironment,
+                    onChanged: (value) {
+                      setState(() {
+                        _isReplicationEnvironment = value;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        FluentIcons.info,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _t(
+                            'Quando ativado, bloqueia backup de log com modo '
+                            '"Truncar" (TRUNCATE). Use "Renomear" ou "Apenas" '
+                            'para ambientes com SQL Remote ou MobiLink.',
+                            'When enabled, blocks log backup with "Truncate" '
+                            'mode (TRUNCATE). Use "Rename" or "Only" for '
+                            'environments with SQL Remote or MobiLink.',
+                          ),
+                          style: FluentTheme.of(context).typography.caption,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

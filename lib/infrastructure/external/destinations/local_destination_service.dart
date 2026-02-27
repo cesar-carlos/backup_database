@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -454,10 +455,18 @@ class LocalDestinationService implements ILocalDestinationService {
       final cutoffDate = DateTime.now().subtract(
         Duration(days: config.retentionDays),
       );
+      final protected = config.protectedBackupIdShortPrefixes;
 
       var deletedCount = 0;
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File) {
+          if (protected.isNotEmpty &&
+              SybaseBackupPathSuffix.isPathProtected(entity.path, protected)) {
+            LoggerService.debug(
+              'Arquivo protegido (cadeia Sybase): ${entity.path}',
+            );
+            continue;
+          }
           final stat = await entity.stat();
           if (stat.modified.isBefore(cutoffDate)) {
             await entity.delete();
@@ -471,6 +480,13 @@ class LocalDestinationService implements ILocalDestinationService {
         if (entity is Directory) {
           final contents = await entity.list().toList();
           if (contents.isEmpty) {
+            if (protected.isNotEmpty &&
+                SybaseBackupPathSuffix.isPathProtected(entity.path, protected)) {
+              LoggerService.debug(
+                'Diretório protegido (cadeia Sybase): ${entity.path}',
+              );
+              continue;
+            }
             await entity.delete();
             LoggerService.debug('Diretório vazio removido: ${entity.path}');
           }

@@ -33,7 +33,20 @@ class ProcessService {
     'DBPASSWORD',
   };
 
-  String _redactCommand(String executable, List<String> arguments) {
+  static String _redactSensitiveInArg(String arg) {
+    if (arg.contains(RegExp('PWD=', caseSensitive: false))) {
+      return arg.replaceAll(
+        RegExp('PWD=[^;]*', caseSensitive: false),
+        'PWD=***REDACTED***',
+      );
+    }
+    return arg;
+  }
+
+  static String redactCommandForLogging(
+    String executable,
+    List<String> arguments,
+  ) {
     final redactedArgs = <String>[];
     for (var i = 0; i < arguments.length; i++) {
       final arg = arguments[i];
@@ -42,13 +55,16 @@ class ProcessService {
         redactedArgs.add('***REDACTED***');
         i++;
       } else {
-        redactedArgs.add(arg);
+        redactedArgs.add(_redactSensitiveInArg(arg));
       }
     }
     return '$executable ${redactedArgs.join(' ')}';
   }
 
-  String _redactEnv(Map<String, String>? environment) {
+  String _redactCommand(String executable, List<String> arguments) =>
+      redactCommandForLogging(executable, arguments);
+
+  static String redactEnvForLogging(Map<String, String>? environment) {
     if (environment == null || environment.isEmpty) return '';
 
     final redactedEntries = <String>[];
@@ -59,6 +75,9 @@ class ProcessService {
     }
     return redactedEntries.isNotEmpty ? ' ${redactedEntries.join(' ')}' : '';
   }
+
+  String _redactEnv(Map<String, String>? environment) =>
+      redactEnvForLogging(environment);
 
   Future<rd.Result<ProcessResult>> run({
     required String executable,
@@ -194,7 +213,8 @@ class ProcessService {
         final isSybaseTool =
             executableLower.contains('dbisql') ||
             executableLower.contains('dbbackup') ||
-            executableLower.contains('dbverify');
+            executableLower.contains('dbverify') ||
+            executableLower.contains('dbvalid');
 
         List<String>? commonPaths;
 
@@ -302,7 +322,8 @@ class ProcessService {
         final isSybaseTool =
             executableLower.contains('dbisql') ||
             executableLower.contains('dbbackup') ||
-            executableLower.contains('dbverify');
+            executableLower.contains('dbverify') ||
+            executableLower.contains('dbvalid');
 
         String message;
 
@@ -582,7 +603,8 @@ class ProcessService {
         final isSybaseTool =
             executableLower.contains('dbisql') ||
             executableLower.contains('dbbackup') ||
-            executableLower.contains('dbverify');
+            executableLower.contains('dbverify') ||
+            executableLower.contains('dbvalid');
 
         if (isPostgresTool) {
           final toolName = executableLower.contains('pg_basebackup')

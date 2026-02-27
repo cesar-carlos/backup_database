@@ -1,5 +1,6 @@
-﻿import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/sybase_tools_status.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -78,6 +79,7 @@ class ToolVerificationService {
 
       var dbisqlFound = false;
       var dbbackupFound = false;
+      var dbvalidFound = false;
 
       final dbisqlResult = await _processService.run(
         executable: 'dbisql',
@@ -105,9 +107,34 @@ class ToolVerificationService {
         }
       }, (_) {});
 
+      final dbvalidResult = await _processService.run(
+        executable: 'dbvalid',
+        arguments: ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      dbvalidResult.fold(
+        (processResult) {
+          if (processResult.isSuccess) {
+            dbvalidFound = true;
+            LoggerService.info('dbvalid encontrado e disponível');
+          } else {
+            LoggerService.debug(
+              'dbvalid não encontrado (recomendado para verificação de backup)',
+            );
+          }
+        },
+        (_) {
+          LoggerService.debug(
+            'dbvalid não encontrado (recomendado para verificação de backup)',
+          );
+        },
+      );
+
       if (dbisqlFound || dbbackupFound) {
         LoggerService.info(
-          'Ferramentas Sybase encontradas: dbisql=$dbisqlFound, dbbackup=$dbbackupFound',
+          'Ferramentas Sybase encontradas: dbisql=$dbisqlFound, '
+          'dbbackup=$dbbackupFound, dbvalid=$dbvalidFound',
         );
         return const rd.Success(true);
       }
@@ -124,6 +151,98 @@ class ToolVerificationService {
               r'Consulte: docs\path_setup.md',
         ),
       );
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao verificar ferramentas Sybase',
+        e,
+        stackTrace,
+      );
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Erro ao verificar ferramentas Sybase: $e\n\n'
+              'Para fazer backup de Sybase SQL Anywhere, você precisa:\n'
+              '1. Instalar Sybase SQL Anywhere\n'
+              '2. Adicionar o caminho Bin64 ao PATH do Windows\n\n'
+              r'Consulte: docs\path_setup.md',
+        ),
+      );
+    }
+  }
+
+  Future<rd.Result<SybaseToolsStatus>> verifySybaseToolsDetailed() async {
+    try {
+      LoggerService.info(
+        'Verificando estado das ferramentas Sybase...',
+      );
+
+      var dbisqlStatus = SybaseToolStatus.missing;
+      var dbbackupStatus = SybaseToolStatus.missing;
+      var dbvalidStatus = SybaseToolStatus.warning;
+      var dbverifyStatus = SybaseToolStatus.warning;
+
+      final dbisqlResult = await _processService.run(
+        executable: 'dbisql',
+        arguments: ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      dbisqlResult.fold((processResult) {
+        dbisqlStatus = processResult.isSuccess
+            ? SybaseToolStatus.ok
+            : SybaseToolStatus.missing;
+      }, (_) {});
+
+      final dbbackupResult = await _processService.run(
+        executable: 'dbbackup',
+        arguments: ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      dbbackupResult.fold((processResult) {
+        dbbackupStatus = processResult.isSuccess
+            ? SybaseToolStatus.ok
+            : SybaseToolStatus.missing;
+      }, (_) {});
+
+      final dbvalidResult = await _processService.run(
+        executable: 'dbvalid',
+        arguments: ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      dbvalidResult.fold((processResult) {
+        dbvalidStatus = processResult.isSuccess
+            ? SybaseToolStatus.ok
+            : SybaseToolStatus.warning;
+      }, (_) {});
+
+      final dbverifyResult = await _processService.run(
+        executable: 'dbverify',
+        arguments: ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      dbverifyResult.fold((processResult) {
+        dbverifyStatus = processResult.isSuccess
+            ? SybaseToolStatus.ok
+            : SybaseToolStatus.warning;
+      }, (_) {});
+
+      final status = SybaseToolsStatus(
+        dbisql: dbisqlStatus,
+        dbbackup: dbbackupStatus,
+        dbvalid: dbvalidStatus,
+        dbverify: dbverifyStatus,
+      );
+
+      LoggerService.info(
+        'Ferramentas Sybase: dbisql=${dbisqlStatus.name}, '
+        'dbbackup=${dbbackupStatus.name}, dbvalid=${dbvalidStatus.name}, '
+        'dbverify=${dbverifyStatus.name}',
+      );
+
+      return rd.Success(status);
     } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao verificar ferramentas Sybase',

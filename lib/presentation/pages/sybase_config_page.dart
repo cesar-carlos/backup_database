@@ -43,6 +43,16 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Consumer<SybaseConfigProvider>(
+              builder: (context, provider, _) => SybaseToolsStatusCard(
+                status: provider.toolsStatus,
+                isLoading: provider.isLoadingTools,
+                onRefresh: provider.refreshToolsStatus,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const SybaseBackupHealthCard(),
+            const SizedBox(height: 24),
             Expanded(
               child: Consumer<SybaseConfigProvider>(
                 builder: (context, provider, child) {

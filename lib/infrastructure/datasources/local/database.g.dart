@@ -769,6 +769,21 @@ class $SybaseConfigsTableTable extends SybaseConfigsTable
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _isReplicationEnvironmentMeta =
+      const VerificationMeta('isReplicationEnvironment');
+  @override
+  late final GeneratedColumn<bool> isReplicationEnvironment =
+      GeneratedColumn<bool>(
+        'is_replication_environment',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("is_replication_environment" IN (0, 1))',
+        ),
+        defaultValue: const Constant(false),
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -802,6 +817,7 @@ class $SybaseConfigsTableTable extends SybaseConfigsTable
     username,
     password,
     enabled,
+    isReplicationEnvironment,
     createdAt,
     updatedAt,
   ];
@@ -888,6 +904,15 @@ class $SybaseConfigsTableTable extends SybaseConfigsTable
         enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
       );
     }
+    if (data.containsKey('is_replication_environment')) {
+      context.handle(
+        _isReplicationEnvironmentMeta,
+        isReplicationEnvironment.isAcceptableOrUnknown(
+          data['is_replication_environment']!,
+          _isReplicationEnvironmentMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -949,6 +974,10 @@ class $SybaseConfigsTableTable extends SybaseConfigsTable
         DriftSqlType.bool,
         data['${effectivePrefix}enabled'],
       )!,
+      isReplicationEnvironment: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_replication_environment'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -977,6 +1006,7 @@ class SybaseConfigsTableData extends DataClass
   final String username;
   final String password;
   final bool enabled;
+  final bool isReplicationEnvironment;
   final DateTime createdAt;
   final DateTime updatedAt;
   const SybaseConfigsTableData({
@@ -989,6 +1019,7 @@ class SybaseConfigsTableData extends DataClass
     required this.username,
     required this.password,
     required this.enabled,
+    required this.isReplicationEnvironment,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1004,6 +1035,9 @@ class SybaseConfigsTableData extends DataClass
     map['username'] = Variable<String>(username);
     map['password'] = Variable<String>(password);
     map['enabled'] = Variable<bool>(enabled);
+    map['is_replication_environment'] = Variable<bool>(
+      isReplicationEnvironment,
+    );
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -1020,6 +1054,7 @@ class SybaseConfigsTableData extends DataClass
       username: Value(username),
       password: Value(password),
       enabled: Value(enabled),
+      isReplicationEnvironment: Value(isReplicationEnvironment),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -1040,6 +1075,9 @@ class SybaseConfigsTableData extends DataClass
       username: serializer.fromJson<String>(json['username']),
       password: serializer.fromJson<String>(json['password']),
       enabled: serializer.fromJson<bool>(json['enabled']),
+      isReplicationEnvironment: serializer.fromJson<bool>(
+        json['isReplicationEnvironment'],
+      ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -1057,6 +1095,9 @@ class SybaseConfigsTableData extends DataClass
       'username': serializer.toJson<String>(username),
       'password': serializer.toJson<String>(password),
       'enabled': serializer.toJson<bool>(enabled),
+      'isReplicationEnvironment': serializer.toJson<bool>(
+        isReplicationEnvironment,
+      ),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -1072,6 +1113,7 @@ class SybaseConfigsTableData extends DataClass
     String? username,
     String? password,
     bool? enabled,
+    bool? isReplicationEnvironment,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => SybaseConfigsTableData(
@@ -1084,6 +1126,8 @@ class SybaseConfigsTableData extends DataClass
     username: username ?? this.username,
     password: password ?? this.password,
     enabled: enabled ?? this.enabled,
+    isReplicationEnvironment:
+        isReplicationEnvironment ?? this.isReplicationEnvironment,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1104,6 +1148,9 @@ class SybaseConfigsTableData extends DataClass
       username: data.username.present ? data.username.value : this.username,
       password: data.password.present ? data.password.value : this.password,
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      isReplicationEnvironment: data.isReplicationEnvironment.present
+          ? data.isReplicationEnvironment.value
+          : this.isReplicationEnvironment,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1121,6 +1168,7 @@ class SybaseConfigsTableData extends DataClass
           ..write('username: $username, ')
           ..write('password: $password, ')
           ..write('enabled: $enabled, ')
+          ..write('isReplicationEnvironment: $isReplicationEnvironment, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1138,6 +1186,7 @@ class SybaseConfigsTableData extends DataClass
     username,
     password,
     enabled,
+    isReplicationEnvironment,
     createdAt,
     updatedAt,
   );
@@ -1154,6 +1203,7 @@ class SybaseConfigsTableData extends DataClass
           other.username == this.username &&
           other.password == this.password &&
           other.enabled == this.enabled &&
+          other.isReplicationEnvironment == this.isReplicationEnvironment &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1169,6 +1219,7 @@ class SybaseConfigsTableCompanion
   final Value<String> username;
   final Value<String> password;
   final Value<bool> enabled;
+  final Value<bool> isReplicationEnvironment;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -1182,6 +1233,7 @@ class SybaseConfigsTableCompanion
     this.username = const Value.absent(),
     this.password = const Value.absent(),
     this.enabled = const Value.absent(),
+    this.isReplicationEnvironment = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1196,6 +1248,7 @@ class SybaseConfigsTableCompanion
     required String username,
     required String password,
     this.enabled = const Value.absent(),
+    this.isReplicationEnvironment = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -1218,6 +1271,7 @@ class SybaseConfigsTableCompanion
     Expression<String>? username,
     Expression<String>? password,
     Expression<bool>? enabled,
+    Expression<bool>? isReplicationEnvironment,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -1232,6 +1286,8 @@ class SybaseConfigsTableCompanion
       if (username != null) 'username': username,
       if (password != null) 'password': password,
       if (enabled != null) 'enabled': enabled,
+      if (isReplicationEnvironment != null)
+        'is_replication_environment': isReplicationEnvironment,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1248,6 +1304,7 @@ class SybaseConfigsTableCompanion
     Value<String>? username,
     Value<String>? password,
     Value<bool>? enabled,
+    Value<bool>? isReplicationEnvironment,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -1262,6 +1319,8 @@ class SybaseConfigsTableCompanion
       username: username ?? this.username,
       password: password ?? this.password,
       enabled: enabled ?? this.enabled,
+      isReplicationEnvironment:
+          isReplicationEnvironment ?? this.isReplicationEnvironment,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -1298,6 +1357,11 @@ class SybaseConfigsTableCompanion
     if (enabled.present) {
       map['enabled'] = Variable<bool>(enabled.value);
     }
+    if (isReplicationEnvironment.present) {
+      map['is_replication_environment'] = Variable<bool>(
+        isReplicationEnvironment.value,
+      );
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1322,6 +1386,7 @@ class SybaseConfigsTableCompanion
           ..write('username: $username, ')
           ..write('password: $password, ')
           ..write('enabled: $enabled, ')
+          ..write('isReplicationEnvironment: $isReplicationEnvironment, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -11284,6 +11349,7 @@ typedef $$SybaseConfigsTableTableCreateCompanionBuilder =
       required String username,
       required String password,
       Value<bool> enabled,
+      Value<bool> isReplicationEnvironment,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -11299,6 +11365,7 @@ typedef $$SybaseConfigsTableTableUpdateCompanionBuilder =
       Value<String> username,
       Value<String> password,
       Value<bool> enabled,
+      Value<bool> isReplicationEnvironment,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -11355,6 +11422,11 @@ class $$SybaseConfigsTableTableFilterComposer
 
   ColumnFilters<bool> get enabled => $composableBuilder(
     column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isReplicationEnvironment => $composableBuilder(
+    column: $table.isReplicationEnvironment,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11423,6 +11495,11 @@ class $$SybaseConfigsTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isReplicationEnvironment => $composableBuilder(
+    column: $table.isReplicationEnvironment,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -11475,6 +11552,11 @@ class $$SybaseConfigsTableTableAnnotationComposer
 
   GeneratedColumn<bool> get enabled =>
       $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<bool> get isReplicationEnvironment => $composableBuilder(
+    column: $table.isReplicationEnvironment,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -11532,6 +11614,7 @@ class $$SybaseConfigsTableTableTableManager
                 Value<String> username = const Value.absent(),
                 Value<String> password = const Value.absent(),
                 Value<bool> enabled = const Value.absent(),
+                Value<bool> isReplicationEnvironment = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -11545,6 +11628,7 @@ class $$SybaseConfigsTableTableTableManager
                 username: username,
                 password: password,
                 enabled: enabled,
+                isReplicationEnvironment: isReplicationEnvironment,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -11560,6 +11644,7 @@ class $$SybaseConfigsTableTableTableManager
                 required String username,
                 required String password,
                 Value<bool> enabled = const Value.absent(),
+                Value<bool> isReplicationEnvironment = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -11573,6 +11658,7 @@ class $$SybaseConfigsTableTableTableManager
                 username: username,
                 password: password,
                 enabled: enabled,
+                isReplicationEnvironment: isReplicationEnvironment,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

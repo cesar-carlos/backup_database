@@ -13,6 +13,8 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
+import 'package:backup_database/domain/entities/sybase_backup_options.dart';
+import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -69,6 +71,12 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   int? _blockSize;
   int _stripingCount = 1;
   int _statsPercent = 10;
+
+  SybaseCheckpointLog? _sybaseCheckpointLog;
+  bool _sybaseServerSide = false;
+  bool _sybaseAutoTuneWriters = false;
+  int? _sybaseBlockSize;
+  SybaseLogBackupMode? _sybaseLogBackupMode;
 
   int _hour = 0;
   int _minute = 0;
@@ -140,6 +148,15 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           _blockSize = sqlServerBackupOptions.blockSize;
           _stripingCount = sqlServerBackupOptions.stripingCount;
           _statsPercent = sqlServerBackupOptions.statsPercent;
+        case SybaseBackupSchedule(:final sybaseBackupOptions):
+          _sybaseCheckpointLog = sybaseBackupOptions.checkpointLog;
+          _sybaseServerSide = sybaseBackupOptions.serverSide;
+          _sybaseAutoTuneWriters = sybaseBackupOptions.autoTuneWriters;
+          _sybaseBlockSize = sybaseBackupOptions.blockSize;
+          _sybaseLogBackupMode = sybaseBackupOptions.logBackupMode ??
+              (widget.schedule!.truncateLog
+                  ? SybaseLogBackupMode.truncate
+                  : SybaseLogBackupMode.only);
         case _:
       }
 
@@ -236,6 +253,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   void _onBackupTypeChanged() {
     if (_backupType != BackupType.log) {
       _truncateLog = true;
+    } else if (_databaseType == DatabaseType.sybase &&
+        _sybaseLogBackupMode == null) {
+      _sybaseLogBackupMode =
+          _truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only;
     }
   }
 
@@ -438,7 +459,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                   isBlocked
                                       ? '${type.displayName} (Requer licença)'
                                       : isSybaseConvertedType
-                                      ? '${type.displayName} (convertido)'
+                                      ? 'Incremental (Transaction Log)'
                                       : type.displayName,
                                   textAlign: TextAlign.start,
                                   style: TextStyle(
@@ -620,7 +641,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             },
           ),
           const SizedBox(height: 16),
-          if (_backupType == BackupType.log)
+          if (_backupType == BackupType.log &&
+              _databaseType == DatabaseType.sybase)
+            _buildSybaseLogBackupModeSelector(),
+          if (_backupType == BackupType.log &&
+              _databaseType != DatabaseType.sybase)
             InfoLabel(
               label: 'Truncar log após backup',
               child: ToggleSwitch(
@@ -633,9 +658,16 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               ),
             ),
           if (_backupType == BackupType.log) const SizedBox(height: 8),
-          if (_backupType == BackupType.log)
+          if (_backupType == BackupType.log &&
+              _databaseType != DatabaseType.sybase)
             Text(
               'Quando habilitado, o backup de log libera espaço (SQL Server: padrão; Sybase: depende do motor).',
+              style: FluentTheme.of(context).typography.caption,
+            ),
+          if (_backupType == BackupType.log &&
+              _databaseType == DatabaseType.sybase)
+            Text(
+              'Truncar: libera espaço. Renomear: recomendado para replicação (SQL Remote, MobiLink).',
               style: FluentTheme.of(context).typography.caption,
             ),
           const SizedBox(height: 16),
@@ -828,6 +860,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           _buildIntegrityOptions(),
           if (_databaseType == DatabaseType.sqlServer)
             _buildAdvancedPerformanceOptions(),
+          if (_databaseType == DatabaseType.sybase)
+            _buildSybaseAdvancedPerformanceOptions(),
         ],
       ),
     );
@@ -927,6 +961,93 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     );
   }
 
+  Widget _buildSybaseAdvancedPerformanceOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionTitle('Performance Avançada (Sybase)'),
+        const SizedBox(height: 12),
+        AppDropdown<SybaseCheckpointLog?>(
+          label: 'CHECKPOINT LOG (backup Full)',
+          value: _sybaseCheckpointLog,
+          placeholder: const Text('Padrão do servidor'),
+          items: const [
+            ComboBoxItem(child: Text('Padrão')),
+            ComboBoxItem(value: SybaseCheckpointLog.copy, child: Text('COPY')),
+            ComboBoxItem(
+              value: SybaseCheckpointLog.nocopy,
+              child: Text('NOCOPY'),
+            ),
+            ComboBoxItem(value: SybaseCheckpointLog.auto, child: Text('AUTO')),
+            ComboBoxItem(
+              value: SybaseCheckpointLog.recover,
+              child: Text('RECOVER'),
+            ),
+          ],
+          onChanged: (value) {
+            setState(() => _sybaseCheckpointLog = value);
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'COPY: mais rápido no restore; NOCOPY: backup menor. Apenas para backup Full.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: 'Modo Server-Side (dbbackup -s)',
+          child: ToggleSwitch(
+            checked: _sybaseServerSide,
+            onChanged: (value) {
+              setState(() => _sybaseServerSide = value);
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Backup gerado no servidor. Aplica-se quando dbbackup é usado.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: 'AUTO TUNE WRITERS',
+          child: ToggleSwitch(
+            checked: _sybaseAutoTuneWriters,
+            onChanged: (value) {
+              setState(() => _sybaseAutoTuneWriters = value);
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Ajuste automático de threads de escrita. Recomendado em ambientes I/O-bound.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<int?>(
+          label: 'Block Size (dbbackup -b)',
+          value: _sybaseBlockSize,
+          placeholder: const Text('Padrão (128 páginas)'),
+          items: const [
+            ComboBoxItem(child: Text('Padrão')),
+            ComboBoxItem(value: 64, child: Text('64')),
+            ComboBoxItem(value: 128, child: Text('128')),
+            ComboBoxItem(value: 256, child: Text('256')),
+            ComboBoxItem(value: 512, child: Text('512')),
+          ],
+          onChanged: (value) {
+            setState(() => _sybaseBlockSize = value);
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Tamanho do bloco em páginas. Valores maiores podem melhorar throughput.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+      ],
+    );
+  }
+
   Widget _buildIntegrityOptions() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1016,8 +1137,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                   : _databaseType == DatabaseType.postgresql
                                   ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
                                         'Garante que o backup está íntegro e pode ser restaurado.'
-                                  : 'Verifica a integridade do backup após criação usando dbvalid (preferencial) '
-                                        'e dbverify (fallback). Garante que o backup está íntegro e pode ser restaurado.')
+                                  : 'Verifica a integridade do backup após criação usando dbvalid '
+                                        '(fallback dbverify). Garante que o backup está íntegro.')
                             : 'Este recurso requer uma licença válida. '
                                   'Acesse Configurações > Licenciamento para mais informações.',
                       ),
@@ -1180,6 +1301,37 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       style: FluentTheme.of(
         context,
       ).typography.subtitle?.copyWith(fontWeight: FontWeight.bold),
+    );
+  }
+
+  Widget _buildSybaseLogBackupModeSelector() {
+    final effectiveMode = _sybaseLogBackupMode ??
+        (_truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only);
+    return AppDropdown<SybaseLogBackupMode>(
+      label: 'Modo de log após backup',
+      value: effectiveMode,
+      items: const [
+          ComboBoxItem(
+            value: SybaseLogBackupMode.truncate,
+            child: Text('Truncar (liberar espaço)'),
+          ),
+          ComboBoxItem(
+            value: SybaseLogBackupMode.only,
+            child: Text('Apenas backup (sem alterar log)'),
+          ),
+          ComboBoxItem(
+            value: SybaseLogBackupMode.rename,
+            child: Text('Renomear (recomendado para replicação)'),
+          ),
+        ],
+      onChanged: (value) {
+        if (value != null) {
+          setState(() {
+            _sybaseLogBackupMode = value;
+            _truncateLog = value == SybaseLogBackupMode.truncate;
+          });
+        }
+      },
     );
   }
 
@@ -1724,7 +1876,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           return 'Backup do log de transações. Pode ser executado frequentemente e requer backup Full anterior.';
         case BackupType.differential:
         case BackupType.convertedDifferential:
-          return 'Sybase SQL Anywhere não suporta backup diferencial nativo; este tipo é convertido automaticamente para Full.';
+          return 'Sybase SQL Anywhere não suporta backup diferencial nativo; '
+              'este tipo é convertido automaticamente para Incremental (Transaction Log).';
         case BackupType.fullSingle:
         case BackupType.convertedFullSingle:
           return 'Sybase trata este tipo como backup Full.';
@@ -1982,6 +2135,23 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
     if (!mounted) return;
 
+    if (_databaseType == DatabaseType.sybase) {
+      final sybaseOptions = SybaseBackupOptions(
+        checkpointLog: _sybaseCheckpointLog,
+        serverSide: _sybaseServerSide,
+        autoTuneWriters: _sybaseAutoTuneWriters,
+        blockSize: _sybaseBlockSize,
+      );
+      final validation = sybaseOptions.validate();
+      if (!validation.isValid) {
+        MessageModal.showWarning(
+          context,
+          message: 'Opções Sybase inválidas: ${validation.errorMessage}',
+        );
+        return;
+      }
+    }
+
     final licenseProvider = Provider.of<LicenseProvider>(
       context,
       listen: false,
@@ -2057,6 +2227,46 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         isConvertedDifferential:
             widget.schedule?.isConvertedDifferential ?? false,
       );
+    } else if (_databaseType == DatabaseType.sybase) {
+      final effectiveLogMode = _sybaseLogBackupMode ??
+          (_truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only);
+      final sybaseBackupOptions = SybaseBackupOptions(
+        checkpointLog: _sybaseCheckpointLog,
+        serverSide: _sybaseServerSide,
+        autoTuneWriters: _sybaseAutoTuneWriters,
+        blockSize: _sybaseBlockSize,
+        logBackupMode: effectiveLogMode,
+      );
+      schedule = SybaseBackupSchedule(
+        id: widget.schedule?.id,
+        name: _nameController.text.trim(),
+        databaseConfigId: _selectedDatabaseConfigId!,
+        databaseType: _databaseType,
+        scheduleType: scheduleTypeString,
+        scheduleConfig: scheduleConfigJson,
+        destinationIds: _selectedDestinationIds,
+        backupFolder: _backupFolderController.text.trim(),
+        backupType: effectiveBackupType,
+        compressBackup: _compressBackup,
+        compressionFormat: effectiveCompressionFormat,
+        enabled: _isEnabled,
+        enableChecksum: effectiveEnableChecksum,
+        verifyAfterBackup: _verifyAfterBackup,
+        verifyPolicy: _verifyPolicy,
+        postBackupScript: _postBackupScriptController.text.trim().isEmpty
+            ? null
+            : _postBackupScriptController.text.trim(),
+        lastRunAt: widget.schedule?.lastRunAt,
+        nextRunAt: widget.schedule?.nextRunAt,
+        createdAt: widget.schedule?.createdAt,
+        truncateLog: effectiveLogMode == SybaseLogBackupMode.truncate,
+        backupTimeout: _backupTimeout,
+        verifyTimeout: _verifyTimeout,
+        sybaseBackupOptions: sybaseBackupOptions,
+        isConvertedDifferential:
+            widget.schedule?.isConvertedDifferential ??
+            (_backupType == BackupType.differential),
+      );
     } else {
       schedule = Schedule(
         id: widget.schedule?.id,
@@ -2083,9 +2293,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         truncateLog: _truncateLog,
         backupTimeout: _backupTimeout,
         verifyTimeout: _verifyTimeout,
-        isConvertedDifferential:
-            _databaseType == DatabaseType.sybase &&
-            _backupType == BackupType.differential,
       );
     }
 

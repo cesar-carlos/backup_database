@@ -47,8 +47,14 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<ISqlServerBackupService>(
     () => SqlServerBackupService(getIt<ProcessService>()),
   );
+  getIt.registerLazySingleton<SybaseConnectionStrategyCache>(
+    SybaseConnectionStrategyCache.new,
+  );
   getIt.registerLazySingleton<ISybaseBackupService>(
-    () => SybaseBackupService(getIt<ProcessService>()),
+    () => SybaseBackupService(
+      getIt<ProcessService>(),
+      strategyCache: getIt<SybaseConnectionStrategyCache>(),
+    ),
   );
   getIt.registerLazySingleton<IPostgresBackupService>(
     () => PostgresBackupService(getIt<ProcessService>()),
@@ -96,6 +102,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       licensePolicyService: getIt<ILicensePolicyService>(),
       notificationService: getIt<INotificationService>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
+      backupHistoryRepository: getIt<IBackupHistoryRepository>(),
     ),
   );
 

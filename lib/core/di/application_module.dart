@@ -60,6 +60,9 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       progressNotifier: getIt<IBackupProgressNotifier>(),
       getDatabaseConfig: getIt<GetDatabaseConfig>(),
       validateBackupDirectory: getIt<ValidateBackupDirectory>(),
+      validateSybaseLogBackupPreflight:
+          getIt<ValidateSybaseLogBackupPreflight>(),
+      storageChecker: getIt<IStorageChecker>(),
     ),
   );
 

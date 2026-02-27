@@ -59,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   @override
   MigrationStrategy get migration {
@@ -866,6 +866,22 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v25 para licenses_table device_key unique',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 26) {
+          try {
+            await _ensureSybaseConfigReplicationColumn();
+            LoggerService.info(
+              'Migração v26: coluna is_replication_environment adicionada '
+              'à sybase_configs_table.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v26 para sybase_configs_table',
               e,
               stackTrace,
             );
@@ -1831,6 +1847,34 @@ class AppDatabase extends _$AppDatabase {
         e,
         stackTrace,
       );
+    }
+  }
+
+  Future<void> _ensureSybaseConfigReplicationColumn() async {
+    try {
+      final columns = await customSelect(
+        'PRAGMA table_info(sybase_configs_table)',
+      ).get();
+      final columnNames = columns
+          .map((row) => row.data['name'] as String)
+          .toSet();
+
+      if (!columnNames.contains('is_replication_environment')) {
+        await customStatement(
+          'ALTER TABLE sybase_configs_table ADD COLUMN '
+          'is_replication_environment INTEGER NOT NULL DEFAULT 0',
+        );
+        LoggerService.info(
+          'Coluna is_replication_environment adicionada à sybase_configs_table',
+        );
+      }
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao adicionar coluna is_replication_environment',
+        e,
+        stackTrace,
+      );
+      rethrow;
     }
   }
 

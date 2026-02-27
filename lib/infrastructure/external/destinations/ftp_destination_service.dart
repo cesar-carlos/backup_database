@@ -6,6 +6,7 @@ import 'package:backup_database/core/errors/failure.dart' hide FtpFailure;
 import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/ftp_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -315,6 +316,16 @@ class FtpDestinationService implements IFtpService {
         if (item.type == FTPEntryType.file) {
           try {
             final fileName = item.name;
+
+            if (SybaseBackupPathSuffix.isPathProtected(
+              fileName,
+              config.protectedBackupIdShortPrefixes,
+            )) {
+              LoggerService.debug(
+                'Arquivo FTP protegido (retenção Sybase): $fileName',
+              );
+              continue;
+            }
 
             final datePattern = RegExp(r'(\d{4}-\d{2}-\d{2})');
             final match = datePattern.firstMatch(fileName);

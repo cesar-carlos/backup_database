@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/entities/sybase_tools_status.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
 import 'package:backup_database/infrastructure/external/process/tool_verification_service.dart';
@@ -20,10 +23,14 @@ class SybaseConfigProvider extends ChangeNotifier {
   List<SybaseConfig> _configs = [];
   bool _isLoading = false;
   String? _error;
+  SybaseToolsStatus? _toolsStatus;
+  bool _isLoadingTools = false;
 
   List<SybaseConfig> get configs => _configs;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  SybaseToolsStatus? get toolsStatus => _toolsStatus;
+  bool get isLoadingTools => _isLoadingTools;
 
   List<SybaseConfig> get activeConfigs =>
       _configs.where((c) => c.enabled).toList();
@@ -31,12 +38,36 @@ class SybaseConfigProvider extends ChangeNotifier {
   List<SybaseConfig> get inactiveConfigs =>
       _configs.where((c) => !c.enabled).toList();
 
+  Future<void> refreshToolsStatus() async {
+    _isLoadingTools = true;
+    notifyListeners();
+
+    try {
+      final result = await _toolVerificationService.verifySybaseToolsDetailed();
+      result.fold(
+        (status) {
+          _toolsStatus = status;
+        },
+        (_) {
+          _toolsStatus = null;
+        },
+      );
+    } on Object catch (_) {
+      _toolsStatus = null;
+    } finally {
+      _isLoadingTools = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> loadConfigs() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
+      unawaited(refreshToolsStatus());
+
       final result = await _repository.getAll();
       result.fold(
         (configs) {

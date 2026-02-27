@@ -6,6 +6,8 @@ import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart';
+import 'package:backup_database/domain/entities/sybase_backup_options.dart';
+import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
@@ -17,6 +19,7 @@ class ScheduleRepository implements IScheduleRepository {
   final AppDatabase _database;
   static const _verifyPolicyKey = '_verifyPolicy';
   static const _sqlServerBackupOptionsKey = '_sqlServerBackupOptions';
+  static const _sybaseBackupOptionsKey = '_sybaseBackupOptions';
 
   @override
   Future<rd.Result<List<Schedule>>> getAll() async {
@@ -74,6 +77,12 @@ class ScheduleRepository implements IScheduleRepository {
   @override
   Future<rd.Result<Schedule>> create(Schedule schedule) async {
     try {
+      final validationResult =
+          await _validateAllDestinationsExist(schedule.destinationIds);
+      if (validationResult != null) {
+        return validationResult;
+      }
+
       final companion = _toCompanion(schedule);
 
       await _database.transaction(() async {
@@ -121,6 +130,12 @@ class ScheduleRepository implements IScheduleRepository {
   @override
   Future<rd.Result<Schedule>> update(Schedule schedule) async {
     try {
+      final validationResult =
+          await _validateAllDestinationsExist(schedule.destinationIds);
+      if (validationResult != null) {
+        return validationResult;
+      }
+
       final companion = _toCompanion(schedule);
       await _database.transaction(() async {
         await _database.scheduleDao.updateSchedule(companion);
@@ -336,6 +351,36 @@ class ScheduleRepository implements IScheduleRepository {
       );
     }
 
+    if (databaseType == DatabaseType.sybase) {
+      final sybaseOptions = _parseSybaseBackupOptions(scheduleConfigMap);
+      return SybaseBackupSchedule(
+        id: data.id,
+        name: data.name,
+        databaseConfigId: data.databaseConfigId,
+        databaseType: databaseType,
+        scheduleType: data.scheduleType,
+        scheduleConfig: data.scheduleConfig,
+        destinationIds: destinationIds,
+        backupFolder: data.backupFolder,
+        backupType: backupTypeFromString(data.backupType),
+        truncateLog: data.truncateLog,
+        compressBackup: data.compressBackup,
+        compressionFormat: CompressionFormat.fromString(data.compressionFormat),
+        enabled: data.enabled,
+        enableChecksum: data.enableChecksum,
+        verifyAfterBackup: data.verifyAfterBackup,
+        verifyPolicy: verifyPolicy,
+        postBackupScript: data.postBackupScript,
+        backupTimeout: Duration(seconds: data.backupTimeoutSeconds),
+        verifyTimeout: Duration(seconds: data.verifyTimeoutSeconds),
+        lastRunAt: data.lastRunAt,
+        nextRunAt: data.nextRunAt,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        sybaseBackupOptions: sybaseOptions,
+      );
+    }
+
     return Schedule(
       id: data.id,
       name: data.name,
@@ -417,6 +462,33 @@ class ScheduleRepository implements IScheduleRepository {
     }
   }
 
+  Future<rd.Result<Schedule>?> _validateAllDestinationsExist(
+    List<String> destinationIds,
+  ) async {
+    if (destinationIds.isEmpty) return null;
+
+    final uniqueIds = destinationIds.toSet();
+    final nonExistent = <String>[];
+
+    for (final id in uniqueIds) {
+      final exists = await _database.backupDestinationDao.getById(id);
+      if (exists == null) {
+        nonExistent.add(id);
+      }
+    }
+
+    if (nonExistent.isEmpty) return null;
+
+    return rd.Failure(
+      ValidationFailure(
+        message:
+            'Um ou mais destinos selecionados não existem mais. '
+            'Por favor, recarregue e selecione destinos válidos. '
+            'IDs inválidos: ${nonExistent.join(", ")}',
+      ),
+    );
+  }
+
   Future<void> _replaceScheduleDestinations(
     String scheduleId,
     List<String> destinationIds,
@@ -462,6 +534,17 @@ class ScheduleRepository implements IScheduleRepository {
         'blockSize': schedule.sqlServerBackupOptions.blockSize,
         'stripingCount': schedule.sqlServerBackupOptions.stripingCount,
         'statsPercent': schedule.sqlServerBackupOptions.statsPercent,
+      };
+    }
+
+    if (schedule.databaseType == DatabaseType.sybase &&
+        schedule is SybaseBackupSchedule) {
+      scheduleConfigMap[_sybaseBackupOptionsKey] = {
+        'checkpointLog': schedule.sybaseBackupOptions.checkpointLog?.name,
+        'serverSide': schedule.sybaseBackupOptions.serverSide,
+        'autoTuneWriters': schedule.sybaseBackupOptions.autoTuneWriters,
+        'blockSize': schedule.sybaseBackupOptions.blockSize,
+        'logBackupMode': schedule.sybaseBackupOptions.logBackupMode?.name,
       };
     }
 
@@ -550,5 +633,45 @@ class ScheduleRepository implements IScheduleRepository {
       'Using defaults. Details: ${validation.errorMessage}',
     );
     return const SqlServerBackupOptions();
+  }
+
+  SybaseBackupOptions _parseSybaseBackupOptions(
+    Map<String, dynamic> configMap,
+  ) {
+    final optionsRaw = configMap[_sybaseBackupOptionsKey];
+    if (optionsRaw == null || optionsRaw is! Map) {
+      return SybaseBackupOptions.safeDefaults;
+    }
+
+    final options = optionsRaw.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+
+    final checkpointLog = SybaseBackupOptions.checkpointLogFromString(
+      options['checkpointLog'] as String?,
+    );
+
+    final logBackupMode = SybaseBackupOptions.logBackupModeFromString(
+      options['logBackupMode'] as String?,
+    );
+
+    final parsed = SybaseBackupOptions(
+      checkpointLog: checkpointLog,
+      serverSide: options['serverSide'] as bool? ?? false,
+      autoTuneWriters: options['autoTuneWriters'] as bool? ?? false,
+      blockSize: options['blockSize'] as int?,
+      logBackupMode: logBackupMode,
+    );
+
+    final validation = parsed.validate();
+    if (validation.isValid) {
+      return parsed;
+    }
+
+    LoggerService.warning(
+      '[ScheduleRepository] Sybase backup options invalid in schedule config. '
+      'Using defaults. Details: ${validation.errorMessage}',
+    );
+    return SybaseBackupOptions.safeDefaults;
   }
 }
