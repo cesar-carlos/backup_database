@@ -1,6 +1,6 @@
-#pragma codePage(65001)
+﻿#pragma codePage(65001)
 #define MyAppName "Backup Database"
-#define MyAppVersion "2.2.5"
+#define MyAppVersion "2.2.6"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
