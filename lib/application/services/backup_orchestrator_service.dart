@@ -1,7 +1,10 @@
+import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
@@ -10,6 +13,7 @@ import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart'
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_backup_compression_orchestrator.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_backup_script_orchestrator.dart';
@@ -126,7 +130,12 @@ class BackupOrchestratorService {
     }
     history = createResult.getOrNull()!;
 
-    await _log(history.id, 'info', 'Backup iniciado');
+    await _log(
+      history.id,
+      'info',
+      'Backup iniciado',
+      step: LogStepConstants.backupStarted,
+    );
 
     try {
       String backupPath;
@@ -152,12 +161,13 @@ class BackupOrchestratorService {
             message:
                 'Configuration not found for ${schedule.databaseType.name} '
                 '(id: ${schedule.databaseConfigId})',
+            code: FailureCodes.configNotFound,
             originalError: failure,
           ),
         );
       }
 
-      // Execute backup based on database type
+      BackupExecutionResult backupExecutionResult;
       if (schedule.databaseType == DatabaseType.sqlServer) {
         final config = configResult.getOrNull()! as SqlServerConfig;
         final backupOptions = schedule is SqlServerBackupSchedule
@@ -180,8 +190,7 @@ class BackupOrchestratorService {
           return rd.Failure(failure);
         }
 
-        backupPath = backupResult.getOrNull()!.backupPath;
-        fileSize = backupResult.getOrNull()!.fileSize;
+        backupExecutionResult = backupResult.getOrNull()!;
       } else if (schedule.databaseType == DatabaseType.sybase) {
         final config = configResult.getOrNull()! as SybaseConfig;
         final backupResult = await _sybaseBackupService.executeBackup(
@@ -197,8 +206,7 @@ class BackupOrchestratorService {
           return rd.Failure(failure);
         }
 
-        backupPath = backupResult.getOrNull()!.backupPath;
-        fileSize = backupResult.getOrNull()!.fileSize;
+        backupExecutionResult = backupResult.getOrNull()!;
       } else if (schedule.databaseType == DatabaseType.postgresql) {
         final config = configResult.getOrNull()! as PostgresConfig;
         final backupResult = await _postgresBackupService.executeBackup(
@@ -213,8 +221,7 @@ class BackupOrchestratorService {
           return rd.Failure(failure);
         }
 
-        backupPath = backupResult.getOrNull()!.backupPath;
-        fileSize = backupResult.getOrNull()!.fileSize;
+        backupExecutionResult = backupResult.getOrNull()!;
       } else {
         return rd.Failure(
           ValidationFailure(
@@ -223,7 +230,15 @@ class BackupOrchestratorService {
         );
       }
 
-      await _log(history.id, 'info', 'Backup do banco concluído');
+      backupPath = backupExecutionResult.backupPath;
+      fileSize = backupExecutionResult.fileSize;
+
+      await _log(
+        history.id,
+        'info',
+        'Backup do banco concluído',
+        step: LogStepConstants.backupDbDone,
+      );
 
       try {
         _progressNotifier.updateProgress(
@@ -235,8 +250,14 @@ class BackupOrchestratorService {
         LoggerService.warning('Erro ao atualizar progresso', e, s);
       }
 
+      var compressionDuration = Duration.zero;
       if (schedule.compressionFormat != CompressionFormat.none) {
-        await _log(history.id, 'info', 'Iniciando compressão');
+        await _log(
+          history.id,
+          'info',
+          'Iniciando compressão',
+          step: LogStepConstants.compressionStarted,
+        );
 
         final compressionResult = await _compressionOrchestrator.compressBackup(
           backupPath: backupPath,
@@ -250,7 +271,13 @@ class BackupOrchestratorService {
           final result = compressionResult.getOrNull()!;
           backupPath = result.compressedPath;
           fileSize = result.compressedSize;
-          await _log(history.id, 'info', 'Compressão concluída');
+          compressionDuration = result.duration;
+          await _log(
+            history.id,
+            'info',
+            'Compressão concluída',
+            step: LogStepConstants.compressionDone,
+          );
         } else {
           final failure = compressionResult.exceptionOrNull()!;
           final failureMessage = failure.toString();
@@ -260,6 +287,7 @@ class BackupOrchestratorService {
             history.id,
             'error',
             'Falha na compressão: $failureMessage',
+            step: LogStepConstants.compressionFailed,
           );
 
           return rd.Failure(failure);
@@ -268,7 +296,12 @@ class BackupOrchestratorService {
 
       if (schedule.postBackupScript != null &&
           schedule.postBackupScript!.trim().isNotEmpty) {
-        await _log(history.id, 'info', 'Executando script SQL pós-backup');
+        await _log(
+          history.id,
+          'info',
+          'Executando script SQL pós-backup',
+          step: LogStepConstants.scriptPostBackup,
+        );
 
         await _scriptOrchestrator.executePostBackupScript(
           historyId: history.id,
@@ -282,16 +315,34 @@ class BackupOrchestratorService {
       }
 
       final finishedAt = DateTime.now();
+      final totalDuration = finishedAt.difference(history.startedAt);
+      final metrics = _buildMetrics(
+        backupExecutionResult: backupExecutionResult,
+        compressionDuration: compressionDuration,
+        totalDuration: totalDuration,
+        finalFileSize: fileSize,
+        backupType: backupType,
+      );
       history = history.copyWith(
         backupPath: backupPath,
         fileSize: fileSize,
         status: BackupStatus.success,
         finishedAt: finishedAt,
-        durationSeconds: finishedAt.difference(history.startedAt).inSeconds,
+        durationSeconds: totalDuration.inSeconds,
+        metrics: metrics,
       );
 
-      await _backupHistoryRepository.update(history);
-      await _log(history.id, 'info', 'Backup finalizado com sucesso');
+      final updateResult = await _backupHistoryRepository
+          .updateHistoryAndLogIfRunning(
+        history: history,
+        logStep: LogStepConstants.backupSuccess,
+        logLevel: LogLevel.info,
+        logMessage: 'Backup finalizado com sucesso',
+      );
+      updateResult.fold(
+        (_) {},
+        (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
+      );
 
       LoggerService.info('Backup concluído: ${history.backupPath}');
       return rd.Success(history);
@@ -306,30 +357,53 @@ class BackupOrchestratorService {
         durationSeconds: finishedAt.difference(history.startedAt).inSeconds,
       );
 
-      await _backupHistoryRepository.update(history);
-      await _log(history.id, 'error', 'Erro no backup: $e');
+      final updateResult = await _backupHistoryRepository
+          .updateHistoryAndLogIfRunning(
+        history: history,
+        logStep: LogStepConstants.backupError,
+        logLevel: LogLevel.error,
+        logMessage: 'Erro no backup: $e',
+      );
+      updateResult.fold(
+        (_) {},
+        (err) => LoggerService.warning('Erro ao atualizar histórico e log: $err'),
+      );
 
       await _notificationService.notifyBackupComplete(history);
 
       return rd.Failure(
-        BackupFailure(message: 'Erro ao executar backup: $e', originalError: e),
+        BackupFailure(
+          message: 'Erro ao executar backup: $e',
+          code: FailureCodes.backupFailed,
+          originalError: e,
+        ),
       );
     }
   }
 
-  Future<void> _log(String historyId, String levelStr, String message) async {
-    LogLevel level;
-    switch (levelStr) {
-      case 'info':
-        level = LogLevel.info;
-      case 'warning':
-        level = LogLevel.warning;
-      case 'error':
-        level = LogLevel.error;
-      default:
-        level = LogLevel.info;
+  Future<void> _log(
+    String historyId,
+    String levelStr,
+    String message, {
+    String? step,
+  }) async {
+    if (step != null) {
+      final level = _logLevelFromString(levelStr);
+      final result = await _backupLogRepository.createIdempotent(
+        backupHistoryId: historyId,
+        step: step,
+        level: level,
+        category: LogCategory.execution,
+        message: message,
+      );
+      result.fold(
+        (_) {},
+        (e) => LoggerService.warning('Erro ao gravar log idempotente: $e'),
+      );
+      return;
     }
 
+    final level = _logLevelFromString(levelStr);
     final log = BackupLog(
       backupHistoryId: historyId,
       level: level,
@@ -337,5 +411,59 @@ class BackupOrchestratorService {
       message: message,
     );
     await _backupLogRepository.create(log);
+  }
+
+  LogLevel _logLevelFromString(String levelStr) {
+    switch (levelStr) {
+      case 'info':
+        return LogLevel.info;
+      case 'warning':
+        return LogLevel.warning;
+      case 'error':
+        return LogLevel.error;
+      default:
+        return LogLevel.info;
+    }
+  }
+
+  BackupMetrics _buildMetrics({
+    required BackupExecutionResult backupExecutionResult,
+    required Duration compressionDuration,
+    required Duration totalDuration,
+    required int finalFileSize,
+    required BackupType backupType,
+  }) {
+    final base = backupExecutionResult.metrics;
+    if (base != null) {
+      return base.copyWith(
+        compressionDuration: compressionDuration,
+        totalDuration: totalDuration,
+        backupSizeBytes: finalFileSize,
+        backupSpeedMbPerSec: _speedMbPerSec(finalFileSize, totalDuration),
+      );
+    }
+    const defaultFlags = BackupFlags(
+      compression: false,
+      verifyPolicy: 'none',
+      stripingCount: 1,
+      withChecksum: false,
+      stopOnError: true,
+    );
+    return BackupMetrics(
+      totalDuration: totalDuration,
+      backupDuration: backupExecutionResult.duration,
+      verifyDuration: Duration.zero,
+      compressionDuration: compressionDuration,
+      backupSizeBytes: finalFileSize,
+      backupSpeedMbPerSec: _speedMbPerSec(finalFileSize, totalDuration),
+      backupType: backupType.name,
+      flags: defaultFlags,
+    );
+  }
+
+  double _speedMbPerSec(int sizeBytes, Duration duration) {
+    if (duration.inSeconds <= 0) return 0;
+    final sizeMb = sizeBytes / 1024 / 1024;
+    return sizeMb / duration.inSeconds;
   }
 }

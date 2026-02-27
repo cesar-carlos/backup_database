@@ -26,6 +26,18 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
   Future<List<SchedulesTableData>> getEnabled() =>
       (select(schedulesTable)..where((t) => t.enabled.equals(true))).get();
 
+  Future<List<SchedulesTableData>> getEnabledDueForExecution(
+    DateTime beforeOrAt,
+  ) =>
+      (select(schedulesTable)
+            ..where((t) =>
+                t.enabled.equals(true) &
+                t.nextRunAt.isNotNull() &
+                t.nextRunAt.isSmallerOrEqualValue(beforeOrAt))
+            ..orderBy([(t) => OrderingTerm.asc(t.nextRunAt)])
+            ..limit(1))
+          .get();
+
   Future<List<SchedulesTableData>> getByDatabaseConfig(
     String databaseConfigId,
   ) => (select(

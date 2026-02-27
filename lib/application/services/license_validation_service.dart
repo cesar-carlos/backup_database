@@ -4,32 +4,44 @@ import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/domain/repositories/i_license_repository.dart';
 import 'package:backup_database/domain/services/i_device_key_service.dart';
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/domain/services/i_revocation_checker.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class LicenseValidationService implements ILicenseValidationService {
   LicenseValidationService({
     required ILicenseRepository licenseRepository,
     required IDeviceKeyService deviceKeyService,
+    IRevocationChecker? revocationChecker,
   }) : _licenseRepository = licenseRepository,
-       _deviceKeyService = deviceKeyService;
+       _deviceKeyService = deviceKeyService,
+       _revocationChecker = revocationChecker;
   final ILicenseRepository _licenseRepository;
   final IDeviceKeyService _deviceKeyService;
+  final IRevocationChecker? _revocationChecker;
 
   @override
   Future<rd.Result<License>> getCurrentLicense() async {
     try {
       final deviceKeyResult = await _deviceKeyService.getDeviceKey();
-      return deviceKeyResult.fold(
+      return await deviceKeyResult.fold(
         (deviceKey) async {
           final licenseResult = await _licenseRepository.getByDeviceKey(
             deviceKey,
           );
           return licenseResult.fold(
-            (license) {
+            (license) async {
               if (license.isExpired) {
                 LoggerService.warning('Licença encontrada mas expirada');
                 return const rd.Failure(
                   core.ValidationFailure(message: 'Licença expirada'),
+                );
+              }
+              final revoked =
+                  await _revocationChecker?.isRevoked(deviceKey) ?? false;
+              if (revoked) {
+                LoggerService.warning('Licença encontrada mas revogada');
+                return const rd.Failure(
+                  core.ValidationFailure(message: 'Licença revogada'),
                 );
               }
               return rd.Success(license);
@@ -89,8 +101,8 @@ class LicenseValidationService implements ILicenseValidationService {
   ) async {
     try {
       final licenseResult = await _licenseRepository.getByDeviceKey(deviceKey);
-      return licenseResult.fold(
-        (license) {
+      return await licenseResult.fold(
+        (license) async {
           if (license.licenseKey != licenseKey) {
             LoggerService.warning('Chave de licença não corresponde');
             return const rd.Success(false);
@@ -98,6 +110,13 @@ class LicenseValidationService implements ILicenseValidationService {
 
           if (license.isExpired) {
             LoggerService.warning('Licença expirada');
+            return const rd.Success(false);
+          }
+
+          final revoked =
+              await _revocationChecker?.isRevoked(deviceKey) ?? false;
+          if (revoked) {
+            LoggerService.warning('Licença revogada');
             return const rd.Success(false);
           }
 

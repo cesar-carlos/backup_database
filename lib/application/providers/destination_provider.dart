@@ -2,17 +2,20 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:flutter/foundation.dart';
 
 class DestinationProvider extends ChangeNotifier {
   DestinationProvider(
     this._repository,
     this._scheduleRepository,
+    this._licensePolicyService,
   ) {
     loadDestinations();
   }
   final IBackupDestinationRepository _repository;
   final IScheduleRepository _scheduleRepository;
+  final ILicensePolicyService _licensePolicyService;
 
   List<BackupDestination> _destinations = [];
   bool _isLoading = false;
@@ -48,6 +51,16 @@ class DestinationProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
+    final policyResult =
+        await _licensePolicyService.validateDestinationCapabilities(destination);
+    if (policyResult.isError()) {
+      final failure = policyResult.exceptionOrNull();
+      _error = failure is Failure ? failure.message : failure.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+
     final result = await _repository.create(destination);
 
     return result.fold(
@@ -70,6 +83,16 @@ class DestinationProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
+
+    final policyResult =
+        await _licensePolicyService.validateDestinationCapabilities(destination);
+    if (policyResult.isError()) {
+      final failure = policyResult.exceptionOrNull();
+      _error = failure is Failure ? failure.message : failure.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
 
     final result = await _repository.update(destination);
 

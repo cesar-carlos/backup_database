@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/license.dart';
@@ -37,6 +37,26 @@ class LicenseRepository implements ILicenseRepository {
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao criar licença', e, stackTrace);
       return rd.Failure(DatabaseFailure(message: 'Erro ao criar licença: $e'));
+    }
+  }
+
+  @override
+  Future<rd.Result<License>> upsertByDeviceKey(License license) async {
+    try {
+      final existing = await _database.licenseDao.getByDeviceKey(license.deviceKey);
+      if (existing != null) {
+        final updated = license.copyWith(
+          id: existing.id,
+          createdAt: existing.createdAt,
+        );
+        return update(updated);
+      }
+      return create(license);
+    } on Object catch (e, stackTrace) {
+      LoggerService.error('Erro ao upsert licença por deviceKey', e, stackTrace);
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao upsert licença: $e'),
+      );
     }
   }
 

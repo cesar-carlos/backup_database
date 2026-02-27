@@ -1,13 +1,20 @@
-﻿import 'package:backup_database/core/core.dart';
+import 'dart:convert';
+
+import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
+import 'package:backup_database/domain/value_objects/backup_history_state_machine.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/repositories/backup_log_repository.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class BackupHistoryRepository implements IBackupHistoryRepository {
-  BackupHistoryRepository(this._database);
+  BackupHistoryRepository(this._database, this._backupLogRepository);
   final AppDatabase _database;
+  final BackupLogRepository _backupLogRepository;
 
   @override
   Future<rd.Result<List<BackupHistory>>> getAll({
@@ -67,6 +74,78 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao atualizar histórico: $e'),
+      );
+    }
+  }
+
+  @override
+  Future<rd.Result<BackupHistory>> updateIfRunning(BackupHistory history) async {
+    try {
+      if (!BackupHistoryStateMachine.isTerminal(history.status)) {
+        return rd.Failure(
+          ValidationFailure(
+            message:
+                'updateIfRunning exige status terminal (success, error ou warning). '
+                'Recebido: ${history.status.name}.',
+          ),
+        );
+      }
+      final companion = _toCompanion(history);
+      final updated = await _database.backupHistoryDao
+          .updateHistoryIfRunning(companion);
+      if (updated == 0) {
+        final current = await _database.backupHistoryDao.getById(history.id);
+        if (current != null) {
+          return rd.Success(_toEntity(current));
+        }
+      }
+      return rd.Success(history);
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(
+          message: 'Erro ao atualizar histórico (updateIfRunning): $e',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<rd.Result<BackupHistory>> updateHistoryAndLogIfRunning({
+    required BackupHistory history,
+    required String logStep,
+    required LogLevel logLevel,
+    required String logMessage,
+    String? logDetails,
+  }) async {
+    try {
+      if (!BackupHistoryStateMachine.isTerminal(history.status)) {
+        return rd.Failure(
+          ValidationFailure(
+            message:
+                'updateHistoryAndLogIfRunning exige status terminal. '
+                'Recebido: ${history.status.name}.',
+          ),
+        );
+      }
+      await _database.transaction(() async {
+        final companion = _toCompanion(history);
+        await _database.backupHistoryDao.updateHistoryIfRunning(companion);
+        final logCompanion = _backupLogRepository.buildIdempotentLogCompanion(
+          backupHistoryId: history.id,
+          step: logStep,
+          level: logLevel,
+          category: LogCategory.execution,
+          message: logMessage,
+          details: logDetails,
+        );
+        await _database.backupLogDao.insertOrReplaceLog(logCompanion);
+      });
+      return rd.Success(history);
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(
+          message: 'Erro ao atualizar histórico e log (atômico): $e',
+        ),
       );
     }
   }
@@ -185,10 +264,12 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       startedAt: data.startedAt,
       finishedAt: data.finishedAt,
       durationSeconds: data.durationSeconds,
+      metrics: BackupMetrics.fromJson(data.metrics),
     );
   }
 
   BackupHistoryTableCompanion _toCompanion(BackupHistory history) {
+    final metricsJson = history.metrics?.toJson();
     return BackupHistoryTableCompanion(
       id: Value(history.id),
       scheduleId: Value(history.scheduleId),
@@ -202,6 +283,7 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       startedAt: Value(history.startedAt),
       finishedAt: Value(history.finishedAt),
       durationSeconds: Value(history.durationSeconds),
+      metrics: Value(metricsJson != null ? jsonEncode(metricsJson) : null),
     );
   }
 }

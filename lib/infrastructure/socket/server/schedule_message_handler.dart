@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
@@ -19,11 +21,15 @@ typedef SendToClient = Future<void> Function(String clientId, Message message);
 class ScheduleMessageHandler {
   ScheduleMessageHandler({
     required IScheduleRepository scheduleRepository,
+    required IBackupDestinationRepository destinationRepository,
+    required ILicensePolicyService licensePolicyService,
     required ISchedulerService schedulerService,
     required UpdateSchedule updateSchedule,
     required ExecuteScheduledBackup executeBackup,
     required IBackupProgressNotifier progressNotifier,
   }) : _scheduleRepository = scheduleRepository,
+       _destinationRepository = destinationRepository,
+       _licensePolicyService = licensePolicyService,
        _schedulerService = schedulerService,
        _updateSchedule = updateSchedule,
        _executeBackup = executeBackup,
@@ -32,6 +38,8 @@ class ScheduleMessageHandler {
   }
 
   final IScheduleRepository _scheduleRepository;
+  final IBackupDestinationRepository _destinationRepository;
+  final ILicensePolicyService _licensePolicyService;
   final ISchedulerService _schedulerService;
   final UpdateSchedule _updateSchedule;
   final ExecuteScheduledBackup _executeBackup;
@@ -310,6 +318,39 @@ class ScheduleMessageHandler {
           createScheduleErrorMessage(
             requestId: requestId,
             error: 'Agendamento não encontrado',
+          ),
+        );
+        return;
+      }
+
+      final destinationsResult =
+          await _destinationRepository.getByIds(schedule.destinationIds);
+      if (destinationsResult.isError()) {
+        _progressNotifier.failBackup('Não foi possível carregar destinos');
+        await sendToClient(
+          clientId,
+          createScheduleErrorMessage(
+            requestId: requestId,
+            error: 'Não foi possível carregar destinos para validação',
+          ),
+        );
+        return;
+      }
+      final destinations = destinationsResult.getOrNull()!;
+      final policyResult =
+          await _licensePolicyService.validateExecutionCapabilities(
+        schedule,
+        destinations,
+      );
+      if (policyResult.isError()) {
+        final failure = policyResult.exceptionOrNull();
+        final errorMessage = failure?.toString() ?? 'Licença não permite execução';
+        _progressNotifier.failBackup(errorMessage);
+        await sendToClient(
+          clientId,
+          createScheduleErrorMessage(
+            requestId: requestId,
+            error: errorMessage,
           ),
         );
         return;

@@ -1,4 +1,5 @@
 import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/infrastructure/datasources/cache/query_cache.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -57,6 +58,36 @@ class CachedBackupHistoryRepository implements IBackupHistoryRepository {
     final result = await _repository.update(history);
     // Invalidate cache on update
     _cache.clear();
+    return result;
+  }
+
+  @override
+  Future<rd.Result<BackupHistory>> updateIfRunning(BackupHistory history) async {
+    final result = await _repository.updateIfRunning(history);
+    if (result.isSuccess()) {
+      _cache.clear();
+    }
+    return result;
+  }
+
+  @override
+  Future<rd.Result<BackupHistory>> updateHistoryAndLogIfRunning({
+    required BackupHistory history,
+    required String logStep,
+    required LogLevel logLevel,
+    required String logMessage,
+    String? logDetails,
+  }) async {
+    final result = await _repository.updateHistoryAndLogIfRunning(
+      history: history,
+      logStep: logStep,
+      logLevel: logLevel,
+      logMessage: logMessage,
+      logDetails: logDetails,
+    );
+    if (result.isSuccess()) {
+      _cache.clear();
+    }
     return result;
   }
 

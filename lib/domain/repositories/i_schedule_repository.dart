@@ -8,6 +8,9 @@ abstract class IScheduleRepository {
   Future<rd.Result<Schedule>> update(Schedule schedule);
   Future<rd.Result<void>> delete(String id);
   Future<rd.Result<List<Schedule>>> getEnabled();
+  Future<rd.Result<List<Schedule>>> getEnabledDueForExecution(
+    DateTime beforeOrAt,
+  );
   Future<rd.Result<List<Schedule>>> getByDatabaseConfig(
     String databaseConfigId,
   );

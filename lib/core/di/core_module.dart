@@ -14,6 +14,7 @@ import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/datasources/local/database_migration_224.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
+import 'package:backup_database/infrastructure/license/signed_revocation_list_service.dart';
 import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
@@ -435,20 +436,41 @@ Future<void> setupCoreModule(GetIt getIt) async {
     LoggerService.error(
       'Failed to get license secret key: $error',
     );
+    throw StateError(
+      'License secret key could not be obtained. '
+      'Ensure device key and secure storage are available.',
+    );
   }
 
-  getIt.registerLazySingleton<LicenseGenerationService>(() {
-    final secretKey = licenseSecretKeyResult.getOrElse(
-      (_) => 'BACKUP_DATABASE_LICENSE_SECRET_2024',
-    );
-    return LicenseGenerationService(secretKey: secretKey);
-  });
+  final secretKey = licenseSecretKeyResult.getOrNull()!;
+  final licenseDecoder = LicenseDecoder.fromEnv(v1SecretKey: secretKey);
+  final revocationChecker = SignedRevocationListService.fromEnv();
+  getIt.registerLazySingleton<LicenseDecoder>(() => licenseDecoder);
+  getIt.registerLazySingleton<IRevocationChecker>(() => revocationChecker);
+  getIt.registerLazySingleton<IMetricsCollector>(MetricsCollector.new);
+  getIt.registerLazySingleton<LicenseGenerationService>(
+    () => LicenseGenerationService(
+      secretKey: secretKey,
+      licenseDecoder: licenseDecoder,
+      revocationChecker: revocationChecker,
+    ),
+  );
 
-  getIt.registerLazySingleton<ILicenseValidationService>(
+  getIt.registerLazySingleton<LicenseValidationService>(
     () => LicenseValidationService(
       licenseRepository: getIt<ILicenseRepository>(),
       deviceKeyService: getIt<IDeviceKeyService>(),
+      revocationChecker: revocationChecker,
     ),
+  );
+  getIt.registerLazySingleton<ILicenseValidationService>(
+    () => CachedLicenseValidationService(
+      delegate: getIt<LicenseValidationService>(),
+      deviceKeyService: getIt<IDeviceKeyService>(),
+    ),
+  );
+  getIt.registerLazySingleton<ILicenseCacheInvalidator>(
+    () => getIt<ILicenseValidationService>() as ILicenseCacheInvalidator,
   );
 }
 

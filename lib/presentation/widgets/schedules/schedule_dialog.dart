@@ -376,16 +376,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           const SizedBox(height: 12),
           Consumer<LicenseProvider>(
             builder: (context, licenseProvider, child) {
+              final license = licenseProvider.currentLicense;
               final hasDifferential =
                   licenseProvider.hasValidLicense &&
-                  licenseProvider.currentLicense!.hasFeature(
-                    LicenseFeatures.differentialBackup,
-                  );
+                  (license?.hasFeature(LicenseFeatures.differentialBackup) ??
+                      false);
               final hasLog =
                   licenseProvider.hasValidLicense &&
-                  licenseProvider.currentLicense!.hasFeature(
-                    LicenseFeatures.logBackup,
-                  );
+                  (license?.hasFeature(LicenseFeatures.logBackup) ?? false);
 
               final isSybaseConvertedDifferential =
                   _databaseType == DatabaseType.sybase &&
@@ -491,16 +489,17 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 }).toList(),
                 onChanged: (value) {
                   if (value != null) {
+                    final license = licenseProvider.currentLicense;
                     final hasDifferential =
                         licenseProvider.hasValidLicense &&
-                        licenseProvider.currentLicense!.hasFeature(
-                          LicenseFeatures.differentialBackup,
-                        );
+                        (license?.hasFeature(
+                              LicenseFeatures.differentialBackup,
+                            ) ??
+                            false);
                     final hasLog =
                         licenseProvider.hasValidLicense &&
-                        licenseProvider.currentLicense!.hasFeature(
-                          LicenseFeatures.logBackup,
-                        );
+                        (license?.hasFeature(LicenseFeatures.logBackup) ??
+                            false);
 
                     final isDifferentialBlocked =
                         value == BackupType.differential && !hasDifferential;
@@ -535,11 +534,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           const SizedBox(height: 12),
           Consumer<LicenseProvider>(
             builder: (context, licenseProvider, child) {
+              final license = licenseProvider.currentLicense;
               final hasInterval =
                   licenseProvider.hasValidLicense &&
-                  licenseProvider.currentLicense!.hasFeature(
-                    LicenseFeatures.intervalSchedule,
-                  );
+                  (license?.hasFeature(LicenseFeatures.intervalSchedule) ??
+                      false);
 
               return AppDropdown<ScheduleType>(
                 label: 'Frequência',
@@ -594,11 +593,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 }).toList(),
                 onChanged: (value) {
                   if (value != null) {
+                    final license = licenseProvider.currentLicense;
                     final hasInterval =
                         licenseProvider.hasValidLicense &&
-                        licenseProvider.currentLicense!.hasFeature(
-                          LicenseFeatures.intervalSchedule,
-                        );
+                        (license?.hasFeature(
+                              LicenseFeatures.intervalSchedule,
+                            ) ??
+                            false);
 
                     if (value == ScheduleType.interval && !hasInterval) {
                       MessageModal.showWarning(
@@ -935,11 +936,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         if (_databaseType == DatabaseType.sqlServer)
           Consumer<LicenseProvider>(
             builder: (context, licenseProvider, child) {
+              final license = licenseProvider.currentLicense;
               final hasChecksum =
                   licenseProvider.hasValidLicense &&
-                  licenseProvider.currentLicense!.hasFeature(
-                    LicenseFeatures.checksum,
-                  );
+                  (license?.hasFeature(LicenseFeatures.checksum) ?? false);
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -986,11 +986,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           ),
         Consumer<LicenseProvider>(
           builder: (context, licenseProvider, child) {
+            final license = licenseProvider.currentLicense;
             final hasVerifyIntegrity =
                 licenseProvider.hasValidLicense &&
-                licenseProvider.currentLicense!.hasFeature(
-                  LicenseFeatures.verifyIntegrity,
-                );
+                (license?.hasFeature(LicenseFeatures.verifyIntegrity) ?? false);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1127,11 +1126,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   Widget _buildScriptTab() {
     return Consumer<LicenseProvider>(
       builder: (context, licenseProvider, child) {
+        final license = licenseProvider.currentLicense;
         final hasPostScript =
             licenseProvider.hasValidLicense &&
-            licenseProvider.currentLicense!.hasFeature(
-              LicenseFeatures.postBackupScript,
-            );
+            (license?.hasFeature(LicenseFeatures.postBackupScript) ?? false);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -1570,19 +1568,16 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
     return Consumer<LicenseProvider>(
       builder: (context, licenseProvider, _) {
+        final license = licenseProvider.currentLicense;
         final hasGoogleDrive =
             licenseProvider.hasValidLicense &&
-            licenseProvider.currentLicense!.hasFeature(
-              LicenseFeatures.googleDrive,
-            );
+            (license?.hasFeature(LicenseFeatures.googleDrive) ?? false);
         final hasDropbox =
             licenseProvider.hasValidLicense &&
-            licenseProvider.currentLicense!.hasFeature(LicenseFeatures.dropbox);
+            (license?.hasFeature(LicenseFeatures.dropbox) ?? false);
         final hasNextcloud =
             licenseProvider.hasValidLicense &&
-            licenseProvider.currentLicense!.hasFeature(
-              LicenseFeatures.nextcloud,
-            );
+            (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
 
         bool isBlocked(DestinationType type) {
           if (type == DestinationType.googleDrive) return !hasGoogleDrive;
@@ -1991,9 +1986,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       context,
       listen: false,
     );
+    final license = licenseProvider.currentLicense;
     final hasChecksum =
         licenseProvider.hasValidLicense &&
-        licenseProvider.currentLicense!.hasFeature(LicenseFeatures.checksum);
+        (license?.hasFeature(LicenseFeatures.checksum) ?? false);
 
     final effectiveEnableChecksum =
         _databaseType == DatabaseType.sqlServer &&

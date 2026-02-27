@@ -2,29 +2,36 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
+import 'package:backup_database/core/constants/log_step_constants.dart';
+import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/i_backup_cleanup_service.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_destination_orchestrator.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
+import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_storage_checker.dart';
 import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
+import 'package:uuid/uuid.dart';
 
 class SchedulerService implements ISchedulerService {
   SchedulerService({
     required IScheduleRepository scheduleRepository,
     required IBackupDestinationRepository destinationRepository,
     required IBackupHistoryRepository backupHistoryRepository,
-    required IBackupLogRepository backupLogRepository,
     required BackupOrchestratorService backupOrchestratorService,
     required IDestinationOrchestrator destinationOrchestrator,
     required IBackupCleanupService cleanupService,
@@ -32,11 +39,12 @@ class SchedulerService implements ISchedulerService {
     required IScheduleCalculator scheduleCalculator,
     required IStorageChecker storageChecker,
     required IBackupProgressNotifier progressNotifier,
+    required ILicensePolicyService licensePolicyService,
     ITransferStagingService? transferStagingService,
+    IMetricsCollector? metricsCollector,
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
        _backupHistoryRepository = backupHistoryRepository,
-       _backupLogRepository = backupLogRepository,
        _backupOrchestratorService = backupOrchestratorService,
        _destinationOrchestrator = destinationOrchestrator,
        _cleanupService = cleanupService,
@@ -44,12 +52,13 @@ class SchedulerService implements ISchedulerService {
        _scheduleCalculator = scheduleCalculator,
        _storageChecker = storageChecker,
        _progressNotifier = progressNotifier,
-       _transferStagingService = transferStagingService;
+       _licensePolicyService = licensePolicyService,
+       _transferStagingService = transferStagingService,
+       _metricsCollector = metricsCollector;
 
   final IScheduleRepository _scheduleRepository;
   final IBackupDestinationRepository _destinationRepository;
   final IBackupHistoryRepository _backupHistoryRepository;
-  final IBackupLogRepository _backupLogRepository;
   final BackupOrchestratorService _backupOrchestratorService;
   final IDestinationOrchestrator _destinationOrchestrator;
   final IBackupCleanupService _cleanupService;
@@ -57,7 +66,9 @@ class SchedulerService implements ISchedulerService {
   final IScheduleCalculator _scheduleCalculator;
   final IStorageChecker _storageChecker;
   final IBackupProgressNotifier _progressNotifier;
+  final ILicensePolicyService _licensePolicyService;
   final ITransferStagingService? _transferStagingService;
+  final IMetricsCollector? _metricsCollector;
 
   Timer? _checkTimer;
   bool _isRunning = false;
@@ -120,26 +131,22 @@ class SchedulerService implements ISchedulerService {
     if (!_isRunning) return;
     if (_executingSchedules.isNotEmpty) return;
 
-    final result = await _scheduleRepository.getEnabled();
+    final now = DateTime.now();
+    final result =
+        await _scheduleRepository.getEnabledDueForExecution(now);
 
     result.fold((schedules) async {
-      for (final schedule in schedules) {
-        final shouldRun = _scheduleCalculator.shouldRunNow(schedule);
+      if (schedules.isEmpty) return;
 
-        if (shouldRun) {
-          final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
-          if (nextRunAt != null) {
-            await _scheduleRepository.update(
-              schedule.copyWith(nextRunAt: nextRunAt),
-            );
-          }
-
-          unawaited(
-            _runScheduleWithLock(schedule),
-          );
-          break;
-        }
+      final schedule = schedules.first;
+      final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
+      if (nextRunAt != null) {
+        await _scheduleRepository.update(
+          schedule.copyWith(nextRunAt: nextRunAt),
+        );
       }
+
+      unawaited(_runScheduleWithLock(schedule));
     }, (failure) => null);
   }
 
@@ -151,8 +158,12 @@ class SchedulerService implements ISchedulerService {
 
     late String tempBackupPath;
     var shouldDeleteTempFile = false;
+    final runId = '${schedule.id}_${const Uuid().v4()}';
 
     try {
+      _licensePolicyService.setRunContext(runId);
+      LogContext.setContext(runId: runId, scheduleId: schedule.id);
+
       final canceledAtStart = await _failIfCancellationRequested(
         schedule: schedule,
       );
@@ -222,6 +233,17 @@ class SchedulerService implements ISchedulerService {
         return rd.Failure(ValidationFailure(message: errorMessage));
       }
 
+      final policyResult = await _licensePolicyService
+          .validateExecutionCapabilities(schedule, destinations);
+      if (policyResult.isError()) {
+        final failure = policyResult.exceptionOrNull()!;
+        final message = failure is Failure
+            ? failure.message
+            : failure.toString();
+        LoggerService.error('Execução bloqueada por licença: $message', failure);
+        return rd.Failure(failure);
+      }
+
       final backupResult = await _backupOrchestratorService.executeBackup(
         schedule: schedule,
         outputDirectory: outputDirectory,
@@ -265,7 +287,17 @@ class SchedulerService implements ISchedulerService {
               .difference(backupHistory.startedAt)
               .inSeconds,
         );
-        await _backupHistoryRepository.update(failedHistory);
+        final updateResult = await _backupHistoryRepository
+            .updateHistoryAndLogIfRunning(
+          history: failedHistory,
+          logStep: LogStepConstants.backupFileNotFound,
+          logLevel: LogLevel.error,
+          logMessage: errorMessage,
+        );
+        updateResult.fold(
+          (_) {},
+          (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
+        );
 
         try {
           _progressNotifier.failBackup(errorMessage);
@@ -293,46 +325,76 @@ class SchedulerService implements ISchedulerService {
       final uploadErrors = <String>[];
       var hasCriticalUploadError = false;
 
-      final totalDestinations = destinations.length;
+      final canceledBeforeUpload = await _failIfCancellationRequested(
+        schedule: schedule,
+        backupHistory: backupHistory,
+      );
+      if (canceledBeforeUpload != null) {
+        return canceledBeforeUpload;
+      }
 
-      for (var index = 0; index < destinations.length; index++) {
-        final canceledBeforeUpload = await _failIfCancellationRequested(
-          schedule: schedule,
-          backupHistory: backupHistory,
+      if (!await backupFile.exists()) {
+        final errorMessage =
+            'Arquivo de backup não existe: ${backupHistory.backupPath}';
+        LoggerService.error(errorMessage);
+        final finishedAt = DateTime.now();
+        final failedHistory = backupHistory.copyWith(
+          status: BackupStatus.error,
+          errorMessage: errorMessage,
+          finishedAt: finishedAt,
+          durationSeconds: finishedAt
+              .difference(backupHistory.startedAt)
+              .inSeconds,
         );
-        if (canceledBeforeUpload != null) {
-          return canceledBeforeUpload;
-        }
-
-        final destination = destinations[index];
-
-        if (!await backupFile.exists()) {
-          final errorMessage =
-              'Arquivo de backup foi deletado antes de enviar para '
-              '${destination.name}: ${backupHistory.backupPath}';
-          uploadErrors.add(errorMessage);
-          LoggerService.error(errorMessage);
-          hasCriticalUploadError = true;
-          continue;
-        }
-
+        final updateResult = await _backupHistoryRepository
+            .updateHistoryAndLogIfRunning(
+          history: failedHistory,
+          logStep: LogStepConstants.backupFileNotFound,
+          logLevel: LogLevel.error,
+          logMessage: errorMessage,
+        );
+        updateResult.fold(
+          (_) {},
+          (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
+        );
         try {
-          final progress = 0.85 + (0.1 * (index + 1) / totalDestinations);
-          _progressNotifier.updateProgress(
-            step: 'Enviando para destino',
-            message: 'Enviando para ${destination.name}...',
-            progress: progress,
-          );
+          _progressNotifier.failBackup(errorMessage);
         } on Object catch (e, s) {
-          LoggerService.warning('Erro ao atualizar progresso', e, s);
+          LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
         }
+        return rd.Failure(BackupFailure(message: errorMessage));
+      }
 
-        final sendResult = await _destinationOrchestrator.uploadToDestination(
-          sourceFilePath: backupHistory.backupPath,
-          destination: destination,
+      final uploadStopwatch = Stopwatch()..start();
+      final sendResults = await _destinationOrchestrator.uploadToAllDestinations(
+        sourceFilePath: backupHistory.backupPath,
+        destinations: destinations,
+        isCancelled: () => _cancelRequestedSchedules.contains(schedule.id),
+      );
+      uploadStopwatch.stop();
+      final uploadDuration = uploadStopwatch.elapsed;
+      _metricsCollector?.recordHistogram(
+        ObservabilityMetrics.destinationUploadDurationMs,
+        uploadDuration.inMilliseconds.toDouble(),
+      );
+
+      try {
+        _progressNotifier.updateProgress(
+          step: 'Enviando para destino',
+          message: 'Upload para destinos concluído.',
+          progress: 0.95,
         );
+      } on Object catch (e, s) {
+        LoggerService.warning('Erro ao atualizar progresso', e, s);
+      }
 
+      for (var index = 0; index < sendResults.length; index++) {
+        final destination = destinations[index];
+        final sendResult = sendResults[index];
         sendResult.fold((_) {}, (failure) {
+          _metricsCollector?.incrementCounter(
+            ObservabilityMetrics.destinationUploadFailureTotal,
+          );
           final failureMessage = failure is Failure
               ? failure.message
               : failure.toString();
@@ -357,12 +419,16 @@ class SchedulerService implements ISchedulerService {
               .difference(backupHistory.startedAt)
               .inSeconds,
         );
-        await _backupHistoryRepository.update(failedHistory);
-
-        await _log(
-          backupHistory.id,
-          'error',
-          'Falha ao enviar backup para destinos:\n$errorMessage',
+        final updateResult = await _backupHistoryRepository
+            .updateHistoryAndLogIfRunning(
+          history: failedHistory,
+          logStep: LogStepConstants.uploadFailed,
+          logLevel: LogLevel.error,
+          logMessage: 'Falha ao enviar backup para destinos:\n$errorMessage',
+        );
+        updateResult.fold(
+          (_) {},
+          (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
         );
 
         final notifyResult = await _notificationService.notifyBackupComplete(
@@ -389,6 +455,7 @@ class SchedulerService implements ISchedulerService {
 
         final failure = BackupFailure(
           message: 'Falha ao enviar backup para destinos:\n$errorMessage',
+          code: FailureCodes.uploadFailed,
         );
         LoggerService.error(
           'Backup marcado como erro devido a falhas no upload',
@@ -494,12 +561,41 @@ class SchedulerService implements ISchedulerService {
         '(baseado em lastRunAt: $now, tipo: ${schedule.scheduleType})',
       );
 
+      final cleanupStopwatch = Stopwatch()..start();
       await _cleanupService.cleanOldBackups(
         destinations: destinations,
         backupHistoryId: backupHistory.id,
       );
+      cleanupStopwatch.stop();
+      final cleanupDuration = cleanupStopwatch.elapsed;
+
+      final updatedMetrics = _mergeUploadAndCleanupMetrics(
+        backupHistory.metrics,
+        uploadDuration,
+        cleanupDuration,
+      );
+      if (updatedMetrics != null) {
+        final historyWithMetrics = backupHistory.copyWith(metrics: updatedMetrics);
+        final updateResult =
+            await _backupHistoryRepository.update(historyWithMetrics);
+        updateResult.fold(
+          (_) {},
+          (e) => LoggerService.warning(
+            'Erro ao atualizar métricas de upload/cleanup: $e',
+          ),
+        );
+      }
 
       LoggerService.info('Backup agendado concluído: ${schedule.name}');
+
+      final backupRunDurationMs = DateTime.now()
+          .difference(backupHistory.startedAt)
+          .inMilliseconds
+          .toDouble();
+      _metricsCollector?.recordHistogram(
+        ObservabilityMetrics.backupRunDurationMs,
+        backupRunDurationMs,
+      );
 
       try {
         // Usar stagingRelativePath se disponível, senão usa backupPath original
@@ -540,8 +636,15 @@ class SchedulerService implements ISchedulerService {
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro no backup agendado', e, stackTrace);
       return rd.Failure(
-        BackupFailure(message: 'Erro no backup agendado: $e', originalError: e),
+        BackupFailure(
+          message: 'Erro no backup agendado: $e',
+          code: FailureCodes.backupFailed,
+          originalError: e,
+        ),
       );
+    } finally {
+      _licensePolicyService.clearRunContext();
+      LogContext.clearContext();
     }
   }
 
@@ -550,13 +653,17 @@ class SchedulerService implements ISchedulerService {
       return const rd.Failure(
         ValidationFailure(
           message: 'Já existe um backup em execução no servidor.',
+          code: FailureCodes.scheduleAlreadyRunning,
         ),
       );
     }
 
     if (_executingSchedules.contains(schedule.id)) {
       return const rd.Failure(
-        ValidationFailure(message: 'Este agendamento já está em execução.'),
+        ValidationFailure(
+          message: 'Este agendamento já está em execução.',
+          code: FailureCodes.scheduleAlreadyRunning,
+        ),
       );
     }
 
@@ -592,7 +699,17 @@ class SchedulerService implements ISchedulerService {
             .difference(backupHistory.startedAt)
             .inSeconds,
       );
-      await _backupHistoryRepository.update(canceledHistory);
+      final updateResult = await _backupHistoryRepository
+          .updateHistoryAndLogIfRunning(
+        history: canceledHistory,
+        logStep: LogStepConstants.backupCancelled,
+        logLevel: LogLevel.warning,
+        logMessage: message,
+      );
+      updateResult.fold(
+        (_) {},
+        (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
+      );
     }
 
     try {
@@ -601,21 +718,21 @@ class SchedulerService implements ISchedulerService {
       LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
     }
 
-    return const rd.Failure(ValidationFailure(message: message));
+    return const rd.Failure(
+      ValidationFailure(
+        message: message,
+        code: FailureCodes.backupCancelled,
+      ),
+    );
   }
 
   Future<List<BackupDestination>> _getDestinations(List<String> ids) async {
-    final destinations = <BackupDestination>[];
-
-    for (final id in ids) {
-      final result = await _destinationRepository.getById(id);
-      result.fold(
-        destinations.add,
-        (failure) => null,
-      );
-    }
-
-    return destinations;
+    if (ids.isEmpty) return [];
+    final result = await _destinationRepository.getByIds(ids);
+    return result.fold(
+      (list) => list,
+      (_) => <BackupDestination>[],
+    );
   }
 
   /// Runs the scheduled backup immediately. Used both by local UI (Run now)
@@ -635,7 +752,10 @@ class SchedulerService implements ISchedulerService {
   Future<rd.Result<void>> cancelExecution(String scheduleId) async {
     if (scheduleId.isEmpty) {
       return const rd.Failure(
-        ValidationFailure(message: 'ID do agendamento nao pode ser vazio'),
+        ValidationFailure(
+          message: 'ID do agendamento nao pode ser vazio',
+          code: FailureCodes.validationFailed,
+        ),
       );
     }
 
@@ -643,6 +763,7 @@ class SchedulerService implements ISchedulerService {
       return const rd.Failure(
         ValidationFailure(
           message: 'Não há backup em execução para este schedule',
+          code: FailureCodes.scheduleNotFound,
         ),
       );
     }
@@ -722,36 +843,22 @@ class SchedulerService implements ISchedulerService {
     );
   }
 
+  BackupMetrics? _mergeUploadAndCleanupMetrics(
+    BackupMetrics? base,
+    Duration uploadDuration,
+    Duration cleanupDuration,
+  ) {
+    if (base == null) return null;
+    return base.copyWith(
+      uploadDuration: uploadDuration,
+      cleanupDuration: cleanupDuration,
+    );
+  }
+
   String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-  }
-
-  Future<void> _log(String historyId, String levelStr, String message) async {
-    try {
-      LogLevel level;
-      switch (levelStr) {
-        case 'info':
-          level = LogLevel.info;
-        case 'warning':
-          level = LogLevel.warning;
-        case 'error':
-          level = LogLevel.error;
-        default:
-          level = LogLevel.info;
-      }
-
-      final log = BackupLog(
-        backupHistoryId: historyId,
-        level: level,
-        category: LogCategory.execution,
-        message: message,
-      );
-      await _backupLogRepository.create(log);
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao gravar log no banco: $e');
-    }
   }
 
   /// Aguarda todos os backups em execução terminarem.

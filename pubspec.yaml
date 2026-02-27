@@ -15,6 +15,7 @@ dependencies:
   brasil_fields: ^1.18.0
   cron: ^0.6.2
   crypto: ^3.0.7
+  ed25519_edwards: ^0.3.1
   cupertino_icons: ^1.0.8
   dio: ^5.9.0
   drift: ^2.29.0

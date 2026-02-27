@@ -34,7 +34,6 @@ class MetricsAnalysisService implements IMetricsAnalysisService {
             final duration = Duration(
               seconds: history.durationSeconds ?? 0,
             );
-
             final metrics = history.metrics;
             final flags =
                 metrics?.flags ??
@@ -46,20 +45,19 @@ class MetricsAnalysisService implements IMetricsAnalysisService {
                   stopOnError: true,
                 );
 
-            metricsByType[type]!.add(
-              BackupMetrics(
-                totalDuration: duration,
-                backupDuration: duration,
-                verifyDuration: Duration.zero,
-                backupSizeBytes: sizeInBytes,
-                backupSpeedMbPerSec: _calculateSpeedMbPerSec(
-                  sizeInBytes,
-                  duration.inSeconds,
-                ),
-                backupType: type.name,
-                flags: flags,
-              ),
-            );
+            final resolvedMetrics = metrics ?? BackupMetrics(
+                    totalDuration: duration,
+                    backupDuration: duration,
+                    verifyDuration: Duration.zero,
+                    backupSizeBytes: sizeInBytes,
+                    backupSpeedMbPerSec: _calculateSpeedMbPerSec(
+                      sizeInBytes,
+                      duration.inSeconds,
+                    ),
+                    backupType: type.name,
+                    flags: flags,
+                  );
+            metricsByType[type]!.add(resolvedMetrics);
           }
         }
 
@@ -96,6 +94,32 @@ class MetricsAnalysisService implements IMetricsAnalysisService {
       final p50Idx = _percentileIndex(list.length, 0.5);
       final p95Idx = _percentileIndex(list.length, 0.95);
 
+      final compressionSeconds = list
+          .map((m) => m.compressionDuration.inSeconds)
+          .where((s) => s > 0)
+          .toList()
+        ..sort();
+      final uploadSeconds = list
+          .map((m) => m.uploadDuration.inSeconds)
+          .where((s) => s > 0)
+          .toList()
+        ..sort();
+      final cleanupSeconds = list
+          .map((m) => m.cleanupDuration.inSeconds)
+          .where((s) => s > 0)
+          .toList()
+        ..sort();
+
+      final p95Compression = compressionSeconds.isNotEmpty
+          ? compressionSeconds[_percentileIndex(compressionSeconds.length, 0.95)]
+          : 0;
+      final p95Upload = uploadSeconds.isNotEmpty
+          ? uploadSeconds[_percentileIndex(uploadSeconds.length, 0.95)]
+          : 0;
+      final p95Cleanup = cleanupSeconds.isNotEmpty
+          ? cleanupSeconds[_percentileIndex(cleanupSeconds.length, 0.95)]
+          : 0;
+
       result[entry.key] = BackupMetricsPercentiles(
         sampleCount: list.length,
         p50DurationSeconds: durations[p50Idx],
@@ -104,6 +128,9 @@ class MetricsAnalysisService implements IMetricsAnalysisService {
         p95SizeBytes: sizes[p95Idx],
         p50SpeedMbPerSec: speeds[p50Idx],
         p95SpeedMbPerSec: speeds[p95Idx],
+        p95CompressionSeconds: p95Compression,
+        p95UploadSeconds: p95Upload,
+        p95CleanupSeconds: p95Cleanup,
       );
     }
     return result;

@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
@@ -91,6 +91,25 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
     } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao buscar destinos por tipo: $e'),
+      );
+    }
+  }
+
+  @override
+  Future<rd.Result<List<BackupDestination>>> getByIds(
+    List<String> ids,
+  ) async {
+    if (ids.isEmpty) {
+      return const rd.Success([]);
+    }
+    try {
+      final destinations =
+          await _database.backupDestinationDao.getByIds(ids);
+      final entities = destinations.map(_toEntity).toList();
+      return rd.Success(entities);
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao buscar destinos: $e'),
       );
     }
   }

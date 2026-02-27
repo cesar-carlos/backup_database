@@ -26,6 +26,15 @@ class BackupHistoryDao extends DatabaseAccessor<AppDatabase>
   Future<bool> updateHistory(BackupHistoryTableCompanion history) =>
       update(backupHistoryTable).replace(history);
 
+  Future<int> updateHistoryIfRunning(BackupHistoryTableCompanion history) =>
+      (update(backupHistoryTable)
+            ..where(
+              (t) =>
+                  t.id.equals(history.id.value) &
+                  t.status.equals('running'),
+            ))
+          .write(history);
+
   Future<int> deleteHistory(String id) =>
       (delete(backupHistoryTable)..where((t) => t.id.equals(id))).go();
 

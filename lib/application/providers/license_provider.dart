@@ -1,3 +1,4 @@
+import 'package:backup_database/application/services/i_license_cache_invalidator.dart';
 import 'package:backup_database/application/services/license_generation_service.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/domain/entities/license.dart';
@@ -12,10 +13,12 @@ class LicenseProvider extends ChangeNotifier {
     required LicenseGenerationService generationService,
     required ILicenseRepository licenseRepository,
     required IDeviceKeyService deviceKeyService,
+    ILicenseCacheInvalidator? cacheInvalidator,
   }) : _validationService = validationService,
        _generationService = generationService,
        _licenseRepository = licenseRepository,
-       _deviceKeyService = deviceKeyService {
+       _deviceKeyService = deviceKeyService,
+       _cacheInvalidator = cacheInvalidator {
     loadDeviceKey();
     loadLicense();
   }
@@ -23,6 +26,7 @@ class LicenseProvider extends ChangeNotifier {
   final LicenseGenerationService _generationService;
   final ILicenseRepository _licenseRepository;
   final IDeviceKeyService _deviceKeyService;
+  final ILicenseCacheInvalidator? _cacheInvalidator;
 
   License? _currentLicense;
   bool _isLoading = false;
@@ -110,10 +114,12 @@ class LicenseProvider extends ChangeNotifier {
 
       return createResult.fold(
         (license) async {
-          final saveResult = await _licenseRepository.create(license);
+          final saveResult =
+              await _licenseRepository.upsertByDeviceKey(license);
           return saveResult.fold(
-            (_) {
-              _currentLicense = license;
+            (saved) {
+              _cacheInvalidator?.invalidateLicenseCache();
+              _currentLicense = saved;
               _error = null;
               _isLoading = false;
               notifyListeners();

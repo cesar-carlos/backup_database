@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
@@ -13,6 +14,7 @@ import 'package:backup_database/domain/repositories/i_email_notification_target_
 import 'package:backup_database/domain/repositories/i_email_test_audit_repository.dart';
 import 'package:backup_database/domain/services/i_email_service.dart';
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -25,12 +27,14 @@ class NotificationService implements INotificationService {
     required IBackupLogRepository backupLogRepository,
     required IEmailService emailService,
     required ILicenseValidationService licenseValidationService,
+    IMetricsCollector? metricsCollector,
   }) : _emailConfigRepository = emailConfigRepository,
        _emailNotificationTargetRepository = emailNotificationTargetRepository,
        _emailTestAuditRepository = emailTestAuditRepository,
        _backupLogRepository = backupLogRepository,
        _emailService = emailService,
-       _licenseValidationService = licenseValidationService;
+       _licenseValidationService = licenseValidationService,
+       _metricsCollector = metricsCollector;
 
   final IEmailConfigRepository _emailConfigRepository;
   final IEmailNotificationTargetRepository _emailNotificationTargetRepository;
@@ -38,6 +42,7 @@ class NotificationService implements INotificationService {
   final IBackupLogRepository _backupLogRepository;
   final IEmailService _emailService;
   final ILicenseValidationService _licenseValidationService;
+  final IMetricsCollector? _metricsCollector;
 
   @override
   Future<rd.Result<bool>> notifyBackupComplete(
@@ -76,6 +81,16 @@ class NotificationService implements INotificationService {
   Future<rd.Result<bool>> testEmailConfiguration(
     EmailConfig config,
   ) async {
+    final isAllowed = await _isEmailNotificationAllowed();
+    if (!isAllowed) {
+      return const rd.Failure(
+        ValidationFailure(
+          message:
+              'Notificação por e-mail requer licença válida com permissão.',
+        ),
+      );
+    }
+
     final correlationId = _buildTestCorrelationId(config.id);
     final destinationRecipient = config.recipients
         .map((email) => email.trim())
@@ -193,6 +208,16 @@ Data/Hora do teste: ${DateTime.now()}
     String recipient,
     String subject,
   ) async {
+    final isAllowed = await _isEmailNotificationAllowed();
+    if (!isAllowed) {
+      return const rd.Failure(
+        ValidationFailure(
+          message:
+              'Notificação por e-mail requer licença válida com permissão.',
+        ),
+      );
+    }
+
     final configResult = await _emailConfigRepository.get();
 
     return configResult.fold(
@@ -226,6 +251,9 @@ Data/Hora do teste: ${DateTime.now()}
 
       final allowed = hasEmailNotification.getOrElse((_) => false);
       if (!allowed) {
+        _metricsCollector?.incrementCounter(
+          ObservabilityMetrics.emailNotificationSkippedLicenseTotal,
+        );
         LoggerService.info(
           'Notificação por email bloqueada - licença não possui permissão',
         );
@@ -233,7 +261,7 @@ Data/Hora do teste: ${DateTime.now()}
       return allowed;
     } on Object catch (e) {
       LoggerService.warning('Erro ao verificar licença para notificação: $e');
-      return true;
+      return false;
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 abstract class IBackupHistoryRepository {
@@ -6,6 +7,16 @@ abstract class IBackupHistoryRepository {
   Future<rd.Result<BackupHistory>> getById(String id);
   Future<rd.Result<BackupHistory>> create(BackupHistory history);
   Future<rd.Result<BackupHistory>> update(BackupHistory history);
+
+  Future<rd.Result<BackupHistory>> updateIfRunning(BackupHistory history);
+
+  Future<rd.Result<BackupHistory>> updateHistoryAndLogIfRunning({
+    required BackupHistory history,
+    required String logStep,
+    required LogLevel logLevel,
+    required String logMessage,
+    String? logDetails,
+  });
   Future<rd.Result<void>> delete(String id);
   Future<rd.Result<List<BackupHistory>>> getBySchedule(String scheduleId);
   Future<rd.Result<List<BackupHistory>>> getByStatus(BackupStatus status);

@@ -23,10 +23,17 @@ class ScheduleRepository implements IScheduleRepository {
     try {
       LoggerService.info('[ScheduleRepository] Loading schedules...');
       final schedules = await _database.scheduleDao.getAll();
+      final destinationIdsBySchedule =
+          await _loadDestinationIdsBatch(schedules.map((s) => s.id).toList());
 
       final entities = <Schedule>[];
       for (final schedule in schedules) {
-        final entity = await _toEntity(schedule);
+        final destinationIds = destinationIdsBySchedule[schedule.id] ??
+            await _loadDestinationIdsFallback(
+              schedule.id,
+              schedule.destinationIds,
+            );
+        final entity = await _toEntity(schedule, destinationIds);
         entities.add(entity);
       }
 
@@ -53,7 +60,9 @@ class ScheduleRepository implements IScheduleRepository {
         );
       }
 
-      final entity = await _toEntity(schedule);
+      final destinationIds =
+          await _loadDestinationIds(schedule.id, schedule.destinationIds);
+      final entity = await _toEntity(schedule, destinationIds);
       return rd.Success(entity);
     } on Object catch (e) {
       return rd.Failure(
@@ -148,10 +157,17 @@ class ScheduleRepository implements IScheduleRepository {
   Future<rd.Result<List<Schedule>>> getEnabled() async {
     try {
       final schedules = await _database.scheduleDao.getEnabled();
-      final entities = <Schedule>[];
+      final destinationIdsBySchedule =
+          await _loadDestinationIdsBatch(schedules.map((s) => s.id).toList());
 
+      final entities = <Schedule>[];
       for (final schedule in schedules) {
-        final entity = await _toEntity(schedule);
+        final destinationIds = destinationIdsBySchedule[schedule.id] ??
+            await _loadDestinationIdsFallback(
+              schedule.id,
+              schedule.destinationIds,
+            );
+        final entity = await _toEntity(schedule, destinationIds);
         entities.add(entity);
       }
 
@@ -164,6 +180,40 @@ class ScheduleRepository implements IScheduleRepository {
   }
 
   @override
+  Future<rd.Result<List<Schedule>>> getEnabledDueForExecution(
+    DateTime beforeOrAt,
+  ) async {
+    try {
+      final schedules =
+          await _database.scheduleDao.getEnabledDueForExecution(beforeOrAt);
+      if (schedules.isEmpty) {
+        return const rd.Success([]);
+      }
+      final destinationIdsBySchedule =
+          await _loadDestinationIdsBatch(schedules.map((s) => s.id).toList());
+
+      final entities = <Schedule>[];
+      for (final schedule in schedules) {
+        final destinationIds = destinationIdsBySchedule[schedule.id] ??
+            await _loadDestinationIdsFallback(
+              schedule.id,
+              schedule.destinationIds,
+            );
+        final entity = await _toEntity(schedule, destinationIds);
+        entities.add(entity);
+      }
+
+      return rd.Success(entities);
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(
+          message: 'Erro ao buscar agendamentos vencidos: $e',
+        ),
+      );
+    }
+  }
+
+  @override
   Future<rd.Result<List<Schedule>>> getByDatabaseConfig(
     String databaseConfigId,
   ) async {
@@ -171,10 +221,17 @@ class ScheduleRepository implements IScheduleRepository {
       final schedules = await _database.scheduleDao.getByDatabaseConfig(
         databaseConfigId,
       );
-      final entities = <Schedule>[];
+      final destinationIdsBySchedule =
+          await _loadDestinationIdsBatch(schedules.map((s) => s.id).toList());
 
+      final entities = <Schedule>[];
       for (final schedule in schedules) {
-        final entity = await _toEntity(schedule);
+        final destinationIds = destinationIdsBySchedule[schedule.id] ??
+            await _loadDestinationIdsFallback(
+              schedule.id,
+              schedule.destinationIds,
+            );
+        final entity = await _toEntity(schedule, destinationIds);
         entities.add(entity);
       }
 
@@ -207,7 +264,9 @@ class ScheduleRepository implements IScheduleRepository {
           continue;
         }
 
-        final entity = await _toEntity(schedule);
+        final destinationIds =
+            await _loadDestinationIds(schedule.id, schedule.destinationIds);
+        final entity = await _toEntity(schedule, destinationIds);
         entities.add(entity);
       }
 
@@ -237,12 +296,10 @@ class ScheduleRepository implements IScheduleRepository {
     }
   }
 
-  Future<Schedule> _toEntity(SchedulesTableData data) async {
-    final destinationIds = await _loadDestinationIds(
-      data.id,
-      data.destinationIds,
-    );
-
+  Future<Schedule> _toEntity(
+    SchedulesTableData data,
+    List<String> destinationIds,
+  ) async {
     final scheduleConfigMap = _safeDecodeScheduleConfig(data.scheduleConfig);
     final verifyPolicy = _parseVerifyPolicy(scheduleConfigMap);
     final databaseType = DatabaseType.values.firstWhere(
@@ -306,6 +363,28 @@ class ScheduleRepository implements IScheduleRepository {
     );
   }
 
+  Future<Map<String, List<String>>> _loadDestinationIdsBatch(
+    List<String> scheduleIds,
+  ) async {
+    if (scheduleIds.isEmpty) return {};
+    try {
+      final relations = await _database.scheduleDestinationDao.getByScheduleIds(
+        scheduleIds,
+      );
+      final map = <String, List<String>>{};
+      for (final r in relations) {
+        map[r.scheduleId] ??= [];
+        map[r.scheduleId]!.add(r.destinationId);
+      }
+      return map;
+    } on Object catch (e) {
+      LoggerService.warning(
+        '[ScheduleRepository] Failed batch loading destinations: $e',
+      );
+      return {};
+    }
+  }
+
   Future<List<String>> _loadDestinationIds(
     String scheduleId,
     String legacyDestinationIdsJson,
@@ -324,7 +403,13 @@ class ScheduleRepository implements IScheduleRepository {
       );
     }
 
-    // Fallback while old DBs migrate.
+    return _loadDestinationIdsFallback(scheduleId, legacyDestinationIdsJson);
+  }
+
+  Future<List<String>> _loadDestinationIdsFallback(
+    String scheduleId,
+    String legacyDestinationIdsJson,
+  ) async {
     try {
       return (jsonDecode(legacyDestinationIdsJson) as List).cast<String>();
     } on Object {

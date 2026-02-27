@@ -2,6 +2,7 @@ import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_running_state.dart';
+import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
@@ -13,13 +14,16 @@ class MetricsMessageHandler {
     required IBackupHistoryRepository backupHistoryRepository,
     required IScheduleRepository scheduleRepository,
     required IBackupRunningState backupRunningState,
+    IMetricsCollector? metricsCollector,
   }) : _backupHistoryRepository = backupHistoryRepository,
        _scheduleRepository = scheduleRepository,
-       _backupRunningState = backupRunningState;
+       _backupRunningState = backupRunningState,
+       _metricsCollector = metricsCollector;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;
   final IBackupRunningState _backupRunningState;
+  final IMetricsCollector? _metricsCollector;
 
   Future<void> handle(
     String clientId,
@@ -101,6 +105,11 @@ class MetricsMessageHandler {
       'recentBackups': recentBackups,
       'backupInProgress': _backupRunningState.isRunning,
     };
+
+    final metricsSnapshot = _metricsCollector?.getSnapshot();
+    if (metricsSnapshot != null && metricsSnapshot.isNotEmpty) {
+      payload['observability'] = metricsSnapshot;
+    }
     if (_backupRunningState.isRunning &&
         _backupRunningState.currentBackupName != null) {
       payload['backupScheduleName'] = _backupRunningState.currentBackupName;

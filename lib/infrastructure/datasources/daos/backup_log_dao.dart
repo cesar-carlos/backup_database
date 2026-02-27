@@ -19,6 +19,12 @@ class BackupLogDao extends DatabaseAccessor<AppDatabase>
   Future<int> insertLog(BackupLogsTableCompanion log) =>
       into(backupLogsTable).insert(log);
 
+  Future<int> insertOrReplaceLog(BackupLogsTableCompanion log) =>
+      into(backupLogsTable).insert(
+        log,
+        mode: InsertMode.insertOrReplace,
+      );
+
   Future<List<BackupLogsTableData>> getByBackupHistory(
     String backupHistoryId,
   ) => (select(

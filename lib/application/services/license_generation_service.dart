@@ -1,15 +1,24 @@
 import 'dart:convert';
 
+import 'package:backup_database/application/services/license_decoder.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/license.dart';
+import 'package:backup_database/domain/services/i_revocation_checker.dart';
 import 'package:crypto/crypto.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class LicenseGenerationService {
-  LicenseGenerationService({required String secretKey})
-    : _secretKey = secretKey;
+  LicenseGenerationService({
+    required String secretKey,
+    required LicenseDecoder licenseDecoder,
+    IRevocationChecker? revocationChecker,
+  })  : _secretKey = secretKey,
+        _licenseDecoder = licenseDecoder,
+        _revocationChecker = revocationChecker;
   final String _secretKey;
+  final LicenseDecoder _licenseDecoder;
+  final IRevocationChecker? _revocationChecker;
 
   Future<rd.Result<String>> generateLicenseKey({
     required String deviceKey,
@@ -51,89 +60,8 @@ class LicenseGenerationService {
 
   Future<rd.Result<Map<String, dynamic>>> decodeLicenseKey(
     String licenseKey,
-  ) async {
-    try {
-      final trimmedKey = licenseKey.trim();
-      if (trimmedKey.isEmpty) {
-        return const rd.Failure(
-          core.ValidationFailure(
-            message: 'Chave de licença não pode estar vazia',
-          ),
-        );
-      }
-
-      List<int> licenseBytes;
-      try {
-        licenseBytes = base64.decode(trimmedKey);
-      } on Object catch (e) {
-        return const rd.Failure(
-          core.ValidationFailure(
-            message: 'Chave de licença inválida. Formato base64 incorreto.',
-          ),
-        );
-      }
-
-      if (licenseBytes.isEmpty) {
-        return const rd.Failure(
-          core.ValidationFailure(
-            message: 'Chave de licença vazia após decodificação',
-          ),
-        );
-      }
-
-      final licenseJson = utf8.decode(licenseBytes);
-      if (licenseJson.trim().isEmpty) {
-        return const rd.Failure(
-          core.ValidationFailure(
-            message: 'Chave de licença contém dados vazios',
-          ),
-        );
-      }
-
-      Map<String, dynamic> licenseData;
-      try {
-        licenseData = jsonDecode(licenseJson) as Map<String, dynamic>;
-      } on Object catch (e) {
-        return const rd.Failure(
-          core.ValidationFailure(
-            message: 'Chave de licença inválida. Formato JSON incorreto.',
-          ),
-        );
-      }
-
-      final data = licenseData['data'] as Map<String, dynamic>;
-      final signature = licenseData['signature'] as String;
-
-      final dataJson = jsonEncode(data);
-      final dataBytes = utf8.encode(dataJson);
-      final keyBytes = utf8.encode(_secretKey);
-
-      final hmac = Hmac(sha256, keyBytes);
-      final expectedSignature = hmac.convert(dataBytes).toString();
-
-      if (signature != expectedSignature) {
-        LoggerService.warning('Assinatura de licença inválida');
-        return const rd.Failure(
-          core.ValidationFailure(message: 'Assinatura de licença inválida'),
-        );
-      }
-
-      return rd.Success(data);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao decodificar chave de licença',
-        e,
-        stackTrace,
-      );
-      return const rd.Failure(
-        core.ValidationFailure(
-          message:
-              'Erro ao processar chave de licença. '
-              'Verifique se a chave está correta.',
-        ),
-      );
-    }
-  }
+  ) async =>
+      _licenseDecoder.decode(licenseKey);
 
   Future<rd.Result<License>> createLicenseFromKey({
     required String licenseKey,
@@ -141,11 +69,21 @@ class LicenseGenerationService {
   }) async {
     try {
       final decodeResult = await decodeLicenseKey(licenseKey);
-      return decodeResult.fold((data) {
+      return await decodeResult.fold((data) async {
         if (data['deviceKey'] as String != deviceKey) {
           return const rd.Failure(
             core.ValidationFailure(
               message: 'Chave de licença não corresponde ao dispositivo',
+            ),
+          );
+        }
+
+        final revoked = await _revocationChecker?.isRevoked(deviceKey) ?? false;
+        if (revoked) {
+          LoggerService.warning('Licença rejeitada: deviceKey revogado');
+          return const rd.Failure(
+            core.ValidationFailure(
+              message: 'Licença revogada para este dispositivo',
             ),
           );
         }

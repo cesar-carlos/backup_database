@@ -206,21 +206,17 @@ class _DestinationDialogState extends State<DestinationDialog> {
               const SizedBox(height: 16),
               Consumer<LicenseProvider>(
                 builder: (context, licenseProvider, child) {
+                  final license = licenseProvider.currentLicense;
                   final hasGoogleDrive =
                       licenseProvider.hasValidLicense &&
-                      licenseProvider.currentLicense!.hasFeature(
-                        LicenseFeatures.googleDrive,
-                      );
+                      (license?.hasFeature(LicenseFeatures.googleDrive) ??
+                          false);
                   final hasDropbox =
                       licenseProvider.hasValidLicense &&
-                      licenseProvider.currentLicense!.hasFeature(
-                        LicenseFeatures.dropbox,
-                      );
+                      (license?.hasFeature(LicenseFeatures.dropbox) ?? false);
                   final hasNextcloud =
                       licenseProvider.hasValidLicense &&
-                      licenseProvider.currentLicense!.hasFeature(
-                        LicenseFeatures.nextcloud,
-                      );
+                      (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
 
                   final isGoogleDriveBlocked =
                       _selectedType == DestinationType.googleDrive &&
@@ -279,19 +275,16 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Widget _buildTypeSelector() {
     return Consumer<LicenseProvider>(
       builder: (context, licenseProvider, child) {
+        final license = licenseProvider.currentLicense;
         final hasGoogleDrive =
             licenseProvider.hasValidLicense &&
-            licenseProvider.currentLicense!.hasFeature(
-              LicenseFeatures.googleDrive,
-            );
+            (license?.hasFeature(LicenseFeatures.googleDrive) ?? false);
         final hasDropbox =
             licenseProvider.hasValidLicense &&
-            licenseProvider.currentLicense!.hasFeature(LicenseFeatures.dropbox);
+            (license?.hasFeature(LicenseFeatures.dropbox) ?? false);
         final hasNextcloud =
             licenseProvider.hasValidLicense &&
-            licenseProvider.currentLicense!.hasFeature(
-              LicenseFeatures.nextcloud,
-            );
+            (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
 
         return AppDropdown<DestinationType>(
           label: _t('Tipo de destino', 'Destination type'),
@@ -1665,9 +1658,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
     if (_selectedType == DestinationType.nextcloud) {
       final licenseProvider = context.read<LicenseProvider>();
+      final license = licenseProvider.currentLicense;
       final hasNextcloud =
           licenseProvider.hasValidLicense &&
-          licenseProvider.currentLicense!.hasFeature(LicenseFeatures.nextcloud);
+          (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
       if (!hasNextcloud) {
         _showError(
           _t(

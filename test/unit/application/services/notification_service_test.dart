@@ -108,6 +108,21 @@ void main() {
 
   group('NotificationService.notifyBackupComplete', () {
     test(
+      'returns false when license validation throws (fail-closed)',
+      () async {
+        when(
+          () => licenseValidationService.isFeatureAllowed(any()),
+        ).thenThrow(Exception('License service unavailable'));
+
+        final result = await service.notifyBackupComplete(successHistory);
+
+        expect(result.isSuccess(), isTrue);
+        expect(result.getOrElse((_) => true), isFalse);
+        verifyNever(() => emailConfigRepository.getAll());
+      },
+    );
+
+    test(
       'returns false and skips sending when license does not allow email',
       () async {
         when(
@@ -294,6 +309,30 @@ void main() {
   });
 
   group('NotificationService.sendTestEmail', () {
+    test(
+      'returns failure when license does not allow email notification',
+      () async {
+        when(
+          () => licenseValidationService.isFeatureAllowed(any()),
+        ).thenAnswer((_) async => const rd.Success(false));
+
+        final result = await service.sendTestEmail(
+          'destino@exemplo.com',
+          'Assunto Teste',
+        );
+
+        expect(result.isError(), isTrue);
+        verifyNever(() => emailConfigRepository.get());
+        verifyNever(
+          () => emailService.sendEmail(
+            config: any(named: 'config'),
+            subject: any(named: 'subject'),
+            body: any(named: 'body'),
+          ),
+        );
+      },
+    );
+
     test('uses the recipient passed to sendTestEmail', () async {
       when(
         () => emailConfigRepository.get(),
@@ -329,6 +368,38 @@ void main() {
   });
 
   group('NotificationService.testEmailConfiguration', () {
+    test(
+      'returns failure when license does not allow email notification',
+      () async {
+        when(
+          () => licenseValidationService.isFeatureAllowed(any()),
+        ).thenAnswer((_) async => const rd.Success(false));
+
+        final configWithDestination = EmailConfig(
+          id: 'config-test',
+          configName: 'SMTP Test',
+          smtpServer: 'smtp.example.com',
+          username: 'smtp-user@example.com',
+          fromEmail: 'sender@example.com',
+          password: 'secret',
+          recipients: const ['destino@example.com'],
+        );
+
+        final result = await service.testEmailConfiguration(
+          configWithDestination,
+        );
+
+        expect(result.isError(), isTrue);
+        verifyNever(
+          () => emailService.sendEmail(
+            config: any(named: 'config'),
+            subject: any(named: 'subject'),
+            body: any(named: 'body'),
+          ),
+        );
+      },
+    );
+
     test(
       'uses destination recipient from config when testing SMTP',
       () async {

@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/nextcloud_failure.dart';
+import 'package:backup_database/core/utils/file_stream_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
@@ -74,7 +76,10 @@ class NextcloudDestinationService implements INextcloudDestinationService {
 
           final response = await dio.putUri(
             uploadUrl,
-            data: sourceFile.openRead(),
+            data: chunkedFileStream(
+              sourceFile,
+              UploadChunkConstants.httpUploadChunkSize,
+            ),
             onSendProgress: onProgress != null
                 ? (sent, total) {
                     if (total > 0) {

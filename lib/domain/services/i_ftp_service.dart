@@ -20,6 +20,7 @@ abstract class IFtpService {
     String? customFileName,
     int maxRetries = 3,
     UploadProgressCallback? onProgress,
+    bool Function()? isCancelled,
   });
 
   Future<rd.Result<bool>> testConnection(FtpDestinationConfig config);

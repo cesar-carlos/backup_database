@@ -1,6 +1,7 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -10,10 +11,14 @@ class CreateSchedule {
     this._repository,
     this._schedulerService,
     this._calculator,
+    this._licensePolicyService,
+    this._destinationRepository,
   );
   final IScheduleRepository _repository;
   final ISchedulerService _schedulerService;
   final IScheduleCalculator _calculator;
+  final ILicensePolicyService _licensePolicyService;
+  final IBackupDestinationRepository _destinationRepository;
 
   Future<rd.Result<Schedule>> call(Schedule schedule) async {
     if (schedule.name.isEmpty) {
@@ -32,6 +37,21 @@ class CreateSchedule {
           message: 'Pelo menos um destino deve ser selecionado',
         ),
       );
+    }
+
+    final destinationsResult =
+        await _destinationRepository.getByIds(schedule.destinationIds);
+    if (destinationsResult.isError()) {
+      return rd.Failure(destinationsResult.exceptionOrNull()!);
+    }
+    final destinations = destinationsResult.getOrNull()!;
+    final policyResult =
+        await _licensePolicyService.validateExecutionCapabilities(
+      schedule,
+      destinations,
+    );
+    if (policyResult.isError()) {
+      return rd.Failure(policyResult.exceptionOrNull()!);
     }
 
     final nextRunAt = _calculator.getNextRunTime(schedule);

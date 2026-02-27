@@ -1,4 +1,5 @@
 import 'package:backup_database/core/logging/file_logger_service.dart';
+import 'package:backup_database/core/logging/log_context.dart';
 import 'package:logger/logger.dart';
 
 class LoggerService {
@@ -43,38 +44,43 @@ class LoggerService {
   /// Retorna o FileLoggerService se disponível
   static FileLoggerService? get fileLogger => _fileLogger;
 
+  static String _messageWithContext(String message) =>
+      LogContext.hasContext ? '${LogContext.buildStructuredPrefix()}$message' : message;
+
   static void debug(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.d(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(message, level: LogLevel.debug);
+    _fileLogger?.log(_messageWithContext(message), level: LogLevel.debug);
   }
 
   static void info(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.i(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(message);
+    _fileLogger?.log(_messageWithContext(message));
   }
 
   static void warning(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.w(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(message, level: LogLevel.warning);
+    _fileLogger?.log(_messageWithContext(message), level: LogLevel.warning);
   }
 
   static void error(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.e(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(message, level: LogLevel.error);
+    _fileLogger?.log(_messageWithContext(message), level: LogLevel.error);
   }
 
   static void fatal(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.f(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(message, level: LogLevel.error);
+    _fileLogger?.log(_messageWithContext(message), level: LogLevel.error);
   }
 
   static String _contextPrefix({
     String? requestId,
+    String? runId,
     String? clientId,
     String? scheduleId,
   }) {
     final parts = <String>[];
     if (requestId != null) parts.add('requestId=$requestId');
+    if (runId != null) parts.add('runId=$runId');
     if (clientId != null) parts.add('clientId=$clientId');
     if (scheduleId != null) parts.add('scheduleId=$scheduleId');
     if (parts.isEmpty) return '';
@@ -84,60 +90,57 @@ class LoggerService {
   static void infoWithContext(
     String message, {
     String? requestId,
+    String? runId,
     String? clientId,
     String? scheduleId,
     dynamic error,
     StackTrace? stackTrace,
   }) {
-    _instance.i(
-      _contextPrefix(
-            requestId: requestId?.toString(),
-            clientId: clientId,
-            scheduleId: scheduleId,
-          ) +
-          message,
-      error: error,
-      stackTrace: stackTrace,
+    final prefix = _contextPrefix(
+      requestId: requestId?.toString(),
+      runId: runId,
+      clientId: clientId,
+      scheduleId: scheduleId,
     );
+    _instance.i(prefix + message, error: error, stackTrace: stackTrace);
+    _fileLogger?.log(prefix + message);
   }
 
   static void warningWithContext(
     String message, {
     String? requestId,
+    String? runId,
     String? clientId,
     String? scheduleId,
     dynamic error,
     StackTrace? stackTrace,
   }) {
-    _instance.w(
-      _contextPrefix(
-            requestId: requestId?.toString(),
-            clientId: clientId,
-            scheduleId: scheduleId,
-          ) +
-          message,
-      error: error,
-      stackTrace: stackTrace,
+    final prefix = _contextPrefix(
+      requestId: requestId?.toString(),
+      runId: runId,
+      clientId: clientId,
+      scheduleId: scheduleId,
     );
+    _instance.w(prefix + message, error: error, stackTrace: stackTrace);
+    _fileLogger?.log(prefix + message, level: LogLevel.warning);
   }
 
   static void errorWithContext(
     String message, {
     String? requestId,
+    String? runId,
     String? clientId,
     String? scheduleId,
     dynamic error,
     StackTrace? stackTrace,
   }) {
-    _instance.e(
-      _contextPrefix(
-            requestId: requestId?.toString(),
-            clientId: clientId,
-            scheduleId: scheduleId,
-          ) +
-          message,
-      error: error,
-      stackTrace: stackTrace,
+    final prefix = _contextPrefix(
+      requestId: requestId?.toString(),
+      runId: runId,
+      clientId: clientId,
+      scheduleId: scheduleId,
     );
+    _instance.e(prefix + message, error: error, stackTrace: stackTrace);
+    _fileLogger?.log(prefix + message, level: LogLevel.error);
   }
 }

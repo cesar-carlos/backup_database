@@ -17,6 +17,15 @@ class ScheduleDestinationDao extends DatabaseAccessor<AppDatabase>
     )..where((t) => t.scheduleId.equals(scheduleId))).get();
   }
 
+  Future<List<ScheduleDestinationsTableData>> getByScheduleIds(
+    List<String> scheduleIds,
+  ) {
+    if (scheduleIds.isEmpty) return Future.value([]);
+    return (select(
+      scheduleDestinationsTable,
+    )..where((t) => t.scheduleId.isIn(scheduleIds))).get();
+  }
+
   Future<List<ScheduleDestinationsTableData>> getByDestinationId(
     String destinationId,
   ) {

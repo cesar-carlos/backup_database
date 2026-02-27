@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -491,7 +492,7 @@ class LocalDestinationService implements ILocalDestinationService {
 }
 
 extension FileCopyWithProgress on File {
-  static const int _chunkSize = 1024 * 1024;
+  static int get _chunkSize => UploadChunkConstants.localCopyChunkSize;
 
   Future<void> copyToWithBugFix(
     String newPath, {

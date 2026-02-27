@@ -1,5 +1,6 @@
-﻿import 'dart:io';
+import 'dart:io';
 
+import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
@@ -72,7 +73,7 @@ class WinRarService {
       final result = await _processService.run(
         executable: _winRarPath!,
         arguments: arguments,
-        timeout: const Duration(hours: 1),
+        timeout: StepTimeoutConstants.compression,
       );
 
       return result.fold(
@@ -134,7 +135,7 @@ class WinRarService {
       final result = await _processService.run(
         executable: _winRarPath!,
         arguments: arguments,
-        timeout: const Duration(hours: 2),
+        timeout: StepTimeoutConstants.compression,
       );
 
       return result.fold(

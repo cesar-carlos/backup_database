@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -231,7 +232,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
     int fileSize,
     UploadProgressCallback? onProgress,
   ) async {
-    const dropboxChunkSize = 4 * 1024 * 1024;
+    const dropboxChunkSize = UploadChunkConstants.dropboxResumableChunkSize;
     final totalChunks = (fileSize / dropboxChunkSize).ceil();
 
     final contentDio = Dio(

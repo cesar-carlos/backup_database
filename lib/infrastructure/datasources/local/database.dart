@@ -59,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 24;
+  int get schemaVersion => 25;
 
   @override
   MigrationStrategy get migration {
@@ -855,6 +855,22 @@ class AppDatabase extends _$AppDatabase {
             );
           }
         }
+
+        if (from < 25) {
+          try {
+            await _ensureLicensesDeviceKeyUnique();
+            LoggerService.info(
+              'Migração v25: unicidade por device_key em licenses_table '
+              'garantida.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v25 para licenses_table device_key unique',
+              e,
+              stackTrace,
+            );
+          }
+        }
       },
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -866,6 +882,7 @@ class AppDatabase extends _$AppDatabase {
 
         await _ensureScheduleDestinationsTableExists();
         await _createScheduleDestinationIndexes();
+        await _createCriticalQueryIndexes();
         await _createScheduleDatabaseConfigIntegrityTriggers();
 
         await _migrateSybaseColumnsToSnakeCase();
@@ -961,6 +978,34 @@ class AppDatabase extends _$AppDatabase {
         stackTrace,
       );
     }
+  }
+
+  Future<void> _ensureLicensesDeviceKeyUnique() async {
+    final tables = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type='table' "
+      "AND name='licenses_table'",
+    ).get();
+    if (tables.isEmpty) return;
+
+    await customStatement('''
+      DELETE FROM licenses_table
+      WHERE id IN (
+        SELECT l1.id FROM licenses_table l1
+        WHERE EXISTS (
+          SELECT 1 FROM licenses_table l2
+          WHERE l1.device_key = l2.device_key
+          AND (
+            l2.updated_at > l1.updated_at
+            OR (l2.updated_at = l1.updated_at AND l2.id > l1.id)
+          )
+        )
+      )
+    ''');
+
+    await customStatement('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_licenses_device_key
+      ON licenses_table(device_key)
+    ''');
   }
 
   Future<void> _ensureEmailTestAuditSchema() async {
@@ -1532,6 +1577,37 @@ class AppDatabase extends _$AppDatabase {
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
         'Erro ao criar índices de schedule_destinations_table',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _createCriticalQueryIndexes() async {
+    try {
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_schedules_enabled_next_run
+        ON schedules_table(enabled, next_run_at)
+      ''');
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_backup_history_schedule_started
+        ON backup_history_table(schedule_id, started_at)
+      ''');
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_backup_history_status_started
+        ON backup_history_table(status, started_at)
+      ''');
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_backup_logs_history_created
+        ON backup_logs_table(backup_history_id, created_at)
+      ''');
+      await customStatement('''
+        CREATE INDEX IF NOT EXISTS idx_backup_logs_level_created
+        ON backup_logs_table(level, created_at)
+      ''');
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Erro ao criar índices de consultas críticas',
         e,
         stackTrace,
       );

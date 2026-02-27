@@ -1,13 +1,19 @@
 import 'dart:convert';
 
-import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/retry_utils.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_destination_orchestrator.dart';
+import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
+import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
-import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
+import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
@@ -20,28 +26,42 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     required IGoogleDriveDestinationService googleDriveDestinationService,
     required SendToDropbox sendToDropbox,
     required SendToNextcloud sendToNextcloud,
-    required ILicenseValidationService licenseValidationService,
+    required ILicensePolicyService licensePolicyService,
+    required CircuitBreakerRegistry circuitBreakerRegistry,
   }) : _localDestinationService = localDestinationService,
        _sendToFtp = sendToFtp,
        _googleDriveDestinationService = googleDriveDestinationService,
        _sendToDropbox = sendToDropbox,
        _sendToNextcloud = sendToNextcloud,
-       _licenseValidationService = licenseValidationService;
+       _licensePolicyService = licensePolicyService,
+       _circuitBreakerRegistry = circuitBreakerRegistry;
 
   final ILocalDestinationService _localDestinationService;
   final SendToFtp _sendToFtp;
   final IGoogleDriveDestinationService _googleDriveDestinationService;
   final SendToDropbox _sendToDropbox;
   final SendToNextcloud _sendToNextcloud;
-  final ILicenseValidationService _licenseValidationService;
+  final ILicensePolicyService _licensePolicyService;
+  final CircuitBreakerRegistry _circuitBreakerRegistry;
 
   @override
   Future<rd.Result<void>> uploadToDestination({
     required String sourceFilePath,
     required BackupDestination destination,
+    bool Function()? isCancelled,
   }) async {
     try {
-      final licenseCheck = await _ensureDestinationFeatureAllowed(destination);
+      if (isCancelled != null && isCancelled()) {
+        return const rd.Failure(
+          BackupFailure(
+            message: 'Upload cancelado pelo usuário.',
+            code: FailureCodes.uploadCancelled,
+          ),
+        );
+      }
+
+      final licenseCheck =
+          await _licensePolicyService.validateDestinationCapabilities(destination);
       if (licenseCheck.isError()) {
         final failure = licenseCheck.exceptionOrNull()!;
         LoggerService.warning(
@@ -66,6 +86,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             sourceFilePath,
             destination,
             configJson,
+            isCancelled,
           );
 
         case DestinationType.googleDrive:
@@ -73,6 +94,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             sourceFilePath,
             destination,
             configJson,
+            isCancelled,
           );
 
         case DestinationType.dropbox:
@@ -80,6 +102,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             sourceFilePath,
             destination,
             configJson,
+            isCancelled,
           );
 
         case DestinationType.nextcloud:
@@ -87,6 +110,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             sourceFilePath,
             destination,
             configJson,
+            isCancelled,
           );
       }
     } on Object catch (e) {
@@ -104,55 +128,48 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
   Future<List<rd.Result<void>>> uploadToAllDestinations({
     required String sourceFilePath,
     required List<BackupDestination> destinations,
+    bool Function()? isCancelled,
   }) async {
-    final results = <rd.Result<void>>[];
+    if (destinations.isEmpty) {
+      return [];
+    }
 
-    for (final destination in destinations) {
-      final result = await uploadToDestination(
-        sourceFilePath: sourceFilePath,
-        destination: destination,
+    const maxParallel = UploadParallelismConstants.maxParallelUploads;
+    final results = List<rd.Result<void>>.filled(destinations.length, const rd.Success(()));
+
+    for (var i = 0; i < destinations.length; i += maxParallel) {
+      if (isCancelled != null && isCancelled()) {
+        for (var j = i; j < destinations.length; j++) {
+          results[j] = const rd.Failure(
+            BackupFailure(
+              message: 'Upload cancelado pelo usuário.',
+              code: FailureCodes.uploadCancelled,
+            ),
+          );
+        }
+        break;
+      }
+
+      final end = i + maxParallel < destinations.length
+          ? i + maxParallel
+          : destinations.length;
+      final batch = destinations.sublist(i, end);
+
+      final batchFutures = batch.asMap().entries.map(
+        (entry) => uploadToDestination(
+          sourceFilePath: sourceFilePath,
+          destination: entry.value,
+          isCancelled: isCancelled,
+        ),
       );
-      results.add(result);
+
+      final batchResults = await Future.wait(batchFutures);
+      for (var j = 0; j < batchResults.length; j++) {
+        results[i + j] = batchResults[j];
+      }
     }
 
     return results;
-  }
-
-  Future<rd.Result<void>> _ensureDestinationFeatureAllowed(
-    BackupDestination destination,
-  ) async {
-    String? requiredFeature;
-    switch (destination.type) {
-      case DestinationType.googleDrive:
-        requiredFeature = LicenseFeatures.googleDrive;
-      case DestinationType.dropbox:
-        requiredFeature = LicenseFeatures.dropbox;
-      case DestinationType.nextcloud:
-        requiredFeature = LicenseFeatures.nextcloud;
-      case DestinationType.local:
-      case DestinationType.ftp:
-        requiredFeature = null;
-    }
-
-    if (requiredFeature == null) {
-      return const rd.Success(());
-    }
-
-    final allowedResult = await _licenseValidationService.isFeatureAllowed(
-      requiredFeature,
-    );
-    final allowed = allowedResult.getOrElse((_) => false);
-    if (!allowed) {
-      return rd.Failure(
-        ValidationFailure(
-          message:
-              'Destino ${destination.name} requer licença '
-              '(${destination.type.name}).',
-        ),
-      );
-    }
-
-    return const rd.Success(());
   }
 
   Future<rd.Result<void>> _uploadToLocal(
@@ -209,7 +226,23 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String sourceFilePath,
     BackupDestination destination,
     Map<String, dynamic> configJson,
+    bool Function()? isCancelled,
   ) async {
+    final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
+    if (!breaker.allowsRequest) {
+      LoggerService.warning(
+        'Circuit breaker aberto para ${destination.name}, pulando upload FTP',
+      );
+      return rd.Failure(
+        BackupFailure(
+          message:
+              'Destino ${destination.name} temporariamente indisponível '
+              '(circuit breaker aberto). Tente novamente mais tarde.',
+          code: FailureCodes.circuitBreakerOpen,
+        ),
+      );
+    }
+
     final config = FtpDestinationConfig(
       host: configJson['host'] as String,
       port: configJson['port'] as int? ?? 21,
@@ -223,13 +256,28 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       'Enviando backup para FTP: ${destination.name} (${config.host})',
     );
 
-    final uploadResult = await _sendToFtp.call(
-      sourceFilePath: sourceFilePath,
-      config: config,
+    final uploadResult = await executeResultWithRetry<FtpUploadResult>(
+      operation: () async {
+        if (isCancelled != null && isCancelled()) {
+          return const rd.Failure(
+            BackupFailure(
+              message: 'Upload cancelado pelo usuário.',
+              code: FailureCodes.uploadCancelled,
+            ),
+          );
+        }
+        return _sendToFtp.call(
+          sourceFilePath: sourceFilePath,
+          config: config,
+          isCancelled: isCancelled,
+        );
+      },
+      operationName: 'Upload FTP ${destination.name}',
     );
 
     return uploadResult.fold(
-      (result) {
+      (FtpUploadResult result) {
+        breaker.recordSuccess();
         LoggerService.info(
           'Upload FTP concluído com sucesso: ${result.remotePath} '
           '(${_formatBytes(result.fileSize)} em '
@@ -238,6 +286,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         return const rd.Success(());
       },
       (failure) {
+        breaker.recordFailure(failure);
         LoggerService.error(
           'Erro ao enviar backup para FTP ${destination.name}',
           failure,
@@ -251,20 +300,55 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String sourceFilePath,
     BackupDestination destination,
     Map<String, dynamic> configJson,
+    bool Function()? isCancelled,
   ) async {
+    final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
+    if (!breaker.allowsRequest) {
+      LoggerService.warning(
+        'Circuit breaker aberto para ${destination.name}, pulando upload',
+      );
+      return rd.Failure(
+        BackupFailure(
+          message:
+              'Destino ${destination.name} temporariamente indisponível '
+              '(circuit breaker aberto). Tente novamente mais tarde.',
+          code: FailureCodes.circuitBreakerOpen,
+        ),
+      );
+    }
+
     final config = GoogleDriveDestinationConfig(
       folderId: configJson['folderId'] as String,
       folderName: configJson['folderName'] as String? ?? 'Backups',
       accessToken: configJson['accessToken'] as String? ?? '',
       refreshToken: configJson['refreshToken'] as String? ?? '',
     );
-    final result = await _googleDriveDestinationService.upload(
-      sourceFilePath: sourceFilePath,
-      config: config,
+    final result = await executeResultWithRetry<GoogleDriveUploadResult>(
+      operation: () async {
+        if (isCancelled != null && isCancelled()) {
+          return const rd.Failure(
+            BackupFailure(
+              message: 'Upload cancelado pelo usuário.',
+              code: FailureCodes.uploadCancelled,
+            ),
+          );
+        }
+        return _googleDriveDestinationService.upload(
+          sourceFilePath: sourceFilePath,
+          config: config,
+        );
+      },
+      operationName: 'Upload Google Drive ${destination.name}',
     );
     return result.fold(
-      (_) => const rd.Success(()),
-      rd.Failure.new,
+      (_) {
+        breaker.recordSuccess();
+        return const rd.Success(());
+      },
+      (failure) {
+        breaker.recordFailure(failure);
+        return rd.Failure(failure);
+      },
     );
   }
 
@@ -272,18 +356,53 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String sourceFilePath,
     BackupDestination destination,
     Map<String, dynamic> configJson,
+    bool Function()? isCancelled,
   ) async {
+    final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
+    if (!breaker.allowsRequest) {
+      LoggerService.warning(
+        'Circuit breaker aberto para ${destination.name}, pulando upload',
+      );
+      return rd.Failure(
+        BackupFailure(
+          message:
+              'Destino ${destination.name} temporariamente indisponível '
+              '(circuit breaker aberto). Tente novamente mais tarde.',
+          code: FailureCodes.circuitBreakerOpen,
+        ),
+      );
+    }
+
     final config = DropboxDestinationConfig(
       folderPath: configJson['folderPath'] as String? ?? '',
       folderName: configJson['folderName'] as String? ?? 'Backups',
     );
-    final result = await _sendToDropbox.call(
-      sourceFilePath: sourceFilePath,
-      config: config,
+    final result = await executeResultWithRetry<DropboxUploadResult>(
+      operation: () async {
+        if (isCancelled != null && isCancelled()) {
+          return const rd.Failure(
+            BackupFailure(
+              message: 'Upload cancelado pelo usuário.',
+              code: FailureCodes.uploadCancelled,
+            ),
+          );
+        }
+        return _sendToDropbox.call(
+          sourceFilePath: sourceFilePath,
+          config: config,
+        );
+      },
+      operationName: 'Upload Dropbox ${destination.name}',
     );
     return result.fold(
-      (_) => const rd.Success(()),
-      rd.Failure.new,
+      (_) {
+        breaker.recordSuccess();
+        return const rd.Success(());
+      },
+      (failure) {
+        breaker.recordFailure(failure);
+        return rd.Failure(failure);
+      },
     );
   }
 
@@ -291,15 +410,50 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String sourceFilePath,
     BackupDestination destination,
     Map<String, dynamic> configJson,
+    bool Function()? isCancelled,
   ) async {
+    final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
+    if (!breaker.allowsRequest) {
+      LoggerService.warning(
+        'Circuit breaker aberto para ${destination.name}, pulando upload',
+      );
+      return rd.Failure(
+        BackupFailure(
+          message:
+              'Destino ${destination.name} temporariamente indisponível '
+              '(circuit breaker aberto). Tente novamente mais tarde.',
+          code: FailureCodes.circuitBreakerOpen,
+        ),
+      );
+    }
+
     final config = NextcloudDestinationConfig.fromJson(configJson);
-    final result = await _sendToNextcloud.call(
-      sourceFilePath: sourceFilePath,
-      config: config,
+    final result = await executeResultWithRetry<NextcloudUploadResult>(
+      operation: () async {
+        if (isCancelled != null && isCancelled()) {
+          return const rd.Failure(
+            BackupFailure(
+              message: 'Upload cancelado pelo usuário.',
+              code: FailureCodes.uploadCancelled,
+            ),
+          );
+        }
+        return _sendToNextcloud.call(
+          sourceFilePath: sourceFilePath,
+          config: config,
+        );
+      },
+      operationName: 'Upload Nextcloud ${destination.name}',
     );
     return result.fold(
-      (_) => const rd.Success(()),
-      rd.Failure.new,
+      (_) {
+        breaker.recordSuccess();
+        return const rd.Success(());
+      },
+      (failure) {
+        breaker.recordFailure(failure);
+        return rd.Failure(failure);
+      },
     );
   }
 

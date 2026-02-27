@@ -1,4 +1,5 @@
-﻿import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
@@ -31,6 +32,68 @@ class BackupLogRepository implements IBackupLogRepository {
       return rd.Success(log);
     } on Object catch (e) {
       return rd.Failure(DatabaseFailure(message: 'Erro ao criar log: $e'));
+    }
+  }
+
+  static String _sanitizeStep(String step) {
+    final sanitized = step.replaceAll(RegExp('[^a-zA-Z0-9_-]'), '_');
+    return sanitized.length > 80 ? sanitized.substring(0, 80) : sanitized;
+  }
+
+  BackupLogsTableCompanion buildIdempotentLogCompanion({
+    required String backupHistoryId,
+    required String step,
+    required LogLevel level,
+    required LogCategory category,
+    required String message,
+    String? details,
+  }) {
+    final id = '${backupHistoryId}_${_sanitizeStep(step)}';
+    final enrichedDetails = _detailsWithContext(details);
+    final log = BackupLog(
+      id: id,
+      backupHistoryId: backupHistoryId,
+      level: level,
+      category: category,
+      message: message,
+      details: enrichedDetails,
+    );
+    return _toCompanion(log);
+  }
+
+  static String? _detailsWithContext(String? details) {
+    if (!LogContext.hasContext) return details;
+    final ctx = 'runId=${LogContext.runId} scheduleId=${LogContext.scheduleId}';
+    return details != null ? '$details | $ctx' : ctx;
+  }
+
+  @override
+  Future<rd.Result<BackupLog>> createIdempotent({
+    required String backupHistoryId,
+    required String step,
+    required LogLevel level,
+    required LogCategory category,
+    required String message,
+    String? details,
+  }) async {
+    try {
+      final id = '${backupHistoryId}_${_sanitizeStep(step)}';
+      final enrichedDetails = _detailsWithContext(details);
+      final log = BackupLog(
+        id: id,
+        backupHistoryId: backupHistoryId,
+        level: level,
+        category: category,
+        message: message,
+        details: enrichedDetails,
+      );
+      final companion = _toCompanion(log);
+      await _database.backupLogDao.insertOrReplaceLog(companion);
+      return rd.Success(log);
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(message: 'Erro ao criar log idempotente: $e'),
+      );
     }
   }
 

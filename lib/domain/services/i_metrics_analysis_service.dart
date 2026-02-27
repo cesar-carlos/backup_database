@@ -11,6 +11,9 @@ class BackupMetricsPercentiles {
     required this.p95SizeBytes,
     required this.p50SpeedMbPerSec,
     required this.p95SpeedMbPerSec,
+    this.p95CompressionSeconds = 0,
+    this.p95UploadSeconds = 0,
+    this.p95CleanupSeconds = 0,
   });
 
   final int sampleCount;
@@ -20,6 +23,9 @@ class BackupMetricsPercentiles {
   final int p95SizeBytes;
   final double p50SpeedMbPerSec;
   final double p95SpeedMbPerSec;
+  final int p95CompressionSeconds;
+  final int p95UploadSeconds;
+  final int p95CleanupSeconds;
 }
 
 class BackupMetricsReport {

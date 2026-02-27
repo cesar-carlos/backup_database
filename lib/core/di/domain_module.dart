@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/providers.dart';
+import 'package:backup_database/application/services/license_policy_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
@@ -47,13 +48,16 @@ Future<void> setupDomainModule(GetIt getIt) async {
   getIt.registerLazySingleton<IScheduleRepository>(
     () => ScheduleRepository(getIt<AppDatabase>()),
   );
-  getIt.registerLazySingleton<IBackupHistoryRepository>(
-    () => CachedBackupHistoryRepository(
-      repository: BackupHistoryRepository(getIt<AppDatabase>()),
-    ),
-  );
   getIt.registerLazySingleton<IBackupLogRepository>(
     () => BackupLogRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IBackupHistoryRepository>(
+    () => CachedBackupHistoryRepository(
+      repository: BackupHistoryRepository(
+        getIt<AppDatabase>(),
+        getIt<IBackupLogRepository>() as BackupLogRepository,
+      ),
+    ),
   );
 
   // System Repositories
@@ -93,6 +97,13 @@ Future<void> setupDomainModule(GetIt getIt) async {
   getIt.registerLazySingleton<IScheduleCalculator>(ScheduleCalculator.new);
   getIt.registerLazySingleton<IFileValidator>(FileValidator.new);
 
+  getIt.registerLazySingleton<ILicensePolicyService>(
+    () => LicensePolicyService(
+      licenseValidationService: getIt<ILicenseValidationService>(),
+      metricsCollector: getIt<IMetricsCollector>(),
+    ),
+  );
+
   // ========================================================================
   // USE CASES
   // ========================================================================
@@ -129,6 +140,8 @@ Future<void> setupDomainModule(GetIt getIt) async {
       getIt<IScheduleRepository>(),
       getIt<ISchedulerService>(),
       getIt<IScheduleCalculator>(),
+      getIt<ILicensePolicyService>(),
+      getIt<IBackupDestinationRepository>(),
     ),
   );
   getIt.registerLazySingleton<UpdateSchedule>(
@@ -136,6 +149,9 @@ Future<void> setupDomainModule(GetIt getIt) async {
       getIt<IScheduleRepository>(),
       getIt<ISchedulerService>(),
       getIt<IScheduleCalculator>(),
+      getIt<ILicensePolicyService>(),
+      getIt<IBackupDestinationRepository>(),
+      metricsCollector: getIt<IMetricsCollector>(),
     ),
   );
   getIt.registerLazySingleton<GetNextRunTime>(

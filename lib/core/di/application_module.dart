@@ -28,6 +28,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       backupLogRepository: getIt<IBackupLogRepository>(),
       emailService: getIt<IEmailService>(),
       licenseValidationService: getIt<ILicenseValidationService>(),
+      metricsCollector: getIt<IMetricsCollector>(),
     ),
   );
 
@@ -38,7 +39,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       googleDriveDestinationService: getIt<IGoogleDriveDestinationService>(),
       sendToDropbox: getIt<SendToDropbox>(),
       sendToNextcloud: getIt<SendToNextcloud>(),
-      licenseValidationService: getIt<ILicenseValidationService>(),
+      licensePolicyService: getIt<ILicensePolicyService>(),
     ),
   );
 
@@ -67,7 +68,6 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       scheduleRepository: getIt<IScheduleRepository>(),
       destinationRepository: getIt<IBackupDestinationRepository>(),
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
-      backupLogRepository: getIt<IBackupLogRepository>(),
       backupOrchestratorService: getIt<BackupOrchestratorService>(),
       destinationOrchestrator: getIt<IDestinationOrchestrator>(),
       cleanupService: getIt<IBackupCleanupService>(),
@@ -75,7 +75,9 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       scheduleCalculator: getIt<IScheduleCalculator>(),
       storageChecker: getIt<IStorageChecker>(),
       progressNotifier: getIt<IBackupProgressNotifier>(),
+      licensePolicyService: getIt<ILicensePolicyService>(),
       transferStagingService: getIt<ITransferStagingService>(),
+      metricsCollector: getIt<IMetricsCollector>(),
     ),
   );
 

@@ -11,11 +11,11 @@ import 'package:backup_database/domain/entities/disk_space_info.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
-import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_cleanup_service.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_destination_orchestrator.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 import 'package:backup_database/domain/services/i_storage_checker.dart';
@@ -34,8 +34,6 @@ class _MockDestinationRepository extends Mock
 class _MockBackupHistoryRepository extends Mock
     implements IBackupHistoryRepository {}
 
-class _MockBackupLogRepository extends Mock implements IBackupLogRepository {}
-
 class _MockBackupOrchestratorService extends Mock
     implements BackupOrchestratorService {}
 
@@ -53,11 +51,12 @@ class _MockBackupProgressNotifier extends Mock
 
 class _MockProcessService extends Mock implements ProcessService {}
 
+class _MockLicensePolicyService extends Mock implements ILicensePolicyService {}
+
 void main() {
   late _MockScheduleRepository scheduleRepository;
   late _MockDestinationRepository destinationRepository;
   late _MockBackupHistoryRepository backupHistoryRepository;
-  late _MockBackupLogRepository backupLogRepository;
   late _MockBackupOrchestratorService backupOrchestratorService;
   late _MockDestinationOrchestrator destinationOrchestrator;
   late _MockBackupCleanupService cleanupService;
@@ -66,6 +65,7 @@ void main() {
   late _MockBackupProgressNotifier progressNotifier;
   late _MockStorageChecker storageChecker;
   late _MockProcessService processService;
+  late _MockLicensePolicyService licensePolicyService;
   late SchedulerService service;
   late Directory tempDir;
 
@@ -146,7 +146,6 @@ void main() {
     scheduleRepository = _MockScheduleRepository();
     destinationRepository = _MockDestinationRepository();
     backupHistoryRepository = _MockBackupHistoryRepository();
-    backupLogRepository = _MockBackupLogRepository();
     backupOrchestratorService = _MockBackupOrchestratorService();
     destinationOrchestrator = _MockDestinationOrchestrator();
     cleanupService = _MockBackupCleanupService();
@@ -170,11 +169,18 @@ void main() {
     );
     when(() => processService.cancelByTag(any())).thenReturn(null);
 
+    licensePolicyService = _MockLicensePolicyService();
+    when(
+      () => licensePolicyService.validateExecutionCapabilities(
+        any(),
+        any(),
+      ),
+    ).thenAnswer((_) async => const rd.Success(rd.unit));
+
     service = SchedulerService(
       scheduleRepository: scheduleRepository,
       destinationRepository: destinationRepository,
       backupHistoryRepository: backupHistoryRepository,
-      backupLogRepository: backupLogRepository,
       backupOrchestratorService: backupOrchestratorService,
       destinationOrchestrator: destinationOrchestrator,
       cleanupService: cleanupService,
@@ -182,6 +188,7 @@ void main() {
       scheduleCalculator: scheduleCalculator,
       progressNotifier: progressNotifier,
       storageChecker: storageChecker,
+      licensePolicyService: licensePolicyService,
     );
   });
 
@@ -361,6 +368,8 @@ void main() {
         verify(
           () => notificationService.notifyBackupComplete(history),
         ).called(1);
+        verify(() => licensePolicyService.setRunContext(any())).called(1);
+        verify(() => licensePolicyService.clearRunContext()).called(1);
       },
     );
 
@@ -402,30 +411,20 @@ void main() {
           ),
         ).thenAnswer((_) async => rd.Success(history));
         when(
-          () => destinationOrchestrator.uploadToDestination(
+          () => destinationOrchestrator.uploadToAllDestinations(
             sourceFilePath: any(named: 'sourceFilePath'),
-            destination: any(named: 'destination'),
+            destinations: any(named: 'destinations'),
           ),
         ).thenAnswer(
-          (_) async => const rd.Failure(
-            ValidationFailure(message: 'falha upload'),
-          ),
+          (_) async => [
+            const rd.Failure(
+              ValidationFailure(message: 'falha upload'),
+            ),
+          ],
         );
         when(
           () => backupHistoryRepository.update(any()),
         ).thenAnswer((_) async => rd.Success(history));
-        when(
-          () => backupLogRepository.create(any()),
-        ).thenAnswer(
-          (_) async => rd.Success(
-            BackupLog(
-              backupHistoryId: history.id,
-              level: LogLevel.error,
-              category: LogCategory.execution,
-              message: 'Falha ao enviar backup',
-            ),
-          ),
-        );
         when(
           () => notificationService.notifyBackupComplete(any()),
         ).thenAnswer((_) async => const rd.Success(true));

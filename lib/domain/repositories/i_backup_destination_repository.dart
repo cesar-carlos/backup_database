@@ -9,4 +9,5 @@ abstract class IBackupDestinationRepository {
   Future<rd.Result<void>> delete(String id);
   Future<rd.Result<List<BackupDestination>>> getByType(DestinationType type);
   Future<rd.Result<List<BackupDestination>>> getEnabled();
+  Future<rd.Result<List<BackupDestination>>> getByIds(List<String> ids);
 }

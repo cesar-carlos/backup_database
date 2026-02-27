@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
@@ -71,6 +72,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<IBackupScriptOrchestrator>(
     BackupScriptOrchestratorImpl.new,
   );
+  getIt.registerLazySingleton<CircuitBreakerRegistry>(
+    CircuitBreakerRegistry.new,
+  );
   getIt.registerLazySingleton<IDestinationOrchestrator>(
     () => DestinationOrchestratorImpl(
       localDestinationService: getIt<ILocalDestinationService>(),
@@ -78,7 +82,8 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       googleDriveDestinationService: getIt<IGoogleDriveDestinationService>(),
       sendToDropbox: getIt<SendToDropbox>(),
       sendToNextcloud: getIt<SendToNextcloud>(),
-      licenseValidationService: getIt<ILicenseValidationService>(),
+      licensePolicyService: getIt<ILicensePolicyService>(),
+      circuitBreakerRegistry: getIt<CircuitBreakerRegistry>(),
     ),
   );
   getIt.registerLazySingleton<IBackupCleanupService>(
@@ -88,7 +93,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       googleDriveDestinationService: getIt<IGoogleDriveDestinationService>(),
       dropboxDestinationService: getIt<IDropboxDestinationService>(),
       nextcloudDestinationService: getIt<INextcloudDestinationService>(),
-      licenseValidationService: getIt<ILicenseValidationService>(),
+      licensePolicyService: getIt<ILicensePolicyService>(),
       notificationService: getIt<INotificationService>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
     ),
@@ -182,6 +187,8 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<ScheduleMessageHandler>(
     () => ScheduleMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
+      destinationRepository: getIt<IBackupDestinationRepository>(),
+      licensePolicyService: getIt<ILicensePolicyService>(),
       schedulerService: getIt<ISchedulerService>(),
       updateSchedule: getIt<UpdateSchedule>(),
       executeBackup: getIt<ExecuteScheduledBackup>(),
@@ -211,6 +218,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
       scheduleRepository: getIt<IScheduleRepository>(),
       backupRunningState: getIt<IBackupRunningState>(),
+      metricsCollector: getIt<IMetricsCollector>(),
     ),
   );
   getIt.registerLazySingleton<TcpSocketServer>(

@@ -1,11 +1,10 @@
 import 'dart:convert';
 
-import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
-import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:backup_database/domain/services/i_send_file_to_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -23,20 +22,20 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
     required IGoogleDriveDestinationService googleDriveDestinationService,
     required SendToDropbox sendToDropbox,
     required SendToNextcloud sendToNextcloud,
-    required ILicenseValidationService licenseValidationService,
+    required ILicensePolicyService licensePolicyService,
   }) : _localDestinationService = localDestinationService,
        _sendToFtp = sendToFtp,
        _googleDriveDestinationService = googleDriveDestinationService,
        _sendToDropbox = sendToDropbox,
        _sendToNextcloud = sendToNextcloud,
-       _licenseValidationService = licenseValidationService;
+       _licensePolicyService = licensePolicyService;
 
   final ILocalDestinationService _localDestinationService;
   final SendToFtp _sendToFtp;
   final IGoogleDriveDestinationService _googleDriveDestinationService;
   final SendToDropbox _sendToDropbox;
   final SendToNextcloud _sendToNextcloud;
-  final ILicenseValidationService _licenseValidationService;
+  final ILicensePolicyService _licensePolicyService;
 
   @override
   Future<rd.Result<void>> sendFile({
@@ -45,7 +44,8 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
     UploadProgressCallback? onProgress,
   }) async {
     try {
-      final licenseCheck = await _ensureDestinationFeatureAllowed(destination);
+      final licenseCheck =
+          await _licensePolicyService.validateDestinationCapabilities(destination);
       if (licenseCheck.isError()) {
         return rd.Failure(licenseCheck.exceptionOrNull()!);
       }
@@ -216,43 +216,6 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
         ),
       );
     }
-  }
-
-  Future<rd.Result<void>> _ensureDestinationFeatureAllowed(
-    BackupDestination destination,
-  ) async {
-    String? requiredFeature;
-    switch (destination.type) {
-      case DestinationType.googleDrive:
-        requiredFeature = LicenseFeatures.googleDrive;
-      case DestinationType.dropbox:
-        requiredFeature = LicenseFeatures.dropbox;
-      case DestinationType.nextcloud:
-        requiredFeature = LicenseFeatures.nextcloud;
-      case DestinationType.local:
-      case DestinationType.ftp:
-        requiredFeature = null;
-    }
-
-    if (requiredFeature == null) {
-      return const rd.Success(());
-    }
-
-    final allowedResult = await _licenseValidationService.isFeatureAllowed(
-      requiredFeature,
-    );
-    final allowed = allowedResult.getOrElse((_) => false);
-    if (!allowed) {
-      return rd.Failure(
-        ValidationFailure(
-          message:
-              'Destino ${destination.name} requer licença '
-              '(${destination.type.name}).',
-        ),
-      );
-    }
-
-    return const rd.Success(());
   }
 
   String _formatBytes(int bytes) {

@@ -10,11 +10,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 bool _hasEmailNotificationFeature(LicenseProvider licenseProvider) {
+  final license = licenseProvider.currentLicense;
   return licenseProvider.hasValidLicense &&
-      licenseProvider.currentLicense != null &&
-      licenseProvider.currentLicense!.hasFeature(
-        LicenseFeatures.emailNotification,
-      );
+      (license?.hasFeature(LicenseFeatures.emailNotification) ?? false);
 }
 
 class NotificationsPage extends StatefulWidget {

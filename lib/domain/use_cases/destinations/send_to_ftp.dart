@@ -13,6 +13,7 @@ class SendToFtp {
     required FtpDestinationConfig config,
     String? customFileName,
     UploadProgressCallback? onProgress,
+    bool Function()? isCancelled,
   }) async {
     if (sourceFilePath.isEmpty) {
       return const rd.Failure(
@@ -30,6 +31,7 @@ class SendToFtp {
       config: config,
       customFileName: customFileName,
       onProgress: onProgress,
+      isCancelled: isCancelled,
     );
   }
 }

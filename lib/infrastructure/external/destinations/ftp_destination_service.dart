@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart' hide FtpFailure;
+import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/ftp_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -19,6 +21,7 @@ class FtpDestinationService implements IFtpService {
     String? customFileName,
     int maxRetries = 3,
     UploadProgressCallback? onProgress,
+    bool Function()? isCancelled,
   }) async {
     final stopwatch = Stopwatch()..start();
 
@@ -49,7 +52,7 @@ class FtpDestinationService implements IFtpService {
             port: config.port,
             user: config.username,
             pass: config.password,
-            timeout: AppConstants.ftpTimeout.inSeconds,
+            timeout: StepTimeoutConstants.uploadFtp.inSeconds,
             securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
             showLog: true,
           );
@@ -74,6 +77,9 @@ class FtpDestinationService implements IFtpService {
             sourceFile,
             sRemoteName: fileName,
             onProgress: (double progress, int sent, int total) {
+              if (isCancelled != null && isCancelled()) {
+                throw _UploadCancelledException();
+              }
               if (onProgress != null) {
                 onProgress(progress);
               }
@@ -117,6 +123,23 @@ class FtpDestinationService implements IFtpService {
               remotePath: remotePath,
               fileSize: fileSize,
               duration: stopwatch.elapsed,
+            ),
+          );
+        } on _UploadCancelledException {
+          if (ftp != null) {
+            try {
+              await ftp.disconnect();
+            } on Object catch (disconnectError) {
+              LoggerService.debug(
+                'Erro ao desconectar FTP após cancelamento: $disconnectError',
+              );
+            }
+          }
+          LoggerService.info('Upload FTP cancelado pelo usuário');
+          return const rd.Failure(
+            BackupFailure(
+              message: 'Upload cancelado pelo usuário.',
+              code: FailureCodes.uploadCancelled,
             ),
           );
         } on Object catch (e) {
@@ -187,7 +210,7 @@ class FtpDestinationService implements IFtpService {
       return 'Servidor FTP sem espaço em disco.';
     }
 
-    return 'Erro no upload FTP após várias tentativas.\n'
+      return 'Erro no upload FTP após várias tentativas.\n'
         'Servidor: $host\nDetalhes: $e';
   }
 
@@ -258,7 +281,7 @@ class FtpDestinationService implements IFtpService {
         port: config.port,
         user: config.username,
         pass: config.password,
-        timeout: AppConstants.ftpTimeout.inSeconds,
+        timeout: StepTimeoutConstants.uploadFtp.inSeconds,
         securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
       );
 
@@ -324,4 +347,8 @@ class FtpDestinationService implements IFtpService {
       );
     }
   }
+}
+
+class _UploadCancelledException implements Exception {
+  _UploadCancelledException();
 }

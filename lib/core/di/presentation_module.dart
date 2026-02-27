@@ -72,6 +72,7 @@ Future<void> setupPresentationModule(GetIt getIt) async {
     () => DestinationProvider(
       getIt<IBackupDestinationRepository>(),
       getIt<IScheduleRepository>(),
+      getIt<ILicensePolicyService>(),
     ),
   );
 
@@ -102,6 +103,7 @@ Future<void> setupPresentationModule(GetIt getIt) async {
       generationService: getIt<LicenseGenerationService>(),
       licenseRepository: getIt<ILicenseRepository>(),
       deviceKeyService: getIt<IDeviceKeyService>(),
+      cacheInvalidator: getIt<ILicenseCacheInvalidator>(),
     ),
   );
 

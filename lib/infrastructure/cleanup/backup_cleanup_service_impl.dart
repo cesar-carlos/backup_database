@@ -1,7 +1,8 @@
 import 'dart:convert';
 
-import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
@@ -10,7 +11,7 @@ import 'package:backup_database/domain/services/i_backup_cleanup_service.dart';
 import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
-import 'package:backup_database/domain/services/i_license_validation_service.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
@@ -23,7 +24,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     required IGoogleDriveDestinationService googleDriveDestinationService,
     required IDropboxDestinationService dropboxDestinationService,
     required INextcloudDestinationService nextcloudDestinationService,
-    required ILicenseValidationService licenseValidationService,
+    required ILicensePolicyService licensePolicyService,
     required INotificationService notificationService,
     required IBackupLogRepository backupLogRepository,
   }) : _localDestinationService = localDestinationService,
@@ -31,7 +32,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
        _googleDriveDestinationService = googleDriveDestinationService,
        _dropboxDestinationService = dropboxDestinationService,
        _nextcloudDestinationService = nextcloudDestinationService,
-       _licenseValidationService = licenseValidationService,
+       _licensePolicyService = licensePolicyService,
        _notificationService = notificationService,
        _backupLogRepository = backupLogRepository;
 
@@ -40,7 +41,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
   final IGoogleDriveDestinationService _googleDriveDestinationService;
   final IDropboxDestinationService _dropboxDestinationService;
   final INextcloudDestinationService _nextcloudDestinationService;
-  final ILicenseValidationService _licenseValidationService;
+  final ILicensePolicyService _licensePolicyService;
   final INotificationService _notificationService;
   final IBackupLogRepository _backupLogRepository;
 
@@ -58,6 +59,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       return rd.Failure(
         BackupFailure(
           message: 'Erro ao limpar backups: $e',
+          code: FailureCodes.cleanupFailed,
           originalError: e,
         ),
       );
@@ -69,9 +71,8 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     String backupHistoryId,
   ) async {
     try {
-      final licenseCheck = await _ensureDestinationFeatureAllowed(
-        destination,
-      );
+      final licenseCheck =
+          await _licensePolicyService.validateDestinationCapabilities(destination);
       if (licenseCheck.isError()) {
         LoggerService.info(
           'Limpeza ignorada por licença: ${destination.name} '
@@ -109,6 +110,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
         backupHistoryId,
         'error',
         'Erro ao limpar backups antigos em ${destination.name}: $e',
+        step: LogStepConstants.cleanupError(destination.id),
       );
 
       await _notificationService.sendWarning(
@@ -160,6 +162,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
         'error',
         'Erro ao limpar backups antigos no FTP ${destination.name}: '
             '$failureMessage',
+        step: LogStepConstants.cleanupError(destination.id),
       );
 
       await _notificationService.sendWarning(
@@ -200,6 +203,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
         'error',
         'Erro ao limpar backups antigos no Google Drive '
             '${destination.name}: $failureMessage',
+        step: LogStepConstants.cleanupError(destination.id),
       );
 
       await _notificationService.sendWarning(
@@ -238,6 +242,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
         'error',
         'Erro ao limpar backups antigos no Dropbox '
             '${destination.name}: $failureMessage',
+        step: LogStepConstants.cleanupError(destination.id),
       );
 
       await _notificationService.sendWarning(
@@ -272,6 +277,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
         'error',
         'Erro ao limpar backups antigos no Nextcloud '
             '${destination.name}: $failureMessage',
+        step: LogStepConstants.cleanupError(destination.id),
       );
 
       await _notificationService.sendWarning(
@@ -283,59 +289,27 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     });
   }
 
-  Future<rd.Result<void>> _ensureDestinationFeatureAllowed(
-    BackupDestination destination,
-  ) async {
-    String? requiredFeature;
-    switch (destination.type) {
-      case DestinationType.googleDrive:
-        requiredFeature = LicenseFeatures.googleDrive;
-      case DestinationType.dropbox:
-        requiredFeature = LicenseFeatures.dropbox;
-      case DestinationType.nextcloud:
-        requiredFeature = LicenseFeatures.nextcloud;
-      case DestinationType.local:
-      case DestinationType.ftp:
-        requiredFeature = null;
-    }
-
-    if (requiredFeature == null) {
-      return const rd.Success(());
-    }
-
-    final allowedResult = await _licenseValidationService.isFeatureAllowed(
-      requiredFeature,
-    );
-    final allowed = allowedResult.getOrElse((_) => false);
-    if (!allowed) {
-      return rd.Failure(
-        ValidationFailure(
-          message:
-              'Destino ${destination.name} requer licença '
-              '(${destination.type.name}).',
-        ),
-      );
-    }
-
-    return const rd.Success(());
-  }
-
   Future<void> _log(
     String historyId,
     String levelStr,
-    String message,
-  ) async {
+    String message, {
+    String? step,
+  }) async {
     try {
-      LogLevel level;
-      switch (levelStr) {
-        case 'info':
-          level = LogLevel.info;
-        case 'warning':
-          level = LogLevel.warning;
-        case 'error':
-          level = LogLevel.error;
-        default:
-          level = LogLevel.info;
+      final level = _logLevelFromString(levelStr);
+      if (step != null) {
+        final result = await _backupLogRepository.createIdempotent(
+          backupHistoryId: historyId,
+          step: step,
+          level: level,
+          category: LogCategory.execution,
+          message: message,
+        );
+        result.fold(
+          (_) {},
+          (e) => LoggerService.warning('Erro ao gravar log idempotente: $e'),
+        );
+        return;
       }
 
       final log = BackupLog(
@@ -347,6 +321,19 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       await _backupLogRepository.create(log);
     } on Object catch (e) {
       LoggerService.warning('Erro ao gravar log no banco: $e');
+    }
+  }
+
+  LogLevel _logLevelFromString(String levelStr) {
+    switch (levelStr) {
+      case 'info':
+        return LogLevel.info;
+      case 'warning':
+        return LogLevel.warning;
+      case 'error':
+        return LogLevel.error;
+      default:
+        return LogLevel.info;
     }
   }
 }
