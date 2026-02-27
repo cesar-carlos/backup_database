@@ -52,7 +52,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
     SqlServerConfig config,
   ) async {
     const query =
-        "SELECT recovery_model_desc FROM sys.databases WHERE name = DB_NAME()";
+        'SELECT recovery_model_desc FROM sys.databases WHERE name = DB_NAME()';
     final args = [..._baseSqlcmdArgs(config), '-Q', query, '-h', '-1', '-W'];
     final result = await _processService.run(
       executable: 'sqlcmd',
@@ -67,8 +67,8 @@ class SqlServerBackupService implements ISqlServerBackupService {
         final model =
             processResult.stdout.trim().toUpperCase().split(RegExp(r'\s+')).first;
         if (model == 'SIMPLE') {
-          return rd.Failure(
-            const ValidationFailure(
+          return const rd.Failure(
+            ValidationFailure(
               message:
                   'Backup de log de transações não permitido: banco em modo SIMPLE. '
                   'Altere para FULL ou BULK_LOGGED.',
