@@ -42,7 +42,7 @@ Para testar se uma atualização é detectada, você precisa criar uma versão m
 
 1. **Atualize a versão no `pubspec.yaml`:**
    ```yaml
-   version: 1.0.1+2  # Versão maior que a atual (1.0.0+1)
+   version: 2.2.8+1  # Versão maior que a atual (ex.: 2.2.7)
    ```
 
 2. **Faça build:**
@@ -52,10 +52,10 @@ Para testar se uma atualização é detectada, você precisa criar uma versão m
 
 3. **Crie o instalador:**
    - Compile o instalador Inno Setup
-   - O arquivo será: `installer\dist\BackupDatabase-Setup-1.0.1.exe`
+   - O arquivo será: `installer\dist\BackupDatabase-Setup-2.2.8.exe`
 
 4. **Crie um novo release no GitHub:**
-   - Tag: `v1.0.1`
+   - Tag: `v2.2.8`
    - **IMPORTANTE**: Marque como "Set as the latest release" (não como Pre-release)
    - Faça upload do novo instalador
    - Publique o release
@@ -66,10 +66,10 @@ Para testar se uma atualização é detectada, você precisa criar uma versão m
    - Aguarde alguns minutos para o `appcast.xml` ser atualizado
 
 6. **Teste no aplicativo:**
-   - Execute a versão 1.0.0 do aplicativo
+   - Execute a versão 2.2.7 do aplicativo
    - Vá em Configurações > Atualizações
    - Clique em "Verificar Atualizações"
-   - Uma janela deve aparecer oferecendo a atualização para 1.0.1
+   - Uma janela deve aparecer oferecendo a atualização para 2.2.8
 
 ### Método 3: Verificar Logs
 

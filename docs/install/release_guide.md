@@ -1,200 +1,155 @@
 # Guia para Criar Release
 
-Este guia explica como criar o primeiro release e os releases subsequentes no GitHub.
+Este guia consolida o processo completo de criação de releases: versão, tags, build, instalador e publicação no GitHub.
 
 ## Versão Atual
 
-A versão atual do projeto é: **1.0.0+1** (definida em `pubspec.yaml`)
+A versão do projeto é definida em `pubspec.yaml` (ex.: 2.2.7).
 
-## Passo a Passo para Criar o Primeiro Release
+## Formato de Tags
 
-### 1. Fazer Build do Executável
+As tags seguem o padrão **`v{VERSÃO}`**:
 
-Execute o comando para gerar o executável Windows em modo release:
+- A versão vem do `pubspec.yaml` (campo `version`)
+- O prefixo `v` é obrigatório
+- Exemplo: versão `2.2.7` → tag `v2.2.7`
+
+## Processo Completo (Recomendado)
+
+### 1. Atualizar Versão
+
+Edite `pubspec.yaml`:
+
+```yaml
+version: 2.2.7
+```
+
+### 2. Sincronizar Versão
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+```
+
+Este script atualiza `installer/setup.iss` e `.env` automaticamente.
+
+### 3. Build e Instalador
 
 ```bash
 flutter build windows --release
+powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
 ```
 
-O executável será gerado em:
+O instalador será criado em `installer\dist\BackupDatabase-Setup-2.2.7.exe`.
 
+### 4. Commit e Push
+
+```bash
+git add pubspec.yaml installer/setup.iss .env
+git commit -m "chore: bump version to 2.2.7"
+git push origin main
 ```
-build/windows/x64/runner/Release/backup_database.exe
+
+### 5. Criar Tag e Enviar
+
+```bash
+git tag v2.2.7
+git push origin v2.2.7
 ```
 
-**Nota**: O executável pode ter dependências (DLLs) na mesma pasta. Para distribuição, você pode precisar incluir todos os arquivos da pasta `Release` ou criar um instalador.
-
-### 2. Preparar o Arquivo para Upload
-
-**Opção A: Apenas o executável**
-
-- Use apenas o arquivo `backup_database.exe`
-- Renomeie para `backup_database-1.0.0.exe` (opcional, mas recomendado)
-
-**Opção B: Pacote completo (recomendado)**
-
-- Crie um arquivo ZIP com todos os arquivos da pasta `Release`
-- Inclua: `backup_database.exe` e todas as DLLs necessárias
-- Nome sugerido: `backup_database-1.0.0.zip`
-
-### 3. Criar o Release no GitHub
+### 6. Criar Release no GitHub
 
 1. Acesse: https://github.com/cesar-carlos/backup_database/releases
+2. Clique em **"Create a new release"**
+3. Selecione a tag `v2.2.7`
+4. Título: `Version 2.2.7`
+5. Adicione descrição com as mudanças
+6. Arraste o instalador (`BackupDatabase-Setup-2.2.7.exe`) para upload
+7. Marque **"Set as the latest release"**
+8. Clique em **"Publish release"**
 
-2. Clique em **"Create a new release"** (ou **"Draft a new release"**)
-
-3. Preencha os campos:
-
-   - **Choose a tag**: Digite `v1.0.0` e clique em **"Create new tag: v1.0.0 on publish"**
-   - **Release title**: `Version 1.0.0`
-   - **Description**: Adicione as notas da versão, por exemplo:
-
-     ```
-     ## Version 1.0.0
-
-     Primeira versão do Backup Database.
-
-     ### Funcionalidades
-     - Backup automático para SQL Server e Sybase ASA
-     - Suporte para múltiplos destinos (Local, FTP, Google Drive)
-     - Agendamento de backups
-     - Notificações por e-mail
-     - Interface gráfica completa
-     ```
-
-4. **Arraste e solte** o arquivo `.exe` (ou `.zip`) na área de upload de assets
-
-5. Marque **"Set as the latest release"** (se disponível)
-
-6. Clique em **"Publish release"**
-
-### 4. Verificar o GitHub Actions
-
-Após publicar o release:
+### 7. Verificar GitHub Actions
 
 1. Acesse: https://github.com/cesar-carlos/backup_database/actions
-
-2. Você verá um workflow chamado **"Update Appcast on Release"** em execução
-
-3. Aguarde a conclusão (geralmente leva 1-2 minutos)
-
-4. Verifique se o workflow foi bem-sucedido (ícone verde)
-
-5. Se houver erro, clique no workflow para ver os detalhes
-
-### 5. Verificar o appcast.xml Atualizado
-
-1. Acesse: https://github.com/cesar-carlos/backup_database/blob/main/appcast.xml
-
-2. Verifique se o novo item foi adicionado com:
-
-   - Versão: `1.0.0`
-   - URL do asset correta
-   - Tamanho do arquivo correto
-   - Data de publicação atual
-
-3. Verifique via GitHub Pages (se configurado):
-   - https://cesar-carlos.github.io/backup_database/appcast.xml
-
-### 6. Testar a Atualização
-
-1. Configure o `.env` com a URL do feed:
-
-   ```env
-   AUTO_UPDATE_FEED_URL=https://cesar-carlos.github.io/backup_database/appcast.xml
-   ```
-
-2. Execute o aplicativo
-
-3. Verifique os logs para confirmar que está verificando atualizações
-
-4. Teste a verificação manual (se disponível na interface)
-
-## Criar Releases Futuros
-
-Para criar novos releases:
-
-1. **Atualize a versão no `pubspec.yaml`**:
-
-   ```yaml
-   version: 1.0.1+1 # Incremente conforme necessário
-   ```
-
-2. **Faça commit da mudança**:
-
-   ```bash
-   git add pubspec.yaml
-   git commit -m "Bump version to 1.0.1"
-   git push
-   ```
-
-3. **Faça build**:
-
-   ```bash
-   flutter build windows --release
-   ```
-
-4. **Crie o release no GitHub**:
-
-   - Tag: `v1.0.1`
-   - Título: `Version 1.0.1`
-   - Upload do novo executável
-   - Publique
-
-5. **O GitHub Actions atualizará o `appcast.xml` automaticamente**
+2. O workflow **"Update Appcast on Release"** executará automaticamente
+3. Aguarde conclusão (1–2 minutos)
+4. O `appcast.xml` será atualizado para o auto-update
 
 ## Estrutura de Versão
 
-O projeto usa o formato: `MAJOR.MINOR.PATCH+BUILD`
+Formato: `MAJOR.MINOR.PATCH+BUILD`
 
-- **MAJOR**: Mudanças incompatíveis
-- **MINOR**: Novas funcionalidades compatíveis
-- **PATCH**: Correções de bugs
-- **BUILD**: Número de build (geralmente incrementado automaticamente)
+| Parte | Uso |
+|-------|-----|
+| MAJOR | Mudanças incompatíveis |
+| MINOR | Novas funcionalidades compatíveis |
+| PATCH | Correções de bugs |
+| BUILD | Número de build (opcional) |
 
-Exemplos:
+Exemplos: `2.2.7` → `v2.2.7`, `2.2.8` → `v2.2.8`
 
-- `1.0.0+1` → Tag: `v1.0.0`
-- `1.0.1+1` → Tag: `v1.0.1`
-- `1.1.0+1` → Tag: `v1.1.0`
-- `2.0.0+1` → Tag: `v2.0.0`
+## Comandos Rápidos
 
-## Checklist do Release
+```bash
+# Sincronizar versão
+powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
 
-Antes de criar um release, verifique:
+# Commit e push
+git add pubspec.yaml installer/setup.iss .env
+git commit -m "chore: bump version to 2.2.7"
+git push origin main
 
-- [ ] Versão atualizada no `pubspec.yaml`
-- [ ] Build executado com sucesso
-- [ ] Executável testado localmente
-- [ ] Notas da versão preparadas
-- [ ] GitHub Pages configurado (se usar)
-- [ ] Permissões do GitHub Actions configuradas
-- [ ] `.env` configurado com a URL correta
+# Tag e push
+git tag v2.2.7
+git push origin v2.2.7
+```
+
+Depois, crie o release manualmente no GitHub e faça upload do instalador.
+
+## Scripts Relacionados
+
+| Script | Propósito |
+|--------|-----------|
+| `installer/update_version.ps1` | Sincroniza versão em setup.iss e .env |
+| `installer/build_installer.ps1` | Build Flutter + compila instalador Inno Setup |
+
+## Verificação de Tags
+
+```bash
+git tag                    # Listar tags locais
+git ls-remote --tags origin  # Listar tags no GitHub
+git show v2.2.7            # Ver detalhes de uma tag
+```
 
 ## Solução de Problemas
 
+### Tag já existe
+
+```bash
+git tag -d v2.2.7
+git push origin --delete v2.2.7
+git tag v2.2.7
+git push origin v2.2.7
+```
+
 ### Workflow não executa
 
-- Verifique se o release foi **publicado** (não apenas criado como draft)
-- Verifique as permissões do GitHub Actions
-- Verifique se há um arquivo `.exe` no release
+- Verifique se o release foi **publicado** (não draft)
+- Confirme que há um asset `.exe` anexado
+- Verifique permissões do GitHub Actions (Read and write)
 
 ### appcast.xml não atualiza
 
 - Verifique os logs do GitHub Actions
 - Confirme que o asset tem extensão `.exe`
-- Verifique se o workflow tem permissão de escrita
+- GitHub Pages pode levar alguns minutos para propagar
 
-### Erro ao baixar atualização
+## Checklist
 
-- Verifique se a URL do asset está correta no `appcast.xml`
-- Confirme que o arquivo existe no release
-- Verifique o tamanho do arquivo no `appcast.xml`
-
-## Notas Importantes
-
-- A tag do release deve ter o prefixo `v` (ex: `v1.0.0`)
-- A versão no `appcast.xml` será sem o prefixo (ex: `1.0.0`)
-- O workflow obtém automaticamente o tamanho do arquivo
-- GitHub Pages pode levar alguns minutos para atualizar após o commit
-- Sempre teste o executável antes de criar o release
+- [ ] Versão atualizada no `pubspec.yaml`
+- [ ] `update_version.ps1` executado
+- [ ] Build Flutter e instalador criados
+- [ ] Executável testado localmente
+- [ ] Commit e push realizados
+- [ ] Tag criada e enviada
+- [ ] Release publicado no GitHub com instalador
+- [ ] GitHub Actions executou com sucesso

@@ -55,7 +55,7 @@ AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_datab
 
 2. **Criar instalador:**
 
-   Consulte [installer_guide.md](installer_guide.md) para instruções completas.
+   Consulte `installer/README.md` para instruções completas.
 
 3. **Criar um release no GitHub:**
 
@@ -238,8 +238,8 @@ servidor/
 
 - **[testing_auto_update.md](testing_auto_update.md)**: Como testar o sistema de atualização
 - **[release_guide.md](release_guide.md)**: Como criar releases no GitHub
-- **[installer_guide.md](installer_guide.md)**: Como criar o instalador
-- **[tag_creation_guide.md](tag_creation_guide.md)**: Como criar tags para releases
+- **installer/README.md**: Como criar o instalador
+- **[release_guide.md](release_guide.md)**: Como criar releases e tags
 
 ## Notas Importantes
 

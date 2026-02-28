@@ -47,8 +47,4 @@ Execute os scripts a partir da raiz do projeto:
 
 ## Documentação
 
-Veja a documentação completa em `docs/test/`:
-
-- `TESTING_SERVER_CLIENT.md` - Guia completo de testes
-- `QUICK_REFERENCE.md` - Referência rápida
-- `SCRIPTS_README.md` - Documentação detalhada dos scripts
+Os scripts acima são usados para testes de integração servidor/cliente. Execute a partir da raiz do projeto.

@@ -65,3 +65,6 @@ Thumbs.db
 # Installer build outputs
 installer/dist/
 installer/dist/*.exe
+
+# Installer dependencies (baixados automaticamente pelo build_installer.ps1)
+installer/dependencies/vc_redist.x64.exe

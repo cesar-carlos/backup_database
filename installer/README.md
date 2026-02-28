@@ -92,8 +92,10 @@ powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
 Este script:
 
 1. Sincroniza a versão do `pubspec.yaml` com o `setup.iss`
-2. Compila o instalador usando Inno Setup
-3. Informa onde o instalador foi criado
+2. Verifica o build do Flutter (`backup_database.exe`)
+3. Baixa `vc_redist.x64.exe` automaticamente se ausente
+4. Compila o instalador usando Inno Setup
+5. Informa onde o instalador foi criado
 
 ## Estrutura do Instalador
 
@@ -161,16 +163,9 @@ Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opçõ
 
 ## Visual C++ Redistributables
 
-O instalador tenta instalar automaticamente o Visual C++ Redistributables, mas você precisa:
+O `build_installer.ps1` baixa automaticamente o `vc_redist.x64.exe` se não existir em `installer\dependencies\`. O instalador inclui e executa o VC++ Redistributables quando necessário no sistema de destino.
 
-1. **Baixar o instalador** do Visual C++ Redistributables:
-
-   - Link: https://aka.ms/vs/17/release/vc_redist.x64.exe
-   - Salve em: `installer\dependencies\vc_redist.x64.exe`
-
-2. **Incluir no instalador** (opcional):
-   - Adicione o arquivo na seção `[Files]` do `setup.iss`
-   - O script já está configurado para procurar em `{tmp}\vc_redist.x64.exe`
+Se o download automático falhar (ex.: sem internet), baixe manualmente de https://aka.ms/vs/17/release/vc_redist.x64.exe e salve em `installer\dependencies\vc_redist.x64.exe`.
 
 ## Testando o Instalador
 
@@ -218,4 +213,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Última atualização**: Versão 1.0.0
+**Última atualização**: Versão 2.2.7

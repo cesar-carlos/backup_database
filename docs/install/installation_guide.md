@@ -13,20 +13,20 @@ Antes de começar, certifique-se de ter:
 3. **Conexão com a Internet** (para baixar dependências, se necessário)
 4. **Espaço em disco** suficiente (mínimo 500 MB)
 
-Para verificar todos os requisitos detalhados, consulte [REQUIREMENTS.md](REQUIREMENTS.md).
+Para verificar todos os requisitos detalhados, consulte [requirements.md](requirements.md).
 
 ---
 
 ## Passo 1: Download do Instalador
 
-1. Baixe o arquivo `BackupDatabase-Setup-1.0.0.exe` da página de releases
+1. Baixe o arquivo `BackupDatabase-Setup-{versão}.exe` da [página de releases](https://github.com/cesar-carlos/backup_database/releases)
 2. Salve o arquivo em um local de fácil acesso (ex: `Downloads`)
 
 ---
 
 ## Passo 2: Executar o Instalador
 
-1. **Localize o arquivo** `BackupDatabase-Setup-1.0.0.exe`
+1. **Localize o arquivo** do instalador (ex.: `BackupDatabase-Setup-2.2.7.exe`)
 2. **Clique com o botão direito** no arquivo
 3. Selecione **"Executar como administrador"**
 4. Se aparecer o **Controle de Conta de Usuário (UAC)**, clique em **"Sim"**
@@ -103,7 +103,7 @@ Se você viu avisos sobre dependências faltando durante a instalação:
 1. **Se você já tem SQL Server instalado**:
 
    - Verifique se `sqlcmd.exe` está no PATH
-   - Consulte [path_setup.md](../path_setup.md) para instruções
+   - Consulte [path_setup.md](path_setup.md) para instruções
 
 2. **Se você não tem SQL Server instalado**:
    - Baixe e instale o **SQL Server Command Line Utilities**
@@ -115,7 +115,7 @@ Se você viu avisos sobre dependências faltando durante a instalação:
 1. **Instale o Sybase SQL Anywhere** (se ainda não tiver)
 2. **Localize a pasta `Bin64`** na instalação
 3. **Adicione o caminho ao PATH** do sistema
-4. Consulte [path_setup.md](../path_setup.md) para instruções detalhadas
+4. Consulte [path_setup.md](path_setup.md) para instruções detalhadas
 
 ### 4.3 Verificar Instalação
 
@@ -249,8 +249,8 @@ Para desinstalar o Backup Database:
 
 Após a instalação bem-sucedida:
 
-1. ✅ Leia a [documentação de requisitos](REQUIREMENTS.md)
-2. ✅ Configure o PATH se necessário ([path_setup.md](../path_setup.md))
+1. ✅ Leia a [documentação de requisitos](requirements.md)
+2. ✅ Configure o PATH se necessário ([path_setup.md](path_setup.md))
 3. ✅ Se o antivírus bloquear conexões, adicione uma exceção para a pasta de instalação e para `backup_database.exe` (se necessário)
 4. ✅ Configure suas conexões de banco de dados
 5. ✅ Crie seus primeiros agendamentos de backup
@@ -262,7 +262,7 @@ Após a instalação bem-sucedida:
 
 Se você encontrar problemas durante a instalação:
 
-1. Consulte a [documentação de requisitos](REQUIREMENTS.md)
+1. Consulte a [documentação de requisitos](requirements.md)
 2. Verifique os logs em: `C:\ProgramData\BackupDatabase\logs\`
 3. Abra uma issue no repositório do projeto com:
    - Versão do Windows

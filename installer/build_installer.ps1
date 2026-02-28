@@ -42,8 +42,34 @@ if (-not (Test-Path $exePath)) {
 Write-Host "✓ Executável encontrado" -ForegroundColor Green
 Write-Host ""
 
-# Passo 3: Localizar Inno Setup Compiler
-Write-Host "Passo 3: Localizando Inno Setup Compiler..." -ForegroundColor Yellow
+# Passo 3: Garantir vc_redist.x64.exe (download se ausente)
+Write-Host "Passo 3: Verificando Visual C++ Redistributables..." -ForegroundColor Yellow
+$vcRedistPath = Join-Path $scriptRoot "dependencies\vc_redist.x64.exe"
+if (-not (Test-Path $vcRedistPath)) {
+    $depsDir = Join-Path $scriptRoot "dependencies"
+    if (-not (Test-Path $depsDir)) {
+        New-Item -ItemType Directory -Path $depsDir -Force | Out-Null
+    }
+    Write-Host "  Baixando vc_redist.x64.exe..." -ForegroundColor Gray
+    try {
+        $vcRedistUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+        Invoke-WebRequest -Uri $vcRedistUrl -OutFile $vcRedistPath -UseBasicParsing
+        Write-Host "✓ vc_redist.x64.exe baixado" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "ERRO: Falha ao baixar vc_redist.x64.exe" -ForegroundColor Red
+        Write-Host "Baixe manualmente de: https://aka.ms/vs/17/release/vc_redist.x64.exe" -ForegroundColor Yellow
+        Write-Host "Salve em: $vcRedistPath" -ForegroundColor Yellow
+        exit 1
+    }
+}
+else {
+    Write-Host "✓ vc_redist.x64.exe encontrado" -ForegroundColor Green
+}
+Write-Host ""
+
+# Passo 4: Localizar Inno Setup Compiler
+Write-Host "Passo 4: Localizando Inno Setup Compiler..." -ForegroundColor Yellow
 $programFilesX86 = ${env:ProgramFiles(x86)}
 $programFiles = $env:ProgramFiles
 
@@ -71,8 +97,8 @@ $isccPath = (Resolve-Path $isccPath).Path
 Write-Host "✓ Inno Setup encontrado: $isccPath" -ForegroundColor Green
 Write-Host ""
 
-# Passo 4: Compilar instalador
-Write-Host "Passo 4: Compilando instalador..." -ForegroundColor Yellow
+# Passo 5: Compilar instalador
+Write-Host "Passo 5: Compilando instalador..." -ForegroundColor Yellow
 Write-Host "Aguarde, isso pode levar alguns minutos..." -ForegroundColor Gray
 
 $setupIssFullPath = (Resolve-Path $setupIssPath).Path

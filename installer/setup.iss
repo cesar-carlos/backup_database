@@ -1,6 +1,6 @@
 #pragma codePage(65001)
 #define MyAppName "Backup Database"
-#define MyAppVersion "2.2.6"
+#define MyAppVersion "2.2.7"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -43,6 +43,7 @@ Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\.env.example"; DestDir: "{app}"; Flags: ignoreversion; DestName: ".env.example"
 Source: "..\docs\install\installation_guide.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\path_setup.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\requirements.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "check_dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "dependencies\nssm-2.24\win64\nssm.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "dependencies\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall

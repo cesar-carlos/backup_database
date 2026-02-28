@@ -11,12 +11,17 @@ Baixe o NSSM de: https://nssm.cc/download
 
 O NSSM é necessário para instalar o aplicativo como serviço do Windows.
 
+## Visual C++ Redistributables (vc_redist.x64.exe)
+
+O `build_installer.ps1` baixa automaticamente este arquivo se não existir. Se o download falhar, baixe manualmente de https://aka.ms/vs/17/release/vc_redist.x64.exe e salve em `installer/dependencies/vc_redist.x64.exe`.
+
 **Estrutura esperada:**
 ```
 installer/
   dependencies/
     nssm-2.24/
       win64/
-        nssm.exe  ← Este arquivo será incluído no instalador
+        nssm.exe       ← Incluído no instalador (manual)
+    vc_redist.x64.exe  ← Auto-baixado pelo build_installer.ps1
 ```
 

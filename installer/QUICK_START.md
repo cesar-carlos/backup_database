@@ -12,7 +12,8 @@ powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
 Este script:
 1. ✅ Sincroniza a versão do `pubspec.yaml` com o `setup.iss`
 2. ✅ Verifica se o projeto foi compilado
-3. ✅ Compila o instalador automaticamente
+3. ✅ Baixa `vc_redist.x64.exe` automaticamente se ausente
+4. ✅ Compila o instalador automaticamente
 
 ### Método Manual
 
@@ -62,7 +63,7 @@ powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
 ## Documentação Completa
 
 - **Instalador**: `installer\README.md`
-- **Guia de Instalação**: `docs\installation_guide.md`
+- **Guia de Instalação**: `docs\install\installation_guide.md`
 - **Requisitos**: `docs\requirements.md`
 - **Configuração PATH**: `docs\path_setup.md`
 
