@@ -12,7 +12,11 @@
 class FlutterWindow : public Win32Window {
  public:
   // Creates a new FlutterWindow hosting a Flutter view running |project|.
-  explicit FlutterWindow(const flutter::DartProject& project);
+  // When |service_mode| is true the window is running as a Windows Service
+  // (Session 0, no GPU/display).  In that case GUI-only plugins are skipped
+  // during registration and rendering setup is omitted even if view() is valid.
+  explicit FlutterWindow(const flutter::DartProject& project,
+                         bool service_mode = false);
   virtual ~FlutterWindow();
 
  protected:
@@ -25,6 +29,9 @@ class FlutterWindow : public Win32Window {
  private:
   // The project to run.
   flutter::DartProject project_;
+
+  // Whether the app is running as a headless Windows Service.
+  bool service_mode_;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;

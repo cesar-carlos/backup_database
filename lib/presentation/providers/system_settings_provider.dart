@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/presentation/managers/window_manager_service.dart';
@@ -17,7 +17,7 @@ class SystemSettingsProvider extends ChangeNotifier {
 
   bool _minimizeToTray = true;
   bool _closeToTray = true;
-  bool _startMinimized = true;
+  bool _startMinimized = false;
   bool _startWithWindows = true;
   bool _isInitialized = false;
 
@@ -40,7 +40,7 @@ class SystemSettingsProvider extends ChangeNotifier {
 
       _minimizeToTray = prefs.getBool(_minimizeToTrayKey) ?? true;
       _closeToTray = prefs.getBool(_closeToTrayKey) ?? true;
-      _startMinimized = prefs.getBool(_startMinimizedKey) ?? true;
+      _startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
       _startWithWindows = prefs.getBool(_startWithWindowsKey) ?? true;
 
       if (isFirstRun) {
@@ -137,7 +137,7 @@ class SystemSettingsProvider extends ChangeNotifier {
 
       if (enable) {
         final prefs = await SharedPreferences.getInstance();
-        final startMinimized = prefs.getBool(_startMinimizedKey) ?? true;
+        final startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
 
         final command = startMinimized
             ? '"$executablePath" --minimized'

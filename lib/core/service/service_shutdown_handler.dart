@@ -21,6 +21,7 @@ class ServiceShutdownHandler {
   factory ServiceShutdownHandler() => _instance ??= ServiceShutdownHandler._();
 
   final List<ShutdownCallback> _shutdownCallbacks = [];
+  final List<StreamSubscription<ProcessSignal>> _signalSubscriptions = [];
   bool _isShuttingDown = false;
   bool _isInitialized = false;
 
@@ -39,17 +40,19 @@ class ServiceShutdownHandler {
     }
 
     try {
-      // Registra handler para SIGINT (Ctrl+C)
-      ProcessSignal.sigint.watch().listen((_) {
-        LoggerService.info('SIGINT recebido (Ctrl+C)');
-        _handleShutdown(const Duration(seconds: 30));
-      });
+      _signalSubscriptions.add(
+        ProcessSignal.sigint.watch().listen((_) {
+          LoggerService.info('SIGINT recebido (Ctrl+C)');
+          _handleShutdown(const Duration(seconds: 30));
+        }),
+      );
 
-      // Registra handler para SIGTERM
-      ProcessSignal.sigterm.watch().listen((_) {
-        LoggerService.info('SIGTERM recebido');
-        _handleShutdown(const Duration(seconds: 30));
-      });
+      _signalSubscriptions.add(
+        ProcessSignal.sigterm.watch().listen((_) {
+          LoggerService.info('SIGTERM recebido');
+          _handleShutdown(const Duration(seconds: 30));
+        }),
+      );
 
       _isInitialized = true;
       LoggerService.info('✅ ServiceShutdownHandler inicializado');
@@ -155,6 +158,14 @@ class ServiceShutdownHandler {
     );
     LoggerService.info('═══════════════════════════════════════');
     LoggerService.info('');
+
+    // Cancel signal subscriptions so stale listeners don't fire after exit.
+    for (final sub in _signalSubscriptions) {
+      try {
+        await sub.cancel();
+      } on Object catch (_) {}
+    }
+    _signalSubscriptions.clear();
   }
 
   /// Verifica se o processo está em shutdown.

@@ -6,6 +6,7 @@ import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
+import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
@@ -22,7 +23,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -151,7 +151,7 @@ Future<bool> _dropConfigTablesForVersion223() async {
   sqlite3.Database? database;
 
   try {
-    final appDataDir = await getApplicationDocumentsDirectory();
+    final appDataDir = await resolveAppDataDirectory();
     final dbPath = p.join(appDataDir.path, 'backup_database.db');
     final dbFile = File(dbPath);
 
@@ -360,15 +360,7 @@ String _getErrorMessage(_DropErrorType type) {
 }
 
 /// Obtém o diretório de dados do aplicativo sem duplicação de pastas
-Future<Directory> getAppDataDirectory() async {
-  if (Platform.isWindows) {
-    final appData = Platform.environment['APPDATA'];
-    if (appData != null) {
-      return Directory(p.join(appData, 'Backup Database'));
-    }
-  }
-  return getApplicationDocumentsDirectory();
-}
+Future<Directory> getAppDataDirectory() => resolveAppDataDirectory();
 
 /// Sets up core services and utilities.
 ///
@@ -379,7 +371,7 @@ Future<void> setupCoreModule(GetIt getIt) async {
 
   final exportData224 = await runFullDatabaseMigration224();
 
-  final appDataDir = await getApplicationDocumentsDirectory();
+  final appDataDir = await getAppDataDirectory();
   final logsDirectory = p.join(appDataDir.path, 'logs');
 
   await LoggerService.init(logsDirectory: logsDirectory);

@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -43,7 +43,7 @@ Future<Map<String, dynamic>?> runFullDatabaseMigration224() async {
     return null;
   }
 
-  final appDataDir = await getApplicationDocumentsDirectory();
+  final appDataDir = await resolveAppDataDirectory();
   final databaseName = getDatabaseNameForMode(currentAppMode);
   final dbPath = p.join(appDataDir.path, '$databaseName.db');
   final dbFile = File(dbPath);

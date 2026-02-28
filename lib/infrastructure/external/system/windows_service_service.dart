@@ -343,13 +343,7 @@ class WindowsServiceService implements IWindowsServiceService {
 
       final installResult = await _processService.run(
         executable: nssmPath,
-        arguments: [
-          'install',
-          _serviceName,
-          appPath,
-          '--minimized',
-          '--mode=server',
-        ],
+        arguments: ['install', _serviceName, appPath],
         timeout: _timing.longTimeout,
       );
 
@@ -390,7 +384,29 @@ class WindowsServiceService implements IWindowsServiceService {
             );
           }
 
-          await _configureService(nssmPath, serviceUser, servicePassword);
+          await Future.delayed(_timing.serviceDelay);
+
+          final configResult = await _configureService(
+            nssmPath,
+            serviceUser,
+            servicePassword,
+          );
+          final configFailure = configResult.exceptionOrNull();
+          if (configFailure != null) {
+            LoggerService.error(
+              'Configuração crítica do serviço falhou — removendo instalação parcial',
+              configFailure,
+            );
+            _metrics?.incrementCounter(
+              ObservabilityMetrics.windowsServiceInstallFailure,
+            );
+            await _processService.run(
+              executable: nssmPath,
+              arguments: ['remove', _serviceName, 'confirm'],
+              timeout: _timing.longTimeout,
+            );
+            return rd.Failure(configFailure as Failure);
+          }
 
           final postStatus = await getStatus();
           return postStatus.fold(
@@ -447,7 +463,7 @@ class WindowsServiceService implements IWindowsServiceService {
     }
   }
 
-  Future<void> _configureService(
+  Future<rd.Result<void>> _configureService(
     String nssmPath,
     String? serviceUser,
     String? servicePassword,
@@ -466,51 +482,90 @@ class WindowsServiceService implements IWindowsServiceService {
       }
     }
 
+    // Critical keys: if any fail the installation must be aborted.
+    const criticalKeys = {
+      'AppParameters',
+      'AppDirectory',
+      'AppEnvironmentExtra',
+      'AppStdout',
+      'AppStderr',
+    };
+
     final configs = [
+      // Critical: --run-as-service triggers headless mode; without it the
+      // service process opens a (invisible) window and the SCM times out.
+      [
+        'set',
+        _serviceName,
+        'AppParameters',
+        '--mode=server --minimized --run-as-service',
+      ],
+      // Critical: working dir is needed for .env and asset resolution.
       ['set', _serviceName, 'AppDirectory', appDir],
+      // Critical: environment variable used as the primary service-mode signal.
+      ['set', _serviceName, 'AppEnvironmentExtra', 'SERVICE_MODE=server'],
       ['set', _serviceName, 'DisplayName', _displayName],
       ['set', _serviceName, 'Description', _description],
       ['set', _serviceName, 'Start', 'SERVICE_AUTO_START'],
       ['set', _serviceName, 'AppStdout', '$logPath\\service_stdout.log'],
       ['set', _serviceName, 'AppStderr', '$logPath\\service_stderr.log'],
-      ['set', _serviceName, 'AppNoConsole', '1'],
-      // Configure auto-restart on crash
       ['set', _serviceName, 'AppExit', 'Default', 'Restart'],
       ['set', _serviceName, 'AppRestartDelay', '60000'],
     ];
 
     for (final config in configs) {
+      final key = config[2];
       final result = await _processService.run(
         executable: nssmPath,
         arguments: config,
         timeout: _timing.shortTimeout,
       );
 
-      result.fold(
+      final isCritical = criticalKeys.contains(key);
+
+      final failure = result.fold(
         (processResult) {
           if (processResult.exitCode != _successExitCode) {
-            LoggerService.warning(
-              'Aviso ao configurar ${config[1]}: ${processResult.stderr}',
+            final msg = processResult.stderr.isNotEmpty
+                ? processResult.stderr
+                : processResult.stdout;
+            if (isCritical) {
+              return ServerFailure(
+                message:
+                    'Falha ao configurar chave crítica "$key" do serviço '
+                    '(exit ${processResult.exitCode}): $msg',
+              );
+            }
+            LoggerService.warning('Aviso ao configurar $key: $msg');
+          }
+          return null;
+        },
+        (f) {
+          if (isCritical) {
+            return ServerFailure(
+              message: 'Erro ao configurar chave crítica "$key": $f',
             );
           }
-        },
-        (failure) {
-          LoggerService.warning('Erro ao configurar ${config[1]}: $failure');
+          LoggerService.warning('Erro ao configurar $key: $f');
+          return null;
         },
       );
+
+      if (failure != null) {
+        return rd.Failure(failure);
+      }
     }
 
     if (serviceUser == null || serviceUser.isEmpty) {
       LoggerService.info(
         'Configurando serviço para rodar como LocalSystem (sem usuário logado)',
       );
-
       await _processService.run(
         executable: nssmPath,
         arguments: ['set', _serviceName, 'ObjectName', _localSystemAccount],
         timeout: _timing.shortTimeout,
       );
-    } else if (servicePassword != null) {
+    } else if (servicePassword != null && servicePassword.isNotEmpty) {
       await _processService.run(
         executable: nssmPath,
         arguments: [
@@ -522,7 +577,18 @@ class WindowsServiceService implements IWindowsServiceService {
         ],
         timeout: _timing.shortTimeout,
       );
+    } else {
+      LoggerService.warning(
+        'Usuário "$serviceUser" fornecido sem senha — usando LocalSystem',
+      );
+      await _processService.run(
+        executable: nssmPath,
+        arguments: ['set', _serviceName, 'ObjectName', _localSystemAccount],
+        timeout: _timing.shortTimeout,
+      );
     }
+
+    return const rd.Success(unit);
   }
 
   @override
@@ -581,15 +647,26 @@ class WindowsServiceService implements IWindowsServiceService {
                 errorMessage.contains('FAILURE 5');
 
             if (isAccessDenied) {
-              _metrics?.incrementCounter(
-                ObservabilityMetrics.windowsServiceUninstallFailure,
+              LoggerService.warning(
+                'Acesso negado ao remover serviço; solicitando elevação UAC',
               );
-              return const rd.Failure(
-                ServerFailure(
-                  message:
-                      'Acesso negado. É necessário executar o aplicativo como '
-                      'Administrador para remover o serviço.\n\n$_accessDeniedSolution',
-                ),
+              final elevatedUninstallResult = await _uninstallWithElevation();
+              return elevatedUninstallResult.fold(
+                (_) {
+                  _metrics?.incrementCounter(
+                    ObservabilityMetrics.windowsServiceUninstallSuccess,
+                  );
+                  LoggerService.info(
+                    'Serviço removido com sucesso após elevação UAC',
+                  );
+                  return const rd.Success(unit);
+                },
+                (failure) {
+                  _metrics?.incrementCounter(
+                    ObservabilityMetrics.windowsServiceUninstallFailure,
+                  );
+                  return rd.Failure(failure);
+                },
               );
             }
 
@@ -821,15 +898,33 @@ class WindowsServiceService implements IWindowsServiceService {
               errorMessage.contains('FAILURE 5');
 
           if (isAccessDenied) {
-            _metrics?.incrementCounter(
-              ObservabilityMetrics.windowsServiceStartFailure,
+            LoggerService.warning(
+              'Acesso negado ao iniciar serviço; solicitando elevação UAC',
             );
-            return const rd.Failure(
-              ServerFailure(
-                message:
-                    'Acesso negado. É necessário executar o aplicativo como '
-                    'Administrador para iniciar o serviço.\n\n$_accessDeniedSolution',
-              ),
+
+            final elevatedResult = await _startServiceWithElevation(
+              scCommand: scCommand,
+              pollingTimeout: pollingTimeout ?? _timing.startPollingTimeout,
+              pollingInterval: pollingInterval ?? _timing.startPollingInterval,
+              initialDelay: initialDelay ?? _timing.startPollingInitialDelay,
+            );
+
+            return elevatedResult.fold(
+              (_) {
+                _metrics?.incrementCounter(
+                  ObservabilityMetrics.windowsServiceStartSuccess,
+                );
+                LoggerService.info(
+                  'Serviço iniciado com sucesso após elevação UAC',
+                );
+                return const rd.Success(unit);
+              },
+              (failure) {
+                _metrics?.incrementCounter(
+                  ObservabilityMetrics.windowsServiceStartFailure,
+                );
+                return rd.Failure(failure);
+              },
             );
           }
 
@@ -861,6 +956,271 @@ class WindowsServiceService implements IWindowsServiceService {
         ),
       );
     }
+  }
+
+  Future<rd.Result<void>> _startServiceWithElevation({
+    required String scCommand,
+    required Duration pollingTimeout,
+    required Duration pollingInterval,
+    required Duration initialDelay,
+  }) async {
+    final elevatedCommand =
+        r'$process = Start-Process -FilePath "sc.exe" '
+        '-ArgumentList "$scCommand $_serviceName" '
+        r'-Verb RunAs -PassThru -Wait; exit $process.ExitCode';
+
+    final result = await _processService.run(
+      executable: 'powershell',
+      arguments: [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        elevatedCommand,
+      ],
+      timeout: _timing.longTimeout,
+    );
+
+    return result.fold(
+      (processResult) async {
+        final output = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+
+        if (processResult.exitCode != _successExitCode) {
+          final normalizedOutput = output.toLowerCase();
+          final wasCancelled =
+              normalizedOutput.contains('canceled by the user') ||
+              normalizedOutput.contains('cancelada pelo usuário') ||
+              normalizedOutput.contains('cancelado pelo usuário') ||
+              normalizedOutput.contains('foi cancelada pelo usuário');
+
+          if (wasCancelled) {
+            return const rd.Failure(
+              ValidationFailure(
+                message:
+                    'A solicitação de permissões de Administrador foi '
+                    'cancelada. Para iniciar o serviço, confirme o prompt UAC.',
+              ),
+            );
+          }
+
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Falha ao iniciar serviço com elevação UAC '
+                  '(exit ${processResult.exitCode}). Saída: $output',
+            ),
+          );
+        }
+
+        final runningAfterPoll = await _pollUntilRunning(
+          timeout: pollingTimeout,
+          interval: pollingInterval,
+          initialDelay: initialDelay,
+          onConvergence: (d) => _metrics?.recordHistogram(
+            ObservabilityMetrics.windowsServiceStartConvergenceSeconds,
+            d.inMilliseconds / 1000,
+          ),
+        );
+
+        if (!runningAfterPoll) {
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Comando elevado executado, mas o serviço não atingiu '
+                  'RUNNING dentro de ${pollingTimeout.inSeconds}s.\n\n'
+                  'Tente:\n'
+                  '1. Atualizar o status\n'
+                  '2. Verificar os logs em $_logPath '
+                  '(service_stdout.log e service_stderr.log)\n'
+                  '3. Confirmar que o prompt UAC foi aceito',
+            ),
+          );
+        }
+
+        return const rd.Success(unit);
+      },
+      (failure) {
+        return Future.value(
+          rd.Failure(
+            ServerFailure(
+              message:
+                  'Não foi possível solicitar elevação UAC para iniciar '
+                  'o serviço: $failure',
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<rd.Result<void>> _stopServiceWithElevation({
+    required Duration pollingTimeout,
+    required Duration pollingInterval,
+  }) async {
+    const elevatedCommand =
+        r'$process = Start-Process -FilePath "sc.exe" '
+        '-ArgumentList "stop $_serviceName" '
+        r'-Verb RunAs -PassThru -Wait; exit $process.ExitCode';
+
+    final result = await _processService.run(
+      executable: 'powershell',
+      arguments: [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        elevatedCommand,
+      ],
+      timeout: _timing.longTimeout,
+    );
+
+    return result.fold(
+      (processResult) async {
+        final output = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+
+        if (processResult.exitCode != _successExitCode) {
+          if (_wasUacCancelled(output)) {
+            return const rd.Failure(
+              ValidationFailure(
+                message:
+                    'A solicitação de permissões de Administrador foi '
+                    'cancelada. Para parar o serviço, confirme o prompt UAC.',
+              ),
+            );
+          }
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Falha ao parar serviço com elevação UAC '
+                  '(exit ${processResult.exitCode}). Saída: $output',
+            ),
+          );
+        }
+
+        final stoppedAfterPoll = await _pollUntilStopped(
+          timeout: pollingTimeout,
+          interval: pollingInterval,
+          onConvergence: (d) => _metrics?.recordHistogram(
+            ObservabilityMetrics.windowsServiceStopConvergenceSeconds,
+            d.inMilliseconds / 1000,
+          ),
+        );
+
+        if (!stoppedAfterPoll) {
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Comando elevado executado, mas o serviço não atingiu '
+                  'STOPPED dentro de ${pollingTimeout.inSeconds}s.\n\n'
+                  'Tente:\n'
+                  '1. Atualizar o status\n'
+                  '2. Verificar os logs em $_logPath\n'
+                  '3. Confirmar que o prompt UAC foi aceito',
+            ),
+          );
+        }
+
+        return const rd.Success(unit);
+      },
+      (failure) {
+        return Future.value(
+          rd.Failure(
+            ServerFailure(
+              message:
+                  'Não foi possível solicitar elevação UAC para parar '
+                  'o serviço: $failure',
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<rd.Result<void>> _uninstallWithElevation() async {
+    const elevatedCommand =
+        r'$process = Start-Process -FilePath "cmd.exe" '
+        '-ArgumentList "/c sc stop $_serviceName & sc delete $_serviceName" '
+        r'-Verb RunAs -PassThru -Wait; exit $process.ExitCode';
+
+    final result = await _processService.run(
+      executable: 'powershell',
+      arguments: [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        elevatedCommand,
+      ],
+      timeout: _timing.longTimeout,
+    );
+
+    return result.fold(
+      (processResult) async {
+        final output = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+
+        if (processResult.exitCode != _successExitCode) {
+          if (_wasUacCancelled(output)) {
+            return const rd.Failure(
+              ValidationFailure(
+                message:
+                    'A solicitação de permissões de Administrador foi '
+                    'cancelada. Para remover o serviço, confirme o prompt UAC.',
+              ),
+            );
+          }
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Falha ao remover serviço com elevação UAC '
+                  '(exit ${processResult.exitCode}). Saída: $output',
+            ),
+          );
+        }
+
+        final postStatus = await getStatus();
+        return postStatus.fold(
+          (status) {
+            if (status.isInstalled) {
+              return const rd.Failure(
+                ServerFailure(
+                  message:
+                      'O comando elevado foi executado, mas o serviço '
+                      'ainda está registrado. Tente remover manualmente '
+                      'via services.msc.',
+                ),
+              );
+            }
+            return const rd.Success(unit);
+          },
+          rd.Failure.new,
+        );
+      },
+      (failure) {
+        return Future.value(
+          rd.Failure(
+            ServerFailure(
+              message:
+                  'Não foi possível solicitar elevação UAC para remover '
+                  'o serviço: $failure',
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  bool _wasUacCancelled(String output) {
+    final normalizedOutput = output.toLowerCase();
+    return normalizedOutput.contains('canceled by the user') ||
+        normalizedOutput.contains('cancelada pelo usuário') ||
+        normalizedOutput.contains('cancelado pelo usuário') ||
+        normalizedOutput.contains('foi cancelada pelo usuário');
   }
 
   /// Verifica se a saída do sc query indica estado RUNNING.
@@ -1018,15 +1378,29 @@ class WindowsServiceService implements IWindowsServiceService {
               errorMessage.contains('FAILURE 5');
 
           if (isAccessDenied) {
-            _metrics?.incrementCounter(
-              ObservabilityMetrics.windowsServiceStopFailure,
+            LoggerService.warning(
+              'Acesso negado ao parar serviço; solicitando elevação UAC',
             );
-            return const rd.Failure(
-              ServerFailure(
-                message:
-                    'Acesso negado. É necessário executar o aplicativo como '
-                    'Administrador para parar o serviço.\n\n$_accessDeniedSolution',
-              ),
+            final elevatedStopResult = await _stopServiceWithElevation(
+              pollingTimeout: _timing.longTimeout,
+              pollingInterval: _timing.startPollingInterval,
+            );
+            return elevatedStopResult.fold(
+              (_) {
+                _metrics?.incrementCounter(
+                  ObservabilityMetrics.windowsServiceStopSuccess,
+                );
+                LoggerService.info(
+                  'Serviço parado com sucesso após elevação UAC',
+                );
+                return const rd.Success(unit);
+              },
+              (failure) {
+                _metrics?.incrementCounter(
+                  ObservabilityMetrics.windowsServiceStopFailure,
+                );
+                return rd.Failure(failure);
+              },
             );
           }
 

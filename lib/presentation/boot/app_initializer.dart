@@ -71,7 +71,8 @@ class AppInitializer {
 
   static Future<LaunchConfig> getLaunchConfig() async {
     final prefs = await SharedPreferences.getInstance();
-    final startMinimizedFromSettings = prefs.getBool('start_minimized') ?? true;
+    final startMinimizedFromSettings =
+        prefs.getBool('start_minimized') ?? false;
     LoggerService.info(
       'Configuracao "Iniciar Minimizado" carregada: $startMinimizedFromSettings',
     );

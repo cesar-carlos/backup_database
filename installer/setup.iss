@@ -1,4 +1,4 @@
-﻿#pragma codePage(65001)
+#pragma codePage(65001)
 #define MyAppName "Backup Database"
 #define MyAppVersion "2.2.6"
 #define MyAppPublisher "Backup Database"
@@ -60,11 +60,11 @@ Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; P
 Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
 Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-; Desktop icon (default to server)
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Tasks: desktopicon
+; Desktop icon (default launch, mode resolved by app config/.install_mode)
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Parameters: "--mode=server"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: startup

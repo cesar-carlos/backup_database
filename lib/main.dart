@@ -27,13 +27,25 @@ void main() {
 }
 
 Future<void> _runApp() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Log arguments and relevant environment variables for diagnostics.
+  LoggerService.info('[main] args=${Platform.executableArguments}');
+  LoggerService.info(
+    '[main] env: SERVICE_MODE=${Platform.environment['SERVICE_MODE']}, '
+    'SERVICE_NAME=${Platform.environment['SERVICE_NAME']}, '
+    'NSSM_SERVICE=${Platform.environment['NSSM_SERVICE']}',
+  );
 
+  // Verifica modo serviço ANTES de inicializar Flutter binding
+  // para evitar tentar criar rendering surface em Session 0
   if (ServiceModeDetector.isServiceMode()) {
-    LoggerService.info('Modo Servico detectado - inicializando sem UI');
+    LoggerService.info('==> Modo Servico detectado - inicializando sem UI');
     await ServiceModeInitializer.initialize();
     return;
   }
+
+  // Só inicializa Flutter binding se não estiver em modo serviço
+  LoggerService.info('==> Modo UI detectado - inicializando interface grafica');
+  WidgetsFlutterBinding.ensureInitialized();
 
   await _loadEnvironment();
   setAppMode(getAppMode(Platform.executableArguments));

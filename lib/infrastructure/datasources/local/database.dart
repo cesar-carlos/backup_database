@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/daos.dart';
 import 'package:backup_database/infrastructure/datasources/local/tables/tables.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 part 'database.g.dart';
 
@@ -1988,7 +1988,7 @@ class AppDatabase extends _$AppDatabase {
 
 LazyDatabase _openConnection([String databaseName = 'backup_database']) {
   return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
+    final dbFolder = await resolveAppDataDirectory();
     final file = File(p.join(dbFolder.path, '$databaseName.db'));
     return NativeDatabase.createInBackground(file);
   });

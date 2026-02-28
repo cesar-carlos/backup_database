@@ -55,8 +55,14 @@ class SingleInstanceService implements ISingleInstanceService {
       calloc.free(mutexNamePtr);
 
       if (_mutexHandle == 0 || _mutexHandle == -1) {
-        LoggerService.error(
-          'Erro ao criar mutex: handle=$_mutexHandle, código=$lastError',
+        // CreateMutex failed — we cannot guarantee exclusivity.
+        // Log explicitly so operators can diagnose this in service logs,
+        // but allow the process to continue (better than refusing to start
+        // when the mutex API itself is unavailable).
+        LoggerService.warning(
+          '[SingleInstance] CreateMutex failed: handle=$_mutexHandle, '
+          'GetLastError=$lastError. '
+          'Exclusivity cannot be guaranteed — proceeding as first instance.',
         );
         _isFirstInstance = true;
         return true;

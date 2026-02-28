@@ -53,6 +53,22 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                 ),
               ),
               const SizedBox(height: 32),
+              if (_shouldShowUacInfoBar(provider)) ...[
+                InfoBar(
+                  title: Text(
+                    _t(
+                      'Aguardando confirmação do Administrador (UAC)',
+                      'Waiting for Administrator confirmation (UAC)',
+                    ),
+                  ),
+                  content: Text(
+                    _getUacInfoBarMessage(provider),
+                  ),
+                  severity: InfoBarSeverity.warning,
+                  isLong: true,
+                ),
+                const SizedBox(height: 24),
+              ],
               _buildStatusCard(context, provider),
               const SizedBox(height: 24),
               if (provider.error != null) ...[
@@ -345,15 +361,30 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     if (provider.isLoading) {
       return switch (provider.operation) {
         WindowsServiceOperation.install =>
-          _t('Instalando...', 'Installing...'),
+          _t(
+            'Instalando... aguardando confirmação do UAC',
+            'Installing... waiting for UAC confirmation',
+          ),
         WindowsServiceOperation.uninstall =>
-          _t('Removendo...', 'Removing...'),
+          _t(
+            'Removendo... aguardando confirmação do UAC',
+            'Removing... waiting for UAC confirmation',
+          ),
         WindowsServiceOperation.start =>
-          _t('Iniciando...', 'Starting...'),
+          _t(
+            'Iniciando... aguardando confirmação do UAC',
+            'Starting... waiting for UAC confirmation',
+          ),
         WindowsServiceOperation.stop =>
-          _t('Parando...', 'Stopping...'),
+          _t(
+            'Parando... aguardando confirmação do UAC',
+            'Stopping... waiting for UAC confirmation',
+          ),
         WindowsServiceOperation.restart =>
-          _t('Reiniciando...', 'Restarting...'),
+          _t(
+            'Reiniciando... aguardando confirmação do UAC',
+            'Restarting... waiting for UAC confirmation',
+          ),
         WindowsServiceOperation.check =>
           _t('Verificando...', 'Checking...'),
         WindowsServiceOperation.none =>
@@ -366,6 +397,46 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           : _t('Instalado', 'Installed');
     }
     return _t('Não instalado', 'Not installed');
+  }
+
+  bool _shouldShowUacInfoBar(WindowsServiceProvider provider) {
+    if (!provider.isLoading) {
+      return false;
+    }
+    return provider.operation == WindowsServiceOperation.install ||
+        provider.operation == WindowsServiceOperation.uninstall ||
+        provider.operation == WindowsServiceOperation.start ||
+        provider.operation == WindowsServiceOperation.stop ||
+        provider.operation == WindowsServiceOperation.restart;
+  }
+
+  String _getUacInfoBarMessage(WindowsServiceProvider provider) {
+    return switch (provider.operation) {
+      WindowsServiceOperation.install => _t(
+        'Confirme o prompt do Windows para instalar o serviço.',
+        'Confirm the Windows prompt to install the service.',
+      ),
+      WindowsServiceOperation.uninstall => _t(
+        'Confirme o prompt do Windows para remover o serviço.',
+        'Confirm the Windows prompt to remove the service.',
+      ),
+      WindowsServiceOperation.start => _t(
+        'Confirme o prompt do Windows para iniciar o serviço.',
+        'Confirm the Windows prompt to start the service.',
+      ),
+      WindowsServiceOperation.stop => _t(
+        'Confirme o prompt do Windows para parar o serviço.',
+        'Confirm the Windows prompt to stop the service.',
+      ),
+      WindowsServiceOperation.restart => _t(
+        'Confirme o prompt do Windows para reiniciar o serviço.',
+        'Confirm the Windows prompt to restart the service.',
+      ),
+      _ => _t(
+        'Confirme o prompt do Windows para continuar.',
+        'Confirm the Windows prompt to continue.',
+      ),
+    };
   }
 
   Future<void> _installService(

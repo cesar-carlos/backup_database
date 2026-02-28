@@ -62,9 +62,9 @@ if ($existingService) {
     Start-Sleep -Seconds 2
 }
 
-# Instalar o serviço
+# Instalar o serviço (apenas o executável, sem argumentos inline)
 Write-Host "Instalando serviço..." -ForegroundColor Green
-& $NssmPath install $ServiceName "`"$AppPath`"" --minimized --mode=server
+& $NssmPath install $ServiceName "`"$AppPath`""
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERRO: Falha ao instalar serviço!" -ForegroundColor Red
@@ -72,20 +72,37 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Configurar diretório de trabalho
+# Helper: configura uma chave crítica do NSSM e aborta em caso de falha.
+function Set-NssmCritical {
+    param(
+        [string]$Key,
+        [string[]]$ExtraArgs = @()
+    )
+    & $NssmPath set $ServiceName $Key @ExtraArgs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERRO CRÍTICO: falha ao configurar NSSM $Key (exit $LASTEXITCODE). Abortando." -ForegroundColor Red
+        & $NssmPath remove $ServiceName confirm | Out-Null
+        Read-Host "Pressione Enter para sair"
+        exit 1
+    }
+}
+
+# Configurar argumentos explicitamente — CRÍTICO: sem os args o serviço roda em modo UI
+Write-Host "Configurando parâmetros do aplicativo..." -ForegroundColor Green
+Set-NssmCritical -Key "AppParameters" -ExtraArgs @("--minimized --mode=server --run-as-service")
+
+# Configurar diretório de trabalho — CRÍTICO: necessário para resolução de .env e assets
 Write-Host "Configurando diretório de trabalho..." -ForegroundColor Green
-& $NssmPath set $ServiceName AppDirectory $AppDirectory
+Set-NssmCritical -Key "AppDirectory" -ExtraArgs @($AppDirectory)
 
-# Configurar nome de exibição
+# Configurar variável de ambiente de detecção — CRÍTICO: fallback de detecção de modo serviço
+Write-Host "Configurando variáveis de ambiente..." -ForegroundColor Green
+Set-NssmCritical -Key "AppEnvironmentExtra" -ExtraArgs @("SERVICE_MODE=server")
+
+# Configurações não-críticas (falha gera aviso, não aborta)
 & $NssmPath set $ServiceName DisplayName $DisplayName
-
-# Configurar descrição
 & $NssmPath set $ServiceName Description $Description
-
-# Configurar para iniciar automaticamente
 & $NssmPath set $ServiceName Start SERVICE_AUTO_START
-
-# Configurar para não exigir sessão interativa
 & $NssmPath set $ServiceName AppNoConsole 1
 
 # Configurar redirecionamento de logs
@@ -94,14 +111,15 @@ if (-not (Test-Path $logPath)) {
     New-Item -ItemType Directory -Path $logPath -Force | Out-Null
 }
 
-& $NssmPath set $ServiceName AppStdout "$logPath\service_stdout.log"
-& $NssmPath set $ServiceName AppStderr "$logPath\service_stderr.log"
+Write-Host "Configurando arquivos de log..." -ForegroundColor Green
+Set-NssmCritical -Key "AppStdout" -ExtraArgs @("$logPath\service_stdout.log")
+Set-NssmCritical -Key "AppStderr" -ExtraArgs @("$logPath\service_stderr.log")
 
 # Configurar auto-restart em caso de crash
 & $NssmPath set $ServiceName AppExit Default Restart
 & $NssmPath set $ServiceName AppRestartDelay 60000
 
-# Configurar usuário do serviço (se fornecido)
+# Configurar usuário do serviço
 if (-not [string]::IsNullOrEmpty($ServiceUser) -and $null -ne $ServicePassword) {
     $credential = New-Object System.Management.Automation.PSCredential($ServiceUser, $ServicePassword)
     $plainPassword = $credential.GetNetworkCredential().Password
@@ -109,10 +127,10 @@ if (-not [string]::IsNullOrEmpty($ServiceUser) -and $null -ne $ServicePassword) 
     if ([string]::IsNullOrEmpty($plainPassword)) {
         Write-Host "Senha vazia detectada. Usando LocalSystem..." -ForegroundColor Yellow
         & $NssmPath set $ServiceName ObjectName LocalSystem
+    } else {
+        Write-Host "Configurando usuário do serviço..." -ForegroundColor Green
+        & $NssmPath set $ServiceName ObjectName $ServiceUser $plainPassword
     }
-
-    Write-Host "Configurando usuário do serviço..." -ForegroundColor Green
-    & $NssmPath set $ServiceName ObjectName $ServiceUser $plainPassword
 } else {
     Write-Host "Configurando para rodar como LocalSystem..." -ForegroundColor Green
     & $NssmPath set $ServiceName ObjectName LocalSystem
