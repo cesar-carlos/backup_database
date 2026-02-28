@@ -1679,25 +1679,30 @@ try {
           status?.stateCode == WindowsServiceStateCode.stopPending;
       final isStopped = _isServiceStopped(status);
 
-      if (isStopped && !isStartPending) {
-        if (isStopPending) {
-          LoggerService.info('Serviço em STOP_PENDING, aguardando parada');
-          final stoppedAfterPoll = await _pollUntilStopped(
-            timeout: _timing.longTimeout,
-            interval: _timing.startPollingInterval,
-            onConvergence: (d) => _metrics?.recordHistogram(
-              ObservabilityMetrics.windowsServiceStopConvergenceSeconds,
-              d.inMilliseconds / 1000,
-            ),
+      if (isStopPending) {
+        LoggerService.info('Serviço em STOP_PENDING, aguardando parada');
+        final stoppedAfterPoll = await _pollUntilStopped(
+          timeout: _timing.longTimeout,
+          interval: _timing.startPollingInterval,
+          onConvergence: (d) => _metrics?.recordHistogram(
+            ObservabilityMetrics.windowsServiceStopConvergenceSeconds,
+            d.inMilliseconds / 1000,
+          ),
+        );
+        if (stoppedAfterPoll) {
+          _metrics?.incrementCounter(
+            ObservabilityMetrics.windowsServiceStopSuccess,
           );
-          if (stoppedAfterPoll) {
-            _metrics?.incrementCounter(
-              ObservabilityMetrics.windowsServiceStopSuccess,
-            );
-            LoggerService.info('Serviço parado com sucesso');
-            return const rd.Success(unit);
-          }
+          LoggerService.info('Serviço parado com sucesso');
+          return const rd.Success(unit);
         }
+        LoggerService.warning(
+          'Serviço permaneceu em STOP_PENDING após timeout; '
+          'tentando comando stop explicitamente',
+        );
+      }
+
+      if (isStopped && !isStartPending) {
         _metrics?.incrementCounter(
           ObservabilityMetrics.windowsServiceStopSuccess,
         );

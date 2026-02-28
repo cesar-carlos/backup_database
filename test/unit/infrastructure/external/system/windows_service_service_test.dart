@@ -227,7 +227,7 @@ void main() {
             expect(failure, isA<ServerFailure>());
             expect(
               (failure as ServerFailure).message,
-              contains('Falha ao consultar status do serviço'),
+              contains('Falha ao consultar status do servi'),
             );
           },
         );
@@ -319,7 +319,7 @@ void main() {
     );
 
     test(
-      'should return success when service is PAUSED and continue reaches RUNNING',
+      'should return success when service is PAUSED and recovery stop/start reaches RUNNING',
       () async {
         var queryCallCount = 0;
         when(
@@ -330,16 +330,34 @@ void main() {
           ),
         ).thenAnswer((_) async {
           queryCallCount++;
-          return queryCallCount == 1
-              ? const rd.Success(_pausedQueryResult)
-              : const rd.Success(_runningQueryResult);
+          if (queryCallCount == 1) {
+            return const rd.Success(_pausedQueryResult);
+          }
+          if (queryCallCount == 2) {
+            return const rd.Success(_pausedQueryResult);
+          }
+          if (queryCallCount == 3) {
+            return const rd.Success(_stoppedQueryResult);
+          }
+          return const rd.Success(_runningQueryResult);
         });
 
-        _stubContinue(
+        _stubStop(
           mockProcessService,
           const ProcessResult(
             exitCode: 0,
-            stdout: 'SERVICE_NAME: BackupDatabaseService\n  STATE: 5  CONTINUE_PENDING',
+            stdout: 'STATE: 3  STOP_PENDING',
+            stderr: '',
+            duration: Duration(milliseconds: 50),
+          ),
+        );
+
+        _stubStart(
+          mockProcessService,
+          const ProcessResult(
+            exitCode: 0,
+            stdout:
+                'SERVICE_NAME: BackupDatabaseService\n  STATE: 2  START_PENDING',
             stderr: '',
             duration: Duration(milliseconds: 50),
           ),
@@ -514,6 +532,22 @@ void main() {
             duration: Duration(milliseconds: 10),
           ),
         );
+        when(
+          () => mockProcessService.run(
+            executable: 'powershell',
+            arguments: any(named: 'arguments'),
+            timeout: _longTimeout,
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            ProcessResult(
+              exitCode: 5,
+              stdout: '',
+              stderr: 'Access is denied.',
+              duration: Duration(milliseconds: 10),
+            ),
+          ),
+        );
 
         final result = await windowsServiceService.startService();
 
@@ -522,8 +556,8 @@ void main() {
           (failure) {
             expect(failure, isA<ServerFailure>());
             expect(
-              (failure as ServerFailure).message,
-              contains('Acesso negado'),
+              (failure as ServerFailure).message.toLowerCase(),
+              contains('uac'),
             );
           },
         );

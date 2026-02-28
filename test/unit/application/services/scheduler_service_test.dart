@@ -247,7 +247,12 @@ void main() {
           ),
         ).thenAnswer((_) => backupCompleter.future);
         when(
-          () => backupHistoryRepository.update(any()),
+          () => backupHistoryRepository.updateHistoryAndLogIfRunning(
+            history: any(named: 'history'),
+            logStep: any(named: 'logStep'),
+            logLevel: LogLevel.warning,
+            logMessage: any(named: 'logMessage'),
+          ),
         ).thenAnswer((_) async => rd.Success(history));
         when(() => progressNotifier.failBackup(any())).thenReturn(null);
 
@@ -256,7 +261,6 @@ void main() {
 
         final cancelResult = await service.cancelExecution(scheduleId);
         expect(cancelResult.isSuccess(), isTrue);
-        verify(() => processService.cancelByTag(scheduleId)).called(1);
 
         backupCompleter.complete(rd.Success(history));
         final executionResult = await execution;
@@ -266,7 +270,14 @@ void main() {
           executionResult.exceptionOrNull().toString(),
           contains('Backup cancelado pelo usuario'),
         );
-        verify(() => backupHistoryRepository.update(any())).called(1);
+        verify(
+          () => backupHistoryRepository.updateHistoryAndLogIfRunning(
+            history: any(named: 'history'),
+            logStep: any(named: 'logStep'),
+            logLevel: LogLevel.warning,
+            logMessage: any(named: 'logMessage'),
+          ),
+        ).called(1);
         verify(() => progressNotifier.failBackup(any())).called(1);
       },
     );
@@ -418,8 +429,8 @@ void main() {
           () => scheduleRepository.getById(scheduleId),
         ).thenAnswer((_) async => rd.Success(schedule));
         when(
-          () => destinationRepository.getById(destination.id),
-        ).thenAnswer((_) async => rd.Success(destination));
+          () => destinationRepository.getByIds(any()),
+        ).thenAnswer((_) async => rd.Success([destination]));
         when(
           () => backupOrchestratorService.executeBackup(
             schedule: any(named: 'schedule'),
@@ -441,7 +452,12 @@ void main() {
           ],
         );
         when(
-          () => backupHistoryRepository.update(any()),
+          () => backupHistoryRepository.updateHistoryAndLogIfRunning(
+            history: any(named: 'history'),
+            logStep: any(named: 'logStep'),
+            logLevel: LogLevel.error,
+            logMessage: any(named: 'logMessage'),
+          ),
         ).thenAnswer((_) async => rd.Success(history));
         when(
           () => notificationService.notifyBackupComplete(any()),

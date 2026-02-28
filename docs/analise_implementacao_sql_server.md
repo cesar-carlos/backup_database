@@ -1,6 +1,6 @@
 # Analise da Implementacao SQL Server
 
-Atualizado em: 2026-02-21
+Atualizado em: 2026-02-28
 
 ## Resumo executivo
 
@@ -75,7 +75,7 @@ O servico usa:
 - `-b` (retorno nao-zero em erro SQL)
 - `-r 1` (mensagens de erro em STDERR)
 - autenticacao:
-  - `-U/-P` quando `username` informado
+  - `-U` quando `username` informado + senha via variavel de ambiente `SQLCMDPASSWORD`
   - `-E` quando `username` vazio
 
 ## Verificacao de integridade
@@ -89,7 +89,8 @@ RESTORE VERIFYONLY FROM DISK = N'<path>' [WITH CHECKSUM]
 Comportamento:
 
 - timeout de 30 minutos;
-- se falhar, gera warning no log, sem marcar o backup como falha.
+- se falhar com `verifyPolicy=bestEffort`, gera warning no log sem marcar falha;
+- se falhar com `verifyPolicy=strict`, o backup e marcado como falha.
 
 ## Teste de conexao e listagem de bancos
 
@@ -157,18 +158,25 @@ No `ScheduleDialog`, para SQL Server:
 
 ## Limitacoes atuais
 
-- Apesar do backend suportar autenticacao Windows com `-E` quando `username` vazio, a UI de configuracao atualmente exige usuario e senha no fluxo de teste de conexao.
+- Nao foram identificadas limitacoes funcionais criticas neste fluxo em relacao ao que esta implementado hoje.
 
 ## Estado de testes
 
-Nao foram encontrados testes unitarios/integracao especificos para:
+Foram encontrados testes unitarios especificos para `SqlServerBackupService` em
+`test/unit/infrastructure/external/process/sql_server_backup_service_test.dart`.
 
-- `SqlServerBackupService`;
-- casos de `verifyAfterBackup`;
-- casos de `truncateLog` com/sem `COPY_ONLY`;
-- parse de erros `Msg/Level` e `sqlcmd: error`.
+Cobertura atual identificada:
 
-Existe teste apenas da entidade `SqlServerConfig`.
+- autenticacao SQL (`SQLCMDPASSWORD`, sem `-P`) e Windows (`-E`);
+- `verifyAfterBackup` com `verifyPolicy=strict` (falha quando `VERIFYONLY` falha);
+- pre-check de recovery model no backup de log (bloqueio em `SIMPLE`);
+- montagem de SQL com opcoes avancadas (`COMPRESSION`, `MAXTRANSFERSIZE`, `BUFFERCOUNT`, `BLOCKSIZE`, `STATS`) e escape de identificador.
+
+Lacunas recomendadas para priorizar:
+
+- casos explicitos de `truncateLog` com/sem `COPY_ONLY`;
+- cenarios dedicados para parse de erros `Msg/Level` e `sqlcmd: error`;
+- casos de `verifyPolicy=bestEffort` para garantir que a falha de verificacao nao interrompe o fluxo.
 
 ## Conclusao
 

@@ -157,8 +157,8 @@ void main() {
     test('delegates to underlying service', () async {
       when(
         () => delegate.validateLicense(
-          any(named: 'licenseKey'),
-          any(named: 'deviceKey'),
+          any(),
+          any(),
         ),
       ).thenAnswer((_) async => const rd.Success(true));
 

@@ -1,6 +1,6 @@
 # Analise da Implementacao PostgreSQL
 
-Atualizado em: 2026-02-21
+Atualizado em: 2026-02-28
 
 ## Resumo executivo
 
@@ -144,14 +144,22 @@ Logo, nao e correto afirmar "verificacao para todos os tipos".
 
 ## Estado de testes
 
-Nao foram encontrados testes unitarios/integracao especificos para o fluxo de backup PostgreSQL (`PostgresBackupService`).
+Foram encontrados testes unitarios especificos para o fluxo PostgreSQL em
+`test/unit/infrastructure/external/process/postgres_backup_service_test.dart`.
 
-Recomendado priorizar:
+Cobertura atual identificada:
 
-1. teste do fallback `differential -> full`;
-2. teste da descoberta de FULL anterior considerando pastas por tipo;
-3. teste para confirmar semantica real do tipo `log`;
-4. teste de verificacao (`pg_verifybackup` e `pg_restore`) por tipo.
+1. fallback `differential -> full` quando nao ha base anterior;
+2. semantica de `log` sem novos segmentos WAL (sucesso com tamanho zero + metadados);
+3. erro de `psql` ausente no `testConnection`;
+4. erro de `pg_receivewal` ausente no tipo `log`.
+
+Lacunas recomendadas para priorizar:
+
+1. descoberta de FULL anterior considerando pasta atual + pasta irma `Full`;
+2. cenarios de verificacao (`pg_verifybackup` e `pg_restore`) por tipo;
+3. cenarios de WAL slot habilitado (`--slot`, `--create-slot`) e cleanup no delete da configuracao;
+4. fallback de compressao do `pg_receivewal --compress` para execucao sem compressao.
 
 ## Conclusao
 

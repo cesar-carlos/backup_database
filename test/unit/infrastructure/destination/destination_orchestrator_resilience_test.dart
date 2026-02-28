@@ -302,7 +302,7 @@ void main() {
         destinations: destinations,
         isCancelled: () {
           batchCount++;
-          return batchCount > 1;
+          return batchCount > 4;
         },
       );
 

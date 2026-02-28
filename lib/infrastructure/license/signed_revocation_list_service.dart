@@ -40,8 +40,17 @@ class SignedRevocationListService implements IRevocationChecker {
             : null,
         _injectedRevocationList = injectedRevocationList;
 
+  static String? _readEnvOrNull(String key) {
+    try {
+      return dotenv.env[key];
+    } on Object {
+      // Tests and some runtime paths may use this service before dotenv is loaded.
+      return null;
+    }
+  }
+
   static List<int>? _publicKeyFromEnv() {
-    final base64Key = dotenv.env[LicenseConstants.envLicensePublicKey];
+    final base64Key = _readEnvOrNull(LicenseConstants.envLicensePublicKey);
     if (base64Key == null || base64Key.trim().isEmpty) {
       return null;
     }
@@ -95,7 +104,7 @@ class SignedRevocationListService implements IRevocationChecker {
     if (_injectedRevocationList != null) {
       return _injectedRevocationList;
     }
-    final fromEnv = dotenv.env[LicenseConstants.envRevocationList];
+    final fromEnv = _readEnvOrNull(LicenseConstants.envRevocationList);
     if (fromEnv != null && fromEnv.trim().isNotEmpty) {
       try {
         return utf8.decode(base64.decode(fromEnv.trim()));
@@ -104,7 +113,7 @@ class SignedRevocationListService implements IRevocationChecker {
       }
     }
 
-    final path = dotenv.env[LicenseConstants.envRevocationListPath];
+    final path = _readEnvOrNull(LicenseConstants.envRevocationListPath);
     if (path != null && path.trim().isNotEmpty) {
       try {
         final file = File(path.trim());
