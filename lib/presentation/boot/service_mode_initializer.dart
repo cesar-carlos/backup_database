@@ -74,7 +74,7 @@ class ServiceModeInitializer {
 
       LoggerService.info('>>> [5/8] Configurando dependências...');
       await _appendBootstrapLog('step 5/8: setupServiceLocator begin');
-      await service_locator.setupServiceLocator();
+      await service_locator.setupServiceLocatorForServiceMode();
       LoggerService.info('>>> [5/8] Dependências configuradas com sucesso');
       await _appendBootstrapLog('step 5/8: setupServiceLocator success');
 

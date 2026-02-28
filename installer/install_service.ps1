@@ -7,7 +7,7 @@ param(
     [string]$AppDirectory = "",
     [string]$NssmPath = "",
     [string]$DisplayName = "Backup Database Service",
-    [string]$Description = "Serviço de backup automático para SQL Server e Sybase",
+    [string]$Description = "Servico de backup automatico para SQL Server e Sybase",
     [string]$ServiceUser = "",
     [SecureString]$ServicePassword
 )

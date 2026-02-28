@@ -32,7 +32,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 _t('Serviço do Windows', 'Windows Service'),

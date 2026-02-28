@@ -26,3 +26,14 @@ Future<void> setupServiceLocator() async {
   await setupApplicationModule(getIt);
   await setupPresentationModule(getIt);
 }
+
+/// Sets up service locator modules for Windows service mode (headless).
+///
+/// Excludes presentation dependencies to reduce startup surface and avoid
+/// unnecessary UI-related initializations in Session 0.
+Future<void> setupServiceLocatorForServiceMode() async {
+  await setupCoreModule(getIt);
+  await setupDomainModule(getIt);
+  await setupInfrastructureModule(getIt);
+  await setupApplicationModule(getIt);
+}

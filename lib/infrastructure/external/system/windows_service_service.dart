@@ -6,6 +6,7 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
+import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart'
     as rd
     show Failure, Result, Success;
@@ -54,7 +55,7 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _serviceName = 'BackupDatabaseService';
   static const String _displayName = 'Backup Database Service';
   static const String _description =
-      'Serviço de backup automático para SQL Server e Sybase';
+      'Servico de backup automatico para SQL Server e Sybase';
   static const int _successExitCode = 0;
   static const int _serviceNotFoundExitCode = 3;
   static const String _nssmExeName = 'nssm.exe';
@@ -68,6 +69,8 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _runningStatePtNoAccent = 'EM EXECUCAO';
   static const String _localSystemAccount = 'LocalSystem';
   static const String _logPath = r'C:\ProgramData\BackupDatabase\logs';
+  static const String _controlDiagnosticsPath =
+      r'C:\ProgramData\BackupDatabase\logs\service_control_diagnostics.log';
   static final RegExp _runningStateRegex = RegExp(
     r'(?:STATE|ESTADO)\s*:\s*4\b',
     caseSensitive: false,
@@ -229,6 +232,12 @@ class WindowsServiceService implements IWindowsServiceService {
             final stdout = processResult.stdout;
             final isRunning = _isRunningState(stdout);
             final stateCode = _parseStateCode(stdout);
+            _appendControlDiagnostics(
+              'getStatus: installed=true running=$isRunning '
+              'state=${stateCode?.name ?? 'unknown'} '
+              'exit=${processResult.exitCode}',
+              output: stdout,
+            );
             return rd.Success(
               WindowsServiceStatus(
                 isInstalled: true,
@@ -241,6 +250,10 @@ class WindowsServiceService implements IWindowsServiceService {
           }
 
           if (_isServiceNotInstalledResponse(processResult)) {
+            _appendControlDiagnostics(
+              'getStatus: installed=false exit=${processResult.exitCode}',
+              output: _getProcessOutput(processResult),
+            );
             return const rd.Success(
               WindowsServiceStatus(
                 isInstalled: false,
@@ -260,6 +273,10 @@ class WindowsServiceService implements IWindowsServiceService {
           }
 
           final errorOutput = _getProcessOutput(processResult);
+          _appendControlDiagnostics(
+            'getStatus: failure exit=${processResult.exitCode}',
+            output: errorOutput,
+          );
           return rd.Failure(
             ServerFailure(
               message:
@@ -361,15 +378,30 @@ class WindowsServiceService implements IWindowsServiceService {
                 errorMessage.contains('FAILURE 5');
 
             if (isAccessDenied) {
-              _metrics?.incrementCounter(
-                ObservabilityMetrics.windowsServiceInstallFailure,
+              LoggerService.warning(
+                'Acesso negado ao instalar serviço; solicitando elevação UAC',
               );
-              return const rd.Failure(
-                ServerFailure(
-                  message:
-                      'Acesso negado. É necessário executar o aplicativo como '
-                      'Administrador para instalar o serviço.\n\n$_accessDeniedSolution',
-                ),
+              final elevatedResult = await _installWithElevation(
+                nssmPath: nssmPath,
+                appPath: appPath,
+                appDir: appDir,
+                serviceUser: serviceUser,
+                servicePassword: servicePassword,
+              );
+              return elevatedResult.fold(
+                (_) {
+                  _metrics?.incrementCounter(
+                    ObservabilityMetrics.windowsServiceInstallSuccess,
+                  );
+                  LoggerService.info('Serviço instalado com sucesso (UAC)');
+                  return const rd.Success(unit);
+                },
+                (f) {
+                  _metrics?.incrementCounter(
+                    ObservabilityMetrics.windowsServiceInstallFailure,
+                  );
+                  return rd.Failure(f);
+                },
               );
             }
 
@@ -393,6 +425,50 @@ class WindowsServiceService implements IWindowsServiceService {
           );
           final configFailure = configResult.exceptionOrNull();
           if (configFailure != null) {
+            final failureMsg =
+                (configFailure is Failure ? configFailure.message : null) ??
+                    configFailure.toString();
+            final isConfigAccessDenied =
+                failureMsg.contains('Acesso negado') ||
+                failureMsg.contains('Access denied') ||
+                failureMsg.contains('FALHA 5') ||
+                failureMsg.contains('FAILURE 5');
+
+            if (isConfigAccessDenied) {
+              LoggerService.warning(
+                'Acesso negado ao configurar serviço; removendo parcial e '
+                'solicitando elevação UAC',
+              );
+              await _processService.run(
+                executable: nssmPath,
+                arguments: ['remove', _serviceName, 'confirm'],
+                timeout: _timing.longTimeout,
+              );
+              await Future.delayed(_timing.serviceDelay);
+              final elevatedResult = await _installWithElevation(
+                nssmPath: nssmPath,
+                appPath: appPath,
+                appDir: appDir,
+                serviceUser: serviceUser,
+                servicePassword: servicePassword,
+              );
+              return elevatedResult.fold(
+                (_) {
+                  _metrics?.incrementCounter(
+                    ObservabilityMetrics.windowsServiceInstallSuccess,
+                  );
+                  LoggerService.info('Serviço instalado com sucesso (UAC)');
+                  return const rd.Success(unit);
+                },
+                (f) {
+                  _metrics?.incrementCounter(
+                    ObservabilityMetrics.windowsServiceInstallFailure,
+                  );
+                  return rd.Failure(f);
+                },
+              );
+            }
+
             LoggerService.error(
               'Configuração crítica do serviço falhou — removendo instalação parcial',
               configFailure,
@@ -752,8 +828,17 @@ class WindowsServiceService implements IWindowsServiceService {
     }
 
     try {
+      _appendControlDiagnostics(
+        'startService: begin timeout=${(pollingTimeout ?? _timing.startPollingTimeout).inSeconds}s '
+        'interval=${(pollingInterval ?? _timing.startPollingInterval).inMilliseconds}ms '
+        'initialDelay=${(initialDelay ?? _timing.startPollingInitialDelay).inMilliseconds}ms',
+      );
       final statusResult = await getStatus();
       final status = statusResult.getOrNull();
+      _appendControlDiagnostics(
+        'startService: initialStatus installed=${status?.isInstalled} '
+        'running=${status?.isRunning} state=${status?.stateCode?.name}',
+      );
 
       if (status?.isRunning ?? false) {
         _metrics?.incrementCounter(
@@ -796,10 +881,24 @@ class WindowsServiceService implements IWindowsServiceService {
       }
 
       final isPaused = status?.stateCode?.isPaused ?? false;
-      final scCommand = isPaused ? 'continue' : 'start';
       if (isPaused) {
-        LoggerService.info('Serviço em PAUSED, usando sc continue');
+        LoggerService.warning(
+          'Serviço em PAUSED. Aplicando recuperação: STOP completo e START',
+        );
+        _appendControlDiagnostics(
+          'startService: detected PAUSED, executing stop+start recovery',
+        );
+        final stopResult = await stopService();
+        final stopFailure = stopResult.exceptionOrNull();
+        if (stopFailure != null) {
+          _metrics?.incrementCounter(
+            ObservabilityMetrics.windowsServiceStartFailure,
+          );
+          return rd.Failure(stopFailure as Failure);
+        }
+        await Future.delayed(_timing.serviceDelay);
       }
+      const scCommand = 'start';
 
       final result = await _runScWithRetry(
         arguments: [scCommand, _serviceName],
@@ -812,6 +911,10 @@ class WindowsServiceService implements IWindowsServiceService {
           final errorMessage = processResult.stderr.isNotEmpty
               ? processResult.stderr
               : processResult.stdout;
+          _appendControlDiagnostics(
+            'startService: sc $scCommand exit=${processResult.exitCode}',
+            output: errorMessage,
+          );
 
           final isAlreadyRunning = _isServiceAlreadyRunningResponse(
             processResult,
@@ -852,6 +955,9 @@ class WindowsServiceService implements IWindowsServiceService {
               LoggerService.info('Serviço $label execução');
               return const rd.Success(unit);
             }
+            _appendControlDiagnostics(
+              'startService: polling finished without RUNNING',
+            );
 
             if (isAlreadyRunning) {
               _metrics?.incrementCounter(
@@ -967,7 +1073,7 @@ class WindowsServiceService implements IWindowsServiceService {
     final elevatedCommand =
         r'$process = Start-Process -FilePath "sc.exe" '
         '-ArgumentList "$scCommand $_serviceName" '
-        r'-Verb RunAs -PassThru -Wait; exit $process.ExitCode';
+        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
 
     final result = await _processService.run(
       executable: 'powershell',
@@ -1062,7 +1168,7 @@ class WindowsServiceService implements IWindowsServiceService {
     const elevatedCommand =
         r'$process = Start-Process -FilePath "sc.exe" '
         '-ArgumentList "stop $_serviceName" '
-        r'-Verb RunAs -PassThru -Wait; exit $process.ExitCode';
+        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
 
     final result = await _processService.run(
       executable: 'powershell',
@@ -1144,7 +1250,7 @@ class WindowsServiceService implements IWindowsServiceService {
     const elevatedCommand =
         r'$process = Start-Process -FilePath "cmd.exe" '
         '-ArgumentList "/c sc stop $_serviceName & sc delete $_serviceName" '
-        r'-Verb RunAs -PassThru -Wait; exit $process.ExitCode';
+        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
 
     final result = await _processService.run(
       executable: 'powershell',
@@ -1215,6 +1321,237 @@ class WindowsServiceService implements IWindowsServiceService {
     );
   }
 
+  Future<rd.Result<void>> _installWithElevation({
+    required String nssmPath,
+    required String appPath,
+    required String appDir,
+    required String? serviceUser,
+    required String? servicePassword,
+  }) async {
+    final programData =
+        Platform.environment[_programDataEnv] ?? _defaultProgramData;
+    final logPath = '$programData\\BackupDatabase\\$_logSubdir';
+    final logDir = '$programData\\BackupDatabase';
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final scriptPath = p.join(
+      Directory.systemTemp.path,
+      'backup_db_install_$timestamp.ps1',
+    );
+    final installLogPath =
+        '$programData\\BackupDatabase\\logs\\install_elevated_$timestamp.log';
+
+    String safePath(String s) => s.replaceAll("'", "''");
+    final scriptContent = '''
+\$ErrorActionPreference = "Stop"
+if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+  \$PSNativeCommandUseErrorActionPreference = \$false
+}
+\$installLog = '${safePath(installLogPath)}'
+\$nssmPath = '${safePath(nssmPath)}'
+\$appPath = '${safePath(appPath)}'
+\$appDir = '${safePath(appDir)}'
+\$serviceUser = '${safePath(serviceUser ?? '')}'
+\$servicePassword = '${safePath(servicePassword ?? '')}'
+\$logPath = '${safePath(logPath)}'
+\$logDir = '${safePath(logDir)}'
+
+function Write-InstallLog { param(\$msg) Add-Content -Path \$installLog -Value \$msg }
+function Fail { param(\$step,\$err) Write-InstallLog "ERRO em \$step`: \$err"; exit 1 }
+
+if (-not (Test-Path \$logDir)) { New-Item -ItemType Directory -Path \$logDir -Force | Out-Null }
+if (-not (Test-Path \$logPath)) { New-Item -ItemType Directory -Path \$logPath -Force | Out-Null }
+
+try {
+  sc.exe query $_serviceName 2>\$null | Out-Null
+  if (\$LASTEXITCODE -eq 0) {
+    & \$nssmPath remove $_serviceName confirm 2>\$null | Out-Null
+    Start-Sleep -Seconds 2
+  }
+
+  \$r = & \$nssmPath install $_serviceName \$appPath 2>&1
+  if (\$LASTEXITCODE -ne 0) { Fail "install" (\$r -join " ") }
+
+  Start-Sleep -Seconds 5
+
+  \$configErr = \$null
+  foreach (\$attempt in 1..3) {
+    \$r = & \$nssmPath set $_serviceName AppParameters "--minimized --mode=server --run-as-service" 2>&1
+    if (\$LASTEXITCODE -eq 0) { \$configErr = \$null; break }
+    \$configErr = \$r -join " "
+    if (\$configErr -notmatch "Can't open service") { Fail "AppParameters" \$configErr }
+    Start-Sleep -Seconds 2
+  }
+  if (\$configErr) { Fail "AppParameters" "Can't open service após 3 tentativas: \$configErr" }
+
+  \$r = & \$nssmPath set $_serviceName AppDirectory \$appDir 2>&1
+  if (\$LASTEXITCODE -ne 0) { Fail "AppDirectory" (\$r -join " ") }
+  \$r = & \$nssmPath set $_serviceName AppEnvironmentExtra "SERVICE_MODE=server" 2>&1
+  if (\$LASTEXITCODE -ne 0) { Fail "AppEnvironmentExtra" (\$r -join " ") }
+  \$r = & \$nssmPath set $_serviceName AppStdout "\$logPath\\service_stdout.log" 2>&1
+  if (\$LASTEXITCODE -ne 0) { Fail "AppStdout" (\$r -join " ") }
+  \$r = & \$nssmPath set $_serviceName AppStderr "\$logPath\\service_stderr.log" 2>&1
+  if (\$LASTEXITCODE -ne 0) { Fail "AppStderr" (\$r -join " ") }
+  & \$nssmPath set $_serviceName DisplayName "$_displayName" | Out-Null
+  & \$nssmPath set $_serviceName Description "$_description" | Out-Null
+  & \$nssmPath set $_serviceName Start SERVICE_AUTO_START | Out-Null
+  & \$nssmPath set $_serviceName AppExit Default Restart | Out-Null
+  & \$nssmPath set $_serviceName AppRestartDelay 60000 | Out-Null
+  if (\$serviceUser -ne '' -and \$servicePassword -ne '') {
+    & \$nssmPath set $_serviceName ObjectName \$serviceUser \$servicePassword | Out-Null
+  } else {
+    & \$nssmPath set $_serviceName ObjectName $_localSystemAccount | Out-Null
+  }
+
+  exit 0
+} catch {
+  Fail "geral" \$_.Exception.Message
+}
+''';
+
+    File? scriptFile;
+    try {
+      scriptFile = File(scriptPath);
+      await scriptFile.writeAsString(scriptContent);
+    } on Object catch (e) {
+      return rd.Failure(
+        ServerFailure(
+          message: 'Não foi possível criar script de instalação: $e',
+        ),
+      );
+    }
+
+    final scriptPathEscaped = scriptPath.replaceAll('"', '`"');
+    final elevatedCommand =
+        r'$p = Start-Process -FilePath "powershell.exe" '
+        '-ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","$scriptPathEscaped" '
+        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode';
+
+    final result = await _processService.run(
+      executable: 'powershell',
+      arguments: [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        elevatedCommand,
+      ],
+      timeout: _timing.longTimeout,
+    );
+
+    String? logContent;
+    try {
+      final logFile = File(installLogPath);
+      if (await logFile.exists()) {
+        logContent = await logFile.readAsString();
+        await logFile.delete();
+      }
+    } on Object catch (_) {}
+    try {
+      await scriptFile.delete();
+    } on Object catch (_) {}
+
+    return result.fold(
+      (processResult) async {
+        final output = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+
+        if (_wasUacCancelled(output)) {
+          return const rd.Failure(
+            ValidationFailure(
+              message:
+                  'A solicitação de permissões de Administrador foi '
+                  'cancelada. Para instalar o serviço, confirme o prompt UAC.',
+            ),
+          );
+        }
+
+        if (processResult.exitCode != _successExitCode) {
+          var detail = logContent != null && logContent.isNotEmpty
+              ? logContent.trim()
+              : (output.isNotEmpty ? output : '');
+          if (detail.isEmpty) {
+            detail = await _readLogsFromProgramData();
+          }
+          final finalDetail = detail.isNotEmpty ? detail : 'Sem detalhes';
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Falha ao instalar serviço com elevação UAC '
+                  '(exit ${processResult.exitCode}).\n\n$finalDetail',
+            ),
+          );
+        }
+
+        final postStatus = await getStatus();
+        return postStatus.fold(
+          (status) {
+            if (!status.isInstalled) {
+              return const rd.Failure(
+                ServerFailure(
+                  message:
+                      'O comando elevado foi executado, mas o serviço não está '
+                      'registrado.\n\n$_troubleshootingWithEnv',
+                ),
+              );
+            }
+            return const rd.Success(unit);
+          },
+          rd.Failure.new,
+        );
+      },
+      (failure) => Future.value(
+        rd.Failure(
+          ServerFailure(
+            message:
+                'Não foi possível solicitar elevação UAC para instalar '
+                'o serviço: $failure',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<String> _readLogsFromProgramData() async {
+    const logsDir = r'C:\ProgramData\BackupDatabase\logs';
+    final dir = Directory(logsDir);
+    if (!await dir.exists()) {
+      return 'Pasta de logs não encontrada: $logsDir';
+    }
+
+    final buffer = StringBuffer();
+    try {
+      final entities = dir.listSync();
+      final files = entities.whereType<File>().toList();
+      files.sort((a, b) {
+        try {
+          return b.statSync().modified.compareTo(a.statSync().modified);
+        } on Object {
+          return 0;
+        }
+      });
+
+      for (final f in files.take(5)) {
+        try {
+          final content = await f.readAsString();
+          if (content.trim().isNotEmpty) {
+            buffer.writeln('--- ${f.path} ---');
+            buffer.writeln(content.trim().length > 2000
+                ? '${content.trim().substring(0, 2000)}...'
+                : content.trim());
+            buffer.writeln();
+          }
+        } on Object catch (_) {}
+      }
+    } on Object catch (e) {
+      return 'Erro ao ler $logsDir: $e';
+    }
+
+    final result = buffer.toString().trim();
+    return result.isNotEmpty ? result : 'Nenhum log encontrado em $logsDir';
+  }
+
   bool _wasUacCancelled(String output) {
     final normalizedOutput = output.toLowerCase();
     return normalizedOutput.contains('canceled by the user') ||
@@ -1250,6 +1587,7 @@ class WindowsServiceService implements IWindowsServiceService {
     void Function(Duration)? onConvergence,
   }) async {
     final stopwatch = Stopwatch()..start();
+    var pollCount = 0;
     if (initialDelay > Duration.zero) {
       await Future.delayed(initialDelay);
     }
@@ -1258,10 +1596,18 @@ class WindowsServiceService implements IWindowsServiceService {
 
     while (DateTime.now().isBefore(deadline)) {
       await Future.delayed(interval);
+      pollCount++;
       lastStatusResult = await getStatus();
       final status = lastStatusResult.getOrNull();
+      _appendControlDiagnostics(
+        '_pollUntilRunning: poll=$pollCount installed=${status?.isInstalled} '
+        'running=${status?.isRunning} state=${status?.stateCode?.name}',
+      );
       if (status?.isRunning ?? false) {
         onConvergence?.call(stopwatch.elapsed);
+        _appendControlDiagnostics(
+          '_pollUntilRunning: converged in ${stopwatch.elapsedMilliseconds}ms',
+        );
         return true;
       }
     }
@@ -1273,6 +1619,10 @@ class WindowsServiceService implements IWindowsServiceService {
         'isInstalled=${lastStatus?.isInstalled}, '
         'isRunning=${lastStatus?.isRunning}, '
         'stateCode=${lastStatus?.stateCode?.name}',
+      );
+      _appendControlDiagnostics(
+        '_pollUntilRunning: timeout after ${stopwatch.elapsedMilliseconds}ms '
+        'lastState=${lastStatus?.stateCode?.name}',
       );
     }
     return false;
@@ -1286,16 +1636,28 @@ class WindowsServiceService implements IWindowsServiceService {
     void Function(Duration)? onConvergence,
   }) async {
     final stopwatch = Stopwatch()..start();
+    var pollCount = 0;
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       await Future.delayed(interval);
+      pollCount++;
       final statusResult = await getStatus();
       final status = statusResult.getOrNull();
-      if (status?.isRunning != true) {
+      _appendControlDiagnostics(
+        '_pollUntilStopped: poll=$pollCount installed=${status?.isInstalled} '
+        'running=${status?.isRunning} state=${status?.stateCode?.name}',
+      );
+      if (_isServiceStopped(status)) {
         onConvergence?.call(stopwatch.elapsed);
+        _appendControlDiagnostics(
+          '_pollUntilStopped: converged in ${stopwatch.elapsedMilliseconds}ms',
+        );
         return true;
       }
     }
+    _appendControlDiagnostics(
+      '_pollUntilStopped: timeout after ${stopwatch.elapsedMilliseconds}ms',
+    );
     return false;
   }
 
@@ -1315,8 +1677,9 @@ class WindowsServiceService implements IWindowsServiceService {
           status?.stateCode == WindowsServiceStateCode.startPending;
       final isStopPending =
           status?.stateCode == WindowsServiceStateCode.stopPending;
+      final isStopped = _isServiceStopped(status);
 
-      if (status?.isRunning != true && !isStartPending) {
+      if (isStopped && !isStartPending) {
         if (isStopPending) {
           LoggerService.info('Serviço em STOP_PENDING, aguardando parada');
           final stoppedAfterPoll = await _pollUntilStopped(
@@ -1541,5 +1904,43 @@ class WindowsServiceService implements IWindowsServiceService {
       return stdout;
     }
     return 'sem saída';
+  }
+
+  bool _isServiceStopped(WindowsServiceStatus? status) {
+    if (status == null) {
+      return false;
+    }
+    if (!status.isInstalled) {
+      return true;
+    }
+    return status.stateCode == WindowsServiceStateCode.stopped;
+  }
+
+  void _appendControlDiagnostics(String message, {String? output}) {
+    try {
+      final logDir = Directory(_logPath);
+      if (!logDir.existsSync()) {
+        logDir.createSync(recursive: true);
+      }
+      final file = File(_controlDiagnosticsPath);
+      final ts = DateTime.now().toIso8601String();
+      final buffer = StringBuffer('[$ts] $message');
+      if (output != null && output.trim().isNotEmpty) {
+        final trimmed = output.trim();
+        const maxChars = 3000;
+        final safeOutput = trimmed.length > maxChars
+            ? '${trimmed.substring(0, maxChars)}...'
+            : trimmed;
+        buffer.write('\noutput: $safeOutput');
+      }
+      buffer.write('\n');
+      file.writeAsStringSync(
+        buffer.toString(),
+        mode: FileMode.append,
+        flush: true,
+      );
+    } on Object {
+      // best-effort diagnostics only
+    }
   }
 }

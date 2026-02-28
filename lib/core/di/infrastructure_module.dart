@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
@@ -21,7 +22,6 @@ import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.d
 import 'package:backup_database/infrastructure/transfer_staging_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 /// Sets up infrastructure layer dependencies.
 ///
@@ -210,7 +210,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     ),
   );
 
-  final appDir = await getApplicationDocumentsDirectory();
+  final appDir = await resolveAppDataDirectory();
   final transferBasePath = p.join(appDir.path, 'backups');
   final lockPath = p.join(appDir.path, 'locks');
 

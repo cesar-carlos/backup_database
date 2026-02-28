@@ -60,7 +60,9 @@ static std::string JoinArgs(const std::vector<std::string>& args) {
 
 static std::string ToLowerCopy(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+                 [](unsigned char c) {
+                   return static_cast<char>(std::tolower(c));
+                 });
   return value;
 }
 
