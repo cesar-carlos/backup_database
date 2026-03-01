@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/nextcloud_failure.dart';
+import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/file_stream_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
@@ -19,6 +21,9 @@ import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 class NextcloudDestinationService implements INextcloudDestinationService {
+  static const _integrityReadBackAttempts = 2;
+  static const _integrityReadBackDelay = Duration(seconds: 1);
+
   @override
   Future<rd.Result<NextcloudUploadResult>> upload({
     required String sourceFilePath,
@@ -53,6 +58,7 @@ class NextcloudDestinationService implements INextcloudDestinationService {
 
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final fileSize = await sourceFile.length();
+      final localSha256 = await FileHashUtils.computeSha256(sourceFile);
       final remoteFilePath = _joinRemote(dateFolderPath, fileName);
 
       Exception? lastError;
@@ -99,44 +105,24 @@ class NextcloudDestinationService implements INextcloudDestinationService {
           if (response.statusCode != null &&
               response.statusCode! >= 200 &&
               response.statusCode! < 300) {
-            // Validação de Integridade via HEAD
-            try {
-              final headResponse = await dio.headUri(uploadUrl);
-              final contentLengthStr = headResponse.headers.value(
-                'content-length',
-              );
-              if (contentLengthStr != null) {
-                final remoteSize = int.tryParse(contentLengthStr);
-                if (remoteSize != null && remoteSize != fileSize) {
-                  // Tentar apagar
-                  try {
-                    await dio.deleteUri(uploadUrl);
-                  } on Object catch (delErr, s) {
-                    LoggerService.warning(
-                      'Erro ao deletar arquivo corrompido do Nextcloud',
-                      delErr,
-                      s,
-                    );
-                  }
-
-                  throw Exception(
-                    'Arquivo corrompido no Nextcloud. '
-                    'Local: $fileSize, Remoto: $remoteSize',
-                  );
-                }
+            final integrityResult = await _validateUploadedFileIntegrity(
+              dio: dio,
+              uploadUrl: uploadUrl,
+              fileSize: fileSize,
+              localSha256: localSha256,
+            );
+            if (integrityResult.isError()) {
+              final failure = integrityResult.exceptionOrNull()!;
+              try {
+                await dio.deleteUri(uploadUrl);
+              } on Object catch (deleteError, s) {
+                LoggerService.warning(
+                  'Erro ao deletar arquivo inválido no Nextcloud',
+                  deleteError,
+                  s,
+                );
               }
-            } on Object catch (e) {
-              LoggerService.warning(
-                'Não foi possível validar integridade no Nextcloud: $e',
-              );
-              // Se falhar o HEAD, assumimos que pode ser problema de permissão ou rede
-              // mas não necessariamente arquivo corrompido, então seguimos.
-              // O ideal seria falhar, mas Nextcloud as vezes bloqueia HEAD/PROPFIND.
-              // Mas aqui como acabamos de enviar, devemos ter acesso.
-              if (e is Exception &&
-                  e.toString().contains('Arquivo corrompido')) {
-                rethrow;
-              }
+              throw failure;
             }
 
             stopwatch.stop();
@@ -166,6 +152,9 @@ class NextcloudDestinationService implements INextcloudDestinationService {
       }
 
       stopwatch.stop();
+      if (lastError is NextcloudFailure) {
+        return rd.Failure(lastError);
+      }
       return rd.Failure(
         NextcloudFailure(
           message: _getNextcloudErrorMessage(lastError),
@@ -174,6 +163,9 @@ class NextcloudDestinationService implements INextcloudDestinationService {
       );
     } on Object catch (e) {
       stopwatch.stop();
+      if (e is NextcloudFailure) {
+        return rd.Failure(e);
+      }
       return rd.Failure(
         NextcloudFailure(
           message: _getNextcloudErrorMessage(e),
@@ -484,7 +476,145 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     );
   }
 
+  Future<rd.Result<void>> _validateUploadedFileIntegrity({
+    required Dio dio,
+    required Uri uploadUrl,
+    required int fileSize,
+    required String localSha256,
+  }) async {
+    final headSizeResult = await _validateRemoteContentLength(
+      dio: dio,
+      uploadUrl: uploadUrl,
+      expectedSize: fileSize,
+    );
+    if (headSizeResult.isError()) {
+      return rd.Failure(headSizeResult.exceptionOrNull()!);
+    }
+
+    for (var attempt = 0; attempt < _integrityReadBackAttempts; attempt++) {
+      try {
+        final response = await dio.getUri(
+          uploadUrl,
+          options: Options(responseType: ResponseType.stream),
+        );
+        final body = response.data;
+        if (body is! ResponseBody) {
+          throw Exception('Resposta inválida no read-back Nextcloud');
+        }
+        final remoteSha256 = await FileHashUtils.computeSha256FromStream(
+          body.stream,
+        );
+        if (remoteSha256.toLowerCase() == localSha256.toLowerCase()) {
+          return const rd.Success(());
+        }
+        return rd.Failure(
+          NextcloudFailure(
+            message:
+                'Falha de integridade no Nextcloud: hash remoto difere '
+                'do arquivo local (SHA-256).',
+            code: FailureCodes.integrityValidationFailed,
+            originalError: Exception(
+              'Nextcloud SHA-256 mismatch: '
+              'local=$localSha256 remote=$remoteSha256',
+            ),
+          ),
+        );
+      } on Object catch (e) {
+        if (attempt < _integrityReadBackAttempts - 1) {
+          await Future.delayed(_integrityReadBackDelay);
+          continue;
+        }
+        return rd.Failure(
+          NextcloudFailure(
+            message:
+                'Não foi possível confirmar integridade no Nextcloud por '
+                'read-back (download de validação).',
+            code: FailureCodes.integrityValidationInconclusive,
+            originalError: e,
+          ),
+        );
+      }
+    }
+
+    return const rd.Failure(
+      NextcloudFailure(
+        message: 'Não foi possível confirmar integridade no Nextcloud.',
+        code: FailureCodes.integrityValidationInconclusive,
+      ),
+    );
+  }
+
+  Future<rd.Result<void>> _validateRemoteContentLength({
+    required Dio dio,
+    required Uri uploadUrl,
+    required int expectedSize,
+  }) async {
+    try {
+      final headResponse = await dio.headUri(uploadUrl);
+      final contentLengthStr = headResponse.headers.value('content-length');
+      if (contentLengthStr == null || contentLengthStr.isEmpty) {
+        return const rd.Failure(
+          NextcloudFailure(
+            message:
+                'Não foi possível validar integridade no Nextcloud '
+                '(content-length ausente no HEAD).',
+            code: FailureCodes.integrityValidationInconclusive,
+          ),
+        );
+      }
+      final remoteSize = int.tryParse(contentLengthStr);
+      if (remoteSize == null) {
+        return const rd.Failure(
+          NextcloudFailure(
+            message:
+                'Não foi possível validar integridade no Nextcloud '
+                '(content-length inválido no HEAD).',
+            code: FailureCodes.integrityValidationInconclusive,
+          ),
+        );
+      }
+      if (remoteSize != expectedSize) {
+        return rd.Failure(
+          NextcloudFailure(
+            message:
+                'Falha de integridade no Nextcloud: tamanho remoto '
+                'diverge do arquivo local. Local: $expectedSize, '
+                'Remoto: $remoteSize',
+            code: FailureCodes.integrityValidationFailed,
+            originalError: Exception(
+              'Nextcloud content-length mismatch: '
+              'local=$expectedSize remote=$remoteSize',
+            ),
+          ),
+        );
+      }
+      return const rd.Success(());
+    } on Object catch (e) {
+      return rd.Failure(
+        NextcloudFailure(
+          message:
+              'Não foi possível validar integridade no Nextcloud '
+              '(falha na consulta HEAD).',
+          code: FailureCodes.integrityValidationInconclusive,
+          originalError: e,
+        ),
+      );
+    }
+  }
+
   String _getNextcloudErrorMessage(dynamic e) {
+    if (e is Failure && e.code != null) {
+      if (e.code == FailureCodes.integrityValidationInconclusive) {
+        return 'Não foi possível confirmar a integridade no Nextcloud.\n'
+            'Detalhes: ${e.message}';
+      }
+      if (e.code == FailureCodes.integrityValidationFailed) {
+        return 'Falha de integridade no Nextcloud: arquivo remoto não confere '
+            'com o original.\n'
+            'Detalhes: ${e.message}';
+      }
+    }
+
     final errorStr = e.toString().toLowerCase();
 
     if (errorStr.contains('401') || errorStr.contains('unauthorized')) {

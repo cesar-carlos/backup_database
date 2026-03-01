@@ -35,6 +35,8 @@ class DestinationDialog extends StatefulWidget {
   State<DestinationDialog> createState() => _DestinationDialogState();
 }
 
+enum _FtpIntegrityPreset { quick, balanced, maximum }
+
 class _DestinationDialogState extends State<DestinationDialog> {
   final _formKey = GlobalKey<FormState>();
 
@@ -55,6 +57,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
   FtpWhenResumeNotSupported _whenResumeNotSupportedFtp =
       FtpWhenResumeNotSupported.fallback;
   bool _enableVerboseLogFtp = false;
+  bool _enableStrongIntegrityValidationFtp = true;
+  bool _enableReadBackValidationFtp = true;
+  _FtpIntegrityPreset _ftpIntegrityPreset = _FtpIntegrityPreset.maximum;
   final _connectionTimeoutSecondsController = TextEditingController();
   final _uploadTimeoutMinutesController = TextEditingController();
   final _maxAttemptsFtpController = TextEditingController();
@@ -119,15 +124,27 @@ class _DestinationDialogState extends State<DestinationDialog> {
             config['whenResumeNotSupported'] as String?,
           );
           _enableVerboseLogFtp = (config['enableVerboseLog'] as bool?) ?? false;
+          _enableStrongIntegrityValidationFtp =
+              (config['enableStrongIntegrityValidation'] as bool?) ?? true;
+          _enableReadBackValidationFtp =
+              (config['enableReadBackValidation'] as bool?) ?? true;
+          _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
+            enableStrongIntegrityValidation:
+                _enableStrongIntegrityValidationFtp,
+            enableReadBackValidation: _enableReadBackValidationFtp,
+          );
           final maxAttempts = config['maxAttempts'] as int?;
-          _maxAttemptsFtpController.text =
-              maxAttempts != null ? maxAttempts.toString() : '';
+          _maxAttemptsFtpController.text = maxAttempts != null
+              ? maxAttempts.toString()
+              : '';
           final connTimeout = config['connectionTimeoutSeconds'] as int?;
-          _connectionTimeoutSecondsController.text =
-              connTimeout != null ? connTimeout.toString() : '';
+          _connectionTimeoutSecondsController.text = connTimeout != null
+              ? connTimeout.toString()
+              : '';
           final uploadTimeout = config['uploadTimeoutMinutes'] as int?;
-          _uploadTimeoutMinutesController.text =
-              uploadTimeout != null ? uploadTimeout.toString() : '';
+          _uploadTimeoutMinutesController.text = uploadTimeout != null
+              ? uploadTimeout.toString()
+              : '';
           _retentionDaysController.text =
               ((config['retentionDays'] as int?) ?? 7).toString();
         case DestinationType.googleDrive:
@@ -765,6 +782,58 @@ class _DestinationDialogState extends State<DestinationDialog> {
     );
   }
 
+  _FtpIntegrityPreset _deriveFtpIntegrityPreset({
+    required bool enableStrongIntegrityValidation,
+    required bool enableReadBackValidation,
+  }) {
+    if (!enableStrongIntegrityValidation) {
+      return _FtpIntegrityPreset.quick;
+    }
+    if (enableReadBackValidation) {
+      return _FtpIntegrityPreset.maximum;
+    }
+    return _FtpIntegrityPreset.balanced;
+  }
+
+  void _applyFtpIntegrityPreset(_FtpIntegrityPreset preset) {
+    switch (preset) {
+      case _FtpIntegrityPreset.quick:
+        _enableStrongIntegrityValidationFtp = false;
+        _enableReadBackValidationFtp = false;
+      case _FtpIntegrityPreset.balanced:
+        _enableStrongIntegrityValidationFtp = true;
+        _enableReadBackValidationFtp = false;
+      case _FtpIntegrityPreset.maximum:
+        _enableStrongIntegrityValidationFtp = true;
+        _enableReadBackValidationFtp = true;
+    }
+  }
+
+  Color _getFtpIntegrityImpactColor() {
+    return switch (_ftpIntegrityPreset) {
+      _FtpIntegrityPreset.quick => AppColors.success,
+      _FtpIntegrityPreset.balanced => AppColors.primary,
+      _FtpIntegrityPreset.maximum => AppColors.warning,
+    };
+  }
+
+  String _getFtpIntegrityImpactText() {
+    return switch (_ftpIntegrityPreset) {
+      _FtpIntegrityPreset.quick => _t(
+        'Impacto de performance: baixo. Menor confiança de integridade.',
+        'Performance impact: low. Lower integrity confidence.',
+      ),
+      _FtpIntegrityPreset.balanced => _t(
+        'Impacto de performance: médio. Bom equilíbrio para uso diário.',
+        'Performance impact: medium. Good balance for daily usage.',
+      ),
+      _FtpIntegrityPreset.maximum => _t(
+        'Impacto de performance: alto em arquivos grandes devido ao read-back.',
+        'Performance impact: high on large files due to read-back.',
+      ),
+    };
+  }
+
   Widget _buildFtpAdvancedOptions() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -774,6 +843,147 @@ class _DestinationDialogState extends State<DestinationDialog> {
           style: FluentTheme.of(context).typography.bodyStrong,
         ),
         const SizedBox(height: 12),
+        AppDropdown<_FtpIntegrityPreset>(
+          label: _t('Preset de integridade', 'Integrity preset'),
+          value: _ftpIntegrityPreset,
+          placeholder: Text(
+            _t('Máxima integridade', 'Maximum integrity'),
+          ),
+          items: _FtpIntegrityPreset.values
+              .map(
+                (preset) => ComboBoxItem<_FtpIntegrityPreset>(
+                  value: preset,
+                  child: Text(
+                    switch (preset) {
+                      _FtpIntegrityPreset.quick => _t('Rápido', 'Quick'),
+                      _FtpIntegrityPreset.balanced => _t(
+                        'Equilibrado',
+                        'Balanced',
+                      ),
+                      _FtpIntegrityPreset.maximum => _t(
+                        'Máxima integridade',
+                        'Maximum integrity',
+                      ),
+                    },
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _ftpIntegrityPreset = value;
+                _applyFtpIntegrityPreset(value);
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Rápido: só tamanho. Equilibrado: hash remoto. '
+                'Máxima: hash remoto + read-back quando necessário.',
+            'Quick: size only. Balanced: remote hash. '
+                'Maximum: remote hash + read-back when needed.',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: _getFtpIntegrityImpactColor().withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _getFtpIntegrityImpactColor().withValues(alpha: 0.45),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                FluentIcons.info,
+                size: 16,
+                color: _getFtpIntegrityImpactColor(),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _getFtpIntegrityImpactText(),
+                  style: FluentTheme.of(context).typography.caption?.copyWith(
+                    color: _getFtpIntegrityImpactColor(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: _t(
+            'Validação forte de integridade',
+            'Strong integrity validation',
+          ),
+          child: ToggleSwitch(
+            checked: _enableStrongIntegrityValidationFtp,
+            onChanged: (value) {
+              setState(() {
+                _enableStrongIntegrityValidationFtp = value;
+                if (!value) {
+                  _enableReadBackValidationFtp = false;
+                }
+                _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
+                  enableStrongIntegrityValidation:
+                      _enableStrongIntegrityValidationFtp,
+                  enableReadBackValidation: _enableReadBackValidationFtp,
+                );
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Além do tamanho, valida com hash do arquivo remoto para reduzir '
+                'falsos positivos.',
+            'In addition to file size, validates using remote file hash to '
+                'reduce false positives.',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: _t(
+            'Read-back quando hash remoto indisponível',
+            'Read-back when remote hash unavailable',
+          ),
+          child: ToggleSwitch(
+            checked: _enableReadBackValidationFtp,
+            onChanged: _enableStrongIntegrityValidationFtp
+                ? (value) {
+                    setState(() {
+                      _enableReadBackValidationFtp = value;
+                      _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
+                        enableStrongIntegrityValidation:
+                            _enableStrongIntegrityValidationFtp,
+                        enableReadBackValidation: _enableReadBackValidationFtp,
+                      );
+                    });
+                  }
+                : null,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Baixa o arquivo do FTP e compara SHA-256 com o local. '
+                'Mais confiável, porém mais lento para arquivos grandes.',
+            'Downloads the file from FTP and compares SHA-256 with local. '
+                'More reliable, but slower for large files.',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
         InfoLabel(
           label: _t('Manter parcial ao cancelar', 'Keep partial on cancel'),
           child: ToggleSwitch(
@@ -800,14 +1010,19 @@ class _DestinationDialogState extends State<DestinationDialog> {
             'When server does not support resume',
           ),
           value: _whenResumeNotSupportedFtp,
-          placeholder: Text(_t('Fallback (upload completo)', 'Fallback (full upload)')),
+          placeholder: Text(
+            _t('Fallback (upload completo)', 'Fallback (full upload)'),
+          ),
           items: FtpWhenResumeNotSupported.values
               .map(
                 (e) => ComboBoxItem<FtpWhenResumeNotSupported>(
                   value: e,
                   child: Text(
                     e == FtpWhenResumeNotSupported.fallback
-                        ? _t('Fallback (upload completo)', 'Fallback (full upload)')
+                        ? _t(
+                            'Fallback (upload completo)',
+                            'Fallback (full upload)',
+                          )
                         : _t('Falhar', 'Fail'),
                   ),
                 ),
@@ -1689,6 +1904,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
         'remotePath': _ftpRemotePathController.text.trim(),
         'useFtps': _useFtps,
         'enableVerboseLog': _enableVerboseLogFtp,
+        'enableStrongIntegrityValidation': _enableStrongIntegrityValidationFtp,
+        'enableReadBackValidation': _enableReadBackValidationFtp,
         'connectionTimeoutSeconds': connTimeout,
         'uploadTimeoutMinutes': uploadTimeout,
       });
@@ -1704,12 +1921,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
             final restInfo = switch (testResult.supportsRestStream) {
               true =>
                 '\n${_t("Suporta retomada de upload (REST STREAM).", "Supports upload resume (REST STREAM).")}',
-              false => '\n${_t(
-                "Não suporta retomada de upload. "
-                "Em caso de interrupção, o envio será reiniciado do zero.",
-                "Does not support upload resume. "
-                "If interrupted, upload will restart from the beginning.",
-              )}',
+              false =>
+                '\n${_t(
+                  "Não suporta retomada de upload. "
+                      "Em caso de interrupção, o envio será reiniciado do zero.",
+                  "Does not support upload resume. "
+                      "If interrupted, upload will restart from the beginning.",
+                )}',
               null => '',
             };
             final compatWarnings = <String>[];
@@ -1725,17 +1943,17 @@ class _DestinationDialogState extends State<DestinationDialog> {
               compatWarnings.add(
                 _t(
                   'Renomear arquivos não permitido (RNFR/RNTO). '
-                  'Upload pode falhar na publicação final.',
+                      'Upload pode falhar na publicação final.',
                   'File rename not allowed (RNFR/RNTO). '
-                  'Upload may fail at final publication.',
+                      'Upload may fail at final publication.',
                 ),
               );
             }
             final warningInfo = compatWarnings.isEmpty
                 ? ''
                 : '\n${_t("Avisos:", "Warnings:")} ${compatWarnings.join(" ")}'
-                    '${compatWarnings.isNotEmpty ? " " : ""}'
-                    '${_t("Consulte o guia de configuração do servidor FTP.", "See FTP server configuration guide.")}';
+                      '${compatWarnings.isNotEmpty ? " " : ""}'
+                      '${_t("Consulte o guia de configuração do servidor FTP.", "See FTP server configuration guide.")}';
             _showSuccess(
               _t(
                 'Conexão FTP estabelecida com sucesso!$restInfo$warningInfo',
@@ -1935,8 +2153,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         final connTimeout = connTimeoutStr.isEmpty
             ? null
             : int.tryParse(connTimeoutStr);
-        final uploadTimeoutStr =
-            _uploadTimeoutMinutesController.text.trim();
+        final uploadTimeoutStr = _uploadTimeoutMinutesController.text.trim();
         final uploadTimeout = uploadTimeoutStr.isEmpty
             ? null
             : int.tryParse(uploadTimeoutStr);
@@ -1954,12 +2171,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
           'enableResume': _enableResumeFtp,
           'keepPartOnCancel': _keepPartOnCancelFtp,
           'whenResumeNotSupported': _whenResumeNotSupportedFtp.name,
-          ...? (maxAttempts != null ? {'maxAttempts': maxAttempts} : null),
+          ...?(maxAttempts != null ? {'maxAttempts': maxAttempts} : null),
           'enableVerboseLog': _enableVerboseLogFtp,
-          ...? (connTimeout != null
+          'enableStrongIntegrityValidation':
+              _enableStrongIntegrityValidationFtp,
+          'enableReadBackValidation': _enableReadBackValidationFtp,
+          ...?(connTimeout != null
               ? {'connectionTimeoutSeconds': connTimeout}
               : null),
-          ...? (uploadTimeout != null
+          ...?(uploadTimeout != null
               ? {'uploadTimeoutMinutes': uploadTimeout}
               : null),
           'retentionDays': retentionDays,

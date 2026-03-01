@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -162,10 +164,37 @@ class LocalDestinationService implements ILocalDestinationService {
         LoggerService.info('Tamanho do arquivo de destino: $copiedSize bytes');
 
         if (copiedSize != sourceSize) {
-          throw FileSystemException(
-            destinationPath,
-            'Tamanho do arquivo de destino difere do arquivo de origem após cópia '
-            '(origem: $sourceSize bytes, destino: $copiedSize bytes)',
+          return rd.Failure(
+            FileSystemFailure(
+              message:
+                  'Falha de integridade no destino local: tamanho divergente '
+                  'após cópia (origem: $sourceSize bytes, '
+                  'destino: $copiedSize bytes).',
+              code: FailureCodes.integrityValidationFailed,
+              originalError: Exception(
+                'Local copy size mismatch: source=$sourceSize '
+                'destination=$copiedSize',
+              ),
+            ),
+          );
+        }
+
+        final sourceSha256 = await FileHashUtils.computeSha256(sourceFile);
+        final destinationSha256 = await FileHashUtils.computeSha256(
+          destinationFile,
+        );
+        if (destinationSha256.toLowerCase() != sourceSha256.toLowerCase()) {
+          return rd.Failure(
+            FileSystemFailure(
+              message:
+                  'Falha de integridade no destino local: hash SHA-256 do '
+                  'arquivo copiado difere do arquivo de origem.',
+              code: FailureCodes.integrityValidationFailed,
+              originalError: Exception(
+                'Local copy SHA-256 mismatch: source=$sourceSha256 '
+                'destination=$destinationSha256',
+              ),
+            ),
           );
         }
 

@@ -4,6 +4,8 @@ import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -59,6 +61,9 @@ class DropboxDestinationService implements IDropboxDestinationService {
 
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final fileSize = await sourceFile.length();
+      final localContentHash = await FileHashUtils.computeDropboxContentHash(
+        sourceFile,
+      );
       final filePath = '$dateFolderPath/$fileName';
 
       await _deleteFileIfExists(filePath);
@@ -116,6 +121,43 @@ class DropboxDestinationService implements IDropboxDestinationService {
               }
             }
 
+            final remoteContentHash = uploadResult['content_hash'] as String?;
+            if (remoteContentHash == null || remoteContentHash.isEmpty) {
+              throw DropboxFailure(
+                message:
+                    'Não foi possível confirmar integridade no Dropbox '
+                    '(content_hash ausente).',
+                code: FailureCodes.integrityValidationInconclusive,
+                originalError: Exception('Dropbox content_hash ausente'),
+              );
+            }
+
+            if (remoteContentHash.toLowerCase() !=
+                localContentHash.toLowerCase()) {
+              try {
+                await dio.post(
+                  '/2/files/delete_v2',
+                  data: {'path': filePath},
+                );
+              } on Object catch (e, s) {
+                LoggerService.error(
+                  'Failed to delete hash-mismatched Dropbox file: $filePath',
+                  e,
+                  s,
+                );
+              }
+              throw DropboxFailure(
+                message:
+                    'Falha de integridade no Dropbox: content_hash remoto '
+                    'difere do arquivo local.',
+                code: FailureCodes.integrityValidationFailed,
+                originalError: Exception(
+                  'Dropbox content_hash mismatch: '
+                  'local=$localContentHash remote=$remoteContentHash',
+                ),
+              );
+            }
+
             return uploadResult;
           });
 
@@ -143,6 +185,9 @@ class DropboxDestinationService implements IDropboxDestinationService {
       }
 
       stopwatch.stop();
+      if (lastError is DropboxFailure) {
+        return rd.Failure(lastError);
+      }
       return rd.Failure(
         DropboxFailure(
           message: _getDropboxErrorMessage(lastError),
@@ -151,6 +196,9 @@ class DropboxDestinationService implements IDropboxDestinationService {
       );
     } on Object catch (e) {
       stopwatch.stop();
+      if (e is DropboxFailure) {
+        return rd.Failure(e);
+      }
       return rd.Failure(
         DropboxFailure(message: _getDropboxErrorMessage(e), originalError: e),
       );
@@ -365,6 +413,18 @@ class DropboxDestinationService implements IDropboxDestinationService {
   }
 
   String _getDropboxErrorMessage(dynamic e) {
+    if (e is Failure && e.code != null) {
+      if (e.code == FailureCodes.integrityValidationInconclusive) {
+        return 'Não foi possível confirmar a integridade no Dropbox.\n'
+            'Detalhes: ${e.message}';
+      }
+      if (e.code == FailureCodes.integrityValidationFailed) {
+        return 'Falha de integridade no Dropbox: arquivo remoto não confere '
+            'com o original.\n'
+            'Detalhes: ${e.message}';
+      }
+    }
+
     final errorStr = e.toString().toLowerCase();
 
     if (errorStr.contains('401') || errorStr.contains('unauthorized')) {

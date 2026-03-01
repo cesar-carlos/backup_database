@@ -13,6 +13,12 @@ bool isRetryableFailure(Object failure) {
   if (failure is ValidationFailure) return false;
   if (failure is Failure && failure.code != null) {
     final code = failure.code!;
+    if (code == FailureCodes.ftpIntegrityValidationInconclusive) {
+      return true;
+    }
+    if (code == FailureCodes.integrityValidationInconclusive) {
+      return true;
+    }
     if (code == FailureCodes.uploadCancelled ||
         code == FailureCodes.backupCancelled ||
         code == FailureCodes.validationFailed ||

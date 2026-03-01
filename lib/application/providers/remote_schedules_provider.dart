@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/error_mapper.dart'
     show mapExceptionToMessage;
@@ -26,6 +27,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   bool _isUpdating = false;
   bool _isExecuting = false;
   String? _error;
+  String? _lastErrorCode;
   String? _updatingScheduleId;
   String? _executingScheduleId;
 
@@ -44,6 +46,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   bool get isUpdating => _isUpdating;
   bool get isExecuting => _isExecuting;
   String? get error => _error;
+  String? get lastErrorCode => _lastErrorCode;
   bool get isConnected => _connectionManager.isConnected;
   String? get updatingScheduleId => _updatingScheduleId;
   String? get executingScheduleId => _executingScheduleId;
@@ -58,12 +61,14 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   Future<void> loadSchedules() async {
     if (!_connectionManager.isConnected) {
       _error = 'Conecte-se a um servidor para ver os agendamentos.';
+      _lastErrorCode = null;
       notifyListeners();
       return;
     }
 
     _isLoading = true;
     _error = null;
+    _lastErrorCode = null;
     notifyListeners();
 
     final result = await _connectionManager.listSchedules();
@@ -72,9 +77,11 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       (list) {
         _schedules = list;
         _isLoading = false;
+        _lastErrorCode = null;
       },
       (exception) {
         _error = mapExceptionToMessage(exception);
+        _lastErrorCode = exception is Failure ? exception.code : null;
         _isLoading = false;
       },
     );
@@ -85,6 +92,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   Future<bool> updateSchedule(Schedule schedule) async {
     if (!_connectionManager.isConnected) {
       _error = 'Conecte-se a um servidor para atualizar agendamentos.';
+      _lastErrorCode = null;
       notifyListeners();
       return false;
     }
@@ -92,6 +100,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _isUpdating = true;
     _updatingScheduleId = schedule.id;
     _error = null;
+    _lastErrorCode = null;
     notifyListeners();
 
     final result = await _connectionManager.updateSchedule(schedule);
@@ -103,6 +112,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           _schedules = List<Schedule>.from(_schedules)..[index] = updated;
         }
         _error = null;
+        _lastErrorCode = null;
         _isUpdating = false;
         _updatingScheduleId = null;
         notifyListeners();
@@ -110,6 +120,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       },
       (exception) {
         _error = mapExceptionToMessage(exception);
+        _lastErrorCode = exception is Failure ? exception.code : null;
         _isUpdating = false;
         _updatingScheduleId = null;
         notifyListeners();
@@ -121,6 +132,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   Future<bool> executeSchedule(String scheduleId) async {
     if (!_connectionManager.isConnected) {
       _error = 'Conecte-se a um servidor para executar agendamentos.';
+      _lastErrorCode = null;
       notifyListeners();
       return false;
     }
@@ -128,6 +140,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _isExecuting = true;
     _executingScheduleId = scheduleId;
     _error = null;
+    _lastErrorCode = null;
     _backupStep = null;
     _backupMessage = null;
     _backupProgress = null;
@@ -149,6 +162,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       _error =
           'Sem permissão de escrita na pasta temporária:\n${downloadsDir.path}\n\n'
           'Execute o aplicativo como Administrador ou configure outra pasta em Configurações > Geral.';
+      _lastErrorCode = null;
       _isExecuting = false;
       _executingScheduleId = null;
       _backupStep = null;
@@ -188,6 +202,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
             '⚠️ DOWNLOAD CANCELADO: backupPath.isEmpty=${backupPath.isEmpty}, _transferProvider==null=${_transferProvider == null}',
           );
           _error = null;
+          _lastErrorCode = null;
           _isExecuting = false;
           _executingScheduleId = null;
           _backupStep = null;
@@ -232,6 +247,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         LoggerService.info('DownloadSuccess: $downloadSuccess');
 
         _error = null;
+        _lastErrorCode = null;
         _isExecuting = false;
         _executingScheduleId = null;
         _backupStep = null;
@@ -246,6 +262,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       },
       (exception) {
         _error = mapExceptionToMessage(exception);
+        _lastErrorCode = exception is Failure ? exception.code : null;
         _isExecuting = false;
         _executingScheduleId = null;
         _backupStep = null;
@@ -264,12 +281,14 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   Future<bool> cancelSchedule() async {
     if (!_connectionManager.isConnected) {
       _error = 'Conecte-se a um servidor para cancelar agendamentos.';
+      _lastErrorCode = null;
       notifyListeners();
       return false;
     }
 
     if (_executingScheduleId == null) {
       _error = 'Nenhum backup em execução para cancelar.';
+      _lastErrorCode = null;
       notifyListeners();
       return false;
     }
@@ -290,11 +309,13 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         _transferProgress = null;
         _isTransferringFile = false;
         _error = null;
+        _lastErrorCode = null;
         notifyListeners();
         return true;
       },
       (exception) {
         _error = mapExceptionToMessage(exception);
+        _lastErrorCode = exception is Failure ? exception.code : null;
         notifyListeners();
         return false;
       },
@@ -303,6 +324,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
   void clearError() {
     _error = null;
+    _lastErrorCode = null;
     notifyListeners();
   }
 
@@ -321,6 +343,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _transferProgress = null;
     _isTransferringFile = false;
     _error = _connectionLostMessage;
+    _lastErrorCode = null;
     notifyListeners();
   }
 }

@@ -244,7 +244,10 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       '(${config.path})',
     );
 
-    onProgress?.call(0, 'Preparando cópia para pasta local: ${destination.name}');
+    onProgress?.call(
+      0,
+      'Preparando cópia para pasta local: ${destination.name}',
+    );
 
     final customFileName = backupId != null
         ? SybaseBackupPathSuffix.buildDestinationName(
@@ -317,9 +320,12 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         configJson['whenResumeNotSupported'] as String?,
       ),
       enableVerboseLog: configJson['enableVerboseLog'] as bool? ?? false,
-      connectionTimeoutSeconds:
-          configJson['connectionTimeoutSeconds'] as int?,
+      connectionTimeoutSeconds: configJson['connectionTimeoutSeconds'] as int?,
       uploadTimeoutMinutes: configJson['uploadTimeoutMinutes'] as int?,
+      enableStrongIntegrityValidation:
+          configJson['enableStrongIntegrityValidation'] as bool? ?? true,
+      enableReadBackValidation:
+          configJson['enableReadBackValidation'] as bool? ?? true,
     );
 
     LoggerService.info(

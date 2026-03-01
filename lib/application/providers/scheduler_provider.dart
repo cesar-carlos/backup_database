@@ -38,11 +38,13 @@ class SchedulerProvider extends ChangeNotifier {
   List<Schedule> _schedules = [];
   bool _isLoading = false;
   String? _error;
+  String? _lastErrorCode;
   bool _isSchedulerRunning = true;
 
   List<Schedule> get schedules => _schedules;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  String? get lastErrorCode => _lastErrorCode;
   bool get isSchedulerRunning => _isSchedulerRunning;
 
   List<Schedule> get activeSchedules =>
@@ -54,6 +56,7 @@ class SchedulerProvider extends ChangeNotifier {
   Future<void> loadSchedules() async {
     _isLoading = true;
     _error = null;
+    _lastErrorCode = null;
     notifyListeners();
 
     try {
@@ -62,10 +65,12 @@ class SchedulerProvider extends ChangeNotifier {
         (schedules) {
           _schedules = schedules;
           _error = null;
+          _lastErrorCode = null;
         },
         (failure) {
           final f = failure as Failure;
           _error = f.message;
+          _lastErrorCode = f.code;
         },
       );
     } on Object catch (e) {
@@ -79,6 +84,7 @@ class SchedulerProvider extends ChangeNotifier {
   Future<bool> createSchedule(Schedule schedule) async {
     _isLoading = true;
     _error = null;
+    _lastErrorCode = null;
     notifyListeners();
 
     try {
@@ -91,6 +97,7 @@ class SchedulerProvider extends ChangeNotifier {
         (failure) async {
           final f = failure as Failure;
           _error = f.message;
+          _lastErrorCode = f.code;
           _isLoading = false;
           notifyListeners();
           return false;
@@ -107,6 +114,7 @@ class SchedulerProvider extends ChangeNotifier {
   Future<bool> updateSchedule(Schedule schedule) async {
     _isLoading = true;
     _error = null;
+    _lastErrorCode = null;
     notifyListeners();
 
     try {
@@ -119,6 +127,7 @@ class SchedulerProvider extends ChangeNotifier {
         (failure) async {
           final f = failure as Failure;
           _error = f.message;
+          _lastErrorCode = f.code;
           _isLoading = false;
           notifyListeners();
           return false;
@@ -135,6 +144,7 @@ class SchedulerProvider extends ChangeNotifier {
   Future<bool> deleteSchedule(String id) async {
     _isLoading = true;
     _error = null;
+    _lastErrorCode = null;
     notifyListeners();
 
     try {
@@ -143,6 +153,7 @@ class SchedulerProvider extends ChangeNotifier {
         (_) {
           _schedules.removeWhere((s) => s.id == id);
           _error = null;
+          _lastErrorCode = null;
           _isLoading = false;
           notifyListeners();
           return true;
@@ -150,6 +161,7 @@ class SchedulerProvider extends ChangeNotifier {
         (failure) {
           final f = failure as Failure;
           _error = f.message;
+          _lastErrorCode = f.code;
           _isLoading = false;
           notifyListeners();
           return false;
@@ -188,6 +200,7 @@ class SchedulerProvider extends ChangeNotifier {
   Future<bool> executeNow(String scheduleId) async {
     _isLoading = true;
     _error = null;
+    _lastErrorCode = null;
     notifyListeners();
 
     final schedule = getScheduleById(scheduleId);
@@ -219,6 +232,7 @@ class SchedulerProvider extends ChangeNotifier {
             );
           }
           _error = null;
+          _lastErrorCode = null;
           _isLoading = false;
           notifyListeners();
           return true;
@@ -229,6 +243,7 @@ class SchedulerProvider extends ChangeNotifier {
             progressProvider.failBackup(f.message);
           }
           _error = f.message;
+          _lastErrorCode = f.code;
           _isLoading = false;
           notifyListeners();
           return false;

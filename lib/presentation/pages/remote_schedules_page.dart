@@ -5,6 +5,7 @@ import 'package:backup_database/application/providers/server_connection_provider
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedules.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -300,9 +301,12 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
         );
         provider.loadSchedules();
       } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao executar.',
+        final code = provider.lastErrorCode;
+        final message = provider.error ?? 'Erro ao executar.';
+        IntegrityErrorModalHelper.showExecutionErrorModal(
+          context: context,
+          failureCode: code,
+          message: message,
         );
       }
     }

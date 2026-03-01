@@ -100,6 +100,8 @@ class FtpDestinationConfig {
     this.enableVerboseLog = false,
     this.connectionTimeoutSeconds,
     this.uploadTimeoutMinutes,
+    this.enableStrongIntegrityValidation = true,
+    this.enableReadBackValidation = true,
     this.protectedBackupIdShortPrefixes = const {},
   });
 
@@ -125,9 +127,12 @@ class FtpDestinationConfig {
       maxAttempts: json['maxAttempts'] as int?,
       whenResumeNotSupported: whenResume,
       enableVerboseLog: json['enableVerboseLog'] as bool? ?? false,
-      connectionTimeoutSeconds:
-          json['connectionTimeoutSeconds'] as int?,
+      connectionTimeoutSeconds: json['connectionTimeoutSeconds'] as int?,
       uploadTimeoutMinutes: json['uploadTimeoutMinutes'] as int?,
+      enableStrongIntegrityValidation:
+          json['enableStrongIntegrityValidation'] as bool? ?? true,
+      enableReadBackValidation:
+          json['enableReadBackValidation'] as bool? ?? true,
     );
   }
   final String host;
@@ -144,36 +149,39 @@ class FtpDestinationConfig {
   final bool enableVerboseLog;
   final int? connectionTimeoutSeconds;
   final int? uploadTimeoutMinutes;
+  final bool enableStrongIntegrityValidation;
+  final bool enableReadBackValidation;
   final Set<String> protectedBackupIdShortPrefixes;
 
   int get effectiveMaxAttempts =>
       maxAttempts ?? DestinationRetryConstants.maxAttempts;
 
   int get effectiveConnectionTimeoutSeconds =>
-      connectionTimeoutSeconds ??
-      StepTimeoutConstants.ftpConnection.inSeconds;
+      connectionTimeoutSeconds ?? StepTimeoutConstants.ftpConnection.inSeconds;
 
   int get effectiveUploadTimeoutSeconds =>
       (uploadTimeoutMinutes ?? StepTimeoutConstants.uploadFtp.inMinutes) * 60;
 
   Map<String, dynamic> toJson() => {
-        'host': host,
-        'port': port,
-        'username': username,
-        'password': password,
-        'remotePath': remotePath,
-        'useFtps': useFtps,
-        'retentionDays': retentionDays,
-        'enableResume': enableResume,
-        'keepPartOnCancel': keepPartOnCancel,
-        if (maxAttempts != null) 'maxAttempts': maxAttempts,
-        'whenResumeNotSupported': whenResumeNotSupported.name,
-        'enableVerboseLog': enableVerboseLog,
-        if (connectionTimeoutSeconds != null)
-          'connectionTimeoutSeconds': connectionTimeoutSeconds,
-        if (uploadTimeoutMinutes != null)
-          'uploadTimeoutMinutes': uploadTimeoutMinutes,
-      };
+    'host': host,
+    'port': port,
+    'username': username,
+    'password': password,
+    'remotePath': remotePath,
+    'useFtps': useFtps,
+    'retentionDays': retentionDays,
+    'enableResume': enableResume,
+    'keepPartOnCancel': keepPartOnCancel,
+    if (maxAttempts != null) 'maxAttempts': maxAttempts,
+    'whenResumeNotSupported': whenResumeNotSupported.name,
+    'enableVerboseLog': enableVerboseLog,
+    'enableStrongIntegrityValidation': enableStrongIntegrityValidation,
+    'enableReadBackValidation': enableReadBackValidation,
+    if (connectionTimeoutSeconds != null)
+      'connectionTimeoutSeconds': connectionTimeoutSeconds,
+    if (uploadTimeoutMinutes != null)
+      'uploadTimeoutMinutes': uploadTimeoutMinutes,
+  };
 }
 
 class GoogleDriveDestinationConfig {

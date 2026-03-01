@@ -1,6 +1,8 @@
 import 'package:backup_database/application/providers/scheduler_provider.dart';
+import 'package:backup_database/core/constants/integrity_ui_strings.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedules.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -206,10 +208,13 @@ class _SchedulesPageState extends State<SchedulesPage> {
       final success = await schedulerProvider.executeNow(id);
 
       if (!success && context.mounted) {
-        MessageModal.showError(
-          context,
-          title: 'Erro ao Executar Backup',
-          message: schedulerProvider.error ?? 'Erro ao executar backup',
+        final code = schedulerProvider.lastErrorCode;
+        final message = schedulerProvider.error ?? 'Erro ao executar backup';
+        IntegrityErrorModalHelper.showExecutionErrorModal(
+          context: context,
+          failureCode: code,
+          message: message,
+          defaultErrorTitleBuilder: IntegrityUiStrings.executeBackupErrorTitle,
         );
       }
     }

@@ -26,4 +26,9 @@ class FailureCodes {
   static const String cleanupFailed = 'CLEANUP_FAILED';
   static const String ftpIntegrityValidationFailed =
       'FTP_INTEGRITY_VALIDATION_FAILED';
+  static const String ftpIntegrityValidationInconclusive =
+      'FTP_INTEGRITY_VALIDATION_INCONCLUSIVE';
+  static const String integrityValidationFailed = 'INTEGRITY_VALIDATION_FAILED';
+  static const String integrityValidationInconclusive =
+      'INTEGRITY_VALIDATION_INCONCLUSIVE';
 }

@@ -5,7 +5,9 @@ import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart'
     hide GoogleDriveFailure;
+import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/google_drive_failure.dart';
+import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/file_stream_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
@@ -80,6 +82,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
 
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final fileSize = await sourceFile.length();
+      final localMd5 = await FileHashUtils.computeMd5(sourceFile);
 
       const largeFileThreshold = 5 * 1024 * 1024;
       final useResumableUpload = fileSize > largeFileThreshold;
@@ -136,7 +139,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
             final uploadedFile = await driveApi.files.create(
               driveFile,
               uploadMedia: media,
-              $fields: 'id, name, size',
+              $fields: 'id, name, size, md5Checksum',
             );
 
             if (uploadedFile.size != null) {
@@ -155,6 +158,35 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
                   'Local: $fileSize, Remoto: $remoteSize',
                 );
               }
+            }
+
+            final remoteMd5 = uploadedFile.md5Checksum;
+            if (remoteMd5 == null || remoteMd5.isEmpty) {
+              throw GoogleDriveFailure(
+                message:
+                    'Não foi possível confirmar integridade no Google Drive '
+                    '(md5Checksum não retornado pela API).',
+                code: FailureCodes.integrityValidationInconclusive,
+                originalError: Exception('Google Drive md5Checksum ausente'),
+              );
+            }
+            if (remoteMd5.toLowerCase() != localMd5.toLowerCase()) {
+              try {
+                await driveApi.files.delete(uploadedFile.id!);
+              } on Object catch (e) {
+                LoggerService.warning(
+                  'Não foi possível remover arquivo com hash divergente: $e',
+                );
+              }
+              throw GoogleDriveFailure(
+                message:
+                    'Falha de integridade no Google Drive: hash remoto difere '
+                    'do arquivo local (MD5).',
+                code: FailureCodes.integrityValidationFailed,
+                originalError: Exception(
+                  'Google Drive MD5 mismatch: local=$localMd5 remote=$remoteMd5',
+                ),
+              );
             }
 
             return uploadedFile;
@@ -188,6 +220,9 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
       }
 
       stopwatch.stop();
+      if (lastError is GoogleDriveFailure) {
+        return rd.Failure(lastError);
+      }
       return rd.Failure(
         GoogleDriveFailure(
           message: _getGoogleDriveErrorMessage(lastError),
@@ -197,6 +232,9 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
     } on Object catch (e, stackTrace) {
       stopwatch.stop();
       LoggerService.error('Erro no upload Google Drive', e, stackTrace);
+      if (e is GoogleDriveFailure) {
+        return rd.Failure(e);
+      }
       return rd.Failure(
         GoogleDriveFailure(
           message: _getGoogleDriveErrorMessage(e),
@@ -216,6 +254,18 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
   }
 
   String _getGoogleDriveErrorMessage(dynamic e) {
+    if (e is Failure && e.code != null) {
+      if (e.code == FailureCodes.integrityValidationInconclusive) {
+        return 'Não foi possível confirmar a integridade no Google Drive.\n'
+            'Detalhes: ${e.message}';
+      }
+      if (e.code == FailureCodes.integrityValidationFailed) {
+        return 'Falha de integridade no Google Drive: arquivo remoto não '
+            'confere com o original.\n'
+            'Detalhes: ${e.message}';
+      }
+    }
+
     final errorStr = e.toString().toLowerCase();
 
     if (errorStr.contains('401') || errorStr.contains('unauthorized')) {
