@@ -365,7 +365,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                       ? Text(_t('Carregando...', 'Loading...'))
                       : Text(
                           _packageInfo != null
-                              ? '${_packageInfo!.version}+${_packageInfo!.buildNumber}'
+                              ? (_packageInfo!.buildNumber.isNotEmpty
+                                    ? '${_packageInfo!.version}+${_packageInfo!.buildNumber}'
+                                    : _packageInfo!.version)
                               : _t('Desconhecida', 'Unknown'),
                         ),
                 ),

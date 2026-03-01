@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import urllib.request
@@ -40,6 +41,40 @@ def run_command(cmd: list[str], cwd: Path | None = None) -> int:
         return 127
 
 
+def read_pubspec_version(pubspec_path: Path) -> tuple[str, str]:
+    content = pubspec_path.read_text(encoding="utf-8")
+    match = re.search(r"(?m)^version:\s*([^\s#]+)", content)
+    if not match:
+        raise ValueError("Nao foi possivel encontrar a versao no pubspec.yaml")
+    full_version = match.group(1).strip()
+    version_only = full_version.split("+", 1)[0]
+    return full_version, version_only
+
+
+def get_exe_product_version(exe_path: Path) -> str | None:
+    if not exe_path.exists():
+        return None
+
+    # Build/installer is Windows-only (Inno Setup), so querying via PowerShell
+    # keeps this dependency-free for Python.
+    cmd = [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        f"(Get-Item '{exe_path.resolve()}').VersionInfo.ProductVersion",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        return None
+    return (result.stdout or "").strip() or None
+
+
+def normalize_version(version: str | None) -> str | None:
+    if not version:
+        return None
+    return version.split("+", 1)[0].strip()
+
+
 def main() -> int:
     print("========================================")
     print("  Build do Instalador - Backup Database")
@@ -48,8 +83,20 @@ def main() -> int:
 
     script_root = Path(__file__).resolve().parent
     project_root = script_root.parent
+    pubspec_path = project_root / "pubspec.yaml"
     update_version_script = script_root / "update_version.py"
     setup_iss_path = script_root / "setup.iss"
+    exe_path = project_root / "build" / "windows" / "x64" / "runner" / "Release" / "backup_database.exe"
+
+    try:
+        full_version, expected_product_version = read_pubspec_version(pubspec_path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERRO: {exc}")
+        return 1
+
+    print(f"Versao alvo (pubspec): {full_version}")
+    print(f"Versao esperada no executavel: {expected_product_version}")
+    print()
 
     step("Passo 1: Sincronizando versao...")
     if update_version_script.exists():
@@ -61,13 +108,37 @@ def main() -> int:
         print("AVISO: script update_version.py nao encontrado. Pulando sincronizacao.")
     print()
 
-    step("Passo 2: Verificando build do Flutter...")
-    exe_path = project_root / "build" / "windows" / "x64" / "runner" / "Release" / "backup_database.exe"
-    if not exe_path.exists():
-        print(f"ERRO: executavel nao encontrado em: {exe_path}")
-        print("Execute primeiro: flutter build windows --release")
+    step("Passo 2: Validando build do Flutter...")
+    current_version = normalize_version(get_exe_product_version(exe_path))
+    if current_version != expected_product_version:
+        if current_version is None:
+            print("Build ausente/invalido. Executando flutter build windows --release...")
+        else:
+            print(
+                "Build desatualizado: "
+                f"exe={current_version}, esperado={expected_product_version}",
+            )
+            print("Executando rebuild para alinhar versao...")
+
+        code = run_command(
+            ["flutter", "build", "windows", "--release"],
+            cwd=project_root,
+        )
+        if code != 0:
+            print("ERRO: falha no flutter build windows --release")
+            return 1
+
+        current_version = normalize_version(get_exe_product_version(exe_path))
+
+    if current_version != expected_product_version:
+        print(
+            "ERRO: versao do executavel apos build nao confere com pubspec. "
+            f"exe={current_version}, esperado={expected_product_version}",
+        )
+        print("Dica: execute flutter clean e tente novamente.")
         return 1
-    print("OK: executavel encontrado")
+
+    print(f"OK: executavel valido ({current_version})")
     print()
 
     step("Passo 3: Verificando Visual C++ Redistributables...")

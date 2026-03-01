@@ -23,6 +23,7 @@ def main() -> int:
     pubspec_path = project_root / "pubspec.yaml"
     setup_iss_path = script_root / "setup.iss"
     env_path = project_root / ".env"
+    env_example_path = project_root / ".env.example"
 
     print("Sincronizando versao do pubspec.yaml com setup.iss e .env...")
 
@@ -72,6 +73,23 @@ def main() -> int:
         print(f"Versao atualizada no .env: {version_only}")
     else:
         print("AVISO: arquivo .env nao encontrado. Pulando atualizacao.")
+
+    if env_example_path.exists():
+        env_example_content = read_text(env_example_path)
+        updated_env_example, env_example_changes = re.subn(
+            r"(?m)^APP_VERSION\s*=.*$",
+            f"APP_VERSION={version_only}",
+            env_example_content,
+        )
+        if env_example_changes == 0:
+            if updated_env_example and not updated_env_example.endswith("\n"):
+                updated_env_example += "\n"
+            updated_env_example += f"APP_VERSION={version_only}\n"
+            print("AVISO: APP_VERSION nao encontrado no .env.example. Adicionando...")
+        write_text(env_example_path, updated_env_example)
+        print(f"Versao atualizada no .env.example: {version_only}")
+    else:
+        print("AVISO: arquivo .env.example nao encontrado. Pulando atualizacao.")
 
     print()
     print("Sincronizacao concluida com sucesso!")
