@@ -1,6 +1,6 @@
 ﻿# Backup Database
 
-Sistema completo de backup automático para SQL Server e Sybase SQL Anywhere (ASA) no Windows.
+Sistema completo de backup automático para SQL Server, Sybase SQL Anywhere (ASA) e PostgreSQL no Windows.
 
 ## 🎯 Funcionalidades
 
@@ -8,6 +8,7 @@ Sistema completo de backup automático para SQL Server e Sybase SQL Anywhere (AS
 
 - ✅ SQL Server (via `sqlcmd`)
 - ✅ Sybase SQL Anywhere 16 (via `dbbackup.exe`)
+- ✅ PostgreSQL (via `pg_basebackup` / `psql`)
 - ✅ Compressão ZIP automática
 - ✅ Verificação de integridade
 - ✅ Verificação de espaço em disco
@@ -17,6 +18,8 @@ Sistema completo de backup automático para SQL Server e Sybase SQL Anywhere (AS
 - ✅ Local (diretório do sistema)
 - ✅ FTP/FTPS
 - ✅ Google Drive (via OAuth2)
+- ✅ Dropbox
+- ✅ Nextcloud (WebDAV)
 - ✅ Limpeza automática de backups antigos
 
 ### Agendamento
@@ -49,13 +52,14 @@ Sistema completo de backup automático para SQL Server e Sybase SQL Anywhere (AS
 - **Arquitetura**: 64 bits apenas
 - **SQL Server**: Qualquer versão com `sqlcmd` instalado
 - **Sybase ASA**: Versão 16 com `dbbackup.exe`
-- **.NET**: Runtime necessário para execução
+- **PostgreSQL (opcional)**: utilitários `pg_basebackup`, `psql` e `pg_verifybackup` no PATH (quando usar backups PostgreSQL)
+- **Visual C++ Redistributable**: 2015-2022 (x64), instalado automaticamente pelo instalador quando necessário
 
 ## 📦 Instalação
 
 ### 1. Download
 
-Baixe o instalador da [página de releases](https://github.com/seu-usuario/backup_database/releases).
+Baixe o instalador da [página de releases](https://github.com/cesar-carlos/backup_database/releases).
 
 ### 2. Instalação
 
@@ -76,17 +80,26 @@ Execute o instalador e siga as instruções na tela.
 Crie um arquivo `.env` na raiz do aplicativo (ou use `.env.example` como base):
 
 ```env
-# API Keys (se necessário)
-GOOGLE_CLIENT_ID=seu_client_id
-GOOGLE_CLIENT_SECRET=seu_client_secret
+APP_NAME=Backup Database
+APP_VERSION=2.2.8
+SINGLE_INSTANCE_ENABLED=true
 
-# FTP (opcional)
-FTP_DEFAULT_PORT=21
-FTPS_DEFAULT_PORT=990
+# fail_open (padrão): inicia scheduler local quando status do serviço falha
+# fail_safe: não inicia scheduler local
+UI_SCHEDULER_FALLBACK_MODE=fail_open
 
-# Logs
-LOG_LEVEL=info
+# Override de modo (debug/desenvolvimento): server | client
+DEBUG_APP_MODE=server
+
+# FTP de integração (opcional, para testes com servidor real)
+FTP_IT_HOST=
+FTP_IT_PORT=21
+FTP_IT_USER=
+FTP_IT_PASS=
+FTP_IT_REMOTE_PATH=
 ```
+
+Para cenários de integração server/client em desenvolvimento, também existem os arquivos `.env.server` e `.env.client`.
 
 ### SQL Server
 
@@ -140,6 +153,20 @@ LOG_LEVEL=info
 3. Clique em **Autenticar com Google**
 4. Autorize o aplicativo
 5. Escolha a pasta de destino
+
+#### Dropbox
+
+1. Acesse **Destinos > Novo Destino**
+2. Tipo: **Dropbox**
+3. Configure OAuth (Client ID / Client Secret)
+4. Conecte a conta e escolha a pasta de destino
+
+#### Nextcloud
+
+1. Acesse **Destinos > Novo Destino**
+2. Tipo: **Nextcloud**
+3. Informe URL do servidor, usuário e App Password
+4. Configure pasta remota e teste a conexão
 
 ### Agendamentos
 
@@ -206,6 +233,16 @@ backup_database.exe --schedule-id=<schedule_id>
 backup_database.exe --minimized
 ```
 
+### Definir Modo de Execução
+
+```bash
+# modo servidor
+backup_database.exe --mode=server
+
+# modo cliente
+backup_database.exe --mode=client
+```
+
 ## 🪟 Windows Service
 
 O Backup Database pode ser instalado como serviço do Windows usando o **NSSM (Non-Sucking Service Manager)**. Isso permite que o aplicativo execute automaticamente em background, mesmo sem usuário logado.
@@ -240,7 +277,7 @@ nssm set BackupDatabaseService AppDirectory "C:\Program Files\Backup Database"
 nssm set BackupDatabaseService DisplayName "Backup Database Service"
 
 # 4. Configurar descrição
-nssm set BackupDatabaseService Description "Serviço de backup automático para SQL Server e Sybase"
+nssm set BackupDatabaseService Description "Serviço de backup automático para SQL Server, Sybase e PostgreSQL"
 
 # 5. Configurar para iniciar automaticamente
 nssm set BackupDatabaseService Start SERVICE_AUTO_START
@@ -263,8 +300,8 @@ nssm start BackupDatabaseService
 - Verificação de agendamentos a cada minuto
 - Envio de notificações por e-mail
 - Geração de logs em `C:\ProgramData\BackupDatabase\logs\`
-- Acesso a bancos de dados SQL Server e Sybase
-- Upload para FTP e Google Drive
+- Acesso a bancos de dados SQL Server, Sybase e PostgreSQL
+- Upload para FTP, Google Drive, Dropbox e Nextcloud
 
 ⚠️ **Limitações**:
 
@@ -360,13 +397,28 @@ C:\ProgramData\BackupDatabase\
 
 ## 🧪 Testes
 
-Para executar os testes:
+Para executar os testes unitários/localmente:
 
 ```bash
-flutter test
+flutter test test/unit/ --reporter compact
 ```
 
-Com cobertura:
+Para executar testes de integração no ambiente de desenvolvimento:
+
+```bash
+# socket + file transfer
+python test/scripts/run_integration_tests.py
+
+# FTP (modo local e, se configurado, servidor real)
+python test/scripts/run_ftp_integration_tests.py
+```
+
+No GitHub Actions:
+
+- O workflow `Test` executa análise estática + testes unitários.
+- Testes de integração rodam separadamente no workflow manual `Integration Tests (Self-Hosted)`.
+
+Cobertura:
 
 ```bash
 flutter test --coverage
@@ -409,7 +461,7 @@ Logs são armazenados em:
 
 ## 🛟 Suporte
 
-Para reportar bugs ou solicitar funcionalidades, abra uma [issue](https://github.com/seu-usuario/backup_database/issues).
+Para reportar bugs ou solicitar funcionalidades, abra uma [issue](https://github.com/cesar-carlos/backup_database/issues).
 
 ## 📄 Licença
 
