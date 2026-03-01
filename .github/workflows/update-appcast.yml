@@ -56,7 +56,7 @@ jobs:
         run: |
           python3 << 'EOF'
           import xml.etree.ElementTree as ET
-          from datetime import datetime
+          from datetime import datetime, timezone
           import os
           import sys
 
@@ -79,7 +79,7 @@ jobs:
               channel = root.find('channel')
               
               # Remover item existente com a mesma versão (se houver)
-              for item in channel.findall('item'):
+              for item in list(channel.findall('item')):
                   enclosure = item.find('enclosure')
                   if enclosure is not None:
                       # Verificar namespace sparkle (tentar ambos os formatos)
@@ -99,9 +99,9 @@ jobs:
           ET.register_namespace('sparkle', SPARKLE_NS)
 
           # Criar novo item (inserir no início)
-          item = ET.SubElement(channel, 'item')
+          item = ET.Element('item')
           ET.SubElement(item, 'title').text = f'Version {VERSION}'
-          ET.SubElement(item, 'pubDate').text = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S +0000')
+          ET.SubElement(item, 'pubDate').text = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S +0000')
 
           desc = ET.SubElement(item, 'description')
           desc.text = f'<![CDATA[<h2>Nova Versão {VERSION}</h2><p>Atualização automática via GitHub Release.</p>]]>'
