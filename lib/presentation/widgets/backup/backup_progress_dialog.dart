@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/core/l10n/upload_progress_labels.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
@@ -15,9 +16,8 @@ class BackupProgressDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final texts = _BackupProgressTexts.fromLocale(
-      Localizations.localeOf(context),
-    );
+    final locale = Localizations.localeOf(context);
+    final texts = _BackupProgressTexts.fromLocale(locale);
 
     return Consumer<BackupProgressProvider>(
       builder: (context, provider, child) {
@@ -31,8 +31,10 @@ class BackupProgressDialog extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        return ContentDialog(
-          title: Row(
+        return Semantics(
+          label: texts.title,
+          child: ContentDialog(
+            title: Row(
             children: [
               if (progress.step == BackupStep.completed)
                 const Icon(FluentIcons.check_mark, color: AppColors.successIcon)
@@ -55,30 +57,53 @@ class BackupProgressDialog extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    progress.message,
-                    style: FluentTheme.of(context).typography.bodyLarge,
+                  Semantics(
+                    liveRegion: true,
+                    label: UploadProgressLabels.localizeMessage(
+                      progress.message,
+                      locale,
+                    ),
+                    child: Text(
+                      UploadProgressLabels.localizeMessage(
+                        progress.message,
+                        locale,
+                      ),
+                      style: FluentTheme.of(context).typography.bodyLarge,
+                    ),
                   ),
                   if (progress.progress != null &&
                       progress.step != BackupStep.completed) ...[
                     const SizedBox(height: 16),
-                    _CustomProgressBar(
-                      value: progress.progress!.clamp(0.0, 1.0),
+                    Semantics(
+                      label: '${texts.overallProgressLabel}: '
+                          '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
+                      child: Text(
+                        '${texts.overallProgressLabel}: '
+                            '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
+                        style: FluentTheme.of(context).typography.caption,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
-                      style: FluentTheme.of(context).typography.caption,
-                      textAlign: TextAlign.center,
+                    Semantics(
+                      label: '${texts.overallProgressLabel}, '
+                          '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
+                      child: _CustomProgressBar(
+                        value: progress.progress!.clamp(0.0, 1.0),
+                      ),
                     ),
                   ],
                   if (progress.elapsed != null) ...[
                     const SizedBox(height: 16),
-                    Text(
-                      '${texts.elapsedLabel}: ${_formatDuration(progress.elapsed!, texts)}',
-                      style: FluentTheme.of(
-                        context,
-                      ).typography.caption?.copyWith(color: AppColors.grey600),
+                    Semantics(
+                      label: '${texts.elapsedLabel}: '
+                          '${_formatDuration(progress.elapsed!, texts)}',
+                      child: Text(
+                        '${texts.elapsedLabel}: '
+                            '${_formatDuration(progress.elapsed!, texts)}',
+                        style: FluentTheme.of(
+                          context,
+                        ).typography.caption?.copyWith(color: AppColors.grey600),
+                      ),
                     ),
                   ],
                   if (progress.error != null) ...[
@@ -125,6 +150,7 @@ class BackupProgressDialog extends StatelessWidget {
                 child: Text(texts.closeButton),
               ),
           ],
+        ),
         );
       },
     );
@@ -190,6 +216,7 @@ class _BackupProgressTexts {
   const _BackupProgressTexts({
     required this.title,
     required this.elapsedLabel,
+    required this.overallProgressLabel,
     required this.closeButton,
     required this.minuteShort,
     required this.secondShort,
@@ -197,6 +224,7 @@ class _BackupProgressTexts {
 
   final String title;
   final String elapsedLabel;
+  final String overallProgressLabel;
   final String closeButton;
   final String minuteShort;
   final String secondShort;
@@ -208,6 +236,7 @@ class _BackupProgressTexts {
       return const _BackupProgressTexts(
         title: 'Backup em execução',
         elapsedLabel: 'Tempo decorrido',
+        overallProgressLabel: 'Progresso geral',
         closeButton: 'Fechar',
         minuteShort: 'm',
         secondShort: 's',
@@ -217,6 +246,7 @@ class _BackupProgressTexts {
     return const _BackupProgressTexts(
       title: 'Backup in progress',
       elapsedLabel: 'Elapsed time',
+      overallProgressLabel: 'Overall progress',
       closeButton: 'Close',
       minuteShort: 'm',
       secondShort: 's',

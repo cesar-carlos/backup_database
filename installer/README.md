@@ -218,7 +218,3 @@ Para problemas ou dúvidas:
 ---
 
 **Última atualização**: Versão 2.2.7
-
-
-
-

@@ -379,17 +379,9 @@ class SchedulerService implements ISchedulerService {
             destinations: destinations,
             isCancelled: () => _cancelRequestedSchedules.contains(schedule.id),
             backupId: backupIdForPath,
-            onProgress: (double p, [String? stepOverride]) {
-              try {
-                _progressNotifier.updateProgress(
-                  step: stepOverride ?? 'Enviando para destino',
-                  message: '${(p * 100).toInt()}%',
-                  progress: 0.85 + p * 0.10,
-                );
-              } on Object catch (e, s) {
-                LoggerService.debug('Erro ao atualizar progresso: $e', e, s);
-              }
-            },
+            onProgress: _createThrottledUploadProgressCallback(
+              destinations.length,
+            ),
           );
       uploadStopwatch.stop();
       final uploadDuration = uploadStopwatch.elapsed;
@@ -885,6 +877,56 @@ class SchedulerService implements ISchedulerService {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+  }
+
+  static const _progressThrottleInterval = Duration(milliseconds: 250);
+  static const _progressMinChangePercent = 2.0;
+
+  void Function(double, [String?]) _createThrottledUploadProgressCallback(
+    int totalDestinations,
+  ) {
+    DateTime? lastUpdateTime;
+    var lastProgress = -1.0;
+
+    void onProgress(double p, [String? stepOverride]) {
+      try {
+        final now = DateTime.now();
+        final progress = 0.85 + p * 0.10;
+        final pct = (p * 100).toInt();
+        final shouldUpdate = lastUpdateTime == null ||
+            p >= 0.99 ||
+            p <= 0 ||
+            now.difference(lastUpdateTime!) >= _progressThrottleInterval ||
+            (p - lastProgress).abs() * 100 >= _progressMinChangePercent;
+
+        if (!shouldUpdate) return;
+
+        lastUpdateTime = now;
+        lastProgress = p;
+
+        var step = stepOverride ?? 'Enviando para destino';
+        if (totalDestinations > 1) {
+          step = 'Enviando para $totalDestinations destinos: $step';
+        }
+        final hasUploadPrefix = step.contains('Enviando') || step.contains('Retomando');
+        final isComplete = p >= 0.99;
+        final message = isComplete && hasUploadPrefix
+            ? '$step concluído ✓'
+            : hasUploadPrefix
+                ? '$step — $pct%'
+                : '$pct%';
+
+        _progressNotifier.updateProgress(
+          step: step,
+          message: message,
+          progress: progress,
+        );
+      } on Object catch (e, s) {
+        LoggerService.debug('Erro ao atualizar progresso: $e', e, s);
+      }
+    }
+
+    return onProgress;
   }
 
   /// Aguarda todos os backups em execução terminarem.

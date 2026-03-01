@@ -154,6 +154,12 @@ class BackupProgressProvider extends ChangeNotifier
       case 'Erro':
         return BackupStep.error;
       default:
+        if (step.startsWith('Enviando para ') ||
+            step.startsWith('Copiando para ') ||
+            step.startsWith('Preparando cópia para ') ||
+            step.startsWith('Retomando de ')) {
+          return BackupStep.uploading;
+        }
         return null;
     }
   }

@@ -48,6 +48,21 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
   final ILicensePolicyService _licensePolicyService;
   final CircuitBreakerRegistry _circuitBreakerRegistry;
 
+  static String _uploadStepLabel(BackupDestination destination) {
+    switch (destination.type) {
+      case DestinationType.local:
+        return 'Copiando para pasta local: ${destination.name}';
+      case DestinationType.ftp:
+        return 'Enviando para FTP: ${destination.name}';
+      case DestinationType.googleDrive:
+        return 'Enviando para Google Drive: ${destination.name}';
+      case DestinationType.dropbox:
+        return 'Enviando para Dropbox: ${destination.name}';
+      case DestinationType.nextcloud:
+        return 'Enviando para Nextcloud: ${destination.name}';
+    }
+  }
+
   @override
   Future<rd.Result<void>> uploadToDestination({
     required String sourceFilePath,
@@ -77,6 +92,13 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         return rd.Failure(failure);
       }
 
+      final defaultStep = _uploadStepLabel(destination);
+      final wrappedOnProgress = onProgress != null
+          ? (double p, [String? stepOverride]) {
+              onProgress(p, stepOverride ?? defaultStep);
+            }
+          : null;
+
       final configJson = jsonDecode(destination.config) as Map<String, dynamic>;
 
       switch (destination.type) {
@@ -86,6 +108,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             destination,
             configJson,
             backupId,
+            wrappedOnProgress,
           );
 
         case DestinationType.ftp:
@@ -95,7 +118,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             configJson,
             isCancelled,
             backupId,
-            onProgress,
+            wrappedOnProgress,
           );
 
         case DestinationType.googleDrive:
@@ -105,6 +128,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             configJson,
             isCancelled,
             backupId,
+            wrappedOnProgress,
           );
 
         case DestinationType.dropbox:
@@ -114,6 +138,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             configJson,
             isCancelled,
             backupId,
+            wrappedOnProgress,
           );
 
         case DestinationType.nextcloud:
@@ -123,6 +148,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             configJson,
             isCancelled,
             backupId,
+            wrappedOnProgress,
           );
       }
     } on Object catch (e) {
@@ -196,6 +222,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     BackupDestination destination,
     Map<String, dynamic> configJson,
     String? backupId,
+    UploadProgressCallback? onProgress,
   ) async {
     final config = LocalDestinationConfig(
       path: configJson['path'] as String,
@@ -217,6 +244,8 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       '(${config.path})',
     );
 
+    onProgress?.call(0, 'Preparando cópia para pasta local: ${destination.name}');
+
     final customFileName = backupId != null
         ? SybaseBackupPathSuffix.buildDestinationName(
             p.basename(sourceFilePath),
@@ -228,6 +257,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       sourceFilePath: sourceFilePath,
       config: config,
       customFileName: customFileName,
+      onProgress: onProgress,
     );
 
     return uploadResult.fold(
@@ -353,6 +383,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     Map<String, dynamic> configJson,
     bool Function()? isCancelled,
     String? backupId,
+    UploadProgressCallback? onProgress,
   ) async {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
     if (!breaker.allowsRequest) {
@@ -395,6 +426,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           sourceFilePath: sourceFilePath,
           config: config,
           customFileName: customFileName,
+          onProgress: onProgress,
         );
       },
       operationName: 'Upload Google Drive ${destination.name}',
@@ -417,6 +449,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     Map<String, dynamic> configJson,
     bool Function()? isCancelled,
     String? backupId,
+    UploadProgressCallback? onProgress,
   ) async {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
     if (!breaker.allowsRequest) {
@@ -457,6 +490,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           sourceFilePath: sourceFilePath,
           config: config,
           customFileName: customFileName,
+          onProgress: onProgress,
         );
       },
       operationName: 'Upload Dropbox ${destination.name}',
@@ -479,6 +513,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     Map<String, dynamic> configJson,
     bool Function()? isCancelled,
     String? backupId,
+    UploadProgressCallback? onProgress,
   ) async {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
     if (!breaker.allowsRequest) {
@@ -516,6 +551,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           sourceFilePath: sourceFilePath,
           config: config,
           customFileName: customFileName,
+          onProgress: onProgress,
         );
       },
       operationName: 'Upload Nextcloud ${destination.name}',

@@ -10,6 +10,7 @@ python installer\build_installer.py
 ```
 
 Este script:
+
 1. ✅ Sincroniza a versão do `pubspec.yaml` com o `setup.iss`
 2. ✅ Verifica se o projeto foi compilado
 3. ✅ Baixa `vc_redist.x64.exe` automaticamente se ausente
@@ -56,7 +57,7 @@ python installer\update_version.py
 ✅ Instala sem verificar dependências (usuário pode usar apenas SQL Server ou apenas Sybase)  
 ✅ Cria atalhos  
 ✅ Inclui documentação  
-✅ Configura inicialização automática (opcional)  
+✅ Configura inicialização automática (opcional)
 
 ---
 
@@ -70,8 +71,3 @@ python installer\update_version.py
 ---
 
 **Pronto para criar seu instalador! 🚀**
-
-
-
-
-
