@@ -16,6 +16,26 @@ def write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def sync_app_version_in_env_file(env_path: Path, version_only: str) -> None:
+    if not env_path.exists():
+        print(f"AVISO: arquivo {env_path.name} nao encontrado. Pulando atualizacao.")
+        return
+
+    env_content = read_text(env_path)
+    updated_env, env_changes = re.subn(
+        r"(?m)^APP_VERSION\s*=.*$",
+        f"APP_VERSION={version_only}",
+        env_content,
+    )
+    if env_changes == 0:
+        if updated_env and not updated_env.endswith("\n"):
+            updated_env += "\n"
+        updated_env += f"APP_VERSION={version_only}\n"
+        print(f"AVISO: APP_VERSION nao encontrado no {env_path.name}. Adicionando...")
+    write_text(env_path, updated_env)
+    print(f"Versao atualizada no {env_path.name}: {version_only}")
+
+
 def main() -> int:
     script_root = Path(__file__).resolve().parent
     project_root = script_root.parent
@@ -24,6 +44,8 @@ def main() -> int:
     setup_iss_path = script_root / "setup.iss"
     env_path = project_root / ".env"
     env_example_path = project_root / ".env.example"
+    env_client_path = project_root / ".env.client"
+    env_server_path = project_root / ".env.server"
 
     print("Sincronizando versao do pubspec.yaml com setup.iss e .env...")
 
@@ -57,39 +79,10 @@ def main() -> int:
     write_text(setup_iss_path, updated_setup)
     print(f"Versao atualizada no setup.iss: {full_version}")
 
-    if env_path.exists():
-        env_content = read_text(env_path)
-        updated_env, env_changes = re.subn(
-            r"(?m)^APP_VERSION\s*=.*$",
-            f"APP_VERSION={version_only}",
-            env_content,
-        )
-        if env_changes == 0:
-            if updated_env and not updated_env.endswith("\n"):
-                updated_env += "\n"
-            updated_env += f"APP_VERSION={version_only}\n"
-            print("AVISO: APP_VERSION nao encontrado no .env. Adicionando...")
-        write_text(env_path, updated_env)
-        print(f"Versao atualizada no .env: {version_only}")
-    else:
-        print("AVISO: arquivo .env nao encontrado. Pulando atualizacao.")
-
-    if env_example_path.exists():
-        env_example_content = read_text(env_example_path)
-        updated_env_example, env_example_changes = re.subn(
-            r"(?m)^APP_VERSION\s*=.*$",
-            f"APP_VERSION={version_only}",
-            env_example_content,
-        )
-        if env_example_changes == 0:
-            if updated_env_example and not updated_env_example.endswith("\n"):
-                updated_env_example += "\n"
-            updated_env_example += f"APP_VERSION={version_only}\n"
-            print("AVISO: APP_VERSION nao encontrado no .env.example. Adicionando...")
-        write_text(env_example_path, updated_env_example)
-        print(f"Versao atualizada no .env.example: {version_only}")
-    else:
-        print("AVISO: arquivo .env.example nao encontrado. Pulando atualizacao.")
+    sync_app_version_in_env_file(env_path, version_only)
+    sync_app_version_in_env_file(env_example_path, version_only)
+    sync_app_version_in_env_file(env_client_path, version_only)
+    sync_app_version_in_env_file(env_server_path, version_only)
 
     print()
     print("Sincronizacao concluida com sucesso!")
