@@ -427,8 +427,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
       }
 
       final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
-      final query =
-          "'$folderId' in parents and trashed = false";
+      final query = "'$folderId' in parents and trashed = false";
 
       return driveApi.files.list(
         q: query,

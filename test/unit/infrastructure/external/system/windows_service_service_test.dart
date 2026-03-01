@@ -87,19 +87,6 @@ void _stubStart(
   ).thenAnswer((_) async => rd.Success(result));
 }
 
-void _stubContinue(
-  MockProcessService mock,
-  ProcessResult result,
-) {
-  when(
-    () => mock.run(
-      executable: 'sc',
-      arguments: ['continue', 'BackupDatabaseService'],
-      timeout: _longTimeout,
-    ),
-  ).thenAnswer((_) async => rd.Success(result));
-}
-
 void _stubStop(
   MockProcessService mock,
   ProcessResult result,

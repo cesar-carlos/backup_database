@@ -71,7 +71,8 @@ class ValidateSybaseLogBackupPreflight {
     if (historyResult.isError()) {
       return rd.Failure(
         ValidationFailure(
-          message: 'Não foi possível verificar histórico de backup: '
+          message:
+              'Não foi possível verificar histórico de backup: '
               '${historyResult.exceptionOrNull()}',
         ),
       );
@@ -103,7 +104,8 @@ class ValidateSybaseLogBackupPreflight {
     }
 
     successfulFulls.sort(
-      (a, b) => (b.finishedAt ?? b.startedAt).compareTo(a.finishedAt ?? a.startedAt),
+      (a, b) =>
+          (b.finishedAt ?? b.startedAt).compareTo(a.finishedAt ?? a.startedAt),
     );
     final lastFull = successfulFulls.first;
     final lastFullAt = lastFull.finishedAt ?? lastFull.startedAt;
@@ -120,9 +122,11 @@ class ValidateSybaseLogBackupPreflight {
     final lastBackup = histories.isNotEmpty
         ? histories.reduce(
             (a, b) =>
-                (a.finishedAt ?? a.startedAt).isAfter(b.finishedAt ?? b.startedAt)
-                    ? a
-                    : b,
+                (a.finishedAt ?? a.startedAt).isAfter(
+                  b.finishedAt ?? b.startedAt,
+                )
+                ? a
+                : b,
           )
         : null;
     if (lastBackup != null && lastBackup.status == BackupStatus.error) {

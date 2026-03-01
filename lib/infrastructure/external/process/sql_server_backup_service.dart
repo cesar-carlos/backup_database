@@ -45,8 +45,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
     return {'SQLCMDPASSWORD': config.password};
   }
 
-  String _escapeSqlIdentifier(String value) =>
-      value.replaceAll(']', ']]');
+  String _escapeSqlIdentifier(String value) => value.replaceAll(']', ']]');
 
   Future<rd.Result<BackupExecutionResult>?> _checkRecoveryModel(
     SqlServerConfig config,
@@ -64,8 +63,11 @@ class SqlServerBackupService implements ISqlServerBackupService {
     return result.fold(
       (processResult) {
         if (!processResult.isSuccess) return null;
-        final model =
-            processResult.stdout.trim().toUpperCase().split(RegExp(r'\s+')).first;
+        final model = processResult.stdout
+            .trim()
+            .toUpperCase()
+            .split(RegExp(r'\s+'))
+            .first;
         if (model == 'SIMPLE') {
           return const rd.Failure(
             ValidationFailure(
@@ -319,8 +321,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
             },
             (failure) {
               verifyFailed = true;
-              verifyErrorMsg =
-                  failure is Failure ? failure.message : failure.toString();
+              verifyErrorMsg = failure is Failure
+                  ? failure.message
+                  : failure.toString();
               LoggerService.warning(
                 'Erro ao verificar integridade do backup: $verifyErrorMsg',
               );

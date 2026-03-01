@@ -15,6 +15,6 @@ class LicensesTable extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {deviceKey},
-      ];
+    {deviceKey},
+  ];
 }

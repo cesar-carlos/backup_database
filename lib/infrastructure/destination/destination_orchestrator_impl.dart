@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/retry_utils.dart';
@@ -15,6 +16,7 @@ import 'package:backup_database/domain/services/i_google_drive_destination_servi
 import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_local_destination_service.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
@@ -52,6 +54,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     required BackupDestination destination,
     bool Function()? isCancelled,
     String? backupId,
+    UploadProgressCallback? onProgress,
   }) async {
     try {
       if (isCancelled != null && isCancelled()) {
@@ -63,8 +66,8 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         );
       }
 
-      final licenseCheck =
-          await _licensePolicyService.validateDestinationCapabilities(destination);
+      final licenseCheck = await _licensePolicyService
+          .validateDestinationCapabilities(destination);
       if (licenseCheck.isError()) {
         final failure = licenseCheck.exceptionOrNull()!;
         LoggerService.warning(
@@ -92,6 +95,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             configJson,
             isCancelled,
             backupId,
+            onProgress,
           );
 
         case DestinationType.googleDrive:
@@ -138,13 +142,17 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     required List<BackupDestination> destinations,
     bool Function()? isCancelled,
     String? backupId,
+    UploadProgressCallback? onProgress,
   }) async {
     if (destinations.isEmpty) {
       return [];
     }
 
     const maxParallel = UploadParallelismConstants.maxParallelUploads;
-    final results = List<rd.Result<void>>.filled(destinations.length, const rd.Success(()));
+    final results = List<rd.Result<void>>.filled(
+      destinations.length,
+      const rd.Success(()),
+    );
 
     for (var i = 0; i < destinations.length; i += maxParallel) {
       if (isCancelled != null && isCancelled()) {
@@ -170,6 +178,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           destination: entry.value,
           isCancelled: isCancelled,
           backupId: backupId,
+          onProgress: onProgress,
         ),
       );
 
@@ -247,6 +256,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     Map<String, dynamic> configJson,
     bool Function()? isCancelled,
     String? backupId,
+    UploadProgressCallback? onProgress,
   ) async {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
     if (!breaker.allowsRequest) {
@@ -270,6 +280,16 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       password: configJson['password'] as String,
       remotePath: configJson['remotePath'] as String? ?? '/',
       useFtps: configJson['useFtps'] as bool? ?? false,
+      enableResume: configJson['enableResume'] as bool? ?? true,
+      keepPartOnCancel: configJson['keepPartOnCancel'] as bool? ?? true,
+      maxAttempts: configJson['maxAttempts'] as int?,
+      whenResumeNotSupported: _parseWhenResumeNotSupported(
+        configJson['whenResumeNotSupported'] as String?,
+      ),
+      enableVerboseLog: configJson['enableVerboseLog'] as bool? ?? false,
+      connectionTimeoutSeconds:
+          configJson['connectionTimeoutSeconds'] as int?,
+      uploadTimeoutMinutes: configJson['uploadTimeoutMinutes'] as int?,
     );
 
     LoggerService.info(
@@ -277,6 +297,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     );
 
     final uploadResult = await executeResultWithRetry<FtpUploadResult>(
+      maxAttempts: config.effectiveMaxAttempts,
       operation: () async {
         if (isCancelled != null && isCancelled()) {
           return const rd.Failure(
@@ -297,6 +318,9 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           config: config,
           customFileName: customFileName,
           isCancelled: isCancelled,
+          onProgress: onProgress,
+          runId: LogContext.runId,
+          destinationId: destination.id,
         );
       },
       operationName: 'Upload FTP ${destination.name}',
@@ -505,6 +529,16 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         breaker.recordFailure(failure);
         return rd.Failure(failure);
       },
+    );
+  }
+
+  static FtpWhenResumeNotSupported _parseWhenResumeNotSupported(
+    String? value,
+  ) {
+    if (value == null) return FtpWhenResumeNotSupported.fallback;
+    return FtpWhenResumeNotSupported.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => FtpWhenResumeNotSupported.fallback,
     );
   }
 

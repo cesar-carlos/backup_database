@@ -57,12 +57,12 @@ class SybaseBackupOptions {
   }
 
   Map<String, dynamic> toJson() => {
-        if (checkpointLog != null) 'checkpointLog': checkpointLog!.name,
-        'serverSide': serverSide,
-        'autoTuneWriters': autoTuneWriters,
-        if (blockSize != null) 'blockSize': blockSize,
-        if (logBackupMode != null) 'logBackupMode': logBackupMode!.name,
-      };
+    if (checkpointLog != null) 'checkpointLog': checkpointLog!.name,
+    'serverSide': serverSide,
+    'autoTuneWriters': autoTuneWriters,
+    if (blockSize != null) 'blockSize': blockSize,
+    if (logBackupMode != null) 'logBackupMode': logBackupMode!.name,
+  };
 
   static SybaseBackupOptions? fromJson(Map<String, dynamic>? map) {
     if (map == null || map.isEmpty) return null;

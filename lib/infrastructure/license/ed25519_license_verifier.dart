@@ -7,7 +7,7 @@ const _ed25519SignatureSize = 64;
 
 class Ed25519LicenseVerifier {
   Ed25519LicenseVerifier({required List<int> publicKeyBytes})
-      : _publicKey = ed.PublicKey(publicKeyBytes);
+    : _publicKey = ed.PublicKey(publicKeyBytes);
 
   final ed.PublicKey _publicKey;
 

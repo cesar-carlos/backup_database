@@ -56,25 +56,25 @@ class BackupMetrics {
   }
 
   Map<String, dynamic> toJson() => {
-        'totalDurationMs': totalDuration.inMilliseconds,
-        'backupDurationMs': backupDuration.inMilliseconds,
-        'verifyDurationMs': verifyDuration.inMilliseconds,
-        'compressionDurationMs': compressionDuration.inMilliseconds,
-        'uploadDurationMs': uploadDuration.inMilliseconds,
-        'cleanupDurationMs': cleanupDuration.inMilliseconds,
-        'backupSizeBytes': backupSizeBytes,
-        'backupSpeedMbPerSec': backupSpeedMbPerSec,
-        'backupType': backupType,
-        'flags': {
-          'compression': flags.compression,
-          'verifyPolicy': flags.verifyPolicy,
-          'stripingCount': flags.stripingCount,
-          'withChecksum': flags.withChecksum,
-          'stopOnError': flags.stopOnError,
-        },
-        if (sybaseOptions != null && sybaseOptions!.isNotEmpty)
-          'sybaseOptions': sybaseOptions,
-      };
+    'totalDurationMs': totalDuration.inMilliseconds,
+    'backupDurationMs': backupDuration.inMilliseconds,
+    'verifyDurationMs': verifyDuration.inMilliseconds,
+    'compressionDurationMs': compressionDuration.inMilliseconds,
+    'uploadDurationMs': uploadDuration.inMilliseconds,
+    'cleanupDurationMs': cleanupDuration.inMilliseconds,
+    'backupSizeBytes': backupSizeBytes,
+    'backupSpeedMbPerSec': backupSpeedMbPerSec,
+    'backupType': backupType,
+    'flags': {
+      'compression': flags.compression,
+      'verifyPolicy': flags.verifyPolicy,
+      'stripingCount': flags.stripingCount,
+      'withChecksum': flags.withChecksum,
+      'stopOnError': flags.stopOnError,
+    },
+    if (sybaseOptions != null && sybaseOptions!.isNotEmpty)
+      'sybaseOptions': sybaseOptions,
+  };
 
   static BackupMetrics? fromJson(String? jsonStr) {
     if (jsonStr == null || jsonStr.isEmpty) return null;

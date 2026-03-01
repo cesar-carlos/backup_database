@@ -576,14 +576,14 @@ class RemoteFileTransferProvider extends ChangeNotifier {
           final sendResult = await _sendFileToDestinationService.sendFile(
             localFilePath: outputFilePath,
             destination: destination,
-            onProgress: (uploadProgressValue) {
+            onProgress: (uploadProgressValue, [String? stepOverride]) {
               final baseProgress = completedUploads / linkedIds.length;
               final destinationProgress =
                   (1 / linkedIds.length) * uploadProgressValue;
               final totalProgress = baseProgress + destinationProgress;
 
               onTransferProgress?.call(
-                'Enviando para ${destination.name}',
+                stepOverride ?? 'Enviando para ${destination.name}',
                 '${(uploadProgressValue * 100).toStringAsFixed(1)}%',
                 totalProgress,
               );

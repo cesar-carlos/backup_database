@@ -427,7 +427,7 @@ class WindowsServiceService implements IWindowsServiceService {
           if (configFailure != null) {
             final failureMsg =
                 (configFailure is Failure ? configFailure.message : null) ??
-                    configFailure.toString();
+                configFailure.toString();
             final isConfigAccessDenied =
                 failureMsg.contains('Acesso negado') ||
                 failureMsg.contains('Access denied') ||
@@ -1342,7 +1342,8 @@ class WindowsServiceService implements IWindowsServiceService {
         '$programData\\BackupDatabase\\logs\\install_elevated_$timestamp.log';
 
     String safePath(String s) => s.replaceAll("'", "''");
-    final scriptContent = '''
+    final scriptContent =
+        '''
 \$ErrorActionPreference = "Stop"
 if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
   \$PSNativeCommandUseErrorActionPreference = \$false
@@ -1537,9 +1538,11 @@ try {
           final content = await f.readAsString();
           if (content.trim().isNotEmpty) {
             buffer.writeln('--- ${f.path} ---');
-            buffer.writeln(content.trim().length > 2000
-                ? '${content.trim().substring(0, 2000)}...'
-                : content.trim());
+            buffer.writeln(
+              content.trim().length > 2000
+                  ? '${content.trim().substring(0, 2000)}...'
+                  : content.trim(),
+            );
             buffer.writeln();
           }
         } on Object catch (_) {}

@@ -78,6 +78,11 @@ class AppConstants {
     'ALLOW_INSECURE_SMTP',
   );
 
+  static const bool ftpResumableUpload = bool.fromEnvironment(
+    'FTP_RESUMABLE_UPLOAD',
+    defaultValue: true,
+  );
+
   static const String receivedBackupsDefaultPathKey =
       'received_backups_default_path';
 

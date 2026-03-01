@@ -32,6 +32,8 @@ linter:
     sort_unnamed_constructors_first: false
 
 analyzer:
+  exclude:
+    - packages/ftpconnect/**
   errors:
     inference_failure_on_function_return_type: ignore
     inference_failure_on_function_invocation: ignore

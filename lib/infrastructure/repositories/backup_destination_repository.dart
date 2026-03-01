@@ -103,8 +103,7 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
       return const rd.Success([]);
     }
     try {
-      final destinations =
-          await _database.backupDestinationDao.getByIds(ids);
+      final destinations = await _database.backupDestinationDao.getByIds(ids);
       final entities = destinations.map(_toEntity).toList();
       return rd.Success(entities);
     } on Object catch (e) {

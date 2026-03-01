@@ -22,14 +22,12 @@ class ComputeSybaseRetentionProtectedIds {
     if (histories.isEmpty) return const {};
 
     final cutoff = DateTime.now().subtract(Duration(days: retentionDays));
-    final successful = histories
-        .where((h) => h.status == BackupStatus.success)
-        .toList()
-      ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
+    final successful =
+        histories.where((h) => h.status == BackupStatus.success).toList()
+          ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
 
     final fulls = successful
-        .where((h) =>
-            h.backupType == 'full' || h.backupType == 'full_single')
+        .where((h) => h.backupType == 'full' || h.backupType == 'full_single')
         .toList();
     final logs = successful.where((h) => h.backupType == 'log').toList();
 

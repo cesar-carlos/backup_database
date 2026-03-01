@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -83,15 +83,7 @@ class CleanOldBackups {
             });
 
           case DestinationType.ftp:
-            final config = FtpDestinationConfig(
-              host: configJson['host'] as String,
-              port: configJson['port'] as int? ?? 21,
-              username: configJson['username'] as String,
-              password: configJson['password'] as String,
-              remotePath: configJson['remotePath'] as String? ?? '/',
-              useFtps: configJson['useFtps'] as bool? ?? false,
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
+            final config = FtpDestinationConfig.fromJson(configJson);
             final result = await _ftpService.cleanOldBackups(config: config);
             result.fold((count) => ftpDeleted += count, (exception) {
               final failure = exception as Failure;

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
@@ -126,14 +127,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
           );
 
         case DestinationType.ftp:
-          final config = FtpDestinationConfig(
-            host: configJson['host'] as String,
-            port: configJson['port'] as int? ?? 21,
-            username: configJson['username'] as String,
-            password: configJson['password'] as String,
-            remotePath: configJson['remotePath'] as String? ?? '/',
-            useFtps: configJson['useFtps'] as bool? ?? false,
-          );
+          final config = FtpDestinationConfig.fromJson(configJson);
 
           LoggerService.info(
             'Enviando backup para FTP: ${destination.name} (${config.host})',
@@ -143,6 +137,8 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
             sourceFilePath: localFilePath,
             config: config,
             onProgress: onProgress,
+            runId: LogContext.runId,
+            destinationId: destination.id,
           );
 
           return uploadResult.fold(

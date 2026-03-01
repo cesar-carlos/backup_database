@@ -1,4 +1,5 @@
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:result_dart/result_dart.dart';
 
 /// Service for orchestrating backup uploads to multiple destinations.
@@ -14,6 +15,7 @@ abstract class IDestinationOrchestrator {
   /// - [destination]: Destination configuration
   /// - [isCancelled]: Optional callback to check if operation was cancelled
   /// - [backupId]: When set, embeds short ID in path for chain-aware retention
+  /// - [onProgress]: Optional callback for upload progress (0.0 to 1.0)
   ///
   /// Returns [Success] if upload succeeded, [Failure] otherwise.
   Future<Result<void>> uploadToDestination({
@@ -21,6 +23,7 @@ abstract class IDestinationOrchestrator {
     required BackupDestination destination,
     bool Function()? isCancelled,
     String? backupId,
+    UploadProgressCallback? onProgress,
   });
 
   /// Uploads a backup file to multiple destinations.
@@ -31,6 +34,7 @@ abstract class IDestinationOrchestrator {
   /// - [isCancelled]: Optional callback to check if operation was cancelled
   /// - [backupId]: When set (e.g. Sybase schedules), embeds short ID in path
   ///   for chain-aware retention during cleanup
+  /// - [onProgress]: Optional callback for upload progress (0.0 to 1.0)
   ///
   /// Returns a list of results for each destination upload attempt.
   Future<List<Result<void>>> uploadToAllDestinations({
@@ -38,5 +42,6 @@ abstract class IDestinationOrchestrator {
     required List<BackupDestination> destinations,
     bool Function()? isCancelled,
     String? backupId,
+    UploadProgressCallback? onProgress,
   });
 }

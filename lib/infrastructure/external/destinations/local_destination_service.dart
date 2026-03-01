@@ -481,7 +481,10 @@ class LocalDestinationService implements ILocalDestinationService {
           final contents = await entity.list().toList();
           if (contents.isEmpty) {
             if (protected.isNotEmpty &&
-                SybaseBackupPathSuffix.isPathProtected(entity.path, protected)) {
+                SybaseBackupPathSuffix.isPathProtected(
+                  entity.path,
+                  protected,
+                )) {
               LoggerService.debug(
                 'Diretório protegido (cadeia Sybase): ${entity.path}',
               );

@@ -30,10 +30,12 @@ class ScheduleDao extends DatabaseAccessor<AppDatabase>
     DateTime beforeOrAt,
   ) =>
       (select(schedulesTable)
-            ..where((t) =>
-                t.enabled.equals(true) &
-                t.nextRunAt.isNotNull() &
-                t.nextRunAt.isSmallerOrEqualValue(beforeOrAt))
+            ..where(
+              (t) =>
+                  t.enabled.equals(true) &
+                  t.nextRunAt.isNotNull() &
+                  t.nextRunAt.isSmallerOrEqualValue(beforeOrAt),
+            )
             ..orderBy([(t) => OrderingTerm.asc(t.nextRunAt)])
             ..limit(1))
           .get();

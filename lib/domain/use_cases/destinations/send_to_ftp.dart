@@ -14,6 +14,8 @@ class SendToFtp {
     String? customFileName,
     UploadProgressCallback? onProgress,
     bool Function()? isCancelled,
+    String? runId,
+    String? destinationId,
   }) async {
     if (sourceFilePath.isEmpty) {
       return const rd.Failure(
@@ -32,6 +34,8 @@ class SendToFtp {
       customFileName: customFileName,
       onProgress: onProgress,
       isCancelled: isCancelled,
+      runId: runId,
+      destinationId: destinationId,
     );
   }
 }

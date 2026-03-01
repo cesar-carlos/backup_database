@@ -93,8 +93,9 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       return const {};
     }
 
-    final historiesResult =
-        await _backupHistoryRepository.getBySchedule(schedule.id);
+    final historiesResult = await _backupHistoryRepository.getBySchedule(
+      schedule.id,
+    );
     if (historiesResult.isError()) return const {};
 
     final histories = historiesResult.getOrNull() ?? [];
@@ -124,8 +125,8 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     Set<String> protectedShortIds,
   ) async {
     try {
-      final licenseCheck =
-          await _licensePolicyService.validateDestinationCapabilities(destination);
+      final licenseCheck = await _licensePolicyService
+          .validateDestinationCapabilities(destination);
       if (licenseCheck.isError()) {
         LoggerService.info(
           'Limpeza ignorada por licença: ${destination.name} '
@@ -216,18 +217,26 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     String backupHistoryId,
     Set<String> protectedShortIds,
   ) async {
-    final config = FtpDestinationConfig(
-      host: configJson['host'] as String,
-      port: configJson['port'] as int? ?? 21,
-      username: configJson['username'] as String,
-      password: configJson['password'] as String,
-      remotePath: configJson['remotePath'] as String? ?? '/',
-      useFtps: configJson['useFtps'] as bool? ?? false,
-      retentionDays: configJson['retentionDays'] as int? ?? 30,
+    final config = FtpDestinationConfig.fromJson(configJson);
+    final configWithProtected = FtpDestinationConfig(
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      remotePath: config.remotePath,
+      useFtps: config.useFtps,
+      retentionDays: config.retentionDays,
+      enableResume: config.enableResume,
+      keepPartOnCancel: config.keepPartOnCancel,
+      maxAttempts: config.maxAttempts,
+      whenResumeNotSupported: config.whenResumeNotSupported,
+      enableVerboseLog: config.enableVerboseLog,
+      connectionTimeoutSeconds: config.connectionTimeoutSeconds,
+      uploadTimeoutMinutes: config.uploadTimeoutMinutes,
       protectedBackupIdShortPrefixes: protectedShortIds,
     );
     final cleanResult = await _ftpDestinationService.cleanOldBackups(
-      config: config,
+      config: configWithProtected,
     );
     cleanResult.fold((_) {}, (exception) async {
       LoggerService.error(

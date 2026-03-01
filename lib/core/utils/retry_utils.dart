@@ -15,7 +15,8 @@ bool isRetryableFailure(Object failure) {
     final code = failure.code!;
     if (code == FailureCodes.uploadCancelled ||
         code == FailureCodes.backupCancelled ||
-        code == FailureCodes.validationFailed) {
+        code == FailureCodes.validationFailed ||
+        code == FailureCodes.ftpIntegrityValidationFailed) {
       return false;
     }
   }
@@ -32,8 +33,7 @@ bool isRetryableFailure(Object failure) {
         originalStr.contains('connection')) {
       return true;
     }
-    if (originalStr.contains('timeout') ||
-        originalStr.contains('Timeout')) {
+    if (originalStr.contains('timeout') || originalStr.contains('Timeout')) {
       return true;
     }
     if (originalStr.contains('503') ||
@@ -58,9 +58,10 @@ bool isRetryableFailure(Object failure) {
 Duration addJitter(Duration base, double jitterFactor) {
   final jitter =
       base.inMilliseconds * jitterFactor * (_random.nextDouble() * 2 - 1);
-  final ms = (base.inMilliseconds + jitter)
-      .round()
-      .clamp(100, base.inMilliseconds * 2);
+  final ms = (base.inMilliseconds + jitter).round().clamp(
+    100,
+    base.inMilliseconds * 2,
+  );
   return Duration(milliseconds: ms);
 }
 
@@ -82,6 +83,11 @@ Future<rd.Result<T>> executeResultWithRetry<T extends Object>({
     final result = await operation();
 
     if (result.isSuccess()) {
+      if (attempt > 1) {
+        LoggerService.info(
+          '$name succeeded on attempt $attempt/$maxAttempts',
+        );
+      }
       return result;
     }
 

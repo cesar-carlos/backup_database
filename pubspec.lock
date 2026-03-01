@@ -517,14 +517,21 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  ftp_server:
+    dependency: "direct dev"
+    description:
+      name: ftp_server
+      sha256: "0dd851d1f75734fcc846f5f8fcae0c9673d4e2d81e1e2779f07b57a54f8fb341"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
   ftpconnect:
     dependency: "direct main"
     description:
-      name: ftpconnect
-      sha256: a9ebac24a50b17dc9a1101fff85c3729fd8c16ec41346b0fa6e549616e23b2f6
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.10"
+      path: "packages/ftpconnect"
+      relative: true
+    source: path
+    version: "2.0.10+resume1"
   get_it:
     dependency: "direct main"
     description:

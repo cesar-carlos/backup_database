@@ -39,21 +39,21 @@ class UpdateSchedule {
     }
 
     if (schedule.destinationIds.isNotEmpty) {
-      final destinationsResult =
-          await _destinationRepository.getByIds(schedule.destinationIds);
+      final destinationsResult = await _destinationRepository.getByIds(
+        schedule.destinationIds,
+      );
       if (destinationsResult.isError()) {
         return rd.Failure(destinationsResult.exceptionOrNull()!);
       }
       final destinations = destinationsResult.getOrNull()!;
-      final policyResult =
-          await _licensePolicyService.validateExecutionCapabilities(
-        schedule,
-        destinations,
-      );
+      final policyResult = await _licensePolicyService
+          .validateExecutionCapabilities(
+            schedule,
+            destinations,
+          );
       if (policyResult.isError()) {
         final failure = policyResult.exceptionOrNull()!;
-        if (failure is Failure &&
-            failure.code == FailureCodes.licenseDenied) {
+        if (failure is Failure && failure.code == FailureCodes.licenseDenied) {
           _metricsCollector?.incrementCounter(
             ObservabilityMetrics.scheduleUpdateRejectedTotal,
           );
@@ -61,12 +61,11 @@ class UpdateSchedule {
         return rd.Failure(failure);
       }
     } else {
-      final policyResult =
-          await _licensePolicyService.validateScheduleCapabilities(schedule);
+      final policyResult = await _licensePolicyService
+          .validateScheduleCapabilities(schedule);
       if (policyResult.isError()) {
         final failure = policyResult.exceptionOrNull()!;
-        if (failure is Failure &&
-            failure.code == FailureCodes.licenseDenied) {
+        if (failure is Failure && failure.code == FailureCodes.licenseDenied) {
           _metricsCollector?.incrementCounter(
             ObservabilityMetrics.scheduleUpdateRejectedTotal,
           );

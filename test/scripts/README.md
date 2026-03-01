@@ -43,7 +43,8 @@ Execute os scripts a partir da raiz do projeto:
 | `stop_all.ps1` | Para todas as instâncias do Flutter |
 | `find_logs.ps1` | Encontra e exibe logs recentes |
 | `get_logs.ps1` | Coleta todos os logs para análise |
-| `run_integration_tests.ps1` | Executa todos os testes de integração |
+| `run_integration_tests.ps1` | Executa testes de integração (Socket, File Transfer) |
+| `run_ftp_integration_tests.ps1` | Executa testes de integração FTP (upload, fallback, testConnection) |
 
 ## Documentação
 

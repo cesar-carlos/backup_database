@@ -43,7 +43,9 @@ class LicenseRepository implements ILicenseRepository {
   @override
   Future<rd.Result<License>> upsertByDeviceKey(License license) async {
     try {
-      final existing = await _database.licenseDao.getByDeviceKey(license.deviceKey);
+      final existing = await _database.licenseDao.getByDeviceKey(
+        license.deviceKey,
+      );
       if (existing != null) {
         final updated = license.copyWith(
           id: existing.id,
@@ -53,7 +55,11 @@ class LicenseRepository implements ILicenseRepository {
       }
       return create(license);
     } on Object catch (e, stackTrace) {
-      LoggerService.error('Erro ao upsert licença por deviceKey', e, stackTrace);
+      LoggerService.error(
+        'Erro ao upsert licença por deviceKey',
+        e,
+        stackTrace,
+      );
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao upsert licença: $e'),
       );

@@ -26,12 +26,14 @@ class ScheduleRepository implements IScheduleRepository {
     try {
       LoggerService.info('[ScheduleRepository] Loading schedules...');
       final schedules = await _database.scheduleDao.getAll();
-      final destinationIdsBySchedule =
-          await _loadDestinationIdsBatch(schedules.map((s) => s.id).toList());
+      final destinationIdsBySchedule = await _loadDestinationIdsBatch(
+        schedules.map((s) => s.id).toList(),
+      );
 
       final entities = <Schedule>[];
       for (final schedule in schedules) {
-        final destinationIds = destinationIdsBySchedule[schedule.id] ??
+        final destinationIds =
+            destinationIdsBySchedule[schedule.id] ??
             await _loadDestinationIdsFallback(
               schedule.id,
               schedule.destinationIds,
@@ -63,8 +65,10 @@ class ScheduleRepository implements IScheduleRepository {
         );
       }
 
-      final destinationIds =
-          await _loadDestinationIds(schedule.id, schedule.destinationIds);
+      final destinationIds = await _loadDestinationIds(
+        schedule.id,
+        schedule.destinationIds,
+      );
       final entity = await _toEntity(schedule, destinationIds);
       return rd.Success(entity);
     } on Object catch (e) {
@@ -77,8 +81,9 @@ class ScheduleRepository implements IScheduleRepository {
   @override
   Future<rd.Result<Schedule>> create(Schedule schedule) async {
     try {
-      final validationResult =
-          await _validateAllDestinationsExist(schedule.destinationIds);
+      final validationResult = await _validateAllDestinationsExist(
+        schedule.destinationIds,
+      );
       if (validationResult != null) {
         return validationResult;
       }
@@ -130,8 +135,9 @@ class ScheduleRepository implements IScheduleRepository {
   @override
   Future<rd.Result<Schedule>> update(Schedule schedule) async {
     try {
-      final validationResult =
-          await _validateAllDestinationsExist(schedule.destinationIds);
+      final validationResult = await _validateAllDestinationsExist(
+        schedule.destinationIds,
+      );
       if (validationResult != null) {
         return validationResult;
       }
@@ -172,12 +178,14 @@ class ScheduleRepository implements IScheduleRepository {
   Future<rd.Result<List<Schedule>>> getEnabled() async {
     try {
       final schedules = await _database.scheduleDao.getEnabled();
-      final destinationIdsBySchedule =
-          await _loadDestinationIdsBatch(schedules.map((s) => s.id).toList());
+      final destinationIdsBySchedule = await _loadDestinationIdsBatch(
+        schedules.map((s) => s.id).toList(),
+      );
 
       final entities = <Schedule>[];
       for (final schedule in schedules) {
-        final destinationIds = destinationIdsBySchedule[schedule.id] ??
+        final destinationIds =
+            destinationIdsBySchedule[schedule.id] ??
             await _loadDestinationIdsFallback(
               schedule.id,
               schedule.destinationIds,
@@ -199,17 +207,20 @@ class ScheduleRepository implements IScheduleRepository {
     DateTime beforeOrAt,
   ) async {
     try {
-      final schedules =
-          await _database.scheduleDao.getEnabledDueForExecution(beforeOrAt);
+      final schedules = await _database.scheduleDao.getEnabledDueForExecution(
+        beforeOrAt,
+      );
       if (schedules.isEmpty) {
         return const rd.Success([]);
       }
-      final destinationIdsBySchedule =
-          await _loadDestinationIdsBatch(schedules.map((s) => s.id).toList());
+      final destinationIdsBySchedule = await _loadDestinationIdsBatch(
+        schedules.map((s) => s.id).toList(),
+      );
 
       final entities = <Schedule>[];
       for (final schedule in schedules) {
-        final destinationIds = destinationIdsBySchedule[schedule.id] ??
+        final destinationIds =
+            destinationIdsBySchedule[schedule.id] ??
             await _loadDestinationIdsFallback(
               schedule.id,
               schedule.destinationIds,
@@ -236,12 +247,14 @@ class ScheduleRepository implements IScheduleRepository {
       final schedules = await _database.scheduleDao.getByDatabaseConfig(
         databaseConfigId,
       );
-      final destinationIdsBySchedule =
-          await _loadDestinationIdsBatch(schedules.map((s) => s.id).toList());
+      final destinationIdsBySchedule = await _loadDestinationIdsBatch(
+        schedules.map((s) => s.id).toList(),
+      );
 
       final entities = <Schedule>[];
       for (final schedule in schedules) {
-        final destinationIds = destinationIdsBySchedule[schedule.id] ??
+        final destinationIds =
+            destinationIdsBySchedule[schedule.id] ??
             await _loadDestinationIdsFallback(
               schedule.id,
               schedule.destinationIds,
@@ -279,8 +292,10 @@ class ScheduleRepository implements IScheduleRepository {
           continue;
         }
 
-        final destinationIds =
-            await _loadDestinationIds(schedule.id, schedule.destinationIds);
+        final destinationIds = await _loadDestinationIds(
+          schedule.id,
+          schedule.destinationIds,
+        );
         final entity = await _toEntity(schedule, destinationIds);
         entities.add(entity);
       }

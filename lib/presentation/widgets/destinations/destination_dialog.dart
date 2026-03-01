@@ -50,6 +50,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
   final _ftpPasswordController = TextEditingController();
   final _ftpRemotePathController = TextEditingController(text: '/backups');
   bool _useFtps = false;
+  bool _enableResumeFtp = true;
+  bool _keepPartOnCancelFtp = true;
+  FtpWhenResumeNotSupported _whenResumeNotSupportedFtp =
+      FtpWhenResumeNotSupported.fallback;
+  bool _enableVerboseLogFtp = false;
+  final _connectionTimeoutSecondsController = TextEditingController();
+  final _uploadTimeoutMinutesController = TextEditingController();
+  final _maxAttemptsFtpController = TextEditingController();
 
   final _googleFolderNameController = TextEditingController(text: 'Backups');
 
@@ -105,6 +113,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
           _ftpRemotePathController.text =
               (config['remotePath'] as String?) ?? '/backups';
           _useFtps = (config['useFtps'] as bool?) ?? false;
+          _enableResumeFtp = (config['enableResume'] as bool?) ?? true;
+          _keepPartOnCancelFtp = (config['keepPartOnCancel'] as bool?) ?? true;
+          _whenResumeNotSupportedFtp = _parseWhenResumeNotSupported(
+            config['whenResumeNotSupported'] as String?,
+          );
+          _enableVerboseLogFtp = (config['enableVerboseLog'] as bool?) ?? false;
+          final maxAttempts = config['maxAttempts'] as int?;
+          _maxAttemptsFtpController.text =
+              maxAttempts != null ? maxAttempts.toString() : '';
+          final connTimeout = config['connectionTimeoutSeconds'] as int?;
+          _connectionTimeoutSecondsController.text =
+              connTimeout != null ? connTimeout.toString() : '';
+          final uploadTimeout = config['uploadTimeoutMinutes'] as int?;
+          _uploadTimeoutMinutesController.text =
+              uploadTimeout != null ? uploadTimeout.toString() : '';
           _retentionDaysController.text =
               ((config['retentionDays'] as int?) ?? 7).toString();
         case DestinationType.googleDrive:
@@ -152,6 +175,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
     _ftpUsernameController.dispose();
     _ftpPasswordController.dispose();
     _ftpRemotePathController.dispose();
+    _connectionTimeoutSecondsController.dispose();
+    _uploadTimeoutMinutesController.dispose();
+    _maxAttemptsFtpController.dispose();
     _googleFolderNameController.dispose();
     _dropboxFolderPathController.dispose();
     _dropboxFolderNameController.dispose();
@@ -696,11 +722,169 @@ class _DestinationDialogState extends State<DestinationDialog> {
           style: FluentTheme.of(context).typography.caption,
         ),
         const SizedBox(height: 16),
+        InfoLabel(
+          label: _t(
+            'Retomada de upload (REST STREAM)',
+            'Upload resume (REST STREAM)',
+          ),
+          child: ToggleSwitch(
+            checked: _enableResumeFtp,
+            onChanged: (value) {
+              setState(() {
+                _enableResumeFtp = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Retomar envio do ponto de interrupção quando o servidor suportar',
+            'Resume upload from interruption point when server supports it',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
         ActionButton(
           label: _t('Testar conexão FTP', 'Test FTP connection'),
           icon: FluentIcons.network_tower,
           onPressed: _testFtpConnection,
           isLoading: _isTestingFtpConnection,
+        ),
+        const SizedBox(height: 16),
+        _buildFtpAdvancedOptions(),
+      ],
+    );
+  }
+
+  FtpWhenResumeNotSupported _parseWhenResumeNotSupported(String? value) {
+    if (value == null) return FtpWhenResumeNotSupported.fallback;
+    return FtpWhenResumeNotSupported.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => FtpWhenResumeNotSupported.fallback,
+    );
+  }
+
+  Widget _buildFtpAdvancedOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _t('Opções avançadas', 'Advanced options'),
+          style: FluentTheme.of(context).typography.bodyStrong,
+        ),
+        const SizedBox(height: 12),
+        InfoLabel(
+          label: _t('Manter parcial ao cancelar', 'Keep partial on cancel'),
+          child: ToggleSwitch(
+            checked: _keepPartOnCancelFtp,
+            onChanged: (value) {
+              setState(() {
+                _keepPartOnCancelFtp = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Manter arquivo .part no servidor para retomar depois',
+            'Keep .part file on server to resume later',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<FtpWhenResumeNotSupported>(
+          label: _t(
+            'Quando servidor não suporta retomada',
+            'When server does not support resume',
+          ),
+          value: _whenResumeNotSupportedFtp,
+          placeholder: Text(_t('Fallback (upload completo)', 'Fallback (full upload)')),
+          items: FtpWhenResumeNotSupported.values
+              .map(
+                (e) => ComboBoxItem<FtpWhenResumeNotSupported>(
+                  value: e,
+                  child: Text(
+                    e == FtpWhenResumeNotSupported.fallback
+                        ? _t('Fallback (upload completo)', 'Fallback (full upload)')
+                        : _t('Falhar', 'Fail'),
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _whenResumeNotSupportedFtp = value;
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          label: _t('Máx. tentativas', 'Max attempts'),
+          controller: _maxAttemptsFtpController,
+          hint: _t('Padrão: 3', 'Default: 3'),
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Número máximo de tentativas por upload',
+            'Maximum number of attempts per upload',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: _t('Log detalhado FTP', 'Verbose FTP log'),
+          child: ToggleSwitch(
+            checked: _enableVerboseLogFtp,
+            onChanged: (value) {
+              setState(() {
+                _enableVerboseLogFtp = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Registrar comandos e respostas do protocolo FTP (útil para diagnóstico)',
+            'Log FTP protocol commands and responses (useful for troubleshooting)',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          label: _t('Timeout de conexão (s)', 'Connection timeout (s)'),
+          controller: _connectionTimeoutSecondsController,
+          hint: _t('Padrão: 15', 'Default: 15'),
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Tempo limite para conectar e autenticar no servidor FTP',
+            'Time limit to connect and authenticate to FTP server',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          label: _t('Timeout de upload (min)', 'Upload timeout (min)'),
+          controller: _uploadTimeoutMinutesController,
+          hint: _t('Padrão: 60', 'Default: 60'),
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _t(
+            'Tempo limite para sessão de upload (arquivos grandes podem precisar de mais)',
+            'Time limit for upload session (large files may need more)',
+          ),
+          style: FluentTheme.of(context).typography.caption,
         ),
       ],
     );
@@ -1488,14 +1672,26 @@ class _DestinationDialogState extends State<DestinationDialog> {
         return;
       }
 
-      final config = FtpDestinationConfig(
-        host: _ftpHostController.text.trim(),
-        port: port,
-        username: _ftpUsernameController.text.trim(),
-        password: _ftpPasswordController.text,
-        remotePath: _ftpRemotePathController.text.trim(),
-        useFtps: _useFtps,
-      );
+      final connTimeoutStr = _connectionTimeoutSecondsController.text.trim();
+      final connTimeout = connTimeoutStr.isEmpty
+          ? null
+          : int.tryParse(connTimeoutStr);
+      final uploadTimeoutStr = _uploadTimeoutMinutesController.text.trim();
+      final uploadTimeout = uploadTimeoutStr.isEmpty
+          ? null
+          : int.tryParse(uploadTimeoutStr);
+
+      final config = FtpDestinationConfig.fromJson({
+        'host': _ftpHostController.text.trim(),
+        'port': port,
+        'username': _ftpUsernameController.text.trim(),
+        'password': _ftpPasswordController.text,
+        'remotePath': _ftpRemotePathController.text.trim(),
+        'useFtps': _useFtps,
+        'enableVerboseLog': _enableVerboseLogFtp,
+        'connectionTimeoutSeconds': connTimeout,
+        'uploadTimeoutMinutes': uploadTimeout,
+      });
 
       final ftpService = getIt<IFtpService>();
       final result = await ftpService.testConnection(config);
@@ -1503,12 +1699,47 @@ class _DestinationDialogState extends State<DestinationDialog> {
       if (!mounted) return;
 
       result.fold(
-        (success) {
-          if (success) {
+        (testResult) {
+          if (testResult.ok) {
+            final restInfo = switch (testResult.supportsRestStream) {
+              true =>
+                '\n${_t("Suporta retomada de upload (REST STREAM).", "Supports upload resume (REST STREAM).")}',
+              false => '\n${_t(
+                "Não suporta retomada de upload. "
+                "Em caso de interrupção, o envio será reiniciado do zero.",
+                "Does not support upload resume. "
+                "If interrupted, upload will restart from the beginning.",
+              )}',
+              null => '',
+            };
+            final compatWarnings = <String>[];
+            if (testResult.canWrite == false) {
+              compatWarnings.add(
+                _t(
+                  'Sem permissão de escrita no diretório remoto.',
+                  'No write permission on remote directory.',
+                ),
+              );
+            }
+            if (testResult.canRename == false) {
+              compatWarnings.add(
+                _t(
+                  'Renomear arquivos não permitido (RNFR/RNTO). '
+                  'Upload pode falhar na publicação final.',
+                  'File rename not allowed (RNFR/RNTO). '
+                  'Upload may fail at final publication.',
+                ),
+              );
+            }
+            final warningInfo = compatWarnings.isEmpty
+                ? ''
+                : '\n${_t("Avisos:", "Warnings:")} ${compatWarnings.join(" ")}'
+                    '${compatWarnings.isNotEmpty ? " " : ""}'
+                    '${_t("Consulte o guia de configuração do servidor FTP.", "See FTP server configuration guide.")}';
             _showSuccess(
               _t(
-                'Conexão FTP estabelecida com sucesso!',
-                'FTP connection established successfully!',
+                'Conexão FTP estabelecida com sucesso!$restInfo$warningInfo',
+                'FTP connection established successfully!$restInfo$warningInfo',
               ),
             );
           } else {
@@ -1533,7 +1764,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
         },
       );
     } on Object catch (e) {
-      if (mounted) _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
+      if (mounted) {
+        _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -1616,7 +1849,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
         },
       );
     } on Object catch (e) {
-      if (mounted) _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
+      if (mounted) {
+        _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -1696,6 +1931,19 @@ class _DestinationDialogState extends State<DestinationDialog> {
           'retentionDays': retentionDays,
         });
       case DestinationType.ftp:
+        final connTimeoutStr = _connectionTimeoutSecondsController.text.trim();
+        final connTimeout = connTimeoutStr.isEmpty
+            ? null
+            : int.tryParse(connTimeoutStr);
+        final uploadTimeoutStr =
+            _uploadTimeoutMinutesController.text.trim();
+        final uploadTimeout = uploadTimeoutStr.isEmpty
+            ? null
+            : int.tryParse(uploadTimeoutStr);
+        final maxAttemptsStr = _maxAttemptsFtpController.text.trim();
+        final maxAttempts = maxAttemptsStr.isEmpty
+            ? null
+            : int.tryParse(maxAttemptsStr);
         configJson = jsonEncode({
           'host': _ftpHostController.text.trim(),
           'port': int.parse(_ftpPortController.text),
@@ -1703,6 +1951,17 @@ class _DestinationDialogState extends State<DestinationDialog> {
           'password': _ftpPasswordController.text,
           'remotePath': _ftpRemotePathController.text.trim(),
           'useFtps': _useFtps,
+          'enableResume': _enableResumeFtp,
+          'keepPartOnCancel': _keepPartOnCancelFtp,
+          'whenResumeNotSupported': _whenResumeNotSupportedFtp.name,
+          ...? (maxAttempts != null ? {'maxAttempts': maxAttempts} : null),
+          'enableVerboseLog': _enableVerboseLogFtp,
+          ...? (connTimeout != null
+              ? {'connectionTimeoutSeconds': connTimeout}
+              : null),
+          ...? (uploadTimeout != null
+              ? {'uploadTimeoutMinutes': uploadTimeout}
+              : null),
           'retentionDays': retentionDays,
         });
       case DestinationType.googleDrive:

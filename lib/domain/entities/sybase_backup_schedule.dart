@@ -114,8 +114,7 @@ class SybaseBackupSchedule extends Schedule {
       updatedAt: baseSchedule.updatedAt,
       backupTimeout: baseSchedule.backupTimeout,
       verifyTimeout: baseSchedule.verifyTimeout,
-      sybaseBackupOptions:
-          sybaseBackupOptions ?? this.sybaseBackupOptions,
+      sybaseBackupOptions: sybaseBackupOptions ?? this.sybaseBackupOptions,
     );
   }
 }

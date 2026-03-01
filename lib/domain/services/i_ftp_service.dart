@@ -7,10 +7,33 @@ class FtpUploadResult {
     required this.remotePath,
     required this.fileSize,
     required this.duration,
+    this.sha256,
+    this.hashDurationMs,
   });
   final String remotePath;
   final int fileSize;
   final Duration duration;
+  final String? sha256;
+  final int? hashDurationMs;
+}
+
+class FtpConnectionTestResult {
+  const FtpConnectionTestResult({
+    required this.connected,
+    this.supportsRestStream,
+    this.canWrite,
+    this.canRename,
+  });
+  final bool connected;
+  final bool? supportsRestStream;
+  final bool? canWrite;
+  final bool? canRename;
+
+  bool get ok => connected;
+
+  bool get hasCompatibilityWarnings =>
+      connected &&
+      (canWrite == false || canRename == false);
 }
 
 abstract class IFtpService {
@@ -18,12 +41,16 @@ abstract class IFtpService {
     required String sourceFilePath,
     required FtpDestinationConfig config,
     String? customFileName,
-    int maxRetries = 3,
+    int maxRetries = 1,
     UploadProgressCallback? onProgress,
     bool Function()? isCancelled,
+    String? runId,
+    String? destinationId,
   });
 
-  Future<rd.Result<bool>> testConnection(FtpDestinationConfig config);
+  Future<rd.Result<FtpConnectionTestResult>> testConnection(
+    FtpDestinationConfig config,
+  );
 
   Future<rd.Result<int>> cleanOldBackups({
     required FtpDestinationConfig config,

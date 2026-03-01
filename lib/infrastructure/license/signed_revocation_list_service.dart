@@ -25,20 +25,20 @@ class SignedRevocationListService implements IRevocationChecker {
   factory SignedRevocationListService.forTesting({
     required List<int> publicKeyBytes,
     required String revocationListJson,
-  }) =>
-      SignedRevocationListService._(
-        publicKeyBytes: publicKeyBytes,
-        injectedRevocationList: revocationListJson,
-      );
+  }) => SignedRevocationListService._(
+    publicKeyBytes: publicKeyBytes,
+    injectedRevocationList: revocationListJson,
+  );
 
   SignedRevocationListService._({
     List<int>? publicKeyBytes,
     String? injectedRevocationList,
-  })  : _verifier = publicKeyBytes != null &&
-                publicKeyBytes.length == _ed25519PublicKeySize
-            ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
-            : null,
-        _injectedRevocationList = injectedRevocationList;
+  }) : _verifier =
+           publicKeyBytes != null &&
+               publicKeyBytes.length == _ed25519PublicKeySize
+           ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
+           : null,
+       _injectedRevocationList = injectedRevocationList;
 
   static String? _readEnvOrNull(String key) {
     try {
@@ -184,10 +184,8 @@ class SignedRevocationListService implements IRevocationChecker {
       );
     }
 
-    final keys = (data['revokedDeviceKeys'] as List?)
-            ?.whereType<String>()
-            .toSet() ??
-        {};
+    final keys =
+        (data['revokedDeviceKeys'] as List?)?.whereType<String>().toSet() ?? {};
 
     final expiresAtStr = data['expiresAt'] as String?;
     if (expiresAtStr != null) {

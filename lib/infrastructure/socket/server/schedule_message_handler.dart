@@ -323,8 +323,9 @@ class ScheduleMessageHandler {
         return;
       }
 
-      final destinationsResult =
-          await _destinationRepository.getByIds(schedule.destinationIds);
+      final destinationsResult = await _destinationRepository.getByIds(
+        schedule.destinationIds,
+      );
       if (destinationsResult.isError()) {
         _progressNotifier.failBackup('Não foi possível carregar destinos');
         await sendToClient(
@@ -337,14 +338,15 @@ class ScheduleMessageHandler {
         return;
       }
       final destinations = destinationsResult.getOrNull()!;
-      final policyResult =
-          await _licensePolicyService.validateExecutionCapabilities(
-        schedule,
-        destinations,
-      );
+      final policyResult = await _licensePolicyService
+          .validateExecutionCapabilities(
+            schedule,
+            destinations,
+          );
       if (policyResult.isError()) {
         final failure = policyResult.exceptionOrNull();
-        final errorMessage = failure?.toString() ?? 'Licença não permite execução';
+        final errorMessage =
+            failure?.toString() ?? 'Licença não permite execução';
         _progressNotifier.failBackup(errorMessage);
         await sendToClient(
           clientId,

@@ -225,23 +225,23 @@ class SybaseBackupService implements ISybaseBackupService {
             '$dbisqlStrategyIndex/${dbisqlConnections.length}',
           );
 
-        final backupSql = _buildBackupSql(
-          effectiveType,
-          escapedBackupPath,
-          effectiveLogMode,
-          options,
-        );
-        if (backupSql == null) {
-          return const rd.Failure(
-            BackupFailure(
-              message:
-                  'Sybase SQL Anywhere não suporta tipos convertidos. '
-                  'Use o tipo de backup nativo correspondente.',
-            ),
+          final backupSql = _buildBackupSql(
+            effectiveType,
+            escapedBackupPath,
+            effectiveLogMode,
+            options,
           );
-        }
+          if (backupSql == null) {
+            return const rd.Failure(
+              BackupFailure(
+                message:
+                    'Sybase SQL Anywhere não suporta tipos convertidos. '
+                    'Use o tipo de backup nativo correspondente.',
+              ),
+            );
+          }
 
-        final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
+          final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
 
           result = await _processService.run(
             executable: 'dbisql',
@@ -603,11 +603,12 @@ class SybaseBackupService implements ISybaseBackupService {
           sybaseOptionsJson['backupMethod'] = 'dbbackup';
           sybaseOptionsJson['connectionStrategy'] =
               connectionStrategies[dbbackupStrategyIndex]['name'] ??
-                  'dbbackup #${dbbackupStrategyIndex + 1}';
+              'dbbackup #${dbbackupStrategyIndex + 1}';
         } else {
           sybaseOptionsJson['backupMethod'] = 'dbisql';
-          sybaseOptionsJson['connectionStrategy'] =
-              _dbisqlStrategyName(dbisqlStrategyIndex);
+          sybaseOptionsJson['connectionStrategy'] = _dbisqlStrategyName(
+            dbisqlStrategyIndex,
+          );
         }
 
         final metrics = BackupMetrics(
@@ -755,7 +756,9 @@ class SybaseBackupService implements ISybaseBackupService {
     bool truncateLog,
   ) {
     if (options.logBackupMode != null) return options.logBackupMode!;
-    return truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only;
+    return truncateLog
+        ? SybaseLogBackupMode.truncate
+        : SybaseLogBackupMode.only;
   }
 
   static List<String> _buildDbbackupLogArgs(SybaseLogBackupMode mode) {
@@ -778,8 +781,7 @@ class SybaseBackupService implements ISybaseBackupService {
     switch (effectiveType) {
       case BackupType.full:
       case BackupType.fullSingle:
-        final base =
-            "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
+        final base = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
         final checkpointClause = options.buildCheckpointLogClause();
         final autoTuneClause = options.buildAutoTuneWritersClause();
         return base + checkpointClause + autoTuneClause;

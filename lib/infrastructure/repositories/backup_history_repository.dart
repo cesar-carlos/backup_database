@@ -79,7 +79,9 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
   }
 
   @override
-  Future<rd.Result<BackupHistory>> updateIfRunning(BackupHistory history) async {
+  Future<rd.Result<BackupHistory>> updateIfRunning(
+    BackupHistory history,
+  ) async {
     try {
       if (!BackupHistoryStateMachine.isTerminal(history.status)) {
         return rd.Failure(
@@ -91,8 +93,9 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
         );
       }
       final companion = _toCompanion(history);
-      final updated = await _database.backupHistoryDao
-          .updateHistoryIfRunning(companion);
+      final updated = await _database.backupHistoryDao.updateHistoryIfRunning(
+        companion,
+      );
       if (updated == 0) {
         final current = await _database.backupHistoryDao.getById(history.id);
         if (current != null) {

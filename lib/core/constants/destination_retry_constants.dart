@@ -11,6 +11,7 @@ class DestinationRetryConstants {
 class StepTimeoutConstants {
   StepTimeoutConstants._();
 
+  static const Duration ftpConnection = Duration(seconds: 15);
   static const Duration uploadFtp = Duration(minutes: 60);
   static const Duration uploadHttp = Duration(minutes: 5);
   static const Duration compression = Duration(hours: 2);
@@ -38,4 +39,6 @@ class UploadChunkConstants {
   static const int dropboxResumableChunkSize = 4 * 1024 * 1024;
   static const int localCopyChunkSize = 1024 * 1024;
   static const int httpUploadChunkSize = 512 * 1024;
+
+  static const int ftpUploadBufferSize = 256 * 1024;
 }

@@ -55,6 +55,10 @@ app.*.map.json
 .env.backup
 .server.pid
 
+# FTP metrics parser output
+ftp_metrics_export.csv
+ftp_metrics_export.json
+
 # IDE and Editor
 .metadata
 

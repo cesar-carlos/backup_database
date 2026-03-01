@@ -24,4 +24,6 @@ class FailureCodes {
   static const String scheduleNotFound = 'SCHEDULE_NOT_FOUND';
   static const String scheduleAlreadyRunning = 'SCHEDULE_ALREADY_RUNNING';
   static const String cleanupFailed = 'CLEANUP_FAILED';
+  static const String ftpIntegrityValidationFailed =
+      'FTP_INTEGRITY_VALIDATION_FAILED';
 }

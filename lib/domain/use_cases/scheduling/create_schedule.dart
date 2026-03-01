@@ -39,17 +39,18 @@ class CreateSchedule {
       );
     }
 
-    final destinationsResult =
-        await _destinationRepository.getByIds(schedule.destinationIds);
+    final destinationsResult = await _destinationRepository.getByIds(
+      schedule.destinationIds,
+    );
     if (destinationsResult.isError()) {
       return rd.Failure(destinationsResult.exceptionOrNull()!);
     }
     final destinations = destinationsResult.getOrNull()!;
-    final policyResult =
-        await _licensePolicyService.validateExecutionCapabilities(
-      schedule,
-      destinations,
-    );
+    final policyResult = await _licensePolicyService
+        .validateExecutionCapabilities(
+          schedule,
+          destinations,
+        );
     if (policyResult.isError()) {
       return rd.Failure(policyResult.exceptionOrNull()!);
     }

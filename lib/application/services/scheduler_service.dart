@@ -379,6 +379,17 @@ class SchedulerService implements ISchedulerService {
             destinations: destinations,
             isCancelled: () => _cancelRequestedSchedules.contains(schedule.id),
             backupId: backupIdForPath,
+            onProgress: (double p, [String? stepOverride]) {
+              try {
+                _progressNotifier.updateProgress(
+                  step: stepOverride ?? 'Enviando para destino',
+                  message: '${(p * 100).toInt()}%',
+                  progress: 0.85 + p * 0.10,
+                );
+              } on Object catch (e, s) {
+                LoggerService.debug('Erro ao atualizar progresso: $e', e, s);
+              }
+            },
           );
       uploadStopwatch.stop();
       final uploadDuration = uploadStopwatch.elapsed;

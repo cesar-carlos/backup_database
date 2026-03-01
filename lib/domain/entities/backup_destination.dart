@@ -1,3 +1,5 @@
+import 'package:backup_database/core/constants/destination_retry_constants.dart'
+    show DestinationRetryConstants, StepTimeoutConstants;
 import 'package:uuid/uuid.dart';
 
 enum DestinationType { local, ftp, googleDrive, dropbox, nextcloud }
@@ -80,6 +82,8 @@ class LocalDestinationConfig {
   };
 }
 
+enum FtpWhenResumeNotSupported { fallback, fail }
+
 class FtpDestinationConfig {
   const FtpDestinationConfig({
     required this.host,
@@ -89,10 +93,25 @@ class FtpDestinationConfig {
     this.port = 21,
     this.useFtps = false,
     this.retentionDays = 30,
+    this.enableResume = true,
+    this.keepPartOnCancel = true,
+    this.maxAttempts,
+    this.whenResumeNotSupported = FtpWhenResumeNotSupported.fallback,
+    this.enableVerboseLog = false,
+    this.connectionTimeoutSeconds,
+    this.uploadTimeoutMinutes,
     this.protectedBackupIdShortPrefixes = const {},
   });
 
   factory FtpDestinationConfig.fromJson(Map<String, dynamic> json) {
+    final whenStr = json['whenResumeNotSupported'] as String?;
+    final whenResume = whenStr != null
+        ? FtpWhenResumeNotSupported.values.firstWhere(
+            (e) => e.name == whenStr,
+            orElse: () => FtpWhenResumeNotSupported.fallback,
+          )
+        : FtpWhenResumeNotSupported.fallback;
+
     return FtpDestinationConfig(
       host: json['host'] as String,
       port: json['port'] as int? ?? 21,
@@ -101,6 +120,14 @@ class FtpDestinationConfig {
       remotePath: json['remotePath'] as String,
       useFtps: json['useFtps'] as bool? ?? false,
       retentionDays: json['retentionDays'] as int? ?? 30,
+      enableResume: json['enableResume'] as bool? ?? true,
+      keepPartOnCancel: json['keepPartOnCancel'] as bool? ?? true,
+      maxAttempts: json['maxAttempts'] as int?,
+      whenResumeNotSupported: whenResume,
+      enableVerboseLog: json['enableVerboseLog'] as bool? ?? false,
+      connectionTimeoutSeconds:
+          json['connectionTimeoutSeconds'] as int?,
+      uploadTimeoutMinutes: json['uploadTimeoutMinutes'] as int?,
     );
   }
   final String host;
@@ -110,17 +137,43 @@ class FtpDestinationConfig {
   final String remotePath;
   final bool useFtps;
   final int retentionDays;
+  final bool enableResume;
+  final bool keepPartOnCancel;
+  final int? maxAttempts;
+  final FtpWhenResumeNotSupported whenResumeNotSupported;
+  final bool enableVerboseLog;
+  final int? connectionTimeoutSeconds;
+  final int? uploadTimeoutMinutes;
   final Set<String> protectedBackupIdShortPrefixes;
 
+  int get effectiveMaxAttempts =>
+      maxAttempts ?? DestinationRetryConstants.maxAttempts;
+
+  int get effectiveConnectionTimeoutSeconds =>
+      connectionTimeoutSeconds ??
+      StepTimeoutConstants.ftpConnection.inSeconds;
+
+  int get effectiveUploadTimeoutSeconds =>
+      (uploadTimeoutMinutes ?? StepTimeoutConstants.uploadFtp.inMinutes) * 60;
+
   Map<String, dynamic> toJson() => {
-    'host': host,
-    'port': port,
-    'username': username,
-    'password': password,
-    'remotePath': remotePath,
-    'useFtps': useFtps,
-    'retentionDays': retentionDays,
-  };
+        'host': host,
+        'port': port,
+        'username': username,
+        'password': password,
+        'remotePath': remotePath,
+        'useFtps': useFtps,
+        'retentionDays': retentionDays,
+        'enableResume': enableResume,
+        'keepPartOnCancel': keepPartOnCancel,
+        if (maxAttempts != null) 'maxAttempts': maxAttempts,
+        'whenResumeNotSupported': whenResumeNotSupported.name,
+        'enableVerboseLog': enableVerboseLog,
+        if (connectionTimeoutSeconds != null)
+          'connectionTimeoutSeconds': connectionTimeoutSeconds,
+        if (uploadTimeoutMinutes != null)
+          'uploadTimeoutMinutes': uploadTimeoutMinutes,
+      };
 }
 
 class GoogleDriveDestinationConfig {

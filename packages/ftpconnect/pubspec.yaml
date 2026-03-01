@@ -1,0 +1,10 @@
+name: ftpconnect
+description: FTP Connect Library with resume support (REST + STOR). Fork of ftpconnect 2.0.10.
+version: 2.0.10+resume1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  path: ^1.9.1
+  intl: ^0.20.2

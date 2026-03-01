@@ -62,7 +62,9 @@ class CachedBackupHistoryRepository implements IBackupHistoryRepository {
   }
 
   @override
-  Future<rd.Result<BackupHistory>> updateIfRunning(BackupHistory history) async {
+  Future<rd.Result<BackupHistory>> updateIfRunning(
+    BackupHistory history,
+  ) async {
     final result = await _repository.updateIfRunning(history);
     if (result.isSuccess()) {
       _cache.clear();
