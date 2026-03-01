@@ -307,6 +307,9 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _duplicatePostgresConfig(PostgresConfig config) async {
+    final confirmed = await _showDuplicateConfirmDialog(config.name);
+    if (!confirmed || !mounted) return;
+
     final provider = context.read<PostgresConfigProvider>();
     final success = await provider.duplicateConfig(config);
 

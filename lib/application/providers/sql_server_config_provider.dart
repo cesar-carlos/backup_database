@@ -49,7 +49,7 @@ class SqlServerConfigProvider extends ChangeNotifier {
         },
       );
     } on Object catch (e) {
-      _error = 'Erro ao carregar configuraÃ§Ãµes: $e';
+      _error = 'Erro ao carregar configurações: $e';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -94,7 +94,7 @@ class SqlServerConfigProvider extends ChangeNotifier {
         },
       );
     } on Object catch (e) {
-      _error = 'Erro ao criar configuraÃ§Ã£o: $e';
+      _error = 'Erro ao criar configuração: $e';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -139,7 +139,7 @@ class SqlServerConfigProvider extends ChangeNotifier {
         },
       );
     } on Object catch (e) {
-      _error = 'Erro ao atualizar configuraÃ§Ã£o: $e';
+      _error = 'Erro ao atualizar configuração: $e';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -151,8 +151,8 @@ class SqlServerConfigProvider extends ChangeNotifier {
     if (schedulesResult.isError()) {
       final failure = schedulesResult.exceptionOrNull();
       _error = failure is Failure
-          ? 'NÃ£o foi possÃ­vel validar dependÃªncias: ${failure.message}'
-          : 'NÃ£o foi possÃ­vel validar dependÃªncias antes da exclusÃ£o.';
+          ? 'Não foi possível validar dependências: ${failure.message}'
+          : 'Não foi possível validar dependências antes da exclusão.';
       notifyListeners();
       return false;
     }
@@ -160,7 +160,7 @@ class SqlServerConfigProvider extends ChangeNotifier {
     final linkedSchedules = schedulesResult.getOrNull() ?? [];
     if (linkedSchedules.isNotEmpty) {
       _error =
-          'HÃ¡ agendamentos vinculados a esta configuraÃ§Ã£o. '
+          'Há agendamentos vinculados a esta configuração. '
           'Remova-os antes de excluir.';
       notifyListeners();
       return false;
@@ -188,7 +188,7 @@ class SqlServerConfigProvider extends ChangeNotifier {
         },
       );
     } on Object catch (e) {
-      _error = 'Erro ao deletar configuraÃ§Ã£o: $e';
+      _error = 'Erro ao deletar configuração: $e';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -197,7 +197,7 @@ class SqlServerConfigProvider extends ChangeNotifier {
 
   Future<bool> duplicateConfig(SqlServerConfig source) async {
     final copy = SqlServerConfig(
-      name: '${source.name} (cÃ³pia)',
+      name: '${source.name} (cópia)',
       server: source.server,
       database: source.database,
       username: source.username,

@@ -157,6 +157,16 @@ class DestinationProvider extends ChangeNotifier {
     );
   }
 
+  Future<bool> duplicateDestination(BackupDestination source) async {
+    final copy = BackupDestination(
+      name: '${source.name} (cópia)',
+      type: source.type,
+      config: source.config,
+      enabled: source.enabled,
+    );
+    return createDestination(copy);
+  }
+
   Future<bool> toggleEnabled(String id, bool enabled) async {
     final destination = _destinations.firstWhere((d) => d.id == id);
     final updated = destination.copyWith(enabled: enabled);

@@ -92,6 +92,8 @@ class DestinationsPage extends StatelessWidget {
                     destinations: provider.destinations,
                     onEdit: (destination) =>
                         _showDestinationDialog(context, destination),
+                    onDuplicate: (destination) =>
+                        _duplicateDestination(context, destination),
                     onDelete: (id) => _confirmDelete(context, id),
                     onToggleEnabled: (destination, enabled) =>
                         provider.toggleEnabled(destination.id, enabled),
@@ -133,6 +135,48 @@ class DestinationsPage extends StatelessWidget {
           message: provider.error ?? 'Erro ao salvar destino',
         );
       }
+    }
+  }
+
+  Future<void> _duplicateDestination(
+    BuildContext context,
+    BackupDestination destination,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => ContentDialog(
+        title: const Text('Duplicar Destino'),
+        content: Text(
+          'Tem certeza que deseja duplicar "${destination.name}"?',
+        ),
+        actions: [
+          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
+          ActionButton(
+            label: 'Duplicar',
+            icon: FluentIcons.copy,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (!(confirmed ?? false) || !context.mounted) return;
+
+    final provider = context.read<DestinationProvider>();
+    final success = await provider.duplicateDestination(destination);
+
+    if (!context.mounted) return;
+
+    if (success) {
+      await MessageModal.showSuccess(
+        context,
+        message: 'Destino duplicado com sucesso!',
+      );
+    } else {
+      await MessageModal.showError(
+        context,
+        message: provider.error ?? 'Erro ao duplicar destino',
+      );
     }
   }
 

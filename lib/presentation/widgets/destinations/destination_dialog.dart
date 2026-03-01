@@ -431,11 +431,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
           prefixIcon: const Icon(FluentIcons.globe),
           validator: (value) {
             final text = value?.trim() ?? '';
-            if (text.isEmpty) return _t('URL e obrigatoria', 'URL is required');
+            if (text.isEmpty) return _t('URL é obrigatória', 'URL is required');
 
             final uri = Uri.tryParse(text);
             if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-              return _t('URL invalida', 'Invalid URL');
+              return _t('URL inválida', 'Invalid URL');
             }
             if (uri.scheme != 'https' && uri.scheme != 'http') {
               return _t('Use http ou https', 'Use http or https');
@@ -493,7 +493,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               return _nextcloudAuthMode == NextcloudAuthMode.appPassword
                   ? _t('App Password é obrigatório', 'App Password is required')
                   : _t(
-                      'Senha do usuario e obrigatoria',
+                      'Senha do usuário é obrigatória',
                       'User password is required',
                     );
             }
@@ -778,6 +778,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return Column(
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               flex: 3,
@@ -1459,7 +1460,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       return;
     }
     if (_ftpPortController.text.trim().isEmpty) {
-      _showError(_t('Porta e obrigatoria', 'Port is required'));
+      _showError(_t('Porta é obrigatória', 'Port is required'));
       return;
     }
     if (_ftpUsernameController.text.trim().isEmpty) {
@@ -1467,7 +1468,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       return;
     }
     if (_ftpPasswordController.text.trim().isEmpty) {
-      _showError(_t('Senha e obrigatoria', 'Password is required'));
+      _showError(_t('Senha é obrigatória', 'Password is required'));
       return;
     }
 
@@ -1480,7 +1481,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       if (port == null || port < 1 || port > 65535) {
         _showError(
           _t(
-            'Porta invalida. Use um valor entre 1 e 65535',
+            'Porta inválida. Use um valor entre 1 e 65535',
             'Invalid port. Use a value between 1 and 65535',
           ),
         );
@@ -1545,7 +1546,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Future<void> _testNextcloudConnection() async {
     if (_nextcloudServerUrlController.text.trim().isEmpty) {
       _showError(
-        _t('URL do Nextcloud e obrigatoria', 'Nextcloud URL is required'),
+        _t('URL do Nextcloud é obrigatória', 'Nextcloud URL is required'),
       );
       return;
     }
@@ -1557,7 +1558,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       _showError(
         _nextcloudAuthMode == NextcloudAuthMode.appPassword
             ? _t('App Password é obrigatório', 'App Password is required')
-            : _t('Senha do usuario e obrigatoria', 'User password is required'),
+            : _t('Senha do usuário é obrigatória', 'User password is required'),
       );
       return;
     }

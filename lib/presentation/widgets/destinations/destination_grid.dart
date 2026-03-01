@@ -7,6 +7,7 @@ class DestinationGrid extends StatelessWidget {
   const DestinationGrid({
     required this.destinations,
     required this.onEdit,
+    required this.onDuplicate,
     required this.onDelete,
     required this.onToggleEnabled,
     super.key,
@@ -14,9 +15,10 @@ class DestinationGrid extends StatelessWidget {
 
   final List<BackupDestination> destinations;
   final ValueChanged<BackupDestination> onEdit;
+  final ValueChanged<BackupDestination> onDuplicate;
   final ValueChanged<String> onDelete;
   final void Function(BackupDestination destination, bool enabled)
-  onToggleEnabled;
+      onToggleEnabled;
 
   String _t(BuildContext context, String pt, String en) {
     final isPt =
@@ -96,6 +98,11 @@ class DestinationGrid extends StatelessWidget {
             icon: FluentIcons.edit,
             tooltip: _t(context, 'Editar', 'Edit'),
             onPressed: onEdit,
+          ),
+          AppDataGridAction<BackupDestination>(
+            icon: FluentIcons.copy,
+            tooltip: _t(context, 'Duplicar', 'Duplicate'),
+            onPressed: onDuplicate,
           ),
           AppDataGridAction<BackupDestination>(
             icon: FluentIcons.delete,

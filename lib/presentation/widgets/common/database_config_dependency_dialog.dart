@@ -1,6 +1,5 @@
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/presentation/widgets/common/action_button.dart';
 import 'package:backup_database/presentation/widgets/common/app_card.dart';
 import 'package:backup_database/presentation/widgets/common/cancel_button.dart';
 import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
@@ -134,12 +133,11 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
           onPressed: () =>
               Navigator.of(context).pop(DependencyDialogAction.close),
         ),
-        ActionButton(
-          label: texts.goToSchedules,
-          icon: FluentIcons.calendar,
+        FilledButton(
           onPressed: () => Navigator.of(
             context,
           ).pop(DependencyDialogAction.goToSchedules),
+          child: Text(texts.goToSchedules),
         ),
       ],
     );

@@ -1,6 +1,5 @@
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/presentation/widgets/common/action_button.dart';
 import 'package:backup_database/presentation/widgets/common/app_card.dart';
 import 'package:backup_database/presentation/widgets/common/cancel_button.dart';
 import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
@@ -130,12 +129,11 @@ class DestinationDependencyDialog extends StatelessWidget {
             context,
           ).pop(DestinationDependencyDialogAction.close),
         ),
-        ActionButton(
-          label: texts.goToSchedules,
-          icon: FluentIcons.calendar,
+        FilledButton(
           onPressed: () => Navigator.of(context).pop(
             DestinationDependencyDialogAction.goToSchedules,
           ),
+          child: Text(texts.goToSchedules),
         ),
       ],
     );
