@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -27,7 +28,7 @@ void main() {
   });
 
   group('TempDirectoryService', () {
-    test('getDownloadsDirectory cria pasta se não existir', () async {
+    test('getDownloadsDirectory cria pasta se nao existir', () async {
       final downloadsDir = await tempService.getDownloadsDirectory();
 
       expect(await downloadsDir.exists(), isTrue);
@@ -45,10 +46,13 @@ void main() {
       },
     );
 
-    test('getTempDirectory retorna temp do sistema por padrão', () async {
+    test('getTempDirectory retorna temp do sistema por padrao', () async {
       final tempDir = await tempService.getTempDirectory();
 
-      expect(tempDir.path, contains('Temp'));
+      expect(
+        p.normalize(tempDir.path),
+        equals(p.normalize(Directory.systemTemp.path)),
+      );
     });
 
     test('setCustomTempPath valida e salva path customizado', () async {
@@ -61,9 +65,14 @@ void main() {
       expect(savedPath, equals(customDir.path));
     });
 
-    test('setCustomTempPath retorna false para path inválido', () async {
-      const invalidPath = r'C:\Invalid<>Path\That\Cannot\Be\Created';
-      final result = await tempService.setCustomTempPath(invalidPath);
+    test('setCustomTempPath retorna false para path invalido', () async {
+      final invalidPathAsFile = File(
+        p.join(testTempDir.path, 'not_a_directory.txt'),
+      );
+      await invalidPathAsFile.writeAsString('invalid');
+      final result = await tempService.setCustomTempPath(
+        invalidPathAsFile.path,
+      );
 
       expect(result, isFalse);
     });
@@ -77,7 +86,7 @@ void main() {
       expect(tempDir.path, equals(customDir.path));
     });
 
-    test('clearCustomTempPath remove configuração customizada', () async {
+    test('clearCustomTempPath remove configuracao customizada', () async {
       final customDir = await testTempDir.createTemp('to_clear_');
       await tempService.setCustomTempPath(customDir.path);
       expect(await tempService.getCustomTempPath(), isNotNull);
@@ -95,24 +104,27 @@ void main() {
       final tempDir = await tempService.getTempDirectory();
 
       expect(tempDir.path, isNot(equals(customDir.path)));
-      expect(tempDir.path, contains('Temp'));
+      expect(
+        p.normalize(tempDir.path),
+        equals(p.normalize(Directory.systemTemp.path)),
+      );
     });
 
-    test('clearCache limpa cache de diretórios', () async {
+    test('clearCache limpa cache de diretorios', () async {
       await tempService.getDownloadsDirectory();
       tempService.clearCache();
 
-      // Não deve lançar erro ao chamar novamente
+      // Nao deve lancar erro ao chamar novamente
       final dir = await tempService.getDownloadsDirectory();
       expect(dir, isNotNull);
     });
 
     test(
-      '_isValidDirectory retorna true para diretório com permissão',
+      '_isValidDirectory retorna true para diretorio com permissao',
       () async {
         final validDir = await testTempDir.createTemp('valid_');
 
-        // Método privado, testado indiretamente via setCustomTempPath
+        // Metodo privado, testado indiretamente via setCustomTempPath
         final result = await tempService.setCustomTempPath(validDir.path);
 
         expect(result, isTrue);
