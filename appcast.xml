@@ -2,6 +2,12 @@
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
     <item>
+      <title>Version 2.3.0</title>
+      <pubDate>Sun, 01 Mar 2026 19:00:31 +0000</pubDate>
+      <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.3.0&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.3.0/BackupDatabase-Setup-2.3.0.exe" sparkle:version="2.3.0" sparkle:os="windows" length="38282645" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 2.2.9</title>
       <pubDate>Sun, 01 Mar 2026 17:52:34 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.2.9&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
