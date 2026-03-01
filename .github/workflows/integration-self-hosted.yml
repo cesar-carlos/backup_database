@@ -1,0 +1,83 @@
+name: Integration Tests (Self-Hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Which integration suite to run
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - socket
+          - file-transfer
+          - ftp
+      run_real_ftp:
+        description: Run real FTP tests (requires runner FTP config)
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  integration:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Create minimal .env for tests
+        shell: pwsh
+        run: |
+          if (Test-Path ".env.example") {
+            Copy-Item ".env.example" ".env" -Force
+          } else {
+            @(
+              "APP_NAME=Backup Database"
+              "SINGLE_INSTANCE_ENABLED=true"
+            ) | Set-Content ".env"
+          }
+
+      - name: Run selected integration tests
+        shell: pwsh
+        env:
+          SUITE: ${{ inputs.suite }}
+          RUN_REAL_FTP: ${{ inputs.run_real_ftp }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if ($env:RUN_REAL_FTP -eq "true") {
+            $env:RUN_FTP_INTEGRATION = "1"
+          } else {
+            $env:RUN_FTP_INTEGRATION = "0"
+          }
+
+          switch ($env:SUITE) {
+            "all" {
+              flutter test test/integration/socket_integration_test.dart --reporter compact
+              flutter test test/integration/file_transfer_integration_test.dart --reporter compact
+              flutter test test/integration/ftp_integration_test.dart --reporter compact
+            }
+            "socket" {
+              flutter test test/integration/socket_integration_test.dart --reporter compact
+            }
+            "file-transfer" {
+              flutter test test/integration/file_transfer_integration_test.dart --reporter compact
+            }
+            "ftp" {
+              flutter test test/integration/ftp_integration_test.dart --reporter compact
+            }
+            default {
+              throw "Unknown suite: $env:SUITE"
+            }
+          }

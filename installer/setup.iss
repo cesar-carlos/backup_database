@@ -1,4 +1,3 @@
-#pragma codePage(65001)
 #define MyAppName "Backup Database"
 #define MyAppVersion "2.2.7"
 #define MyAppPublisher "Backup Database"
@@ -24,8 +23,8 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-ArchitecturesInstallIn64BitMode=x64
-ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed=x64compatible
 MinVersion=6.3
 CloseApplications=yes
 CloseApplicationsFilter=*.exe
@@ -68,7 +67,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: startup
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: startup
 
 [UninstallDelete]
 Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs
@@ -195,7 +194,6 @@ var
   UninstallExe: String;
   UninstallPath: String;
   ResultCode: Integer;
-  SecondQuotePos: Integer;
 begin
   Result := True;
   VCRedistNeeded := False;
@@ -441,7 +439,7 @@ begin
     EnvPath := ExpandConstant('{app}\.env');
     if FileExists(EnvExamplePath) and not FileExists(EnvPath) then
     begin
-      if FileCopy(EnvExamplePath, EnvPath, False) then
+      if CopyFile(EnvExamplePath, EnvPath, False) then
         Log('Copied .env.example to .env for service mode')
       else
         Log('Warning: Failed to copy .env.example to .env');

@@ -38,13 +38,5 @@ jobs:
       - name: Run unit tests
         run: flutter test test/unit/ --reporter compact
 
-      - name: Run integration tests (FTP)
-        env:
-          RUN_FTP_INTEGRATION: "1"
-        run: flutter test test/integration/ftp_integration_test.dart --reporter compact
-
-      - name: Run integration tests (File Transfer)
-        run: flutter test test/integration/file_transfer_integration_test.dart --reporter compact
-
-      - name: Run integration tests (Socket)
-        run: flutter test test/integration/socket_integration_test.dart --reporter compact
+      - name: Integration tests skipped on GitHub Actions
+        run: echo "Integration tests run only in local/dev environments."

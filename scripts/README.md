@@ -1,191 +1,103 @@
-# Scripts de Manutenção do Banco de Dados
+﻿# Scripts Operacionais
 
-## migrate_database.dart
+Este diretorio reune scripts de suporte para manutencao, metricas e release.
 
-Script completo de migração que preserva todos os dados existentes.
+## Inventario Atual
 
-### O que o script faz:
+| Script | Tipo | Finalidade |
+|---|---|---|
+| `check_database.dart` | Dart | Diagnostico do banco local (somente leitura) |
+| `recreate_database.dart` | Dart | Recria banco local do zero (destrutivo) |
+| `migrate_database.dart` | Dart | Migra banco preservando dados com backup/export |
+| `parse_ftp_metrics.dart` | Dart | Extrai metricas de FTP a partir de logs |
+| `run_parse_ftp_metrics.py` | Python | Wrapper para `parse_ftp_metrics.dart` |
+| `coverage.py` | Python | Executa testes com cobertura e filtro de lcov |
+| `sync_appcast_from_releases.py` | Python | Versao Python do sincronizador de appcast |
+| `update_appcast_manual.py` | Python | Atualiza `appcast.xml` manualmente para uma versao |
 
-1. **Cria backup** do banco atual (`backup_database_backup.db`)
-2. **Exporta dados** para JSON (`backup_export.json`)
-3. **Remove banco antigo** com schema incorreto
-4. **Cria novo banco** com schema correto (v24)
-5. **Importa todos os dados** de volta
-6. **Valida** que os dados foram importados corretamente
+## Banco de Dados
 
-### Como usar:
+### `check_database.dart`
 
-```bash
-# Execute o script
-dart run scripts/migrate_database.dart
-```
-
-### O script irá:
-
-✅ Preservar todos os dados:
-- Configurações de SQL Server
-- Configurações de Sybase
-- Configurações de PostgreSQL
-- Destinos de backup
-- Agendamentos
-- Vínculos Schedule-Destination
-- Histórico de backups
-- Logs de backup
-- Configurações de email
-- Destinatários de email
-- Licenças
-
-✅ Criar arquivos de segurança:
-- `backup_database_backup.db` - Cópia do banco original
-- `backup_export.json` - Dados em formato JSON
-
-### Após a execução:
-
-1. **Teste a aplicação** para garantir que tudo funciona
-2. **Verifique os dados** nas telas de configuração
-3. **Teste criar um agendamento** (o erro de trigger deve estar corrigido)
-4. **Se tudo estiver OK**, você pode deletar os arquivos de backup:
-   - `C:\Users\cesar\Documents\backup_database_backup.db`
-   - `C:\Users\cesar\Documents\backup_export.json`
-
-### Se algo der errado:
-
-O script preserva o banco original como backup. Para restaurar:
-
-```bash
-# 1. Feche a aplicação
-# 2. Navegue até a pasta de documentos
-cd C:\Users\cesar\Documents
-
-# 3. Delete o novo banco
-del backup_database.db
-
-# 4. Renomeie o backup
-ren backup_database_backup.db backup_database.db
-
-# 5. Inicie a aplicação novamente
-```
-
-### Logs do Script:
-
-O script mostra o progresso em tempo real:
-- 🔄 Processo em andamento
-- ✅ Operação concluída
-- ⚠️  Aviso (não crítico)
-- ❌ Erro (operação falhou)
-
-### Exemplo de saída esperada:
-
-```
-🔄 Iniciando migração do banco de dados...
-
-📂 Banco atual: C:\Users\cesar\Documents\backup_database.db
-💾 Backup será salvo em: C:\Users\cesar\Documents\backup_database_backup.db
-📄 Export JSON em: C:\Users\cesar\Documents\backup_export.json
-
-1️⃣  Criando backup do banco atual...
-   ✅ Backup criado
-
-2️⃣  Conectando ao banco existente...
-3️⃣  Exportando dados...
-   ✓ SQL Server configs: 2
-   ✓ Sybase configs: 0
-   ✓ PostgreSQL configs: 0
-   ✓ Destinos: 1
-   ✓ Agendamentos: 0
-   ✅ Dados exportados
-
-📊 Resumo dos dados exportados:
-   • SQL Server configs: 2
-   • Sybase configs: 0
-   • PostgreSQL configs: 0
-   • Destinos: 1
-   • Agendamentos: 0
-   • Histórico: 0
-
-4️⃣  Fechando banco antigo...
-   ✅ Banco fechado
-
-5️⃣  Removendo banco antigo...
-   ✅ Banco antigo removido
-
-6️⃣  Criando novo banco com schema correto...
-   ✅ Novo banco criado com schema v24
-
-7️⃣  Importando dados...
-   ✓ SQL Server configs: 2 importados
-   ✓ Sybase configs: 0 importados
-   ✓ PostgreSQL configs: 0 importados
-   ✓ Destinos: 1 importados
-   ✓ Email configs: 0 importados
-   ✓ Email targets: 0 importados
-   ✓ Licenças: 0 importadas
-   ✓ Agendamentos: 0 importados
-   ✓ Vínculos: 0 importados
-   ✓ Histórico: 0 registros importados
-   ✓ Logs: 0 registros importados
-   ✅ Dados importados com sucesso
-
-8️⃣  Validando dados...
-   ✅ Dados validados
-
-✅ MIGRAÇÃO CONCLUÍDA COM SUCESSO!
-
-📌 Arquivos criados:
-   • Backup: C:\Users\cesar\Documents\backup_database_backup.db
-   • Export: C:\Users\cesar\Documents\backup_export.json
-
-💡 Você pode deletar esses arquivos após confirmar que tudo funciona.
-```
-
-## check_database.dart
-
-Script de diagnóstico que verifica o estado atual do banco sem fazer alterações.
-
-### Como usar:
+Verifica existencia, tamanho, tabelas e versao de schema.
 
 ```bash
 dart run scripts/check_database.dart
 ```
 
-### O que verifica:
+### `migrate_database.dart`
 
-- Existência do banco de dados
-- Versão do schema
-- Todas as tabelas existentes
-- Contagem de registros em cada tabela
-- Triggers de validação
-- Estrutura das tabelas
+Migracao completa com preservacao de dados:
 
-## Troubleshooting
+1. Cria backup (`backup_database_backup.db`)
+2. Exporta dados (`backup_export.json`)
+3. Recria estrutura
+4. Reimporta e valida dados
 
-### Erro: "Database is locked"
+```bash
+dart run scripts/migrate_database.dart
+```
 
-Se o script falhar com erro de "database is locked":
+### `recreate_database.dart`
 
-1. Feche completamente a aplicação
-2. Verifique no Task Manager se não há processos do Flutter rodando
-3. Execute o script novamente
+Recria banco do zero. Use apenas quando for aceitavel perder dados atuais.
 
-### Erro: "permission denied"
+```bash
+dart run scripts/recreate_database.dart
+```
 
-Execute o terminal como administrador.
+## Metricas FTP
 
-### Erro durante a importação
+### `parse_ftp_metrics.dart`
 
-O script continua mesmo se alguns registros falharem na importação. Verifique os logs para ver quais registros tiveram problemas.
+Le logs de FTP e gera resumo com:
 
-### Banco ficou vazio após migração
+- sucessos e erros
+- retomadas (`REST + STOR`)
+- fallbacks para upload completo
+- erros de integridade
 
-Isso não deveria acontecer, mas se acontecer:
+```bash
+dart run scripts/parse_ftp_metrics.dart logs/app.log
+dart run scripts/parse_ftp_metrics.dart --export csv logs/*.log
+```
 
-1. Restaure o backup (veja instruções acima)
-2. Execute novamente o script
-3. Se persistir, abra uma issue com os logs completos
+### `run_parse_ftp_metrics.py`
 
-## Suporte
+Facilita o uso do parser no Windows.
 
-Em caso de problemas, forneça:
-- Logs completos do script
-- Conteúdo do arquivo `backup_export.json`
-- Versão do Dart/Flutter (`dart --version`)
+```bash
+python scripts/run_parse_ftp_metrics.py --log-path logs --export csv
+```
+
+## Cobertura de Testes
+
+### `coverage.py`
+
+Executa testes com cobertura, filtra arquivos gerados/testes e calcula percentual.
+
+```bash
+python scripts/coverage.py
+python scripts/coverage.py --fail-under 70
+python scripts/coverage.py --test-targets "test/unit/application/services/scheduler_service_test.dart,test/unit/infrastructure/external/scheduler/schedule_calculator_test.dart"
+python scripts/coverage.py --dart-mode --fail-under 70
+```
+
+## Appcast / Releases
+
+### `sync_appcast_from_releases.py`
+
+Sincronizam `appcast.xml` com todos os releases publicos do GitHub.
+
+### `update_appcast_manual.py`
+
+Atualizacao manual para um release especifico:
+
+```bash
+python scripts/update_appcast_manual.py <versao> <asset_url> <asset_size_bytes>
+```
+
+## Limpeza de Scripts
+
+- `migrate_database_standalone.dart` foi removido por obsolescencia.
+- Use apenas `migrate_database.dart` como fluxo oficial de migracao.

@@ -1,51 +1,51 @@
-# Test Scripts
+﻿# Test Scripts
 
-Scripts PowerShell para automação de testes do servidor e cliente.
+Scripts Python para automacao de testes do servidor e cliente.
 
-## Localização
+## Localizacao
 
-Todos os scripts estão localizados em `test/scripts/` e devem ser executados a partir da raiz do projeto.
+Todos os scripts estao localizados em `test/scripts/` e devem ser executados a partir da raiz do projeto.
 
 ## Uso
 
 Execute os scripts a partir da raiz do projeto:
 
-```powershell
+```bash
 # Verificar ambiente
-.\test\scripts\verify_env.ps1
+python test/scripts/verify_env.py
 
 # Iniciar servidor
-.\test\scripts\start_server.ps1
+python test/scripts/start_server.py
 
 # Iniciar cliente
-.\test\scripts\start_client.ps1
+python test/scripts/start_client.py
 
 # Iniciar ambos automaticamente
-.\test\scripts\start_both.ps1
+python test/scripts/start_both.py
 
-# Verificar se servidor está rodando
-.\test\scripts\check_server.ps1
+# Verificar se servidor esta rodando
+python test/scripts/check_server.py
 
-# Parar todas as instâncias
-.\test\scripts\stop_all.ps1
+# Parar todas as instancias
+python test/scripts/stop_all.py
 ```
 
-## Scripts Disponíveis
+## Scripts Disponiveis
 
-| Script | Propósito |
+| Script | Proposito |
 |--------|-----------|
-| `verify_env.ps1` | Verifica configuração do ambiente |
-| `start_server.ps1` | Inicia app em modo servidor |
-| `start_client.ps1` | Inicia app em modo cliente |
-| `start_both.ps1` | Inicia server + client automaticamente |
-| `check_server.ps1` | Verifica se server está respondendo |
-| `test_socket.ps1` | Testa configuração de socket |
-| `stop_all.ps1` | Para todas as instâncias do Flutter |
-| `find_logs.ps1` | Encontra e exibe logs recentes |
-| `get_logs.ps1` | Coleta todos os logs para análise |
-| `run_integration_tests.ps1` | Executa testes de integração (Socket, File Transfer) |
-| `run_ftp_integration_tests.ps1` | Executa testes de integração FTP (upload, fallback, testConnection) |
+| `verify_env.py` | Verifica configuracao do ambiente |
+| `start_server.py` | Inicia app em modo servidor |
+| `start_client.py` | Inicia app em modo cliente |
+| `start_both.py` | Inicia server + client automaticamente |
+| `check_server.py` | Verifica se server esta respondendo |
+| `test_socket.py` | Testa configuracao de socket |
+| `stop_all.py` | Para todas as instancias do Flutter |
+| `find_logs.py` | Encontra e exibe logs recentes |
+| `get_logs.py` | Coleta todos os logs para analise |
+| `run_integration_tests.py` | Executa testes de integracao (Socket, File Transfer) |
+| `run_ftp_integration_tests.py` | Executa testes de integracao FTP (upload, fallback, testConnection) |
 
-## Documentação
+## Documentacao
 
-Os scripts acima são usados para testes de integração servidor/cliente. Execute a partir da raiz do projeto.
+Os scripts acima sao usados para testes de integracao servidor/cliente. Execute a partir da raiz do projeto.

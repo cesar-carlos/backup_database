@@ -1,4 +1,4 @@
-# Guia para Criar Release
+﻿# Guia para Criar Release
 
 Este guia consolida o processo completo de criação de releases: versão, tags, build, instalador e publicação no GitHub.
 
@@ -27,7 +27,7 @@ version: 2.2.7
 ### 2. Sincronizar Versão
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+python installer\update_version.py
 ```
 
 Este script atualiza `installer/setup.iss` e `.env` automaticamente.
@@ -36,7 +36,7 @@ Este script atualiza `installer/setup.iss` e `.env` automaticamente.
 
 ```bash
 flutter build windows --release
-powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
+python installer\build_installer.py
 ```
 
 O instalador será criado em `installer\dist\BackupDatabase-Setup-2.2.7.exe`.
@@ -91,7 +91,7 @@ Exemplos: `2.2.7` → `v2.2.7`, `2.2.8` → `v2.2.8`
 
 ```bash
 # Sincronizar versão
-powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+python installer\update_version.py
 
 # Commit e push
 git add pubspec.yaml installer/setup.iss .env
@@ -109,8 +109,8 @@ Depois, crie o release manualmente no GitHub e faça upload do instalador.
 
 | Script | Propósito |
 |--------|-----------|
-| `installer/update_version.ps1` | Sincroniza versão em setup.iss e .env |
-| `installer/build_installer.ps1` | Build Flutter + compila instalador Inno Setup |
+| `installer/update_version.py` | Sincroniza versão em setup.iss e .env |
+| `installer/build_installer.py` | Build Flutter + compila instalador Inno Setup |
 
 ## Verificação de Tags
 
@@ -146,10 +146,14 @@ git push origin v2.2.7
 ## Checklist
 
 - [ ] Versão atualizada no `pubspec.yaml`
-- [ ] `update_version.ps1` executado
+- [ ] `update_version.py` executado
 - [ ] Build Flutter e instalador criados
 - [ ] Executável testado localmente
 - [ ] Commit e push realizados
 - [ ] Tag criada e enviada
 - [ ] Release publicado no GitHub com instalador
 - [ ] GitHub Actions executou com sucesso
+
+
+
+

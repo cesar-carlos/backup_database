@@ -1,4 +1,4 @@
-# Guia Rápido - Criar Instalador
+﻿# Guia Rápido - Criar Instalador
 
 ## Passos Rápidos
 
@@ -6,7 +6,7 @@
 
 ```powershell
 # Execute na raiz do projeto - faz tudo automaticamente!
-powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
+python installer\build_installer.py
 ```
 
 Este script:
@@ -26,7 +26,7 @@ flutter build windows --release
 #### 2. Sincronizar Versão
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+python installer\update_version.py
 ```
 
 #### 3. Criar o Instalador
@@ -70,4 +70,8 @@ powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
 ---
 
 **Pronto para criar seu instalador! 🚀**
+
+
+
+
 

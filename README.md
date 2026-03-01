@@ -1,4 +1,4 @@
-# Backup Database
+﻿# Backup Database
 
 Sistema completo de backup automático para SQL Server e Sybase SQL Anywhere (ASA) no Windows.
 
@@ -374,18 +374,18 @@ flutter test --coverage
 
 Com script padronizado (inclui filtro de arquivos gerados e threshold opcional):
 
-```powershell
+```bash
 # cobertura Flutter (padrão)
-powershell -ExecutionPolicy Bypass -File scripts\coverage.ps1
+python scripts/coverage.py
 
 # cobertura Flutter com mínimo de 70%
-powershell -ExecutionPolicy Bypass -File scripts\coverage.ps1 -FailUnder 70
+python scripts/coverage.py --fail-under 70
 
 # cobertura Flutter só para um arquivo/pasta de teste
-powershell -ExecutionPolicy Bypass -File scripts\coverage.ps1 -TestTargets "test\unit\application\services\scheduler_service_test.dart,test\unit\infrastructure\external\scheduler\schedule_calculator_test.dart"
+python scripts/coverage.py --test-targets "test\unit\application\services\scheduler_service_test.dart,test\unit\infrastructure\external\scheduler\schedule_calculator_test.dart"
 
 # cobertura Dart usando package:coverage (modo Dart puro)
-powershell -ExecutionPolicy Bypass -File scripts\coverage.ps1 -DartMode -FailUnder 70
+python scripts/coverage.py --dart-mode --fail-under 70
 ```
 
 ## 🏗️ Build
@@ -516,3 +516,5 @@ Contribuições são bem-vindas! Por favor:
 ---
 
 **Desenvolvido para facilitar backups no Windows**
+
+

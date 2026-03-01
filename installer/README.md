@@ -1,11 +1,15 @@
-# Instalador - Backup Database
+﻿# Instalador - Backup Database
 
 Este diretório contém os arquivos necessários para criar o instalador do Backup Database.
 
 ## Arquivos
 
 - `setup.iss` - Script principal do Inno Setup para criar o instalador
+- `update_version.py` - Sincroniza versao do `pubspec.yaml` com `setup.iss` e `.env`
+- `build_installer.py` - Fluxo automatizado para gerar instalador
 - `check_dependencies.ps1` - Script PowerShell para verificar dependências do sistema
+- `install_service.ps1` - Instala o aplicativo como serviço do Windows (cliente)
+- `uninstall_service.ps1` - Remove o serviço do Windows (cliente)
 - `README.md` - Este arquivo
 
 ## Pré-requisitos para Criar o Instalador
@@ -49,7 +53,7 @@ Antes de compilar o instalador, **sempre** sincronize a versão do `pubspec.yaml
 
 ```powershell
 # Execute na raiz do projeto
-powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+python installer\update_version.py
 ```
 
 Este script:
@@ -82,11 +86,11 @@ O instalador será criado em: `installer\dist\BackupDatabase-Setup-{versão}.exe
 
 ### Método 3: Script Automatizado (Recomendado)
 
-Use o script `build_installer.ps1` que faz tudo automaticamente:
+Use o script `build_installer.py` que faz tudo automaticamente:
 
 ```powershell
 # Execute na raiz do projeto
-powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
+python installer\build_installer.py
 ```
 
 Este script:
@@ -125,12 +129,12 @@ Para alterar a versão:
 2. Execute o script de sincronização:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File installer\update_version.ps1
+   python installer\update_version.py
    ```
 
 3. Ou use o script automatizado que faz tudo:
    ```powershell
-   powershell -ExecutionPolicy Bypass -File installer\build_installer.ps1
+   python installer\build_installer.py
    ```
 
 **NÃO edite manualmente** o `#define MyAppVersion` no `setup.iss`, pois será sobrescrito pelo script.
@@ -163,7 +167,7 @@ Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opçõ
 
 ## Visual C++ Redistributables
 
-O `build_installer.ps1` baixa automaticamente o `vc_redist.x64.exe` se não existir em `installer\dependencies\`. O instalador inclui e executa o VC++ Redistributables quando necessário no sistema de destino.
+O `build_installer.py` baixa automaticamente o `vc_redist.x64.exe` se não existir em `installer\dependencies\`. O instalador inclui e executa o VC++ Redistributables quando necessário no sistema de destino.
 
 Se o download automático falhar (ex.: sem internet), baixe manualmente de https://aka.ms/vs/17/release/vc_redist.x64.exe e salve em `installer\dependencies\vc_redist.x64.exe`.
 
@@ -214,3 +218,7 @@ Para problemas ou dúvidas:
 ---
 
 **Última atualização**: Versão 2.2.7
+
+
+
+

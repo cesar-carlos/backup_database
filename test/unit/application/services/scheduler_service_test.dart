@@ -366,6 +366,7 @@ void main() {
             destinations: any(named: 'destinations'),
             isCancelled: any(named: 'isCancelled'),
             backupId: any(named: 'backupId'),
+            onProgress: any(named: 'onProgress'),
           ),
         ).thenAnswer((invocation) async {
           final dests = invocation.namedArguments[#destinations]
@@ -443,6 +444,7 @@ void main() {
             destinations: any(named: 'destinations'),
             isCancelled: any(named: 'isCancelled'),
             backupId: any(named: 'backupId'),
+            onProgress: any(named: 'onProgress'),
           ),
         ).thenAnswer(
           (_) async => [

@@ -107,7 +107,12 @@ void main() {
         () => ftpService.upload(
           sourceFilePath: any(named: 'sourceFilePath'),
           config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          maxRetries: any(named: 'maxRetries'),
+          onProgress: any(named: 'onProgress'),
           isCancelled: any(named: 'isCancelled'),
+          runId: any(named: 'runId'),
+          destinationId: any(named: 'destinationId'),
         ),
       );
     });
@@ -117,7 +122,12 @@ void main() {
         () => ftpService.upload(
           sourceFilePath: any(named: 'sourceFilePath'),
           config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          maxRetries: any(named: 'maxRetries'),
+          onProgress: any(named: 'onProgress'),
           isCancelled: any(named: 'isCancelled'),
+          runId: any(named: 'runId'),
+          destinationId: any(named: 'destinationId'),
         ),
       ).thenAnswer(
         (_) async => const rd.Success(
@@ -139,7 +149,12 @@ void main() {
         () => ftpService.upload(
           sourceFilePath: any(named: 'sourceFilePath'),
           config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          maxRetries: any(named: 'maxRetries'),
+          onProgress: any(named: 'onProgress'),
           isCancelled: any(named: 'isCancelled'),
+          runId: any(named: 'runId'),
+          destinationId: any(named: 'destinationId'),
         ),
       ).called(1);
     });
@@ -152,7 +167,12 @@ void main() {
         () => ftpService.upload(
           sourceFilePath: any(named: 'sourceFilePath'),
           config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          maxRetries: any(named: 'maxRetries'),
+          onProgress: any(named: 'onProgress'),
           isCancelled: any(named: 'isCancelled'),
+          runId: any(named: 'runId'),
+          destinationId: any(named: 'destinationId'),
         ),
       ).thenAnswer(
         (_) async => rd.Failure(
@@ -188,7 +208,12 @@ void main() {
         () => ftpService.upload(
           sourceFilePath: any(named: 'sourceFilePath'),
           config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          maxRetries: any(named: 'maxRetries'),
+          onProgress: any(named: 'onProgress'),
           isCancelled: any(named: 'isCancelled'),
+          runId: any(named: 'runId'),
+          destinationId: any(named: 'destinationId'),
         ),
       ).thenAnswer((_) async {
         attempts++;
@@ -238,6 +263,8 @@ void main() {
         () => localDestinationService.upload(
           sourceFilePath: any(named: 'sourceFilePath'),
           config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          onProgress: any(named: 'onProgress'),
         ),
       ).thenAnswer(
         (invocation) async {
@@ -265,6 +292,8 @@ void main() {
         () => localDestinationService.upload(
           sourceFilePath: any(named: 'sourceFilePath'),
           config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          onProgress: any(named: 'onProgress'),
         ),
       ).called(2);
     });
@@ -275,6 +304,8 @@ void main() {
         () => localDestinationService.upload(
           sourceFilePath: any(named: 'sourceFilePath'),
           config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          onProgress: any(named: 'onProgress'),
         ),
       ).thenAnswer(
         (_) async => const rd.Success(
