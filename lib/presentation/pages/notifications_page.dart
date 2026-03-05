@@ -503,6 +503,11 @@ class _EmailTargetsPanel extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
+          const SizedBox(height: 8),
+          const Text(
+            'Configure quais destinatários receberão as notificações e '
+            'quais tipos de evento (sucesso, erro ou aviso) cada um deve receber.',
+          ),
           const SizedBox(height: 16),
           if (selectedConfig == null)
             const EmptyState(
@@ -555,7 +560,6 @@ class _EmailTargetsPanel extends StatelessWidget {
                 ),
                 AppDataGridColumn<EmailNotificationTarget>(
                   label: 'Status',
-                  width: const FlexColumnWidth(1.0),
                   cellBuilder: (context, row) => Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

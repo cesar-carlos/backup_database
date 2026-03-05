@@ -79,9 +79,6 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
   late final Schema<String> _emailSchema;
   late final Schema<String> _recipientEmailSchema;
   late final Schema<String> _passwordSchema;
-  bool _notifyOnSuccess = true;
-  bool _notifyOnError = true;
-  bool _notifyOnWarning = true;
   bool _attachLog = false;
   bool _isTestingConfiguration = false;
   bool _isConnectingOAuth = false;
@@ -136,9 +133,6 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     _oauthAccountEmail = config?.oauthAccountEmail;
     _oauthTokenKey = config?.oauthTokenKey;
     _oauthConnectedAt = config?.oauthConnectedAt;
-    _notifyOnSuccess = config?.notifyOnSuccess ?? true;
-    _notifyOnError = config?.notifyOnError ?? true;
-    _notifyOnWarning = config?.notifyOnWarning ?? true;
     _attachLog = config?.attachLog ?? false;
   }
 
@@ -182,9 +176,6 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
       oauthTokenKey: _oauthTokenKey,
       oauthConnectedAt: _oauthConnectedAt,
       recipients: recipient.isEmpty ? const [] : [recipient],
-      notifyOnSuccess: _notifyOnSuccess,
-      notifyOnError: _notifyOnError,
-      notifyOnWarning: _notifyOnWarning,
       attachLog: _attachLog,
       enabled: current?.enabled ?? true,
       createdAt: current?.createdAt,
@@ -516,26 +507,8 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                   onDisconnect: _disconnectOAuth,
                 ),
                 const SizedBox(height: 24),
-                _NotificationBehaviorSection(
-                  notifyOnSuccess: _notifyOnSuccess,
-                  notifyOnError: _notifyOnError,
-                  notifyOnWarning: _notifyOnWarning,
+                _AttachLogSection(
                   attachLog: _attachLog,
-                  onNotifyOnSuccessChanged: (value) {
-                    setState(() {
-                      _notifyOnSuccess = value;
-                    });
-                  },
-                  onNotifyOnErrorChanged: (value) {
-                    setState(() {
-                      _notifyOnError = value;
-                    });
-                  },
-                  onNotifyOnWarningChanged: (value) {
-                    setState(() {
-                      _notifyOnWarning = value;
-                    });
-                  },
                   onAttachLogChanged: (value) {
                     setState(() {
                       _attachLog = value;
@@ -758,25 +731,13 @@ class _SmtpSettingsSection extends StatelessWidget {
   }
 }
 
-class _NotificationBehaviorSection extends StatelessWidget {
-  const _NotificationBehaviorSection({
-    required this.notifyOnSuccess,
-    required this.notifyOnError,
-    required this.notifyOnWarning,
+class _AttachLogSection extends StatelessWidget {
+  const _AttachLogSection({
     required this.attachLog,
-    required this.onNotifyOnSuccessChanged,
-    required this.onNotifyOnErrorChanged,
-    required this.onNotifyOnWarningChanged,
     required this.onAttachLogChanged,
   });
 
-  final bool notifyOnSuccess;
-  final bool notifyOnError;
-  final bool notifyOnWarning;
   final bool attachLog;
-  final ValueChanged<bool> onNotifyOnSuccessChanged;
-  final ValueChanged<bool> onNotifyOnErrorChanged;
-  final ValueChanged<bool> onNotifyOnWarningChanged;
   final ValueChanged<bool> onAttachLogChanged;
 
   @override
@@ -787,63 +748,20 @@ class _NotificationBehaviorSection extends StatelessWidget {
         const Divider(),
         const SizedBox(height: 16),
         Text(
-          'Comportamento de notificacao',
+          'Anexos',
           style: FluentTheme.of(context).typography.subtitle?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 8),
-        const Text(
-          'Os tipos de aviso são configurados nesta configuração SMTP.',
-        ),
         const SizedBox(height: 16),
-        _NotificationToggleField(
-          label: 'Notificar em caso de sucesso',
-          value: notifyOnSuccess,
-          onChanged: onNotifyOnSuccessChanged,
-        ),
-        const SizedBox(height: 10),
-        _NotificationToggleField(
-          label: 'Notificar em caso de erro',
-          value: notifyOnError,
-          onChanged: onNotifyOnErrorChanged,
-        ),
-        const SizedBox(height: 10),
-        _NotificationToggleField(
-          label: 'Notificar em caso de aviso',
-          value: notifyOnWarning,
-          onChanged: onNotifyOnWarningChanged,
-        ),
-        const SizedBox(height: 10),
-        _NotificationToggleField(
+        InfoLabel(
           label: 'Incluir detalhamento/logs no e-mail',
-          value: attachLog,
-          onChanged: onAttachLogChanged,
+          child: ToggleSwitch(
+            checked: attachLog,
+            onChanged: onAttachLogChanged,
+          ),
         ),
       ],
-    );
-  }
-}
-
-class _NotificationToggleField extends StatelessWidget {
-  const _NotificationToggleField({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return InfoLabel(
-      label: label,
-      child: ToggleSwitch(
-        checked: value,
-        onChanged: onChanged,
-      ),
     );
   }
 }

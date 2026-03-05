@@ -171,7 +171,7 @@ class EmailService implements IEmailService {
     required BackupHistory history,
     String? logPath,
   }) async {
-    if (!config.enabled || !config.notifyOnSuccess) {
+    if (!config.enabled) {
       return const rd.Success(false);
     }
 
@@ -192,7 +192,7 @@ class EmailService implements IEmailService {
     required BackupHistory history,
     String? logPath,
   }) async {
-    if (!config.enabled || !config.notifyOnError) {
+    if (!config.enabled) {
       return const rd.Success(false);
     }
 
@@ -214,7 +214,7 @@ class EmailService implements IEmailService {
     required String warningMessage,
     String? logPath,
   }) async {
-    if (!config.enabled || !config.notifyOnWarning) {
+    if (!config.enabled) {
       return const rd.Success(false);
     }
 

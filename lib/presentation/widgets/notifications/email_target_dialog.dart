@@ -192,7 +192,10 @@ class _TargetStatusSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Defina quais tipos de evento este destinatário recebe.'),
+        const Text(
+          'Defina quais tipos de evento este destinatário receberá. '
+          'Cada destinatário pode ter configurações diferentes de notificação.',
+        ),
         const SizedBox(height: 10),
         _TargetToggleField(
           label: 'Receber notificação de sucesso',

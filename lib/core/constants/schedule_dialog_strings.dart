@@ -43,4 +43,17 @@ class ScheduleDialogStrings {
   static const String cancel = 'Cancelar';
   static const String create = 'Criar';
   static const String save = 'Salvar';
+
+  static const String scriptTabTitle = 'Script SQL Pós-Backup (Opcional)';
+  static const String scriptFieldLabel = 'Script SQL';
+  static const String scriptFieldPlaceholder =
+      "Ex: UPDATE tabela SET status = 'backup_completo' WHERE id = 1;";
+  static const String scriptLicenseBlockedTitle = 'Recurso Bloqueado';
+  static const String scriptLicenseBlockedMessage =
+      'Este recurso requer uma licença válida com permissão para scripts SQL pós-backup.';
+  static const String scriptInfoTitle = 'Informação';
+  static const String scriptInfoMessage =
+      'O script será executado após o backup, usando uma nova conexão '
+      'com o banco configurado. Erros no script não impedem o backup '
+      'de ser considerado bem-sucedido.';
 }

@@ -470,10 +470,10 @@ Data/Hora do teste: ${DateTime.now()}
         : 'backup_error';
 
     if (history.status == BackupStatus.success) {
-      if (!config.notifyOnSuccess || !target.notifyOnSuccess) {
+      if (!target.notifyOnSuccess) {
         final result = _RecipientDeliveryResult.skipped(
           recipientEmail: target.recipientEmail,
-          reason: 'Regra de sucesso desabilitada para configuração/destinatário',
+          reason: 'Regra de sucesso desabilitada para destinatário',
         );
         await _saveBackupDeliveryAuditLog(
           historyId: history.id,
@@ -514,10 +514,10 @@ Data/Hora do teste: ${DateTime.now()}
     }
 
     if (history.status == BackupStatus.error) {
-      if (!config.notifyOnError || !target.notifyOnError) {
+      if (!target.notifyOnError) {
         final result = _RecipientDeliveryResult.skipped(
           recipientEmail: target.recipientEmail,
-          reason: 'Regra de erro desabilitada para configuração/destinatário',
+          reason: 'Regra de erro desabilitada para destinatário',
         );
         await _saveBackupDeliveryAuditLog(
           historyId: history.id,
@@ -577,10 +577,10 @@ Data/Hora do teste: ${DateTime.now()}
     required String databaseName,
     required String warningMessage,
   }) async {
-    if (!config.notifyOnWarning || !target.notifyOnWarning) {
+    if (!target.notifyOnWarning) {
       final result = _RecipientDeliveryResult.skipped(
         recipientEmail: target.recipientEmail,
-        reason: 'Regra de aviso desabilitada para configuração/destinatário',
+        reason: 'Regra de aviso desabilitada para destinatário',
       );
       await _saveBackupDeliveryAuditLog(
         configId: config.id,
