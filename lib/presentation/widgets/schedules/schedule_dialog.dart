@@ -1262,23 +1262,25 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildSectionTitle('Script SQL Pós-Backup (Opcional)'),
+              _buildSectionTitle(ScheduleDialogStrings.scriptTabTitle),
               const SizedBox(height: 16),
               if (!hasPostScript)
                 const InfoBar(
                   severity: InfoBarSeverity.warning,
-                  title: Text('Recurso Bloqueado'),
+                  title: Text(
+                    ScheduleDialogStrings.scriptLicenseBlockedTitle,
+                  ),
                   content: Text(
-                    'Este recurso requer uma licença válida com permissão para scripts SQL pós-backup.',
+                    ScheduleDialogStrings.scriptLicenseBlockedMessage,
                   ),
                 ),
               if (!hasPostScript) const SizedBox(height: 16),
               InfoLabel(
-                label: 'Script SQL',
+                label: ScheduleDialogStrings.scriptFieldLabel,
                 child: TextBox(
                   controller: _postBackupScriptController,
                   placeholder:
-                      "Ex: UPDATE tabela SET status = 'backup_completo' WHERE id = 1;",
+                      ScheduleDialogStrings.scriptFieldPlaceholder,
                   maxLines: 15,
                   minLines: 10,
                   readOnly: !hasPostScript,
@@ -1286,11 +1288,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               ),
               const SizedBox(height: 16),
               const InfoBar(
-                title: Text('Informação'),
+                title: Text(
+                  ScheduleDialogStrings.scriptInfoTitle,
+                ),
                 content: Text(
-                  'O script será executado após o backup, usando uma nova conexão '
-                  'com o banco configurado. Erros no script não impedem o backup '
-                  'de ser considerado bem-sucedido.',
+                  ScheduleDialogStrings.scriptInfoMessage,
                 ),
               ),
             ],

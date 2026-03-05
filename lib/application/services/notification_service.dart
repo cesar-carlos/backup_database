@@ -722,11 +722,11 @@ Data/Hora do teste: ${DateTime.now()}
   }
 
   Future<void> _saveBackupDeliveryAuditLog({
-    String? historyId,
     required String configId,
     required EmailNotificationTarget target,
     required String eventType,
     required _RecipientDeliveryResult result,
+    String? historyId,
   }) async {
     final level = result.isFailed ? LogLevel.error : LogLevel.info;
     final status = result.isSent
@@ -852,9 +852,9 @@ Data/Hora do teste: ${DateTime.now()}
 class _RecipientDeliveryResult {
   const _RecipientDeliveryResult._({
     required this.recipientEmail,
+    required this.state,
     this.failure,
     this.reason,
-    required this.state,
   });
 
   factory _RecipientDeliveryResult.sent({required String recipientEmail}) {
