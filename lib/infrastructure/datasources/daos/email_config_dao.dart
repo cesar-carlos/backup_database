@@ -27,11 +27,6 @@ class EmailConfigDao extends DatabaseAccessor<AppDatabase>
       return false;
     }
 
-    final existing = await getById(config.id.value);
-    if (existing == null) {
-      return false;
-    }
-
     final updated = await (update(
       emailConfigsTable,
     )..where((tbl) => tbl.id.equals(config.id.value))).write(config);

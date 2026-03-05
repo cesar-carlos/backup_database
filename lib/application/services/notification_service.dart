@@ -5,6 +5,7 @@ import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
@@ -43,6 +44,7 @@ class NotificationService implements INotificationService {
   final IEmailService _emailService;
   final ILicenseValidationService _licenseValidationService;
   final IMetricsCollector? _metricsCollector;
+  static const int _maxParallelRecipientSends = 4;
 
   @override
   Future<rd.Result<bool>> notifyBackupComplete(
@@ -292,12 +294,26 @@ Data/Hora do teste: ${DateTime.now()}
           );
           sendResult = const rd.Success(false);
         } else {
-          sendResult = await _sendHistoryToTargets(
+          final summary = await _sendHistoryToTargets(
             config,
             targets,
             history,
             logPath,
           );
+          _logDeliverySummary(
+            configId: config.id,
+            eventType: history.status == BackupStatus.success
+                ? 'backup_success'
+                : 'backup_error',
+            summary: summary,
+          );
+          if (summary.sentCount > 0) {
+            sentAny = true;
+          }
+          if (summary.firstFailure != null) {
+            firstFailure ??= summary.firstFailure;
+          }
+          sendResult = rd.Success(summary.sentCount > 0);
         }
       } else {
         final failure =
@@ -353,12 +369,24 @@ Data/Hora do teste: ${DateTime.now()}
           );
           sendResult = const rd.Success(false);
         } else {
-          sendResult = await _sendWarningToTargets(
+          final summary = await _sendWarningToTargets(
             config,
             targets,
             databaseName,
             message,
           );
+          _logDeliverySummary(
+            configId: config.id,
+            eventType: 'backup_warning',
+            summary: summary,
+          );
+          if (summary.sentCount > 0) {
+            sentAny = true;
+          }
+          if (summary.firstFailure != null) {
+            firstFailure ??= summary.firstFailure;
+          }
+          sendResult = rd.Success(summary.sentCount > 0);
         }
       } else {
         final failure =
@@ -391,119 +419,203 @@ Data/Hora do teste: ${DateTime.now()}
     return const rd.Success(false);
   }
 
-  Future<rd.Result<bool>> _sendHistoryToTargets(
+  Future<_DeliverySendSummary> _sendHistoryToTargets(
     EmailConfig config,
     List<EmailNotificationTarget> targets,
     BackupHistory history,
     String? logPath,
   ) async {
-    var sentAny = false;
-    Exception? firstFailure;
-
-    for (final target in targets.where((t) => t.enabled)) {
-      final result = await _sendHistoryToTarget(
+    final enabledTargets = targets.where((target) => target.enabled).toList();
+    final results = await _runInBatches<EmailNotificationTarget, _RecipientDeliveryResult>(
+      enabledTargets,
+      _maxParallelRecipientSends,
+      (target) => _sendHistoryToTarget(
         config,
         target,
         history,
         logPath,
-      );
-      result.fold(
-        (sent) {
-          if (sent) {
-            sentAny = true;
-          }
-        },
-        (failure) {
-          firstFailure ??= _toException(failure);
-        },
-      );
-    }
-
-    if (sentAny) {
-      return const rd.Success(true);
-    }
-    if (firstFailure != null) {
-      return rd.Failure(firstFailure!);
-    }
-    return const rd.Success(false);
+      ),
+    );
+    return _summarizeDeliveryResults(results);
   }
 
-  Future<rd.Result<bool>> _sendWarningToTargets(
+  Future<_DeliverySendSummary> _sendWarningToTargets(
     EmailConfig config,
     List<EmailNotificationTarget> targets,
     String databaseName,
     String warningMessage,
   ) async {
-    if (!config.notifyOnWarning) {
-      return const rd.Success(false);
-    }
-
-    var sentAny = false;
-    Exception? firstFailure;
-
-    for (final target in targets.where((t) => t.enabled)) {
-      final targetConfig = config.copyWith(recipients: [target.recipientEmail]);
-
-      final result = await _emailService.sendBackupWarningNotification(
-        config: targetConfig,
+    final enabledTargets = targets.where((target) => target.enabled).toList();
+    final results = await _runInBatches<EmailNotificationTarget, _RecipientDeliveryResult>(
+      enabledTargets,
+      _maxParallelRecipientSends,
+      (target) => _sendWarningToTarget(
+        config: config,
+        target: target,
         databaseName: databaseName,
         warningMessage: warningMessage,
-      );
-
-      result.fold(
-        (sent) {
-          if (sent) {
-            sentAny = true;
-          }
-        },
-        (failure) {
-          firstFailure ??= _toException(failure);
-        },
-      );
-    }
-
-    if (sentAny) {
-      return const rd.Success(true);
-    }
-    if (firstFailure != null) {
-      return rd.Failure(firstFailure!);
-    }
-    return const rd.Success(false);
+      ),
+    );
+    return _summarizeDeliveryResults(results);
   }
 
-  Future<rd.Result<bool>> _sendHistoryToTarget(
+  Future<_RecipientDeliveryResult> _sendHistoryToTarget(
     EmailConfig config,
     EmailNotificationTarget target,
     BackupHistory history,
     String? logPath,
-  ) {
+  ) async {
+    final eventType = history.status == BackupStatus.success
+        ? 'backup_success'
+        : 'backup_error';
+
     if (history.status == BackupStatus.success) {
-      if (!config.notifyOnSuccess) {
-        return Future.value(const rd.Success(false));
+      if (!config.notifyOnSuccess || !target.notifyOnSuccess) {
+        final result = _RecipientDeliveryResult.skipped(
+          recipientEmail: target.recipientEmail,
+          reason: 'Regra de sucesso desabilitada para configuração/destinatário',
+        );
+        await _saveBackupDeliveryAuditLog(
+          historyId: history.id,
+          configId: config.id,
+          target: target,
+          eventType: eventType,
+          result: result,
+        );
+        return result;
       }
-      return _emailService.sendBackupSuccessNotification(
+      final sendResult = await _emailService.sendBackupSuccessNotification(
         config: config.copyWith(
           recipients: [target.recipientEmail],
         ),
         history: history,
         logPath: logPath,
       );
+      final result = sendResult.fold(
+        (sent) => sent
+            ? _RecipientDeliveryResult.sent(recipientEmail: target.recipientEmail)
+            : _RecipientDeliveryResult.skipped(
+                recipientEmail: target.recipientEmail,
+                reason: 'Envio não realizado pelo serviço SMTP',
+              ),
+        (failure) => _RecipientDeliveryResult.failed(
+          recipientEmail: target.recipientEmail,
+          failure: _toException(failure),
+        ),
+      );
+      await _saveBackupDeliveryAuditLog(
+        historyId: history.id,
+        configId: config.id,
+        target: target,
+        eventType: eventType,
+        result: result,
+      );
+      return result;
     }
 
     if (history.status == BackupStatus.error) {
-      if (!config.notifyOnError) {
-        return Future.value(const rd.Success(false));
+      if (!config.notifyOnError || !target.notifyOnError) {
+        final result = _RecipientDeliveryResult.skipped(
+          recipientEmail: target.recipientEmail,
+          reason: 'Regra de erro desabilitada para configuração/destinatário',
+        );
+        await _saveBackupDeliveryAuditLog(
+          historyId: history.id,
+          configId: config.id,
+          target: target,
+          eventType: eventType,
+          result: result,
+        );
+        return result;
       }
-      return _emailService.sendBackupErrorNotification(
+      final sendResult = await _emailService.sendBackupErrorNotification(
         config: config.copyWith(
           recipients: [target.recipientEmail],
         ),
         history: history,
         logPath: logPath,
       );
+      final result = sendResult.fold(
+        (sent) => sent
+            ? _RecipientDeliveryResult.sent(recipientEmail: target.recipientEmail)
+            : _RecipientDeliveryResult.skipped(
+                recipientEmail: target.recipientEmail,
+                reason: 'Envio não realizado pelo serviço SMTP',
+              ),
+        (failure) => _RecipientDeliveryResult.failed(
+          recipientEmail: target.recipientEmail,
+          failure: _toException(failure),
+        ),
+      );
+      await _saveBackupDeliveryAuditLog(
+        historyId: history.id,
+        configId: config.id,
+        target: target,
+        eventType: eventType,
+        result: result,
+      );
+      return result;
     }
 
-    return Future.value(const rd.Success(false));
+    final result = _RecipientDeliveryResult.skipped(
+      recipientEmail: target.recipientEmail,
+      reason: 'Status de backup não suporta envio',
+    );
+    await _saveBackupDeliveryAuditLog(
+      historyId: history.id,
+      configId: config.id,
+      target: target,
+      eventType: eventType,
+      result: result,
+    );
+    return result;
+  }
+
+  Future<_RecipientDeliveryResult> _sendWarningToTarget({
+    required EmailConfig config,
+    required EmailNotificationTarget target,
+    required String databaseName,
+    required String warningMessage,
+  }) async {
+    if (!config.notifyOnWarning || !target.notifyOnWarning) {
+      final result = _RecipientDeliveryResult.skipped(
+        recipientEmail: target.recipientEmail,
+        reason: 'Regra de aviso desabilitada para configuração/destinatário',
+      );
+      await _saveBackupDeliveryAuditLog(
+        configId: config.id,
+        target: target,
+        eventType: 'backup_warning',
+        result: result,
+      );
+      return result;
+    }
+
+    final targetConfig = config.copyWith(recipients: [target.recipientEmail]);
+    final sendResult = await _emailService.sendBackupWarningNotification(
+      config: targetConfig,
+      databaseName: databaseName,
+      warningMessage: warningMessage,
+    );
+    final result = sendResult.fold(
+      (sent) => sent
+          ? _RecipientDeliveryResult.sent(recipientEmail: target.recipientEmail)
+          : _RecipientDeliveryResult.skipped(
+              recipientEmail: target.recipientEmail,
+              reason: 'Envio não realizado pelo serviço SMTP',
+            ),
+      (failure) => _RecipientDeliveryResult.failed(
+        recipientEmail: target.recipientEmail,
+        failure: _toException(failure),
+      ),
+    );
+    await _saveBackupDeliveryAuditLog(
+      configId: config.id,
+      target: target,
+      eventType: 'backup_warning',
+      result: result,
+    );
+    return result;
   }
 
   Future<String?> _exportLogsForBackup(String backupHistoryId) async {
@@ -542,6 +654,117 @@ Data/Hora do teste: ${DateTime.now()}
       LoggerService.warning('Erro ao exportar logs: $e');
       return null;
     }
+  }
+
+  Future<List<R>> _runInBatches<T, R>(
+    List<T> items,
+    int concurrencyLimit,
+    Future<R> Function(T item) task,
+  ) async {
+    if (items.isEmpty) {
+      return const [];
+    }
+
+    final results = <R>[];
+    for (var index = 0; index < items.length; index += concurrencyLimit) {
+      final batchEnd = (index + concurrencyLimit > items.length)
+          ? items.length
+          : index + concurrencyLimit;
+      final batch = items.sublist(index, batchEnd);
+      final batchResults = await Future.wait(batch.map(task));
+      results.addAll(batchResults);
+    }
+    return results;
+  }
+
+  _DeliverySendSummary _summarizeDeliveryResults(
+    List<_RecipientDeliveryResult> results,
+  ) {
+    var sent = 0;
+    var failed = 0;
+    var skipped = 0;
+    Exception? firstFailure;
+
+    for (final result in results) {
+      if (result.isSent) {
+        sent++;
+      } else if (result.isFailed) {
+        failed++;
+        firstFailure ??= result.failure;
+      } else {
+        skipped++;
+      }
+    }
+
+    return _DeliverySendSummary(
+      attemptedCount: results.length,
+      sentCount: sent,
+      failedCount: failed,
+      skippedCount: skipped,
+      firstFailure: firstFailure,
+    );
+  }
+
+  void _logDeliverySummary({
+    required String configId,
+    required String eventType,
+    required _DeliverySendSummary summary,
+  }) {
+    LoggerService.info(
+      '[NotificationService] Resumo de envio | '
+      'configId=$configId '
+      'event=$eventType '
+      'attempted=${summary.attemptedCount} '
+      'sent=${summary.sentCount} '
+      'failed=${summary.failedCount} '
+      'skipped=${summary.skippedCount}',
+    );
+  }
+
+  Future<void> _saveBackupDeliveryAuditLog({
+    String? historyId,
+    required String configId,
+    required EmailNotificationTarget target,
+    required String eventType,
+    required _RecipientDeliveryResult result,
+  }) async {
+    final level = result.isFailed ? LogLevel.error : LogLevel.info;
+    final status = result.isSent
+        ? 'success'
+        : result.isFailed
+        ? 'failure'
+        : 'skipped';
+    final message =
+        'Notificação $eventType para ${target.recipientEmail}: $status';
+    final detailsBuffer = StringBuffer()
+      ..write('configId=$configId;')
+      ..write('targetId=${target.id};')
+      ..write('recipient=${target.recipientEmail};')
+      ..write('event=$eventType;')
+      ..write('status=$status');
+    if (result.reason != null && result.reason!.trim().isNotEmpty) {
+      detailsBuffer.write(';reason=${result.reason!.trim()}');
+    }
+    if (result.failure != null) {
+      detailsBuffer.write(';error=${result.failure}');
+    }
+
+    final log = BackupLog(
+      backupHistoryId: historyId,
+      level: level,
+      category: LogCategory.audit,
+      message: message,
+      details: detailsBuffer.toString(),
+    );
+    final createResult = await _backupLogRepository.create(log);
+    createResult.fold(
+      (_) {},
+      (failure) {
+        LoggerService.warning(
+          '[NotificationService] Falha ao persistir auditoria de entrega: $failure',
+        );
+      },
+    );
   }
 
   Exception _toException(Object failure) {
@@ -625,3 +848,67 @@ Data/Hora do teste: ${DateTime.now()}
     return 'unknown';
   }
 }
+
+class _RecipientDeliveryResult {
+  const _RecipientDeliveryResult._({
+    required this.recipientEmail,
+    this.failure,
+    this.reason,
+    required this.state,
+  });
+
+  factory _RecipientDeliveryResult.sent({required String recipientEmail}) {
+    return _RecipientDeliveryResult._(
+      recipientEmail: recipientEmail,
+      state: _RecipientDeliveryState.sent,
+    );
+  }
+
+  factory _RecipientDeliveryResult.failed({
+    required String recipientEmail,
+    required Exception failure,
+  }) {
+    return _RecipientDeliveryResult._(
+      recipientEmail: recipientEmail,
+      failure: failure,
+      state: _RecipientDeliveryState.failed,
+    );
+  }
+
+  factory _RecipientDeliveryResult.skipped({
+    required String recipientEmail,
+    required String reason,
+  }) {
+    return _RecipientDeliveryResult._(
+      recipientEmail: recipientEmail,
+      reason: reason,
+      state: _RecipientDeliveryState.skipped,
+    );
+  }
+
+  final String recipientEmail;
+  final Exception? failure;
+  final String? reason;
+  final _RecipientDeliveryState state;
+
+  bool get isSent => state == _RecipientDeliveryState.sent;
+  bool get isFailed => state == _RecipientDeliveryState.failed;
+}
+
+class _DeliverySendSummary {
+  const _DeliverySendSummary({
+    required this.attemptedCount,
+    required this.sentCount,
+    required this.failedCount,
+    required this.skippedCount,
+    required this.firstFailure,
+  });
+
+  final int attemptedCount;
+  final int sentCount;
+  final int failedCount;
+  final int skippedCount;
+  final Exception? firstFailure;
+}
+
+enum _RecipientDeliveryState { sent, failed, skipped }

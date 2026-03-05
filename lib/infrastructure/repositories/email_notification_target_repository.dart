@@ -54,11 +54,12 @@ class EmailNotificationTargetRepository
   Future<rd.Result<EmailNotificationTarget>> create(
     EmailNotificationTarget target,
   ) async {
+    final normalizedTarget = _normalizeTarget(target);
     try {
       await _database.emailNotificationTargetDao.insertTarget(
-        _toCompanion(target),
+        _toCompanion(normalizedTarget),
       );
-      return rd.Success(target);
+      return rd.Success(normalizedTarget);
     } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao criar destinatario de notificacao',
@@ -77,9 +78,10 @@ class EmailNotificationTargetRepository
   Future<rd.Result<EmailNotificationTarget>> update(
     EmailNotificationTarget target,
   ) async {
+    final normalizedTarget = _normalizeTarget(target);
     try {
       final updated = await _database.emailNotificationTargetDao.updateTarget(
-        _toCompanion(target),
+        _toCompanion(normalizedTarget),
       );
       if (!updated) {
         return const rd.Failure(
@@ -88,7 +90,7 @@ class EmailNotificationTargetRepository
           ),
         );
       }
-      return rd.Success(target);
+      return rd.Success(normalizedTarget);
     } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao atualizar destinatario de notificacao',
@@ -137,13 +139,19 @@ class EmailNotificationTargetRepository
     return EmailNotificationTarget(
       id: data.id,
       emailConfigId: data.emailConfigId,
-      recipientEmail: data.recipientEmail,
+      recipientEmail: data.recipientEmail.trim().toLowerCase(),
       notifyOnSuccess: data.notifyOnSuccess,
       notifyOnError: data.notifyOnError,
       notifyOnWarning: data.notifyOnWarning,
       enabled: data.enabled,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
+    );
+  }
+
+  EmailNotificationTarget _normalizeTarget(EmailNotificationTarget target) {
+    return target.copyWith(
+      recipientEmail: target.recipientEmail.trim().toLowerCase(),
     );
   }
 

@@ -20,10 +20,9 @@ class EmailConfigRepository implements IEmailConfigRepository {
   Future<rd.Result<List<EmailConfig>>> getAll() async {
     try {
       final configs = await _database.emailConfigDao.getAll();
-      final entities = <EmailConfig>[];
-      for (final config in configs) {
-        entities.add(await _toEntity(config));
-      }
+      final entities = await Future.wait(
+        configs.map(_toEntity),
+      );
       return rd.Success(entities);
     } on Object catch (e) {
       return rd.Failure(

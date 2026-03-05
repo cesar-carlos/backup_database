@@ -3,6 +3,7 @@ import 'package:backup_database/application/providers/notification_provider.dart
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
+import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/notifications/notifications.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -42,13 +43,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     final provider = context.read<NotificationProvider>();
-    final initialConfig = initial ?? provider.selectedConfig;
-    String? initialRecipientEmail;
-    if (initialConfig != null) {
-      initialRecipientEmail = await provider.getPrimaryRecipientEmail(
-        initialConfig.id,
-      );
-    }
+    final initialConfig = initial;
 
     if (!mounted) {
       return;
@@ -57,7 +52,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final result = await NotificationConfigDialog.show(
       context,
       initialConfig: initialConfig,
-      initialRecipientEmail: initialRecipientEmail,
       onTestConfiguration: (config) async {
         final success = await provider.testDraftConfiguration(config);
         if (success) {
@@ -99,6 +93,131 @@ class _NotificationsPageState extends State<NotificationsPage> {
         message: provider.error ?? 'Erro ao salvar configuração',
       );
     }
+  }
+
+  Future<void> _createTarget() async {
+    final provider = context.read<NotificationProvider>();
+    final selectedConfig = provider.selectedConfig;
+    if (selectedConfig == null) {
+      await MessageModal.showWarning(
+        context,
+        message: 'Selecione uma configuração SMTP antes de adicionar destinatários',
+      );
+      return;
+    }
+
+    final target = await EmailTargetDialog.show(
+      context,
+      emailConfigId: selectedConfig.id,
+      defaultNotifyOnSuccess: selectedConfig.notifyOnSuccess,
+      defaultNotifyOnError: selectedConfig.notifyOnError,
+      defaultNotifyOnWarning: selectedConfig.notifyOnWarning,
+    );
+    if (target == null || !mounted) {
+      return;
+    }
+
+    final success = await provider.addTarget(target);
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      await MessageModal.showSuccess(
+        context,
+        message: 'Destinatário adicionado com sucesso',
+      );
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message: provider.error ?? 'Erro ao adicionar destinatário',
+    );
+  }
+
+  Future<void> _editTarget(EmailNotificationTarget target) async {
+    final provider = context.read<NotificationProvider>();
+    final selectedConfig = provider.selectedConfig;
+    if (selectedConfig == null) {
+      return;
+    }
+
+    final updated = await EmailTargetDialog.show(
+      context,
+      emailConfigId: selectedConfig.id,
+      defaultNotifyOnSuccess: selectedConfig.notifyOnSuccess,
+      defaultNotifyOnError: selectedConfig.notifyOnError,
+      defaultNotifyOnWarning: selectedConfig.notifyOnWarning,
+      initialTarget: target,
+    );
+    if (updated == null || !mounted) {
+      return;
+    }
+
+    final success = await provider.updateTarget(updated);
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      await MessageModal.showSuccess(
+        context,
+        message: 'Destinatário atualizado com sucesso',
+      );
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message: provider.error ?? 'Erro ao atualizar destinatário',
+    );
+  }
+
+  Future<void> _deleteTarget(EmailNotificationTarget target) async {
+    final confirmed = await _confirmDialog(
+      title: 'Excluir destinatário',
+      message:
+          'Deseja realmente excluir o destinatário "${target.recipientEmail}"?',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    final provider = context.read<NotificationProvider>();
+    final success = await provider.deleteTargetById(target.id);
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      await MessageModal.showSuccess(
+        context,
+        message: 'Destinatário removido com sucesso',
+      );
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message: provider.error ?? 'Erro ao remover destinatário',
+    );
+  }
+
+  Future<void> _toggleTargetEnabled(
+    EmailNotificationTarget target,
+    bool enabled,
+  ) async {
+    final provider = context.read<NotificationProvider>();
+    final success = await provider.toggleTargetEnabled(target.id, enabled);
+    if (success || !mounted) {
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message: provider.error ?? 'Erro ao atualizar status do destinatário',
+    );
   }
 
   Future<void> _deleteConfig(EmailConfig config) async {
@@ -199,6 +318,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   onCreateConfig: _openConfigModal,
                   onEditConfig: (config) => _openConfigModal(initial: config),
                   onDeleteConfig: _deleteConfig,
+                  onCreateTarget: _createTarget,
+                  onEditTarget: _editTarget,
+                  onDeleteTarget: _deleteTarget,
+                  onToggleTargetEnabled: _toggleTargetEnabled,
                 );
               },
             ),
@@ -283,6 +406,10 @@ class _NotificationsContentSection extends StatelessWidget {
     required this.onCreateConfig,
     required this.onEditConfig,
     required this.onDeleteConfig,
+    required this.onCreateTarget,
+    required this.onEditTarget,
+    required this.onDeleteTarget,
+    required this.onToggleTargetEnabled,
   });
 
   final NotificationProvider provider;
@@ -291,6 +418,11 @@ class _NotificationsContentSection extends StatelessWidget {
   final VoidCallback onCreateConfig;
   final ValueChanged<EmailConfig> onEditConfig;
   final ValueChanged<EmailConfig> onDeleteConfig;
+  final VoidCallback onCreateTarget;
+  final ValueChanged<EmailNotificationTarget> onEditTarget;
+  final ValueChanged<EmailNotificationTarget> onDeleteTarget;
+  final void Function(EmailNotificationTarget target, bool enabled)
+  onToggleTargetEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +447,7 @@ class _NotificationsContentSection extends StatelessWidget {
           selectedConfigId: provider.selectedConfigId,
           canManage: hasEmailNotification,
           isLoading: provider.isLoading,
+          updatingConfigIds: provider.updatingConfigIds,
           onCreate: onCreateConfig,
           onEdit: onEditConfig,
           onDelete: onDeleteConfig,
@@ -324,18 +457,145 @@ class _NotificationsContentSection extends StatelessWidget {
           },
         ),
         const SizedBox(height: 16),
-        EmailTestHistoryPanel(
-          history: provider.testHistory,
-          configs: provider.configs,
-          isLoading: provider.isHistoryLoading,
-          error: provider.historyError,
-          selectedConfigId: provider.historyConfigIdFilter,
-          period: provider.historyPeriod,
-          onRefresh: provider.refreshTestHistory,
-          onConfigChanged: provider.setHistoryConfigFilter,
-          onPeriodChanged: provider.setHistoryPeriod,
+        _EmailTargetsPanel(
+          selectedConfig: provider.selectedConfig,
+          targets: provider.targets,
+          canManage: hasEmailNotification,
+          onCreate: onCreateTarget,
+          onEdit: onEditTarget,
+          onDelete: onDeleteTarget,
+          onToggleEnabled: onToggleTargetEnabled,
         ),
       ],
+    );
+  }
+}
+
+class _EmailTargetsPanel extends StatelessWidget {
+  const _EmailTargetsPanel({
+    required this.selectedConfig,
+    required this.targets,
+    required this.canManage,
+    required this.onCreate,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggleEnabled,
+  });
+
+  final EmailConfig? selectedConfig;
+  final List<EmailNotificationTarget> targets;
+  final bool canManage;
+  final VoidCallback onCreate;
+  final ValueChanged<EmailNotificationTarget> onEdit;
+  final ValueChanged<EmailNotificationTarget> onDelete;
+  final void Function(EmailNotificationTarget target, bool enabled)
+  onToggleEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Destinatarios da configuracao selecionada',
+            style: FluentTheme.of(context).typography.subtitle?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (selectedConfig == null)
+            const EmptyState(
+              icon: FluentIcons.group,
+              message:
+                  'Selecione uma configuração SMTP para gerenciar destinatários',
+            )
+          else if (targets.isEmpty)
+            EmptyState(
+              icon: FluentIcons.group,
+              message: 'Nenhum destinatário cadastrado para esta configuração',
+              actionLabel: 'Novo destinatário',
+              onAction: canManage ? onCreate : null,
+            )
+          else
+            AppDataGrid<EmailNotificationTarget>(
+              minWidth: 980,
+              columns: [
+                AppDataGridColumn<EmailNotificationTarget>(
+                  label: 'Destinatario',
+                  width: const FlexColumnWidth(2.2),
+                  cellBuilder: (context, row) => Text(row.recipientEmail),
+                ),
+                AppDataGridColumn<EmailNotificationTarget>(
+                  label: 'Sucesso',
+                  width: const FlexColumnWidth(0.8),
+                  cellAlignment: Alignment.center,
+                  headerAlignment: Alignment.center,
+                  cellBuilder: (context, row) => Text(
+                    row.notifyOnSuccess ? 'Sim' : 'Nao',
+                  ),
+                ),
+                AppDataGridColumn<EmailNotificationTarget>(
+                  label: 'Erro',
+                  width: const FlexColumnWidth(0.8),
+                  cellAlignment: Alignment.center,
+                  headerAlignment: Alignment.center,
+                  cellBuilder: (context, row) => Text(
+                    row.notifyOnError ? 'Sim' : 'Nao',
+                  ),
+                ),
+                AppDataGridColumn<EmailNotificationTarget>(
+                  label: 'Aviso',
+                  width: const FlexColumnWidth(0.8),
+                  cellAlignment: Alignment.center,
+                  headerAlignment: Alignment.center,
+                  cellBuilder: (context, row) => Text(
+                    row.notifyOnWarning ? 'Sim' : 'Nao',
+                  ),
+                ),
+                AppDataGridColumn<EmailNotificationTarget>(
+                  label: 'Status',
+                  width: const FlexColumnWidth(1.0),
+                  cellBuilder: (context, row) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ToggleSwitch(
+                        checked: row.enabled,
+                        onChanged: canManage
+                            ? (value) => onToggleEnabled(row, value)
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(row.enabled ? 'Ativo' : 'Inativo'),
+                    ],
+                  ),
+                ),
+              ],
+              actions: [
+                AppDataGridAction<EmailNotificationTarget>(
+                  icon: FluentIcons.edit,
+                  tooltip: 'Editar',
+                  onPressed: onEdit,
+                  isEnabled: (_) => canManage,
+                ),
+                AppDataGridAction<EmailNotificationTarget>(
+                  icon: FluentIcons.delete,
+                  tooltip: 'Excluir',
+                  onPressed: onDelete,
+                  isEnabled: (_) => canManage,
+                ),
+              ],
+              rows: targets,
+            ),
+          if (selectedConfig != null && targets.isNotEmpty && canManage) ...[
+            const SizedBox(height: 12),
+            Button(
+              onPressed: onCreate,
+              child: const Text('Novo destinatário'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

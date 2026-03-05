@@ -423,12 +423,15 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
   String? _validateRecipientEmail(String? value) {
     final recipient = value?.trim() ?? '';
     if (recipient.isEmpty) {
-      return 'E-mail de destino é obrigatório';
+      return null;
     }
     return _validateWithSchema(_recipientEmailSchema, recipient);
   }
 
   String? _validatePassword(String? value) {
+    if (_authMode != SmtpAuthMode.password) {
+      return null;
+    }
     return _validateWithSchema(_passwordSchema, value?.trim() ?? '');
   }
 
@@ -745,7 +748,7 @@ class _SmtpSettingsSection extends StatelessWidget {
         const SizedBox(height: 16),
         AppTextField(
           controller: recipientEmailController,
-          label: 'E-mail de destino *',
+          label: 'E-mail de destino (opcional para teste)',
           keyboardType: TextInputType.emailAddress,
           hint: 'destino@exemplo.com',
           validator: recipientEmailValidator,

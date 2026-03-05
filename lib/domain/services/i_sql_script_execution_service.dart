@@ -11,5 +11,6 @@ abstract class ISqlScriptExecutionService {
     required SybaseConfig? sybaseConfig,
     required PostgresConfig? postgresConfig,
     required String script,
+    Duration? timeout,
   });
 }

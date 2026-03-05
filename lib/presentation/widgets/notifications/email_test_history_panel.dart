@@ -34,6 +34,10 @@ class EmailTestHistoryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final configNameById = <String, String>{
+      for (final config in configs) config.id: config.configName,
+    };
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,7 +160,7 @@ class EmailTestHistoryPanel extends StatelessWidget {
                   label: 'Configuracao',
                   width: const FlexColumnWidth(1.4),
                   cellBuilder: (context, row) => Text(
-                    _resolveConfigName(row.configId),
+                    configNameById[row.configId] ?? row.configId,
                   ),
                 ),
                 AppDataGridColumn<EmailTestAudit>(
@@ -215,14 +219,6 @@ class EmailTestHistoryPanel extends StatelessWidget {
     );
   }
 
-  String _resolveConfigName(String configId) {
-    for (final config in configs) {
-      if (config.id == configId) {
-        return config.configName;
-      }
-    }
-    return configId;
-  }
 }
 
 class _StatusBadge extends StatelessWidget {

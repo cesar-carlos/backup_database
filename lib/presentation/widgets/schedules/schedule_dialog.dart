@@ -267,6 +267,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     _nameController.dispose();
     _intervalMinutesController.dispose();
     _backupFolderController.dispose();
+    _postBackupScriptController.dispose();
+    _backupTimeoutMinutesController.dispose();
+    _verifyTimeoutMinutesController.dispose();
     super.dispose();
   }
 
@@ -1285,9 +1288,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               const InfoBar(
                 title: Text('Informação'),
                 content: Text(
-                  'O script será executado na mesma conexão do backup, '
-                  'após o backup ser concluído com sucesso. '
-                  'Erros no script não impedem o backup de ser considerado bem-sucedido.',
+                  'O script será executado após o backup, usando uma nova conexão '
+                  'com o banco configurado. Erros no script não impedem o backup '
+                  'de ser considerado bem-sucedido.',
                 ),
               ),
             ],

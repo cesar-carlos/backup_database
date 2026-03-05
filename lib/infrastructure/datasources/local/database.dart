@@ -59,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 27;
+  int get schemaVersion => 28;
 
   @override
   MigrationStrategy get migration {
@@ -909,6 +909,21 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v27 para backup_history_table metrics',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 28) {
+          try {
+            await _ensureEmailTestAuditSchema();
+            LoggerService.info(
+              'Migração v28: índices de auditoria SMTP garantidos.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v28 para índices de auditoria SMTP',
               e,
               stackTrace,
             );

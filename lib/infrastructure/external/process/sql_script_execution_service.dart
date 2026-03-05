@@ -13,6 +13,8 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
   SqlScriptExecutionService(this._processService);
   final ProcessService _processService;
 
+  static const Duration _defaultScriptTimeout = Duration(minutes: 30);
+
   @override
   Future<rd.Result<void>> executeScript({
     required DatabaseType databaseType,
@@ -20,6 +22,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     required SybaseConfig? sybaseConfig,
     required PostgresConfig? postgresConfig,
     required String script,
+    Duration? timeout,
   }) async {
     final trimmedScript = script.trim();
     if (trimmedScript.isEmpty) {
@@ -28,21 +31,28 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
       );
     }
 
+    final effectiveTimeout = (timeout == null || timeout == Duration.zero)
+        ? _defaultScriptTimeout
+        : timeout;
+
     try {
       if (databaseType == DatabaseType.sqlServer) {
         return await _executeSqlServerScript(
           config: sqlServerConfig,
           script: trimmedScript,
+          timeout: effectiveTimeout,
         );
       } else if (databaseType == DatabaseType.sybase) {
         return await _executeSybaseScript(
           config: sybaseConfig,
           script: trimmedScript,
+          timeout: effectiveTimeout,
         );
       } else if (databaseType == DatabaseType.postgresql) {
         return await _executePostgresScript(
           config: postgresConfig,
           script: trimmedScript,
+          timeout: effectiveTimeout,
         );
       } else {
         return rd.Failure(
@@ -69,6 +79,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
   Future<rd.Result<void>> _executeSqlServerScript({
     required SqlServerConfig? config,
     required String script,
+    required Duration timeout,
   }) async {
     if (config == null) {
       return const rd.Failure(
@@ -81,6 +92,8 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         'Executando script SQL no SQL Server: ${config.databaseValue}',
       );
 
+      final timeoutSeconds = timeout.inSeconds.clamp(1, 32767);
+
       final arguments = <String>[
         '-S',
         '${config.server},${config.portValue}',
@@ -92,7 +105,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         '-Q',
         script,
         '-t',
-        '30', // Timeout de 30 segundos
+        timeoutSeconds.toString(),
       ];
 
       if (config.username.isNotEmpty) {
@@ -104,7 +117,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
       final result = await _processService.run(
         executable: 'sqlcmd',
         arguments: arguments,
-        timeout: const Duration(seconds: 30),
+        timeout: timeout,
       );
 
       return result.fold(
@@ -159,6 +172,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
   Future<rd.Result<void>> _executeSybaseScript({
     required SybaseConfig? config,
     required String script,
+    required Duration timeout,
   }) async {
     if (config == null) {
       return const rd.Failure(
@@ -197,7 +211,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         final scriptResult = await _processService.run(
           executable: 'dbisql',
           arguments: dbisqlArgs,
-          timeout: const Duration(seconds: 30),
+          timeout: timeout,
         );
 
         scriptResult.fold(
@@ -253,6 +267,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
   Future<rd.Result<void>> _executePostgresScript({
     required PostgresConfig? config,
     required String script,
+    required Duration timeout,
   }) async {
     if (config == null) {
       return const rd.Failure(
@@ -286,7 +301,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         executable: 'psql',
         arguments: arguments,
         environment: environment,
-        timeout: const Duration(seconds: 30),
+        timeout: timeout,
       );
 
       return result.fold(

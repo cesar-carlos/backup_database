@@ -67,12 +67,17 @@ class BackupScriptOrchestratorImpl implements IBackupScriptOrchestrator {
         }
       }
 
+      final scriptTimeout = schedule.verifyTimeout == Duration.zero
+          ? null
+          : schedule.verifyTimeout;
+
       final scriptResult = await scriptService.executeScript(
         databaseType: schedule.databaseType,
         sqlServerConfig: sqlServerConfig,
         sybaseConfig: sybaseConfig,
         postgresConfig: postgresConfig,
         script: schedule.postBackupScript!,
+        timeout: scriptTimeout,
       );
 
       return scriptResult.fold(

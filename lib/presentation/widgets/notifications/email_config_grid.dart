@@ -8,6 +8,7 @@ class EmailConfigGrid extends StatelessWidget {
     required this.selectedConfigId,
     required this.canManage,
     required this.isLoading,
+    required this.updatingConfigIds,
     required this.onCreate,
     required this.onEdit,
     required this.onDelete,
@@ -20,6 +21,7 @@ class EmailConfigGrid extends StatelessWidget {
   final String? selectedConfigId;
   final bool canManage;
   final bool isLoading;
+  final Set<String> updatingConfigIds;
   final VoidCallback onCreate;
   final ValueChanged<EmailConfig> onEdit;
   final ValueChanged<EmailConfig> onDelete;
@@ -92,19 +94,29 @@ class EmailConfigGrid extends StatelessWidget {
                 AppDataGridColumn<EmailConfig>(
                   label: 'Status',
                   width: const FlexColumnWidth(1.2),
-                  cellBuilder: (context, row) => Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ToggleSwitch(
-                        checked: row.enabled,
-                        onChanged: canManage
-                            ? (value) => onToggleEnabled(row, value)
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(row.enabled ? 'Ativo' : 'Inativo'),
-                    ],
-                  ),
+                  cellBuilder: (context, row) {
+                    final isUpdating = updatingConfigIds.contains(row.id);
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ToggleSwitch(
+                          checked: row.enabled,
+                          onChanged: canManage && !isUpdating
+                              ? (value) => onToggleEnabled(row, value)
+                              : null,
+                        ),
+                        const SizedBox(width: 8),
+                        if (isUpdating)
+                          const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: ProgressRing(strokeWidth: 2),
+                          )
+                        else
+                          Text(row.enabled ? 'Ativo' : 'Inativo'),
+                      ],
+                    );
+                  },
                 ),
               ],
               actions: [

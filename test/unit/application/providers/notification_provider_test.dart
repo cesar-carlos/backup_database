@@ -78,12 +78,9 @@ void main() {
       () => emailConfigRepository.getAll(),
     ).thenAnswer((_) async => const rd.Success(<EmailConfig>[]));
     when(
-      () => emailConfigRepository.saveWithPrimaryTarget(
-        config: any(named: 'config'),
-        primaryRecipientEmail: any(named: 'primaryRecipientEmail'),
-      ),
+      () => emailConfigRepository.save(any()),
     ).thenAnswer((invocation) async {
-      return rd.Success(invocation.namedArguments[#config] as EmailConfig);
+      return rd.Success(invocation.positionalArguments.first as EmailConfig);
     });
     when(
       () => targetRepository.getByConfigId(any()),
@@ -130,9 +127,7 @@ void main() {
       },
     );
 
-    test(
-      'saveConfig uses create for a new config and refreshes selection',
-      () async {
+    test('saveConfig persists config and refreshes selection', () async {
         when(
           () => emailConfigRepository.getAll(),
         ).thenAnswer((_) async => const rd.Success(<EmailConfig>[]));
@@ -151,41 +146,8 @@ void main() {
         expect(result, isTrue);
         expect(provider.selectedConfigId, configA.id);
         expect(provider.configs.length, 1);
-        verify(
-          () => emailConfigRepository.saveWithPrimaryTarget(
-            config: any(named: 'config'),
-            primaryRecipientEmail: configA.recipients.first,
-          ),
-        ).called(1);
-      },
-    );
-
-    test(
-      'saveConfig fails when there is no recipient and no legacy target',
-      () async {
-        final configWithoutRecipients = configA.copyWith(recipients: const []);
-
-        when(
-          () => targetRepository.getByConfigId(configWithoutRecipients.id),
-        ).thenAnswer(
-          (_) async => const rd.Success(<EmailNotificationTarget>[]),
-        );
-
-        final result = await provider.saveConfig(configWithoutRecipients);
-
-        expect(result, isFalse);
-        expect(
-          provider.error,
-          contains('Informe ao menos um e-mail destinatário'),
-        );
-        verifyNever(
-          () => emailConfigRepository.saveWithPrimaryTarget(
-            config: any(named: 'config'),
-            primaryRecipientEmail: any(named: 'primaryRecipientEmail'),
-          ),
-        );
-      },
-    );
+        verify(() => emailConfigRepository.save(any())).called(1);
+      });
 
     test(
       'getPrimaryRecipientEmail falls back to notification target when config recipients are empty',

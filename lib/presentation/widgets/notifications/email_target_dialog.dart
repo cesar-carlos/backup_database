@@ -47,6 +47,9 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
   late final TextEditingController _recipientController;
 
   bool _enabled = true;
+  bool _notifyOnSuccess = true;
+  bool _notifyOnError = true;
+  bool _notifyOnWarning = true;
 
   @override
   void initState() {
@@ -56,6 +59,9 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
       text: target?.recipientEmail ?? '',
     );
     _enabled = target?.enabled ?? true;
+    _notifyOnSuccess = target?.notifyOnSuccess ?? widget.defaultNotifyOnSuccess;
+    _notifyOnError = target?.notifyOnError ?? widget.defaultNotifyOnError;
+    _notifyOnWarning = target?.notifyOnWarning ?? widget.defaultNotifyOnWarning;
   }
 
   @override
@@ -74,11 +80,9 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
       id: current?.id,
       emailConfigId: widget.emailConfigId,
       recipientEmail: _recipientController.text.trim(),
-      notifyOnSuccess:
-          current?.notifyOnSuccess ?? widget.defaultNotifyOnSuccess,
-      notifyOnError: current?.notifyOnError ?? widget.defaultNotifyOnError,
-      notifyOnWarning:
-          current?.notifyOnWarning ?? widget.defaultNotifyOnWarning,
+      notifyOnSuccess: _notifyOnSuccess,
+      notifyOnError: _notifyOnError,
+      notifyOnWarning: _notifyOnWarning,
       enabled: _enabled,
       createdAt: current?.createdAt,
     );
@@ -126,9 +130,27 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
             const SizedBox(height: 20),
             _TargetStatusSection(
               enabled: _enabled,
+              notifyOnSuccess: _notifyOnSuccess,
+              notifyOnError: _notifyOnError,
+              notifyOnWarning: _notifyOnWarning,
               onEnabledChanged: (value) {
                 setState(() {
                   _enabled = value;
+                });
+              },
+              onNotifyOnSuccessChanged: (value) {
+                setState(() {
+                  _notifyOnSuccess = value;
+                });
+              },
+              onNotifyOnErrorChanged: (value) {
+                setState(() {
+                  _notifyOnError = value;
+                });
+              },
+              onNotifyOnWarningChanged: (value) {
+                setState(() {
+                  _notifyOnWarning = value;
                 });
               },
             ),
@@ -146,11 +168,23 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
 class _TargetStatusSection extends StatelessWidget {
   const _TargetStatusSection({
     required this.enabled,
+    required this.notifyOnSuccess,
+    required this.notifyOnError,
+    required this.notifyOnWarning,
     required this.onEnabledChanged,
+    required this.onNotifyOnSuccessChanged,
+    required this.onNotifyOnErrorChanged,
+    required this.onNotifyOnWarningChanged,
   });
 
   final bool enabled;
+  final bool notifyOnSuccess;
+  final bool notifyOnError;
+  final bool notifyOnWarning;
   final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<bool> onNotifyOnSuccessChanged;
+  final ValueChanged<bool> onNotifyOnErrorChanged;
+  final ValueChanged<bool> onNotifyOnWarningChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -158,8 +192,24 @@ class _TargetStatusSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'Os tipos de notificação (sucesso/erro/aviso) são definidos no modal da configuração SMTP.',
+        const Text('Defina quais tipos de evento este destinatário recebe.'),
+        const SizedBox(height: 10),
+        _TargetToggleField(
+          label: 'Receber notificação de sucesso',
+          value: notifyOnSuccess,
+          onChanged: onNotifyOnSuccessChanged,
+        ),
+        const SizedBox(height: 10),
+        _TargetToggleField(
+          label: 'Receber notificação de erro',
+          value: notifyOnError,
+          onChanged: onNotifyOnErrorChanged,
+        ),
+        const SizedBox(height: 10),
+        _TargetToggleField(
+          label: 'Receber notificação de aviso',
+          value: notifyOnWarning,
+          onChanged: onNotifyOnWarningChanged,
         ),
         const SizedBox(height: 10),
         _TargetToggleField(

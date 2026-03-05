@@ -1,6 +1,7 @@
 import 'package:backup_database/application/services/notification_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
@@ -73,6 +74,13 @@ void main() {
         status: 'success',
       ),
     );
+    registerFallbackValue(
+      BackupLog(
+        level: LogLevel.info,
+        category: LogCategory.audit,
+        message: 'fallback',
+      ),
+    );
   });
 
   setUp(() {
@@ -90,6 +98,11 @@ void main() {
     when(
       () => backupLogRepository.getByBackupHistory(any()),
     ).thenAnswer((_) async => const rd.Success([]));
+    when(
+      () => backupLogRepository.create(any()),
+    ).thenAnswer((invocation) async {
+      return rd.Success(invocation.positionalArguments.first as BackupLog);
+    });
     when(
       () => emailTestAuditRepository.create(any()),
     ).thenAnswer((invocation) async {
@@ -206,6 +219,7 @@ void main() {
           recipients,
           equals({'fail@example.com', 'ok@example.com', 'skip@example.com'}),
         );
+        verify(() => backupLogRepository.create(any())).called(3);
       },
     );
 
@@ -246,7 +260,7 @@ void main() {
 
   group('NotificationService.sendWarning', () {
     test(
-      'sends warning for all enabled targets when config allows warning',
+      'sends warning only for enabled targets that allow warning',
       () async {
         final targets = [
           EmailNotificationTarget(
@@ -303,7 +317,7 @@ void main() {
         final recipients = capturedConfigs
             .map((config) => config.recipients.first)
             .toSet();
-        expect(recipients, equals({'off@example.com', 'on@example.com'}));
+        expect(recipients, equals({'on@example.com'}));
       },
     );
   });
