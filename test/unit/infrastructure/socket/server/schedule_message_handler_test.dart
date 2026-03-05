@@ -149,8 +149,9 @@ void main() {
             any(),
           ),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
-        when(() => executeBackup(scheduleId))
-            .thenAnswer((_) async => const rd.Success(rd.unit));
+        when(
+          () => executeBackup(scheduleId),
+        ).thenAnswer((_) async => const rd.Success(rd.unit));
 
         Message? sentMessage;
         Future<void> sendToClient(String clientId, Message msg) async {

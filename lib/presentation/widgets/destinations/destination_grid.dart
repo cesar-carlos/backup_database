@@ -18,7 +18,7 @@ class DestinationGrid extends StatelessWidget {
   final ValueChanged<BackupDestination> onDuplicate;
   final ValueChanged<String> onDelete;
   final void Function(BackupDestination destination, bool enabled)
-      onToggleEnabled;
+  onToggleEnabled;
 
   String _t(BuildContext context, String pt, String en) {
     final isPt =

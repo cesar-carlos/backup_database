@@ -41,7 +41,8 @@ class WindowsServiceProvider extends ChangeNotifier {
   Future<void> checkStatus({bool forceRefresh = false}) async {
     if (_isLoading) return;
 
-    final cacheValid = !forceRefresh &&
+    final cacheValid =
+        !forceRefresh &&
         _statusCache != null &&
         _statusCacheTimestamp != null &&
         DateTime.now().difference(_statusCacheTimestamp!) < _statusCacheTtl;

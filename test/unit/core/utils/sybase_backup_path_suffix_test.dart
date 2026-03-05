@@ -34,7 +34,9 @@ void main() {
 
     test('extractShortIdFromPath returns null when no suffix', () {
       expect(
-        SybaseBackupPathSuffix.extractShortIdFromPath(r'D:\Backups\mydb\file.db'),
+        SybaseBackupPathSuffix.extractShortIdFromPath(
+          r'D:\Backups\mydb\file.db',
+        ),
         isNull,
       );
     });

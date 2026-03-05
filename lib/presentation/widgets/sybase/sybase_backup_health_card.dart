@@ -55,11 +55,13 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
               )
               .toList();
           successfulFulls.sort(
-            (a, b) =>
-                (b.finishedAt ?? b.startedAt)
-                    .compareTo(a.finishedAt ?? a.startedAt),
+            (a, b) => (b.finishedAt ?? b.startedAt).compareTo(
+              a.finishedAt ?? a.startedAt,
+            ),
           );
-          final lastFull = successfulFulls.isNotEmpty ? successfulFulls.first : null;
+          final lastFull = successfulFulls.isNotEmpty
+              ? successfulFulls.first
+              : null;
 
           final successfulLogs = sybase
               .where(
@@ -69,19 +71,22 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
               )
               .toList();
           successfulLogs.sort(
-            (a, b) =>
-                (b.finishedAt ?? b.startedAt)
-                    .compareTo(a.finishedAt ?? a.startedAt),
+            (a, b) => (b.finishedAt ?? b.startedAt).compareTo(
+              a.finishedAt ?? a.startedAt,
+            ),
           );
-          final lastLog = successfulLogs.isNotEmpty ? successfulLogs.first : null;
+          final lastLog = successfulLogs.isNotEmpty
+              ? successfulLogs.first
+              : null;
 
           final lastBackup = sybase.isNotEmpty
               ? sybase.reduce(
                   (a, b) =>
-                      (a.finishedAt ?? a.startedAt)
-                              .isAfter(b.finishedAt ?? b.startedAt)
-                          ? a
-                          : b,
+                      (a.finishedAt ?? a.startedAt).isAfter(
+                        b.finishedAt ?? b.startedAt,
+                      )
+                      ? a
+                      : b,
                 )
               : null;
 
@@ -89,8 +94,9 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
           if (lastFull == null && lastLog != null) {
             status = SybaseChainStatus.broken;
           } else if (lastFull != null) {
-            final daysSinceFull =
-                DateTime.now().difference(lastFull.finishedAt ?? lastFull.startedAt).inDays;
+            final daysSinceFull = DateTime.now()
+                .difference(lastFull.finishedAt ?? lastFull.startedAt)
+                .inDays;
             if (daysSinceFull > BackupConstants.maxDaysForLogBackupBaseFull) {
               status = SybaseChainStatus.warning;
             }
@@ -163,8 +169,8 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
               child: Text(
                 _error!,
                 style: FluentTheme.of(context).typography.body?.copyWith(
-                      color: AppColors.error,
-                    ),
+                  color: AppColors.error,
+                ),
               ),
             )
           else
@@ -177,16 +183,18 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
                   _HealthChip(
                     label: 'Último Full',
                     value: _lastFull != null
-                        ? DateFormat('dd/MM/yyyy HH:mm')
-                            .format(_lastFull!.finishedAt ?? _lastFull!.startedAt)
+                        ? DateFormat('dd/MM/yyyy HH:mm').format(
+                            _lastFull!.finishedAt ?? _lastFull!.startedAt,
+                          )
                         : '—',
                     status: _chainStatus,
                   ),
                   _HealthChip(
                     label: 'Último Log',
                     value: _lastLog != null
-                        ? DateFormat('dd/MM/yyyy HH:mm')
-                            .format(_lastLog!.finishedAt ?? _lastLog!.startedAt)
+                        ? DateFormat(
+                            'dd/MM/yyyy HH:mm',
+                          ).format(_lastLog!.finishedAt ?? _lastLog!.startedAt)
                         : '—',
                     status: SybaseChainStatus.ok,
                   ),
@@ -289,8 +297,8 @@ class _ChainStatusChip extends StatelessWidget {
           Text(
             text,
             style: FluentTheme.of(context).typography.bodyStrong?.copyWith(
-                  color: color,
-                ),
+              color: color,
+            ),
           ),
         ],
       ),

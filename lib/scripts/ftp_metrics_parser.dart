@@ -86,20 +86,26 @@ class FtpMetricsParser {
       if (msg.isEmpty) continue;
 
       final timestamp = _extractTimestamp(line);
-      if (since != null && timestamp != null && timestamp.isBefore(since)) continue;
-      if (until != null && timestamp != null && timestamp.isAfter(until)) continue;
+      if (since != null && timestamp != null && timestamp.isBefore(since)) {
+        continue;
+      }
+      if (until != null && timestamp != null && timestamp.isAfter(until)) {
+        continue;
+      }
 
       final successMatch = _successRegex.firstMatch(msg);
       if (successMatch != null) {
         successCount++;
-        events.add(FtpMetricEvent(
-          timestamp: timestamp,
-          type: 'success',
-          remotePath: successMatch.group(1)?.trim(),
-          hashDurationMs: successMatch.group(2) != null
-              ? int.tryParse(successMatch.group(2)!)
-              : null,
-        ));
+        events.add(
+          FtpMetricEvent(
+            timestamp: timestamp,
+            type: 'success',
+            remotePath: successMatch.group(1)?.trim(),
+            hashDurationMs: successMatch.group(2) != null
+                ? int.tryParse(successMatch.group(2)!)
+                : null,
+          ),
+        );
         final hashMs = successMatch.group(2) != null
             ? int.tryParse(successMatch.group(2)!)
             : null;
@@ -110,40 +116,52 @@ class FtpMetricsParser {
       final resumeMatch = _resumeRegex.firstMatch(msg);
       if (resumeMatch != null) {
         resumeCount++;
-        events.add(FtpMetricEvent(
-          timestamp: timestamp,
-          type: 'resume',
-          resumeOffset: int.tryParse(resumeMatch.group(1)!),
-        ));
+        events.add(
+          FtpMetricEvent(
+            timestamp: timestamp,
+            type: 'resume',
+            resumeOffset: int.tryParse(resumeMatch.group(1)!),
+          ),
+        );
         continue;
       }
 
       if (_fallbackRegex.hasMatch(msg)) {
         fallbackCount++;
-        events.add(FtpMetricEvent(
-          timestamp: timestamp,
-          type: 'fallback',
-        ));
+        events.add(
+          FtpMetricEvent(
+            timestamp: timestamp,
+            type: 'fallback',
+          ),
+        );
         continue;
       }
 
       if (_errorRegex.hasMatch(msg)) {
         errorCount++;
-        events.add(FtpMetricEvent(
-          timestamp: timestamp,
-          type: 'error',
-          errorMessage: msg.length > 200 ? '${msg.substring(0, 200)}...' : msg,
-        ));
+        events.add(
+          FtpMetricEvent(
+            timestamp: timestamp,
+            type: 'error',
+            errorMessage: msg.length > 200
+                ? '${msg.substring(0, 200)}...'
+                : msg,
+          ),
+        );
         continue;
       }
 
       if (_integrityRegex.hasMatch(msg)) {
         integrityErrorCount++;
-        events.add(FtpMetricEvent(
-          timestamp: timestamp,
-          type: 'integrity',
-          errorMessage: msg.length > 200 ? '${msg.substring(0, 200)}...' : msg,
-        ));
+        events.add(
+          FtpMetricEvent(
+            timestamp: timestamp,
+            type: 'integrity',
+            errorMessage: msg.length > 200
+                ? '${msg.substring(0, 200)}...'
+                : msg,
+          ),
+        );
       }
     }
 
@@ -179,7 +197,9 @@ class FtpMetricsParser {
 
   String toCsv(FtpMetricsResult result) {
     final sb = StringBuffer();
-    sb.writeln('timestamp,type,remote_path,hash_duration_ms,resume_offset,error_message');
+    sb.writeln(
+      'timestamp,type,remote_path,hash_duration_ms,resume_offset,error_message',
+    );
     for (final e in result.events) {
       sb.writeln(
         '${e.timestamp?.toIso8601String() ?? ""},'
@@ -211,14 +231,18 @@ class FtpMetricsParser {
         'integrityErrorCount': result.integrityErrorCount,
         'hashDurationsMs': result.hashDurationsMs,
       },
-      'events': result.events.map((e) => {
-        'timestamp': e.timestamp?.toIso8601String(),
-        'type': e.type,
-        'remotePath': e.remotePath,
-        'hashDurationMs': e.hashDurationMs,
-        'resumeOffset': e.resumeOffset,
-        'errorMessage': e.errorMessage,
-      }).toList(),
+      'events': result.events
+          .map(
+            (e) => {
+              'timestamp': e.timestamp?.toIso8601String(),
+              'type': e.type,
+              'remotePath': e.remotePath,
+              'hashDurationMs': e.hashDurationMs,
+              'resumeOffset': e.resumeOffset,
+              'errorMessage': e.errorMessage,
+            },
+          )
+          .toList(),
     };
     return const JsonEncoder.withIndent('  ').convert(map);
   }

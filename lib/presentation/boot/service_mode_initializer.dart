@@ -29,7 +29,7 @@ class ServiceModeInitializer {
       await _appendBootstrapLog('initialize: begin');
       LoggerService.info('>>> [1/8] Iniciando ServiceModeInitializer');
       await _appendBootstrapLog('step 1/8: ServiceModeInitializer started');
-      
+
       try {
         await dotenv.load();
         LoggerService.info('>>> [2/8] Variáveis de ambiente carregadas');
@@ -40,9 +40,12 @@ class ServiceModeInitializer {
           'O serviço continuará com configurações padrão. '
           'Copie .env.example para .env na pasta do aplicativo se necessário.',
         );
-        await _appendBootstrapLog('step 2/8: dotenv load failed, continuing', e);
+        await _appendBootstrapLog(
+          'step 2/8: dotenv load failed, continuing',
+          e,
+        );
       }
-      
+
       setAppMode(getAppMode(Platform.executableArguments));
       LoggerService.info(
         '>>> [3/8] Modo do aplicativo (servico): ${currentAppMode.name}',
@@ -57,7 +60,9 @@ class ServiceModeInitializer {
       final isFirstServiceInstance = await singleInstanceService.checkAndLock(
         isServiceMode: true,
       );
-      LoggerService.info('>>> [4/8] Single instance check realizado para modo serviço');
+      LoggerService.info(
+        '>>> [4/8] Single instance check realizado para modo serviço',
+      );
       await _appendBootstrapLog(
         'step 4/8: single instance result=$isFirstServiceInstance',
       );
@@ -155,8 +160,12 @@ class ServiceModeInitializer {
       LoggerService.info('>>> [8/8] ✅ Verificador de saúde iniciado');
       await _appendBootstrapLog('step 8/8: healthChecker.start success');
 
-      LoggerService.info('🎉 ✅ Aplicativo rodando como serviço do Windows - INICIALIZAÇÃO COMPLETA');
-      await _appendBootstrapLog('initialize: complete, waiting shutdown signal');
+      LoggerService.info(
+        '🎉 ✅ Aplicativo rodando como serviço do Windows - INICIALIZAÇÃO COMPLETA',
+      );
+      await _appendBootstrapLog(
+        'initialize: complete, waiting shutdown signal',
+      );
 
       // Aguarda indefinidamente (será interrompido por shutdown signal via Completer)
       await shutdownCompleter.future;

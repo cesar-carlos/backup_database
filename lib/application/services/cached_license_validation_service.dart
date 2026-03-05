@@ -17,9 +17,9 @@ class CachedLicenseValidationService
     required ILicenseValidationService delegate,
     required IDeviceKeyService deviceKeyService,
     Duration ttl = LicenseCacheConstants.ttl,
-  })  : _delegate = delegate,
-        _deviceKeyService = deviceKeyService,
-        _ttl = ttl;
+  }) : _delegate = delegate,
+       _deviceKeyService = deviceKeyService,
+       _ttl = ttl;
 
   final ILicenseValidationService _delegate;
   final IDeviceKeyService _deviceKeyService;

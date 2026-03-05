@@ -29,7 +29,10 @@ void main(List<String> args) async {
   final lines = <String>[];
   if (filePaths.isEmpty) {
     lines.addAll(
-      await stdin.transform(utf8.decoder).transform(const LineSplitter()).toList(),
+      await stdin
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .toList(),
     );
   } else {
     for (final path in filePaths) {
@@ -51,7 +54,8 @@ void main(List<String> args) async {
   _printSummary(result);
 
   if (exportFormat != null) {
-    final outPath = 'ftp_metrics_export.${exportFormat == 'csv' ? 'csv' : 'json'}';
+    final outPath =
+        'ftp_metrics_export.${exportFormat == 'csv' ? 'csv' : 'json'}';
     if (exportFormat == 'csv') {
       File(outPath).writeAsStringSync(parser.toCsv(result));
       print('\nExportado para: $outPath');
@@ -113,8 +117,12 @@ Exemplos:
 
 void _printSummary(FtpMetricsResult result) {
   final total = result.successCount + result.errorCount;
-  final successRate = total > 0 ? (result.successCount / total * 100).toStringAsFixed(1) : '-';
-  final errorRate = total > 0 ? (result.errorCount / total * 100).toStringAsFixed(1) : '-';
+  final successRate = total > 0
+      ? (result.successCount / total * 100).toStringAsFixed(1)
+      : '-';
+  final errorRate = total > 0
+      ? (result.errorCount / total * 100).toStringAsFixed(1)
+      : '-';
   final resumeRate = result.successCount > 0
       ? (result.resumeCount / result.successCount * 100).toStringAsFixed(1)
       : '-';
@@ -130,10 +138,14 @@ void _printSummary(FtpMetricsResult result) {
   print('Taxa de erro:    $errorRate%');
   print('% com retomada:  $resumeRate%');
   if (result.hashDurationsMs.isNotEmpty) {
-    final avg = result.hashDurationsMs.reduce((a, b) => a + b) / result.hashDurationsMs.length;
+    final avg =
+        result.hashDurationsMs.reduce((a, b) => a + b) /
+        result.hashDurationsMs.length;
     final max = result.hashDurationsMs.reduce((a, b) => a > b ? a : b);
     print('');
-    print('Hash SHA-256 (amostra): média ${avg.toStringAsFixed(0)}ms, max ${max}ms');
+    print(
+      'Hash SHA-256 (amostra): média ${avg.toStringAsFixed(0)}ms, max ${max}ms',
+    );
   }
   print('');
 }

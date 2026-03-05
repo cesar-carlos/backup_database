@@ -6,13 +6,22 @@ void main() {
   group('BackupHistoryStateMachine', () {
     group('isTerminal', () {
       test('returns true for success, error, warning', () {
-        expect(BackupHistoryStateMachine.isTerminal(BackupStatus.success), true);
+        expect(
+          BackupHistoryStateMachine.isTerminal(BackupStatus.success),
+          true,
+        );
         expect(BackupHistoryStateMachine.isTerminal(BackupStatus.error), true);
-        expect(BackupHistoryStateMachine.isTerminal(BackupStatus.warning), true);
+        expect(
+          BackupHistoryStateMachine.isTerminal(BackupStatus.warning),
+          true,
+        );
       });
 
       test('returns false for running', () {
-        expect(BackupHistoryStateMachine.isTerminal(BackupStatus.running), false);
+        expect(
+          BackupHistoryStateMachine.isTerminal(BackupStatus.running),
+          false,
+        );
       });
     });
 

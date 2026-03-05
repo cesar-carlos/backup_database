@@ -687,8 +687,7 @@ void main() {
             tag: any(named: 'tag'),
           ),
         ).thenAnswer((invocation) async {
-          dbvalidArgs =
-              invocation.namedArguments[#arguments] as List<String>?;
+          dbvalidArgs = invocation.namedArguments[#arguments] as List<String>?;
           return const rd.Success(
             ProcessResult(
               exitCode: 0,

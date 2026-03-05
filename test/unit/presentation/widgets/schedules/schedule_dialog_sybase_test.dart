@@ -58,16 +58,21 @@ void main() {
     List<BackupDestination> destinations = const [],
     License? license,
   }) {
-    when(() => mockSqlRepo.getAll())
-        .thenAnswer((_) async => const rd.Success(<SqlServerConfig>[]));
-    when(() => mockSybaseRepo.getAll())
-        .thenAnswer((_) async => rd.Success(sybaseConfigs));
-    when(() => mockPostgresRepo.getAll())
-        .thenAnswer((_) async => const rd.Success(<PostgresConfig>[]));
-    when(() => mockDestRepo.getAll())
-        .thenAnswer((_) async => rd.Success(destinations));
-    when(() => mockToolVerification.verifySqlCmd())
-        .thenAnswer((_) async => const rd.Success(true));
+    when(
+      () => mockSqlRepo.getAll(),
+    ).thenAnswer((_) async => const rd.Success(<SqlServerConfig>[]));
+    when(
+      () => mockSybaseRepo.getAll(),
+    ).thenAnswer((_) async => rd.Success(sybaseConfigs));
+    when(
+      () => mockPostgresRepo.getAll(),
+    ).thenAnswer((_) async => const rd.Success(<PostgresConfig>[]));
+    when(
+      () => mockDestRepo.getAll(),
+    ).thenAnswer((_) async => rd.Success(destinations));
+    when(
+      () => mockToolVerification.verifySqlCmd(),
+    ).thenAnswer((_) async => const rd.Success(true));
     when(() => mockToolVerification.verifySybaseToolsDetailed()).thenAnswer(
       (_) async => const rd.Success(
         SybaseToolsStatus(
@@ -83,8 +88,9 @@ void main() {
           ? rd.Success(license)
           : rd.Failure(Exception('No license')),
     );
-    when(() => mockDeviceKey.getDeviceKey())
-        .thenAnswer((_) async => const rd.Success('test-device-key'));
+    when(
+      () => mockDeviceKey.getDeviceKey(),
+    ).thenAnswer((_) async => const rd.Success('test-device-key'));
 
     final sqlProvider = SqlServerConfigProvider(
       mockSqlRepo,
@@ -143,23 +149,23 @@ void main() {
   }
 
   SybaseConfig sybaseConfig({String id = 'sybase-cfg-1'}) => SybaseConfig(
-        id: id,
-        name: 'Sybase Test',
-        serverName: 'localhost',
-        databaseName: DatabaseName('testdb'),
-        username: 'sa',
-        password: 'secret',
-      );
+    id: id,
+    name: 'Sybase Test',
+    serverName: 'localhost',
+    databaseName: DatabaseName('testdb'),
+    username: 'sa',
+    password: 'secret',
+  );
 
   License licenseWithLogAndDifferential() => License(
-        deviceKey: 'test-key',
-        licenseKey: 'test-license',
-        allowedFeatures: const [
-          LicenseFeatures.differentialBackup,
-          LicenseFeatures.logBackup,
-        ],
-        expiresAt: DateTime.now().add(const Duration(days: 365)),
-      );
+    deviceKey: 'test-key',
+    licenseKey: 'test-license',
+    allowedFeatures: const [
+      LicenseFeatures.differentialBackup,
+      LicenseFeatures.logBackup,
+    ],
+    expiresAt: DateTime.now().add(const Duration(days: 365)),
+  );
 
   group('ScheduleDialog - Sybase backup types', () {
     testWidgets(

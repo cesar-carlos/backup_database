@@ -10,7 +10,8 @@ Future<void> main() async {
 
   try {
     // Usar caminho direto dos documentos do usuário
-    final userHome = Platform.environment['USERPROFILE'] ??
+    final userHome =
+        Platform.environment['USERPROFILE'] ??
         Platform.environment['HOME'] ??
         '';
     final dbFolder = p.join(userHome, 'Documents');
@@ -107,9 +108,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   final data = <String, dynamic>{};
 
   try {
-    final sqlConfigs = await db.customSelect(
-      'SELECT * FROM sql_server_configs_table',
-    ).get();
+    final sqlConfigs = await db
+        .customSelect(
+          'SELECT * FROM sql_server_configs_table',
+        )
+        .get();
     data['sql_server_configs'] = sqlConfigs.map((row) => row.data).toList();
     LoggerService.info('   ✓ SQL Server configs: ${sqlConfigs.length}');
   } on Object catch (e) {
@@ -118,9 +121,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final sybaseConfigs = await db.customSelect(
-      'SELECT * FROM sybase_configs_table',
-    ).get();
+    final sybaseConfigs = await db
+        .customSelect(
+          'SELECT * FROM sybase_configs_table',
+        )
+        .get();
     data['sybase_configs'] = sybaseConfigs.map((row) => row.data).toList();
     LoggerService.info('   ✓ Sybase configs: ${sybaseConfigs.length}');
   } on Object catch (e) {
@@ -129,9 +134,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final postgresConfigs = await db.customSelect(
-      'SELECT * FROM postgres_configs_table',
-    ).get();
+    final postgresConfigs = await db
+        .customSelect(
+          'SELECT * FROM postgres_configs_table',
+        )
+        .get();
     data['postgres_configs'] = postgresConfigs.map((row) => row.data).toList();
     LoggerService.info('   ✓ PostgreSQL configs: ${postgresConfigs.length}');
   } on Object catch (e) {
@@ -140,9 +147,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final destinations = await db.customSelect(
-      'SELECT * FROM backup_destinations_table',
-    ).get();
+    final destinations = await db
+        .customSelect(
+          'SELECT * FROM backup_destinations_table',
+        )
+        .get();
     data['destinations'] = destinations.map((row) => row.data).toList();
     LoggerService.info('   ✓ Destinos: ${destinations.length}');
   } on Object catch (e) {
@@ -151,9 +160,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final schedules = await db.customSelect(
-      'SELECT * FROM schedules_table',
-    ).get();
+    final schedules = await db
+        .customSelect(
+          'SELECT * FROM schedules_table',
+        )
+        .get();
     data['schedules'] = schedules.map((row) => row.data).toList();
     LoggerService.info('   ✓ Agendamentos: ${schedules.length}');
   } on Object catch (e) {
@@ -162,9 +173,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final scheduleDestinations = await db.customSelect(
-      'SELECT * FROM schedule_destinations_table',
-    ).get();
+    final scheduleDestinations = await db
+        .customSelect(
+          'SELECT * FROM schedule_destinations_table',
+        )
+        .get();
     data['schedule_destinations'] = scheduleDestinations
         .map((row) => row.data)
         .toList();
@@ -177,9 +190,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final history = await db.customSelect(
-      'SELECT * FROM backup_history_table',
-    ).get();
+    final history = await db
+        .customSelect(
+          'SELECT * FROM backup_history_table',
+        )
+        .get();
     data['backup_history'] = history.map((row) => row.data).toList();
     LoggerService.info('   ✓ Histórico: ${history.length}');
   } on Object catch (e) {
@@ -188,9 +203,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final logs = await db.customSelect(
-      'SELECT * FROM backup_logs_table',
-    ).get();
+    final logs = await db
+        .customSelect(
+          'SELECT * FROM backup_logs_table',
+        )
+        .get();
     data['backup_logs'] = logs.map((row) => row.data).toList();
     LoggerService.info('   ✓ Logs: ${logs.length}');
   } on Object catch (e) {
@@ -199,9 +216,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final emailConfigs = await db.customSelect(
-      'SELECT * FROM email_configs_table',
-    ).get();
+    final emailConfigs = await db
+        .customSelect(
+          'SELECT * FROM email_configs_table',
+        )
+        .get();
     data['email_configs'] = emailConfigs.map((row) => row.data).toList();
     LoggerService.info(
       '   ✓ Configurações de email: ${emailConfigs.length}',
@@ -212,9 +231,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final emailTargets = await db.customSelect(
-      'SELECT * FROM email_notification_targets_table',
-    ).get();
+    final emailTargets = await db
+        .customSelect(
+          'SELECT * FROM email_notification_targets_table',
+        )
+        .get();
     data['email_notification_targets'] = emailTargets
         .map((row) => row.data)
         .toList();
@@ -227,9 +248,11 @@ Future<Map<String, dynamic>> _exportAllData(AppDatabase db) async {
   }
 
   try {
-    final licenses = await db.customSelect(
-      'SELECT * FROM licenses_table',
-    ).get();
+    final licenses = await db
+        .customSelect(
+          'SELECT * FROM licenses_table',
+        )
+        .get();
     data['licenses'] = licenses.map((row) => row.data).toList();
     LoggerService.info('   ✓ Licenças: ${licenses.length}');
   } on Object catch (e) {
@@ -706,9 +729,11 @@ Future<void> _validateData(
   AppDatabase db,
   Map<String, dynamic> exportData,
 ) async {
-  final sqlConfigsCount = await db.customSelect(
-    'SELECT COUNT(*) as count FROM sql_server_configs_table',
-  ).getSingle();
+  final sqlConfigsCount = await db
+      .customSelect(
+        'SELECT COUNT(*) as count FROM sql_server_configs_table',
+      )
+      .getSingle();
   final exportedSqlConfigs =
       (exportData['sql_server_configs'] as List<dynamic>).length;
 
@@ -719,11 +744,12 @@ Future<void> _validateData(
     );
   }
 
-  final schedulesCount = await db.customSelect(
-    'SELECT COUNT(*) as count FROM schedules_table',
-  ).getSingle();
-  final exportedSchedules =
-      (exportData['schedules'] as List<dynamic>).length;
+  final schedulesCount = await db
+      .customSelect(
+        'SELECT COUNT(*) as count FROM schedules_table',
+      )
+      .getSingle();
+  final exportedSchedules = (exportData['schedules'] as List<dynamic>).length;
 
   if (schedulesCount.read<int>('count') != exportedSchedules) {
     LoggerService.warning(
@@ -732,9 +758,11 @@ Future<void> _validateData(
     );
   }
 
-  final destCount = await db.customSelect(
-    'SELECT COUNT(*) as count FROM backup_destinations_table',
-  ).getSingle();
+  final destCount = await db
+      .customSelect(
+        'SELECT COUNT(*) as count FROM backup_destinations_table',
+      )
+      .getSingle();
   final exportedDest = (exportData['destinations'] as List<dynamic>).length;
 
   if (destCount.read<int>('count') != exportedDest) {

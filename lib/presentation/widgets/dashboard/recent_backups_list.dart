@@ -137,8 +137,7 @@ class RecentBackupsList extends StatelessWidget {
   }
 
   bool _hasSybaseDetails(BackupHistory backup) =>
-      backup.databaseType.toLowerCase() == 'sybase' &&
-      backup.metrics != null;
+      backup.databaseType.toLowerCase() == 'sybase' && backup.metrics != null;
 
   String _buildSybaseDetailsText(BuildContext context, BackupHistory backup) {
     final parts = <String>[];
@@ -147,15 +146,17 @@ class RecentBackupsList extends StatelessWidget {
     if (requestedType != null &&
         requestedType != backup.backupType &&
         requestedType.isNotEmpty) {
-      final requestedDisplay =
-          backupTypeFromString(requestedType).displayName;
-      final effectiveDisplay =
-          backupTypeFromString(backup.backupType).displayName;
-      parts.add(_t(
-        context,
-        'Solicitado: $requestedDisplay → Efetivo: $effectiveDisplay',
-        'Requested: $requestedDisplay → Effective: $effectiveDisplay',
-      ));
+      final requestedDisplay = backupTypeFromString(requestedType).displayName;
+      final effectiveDisplay = backupTypeFromString(
+        backup.backupType,
+      ).displayName;
+      parts.add(
+        _t(
+          context,
+          'Solicitado: $requestedDisplay → Efetivo: $effectiveDisplay',
+          'Requested: $requestedDisplay → Effective: $effectiveDisplay',
+        ),
+      );
     }
     final method = backup.metrics?.sybaseOptions?['backupMethod'] as String?;
     if (method != null) {
@@ -164,11 +165,13 @@ class RecentBackupsList extends StatelessWidget {
     final verify = backup.metrics?.flags.verifyPolicy;
     if (verify != null && verify != 'none') {
       final verifyLabel = _formatVerifyPolicy(context, verify);
-      parts.add(_t(
-        context,
-        'Verificação: $verifyLabel',
-        'Verify: $verifyLabel',
-      ));
+      parts.add(
+        _t(
+          context,
+          'Verificação: $verifyLabel',
+          'Verify: $verifyLabel',
+        ),
+      );
     }
     return parts.join(' • ');
   }

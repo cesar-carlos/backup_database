@@ -21,40 +21,43 @@ void main() {
   });
 
   Schedule sybaseLogSchedule() => SybaseBackupSchedule(
-        name: 'Sybase Log',
-        databaseConfigId: 'cfg-1',
-        databaseType: DatabaseType.sybase,
-        scheduleType: 'daily',
-        scheduleConfig: '{}',
-        destinationIds: const ['dest-1'],
-        backupFolder: r'C:\backup',
-        backupType: BackupType.log,
-        id: 'sched-1',
-      );
+    name: 'Sybase Log',
+    databaseConfigId: 'cfg-1',
+    databaseType: DatabaseType.sybase,
+    scheduleType: 'daily',
+    scheduleConfig: '{}',
+    destinationIds: const ['dest-1'],
+    backupFolder: r'C:\backup',
+    backupType: BackupType.log,
+    id: 'sched-1',
+  );
 
   group('ValidateSybaseLogBackupPreflight', () {
-    test('retorna canProceed=true para databaseType diferente de sybase', () async {
-      final schedule = Schedule(
-        name: 'SQL Server',
-        databaseConfigId: 'cfg-1',
-        databaseType: DatabaseType.sqlServer,
-        scheduleType: 'daily',
-        scheduleConfig: '{}',
-        destinationIds: const ['dest-1'],
-        backupFolder: r'C:\backup',
-        backupType: BackupType.log,
-        id: 'sched-1',
-      );
+    test(
+      'retorna canProceed=true para databaseType diferente de sybase',
+      () async {
+        final schedule = Schedule(
+          name: 'SQL Server',
+          databaseConfigId: 'cfg-1',
+          databaseType: DatabaseType.sqlServer,
+          scheduleType: 'daily',
+          scheduleConfig: '{}',
+          destinationIds: const ['dest-1'],
+          backupFolder: r'C:\backup',
+          backupType: BackupType.log,
+          id: 'sched-1',
+        );
 
-      final result = await useCase(schedule);
+        final result = await useCase(schedule);
 
-      expect(result.isSuccess(), isTrue);
-      result.fold(
-        (r) => expect(r.canProceed, isTrue),
-        (_) => fail('Expected success'),
-      );
-      verifyNever(() => repository.getBySchedule(any()));
-    });
+        expect(result.isSuccess(), isTrue);
+        result.fold(
+          (r) => expect(r.canProceed, isTrue),
+          (_) => fail('Expected success'),
+        );
+        verifyNever(() => repository.getBySchedule(any()));
+      },
+    );
 
     test('retorna canProceed=true para backupType full (nao log)', () async {
       final schedule = sybaseLogSchedule().copyWith(

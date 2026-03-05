@@ -893,7 +893,8 @@ class SchedulerService implements ISchedulerService {
         final now = DateTime.now();
         final progress = 0.85 + p * 0.10;
         final pct = (p * 100).toInt();
-        final shouldUpdate = lastUpdateTime == null ||
+        final shouldUpdate =
+            lastUpdateTime == null ||
             p >= 0.99 ||
             p <= 0 ||
             now.difference(lastUpdateTime!) >= _progressThrottleInterval ||
@@ -908,13 +909,14 @@ class SchedulerService implements ISchedulerService {
         if (totalDestinations > 1) {
           step = 'Enviando para $totalDestinations destinos: $step';
         }
-        final hasUploadPrefix = step.contains('Enviando') || step.contains('Retomando');
+        final hasUploadPrefix =
+            step.contains('Enviando') || step.contains('Retomando');
         final isComplete = p >= 0.99;
         final message = isComplete && hasUploadPrefix
             ? '$step concluído ✓'
             : hasUploadPrefix
-                ? '$step — $pct%'
-                : '$pct%';
+            ? '$step — $pct%'
+            : '$pct%';
 
         _progressNotifier.updateProgress(
           step: step,

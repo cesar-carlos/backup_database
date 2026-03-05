@@ -51,8 +51,8 @@ class DestinationProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final policyResult =
-        await _licensePolicyService.validateDestinationCapabilities(destination);
+    final policyResult = await _licensePolicyService
+        .validateDestinationCapabilities(destination);
     if (policyResult.isError()) {
       final failure = policyResult.exceptionOrNull();
       _error = failure is Failure ? failure.message : failure.toString();
@@ -84,8 +84,8 @@ class DestinationProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final policyResult =
-        await _licensePolicyService.validateDestinationCapabilities(destination);
+    final policyResult = await _licensePolicyService
+        .validateDestinationCapabilities(destination);
     if (policyResult.isError()) {
       final failure = policyResult.exceptionOrNull();
       _error = failure is Failure ? failure.message : failure.toString();

@@ -74,43 +74,44 @@ void main() {
       expect(result.status, BackupStatus.success);
     });
 
-    test('updateHistoryAndLogIfRunning atomically updates history and creates log',
-        () async {
-      final history = BackupHistory(
-        id: 'hist-3',
-        scheduleId: 'sch-1',
-        databaseName: 'Test',
-        databaseType: 'sqlite',
-        backupPath: '/tmp/backup.bak',
-        fileSize: 1024,
-        status: BackupStatus.running,
-        startedAt: DateTime.now(),
-      );
+    test(
+      'updateHistoryAndLogIfRunning atomically updates history and creates log',
+      () async {
+        final history = BackupHistory(
+          id: 'hist-3',
+          scheduleId: 'sch-1',
+          databaseName: 'Test',
+          databaseType: 'sqlite',
+          backupPath: '/tmp/backup.bak',
+          fileSize: 1024,
+          status: BackupStatus.running,
+          startedAt: DateTime.now(),
+        );
 
-      final createResult = await repository.create(history);
-      expect(createResult.isSuccess(), isTrue);
+        final createResult = await repository.create(history);
+        expect(createResult.isSuccess(), isTrue);
 
-      final updatedHistory = history.copyWith(
-        status: BackupStatus.error,
-        errorMessage: 'Test error',
-        finishedAt: DateTime.now(),
-        durationSeconds: 5,
-      );
+        final updatedHistory = history.copyWith(
+          status: BackupStatus.error,
+          errorMessage: 'Test error',
+          finishedAt: DateTime.now(),
+          durationSeconds: 5,
+        );
 
-      final updateResult = await repository.updateHistoryAndLogIfRunning(
-        history: updatedHistory,
-        logStep: LogStepConstants.backupError,
-        logLevel: LogLevel.error,
-        logMessage: 'Test error',
-      );
+        final updateResult = await repository.updateHistoryAndLogIfRunning(
+          history: updatedHistory,
+          logStep: LogStepConstants.backupError,
+          logLevel: LogLevel.error,
+          logMessage: 'Test error',
+        );
 
-      expect(updateResult.isSuccess(), isTrue);
+        expect(updateResult.isSuccess(), isTrue);
 
-      final logsResult =
-          await logRepository.getByBackupHistory(history.id);
-      expect(logsResult.isSuccess(), isTrue);
-      final logs = logsResult.getOrNull()!;
-      expect(logs.any((l) => l.message == 'Test error'), isTrue);
-    });
+        final logsResult = await logRepository.getByBackupHistory(history.id);
+        expect(logsResult.isSuccess(), isTrue);
+        final logs = logsResult.getOrNull()!;
+        expect(logs.any((l) => l.message == 'Test error'), isTrue);
+      },
+    );
   });
 }

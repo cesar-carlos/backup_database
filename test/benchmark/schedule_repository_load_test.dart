@@ -28,31 +28,39 @@ void main() {
   });
 
   group('ScheduleRepository load benchmarks', () {
-    test('getAll completes within threshold for $scheduleCount schedules',
-        () async {
-      final durations = await _measureOperation(
-        () => scheduleRepository.getAll(),
-        warmupRuns: warmupRuns,
-        measureRuns: measureRuns,
-      );
-      final avgMs = _averageMs(durations);
-      expect(avgMs, lessThan(500), reason: 'getAll should complete in < 500ms');
-    });
+    test(
+      'getAll completes within threshold for $scheduleCount schedules',
+      () async {
+        final durations = await _measureOperation(
+          () => scheduleRepository.getAll(),
+          warmupRuns: warmupRuns,
+          measureRuns: measureRuns,
+        );
+        final avgMs = _averageMs(durations);
+        expect(
+          avgMs,
+          lessThan(500),
+          reason: 'getAll should complete in < 500ms',
+        );
+      },
+    );
 
-    test('getEnabled completes within threshold for $scheduleCount schedules',
-        () async {
-      final durations = await _measureOperation(
-        () => scheduleRepository.getEnabled(),
-        warmupRuns: warmupRuns,
-        measureRuns: measureRuns,
-      );
-      final avgMs = _averageMs(durations);
-      expect(
-        avgMs,
-        lessThan(500),
-        reason: 'getEnabled should complete in < 500ms',
-      );
-    });
+    test(
+      'getEnabled completes within threshold for $scheduleCount schedules',
+      () async {
+        final durations = await _measureOperation(
+          () => scheduleRepository.getEnabled(),
+          warmupRuns: warmupRuns,
+          measureRuns: measureRuns,
+        );
+        final avgMs = _averageMs(durations);
+        expect(
+          avgMs,
+          lessThan(500),
+          reason: 'getEnabled should complete in < 500ms',
+        );
+      },
+    );
 
     test('getEnabledDueForExecution completes within threshold', () async {
       final now = DateTime.now();
@@ -158,7 +166,9 @@ Future<List<Duration>> _measureOperation(
 
 double _averageMs(List<Duration> durations) {
   if (durations.isEmpty) return 0;
-  final totalMicros =
-      durations.fold<int>(0, (sum, d) => sum + d.inMicroseconds);
+  final totalMicros = durations.fold<int>(
+    0,
+    (sum, d) => sum + d.inMicroseconds,
+  );
   return totalMicros / durations.length / 1000;
 }

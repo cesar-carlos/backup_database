@@ -45,8 +45,8 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
     UploadProgressCallback? onProgress,
   }) async {
     try {
-      final licenseCheck =
-          await _licensePolicyService.validateDestinationCapabilities(destination);
+      final licenseCheck = await _licensePolicyService
+          .validateDestinationCapabilities(destination);
       if (licenseCheck.isError()) {
         return rd.Failure(licenseCheck.exceptionOrNull()!);
       }

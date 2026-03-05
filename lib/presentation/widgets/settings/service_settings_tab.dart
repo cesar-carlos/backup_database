@@ -158,7 +158,9 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             ),
             const SizedBox(height: 12),
             Button(
-              onPressed: provider.isLoading ? null : () => provider.checkStatus(),
+              onPressed: provider.isLoading
+                  ? null
+                  : () => provider.checkStatus(),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -360,35 +362,28 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   String _getStatusText(WindowsServiceProvider provider) {
     if (provider.isLoading) {
       return switch (provider.operation) {
-        WindowsServiceOperation.install =>
-          _t(
-            'Instalando... aguardando confirmação do UAC',
-            'Installing... waiting for UAC confirmation',
-          ),
-        WindowsServiceOperation.uninstall =>
-          _t(
-            'Removendo... aguardando confirmação do UAC',
-            'Removing... waiting for UAC confirmation',
-          ),
-        WindowsServiceOperation.start =>
-          _t(
-            'Iniciando... aguardando confirmação do UAC',
-            'Starting... waiting for UAC confirmation',
-          ),
-        WindowsServiceOperation.stop =>
-          _t(
-            'Parando... aguardando confirmação do UAC',
-            'Stopping... waiting for UAC confirmation',
-          ),
-        WindowsServiceOperation.restart =>
-          _t(
-            'Reiniciando... aguardando confirmação do UAC',
-            'Restarting... waiting for UAC confirmation',
-          ),
-        WindowsServiceOperation.check =>
-          _t('Verificando...', 'Checking...'),
-        WindowsServiceOperation.none =>
-          _t('Verificando...', 'Checking...'),
+        WindowsServiceOperation.install => _t(
+          'Instalando... aguardando confirmação do UAC',
+          'Installing... waiting for UAC confirmation',
+        ),
+        WindowsServiceOperation.uninstall => _t(
+          'Removendo... aguardando confirmação do UAC',
+          'Removing... waiting for UAC confirmation',
+        ),
+        WindowsServiceOperation.start => _t(
+          'Iniciando... aguardando confirmação do UAC',
+          'Starting... waiting for UAC confirmation',
+        ),
+        WindowsServiceOperation.stop => _t(
+          'Parando... aguardando confirmação do UAC',
+          'Stopping... waiting for UAC confirmation',
+        ),
+        WindowsServiceOperation.restart => _t(
+          'Reiniciando... aguardando confirmação do UAC',
+          'Restarting... waiting for UAC confirmation',
+        ),
+        WindowsServiceOperation.check => _t('Verificando...', 'Checking...'),
+        WindowsServiceOperation.none => _t('Verificando...', 'Checking...'),
       };
     }
     if (provider.isInstalled) {

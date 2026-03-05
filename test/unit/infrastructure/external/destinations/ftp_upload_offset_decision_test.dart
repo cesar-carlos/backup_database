@@ -18,18 +18,22 @@ void main() {
       expect(decision, isA<FtpUploadSkipAndValidate>());
     });
 
-    test('returns SkipAndValidate when remoteSize equals fileSize without REST',
-        () {
-      final decision = computeFtpUploadOffsetDecision(1000, 1000, false);
-      expect(decision, isA<FtpUploadSkipAndValidate>());
-    });
+    test(
+      'returns SkipAndValidate when remoteSize equals fileSize without REST',
+      () {
+        final decision = computeFtpUploadOffsetDecision(1000, 1000, false);
+        expect(decision, isA<FtpUploadSkipAndValidate>());
+      },
+    );
 
-    test('returns Resume when 0 < remoteSize < fileSize and REST supported',
-        () {
-      final decision = computeFtpUploadOffsetDecision(500, 1000, true);
-      expect(decision, isA<FtpUploadResume>());
-      expect((decision as FtpUploadResume).offset, 500);
-    });
+    test(
+      'returns Resume when 0 < remoteSize < fileSize and REST supported',
+      () {
+        final decision = computeFtpUploadOffsetDecision(500, 1000, true);
+        expect(decision, isA<FtpUploadResume>());
+        expect((decision as FtpUploadResume).offset, 500);
+      },
+    );
 
     test('returns FullUpload when partial exists but REST not supported', () {
       final decision = computeFtpUploadOffsetDecision(500, 1000, false);

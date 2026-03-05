@@ -38,44 +38,47 @@ void main() {
       );
     });
 
-    test('returns Failure with connection error when host unreachable', () async {
-      final tempDir = await Directory.systemTemp.createTemp('ftp_test_');
-      addTearDown(() => tempDir.delete(recursive: true));
-      final testFile = File(p.join(tempDir.path, 'test.bak'));
-      await testFile.writeAsString('test content');
+    test(
+      'returns Failure with connection error when host unreachable',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp('ftp_test_');
+        addTearDown(() => tempDir.delete(recursive: true));
+        final testFile = File(p.join(tempDir.path, 'test.bak'));
+        await testFile.writeAsString('test content');
 
-      const config = FtpDestinationConfig(
-        host: '127.0.0.1',
-        port: 29999,
-        username: 'u',
-        password: 'p',
-        remotePath: '/',
-      );
+        const config = FtpDestinationConfig(
+          host: '127.0.0.1',
+          port: 29999,
+          username: 'u',
+          password: 'p',
+          remotePath: '/',
+        );
 
-      final result = await service.upload(
-        sourceFilePath: testFile.path,
-        config: config,
-      );
+        final result = await service.upload(
+          sourceFilePath: testFile.path,
+          config: config,
+        );
 
-      expect(result.isError(), isTrue);
-      result.fold(
-        (_) => fail('Expected failure'),
-        (f) {
-          expect(f, isA<FtpFailure>());
-          final failure = f as FtpFailure;
-          expect(
-            failure.message.toLowerCase(),
-            anyOf(
-              contains('conexão'),
-              contains('connection'),
-              contains('timeout'),
-              contains('recusad'),
-              contains('refused'),
-            ),
-          );
-        },
-      );
-    });
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('Expected failure'),
+          (f) {
+            expect(f, isA<FtpFailure>());
+            final failure = f as FtpFailure;
+            expect(
+              failure.message.toLowerCase(),
+              anyOf(
+                contains('conexão'),
+                contains('connection'),
+                contains('timeout'),
+                contains('recusad'),
+                contains('refused'),
+              ),
+            );
+          },
+        );
+      },
+    );
   });
 
   group('FtpDestinationService.testConnection', () {

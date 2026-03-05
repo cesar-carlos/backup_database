@@ -14,7 +14,8 @@ import 'package:mocktail/mocktail.dart';
 class MockSqlServerConfigRepository extends Mock
     implements ISqlServerConfigRepository {}
 
-class MockSybaseConfigRepository extends Mock implements ISybaseConfigRepository {}
+class MockSybaseConfigRepository extends Mock
+    implements ISybaseConfigRepository {}
 
 class MockPostgresConfigRepository extends Mock
     implements IPostgresConfigRepository {}

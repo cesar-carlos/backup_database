@@ -44,8 +44,9 @@ class LoggerService {
   /// Retorna o FileLoggerService se disponível
   static FileLoggerService? get fileLogger => _fileLogger;
 
-  static String _messageWithContext(String message) =>
-      LogContext.hasContext ? '${LogContext.buildStructuredPrefix()}$message' : message;
+  static String _messageWithContext(String message) => LogContext.hasContext
+      ? '${LogContext.buildStructuredPrefix()}$message'
+      : message;
 
   static void debug(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.d(message, error: error, stackTrace: stackTrace);

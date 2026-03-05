@@ -6,7 +6,16 @@ void main() {
     test('redactCommandForLogging redige -P <valor> (SQL Server)', () {
       final result = ProcessService.redactCommandForLogging(
         'sqlcmd',
-        ['-S', 'localhost', '-U', 'sa', '-P', 'mySecretPassword', '-Q', 'SELECT 1'],
+        [
+          '-S',
+          'localhost',
+          '-U',
+          'sa',
+          '-P',
+          'mySecretPassword',
+          '-Q',
+          'SELECT 1',
+        ],
       );
 
       expect(result, contains('***REDACTED***'));
@@ -14,20 +23,22 @@ void main() {
       expect(result, contains('-P'));
     });
 
-    test('redactCommandForLogging redige PWD= em connection strings (Sybase)',
-        () {
-      const connStr =
-          'ENG=TestServer;DBN=testdb;UID=dba;PWD=superSecret123;LINKS=TCPIP';
-      final result = ProcessService.redactCommandForLogging(
-        'dbisql',
-        ['-c', connStr, '-nogui', 'SELECT 1'],
-      );
+    test(
+      'redactCommandForLogging redige PWD= em connection strings (Sybase)',
+      () {
+        const connStr =
+            'ENG=TestServer;DBN=testdb;UID=dba;PWD=superSecret123;LINKS=TCPIP';
+        final result = ProcessService.redactCommandForLogging(
+          'dbisql',
+          ['-c', connStr, '-nogui', 'SELECT 1'],
+        );
 
-      expect(result, contains('PWD=***REDACTED***'));
-      expect(result, isNot(contains('superSecret123')));
-      expect(result, contains('ENG=TestServer'));
-      expect(result, contains('UID=dba'));
-    });
+        expect(result, contains('PWD=***REDACTED***'));
+        expect(result, isNot(contains('superSecret123')));
+        expect(result, contains('ENG=TestServer'));
+        expect(result, contains('UID=dba'));
+      },
+    );
 
     test('redactCommandForLogging redige PWD= case insensitive', () {
       const connStr = 'ENG=x;pwd=lowercaseSecret;DBN=db';

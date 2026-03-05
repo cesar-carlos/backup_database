@@ -25,9 +25,11 @@ Future<void> main() async {
 
     final database = AppDatabase();
 
-    final tables = await database.customSelect(
-      "SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name",
-    ).get();
+    final tables = await database
+        .customSelect(
+          "SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name",
+        )
+        .get();
 
     LoggerService.info('\n📋 Tables (${tables.length}):');
     for (final table in tables) {
@@ -39,30 +41,38 @@ Future<void> main() async {
     final schemaVersion = version.first.read<int>('user_version');
     LoggerService.info('\n🔢 Schema version: $schemaVersion (expected: 24)');
 
-    final sqlConfigs = await database.customSelect(
-      'SELECT COUNT(*) as count FROM sql_server_configs_table',
-    ).get();
+    final sqlConfigs = await database
+        .customSelect(
+          'SELECT COUNT(*) as count FROM sql_server_configs_table',
+        )
+        .get();
     LoggerService.info(
       '\n🗄️  SQL Server configs: ${sqlConfigs.first.read<int>('count')}',
     );
 
-    final sybaseConfigs = await database.customSelect(
-      'SELECT COUNT(*) as count FROM sybase_configs_table',
-    ).get();
+    final sybaseConfigs = await database
+        .customSelect(
+          'SELECT COUNT(*) as count FROM sybase_configs_table',
+        )
+        .get();
     LoggerService.info(
       '🗄️  Sybase configs: ${sybaseConfigs.first.read<int>('count')}',
     );
 
-    final postgresConfigs = await database.customSelect(
-      'SELECT COUNT(*) as count FROM postgres_configs_table',
-    ).get();
+    final postgresConfigs = await database
+        .customSelect(
+          'SELECT COUNT(*) as count FROM postgres_configs_table',
+        )
+        .get();
     LoggerService.info(
       '🗄️  PostgreSQL configs: ${postgresConfigs.first.read<int>('count')}',
     );
 
-    final schedules = await database.customSelect(
-      'SELECT COUNT(*) as count FROM schedules_table',
-    ).get();
+    final schedules = await database
+        .customSelect(
+          'SELECT COUNT(*) as count FROM schedules_table',
+        )
+        .get();
     LoggerService.info('📅 Schedules: ${schedules.first.read<int>('count')}');
 
     await database.close();

@@ -97,7 +97,10 @@ void main() {
       final full1 = full(
         id: 'f1',
         startedAt: now.subtract(const Duration(days: 5)),
-        sybaseOptions: {'baseFullId': 'f1', 'chainStartAt': now.toIso8601String()},
+        sybaseOptions: {
+          'baseFullId': 'f1',
+          'chainStartAt': now.toIso8601String(),
+        },
       );
       final result = useCase(histories: [full1], retentionDays: 30);
       expect(result, contains('f1'));
@@ -111,8 +114,17 @@ void main() {
         startedAt: base,
         sybaseOptions: {'baseFullId': 'f1'},
       );
-      final log1 = log(id: 'l1', baseFullId: 'f1', startedAt: base.add(const Duration(hours: 1)));
-      final log2 = log(id: 'l2', baseFullId: 'f1', startedAt: base.add(const Duration(hours: 2)), logSequence: 2);
+      final log1 = log(
+        id: 'l1',
+        baseFullId: 'f1',
+        startedAt: base.add(const Duration(hours: 1)),
+      );
+      final log2 = log(
+        id: 'l2',
+        baseFullId: 'f1',
+        startedAt: base.add(const Duration(hours: 2)),
+        logSequence: 2,
+      );
       final result = useCase(
         histories: [full1, log1, log2],
         retentionDays: 30,
@@ -124,7 +136,11 @@ void main() {
       final now = DateTime.now();
       final old = now.subtract(const Duration(days: 60));
       final full1 = full(id: 'f1', startedAt: old);
-      final log1 = log(id: 'l1', baseFullId: 'f1', startedAt: old.add(const Duration(hours: 1)));
+      final log1 = log(
+        id: 'l1',
+        baseFullId: 'f1',
+        startedAt: old.add(const Duration(hours: 1)),
+      );
       final result = useCase(
         histories: [full1, log1],
         retentionDays: 30,
@@ -137,7 +153,11 @@ void main() {
       final old = now.subtract(const Duration(days: 60));
       final recent = now.subtract(const Duration(days: 5));
       final full1 = full(id: 'f1', startedAt: old);
-      final log1 = log(id: 'l1', baseFullId: 'f1', startedAt: old.add(const Duration(hours: 1)));
+      final log1 = log(
+        id: 'l1',
+        baseFullId: 'f1',
+        startedAt: old.add(const Duration(hours: 1)),
+      );
       final full2 = full(
         id: 'f2',
         startedAt: recent,
@@ -154,7 +174,10 @@ void main() {
 
     test('ignores failed backups', () {
       final now = DateTime.now();
-      final full1 = full(id: 'f1', startedAt: now.subtract(const Duration(days: 5)));
+      final full1 = full(
+        id: 'f1',
+        startedAt: now.subtract(const Duration(days: 5)),
+      );
       final failedFull = BackupHistory(
         id: 'f2',
         scheduleId: 's1',

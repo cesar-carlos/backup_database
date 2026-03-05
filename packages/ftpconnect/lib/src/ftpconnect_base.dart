@@ -221,9 +221,8 @@ class FTPConnect {
           final localFile = File(p.join(pLocalDir.path, entry.name));
           await downloadFile(entry.name, localFile);
         } else if (entry.type == FTPEntryType.dir) {
-          final localDir =
-              await Directory(p.join(pLocalDir.path, entry.name))
-                  .create(recursive: true);
+          final localDir = await Directory(p.join(pLocalDir.path, entry.name))
+              .create(recursive: true);
           await downloadDir(entry.name, localDir);
           await changeDirectory('..');
         }

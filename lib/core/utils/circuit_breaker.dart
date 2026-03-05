@@ -10,10 +10,10 @@ class CircuitBreaker {
     int failureThreshold = CircuitBreakerConstants.failureThreshold,
     Duration openDuration = CircuitBreakerConstants.openDuration,
     int halfOpenSuccessCount = CircuitBreakerConstants.halfOpenSuccessCount,
-  })  : _key = key,
-        _failureThreshold = failureThreshold,
-        _openDuration = openDuration,
-        _halfOpenSuccessCount = halfOpenSuccessCount;
+  }) : _key = key,
+       _failureThreshold = failureThreshold,
+       _openDuration = openDuration,
+       _halfOpenSuccessCount = halfOpenSuccessCount;
 
   final String _key;
   final int _failureThreshold;
@@ -101,9 +101,9 @@ class CircuitBreakerRegistry {
     int failureThreshold = CircuitBreakerConstants.failureThreshold,
     Duration openDuration = CircuitBreakerConstants.openDuration,
     int halfOpenSuccessCount = CircuitBreakerConstants.halfOpenSuccessCount,
-  })  : _failureThreshold = failureThreshold,
-        _openDuration = openDuration,
-        _halfOpenSuccessCount = halfOpenSuccessCount;
+  }) : _failureThreshold = failureThreshold,
+       _openDuration = openDuration,
+       _halfOpenSuccessCount = halfOpenSuccessCount;
 
   final int _failureThreshold;
   final Duration _openDuration;

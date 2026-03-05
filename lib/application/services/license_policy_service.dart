@@ -31,7 +31,9 @@ class LicensePolicyService implements ILicensePolicyService {
   final Map<String, bool> _runFeatureCache = {};
 
   @override
-  Future<rd.Result<void>> validateScheduleCapabilities(Schedule schedule) async {
+  Future<rd.Result<void>> validateScheduleCapabilities(
+    Schedule schedule,
+  ) async {
     final differentialTypes = [
       BackupType.differential,
       BackupType.convertedDifferential,
@@ -42,7 +44,9 @@ class LicensePolicyService implements ILicensePolicyService {
     ];
 
     if (differentialTypes.contains(schedule.backupType)) {
-      final allowed = await _isFeatureAllowed(LicenseFeatures.differentialBackup);
+      final allowed = await _isFeatureAllowed(
+        LicenseFeatures.differentialBackup,
+      );
       if (!allowed) {
         _recordLicenseDenied();
         return const rd.Failure(
@@ -61,8 +65,7 @@ class LicensePolicyService implements ILicensePolicyService {
         _recordLicenseDenied();
         return const rd.Failure(
           ValidationFailure(
-            message:
-                'Backup de log requer licença com permissão log_backup',
+            message: 'Backup de log requer licença com permissão log_backup',
             code: FailureCodes.licenseDenied,
           ),
         );
@@ -89,8 +92,7 @@ class LicensePolicyService implements ILicensePolicyService {
         _recordLicenseDenied();
         return const rd.Failure(
           ValidationFailure(
-            message:
-                'Checksum requer licença com permissão checksum',
+            message: 'Checksum requer licença com permissão checksum',
             code: FailureCodes.licenseDenied,
           ),
         );
@@ -111,11 +113,11 @@ class LicensePolicyService implements ILicensePolicyService {
       }
     }
 
-    final hasPostScript = schedule.postBackupScript != null &&
+    final hasPostScript =
+        schedule.postBackupScript != null &&
         schedule.postBackupScript!.trim().isNotEmpty;
     if (hasPostScript) {
-      final allowed =
-          await _isFeatureAllowed(LicenseFeatures.postBackupScript);
+      final allowed = await _isFeatureAllowed(LicenseFeatures.postBackupScript);
       if (!allowed) {
         _recordLicenseDenied();
         return const rd.Failure(
@@ -142,8 +144,7 @@ class LicensePolicyService implements ILicensePolicyService {
           _recordLicenseDenied();
           return const rd.Failure(
             ValidationFailure(
-              message:
-                  'Google Drive requer licença com permissão google_drive',
+              message: 'Google Drive requer licença com permissão google_drive',
               code: FailureCodes.licenseDenied,
             ),
           );
@@ -165,8 +166,7 @@ class LicensePolicyService implements ILicensePolicyService {
           _recordLicenseDenied();
           return const rd.Failure(
             ValidationFailure(
-              message:
-                  'Nextcloud requer licença com permissão nextcloud',
+              message: 'Nextcloud requer licença com permissão nextcloud',
               code: FailureCodes.licenseDenied,
             ),
           );

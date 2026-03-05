@@ -35,122 +35,131 @@ class BackupProgressDialog extends StatelessWidget {
           label: texts.title,
           child: ContentDialog(
             title: Row(
-            children: [
-              if (progress.step == BackupStep.completed)
-                const Icon(FluentIcons.check_mark, color: AppColors.successIcon)
-              else if (progress.step == BackupStep.error)
-                const Icon(FluentIcons.error, color: AppColors.errorIcon)
-              else
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: ProgressRing(strokeWidth: 2),
-                ),
-              const SizedBox(width: 12),
-              Text(texts.title),
-            ],
-          ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 800),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Semantics(
-                    liveRegion: true,
-                    label: UploadProgressLabels.localizeMessage(
-                      progress.message,
-                      locale,
-                    ),
-                    child: Text(
-                      UploadProgressLabels.localizeMessage(
+              children: [
+                if (progress.step == BackupStep.completed)
+                  const Icon(
+                    FluentIcons.check_mark,
+                    color: AppColors.successIcon,
+                  )
+                else if (progress.step == BackupStep.error)
+                  const Icon(FluentIcons.error, color: AppColors.errorIcon)
+                else
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: ProgressRing(strokeWidth: 2),
+                  ),
+                const SizedBox(width: 12),
+                Text(texts.title),
+              ],
+            ),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      liveRegion: true,
+                      label: UploadProgressLabels.localizeMessage(
                         progress.message,
                         locale,
                       ),
-                      style: FluentTheme.of(context).typography.bodyLarge,
-                    ),
-                  ),
-                  if (progress.progress != null &&
-                      progress.step != BackupStep.completed) ...[
-                    const SizedBox(height: 16),
-                    Semantics(
-                      label: '${texts.overallProgressLabel}: '
-                          '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
                       child: Text(
-                        '${texts.overallProgressLabel}: '
+                        UploadProgressLabels.localizeMessage(
+                          progress.message,
+                          locale,
+                        ),
+                        style: FluentTheme.of(context).typography.bodyLarge,
+                      ),
+                    ),
+                    if (progress.progress != null &&
+                        progress.step != BackupStep.completed) ...[
+                      const SizedBox(height: 16),
+                      Semantics(
+                        label:
+                            '${texts.overallProgressLabel}: '
                             '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
-                        style: FluentTheme.of(context).typography.caption,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Semantics(
-                      label: '${texts.overallProgressLabel}, '
+                        child: Text(
+                          '${texts.overallProgressLabel}: '
                           '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
-                      child: _CustomProgressBar(
-                        value: progress.progress!.clamp(0.0, 1.0),
+                          style: FluentTheme.of(context).typography.caption,
+                        ),
                       ),
-                    ),
-                  ],
-                  if (progress.elapsed != null) ...[
-                    const SizedBox(height: 16),
-                    Semantics(
-                      label: '${texts.elapsedLabel}: '
-                          '${_formatDuration(progress.elapsed!, texts)}',
-                      child: Text(
-                        '${texts.elapsedLabel}: '
+                      const SizedBox(height: 8),
+                      Semantics(
+                        label:
+                            '${texts.overallProgressLabel}, '
+                            '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
+                        child: _CustomProgressBar(
+                          value: progress.progress!.clamp(0.0, 1.0),
+                        ),
+                      ),
+                    ],
+                    if (progress.elapsed != null) ...[
+                      const SizedBox(height: 16),
+                      Semantics(
+                        label:
+                            '${texts.elapsedLabel}: '
                             '${_formatDuration(progress.elapsed!, texts)}',
-                        style: FluentTheme.of(
-                          context,
-                        ).typography.caption?.copyWith(color: AppColors.grey600),
+                        child: Text(
+                          '${texts.elapsedLabel}: '
+                          '${_formatDuration(progress.elapsed!, texts)}',
+                          style:
+                              FluentTheme.of(
+                                context,
+                              ).typography.caption?.copyWith(
+                                color: AppColors.grey600,
+                              ),
+                        ),
                       ),
-                    ),
-                  ],
-                  if (progress.error != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.errorBackground,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.errorBorder),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            FluentIcons.error,
-                            color: AppColors.errorIcon,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              progress.error!,
-                              style: const TextStyle(
-                                color: AppColors.errorText,
+                    ],
+                    if (progress.error != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.errorBackground,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.errorBorder),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              FluentIcons.error,
+                              color: AppColors.errorIcon,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                progress.error!,
+                                style: const TextStyle(
+                                  color: AppColors.errorText,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
+            actions: [
+              if (progress.step == BackupStep.completed ||
+                  progress.step == BackupStep.error)
+                Button(
+                  onPressed: () {
+                    provider.reset();
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(texts.closeButton),
+                ),
+            ],
           ),
-          actions: [
-            if (progress.step == BackupStep.completed ||
-                progress.step == BackupStep.error)
-              Button(
-                onPressed: () {
-                  provider.reset();
-                  Navigator.of(context).pop();
-                },
-                child: Text(texts.closeButton),
-              ),
-          ],
-        ),
         );
       },
     );

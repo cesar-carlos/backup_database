@@ -36,7 +36,9 @@ void main() {
     test('returns Failure when sidecar has invalid format', () async {
       final tempDir = await Directory.systemTemp.createTemp();
       final file = File('${tempDir.path}/test.db')..writeAsStringSync('data');
-      File('${tempDir.path}/test.db.sha256').writeAsStringSync('not-a-valid-hash');
+      File(
+        '${tempDir.path}/test.db.sha256',
+      ).writeAsStringSync('not-a-valid-hash');
 
       try {
         final result = await verifyFileSha256(file.path);
@@ -77,8 +79,9 @@ void main() {
 
       final digest = sha256.convert(await file.readAsBytes());
       final expectedHash = digest.toString();
-      File('${tempDir.path}/test.db.sha256')
-          .writeAsStringSync('$expectedHash  test.db');
+      File(
+        '${tempDir.path}/test.db.sha256',
+      ).writeAsStringSync('$expectedHash  test.db');
 
       try {
         final result = await verifyFileSha256(file.path);

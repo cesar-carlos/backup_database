@@ -369,8 +369,9 @@ void main() {
             onProgress: any(named: 'onProgress'),
           ),
         ).thenAnswer((invocation) async {
-          final dests = invocation.namedArguments[#destinations]
-              as List<BackupDestination>;
+          final dests =
+              invocation.namedArguments[#destinations]
+                  as List<BackupDestination>;
           return List.generate(
             dests.length,
             (_) => const rd.Success(()),

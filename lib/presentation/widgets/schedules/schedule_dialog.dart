@@ -153,7 +153,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           _sybaseServerSide = sybaseBackupOptions.serverSide;
           _sybaseAutoTuneWriters = sybaseBackupOptions.autoTuneWriters;
           _sybaseBlockSize = sybaseBackupOptions.blockSize;
-          _sybaseLogBackupMode = sybaseBackupOptions.logBackupMode ??
+          _sybaseLogBackupMode =
+              sybaseBackupOptions.logBackupMode ??
               (widget.schedule!.truncateLog
                   ? SybaseLogBackupMode.truncate
                   : SybaseLogBackupMode.only);
@@ -255,8 +256,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _truncateLog = true;
     } else if (_databaseType == DatabaseType.sybase &&
         _sybaseLogBackupMode == null) {
-      _sybaseLogBackupMode =
-          _truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only;
+      _sybaseLogBackupMode = _truncateLog
+          ? SybaseLogBackupMode.truncate
+          : SybaseLogBackupMode.only;
     }
   }
 
@@ -1305,25 +1307,28 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   }
 
   Widget _buildSybaseLogBackupModeSelector() {
-    final effectiveMode = _sybaseLogBackupMode ??
-        (_truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only);
+    final effectiveMode =
+        _sybaseLogBackupMode ??
+        (_truncateLog
+            ? SybaseLogBackupMode.truncate
+            : SybaseLogBackupMode.only);
     return AppDropdown<SybaseLogBackupMode>(
       label: 'Modo de log após backup',
       value: effectiveMode,
       items: const [
-          ComboBoxItem(
-            value: SybaseLogBackupMode.truncate,
-            child: Text('Truncar (liberar espaço)'),
-          ),
-          ComboBoxItem(
-            value: SybaseLogBackupMode.only,
-            child: Text('Apenas backup (sem alterar log)'),
-          ),
-          ComboBoxItem(
-            value: SybaseLogBackupMode.rename,
-            child: Text('Renomear (recomendado para replicação)'),
-          ),
-        ],
+        ComboBoxItem(
+          value: SybaseLogBackupMode.truncate,
+          child: Text('Truncar (liberar espaço)'),
+        ),
+        ComboBoxItem(
+          value: SybaseLogBackupMode.only,
+          child: Text('Apenas backup (sem alterar log)'),
+        ),
+        ComboBoxItem(
+          value: SybaseLogBackupMode.rename,
+          child: Text('Renomear (recomendado para replicação)'),
+        ),
+      ],
       onChanged: (value) {
         if (value != null) {
           setState(() {
@@ -2228,8 +2233,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             widget.schedule?.isConvertedDifferential ?? false,
       );
     } else if (_databaseType == DatabaseType.sybase) {
-      final effectiveLogMode = _sybaseLogBackupMode ??
-          (_truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only);
+      final effectiveLogMode =
+          _sybaseLogBackupMode ??
+          (_truncateLog
+              ? SybaseLogBackupMode.truncate
+              : SybaseLogBackupMode.only);
       final sybaseBackupOptions = SybaseBackupOptions(
         checkpointLog: _sybaseCheckpointLog,
         serverSide: _sybaseServerSide,

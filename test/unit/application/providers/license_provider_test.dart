@@ -55,8 +55,9 @@ void main() {
     licenseRepository = _MockLicenseRepository();
     deviceKeyService = _MockDeviceKeyService();
 
-    when(() => deviceKeyService.getDeviceKey())
-        .thenAnswer((_) async => const rd.Success(deviceKey));
+    when(
+      () => deviceKeyService.getDeviceKey(),
+    ).thenAnswer((_) async => const rd.Success(deviceKey));
 
     provider = LicenseProvider(
       validationService: validationService,

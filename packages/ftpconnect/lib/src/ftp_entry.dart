@@ -197,8 +197,8 @@ class FTPEntry {
       owner = match.group(4);
       group = match.group(5);
       size = int.tryParse(match.group(6)!) ?? 0;
-      var date = (match.group(7)!.split(' ')..removeWhere((i) => i.isEmpty))
-          .join(' ');
+      var date =
+          (match.group(7)!.split(' ')..removeWhere((i) => i.isEmpty)).join(' ');
       if (date.contains(':')) date = '$date ${DateTime.now().year}';
       final format = date.contains(':') ? 'MMM dd hh:mm yyyy' : 'MMM dd yyyy';
       modifyTime = DateFormat(format, 'en_US').parse(date);

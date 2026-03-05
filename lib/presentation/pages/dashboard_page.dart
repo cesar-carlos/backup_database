@@ -242,7 +242,9 @@ class _DashboardPageState extends State<DashboardPage> {
                       const SizedBox(height: 24),
                       SizedBox(
                         width: double.infinity,
-                        child: MetricsPercentilesCard(report: provider.metricsReport!),
+                        child: MetricsPercentilesCard(
+                          report: provider.metricsReport!,
+                        ),
                       ),
                     ],
                     // Show local schedules only in Server/Unified mode

@@ -222,8 +222,9 @@ class BackupOrchestratorService {
         backupExecutionResult = backupResult.getOrNull()!;
       } else if (schedule.databaseType == DatabaseType.sybase) {
         if (backupType == BackupType.log) {
-          final preflightResult =
-              await _validateSybaseLogBackupPreflight(schedule);
+          final preflightResult = await _validateSybaseLogBackupPreflight(
+            schedule,
+          );
           if (preflightResult.isError()) {
             return rd.Failure(preflightResult.exceptionOrNull()!);
           }
@@ -534,8 +535,8 @@ class BackupOrchestratorService {
               backupType == BackupType.fullSingle) &&
           history != null) {
         mergedSybaseOptions['baseFullId'] = history.id;
-        mergedSybaseOptions['chainStartAt'] =
-            history.startedAt.toIso8601String();
+        mergedSybaseOptions['chainStartAt'] = history.startedAt
+            .toIso8601String();
       }
     }
 
@@ -572,7 +573,9 @@ class BackupOrchestratorService {
     bool truncateLog,
   ) {
     if (options?.logBackupMode != null) return options!.logBackupMode!;
-    return truncateLog ? SybaseLogBackupMode.truncate : SybaseLogBackupMode.only;
+    return truncateLog
+        ? SybaseLogBackupMode.truncate
+        : SybaseLogBackupMode.only;
   }
 
   double _speedMbPerSec(int sizeBytes, Duration duration) {

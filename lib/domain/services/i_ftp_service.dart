@@ -32,8 +32,7 @@ class FtpConnectionTestResult {
   bool get ok => connected;
 
   bool get hasCompatibilityWarnings =>
-      connected &&
-      (canWrite == false || canRename == false);
+      connected && (canWrite == false || canRename == false);
 }
 
 abstract class IFtpService {

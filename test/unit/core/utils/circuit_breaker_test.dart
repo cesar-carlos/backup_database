@@ -75,33 +75,35 @@ void main() {
       expect(breaker.state, CircuitState.closed);
     });
 
-    test('transitions to half-open after openDuration when allowsRequest',
-        () async {
-      final breaker = CircuitBreaker(
-        key: 'dest-1',
-        failureThreshold: 2,
-        openDuration: const Duration(milliseconds: 50),
-      );
+    test(
+      'transitions to half-open after openDuration when allowsRequest',
+      () async {
+        final breaker = CircuitBreaker(
+          key: 'dest-1',
+          failureThreshold: 2,
+          openDuration: const Duration(milliseconds: 50),
+        );
 
-      breaker.recordFailure(
-        BackupFailure(
-          message: 'fail',
-          originalError: TimeoutException('timeout'),
-        ),
-      );
-      breaker.recordFailure(
-        BackupFailure(
-          message: 'fail',
-          originalError: TimeoutException('timeout'),
-        ),
-      );
-      expect(breaker.state, CircuitState.open);
-      expect(breaker.allowsRequest, isFalse);
+        breaker.recordFailure(
+          BackupFailure(
+            message: 'fail',
+            originalError: TimeoutException('timeout'),
+          ),
+        );
+        breaker.recordFailure(
+          BackupFailure(
+            message: 'fail',
+            originalError: TimeoutException('timeout'),
+          ),
+        );
+        expect(breaker.state, CircuitState.open);
+        expect(breaker.allowsRequest, isFalse);
 
-      await Future<void>.delayed(const Duration(milliseconds: 60));
-      expect(breaker.allowsRequest, isTrue);
-      expect(breaker.state, CircuitState.halfOpen);
-    });
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+        expect(breaker.allowsRequest, isTrue);
+        expect(breaker.state, CircuitState.halfOpen);
+      },
+    );
 
     test('transitions from half-open to closed on success', () async {
       final breaker = CircuitBreaker(

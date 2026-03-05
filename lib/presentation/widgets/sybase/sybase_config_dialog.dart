@@ -428,11 +428,11 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                         child: Text(
                           _t(
                             'Quando ativado, bloqueia backup de log com modo '
-                            '"Truncar" (TRUNCATE). Use "Renomear" ou "Apenas" '
-                            'para ambientes com SQL Remote ou MobiLink.',
+                                '"Truncar" (TRUNCATE). Use "Renomear" ou "Apenas" '
+                                'para ambientes com SQL Remote ou MobiLink.',
                             'When enabled, blocks log backup with "Truncate" '
-                            'mode (TRUNCATE). Use "Rename" or "Only" for '
-                            'environments with SQL Remote or MobiLink.',
+                                'mode (TRUNCATE). Use "Rename" or "Only" for '
+                                'environments with SQL Remote or MobiLink.',
                           ),
                           style: FluentTheme.of(context).typography.caption,
                         ),

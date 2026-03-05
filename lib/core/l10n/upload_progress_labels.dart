@@ -21,7 +21,10 @@ class UploadProgressLabels {
       ('Enviando para Dropbox: ', 'Uploading to Dropbox: '),
       ('Enviando para Nextcloud: ', 'Uploading to Nextcloud: '),
       ('Copiando para pasta local: ', 'Copying to local folder: '),
-      ('Preparando cópia para pasta local: ', 'Preparing copy to local folder: '),
+      (
+        'Preparando cópia para pasta local: ',
+        'Preparing copy to local folder: ',
+      ),
       ('Retomando de ', 'Resuming from '),
       (' concluído ✓', ' completed ✓'),
       (' destinos: ', ' destinations: '),

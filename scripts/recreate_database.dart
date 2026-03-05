@@ -48,17 +48,21 @@ Future<void> main() async {
     LoggerService.info('   ✅ Novo banco criado\n');
 
     LoggerService.info('4️⃣  Verificando estrutura...');
-    final tables = await db.customSelect(
-      "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
-    ).get();
+    final tables = await db
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+        )
+        .get();
 
     LoggerService.info('   📊 Tabelas criadas:');
     for (final table in tables) {
       final tableName = table.read<String>('name');
       if (!tableName.startsWith('sqlite_')) {
-        final count = await db.customSelect(
-          'SELECT COUNT(*) as count FROM $tableName',
-        ).getSingle();
+        final count = await db
+            .customSelect(
+              'SELECT COUNT(*) as count FROM $tableName',
+            )
+            .getSingle();
         LoggerService.info(
           '      • $tableName (${count.read<int>('count')} registros)',
         );

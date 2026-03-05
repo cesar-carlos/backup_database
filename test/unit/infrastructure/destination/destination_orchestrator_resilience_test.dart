@@ -48,7 +48,8 @@ void main() {
     id: 'dest-ftp-1',
     name: 'FTP Test',
     type: DestinationType.ftp,
-    config: '{"host":"ftp.example.com","port":21,"username":"u","password":"p",'
+    config:
+        '{"host":"ftp.example.com","port":21,"username":"u","password":"p",'
         '"remotePath":"/backups"}',
   );
 
@@ -92,30 +93,32 @@ void main() {
   });
 
   group('DestinationOrchestrator resilience - cancellation', () {
-    test('returns uploadCancelled when isCancelled returns true immediately',
-        () async {
-      final result = await orchestrator.uploadToDestination(
-        sourceFilePath: '/tmp/backup.bak',
-        destination: ftpDestination,
-        isCancelled: () => true,
-      );
+    test(
+      'returns uploadCancelled when isCancelled returns true immediately',
+      () async {
+        final result = await orchestrator.uploadToDestination(
+          sourceFilePath: '/tmp/backup.bak',
+          destination: ftpDestination,
+          isCancelled: () => true,
+        );
 
-      expect(result.isError(), isTrue);
-      final failure = result.exceptionOrNull()! as BackupFailure;
-      expect(failure.code, FailureCodes.uploadCancelled);
-      verifyNever(
-        () => ftpService.upload(
-          sourceFilePath: any(named: 'sourceFilePath'),
-          config: any(named: 'config'),
-          customFileName: any(named: 'customFileName'),
-          maxRetries: any(named: 'maxRetries'),
-          onProgress: any(named: 'onProgress'),
-          isCancelled: any(named: 'isCancelled'),
-          runId: any(named: 'runId'),
-          destinationId: any(named: 'destinationId'),
-        ),
-      );
-    });
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as BackupFailure;
+        expect(failure.code, FailureCodes.uploadCancelled);
+        verifyNever(
+          () => ftpService.upload(
+            sourceFilePath: any(named: 'sourceFilePath'),
+            config: any(named: 'config'),
+            customFileName: any(named: 'customFileName'),
+            maxRetries: any(named: 'maxRetries'),
+            onProgress: any(named: 'onProgress'),
+            isCancelled: any(named: 'isCancelled'),
+            runId: any(named: 'runId'),
+            destinationId: any(named: 'destinationId'),
+          ),
+        );
+      },
+    );
 
     test('proceeds with upload when isCancelled is null', () async {
       when(
@@ -161,44 +164,46 @@ void main() {
   });
 
   group('DestinationOrchestrator resilience - circuit breaker', () {
-    test('returns circuitBreakerOpen when circuit is open after failures',
-        () async {
-      when(
-        () => ftpService.upload(
-          sourceFilePath: any(named: 'sourceFilePath'),
-          config: any(named: 'config'),
-          customFileName: any(named: 'customFileName'),
-          maxRetries: any(named: 'maxRetries'),
-          onProgress: any(named: 'onProgress'),
-          isCancelled: any(named: 'isCancelled'),
-          runId: any(named: 'runId'),
-          destinationId: any(named: 'destinationId'),
-        ),
-      ).thenAnswer(
-        (_) async => rd.Failure(
-          BackupFailure(
-            message: 'timeout',
-            originalError: TimeoutException('connection'),
+    test(
+      'returns circuitBreakerOpen when circuit is open after failures',
+      () async {
+        when(
+          () => ftpService.upload(
+            sourceFilePath: any(named: 'sourceFilePath'),
+            config: any(named: 'config'),
+            customFileName: any(named: 'customFileName'),
+            maxRetries: any(named: 'maxRetries'),
+            onProgress: any(named: 'onProgress'),
+            isCancelled: any(named: 'isCancelled'),
+            runId: any(named: 'runId'),
+            destinationId: any(named: 'destinationId'),
           ),
-        ),
-      );
+        ).thenAnswer(
+          (_) async => rd.Failure(
+            BackupFailure(
+              message: 'timeout',
+              originalError: TimeoutException('connection'),
+            ),
+          ),
+        );
 
-      for (var i = 0; i < 3; i++) {
-        await orchestrator.uploadToDestination(
+        for (var i = 0; i < 3; i++) {
+          await orchestrator.uploadToDestination(
+            sourceFilePath: '/tmp/backup.bak',
+            destination: ftpDestination,
+          );
+        }
+
+        final result = await orchestrator.uploadToDestination(
           sourceFilePath: '/tmp/backup.bak',
           destination: ftpDestination,
         );
-      }
 
-      final result = await orchestrator.uploadToDestination(
-        sourceFilePath: '/tmp/backup.bak',
-        destination: ftpDestination,
-      );
-
-      expect(result.isError(), isTrue);
-      final failure = result.exceptionOrNull()! as BackupFailure;
-      expect(failure.code, FailureCodes.circuitBreakerOpen);
-    });
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()! as BackupFailure;
+        expect(failure.code, FailureCodes.circuitBreakerOpen);
+      },
+    );
   });
 
   group('DestinationOrchestrator resilience - transient failure retry', () {
@@ -268,8 +273,9 @@ void main() {
         ),
       ).thenAnswer(
         (invocation) async {
-          final config = invocation.namedArguments[const Symbol('config')]
-              as LocalDestinationConfig;
+          final config =
+              invocation.namedArguments[const Symbol('config')]
+                  as LocalDestinationConfig;
           return rd.Success(
             LocalUploadResult(
               destinationPath: config.path,
@@ -298,58 +304,60 @@ void main() {
       ).called(2);
     });
 
-    test('returns uploadCancelled for remaining when isCancelled before batch',
-        () async {
-      when(
-        () => localDestinationService.upload(
-          sourceFilePath: any(named: 'sourceFilePath'),
-          config: any(named: 'config'),
-          customFileName: any(named: 'customFileName'),
-          onProgress: any(named: 'onProgress'),
-        ),
-      ).thenAnswer(
-        (_) async => const rd.Success(
-          LocalUploadResult(
-            destinationPath: 'C:/backups',
-            fileSize: 1024,
-            duration: Duration(seconds: 1),
+    test(
+      'returns uploadCancelled for remaining when isCancelled before batch',
+      () async {
+        when(
+          () => localDestinationService.upload(
+            sourceFilePath: any(named: 'sourceFilePath'),
+            config: any(named: 'config'),
+            customFileName: any(named: 'customFileName'),
+            onProgress: any(named: 'onProgress'),
           ),
-        ),
-      );
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            LocalUploadResult(
+              destinationPath: 'C:/backups',
+              fileSize: 1024,
+              duration: Duration(seconds: 1),
+            ),
+          ),
+        );
 
-      final destinations = List.generate(
-        4,
-        (i) => BackupDestination(
-          id: 'dest-local-$i',
-          name: 'Local $i',
-          type: DestinationType.local,
-          config: '{"path":"C:/backups/$i"}',
-        ),
-      );
+        final destinations = List.generate(
+          4,
+          (i) => BackupDestination(
+            id: 'dest-local-$i',
+            name: 'Local $i',
+            type: DestinationType.local,
+            config: '{"path":"C:/backups/$i"}',
+          ),
+        );
 
-      var batchCount = 0;
-      final results = await orchestrator.uploadToAllDestinations(
-        sourceFilePath: '/tmp/backup.bak',
-        destinations: destinations,
-        isCancelled: () {
-          batchCount++;
-          return batchCount > 4;
-        },
-      );
+        var batchCount = 0;
+        final results = await orchestrator.uploadToAllDestinations(
+          sourceFilePath: '/tmp/backup.bak',
+          destinations: destinations,
+          isCancelled: () {
+            batchCount++;
+            return batchCount > 4;
+          },
+        );
 
-      expect(results.length, 4);
-      expect(results[0].isSuccess(), isTrue);
-      expect(results[1].isSuccess(), isTrue);
-      expect(results[2].isSuccess(), isTrue);
-      expect(results[3].isError(), isTrue);
-      expect(
-        results[3].exceptionOrNull(),
-        isA<BackupFailure>().having(
-          (f) => f.code,
-          'code',
-          FailureCodes.uploadCancelled,
-        ),
-      );
-    });
+        expect(results.length, 4);
+        expect(results[0].isSuccess(), isTrue);
+        expect(results[1].isSuccess(), isTrue);
+        expect(results[2].isSuccess(), isTrue);
+        expect(results[3].isError(), isTrue);
+        expect(
+          results[3].exceptionOrNull(),
+          isA<BackupFailure>().having(
+            (f) => f.code,
+            'code',
+            FailureCodes.uploadCancelled,
+          ),
+        );
+      },
+    );
   });
 }

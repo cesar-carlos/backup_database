@@ -13,8 +13,8 @@ class DashboardProvider extends ChangeNotifier {
     this._scheduleRepository, {
     ConnectionManager? connectionManager,
     IMetricsAnalysisService? metricsAnalysisService,
-  })  : _connectionManager = connectionManager,
-        _metricsAnalysisService = metricsAnalysisService;
+  }) : _connectionManager = connectionManager,
+       _metricsAnalysisService = metricsAnalysisService;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;
@@ -77,7 +77,9 @@ class DashboardProvider extends ChangeNotifier {
     if (service == null) return;
 
     final endDate = DateTime.now();
-    final startDate = endDate.subtract(const Duration(days: _metricsReportDays));
+    final startDate = endDate.subtract(
+      const Duration(days: _metricsReportDays),
+    );
 
     final result = await service.generateReport(
       startDate: startDate,

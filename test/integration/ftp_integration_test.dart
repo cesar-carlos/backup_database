@@ -271,9 +271,11 @@ void main() {
           sourceFilePath: sourceFile.path,
           config: createConfig(),
         );
-        for (var attempt = 2;
-            attempt <= uploadMaxAttempts && !result.isSuccess();
-            attempt++) {
+        for (
+          var attempt = 2;
+          attempt <= uploadMaxAttempts && !result.isSuccess();
+          attempt++
+        ) {
           final shouldRetry = result.fold(
             (_) => false,
             isTransientNetworkFailure,
@@ -317,9 +319,11 @@ void main() {
           customFileName: customFileName,
           config: createConfig(),
         );
-        for (var attempt = 2;
-            attempt <= uploadMaxAttempts && !result.isSuccess();
-            attempt++) {
+        for (
+          var attempt = 2;
+          attempt <= uploadMaxAttempts && !result.isSuccess();
+          attempt++
+        ) {
           final shouldRetry = result.fold(
             (_) => false,
             isTransientNetworkFailure,
@@ -363,9 +367,11 @@ void main() {
           sourceFilePath: sourceFile.path,
           config: createConfig(enableResume: false),
         );
-        for (var attempt = 2;
-            attempt <= uploadMaxAttempts && !result.isSuccess();
-            attempt++) {
+        for (
+          var attempt = 2;
+          attempt <= uploadMaxAttempts && !result.isSuccess();
+          attempt++
+        ) {
           final shouldRetry = result.fold(
             (_) => false,
             isTransientNetworkFailure,

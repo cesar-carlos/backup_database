@@ -28,10 +28,12 @@ void main() {
 
         final db = AppDatabase.forTesting(NativeDatabase(file));
         try {
-          final rows = await db.customSelect(
-            'SELECT id, device_key, updated_at FROM licenses_table '
-            'ORDER BY device_key, updated_at',
-          ).get();
+          final rows = await db
+              .customSelect(
+                'SELECT id, device_key, updated_at FROM licenses_table '
+                'ORDER BY device_key, updated_at',
+              )
+              .get();
 
           expect(rows.length, 2);
           expect(rows[0].read<String>('device_key'), 'device-a');
@@ -39,10 +41,12 @@ void main() {
           expect(rows[1].read<String>('device_key'), 'device-b');
           expect(rows[1].read<String>('id'), 'keep-b');
 
-          final indexRows = await db.customSelect(
-            "SELECT name FROM sqlite_master WHERE type='index' "
-            "AND name='idx_licenses_device_key'",
-          ).get();
+          final indexRows = await db
+              .customSelect(
+                "SELECT name FROM sqlite_master WHERE type='index' "
+                "AND name='idx_licenses_device_key'",
+              )
+              .get();
 
           expect(indexRows.length, 1);
         } finally {

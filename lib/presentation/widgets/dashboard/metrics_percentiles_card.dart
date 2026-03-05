@@ -114,7 +114,10 @@ class MetricsPercentilesCard extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Text('${p.sampleCount}', style: FluentTheme.of(context).typography.body),
+          child: Text(
+            '${p.sampleCount}',
+            style: FluentTheme.of(context).typography.body,
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
