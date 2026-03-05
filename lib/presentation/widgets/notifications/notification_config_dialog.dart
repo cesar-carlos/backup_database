@@ -9,6 +9,7 @@ class NotificationConfigDialog extends StatefulWidget {
     super.key,
     this.initialConfig,
     this.initialRecipientEmail,
+    this.onTestConfiguration,
     this.onConnectOAuth,
     this.onReconnectOAuth,
     this.onDisconnectOAuth,
@@ -16,6 +17,7 @@ class NotificationConfigDialog extends StatefulWidget {
 
   final EmailConfig? initialConfig;
   final String? initialRecipientEmail;
+  final Future<String?> Function(EmailConfig config)? onTestConfiguration;
   final Future<EmailConfig?> Function(
     EmailConfig config,
     SmtpOAuthProvider provider,
@@ -32,6 +34,7 @@ class NotificationConfigDialog extends StatefulWidget {
     BuildContext context, {
     EmailConfig? initialConfig,
     String? initialRecipientEmail,
+    Future<String?> Function(EmailConfig config)? onTestConfiguration,
     Future<EmailConfig?> Function(
       EmailConfig config,
       SmtpOAuthProvider provider,
@@ -49,6 +52,7 @@ class NotificationConfigDialog extends StatefulWidget {
       builder: (context) => NotificationConfigDialog(
         initialConfig: initialConfig,
         initialRecipientEmail: initialRecipientEmail,
+        onTestConfiguration: onTestConfiguration,
         onConnectOAuth: onConnectOAuth,
         onReconnectOAuth: onReconnectOAuth,
         onDisconnectOAuth: onDisconnectOAuth,
@@ -79,6 +83,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
   bool _notifyOnError = true;
   bool _notifyOnWarning = true;
   bool _attachLog = false;
+  bool _isTestingConfiguration = false;
   bool _isConnectingOAuth = false;
   SmtpAuthMode _authMode = SmtpAuthMode.password;
   SmtpOAuthProvider? _oauthProvider;
@@ -193,6 +198,44 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     }
 
     Navigator.of(context).pop(config);
+  }
+
+  Future<void> _testConfiguration() async {
+    final onTestConfiguration = widget.onTestConfiguration;
+    if (onTestConfiguration == null) {
+      return;
+    }
+
+    final config = _buildConfig();
+    if (config == null) {
+      return;
+    }
+
+    setState(() {
+      _isTestingConfiguration = true;
+    });
+
+    final errorMessage = await onTestConfiguration(config);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isTestingConfiguration = false;
+    });
+
+    if (errorMessage == null) {
+      await MessageModal.showSuccess(
+        context,
+        message: 'Configuracao SMTP testada com sucesso.',
+      );
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message: errorMessage,
+    );
   }
 
   Future<void> _connectOAuth() async {
@@ -502,9 +545,30 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
         ),
       ),
       actions: [
+        Button(
+          onPressed: _isTestingConfiguration || _isConnectingOAuth
+              ? null
+              : _testConfiguration,
+          child: _isTestingConfiguration
+              ? const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: ProgressRing(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 8),
+                    Text('Testando...'),
+                  ],
+                )
+              : const Text('Testar configuracao'),
+        ),
         const CancelButton(),
         SaveButton(
-          onPressed: _submit,
+          onPressed: _isTestingConfiguration || _isConnectingOAuth
+              ? null
+              : _submit,
           isEditing: _isEditing,
         ),
       ],

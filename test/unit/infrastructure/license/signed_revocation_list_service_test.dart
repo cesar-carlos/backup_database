@@ -13,31 +13,34 @@ void main() {
       expect(revoked, isFalse);
     });
 
-    test('isRevoked returns false for non-revoked key when list is empty', () async {
-      final keyPair = ed.generateKey();
-      final data = {
-        'revokedDeviceKeys': <String>[],
-        'issuedAt': DateTime.now().toIso8601String(),
-      };
-      final dataJson = jsonEncode(data);
-      final messageBytes = Uint8List.fromList(utf8.encode(dataJson));
-      final sig = ed.sign(
-        keyPair.privateKey,
-        messageBytes,
-      );
-      final listJson = jsonEncode({
-        'data': data,
-        'signature': base64.encode(sig),
-      });
+    test(
+      'isRevoked returns false for non-revoked key when list is empty',
+      () async {
+        final keyPair = ed.generateKey();
+        final data = {
+          'revokedDeviceKeys': <String>[],
+          'issuedAt': DateTime.now().toIso8601String(),
+        };
+        final dataJson = jsonEncode(data);
+        final messageBytes = Uint8List.fromList(utf8.encode(dataJson));
+        final sig = ed.sign(
+          keyPair.privateKey,
+          messageBytes,
+        );
+        final listJson = jsonEncode({
+          'data': data,
+          'signature': base64.encode(sig),
+        });
 
-      final service = SignedRevocationListService.forTesting(
-        publicKeyBytes: keyPair.publicKey.bytes,
-        revocationListJson: listJson,
-      );
+        final service = SignedRevocationListService.forTesting(
+          publicKeyBytes: keyPair.publicKey.bytes,
+          revocationListJson: listJson,
+        );
 
-      final revoked = await service.isRevoked('device-1');
-      expect(revoked, isFalse);
-    });
+        final revoked = await service.isRevoked('device-1');
+        expect(revoked, isFalse);
+      },
+    );
 
     test('isRevoked returns true for revoked key', () async {
       final keyPair = ed.generateKey();
@@ -83,6 +86,51 @@ void main() {
       );
 
       final revoked = await service.isRevoked('device-1');
+      expect(revoked, isFalse);
+    });
+
+    test('caches revocation list for TTL duration', () async {
+      final keyPair = ed.generateKey();
+      const revokedKey = 'revoked-device-cache';
+      final data = {
+        'revokedDeviceKeys': [revokedKey],
+        'issuedAt': DateTime.now().toIso8601String(),
+      };
+      final dataJson = jsonEncode(data);
+      final messageBytes = Uint8List.fromList(utf8.encode(dataJson));
+      final sig = ed.sign(
+        keyPair.privateKey,
+        messageBytes,
+      );
+      final listJson = jsonEncode({
+        'data': data,
+        'signature': base64.encode(sig),
+      });
+
+      final service = SignedRevocationListService.forTesting(
+        publicKeyBytes: keyPair.publicKey.bytes,
+        revocationListJson: listJson,
+        cacheTtl: const Duration(seconds: 2),
+      );
+
+      expect(await service.isRevoked(revokedKey), isTrue);
+      expect(await service.isRevoked(revokedKey), isTrue);
+
+      await Future.delayed(const Duration(seconds: 3));
+
+      expect(await service.isRevoked(revokedKey), isTrue);
+    });
+
+    test('uses fallback (empty list) when list is invalid', () async {
+      final keyPair = ed.generateKey();
+      const invalidListJson = 'not-valid-json';
+
+      final service = SignedRevocationListService.forTesting(
+        publicKeyBytes: keyPair.publicKey.bytes,
+        revocationListJson: invalidListJson,
+      );
+
+      final revoked = await service.isRevoked('any-key');
       expect(revoked, isFalse);
     });
   });

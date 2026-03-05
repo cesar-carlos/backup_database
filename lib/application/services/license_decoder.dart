@@ -4,44 +4,60 @@ import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/license/ed25519_license_verifier.dart';
-import 'package:crypto/crypto.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class LicenseDecoder {
-  LicenseDecoder({
-    required String v1SecretKey,
-    List<int>? v2PublicKeyBytes,
-  })  : _v1SecretKey = v1SecretKey,
-        _v2Verifier = v2PublicKeyBytes != null &&
-                v2PublicKeyBytes.length == _ed25519PublicKeySize
-            ? Ed25519LicenseVerifier(publicKeyBytes: v2PublicKeyBytes)
-            : null;
+  LicenseDecoder({required List<int> publicKeyBytes})
+    : _verifier = publicKeyBytes.length == _ed25519PublicKeySize
+          ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
+          : throw ArgumentError(
+              'Public key must be exactly $_ed25519PublicKeySize bytes',
+            );
 
   static const _ed25519PublicKeySize = 32;
 
-  final String _v1SecretKey;
-  final Ed25519LicenseVerifier? _v2Verifier;
+  final Ed25519LicenseVerifier _verifier;
 
-  static List<int>? _publicKeyFromEnv() {
+  static rd.Result<List<int>> _publicKeyFromEnv() {
     final base64Key = dotenv.env[LicenseConstants.envLicensePublicKey];
     if (base64Key == null || base64Key.trim().isEmpty) {
-      return null;
+      return const rd.Failure(
+        core.ValidationFailure(
+          message:
+              'Chave pública de licença não configurada. '
+              'Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY.',
+        ),
+      );
     }
     try {
-      return base64.decode(base64Key.trim());
-    } on Object {
-      return null;
+      final decoded = base64.decode(base64Key.trim());
+      if (decoded.length != _ed25519PublicKeySize) {
+        return rd.Failure(
+          core.ValidationFailure(
+            message:
+                'Chave pública inválida. Esperado $_ed25519PublicKeySize bytes, '
+                'recebido ${decoded.length} bytes.',
+          ),
+        );
+      }
+      return rd.Success(decoded);
+    } on Object catch (e) {
+      return rd.Failure(
+        core.ValidationFailure(
+          message: 'Erro ao decodificar chave pública: $e',
+        ),
+      );
     }
   }
 
-  factory LicenseDecoder.fromEnv({
-    required String v1SecretKey,
-  }) {
-    final v2Key = _publicKeyFromEnv();
-    return LicenseDecoder(
-      v1SecretKey: v1SecretKey,
-      v2PublicKeyBytes: v2Key,
+  static rd.Result<LicenseDecoder> fromEnv() {
+    final keyResult = _publicKeyFromEnv();
+    return keyResult.fold(
+      (publicKeyBytes) => rd.Success(
+        LicenseDecoder(publicKeyBytes: publicKeyBytes),
+      ),
+      rd.Failure.new,
     );
   }
 
@@ -94,13 +110,20 @@ class LicenseDecoder {
         );
       }
 
-      final version = data['licenseVersion'] as int? ?? LicenseConstants.version1;
-
-      if (version == LicenseConstants.version2) {
-        return _verifyV2(data, signature as Object);
+      final version = data['licenseVersion'] as int?;
+      if (version != LicenseConstants.currentVersion) {
+        return rd.Failure(
+          core.ValidationFailure(
+            message:
+                'Versão de licença não suportada. '
+                'Esperado v${LicenseConstants.currentVersion}, '
+                'recebido v$version. '
+                'Solicite uma licença atualizada.',
+          ),
+        );
       }
 
-      return _verifyV1(data, signature as Object);
+      return _verify(data, signature as Object);
     } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao decodificar chave de licença',
@@ -134,45 +157,25 @@ class LicenseDecoder {
     }
   }
 
-  rd.Result<Map<String, dynamic>> _verifyV2(
+  rd.Result<Map<String, dynamic>> _verify(
     Map<String, dynamic> data,
     Object signature,
   ) {
-    final verifier = _v2Verifier;
-    if (verifier == null) {
-      LoggerService.warning(
-        'Licença v2 recebida mas chave pública não configurada',
-      );
-      return const rd.Failure(
-        core.ValidationFailure(
-          message:
-              'Licença v2 requer chave pública. '
-              'Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY.',
-        ),
-      );
+    final validationResult = _validateRequiredFields(data);
+    if (validationResult.isError()) {
+      return validationResult;
     }
 
-    List<int> signatureBytes;
-    if (signature is String) {
-      try {
-        signatureBytes = base64.decode(signature);
-      } on Object {
-        return const rd.Failure(
-          core.ValidationFailure(
-            message: 'Assinatura v2 inválida. Formato base64 incorreto.',
-          ),
-        );
-      }
-    } else {
-      return const rd.Failure(
-        core.ValidationFailure(message: 'Assinatura v2 inválida'),
-      );
+    final signatureBytesResult = _decodeSignature(signature);
+    if (signatureBytesResult.isError()) {
+      return rd.Failure(signatureBytesResult.exceptionOrNull()!);
     }
 
+    final signatureBytes = signatureBytesResult.getOrNull()!;
     final dataJson = jsonEncode(data);
     final messageBytes = utf8.encode(dataJson);
 
-    if (!verifier.verify(
+    if (!_verifier.verify(
       messageBytes: messageBytes,
       signatureBytes: signatureBytes,
     )) {
@@ -182,62 +185,198 @@ class LicenseDecoder {
       );
     }
 
+    final timeValidationResult = _validateTimeWindow(data);
+    if (timeValidationResult.isError()) {
+      return timeValidationResult;
+    }
+
+    return rd.Success(_normalizePayload(data));
+  }
+
+  rd.Result<Map<String, dynamic>> _validateRequiredFields(
+    Map<String, dynamic> data,
+  ) {
+    final deviceKey = data['deviceKey'] as String?;
+    if (deviceKey == null || deviceKey.trim().isEmpty) {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'Campo obrigatório ausente: deviceKey',
+        ),
+      );
+    }
+
+    final allowedFeatures = data['allowedFeatures'];
+    if (allowedFeatures is! List) {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'Campo obrigatório ausente ou inválido: allowedFeatures',
+        ),
+      );
+    }
+
+    final issuedAt = data['issuedAt'] as String?;
+    if (issuedAt == null || issuedAt.trim().isEmpty) {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'Campo obrigatório ausente: issuedAt',
+        ),
+      );
+    }
+
+    try {
+      DateTime.parse(issuedAt);
+    } on Object {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'Campo issuedAt com formato inválido',
+        ),
+      );
+    }
+
+    final keyId = data['keyId'] as String?;
+    if (keyId == null || keyId.trim().isEmpty) {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'Campo obrigatório ausente: keyId',
+        ),
+      );
+    }
+    if (keyId != LicenseConstants.keyIdDefault) {
+      return rd.Failure(
+        core.ValidationFailure(
+          message:
+              'keyId inválido. Esperado "${LicenseConstants.keyIdDefault}", '
+              'recebido "$keyId".',
+        ),
+      );
+    }
+
+    final issuer = data['issuer'] as String?;
+    if (issuer == null || issuer.trim().isEmpty) {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'Campo obrigatório ausente: issuer',
+        ),
+      );
+    }
+
+    if (issuer != LicenseConstants.issuerDefault) {
+      return rd.Failure(
+        core.ValidationFailure(
+          message:
+              'Emissor inválido. Esperado "${LicenseConstants.issuerDefault}", '
+              'recebido "$issuer".',
+        ),
+      );
+    }
+
+    final featureValues = allowedFeatures.whereType<String>().toList();
+    if (featureValues.length != allowedFeatures.length) {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'allowedFeatures deve conter somente strings',
+        ),
+      );
+    }
+    final hasEmptyFeature = featureValues.any(
+      (feature) => feature.trim().isEmpty,
+    );
+    if (hasEmptyFeature) {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'allowedFeatures não pode conter valores vazios',
+        ),
+      );
+    }
+
+    return const rd.Success({});
+  }
+
+  rd.Result<List<int>> _decodeSignature(Object signature) {
+    if (signature is! String) {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'Assinatura deve ser uma string base64',
+        ),
+      );
+    }
+
+    try {
+      final signatureBytes = base64.decode(signature);
+      if (signatureBytes.isEmpty) {
+        return const rd.Failure(
+          core.ValidationFailure(message: 'Assinatura vazia'),
+        );
+      }
+      return rd.Success(signatureBytes);
+    } on Object {
+      return const rd.Failure(
+        core.ValidationFailure(
+          message: 'Assinatura inválida. Formato base64 incorreto.',
+        ),
+      );
+    }
+  }
+
+  rd.Result<Map<String, dynamic>> _validateTimeWindow(
+    Map<String, dynamic> data,
+  ) {
+    final now = DateTime.now();
+
     final notBefore = data['notBefore'] as String?;
-    if (notBefore != null) {
+    if (notBefore != null && notBefore.isNotEmpty) {
       try {
         final notBeforeDt = DateTime.parse(notBefore);
-        if (DateTime.now().isBefore(notBeforeDt)) {
-          return const rd.Failure(
+        if (now.isBefore(notBeforeDt)) {
+          return rd.Failure(
             core.ValidationFailure(
-              message: 'Licença ainda não válida (notBefore)',
+              message:
+                  'Licença ainda não válida. Válida a partir de: '
+                  '${notBeforeDt.toIso8601String()}',
             ),
           );
         }
       } on Object {
         return const rd.Failure(
           core.ValidationFailure(
-            message: 'Licença v2: notBefore inválido',
+            message: 'Campo notBefore com formato inválido',
           ),
         );
       }
     }
 
-    return rd.Success(_normalizePayload(data));
-  }
-
-  rd.Result<Map<String, dynamic>> _verifyV1(
-    Map<String, dynamic> data,
-    Object signature,
-  ) {
-    if (signature is! String) {
-      return const rd.Failure(
-        core.ValidationFailure(message: 'Assinatura v1 inválida'),
-      );
+    final expiresAt = data['expiresAt'] as String?;
+    if (expiresAt != null && expiresAt.isNotEmpty) {
+      try {
+        final expiresAtDt = DateTime.parse(expiresAt);
+        if (now.isAfter(expiresAtDt)) {
+          return rd.Failure(
+            core.ValidationFailure(
+              message: 'Licença expirada em: ${expiresAtDt.toIso8601String()}',
+            ),
+          );
+        }
+      } on Object {
+        return const rd.Failure(
+          core.ValidationFailure(
+            message: 'Campo expiresAt com formato inválido',
+          ),
+        );
+      }
     }
 
-    final dataJson = jsonEncode(data);
-    final dataBytes = utf8.encode(dataJson);
-    final keyBytes = utf8.encode(_v1SecretKey);
-
-    final hmac = Hmac(sha256, keyBytes);
-    final expectedSignature = hmac.convert(dataBytes).toString();
-
-    if (signature != expectedSignature) {
-      LoggerService.warning('Assinatura HMAC de licença inválida');
-      return const rd.Failure(
-        core.ValidationFailure(message: 'Assinatura de licença inválida'),
-      );
-    }
-
-    return rd.Success(_normalizePayload(data));
+    return const rd.Success({});
   }
 
   Map<String, dynamic> _normalizePayload(Map<String, dynamic> data) {
+    final normalizedFeatures = (data['allowedFeatures'] as List)
+        .map((feature) => (feature as String).trim())
+        .toSet()
+        .toList();
     return {
       'deviceKey': data['deviceKey'] as String,
       'expiresAt': data['expiresAt'] as String?,
-      'allowedFeatures': (data['allowedFeatures'] as List?)?.cast<String>() ??
-          <String>[],
+      'allowedFeatures': normalizedFeatures,
     };
   }
 }

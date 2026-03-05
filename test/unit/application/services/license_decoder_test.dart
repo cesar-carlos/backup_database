@@ -8,56 +8,18 @@ import 'package:ed25519_edwards/ed25519_edwards.dart' as ed;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const v1Secret = 'test-secret-key-v1';
-
-  group('LicenseDecoder v1 (HMAC)', () {
+  group('LicenseDecoder v2-only (Ed25519)', () {
+    late ed.KeyPair keyPair;
     late LicenseDecoder decoder;
     late LicenseGenerationService generationService;
 
     setUp(() {
-      decoder = LicenseDecoder(v1SecretKey: v1Secret);
+      keyPair = ed.generateKey();
+      decoder = LicenseDecoder(publicKeyBytes: keyPair.publicKey.bytes);
       generationService = LicenseGenerationService(
-        secretKey: v1Secret,
+        privateKeyBytes: keyPair.privateKey.bytes,
         licenseDecoder: decoder,
       );
-    });
-
-    test('decodes valid v1 license from generation service', () async {
-      final genResult = await generationService.generateLicenseKey(
-        deviceKey: 'device-a',
-        allowedFeatures: const ['f1', 'f2'],
-        expiresAt: DateTime.now().add(const Duration(days: 30)),
-      );
-
-      expect(genResult.isSuccess(), isTrue);
-      final licenseKey = genResult.getOrNull()!;
-
-      final decodeResult = await decoder.decode(licenseKey);
-
-      expect(decodeResult.isSuccess(), isTrue);
-      final data = decodeResult.getOrNull()!;
-      expect(data['deviceKey'], 'device-a');
-      expect(data['allowedFeatures'], ['f1', 'f2']);
-      expect(data['expiresAt'], isNotNull);
-    });
-
-    test('rejects v1 license with invalid signature', () async {
-      final genResult = await generationService.generateLicenseKey(
-        deviceKey: 'device-a',
-        allowedFeatures: const ['f1'],
-      );
-      final licenseKey = genResult.getOrNull()!;
-
-      final licenseBytes = base64.decode(licenseKey);
-      final licenseJson = utf8.decode(licenseBytes);
-      final licenseData = jsonDecode(licenseJson) as Map<String, dynamic>;
-      licenseData['signature'] = 'tampered-signature';
-
-      final tamperedKey = base64.encode(utf8.encode(jsonEncode(licenseData)));
-
-      final decodeResult = await decoder.decode(tamperedKey);
-
-      expect(decodeResult.isError(), isTrue);
     });
 
     test('rejects empty license key', () async {
@@ -69,36 +31,82 @@ void main() {
       final result = await decoder.decode('not-valid-base64!!!');
       expect(result.isError(), isTrue);
     });
-  });
 
-  group('LicenseDecoder v2 (Ed25519)', () {
-    late ed.KeyPair keyPair;
-    late LicenseDecoder decoderWithPublicKey;
-
-    setUp(() {
-      keyPair = ed.generateKey();
-      decoderWithPublicKey = LicenseDecoder(
-        v1SecretKey: v1Secret,
-        v2PublicKeyBytes: keyPair.publicKey.bytes,
+    test('decodes valid v2 license from generation service', () async {
+      final genResult = await generationService.generateLicenseKey(
+        deviceKey: 'device-v2',
+        allowedFeatures: const ['remote_control', 'email_notification'],
+        expiresAt: DateTime.now().add(const Duration(days: 90)),
       );
+
+      expect(genResult.isSuccess(), isTrue);
+      final licenseKey = genResult.getOrNull()!;
+
+      final result = await decoder.decode(licenseKey);
+
+      expect(result.isSuccess(), isTrue);
+      final data = result.getOrNull()!;
+      expect(data['deviceKey'], 'device-v2');
+      expect(data['allowedFeatures'], ['remote_control', 'email_notification']);
+      expect(data['expiresAt'], isNotNull);
     });
 
-    String createV2License({
-      required String deviceKey,
-      required List<String> allowedFeatures,
-      DateTime? expiresAt,
-      DateTime? notBefore,
-      DateTime? issuedAt,
-    }) {
+    test('rejects v2 license with invalid signature', () async {
+      final genResult = await generationService.generateLicenseKey(
+        deviceKey: 'device-v2',
+        allowedFeatures: const ['f1'],
+      );
+      final licenseKey = genResult.getOrNull()!;
+
+      final licenseBytes = base64.decode(licenseKey);
+      final licenseJson = utf8.decode(licenseBytes);
+      final licenseData = jsonDecode(licenseJson) as Map<String, dynamic>;
+      (licenseData['data'] as Map<String, dynamic>)['deviceKey'] = 'tampered';
+      licenseData['signature'] = base64.encode(List.filled(64, 0));
+
+      final tamperedKey = base64.encode(utf8.encode(jsonEncode(licenseData)));
+
+      final result = await decoder.decode(tamperedKey);
+
+      expect(result.isError(), isTrue);
+    });
+
+    test('rejects v2 license when notBefore is in future', () async {
+      final now = DateTime.now();
+      final notBefore = now.add(const Duration(days: 1));
+
+      final genResult = await generationService.generateLicenseKey(
+        deviceKey: 'device-v2',
+        allowedFeatures: const ['f1'],
+        notBefore: notBefore,
+      );
+      final licenseKey = genResult.getOrNull()!;
+
+      final result = await decoder.decode(licenseKey);
+
+      expect(result.isError(), isTrue);
+    });
+
+    test('rejects v2 license when expiresAt is in past', () async {
+      final now = DateTime.now();
+      final expiresAt = now.subtract(const Duration(days: 1));
+
+      final genResult = await generationService.generateLicenseKey(
+        deviceKey: 'device-v2',
+        allowedFeatures: const ['f1'],
+        expiresAt: expiresAt,
+      );
+      final licenseKey = genResult.getOrNull()!;
+
+      final result = await decoder.decode(licenseKey);
+
+      expect(result.isError(), isTrue);
+    });
+
+    test('rejects license with missing required fields', () async {
       final data = <String, dynamic>{
-        'licenseVersion': LicenseConstants.version2,
-        'deviceKey': deviceKey,
-        'allowedFeatures': allowedFeatures,
-        'expiresAt': expiresAt?.toIso8601String(),
-        'notBefore': notBefore?.toIso8601String(),
-        'issuedAt': issuedAt?.toIso8601String(),
-        'issuer': LicenseConstants.issuerDefault,
-        'keyId': LicenseConstants.keyIdDefault,
+        'licenseVersion': LicenseConstants.currentVersion,
+        'deviceKey': 'device-v2',
       };
 
       final dataJson = jsonEncode(data);
@@ -112,82 +120,141 @@ void main() {
         'data': data,
         'signature': base64.encode(sig),
       };
-      return base64.encode(utf8.encode(jsonEncode(licenseData)));
-    }
+      final licenseKey = base64.encode(utf8.encode(jsonEncode(licenseData)));
 
-    test('decodes valid v2 license', () async {
-      final licenseKey = createV2License(
-        deviceKey: 'device-v2',
-        allowedFeatures: const ['remote_control', 'email_notification'],
-        expiresAt: DateTime.now().add(const Duration(days: 90)),
-      );
-
-      final result = await decoderWithPublicKey.decode(licenseKey);
-
-      expect(result.isSuccess(), isTrue);
-      final data = result.getOrNull()!;
-      expect(data['deviceKey'], 'device-v2');
-      expect(data['allowedFeatures'], ['remote_control', 'email_notification']);
-    });
-
-    test('rejects v2 license with invalid signature', () async {
-      final licenseKey = createV2License(
-        deviceKey: 'device-v2',
-        allowedFeatures: const ['f1'],
-      );
-
-      final licenseBytes = base64.decode(licenseKey);
-      final licenseJson = utf8.decode(licenseBytes);
-      final licenseData = jsonDecode(licenseJson) as Map<String, dynamic>;
-      (licenseData['data'] as Map<String, dynamic>)['deviceKey'] = 'tampered';
-      licenseData['signature'] = base64.encode(List.filled(64, 0));
-
-      final tamperedKey = base64.encode(utf8.encode(jsonEncode(licenseData)));
-
-      final result = await decoderWithPublicKey.decode(tamperedKey);
+      final result = await decoder.decode(licenseKey);
 
       expect(result.isError(), isTrue);
     });
 
-    test('rejects v2 license when notBefore is in future', () async {
-      final licenseKey = createV2License(
-        deviceKey: 'device-v2',
-        allowedFeatures: const ['f1'],
-        notBefore: DateTime.now().add(const Duration(days: 1)),
+    test('rejects v1 license (unsupported version)', () async {
+      final data = <String, dynamic>{
+        'licenseVersion': 1,
+        'deviceKey': 'device-v1',
+        'allowedFeatures': ['f1'],
+        'issuedAt': DateTime.now().toIso8601String(),
+        'keyId': 'test-key',
+        'issuer': LicenseConstants.issuerDefault,
+      };
+
+      final dataJson = jsonEncode(data);
+      final messageBytes = utf8.encode(dataJson);
+      final sig = ed.sign(
+        keyPair.privateKey,
+        Uint8List.fromList(messageBytes),
       );
 
-      final result = await decoderWithPublicKey.decode(licenseKey);
+      final licenseData = {
+        'data': data,
+        'signature': base64.encode(sig),
+      };
+      final licenseKey = base64.encode(utf8.encode(jsonEncode(licenseData)));
+
+      final result = await decoder.decode(licenseKey);
 
       expect(result.isError(), isTrue);
     });
 
-    test('returns failure when v2 license received but public key not configured',
-        () async {
-      final decoderWithoutKey = LicenseDecoder(v1SecretKey: v1Secret);
-      final licenseKey = createV2License(
-        deviceKey: 'device-v2',
-        allowedFeatures: const ['f1'],
+    test('rejects license with wrong issuer', () async {
+      final data = <String, dynamic>{
+        'licenseVersion': LicenseConstants.currentVersion,
+        'deviceKey': 'device-v2',
+        'allowedFeatures': ['f1'],
+        'issuedAt': DateTime.now().toIso8601String(),
+        'keyId': LicenseConstants.keyIdDefault,
+        'issuer': 'wrong_issuer',
+      };
+
+      final dataJson = jsonEncode(data);
+      final messageBytes = utf8.encode(dataJson);
+      final sig = ed.sign(
+        keyPair.privateKey,
+        Uint8List.fromList(messageBytes),
       );
 
-      final result = await decoderWithoutKey.decode(licenseKey);
+      final licenseData = {
+        'data': data,
+        'signature': base64.encode(sig),
+      };
+      final licenseKey = base64.encode(utf8.encode(jsonEncode(licenseData)));
+
+      final result = await decoder.decode(licenseKey);
+
+      expect(result.isError(), isTrue);
+    });
+
+    test('rejects license with wrong keyId', () async {
+      final data = <String, dynamic>{
+        'licenseVersion': LicenseConstants.currentVersion,
+        'deviceKey': 'device-v2',
+        'allowedFeatures': ['f1'],
+        'issuedAt': DateTime.now().toIso8601String(),
+        'keyId': 'unexpected-key',
+        'issuer': LicenseConstants.issuerDefault,
+      };
+
+      final dataJson = jsonEncode(data);
+      final messageBytes = utf8.encode(dataJson);
+      final sig = ed.sign(
+        keyPair.privateKey,
+        Uint8List.fromList(messageBytes),
+      );
+
+      final licenseData = {
+        'data': data,
+        'signature': base64.encode(sig),
+      };
+      final licenseKey = base64.encode(utf8.encode(jsonEncode(licenseData)));
+
+      final result = await decoder.decode(licenseKey);
+
+      expect(result.isError(), isTrue);
+    });
+
+    test('rejects license with non-string feature values', () async {
+      final data = <String, dynamic>{
+        'licenseVersion': LicenseConstants.currentVersion,
+        'deviceKey': 'device-v2',
+        'allowedFeatures': ['f1', 1, true],
+        'issuedAt': DateTime.now().toIso8601String(),
+        'keyId': LicenseConstants.keyIdDefault,
+        'issuer': LicenseConstants.issuerDefault,
+      };
+
+      final dataJson = jsonEncode(data);
+      final messageBytes = utf8.encode(dataJson);
+      final sig = ed.sign(
+        keyPair.privateKey,
+        Uint8List.fromList(messageBytes),
+      );
+
+      final licenseData = {
+        'data': data,
+        'signature': base64.encode(sig),
+      };
+      final licenseKey = base64.encode(utf8.encode(jsonEncode(licenseData)));
+
+      final result = await decoder.decode(licenseKey);
 
       expect(result.isError(), isTrue);
     });
   });
 
-  group('LicenseDecoder v1/v2 compatibility', () {
+  group('LicenseGenerationService.createLicenseFromKey', () {
+    late ed.KeyPair keyPair;
     late LicenseDecoder decoder;
     late LicenseGenerationService generationService;
 
     setUp(() {
-      decoder = LicenseDecoder(v1SecretKey: v1Secret);
+      keyPair = ed.generateKey();
+      decoder = LicenseDecoder(publicKeyBytes: keyPair.publicKey.bytes);
       generationService = LicenseGenerationService(
-        secretKey: v1Secret,
+        privateKeyBytes: keyPair.privateKey.bytes,
         licenseDecoder: decoder,
       );
     });
 
-    test('createLicenseFromKey works with v1 license', () async {
+    test('creates license entity from valid key', () async {
       final genResult = await generationService.generateLicenseKey(
         deviceKey: 'device-compat',
         allowedFeatures: const ['email_notification'],
@@ -206,7 +273,7 @@ void main() {
       expect(license.hasFeature('email_notification'), isTrue);
     });
 
-    test('createLicenseFromKey rejects v1 license for wrong device', () async {
+    test('rejects license for wrong device', () async {
       final genResult = await generationService.generateLicenseKey(
         deviceKey: 'device-a',
         allowedFeatures: const ['f1'],
@@ -219,6 +286,22 @@ void main() {
       );
 
       expect(createResult.isError(), isTrue);
+    });
+
+    test('disables local generation when private key is unavailable', () async {
+      final generationServiceWithoutPrivateKey = LicenseGenerationService(
+        licenseDecoder: decoder,
+      );
+
+      expect(generationServiceWithoutPrivateKey.canGenerateLocally, isFalse);
+
+      final generateResult = await generationServiceWithoutPrivateKey
+          .generateLicenseKey(
+            deviceKey: 'device-a',
+            allowedFeatures: const ['f1'],
+          );
+
+      expect(generateResult.isError(), isTrue);
     });
   });
 }

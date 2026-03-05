@@ -19,26 +19,31 @@ class SignedRevocationListService implements IRevocationChecker {
   final Ed25519LicenseVerifier? _verifier;
 
   Set<String>? _cachedRevokedKeys;
-  bool _loadAttempted = false;
+  DateTime? _cacheExpiresAt;
   final String? _injectedRevocationList;
+  final Duration _cacheTtl;
 
   factory SignedRevocationListService.forTesting({
     required List<int> publicKeyBytes,
     required String revocationListJson,
+    Duration cacheTtl = LicenseConstants.revocationListTtl,
   }) => SignedRevocationListService._(
     publicKeyBytes: publicKeyBytes,
     injectedRevocationList: revocationListJson,
+    cacheTtl: cacheTtl,
   );
 
   SignedRevocationListService._({
     List<int>? publicKeyBytes,
     String? injectedRevocationList,
+    Duration cacheTtl = LicenseConstants.revocationListTtl,
   }) : _verifier =
            publicKeyBytes != null &&
                publicKeyBytes.length == _ed25519PublicKeySize
            ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
            : null,
-       _injectedRevocationList = injectedRevocationList;
+       _injectedRevocationList = injectedRevocationList,
+       _cacheTtl = cacheTtl;
 
   static String? _readEnvOrNull(String key) {
     try {
@@ -69,35 +74,51 @@ class SignedRevocationListService implements IRevocationChecker {
   @override
   Future<bool> isRevoked(String deviceKey) async {
     final revoked = await _getRevokedDeviceKeys();
-    return revoked.contains(deviceKey);
+    final isRevoked = revoked.contains(deviceKey);
+    if (isRevoked) {
+      LoggerService.warning(
+        'Device key revoked: $deviceKey (from cached revocation list)',
+      );
+    }
+    return isRevoked;
   }
 
   Future<Set<String>> _getRevokedDeviceKeys() async {
-    if (_loadAttempted) {
-      return _cachedRevokedKeys ?? {};
+    final now = DateTime.now();
+    final cacheValid =
+        _cacheExpiresAt != null && now.isBefore(_cacheExpiresAt!);
+
+    if (cacheValid && _cachedRevokedKeys != null) {
+      return _cachedRevokedKeys!;
     }
-    _loadAttempted = true;
 
     final raw = await _loadRevocationListRaw();
     if (raw == null || raw.isEmpty) {
-      return {};
+      _cacheExpiresAt = now.add(_cacheTtl);
+      _cachedRevokedKeys ??= {};
+      return _cachedRevokedKeys!;
     }
 
     final result = _parseAndVerify(raw);
     result.fold(
       (keys) {
         _cachedRevokedKeys = keys;
+        _cacheExpiresAt = now.add(_cacheTtl);
         LoggerService.info(
-          'Lista de revogação carregada: ${keys.length} deviceKey(s)',
+          'Lista de revogação carregada: ${keys.length} deviceKey(s), '
+          'cache válido até ${_cacheExpiresAt!.toIso8601String()}',
         );
       },
       (failure) {
         LoggerService.warning(
-          'Lista de revogação inválida ou não verificada: $failure',
+          'Lista de revogação inválida ou não verificada: $failure. '
+          'Usando cache anterior ou lista vazia como fallback seguro.',
         );
+        _cacheExpiresAt = now.add(_cacheTtl);
+        _cachedRevokedKeys ??= {};
       },
     );
-    return _cachedRevokedKeys ?? {};
+    return _cachedRevokedKeys!;
   }
 
   Future<String?> _loadRevocationListRaw() async {

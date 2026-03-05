@@ -315,28 +315,54 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
         children: [
           Row(
             children: [
+              const Icon(FluentIcons.warning, color: Color(0xFFFF9800)),
+              const SizedBox(width: 8),
               Text(
                 _t('Gerador de licenças', 'License generator'),
                 style: FluentTheme.of(context).typography.subtitle,
               ),
               const Spacer(),
-              ValueListenableBuilder<bool>(
-                valueListenable: _isAuthenticatedNotifier,
-                builder: (context, isAuthenticated, child) {
-                  if (!isAuthenticated) {
+              if (!licenseProvider.canGenerateLicenses)
+                Text(
+                  _t(
+                    'Indisponível neste ambiente',
+                    'Unavailable in this environment',
+                  ),
+                  style: FluentTheme.of(context).typography.body,
+                )
+              else
+                ValueListenableBuilder<bool>(
+                  valueListenable: _isAuthenticatedNotifier,
+                  builder: (context, isAuthenticated, child) {
+                    if (!isAuthenticated) {
+                      return Button(
+                        onPressed: () => _showAuthDialog(context),
+                        child: Text(_t('Acessar gerador', 'Open generator')),
+                      );
+                    }
                     return Button(
-                      onPressed: () => _showAuthDialog(context),
-                      child: Text(_t('Acessar gerador', 'Open generator')),
+                      onPressed: () =>
+                          _showGeneratorDialog(context, licenseProvider),
+                      child: Text(_t('Gerar licença', 'Generate license')),
                     );
-                  }
-                  return Button(
-                    onPressed: () =>
-                        _showGeneratorDialog(context, licenseProvider),
-                    child: Text(_t('Gerar licença', 'Generate license')),
-                  );
-                },
-              ),
+                  },
+                ),
             ],
+          ),
+          const SizedBox(height: 8),
+          InfoBar(
+            severity: InfoBarSeverity.warning,
+            title: Text(_t('Modo de desenvolvedor', 'Developer mode')),
+            content: Text(
+              _t(
+                'Este gerador requer chave privada Ed25519 (BACKUP_DATABASE_LICENSE_PRIVATE_KEY). '
+                    'NUNCA distribua a chave privada para clientes. '
+                    'Use este gerador apenas em ambiente controlado.',
+                'This generator requires Ed25519 private key (BACKUP_DATABASE_LICENSE_PRIVATE_KEY). '
+                    'NEVER distribute the private key to clients. '
+                    'Use this generator only in controlled environment.',
+              ),
+            ),
           ),
         ],
       ),

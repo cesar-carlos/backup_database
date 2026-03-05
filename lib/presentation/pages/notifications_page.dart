@@ -58,6 +58,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
       context,
       initialConfig: initialConfig,
       initialRecipientEmail: initialRecipientEmail,
+      onTestConfiguration: (config) async {
+        final success = await provider.testDraftConfiguration(config);
+        if (success) {
+          return null;
+        }
+        return provider.error ?? 'Falha ao testar configuracao SMTP';
+      },
       onConnectOAuth: (config, providerType) {
         return provider.connectOAuth(
           config: config,

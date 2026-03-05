@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
@@ -17,14 +18,14 @@ import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/license/signed_revocation_list_service.dart';
 import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
-import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:pub_semver/pub_semver.dart';
-import 'package:result_dart/result_dart.dart' as rd;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 const _resetFlagKey = 'reset_v2_2_3_done';
@@ -422,31 +423,40 @@ Future<void> setupCoreModule(GetIt getIt) async {
   );
 
   // License
-  final licenseSecretKeyResult = await _getOrCreateLicenseSecretKey(getIt);
-  if (licenseSecretKeyResult.isError()) {
-    final error = licenseSecretKeyResult.exceptionOrNull();
+  final licenseDecoderResult = LicenseDecoder.fromEnv();
+  if (licenseDecoderResult.isError()) {
+    final error = licenseDecoderResult.exceptionOrNull();
     LoggerService.error(
-      'Failed to get license secret key: $error',
+      'Failed to initialize license decoder: $error',
     );
     throw StateError(
-      'License secret key could not be obtained. '
-      'Ensure device key and secure storage are available.',
+      'License decoder could not be initialized. '
+      'Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY with a valid base64-encoded '
+      'Ed25519 public key (32 bytes).',
     );
   }
 
-  final secretKey = licenseSecretKeyResult.getOrNull()!;
-  final licenseDecoder = LicenseDecoder.fromEnv(v1SecretKey: secretKey);
+  final licenseDecoder = licenseDecoderResult.getOrNull()!;
   final revocationChecker = SignedRevocationListService.fromEnv();
   getIt.registerLazySingleton<LicenseDecoder>(() => licenseDecoder);
   getIt.registerLazySingleton<IRevocationChecker>(() => revocationChecker);
   getIt.registerLazySingleton<IMetricsCollector>(MetricsCollector.new);
-  getIt.registerLazySingleton<LicenseGenerationService>(
-    () => LicenseGenerationService(
-      secretKey: secretKey,
-      licenseDecoder: licenseDecoder,
-      revocationChecker: revocationChecker,
-    ),
+
+  final generationService = _createLicenseGenerationService(
+    licenseDecoder,
+    revocationChecker,
   );
+  getIt.registerLazySingleton<LicenseGenerationService>(
+    () => generationService,
+  );
+
+  if (generationService.canGenerateLocally) {
+    LoggerService.info('License generation service initialized (debug only)');
+  } else {
+    LoggerService.info(
+      'License generation disabled (requires debug mode and valid private key)',
+    );
+  }
 
   getIt.registerLazySingleton<LicenseValidationService>(
     () => LicenseValidationService(
@@ -466,49 +476,50 @@ Future<void> setupCoreModule(GetIt getIt) async {
   );
 }
 
-Future<rd.Result<String>> _getOrCreateLicenseSecretKey(GetIt getIt) async {
-  const licenseSecretKey = 'license_secret_key';
+LicenseGenerationService _createLicenseGenerationService(
+  LicenseDecoder licenseDecoder,
+  IRevocationChecker revocationChecker,
+) {
+  if (!kDebugMode) {
+    return LicenseGenerationService(
+      licenseDecoder: licenseDecoder,
+      revocationChecker: revocationChecker,
+    );
+  }
 
-  final secureCredentialService = getIt<ISecureCredentialService>();
-  final deviceKeyService = getIt<IDeviceKeyService>();
+  final base64PrivateKey = dotenv.env[LicenseConstants.envLicensePrivateKey];
+  if (base64PrivateKey == null || base64PrivateKey.trim().isEmpty) {
+    return LicenseGenerationService(
+      licenseDecoder: licenseDecoder,
+      revocationChecker: revocationChecker,
+    );
+  }
 
-  final existingKeyResult = await secureCredentialService.getPassword(
-    key: licenseSecretKey,
-  );
-
-  if (existingKeyResult.isSuccess()) {
-    final existingKey = existingKeyResult.getOrNull()!;
-    if (existingKey.isNotEmpty) {
-      LoggerService.info(
-        'Using existing license secret key from secure storage',
+  try {
+    final privateKeyBytes = base64.decode(base64PrivateKey.trim());
+    if (privateKeyBytes.length != 64) {
+      LoggerService.warning(
+        'Invalid private key length for local generation: '
+        '${privateKeyBytes.length}',
       );
-      return rd.Success(existingKey);
+      return LicenseGenerationService(
+        licenseDecoder: licenseDecoder,
+        revocationChecker: revocationChecker,
+      );
     }
+
+    return LicenseGenerationService(
+      privateKeyBytes: privateKeyBytes,
+      licenseDecoder: licenseDecoder,
+      revocationChecker: revocationChecker,
+    );
+  } on Object catch (e) {
+    LoggerService.warning(
+      'Failed to decode private key for local generation: $e',
+    );
+    return LicenseGenerationService(
+      licenseDecoder: licenseDecoder,
+      revocationChecker: revocationChecker,
+    );
   }
-
-  final deviceKeyResult = await deviceKeyService.getDeviceKey();
-  if (deviceKeyResult.isError()) {
-    return rd.Failure(deviceKeyResult.exceptionOrNull()!);
-  }
-
-  final deviceKey = deviceKeyResult.getOrNull()!;
-  final timestamp = DateTime.now().millisecondsSinceEpoch;
-  final randomBytes = List<int>.generate(32, (i) => (i + timestamp) % 256);
-  final combined = '$deviceKey:$timestamp:${randomBytes.join()}';
-
-  final keyBytes = utf8.encode(combined);
-  final digest = sha256.convert(keyBytes);
-  final generatedKey = digest.toString();
-
-  final storeResult = await secureCredentialService.storePassword(
-    key: licenseSecretKey,
-    password: generatedKey,
-  );
-
-  if (storeResult.isError()) {
-    return rd.Failure(storeResult.exceptionOrNull()!);
-  }
-
-  LoggerService.info('Generated and stored new license secret key');
-  return rd.Success(generatedKey);
 }

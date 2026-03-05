@@ -1,46 +1,84 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:backup_database/application/services/license_decoder.dart';
+import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/domain/services/i_revocation_checker.dart';
-import 'package:crypto/crypto.dart';
+import 'package:ed25519_edwards/ed25519_edwards.dart' as ed;
 import 'package:result_dart/result_dart.dart' as rd;
 
 class LicenseGenerationService {
   LicenseGenerationService({
-    required String secretKey,
     required LicenseDecoder licenseDecoder,
+    List<int>? privateKeyBytes,
     IRevocationChecker? revocationChecker,
-  })  : _secretKey = secretKey,
-        _licenseDecoder = licenseDecoder,
-        _revocationChecker = revocationChecker;
-  final String _secretKey;
+  }) : _privateKey = privateKeyBytes == null
+           ? null
+           : ed.PrivateKey(privateKeyBytes),
+       _licenseDecoder = licenseDecoder,
+       _revocationChecker = revocationChecker;
+
+  final ed.PrivateKey? _privateKey;
   final LicenseDecoder _licenseDecoder;
   final IRevocationChecker? _revocationChecker;
+  bool get canGenerateLocally => _privateKey != null;
 
   Future<rd.Result<String>> generateLicenseKey({
     required String deviceKey,
     required List<String> allowedFeatures,
     DateTime? expiresAt,
+    DateTime? notBefore,
   }) async {
     try {
+      if (!canGenerateLocally) {
+        return const rd.Failure(
+          core.ValidationFailure(
+            message:
+                'Geração local indisponível. Configure a chave privada '
+                'somente em ambiente debug/admin.',
+          ),
+        );
+      }
+
+      if (deviceKey.trim().isEmpty) {
+        return const rd.Failure(
+          core.ValidationFailure(
+            message: 'deviceKey não pode estar vazio',
+          ),
+        );
+      }
+
+      if (allowedFeatures.isEmpty) {
+        return const rd.Failure(
+          core.ValidationFailure(
+            message: 'allowedFeatures não pode estar vazio',
+          ),
+        );
+      }
+
+      final now = DateTime.now();
       final data = {
-        'deviceKey': deviceKey,
-        'expiresAt': expiresAt?.toIso8601String(),
+        'licenseVersion': LicenseConstants.currentVersion,
+        'deviceKey': deviceKey.trim(),
         'allowedFeatures': allowedFeatures,
-        'timestamp': DateTime.now().toIso8601String(),
+        'issuedAt': now.toIso8601String(),
+        'keyId': LicenseConstants.keyIdDefault,
+        'issuer': LicenseConstants.issuerDefault,
+        if (expiresAt != null) 'expiresAt': expiresAt.toIso8601String(),
+        if (notBefore != null) 'notBefore': notBefore.toIso8601String(),
       };
 
-      final jsonString = jsonEncode(data);
-      final bytes = utf8.encode(jsonString);
-      final keyBytes = utf8.encode(_secretKey);
+      final dataJson = jsonEncode(data);
+      final messageBytes = Uint8List.fromList(utf8.encode(dataJson));
+      final signatureBytes = ed.sign(_privateKey!, messageBytes);
 
-      final hmac = Hmac(sha256, keyBytes);
-      final digest = hmac.convert(bytes);
-
-      final licenseData = {'data': data, 'signature': digest.toString()};
+      final licenseData = {
+        'data': data,
+        'signature': base64.encode(signatureBytes),
+      };
 
       final licenseJson = jsonEncode(licenseData);
       final licenseBytes = utf8.encode(licenseJson);
@@ -60,8 +98,7 @@ class LicenseGenerationService {
 
   Future<rd.Result<Map<String, dynamic>>> decodeLicenseKey(
     String licenseKey,
-  ) async =>
-      _licenseDecoder.decode(licenseKey);
+  ) async => _licenseDecoder.decode(licenseKey);
 
   Future<rd.Result<License>> createLicenseFromKey({
     required String licenseKey,

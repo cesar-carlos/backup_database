@@ -37,6 +37,7 @@ class LicenseProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get deviceKey => _deviceKey;
+  bool get canGenerateLicenses => _generationService.canGenerateLocally;
   bool get hasValidLicense =>
       _currentLicense != null && _currentLicense!.isValid;
 
@@ -114,8 +115,9 @@ class LicenseProvider extends ChangeNotifier {
 
       return createResult.fold(
         (license) async {
-          final saveResult =
-              await _licenseRepository.upsertByDeviceKey(license);
+          final saveResult = await _licenseRepository.upsertByDeviceKey(
+            license,
+          );
           return saveResult.fold(
             (saved) {
               _cacheInvalidator?.invalidateLicenseCache();
@@ -179,6 +181,7 @@ class LicenseProvider extends ChangeNotifier {
     required String deviceKey,
     required List<String> allowedFeatures,
     DateTime? expiresAt,
+    DateTime? notBefore,
   }) async {
     _isLoading = true;
     _error = null;
@@ -188,6 +191,7 @@ class LicenseProvider extends ChangeNotifier {
       final generateResult = await _generationService.generateLicenseKey(
         deviceKey: deviceKey,
         expiresAt: expiresAt,
+        notBefore: notBefore,
         allowedFeatures: allowedFeatures,
       );
 
