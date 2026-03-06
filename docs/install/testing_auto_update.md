@@ -5,6 +5,7 @@ Este guia explica como testar o sistema de atualização automática do Backup D
 ## Pré-requisitos
 
 1. **Arquivo `.env` configurado** na raiz do projeto:
+
    ```env
    AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_database/main/appcast.xml
    ```
@@ -18,6 +19,7 @@ Este guia explica como testar o sistema de atualização automática do Backup D
 ### Método 1: Teste Manual na Interface
 
 1. **Execute o aplicativo:**
+
    ```bash
    flutter run -d windows
    ```
@@ -41,11 +43,13 @@ Este guia explica como testar o sistema de atualização automática do Backup D
 Para testar se uma atualização é detectada, você precisa criar uma versão mais nova:
 
 1. **Atualize a versão no `pubspec.yaml`:**
+
    ```yaml
-   version: 2.2.8+1  # Versão maior que a atual (ex.: 2.2.7)
+   version: 2.2.8+1 # Versão maior que a atual (ex.: 2.2.7)
    ```
 
 2. **Faça build:**
+
    ```bash
    flutter build windows --release
    ```
@@ -74,6 +78,7 @@ Para testar se uma atualização é detectada, você precisa criar uma versão m
 ### Método 3: Verificar Logs
 
 1. **Execute o aplicativo com logs:**
+
    ```bash
    flutter run -d windows
    ```
@@ -92,10 +97,12 @@ Para testar se uma atualização é detectada, você precisa criar uma versão m
 ### 1. Verificar se o appcast.xml foi atualizado
 
 Acesse a URL do feed no navegador:
+
 - GitHub Raw: https://raw.githubusercontent.com/cesar-carlos/backup_database/main/appcast.xml
 - GitHub Pages: https://cesar-carlos.github.io/backup_database/appcast.xml
 
 O arquivo deve conter um `<item>` com informações do release:
+
 ```xml
 <item>
   <title>Version 1.0.0</title>
@@ -129,7 +136,8 @@ O arquivo deve conter um `<item>` com informações do release:
 
 **Causa**: O release foi criado como "Pre-release"
 
-**Solução**: 
+**Solução**:
+
 1. Edite o release no GitHub
 2. Desmarque "Set as a pre-release"
 3. Salve as alterações
@@ -140,6 +148,7 @@ O arquivo deve conter um `<item>` com informações do release:
 **Causa**: O workflow não encontrou o arquivo `.exe` no release
 
 **Solução**:
+
 1. Verifique se o arquivo `.exe` foi anexado ao release
 2. Verifique se o nome do arquivo termina com `.exe`
 3. Re-execute o workflow manualmente (se possível) ou crie um novo release
@@ -149,6 +158,7 @@ O arquivo deve conter um `<item>` com informações do release:
 **Causa**: O arquivo `.env` não existe ou não contém a variável
 
 **Solução**:
+
 1. Crie o arquivo `.env` na raiz do projeto
 2. Adicione: `AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_database/main/appcast.xml`
 3. Reinicie o aplicativo
@@ -158,6 +168,7 @@ O arquivo deve conter um `<item>` com informações do release:
 **Causa**: URL do feed inacessível ou formato XML inválido
 
 **Solução**:
+
 1. Teste a URL no navegador
 2. Verifique se o XML está bem formatado
 3. Verifique os logs do aplicativo para mais detalhes
@@ -214,4 +225,3 @@ O arquivo deve conter um `<item>` com informações do release:
 - O aplicativo verifica atualizações automaticamente na inicialização
 - Verificações periódicas ocorrem a cada 1 hora (3600 segundos)
 - A versão no `appcast.xml` deve corresponder à tag do release (sem o prefixo `v`)
-

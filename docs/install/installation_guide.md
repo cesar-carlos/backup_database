@@ -101,7 +101,6 @@ Se você viu avisos sobre dependências faltando durante a instalação:
 #### Para SQL Server (sqlcmd):
 
 1. **Se você já tem SQL Server instalado**:
-
    - Verifique se `sqlcmd.exe` está no PATH
    - Consulte [path_setup.md](path_setup.md) para instruções
 
@@ -141,18 +140,15 @@ Se ambos os comandos mostrarem a ajuda, está tudo configurado!
 Agora você pode configurar o Backup Database:
 
 1. **Configurar conexões com bancos de dados**:
-
    - SQL Server: Vá em **Configurações > SQL Server**
    - Sybase: Vá em **Configurações > Sybase**
 
 2. **Configurar destinos de backup**:
-
    - Local: Vá em **Configurações > Destinos**
    - FTP: Configure servidor FTP
    - Google Drive: Configure autenticação OAuth2
 
 3. **Criar agendamentos**:
-
    - Vá em **Agendamentos**
    - Clique em **"Novo Agendamento"**
    - Configure a frequência e horários

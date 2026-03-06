@@ -203,9 +203,10 @@ Passo a passo:
    - `Certificates & secrets > New client secret`
    - usar valor em `SMTP_MICROSOFT_CLIENT_SECRET`
 10. Validar no app:
-   - iniciar com `--dart-define`
-   - no modal, selecionar `Microsoft OAuth2`
-   - clicar `Conectar`
+
+- iniciar com `--dart-define`
+- no modal, selecionar `Microsoft OAuth2`
+- clicar `Conectar`
 
 ### 9.2 Google
 

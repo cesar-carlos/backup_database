@@ -45,6 +45,11 @@ class FtpDestinationService implements IFtpService {
 
       final fileSize = await sourceFile.length();
       final fileName = customFileName ?? p.basename(sourceFilePath);
+      final remotePartName = _buildRemotePartName(
+        finalFileName: fileName,
+        runId: runId,
+        destinationId: destinationId,
+      );
 
       final hashStopwatch = Stopwatch()..start();
       LoggerService.debug('Calculando SHA-256 do arquivo local...');
@@ -93,8 +98,41 @@ class FtpDestinationService implements IFtpService {
           await ftp.changeDirectory(config.remotePath);
         }
 
-        const partSuffix = '.part';
-        final remotePartName = '$fileName$partSuffix';
+        final alreadyUploaded = await _isRemoteFileAlreadyComplete(
+          ftp: ftp,
+          remoteFileName: fileName,
+          expectedSize: fileSize,
+          localSha256: sha256Hash,
+          enableStrongIntegrityValidation:
+              config.enableStrongIntegrityValidation,
+          enableReadBackValidation: config.enableReadBackValidation,
+        );
+        if (alreadyUploaded) {
+          await ftp.disconnect();
+          ftp = null;
+          stopwatch.stop();
+
+          final remotePath = p.posix.join(
+            config.remotePath == '/' ? '' : config.remotePath,
+            fileName,
+          );
+          LoggerService.info(
+            '$ctx Upload FTP concluído por idempotência: '
+            '$remotePath (arquivo já existente no destino)',
+          );
+
+          return rd.Success(
+            FtpUploadResult(
+              remotePath: remotePath,
+              fileSize: fileSize,
+              duration: stopwatch.elapsed,
+              sha256: sha256Hash,
+              hashDurationMs: sha256Hash != null
+                  ? hashStopwatch.elapsedMilliseconds
+                  : null,
+            ),
+          );
+        }
 
         final uploadResult = await _performUploadWithResume(
           ftp: ftp,
@@ -162,6 +200,7 @@ class FtpDestinationService implements IFtpService {
 
         if (sha256Hash != null) {
           await _uploadSidecar(ftp, fileName, sha256Hash);
+          await _deleteSidecarBestEffort(ftp, fileName);
         }
 
         await ftp.disconnect();
@@ -200,7 +239,7 @@ class FtpDestinationService implements IFtpService {
         if (ftp != null) {
           if (!config.keepPartOnCancel) {
             try {
-              await _safeDeletePart(ftp, '$fileName.part');
+              await _safeDeletePart(ftp, remotePartName);
             } on Object catch (_) {}
           }
           try {
@@ -362,6 +401,61 @@ class FtpDestinationService implements IFtpService {
     return '${parts.map((p) => '[$p]').join()} ';
   }
 
+  static String _buildRemotePartName({
+    required String finalFileName,
+    String? runId,
+    String? destinationId,
+  }) {
+    final tokenSource = <String>[
+      if (runId != null && runId.isNotEmpty) runId,
+      if (destinationId != null && destinationId.isNotEmpty) destinationId,
+    ].join('_');
+    final fallbackToken = DateTime.now().millisecondsSinceEpoch.toString();
+    final rawToken = tokenSource.isNotEmpty ? tokenSource : fallbackToken;
+    final safeToken = rawToken.replaceAll(RegExp('[^A-Za-z0-9._-]'), '_');
+    return '$finalFileName.$safeToken.part';
+  }
+
+  Future<bool> _isRemoteFileAlreadyComplete({
+    required FTPConnect ftp,
+    required String remoteFileName,
+    required int expectedSize,
+    required String? localSha256,
+    required bool enableStrongIntegrityValidation,
+    required bool enableReadBackValidation,
+  }) async {
+    final remoteSize = await ftp.sizeFile(remoteFileName);
+    if (remoteSize == -1) {
+      return false;
+    }
+    if (remoteSize != expectedSize) {
+      LoggerService.warning(
+        'Arquivo final já existe no FTP com tamanho diferente '
+        '(remoto=$remoteSize, local=$expectedSize): $remoteFileName',
+      );
+      return false;
+    }
+
+    final integrityResult = await _validateFinalIntegrity(
+      ftp: ftp,
+      remoteFileName: remoteFileName,
+      expectedSize: expectedSize,
+      localSha256: localSha256,
+      enableStrongIntegrityValidation: enableStrongIntegrityValidation,
+      enableReadBackValidation: enableReadBackValidation,
+    );
+    if (!integrityResult.isValid) {
+      LoggerService.warning(
+        'Arquivo final existente no FTP não passou na validação de '
+        'integridade. Upload completo será tentado novamente: '
+        '${integrityResult.errorMessage}',
+      );
+      return false;
+    }
+
+    return true;
+  }
+
   static String _formatFileSize(int bytes) {
     if (bytes < 1024) return '${bytes}B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
@@ -417,6 +511,21 @@ class FtpDestinationService implements IFtpService {
       try {
         await tempFile.delete();
       } on Object catch (_) {}
+    }
+  }
+
+  Future<void> _deleteSidecarBestEffort(FTPConnect ftp, String fileName) async {
+    const sidecarSuffix = '.sha256';
+    final sidecarName = '$fileName$sidecarSuffix';
+    try {
+      await ftp.deleteFile(sidecarName);
+      LoggerService.debug(
+        'Arquivo sidecar removido do FTP após conclusão: $sidecarName',
+      );
+    } on Object catch (e) {
+      LoggerService.warning(
+        'Não foi possível remover sidecar do FTP: $sidecarName — $e',
+      );
     }
   }
 

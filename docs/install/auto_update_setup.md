@@ -62,7 +62,6 @@ AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_datab
    Consulte [release_guide.md](release_guide.md) para instruções detalhadas.
 
 4. **GitHub Actions executa automaticamente:**
-
    - O workflow `.github/workflows/update-appcast.yml` detecta o release
    - Obtém informações do asset (URL, tamanho)
    - Atualiza o `appcast.xml` com a nova versão

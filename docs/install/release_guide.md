@@ -78,12 +78,12 @@ git push origin v2.2.7
 
 Formato: `MAJOR.MINOR.PATCH+BUILD`
 
-| Parte | Uso |
-|-------|-----|
-| MAJOR | Mudanças incompatíveis |
+| Parte | Uso                               |
+| ----- | --------------------------------- |
+| MAJOR | Mudanças incompatíveis            |
 | MINOR | Novas funcionalidades compatíveis |
-| PATCH | Correções de bugs |
-| BUILD | Número de build (opcional) |
+| PATCH | Correções de bugs                 |
+| BUILD | Número de build (opcional)        |
 
 Exemplos: `2.2.7` → `v2.2.7`, `2.2.8` → `v2.2.8`
 
@@ -107,9 +107,9 @@ Depois, crie o release manualmente no GitHub e faça upload do instalador.
 
 ## Scripts Relacionados
 
-| Script | Propósito |
-|--------|-----------|
-| `installer/update_version.py` | Sincroniza versão em setup.iss e .env |
+| Script                         | Propósito                                     |
+| ------------------------------ | --------------------------------------------- |
+| `installer/update_version.py`  | Sincroniza versão em setup.iss e .env         |
 | `installer/build_installer.py` | Build Flutter + compila instalador Inno Setup |
 
 ## Verificação de Tags
@@ -153,7 +153,3 @@ git push origin v2.2.7
 - [ ] Tag criada e enviada
 - [ ] Release publicado no GitHub com instalador
 - [ ] GitHub Actions executou com sucesso
-
-
-
-
