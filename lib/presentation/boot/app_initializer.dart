@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/application/services/initial_setup_service.dart';
+import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
@@ -78,9 +79,12 @@ class AppInitializer {
     );
 
     final args = Platform.executableArguments;
-    final startMinimizedFromArgs = args.contains('--minimized');
+    final startMinimizedFromArgs = args.contains(
+      SingleInstanceConfig.minimizedArgument,
+    );
     LoggerService.info(
-      'Argumentos de linha de comando: $args (--minimized: $startMinimizedFromArgs)',
+      'Argumentos de linha de comando: $args '
+      '(${SingleInstanceConfig.minimizedArgument}: $startMinimizedFromArgs)',
     );
 
     final scheduleId = _getScheduleIdFromArgs(args);

@@ -1,4 +1,4 @@
-﻿# Backup Database
+# Backup Database
 
 Sistema completo de backup automático para SQL Server, Sybase SQL Anywhere (ASA) e PostgreSQL no Windows.
 
@@ -81,8 +81,9 @@ Crie um arquivo `.env` na raiz do aplicativo (ou use `.env.example` como base):
 
 ```env
 APP_NAME=Backup Database
-APP_VERSION=2.2.8
+APP_VERSION=2.3.3
 SINGLE_INSTANCE_ENABLED=true
+SINGLE_INSTANCE_LOCK_FALLBACK_MODE=fail_open
 
 # fail_open (padrão): inicia scheduler local quando status do serviço falha
 # fail_safe: não inicia scheduler local
@@ -100,6 +101,10 @@ FTP_IT_REMOTE_PATH=
 ```
 
 Para cenários de integração server/client em desenvolvimento, também existem os arquivos `.env.server` e `.env.client`.
+
+Sobre `SINGLE_INSTANCE_LOCK_FALLBACK_MODE`:
+- `fail_open` (padrão): se o `CreateMutexW` falhar, o app continua iniciando, mas sem garantia de exclusividade.
+- `fail_safe`: se o `CreateMutexW` falhar, o app bloqueia a inicialização para preservar o comportamento estrito de instância única.
 
 ### SQL Server
 
@@ -345,7 +350,6 @@ Após instalar o serviço, verifique:
    Deve retornar: `SERVICE_RUNNING`
 
 2. **Logs do aplicativo**:
-
    - Verifique os logs em: `C:\ProgramData\BackupDatabase\logs\`
    - Procure por: `"Serviço de agendamento iniciado"`
 
@@ -568,5 +572,3 @@ Contribuições são bem-vindas! Por favor:
 ---
 
 **Desenvolvido para facilitar backups no Windows**
-
-

@@ -1,5 +1,10 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+enum SingleInstanceLockFallbackMode {
+  failOpen,
+  failSafe,
+}
+
 /// Configuration for single instance behavior.
 ///
 /// Controls whether the application should enforce single instance mode
@@ -25,6 +30,17 @@ class SingleInstanceConfig {
       return true;
     }
     return true;
+  }
+
+  static SingleInstanceLockFallbackMode get lockFallbackMode {
+    final envValue = dotenv.env['SINGLE_INSTANCE_LOCK_FALLBACK_MODE'];
+    if (envValue != null) {
+      final normalizedValue = envValue.trim().toLowerCase();
+      if (normalizedValue == 'fail_safe') {
+        return SingleInstanceLockFallbackMode.failSafe;
+      }
+    }
+    return SingleInstanceLockFallbackMode.failOpen;
   }
 
   // Mutex configuration
@@ -61,4 +77,8 @@ class SingleInstanceConfig {
   static const String userInfoResponsePrefix = 'USER_INFO:';
   static const String pingCommand = 'PING';
   static const String pongResponse = 'PONG';
+
+  // CLI arguments
+  static const String minimizedArgument = '--minimized';
+  static const String startupLaunchArgument = '--startup-launch';
 }

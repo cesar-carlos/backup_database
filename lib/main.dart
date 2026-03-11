@@ -6,7 +6,9 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
+import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/domain/services/i_windows_message_box.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
@@ -34,6 +36,10 @@ Future<void> _runApp() async {
     'SERVICE_NAME=${Platform.environment['SERVICE_NAME']}, '
     'NSSM_SERVICE=${Platform.environment['NSSM_SERVICE']}',
   );
+  final isStartupLaunch = Platform.executableArguments.contains(
+    SingleInstanceConfig.startupLaunchArgument,
+  );
+  LoggerService.info('[main] startup_launch=$isStartupLaunch');
 
   // Verifica modo serviço ANTES de inicializar Flutter binding
   // para evitar tentar criar rendering surface em Session 0
@@ -55,14 +61,21 @@ Future<void> _runApp() async {
   _checkOsCompatibility();
 
   if (SingleInstanceConfig.isEnabled) {
-    final canContinue =
-        await SingleInstanceChecker.checkAndHandleSecondInstance();
+    final singleInstanceChecker = SingleInstanceChecker(
+      singleInstanceService: service_locator.getIt<ISingleInstanceService>(),
+      ipcClient: service_locator.getIt<ISingleInstanceIpcClient>(),
+      messageBox: service_locator.getIt<IWindowsMessageBox>(),
+      isStartupLaunch: isStartupLaunch,
+    );
+
+    final canContinue = await singleInstanceChecker
+        .checkAndHandleSecondInstance();
     if (!canContinue) {
       return;
     }
 
-    final canContinueIpc =
-        await SingleInstanceChecker.checkIpcServerAndHandle();
+    final canContinueIpc = await singleInstanceChecker
+        .checkIpcServerAndHandle();
     if (!canContinueIpc) {
       return;
     }

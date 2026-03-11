@@ -1,24 +1,47 @@
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
+import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
-import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
-import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
-import 'package:backup_database/infrastructure/external/system/windows_message_box.dart';
 
 class SingleInstanceChecker {
-  SingleInstanceChecker._();
+  SingleInstanceChecker({
+    required ISingleInstanceService singleInstanceService,
+    required ISingleInstanceIpcClient ipcClient,
+    required IWindowsMessageBox messageBox,
+    String? Function()? getCurrentUsername,
+    bool isStartupLaunch = false,
+    int maxRetryAttempts = SingleInstanceConfig.maxRetryAttempts,
+    Duration retryDelay = SingleInstanceConfig.retryDelay,
+  }) : _singleInstanceService = singleInstanceService,
+       _ipcClient = ipcClient,
+       _messageBox = messageBox,
+       _getCurrentUsername =
+           getCurrentUsername ?? WindowsUserService.getCurrentUsername,
+       _isStartupLaunch = isStartupLaunch,
+       _maxRetryAttempts = maxRetryAttempts > 0 ? maxRetryAttempts : 1,
+       _retryDelay = retryDelay;
 
-  static final ISingleInstanceService _singleInstanceService =
-      SingleInstanceService();
-  static const IWindowsMessageBox _messageBox = WindowsMessageBox();
+  final ISingleInstanceService _singleInstanceService;
+  final ISingleInstanceIpcClient _ipcClient;
+  final IWindowsMessageBox _messageBox;
+  final String? Function() _getCurrentUsername;
+  final bool _isStartupLaunch;
+  final int _maxRetryAttempts;
+  final Duration _retryDelay;
 
-  static const String _dialogTitle =
+  static const String dialogTitle =
       'Backup Database - J\u00E1 em Execu\u00E7\u00E3o';
   static const String _dialogMessageSameUser =
       'O aplicativo Backup Database j\u00E1 est\u00E1 aberto.\n\n'
       'A janela existente foi trazida para frente.\n\n'
+      'N\u00E3o \u00E9 poss\u00EDvel executar mais de uma inst\u00E2ncia '
+      'ao mesmo tempo.';
+  static const String _dialogMessageSameUserWindowFocusFailed =
+      'O aplicativo Backup Database j\u00E1 est\u00E1 aberto.\n\n'
+      'N\u00E3o foi poss\u00EDvel trazer a janela existente para frente '
+      'automaticamente.\n\n'
       'N\u00E3o \u00E9 poss\u00EDvel executar mais de uma inst\u00E2ncia '
       'ao mesmo tempo.';
   static const String _dialogMessageDifferentUser =
@@ -32,7 +55,7 @@ class SingleInstanceChecker {
       'N\u00E3o foi poss\u00EDvel identificar o usu\u00E1rio da inst\u00E2ncia '
       'existente.';
 
-  static Future<bool> checkAndHandleSecondInstance() async {
+  Future<bool> checkAndHandleSecondInstance() async {
     final isFirstInstance = await _singleInstanceService.checkAndLock();
 
     if (isFirstInstance) {
@@ -43,8 +66,8 @@ class SingleInstanceChecker {
     return false;
   }
 
-  static Future<bool> checkIpcServerAndHandle() async {
-    final isServerRunning = await IpcService.checkServerRunning();
+  Future<bool> checkIpcServerAndHandle() async {
+    final isServerRunning = await _ipcClient.checkServerRunning();
 
     if (!isServerRunning) {
       return true;
@@ -54,13 +77,12 @@ class SingleInstanceChecker {
     return false;
   }
 
-  static Future<void> handleSecondInstance() async {
-    final currentUser =
-        WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
+  Future<void> handleSecondInstance() async {
+    final currentUser = _getCurrentUsername() ?? 'Desconhecido';
 
     String? existingUser;
     try {
-      existingUser = await IpcService.getExistingInstanceUser();
+      existingUser = await _ipcClient.getExistingInstanceUser();
     } on Object catch (e) {
       LoggerService.debug(
         'Nao foi possivel obter usuario da instancia existente: $e',
@@ -79,30 +101,49 @@ class SingleInstanceChecker {
     } else {
       LoggerService.info(
         'SEGUNDA INSTANCIA DETECTADA (mesmo usuario). '
-        'Usuario: $currentUser. Encerrando silenciosamente.',
+        'Usuario: $currentUser. Mostrando aviso ao usuario.',
       );
     }
 
-    for (var i = 0; i < SingleInstanceConfig.maxRetryAttempts; i++) {
-      final notified = await SingleInstanceService.notifyExistingInstance();
+    if (_isStartupLaunch) {
+      LoggerService.info(
+        'Segunda instancia detectada durante inicializacao automatica '
+        'do Windows. Encerrando sem popup.',
+      );
+      return;
+    }
+
+    var wasExistingWindowNotified = false;
+    for (var i = 0; i < _maxRetryAttempts; i++) {
+      final notified = await _ipcClient.notifyExistingInstance();
       if (notified) {
         LoggerService.info('Instancia existente notificada via IPC');
+        wasExistingWindowNotified = true;
         break;
       }
-      await Future.delayed(SingleInstanceConfig.retryDelay);
+      await Future.delayed(_retryDelay);
+    }
+
+    if (!wasExistingWindowNotified) {
+      LoggerService.warning(
+        'Nao foi possivel notificar instancia existente via IPC '
+        'apos $_maxRetryAttempts tentativas',
+      );
     }
 
     final dialogMessage = _getDialogMessage(
       isDifferentUser: isDifferentUser,
       couldNotDetermineUser: couldNotDetermineUser,
       existingUser: existingUser,
+      wasExistingWindowNotified: wasExistingWindowNotified,
     );
-    _messageBox.showWarning(_dialogTitle, dialogMessage);
+    _messageBox.showWarning(dialogTitle, dialogMessage);
   }
 
-  static String _getDialogMessage({
+  String _getDialogMessage({
     required bool isDifferentUser,
     required bool couldNotDetermineUser,
+    required bool wasExistingWindowNotified,
     String? existingUser,
   }) {
     if (isDifferentUser) {
@@ -117,6 +158,10 @@ class SingleInstanceChecker {
       return _dialogMessageUnknownUser;
     }
 
-    return _dialogMessageSameUser;
+    if (wasExistingWindowNotified) {
+      return _dialogMessageSameUser;
+    }
+
+    return _dialogMessageSameUserWindowFocusFailed;
   }
 }

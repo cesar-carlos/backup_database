@@ -16,23 +16,60 @@ final int Function(Pointer<NativeType>, int, Pointer<Utf16>) _createMutex =
       int Function(Pointer, int, Pointer<Utf16>)
     >('CreateMutexW');
 
+SingleInstanceLockFallbackMode _defaultLockFallbackModeProvider() =>
+    SingleInstanceConfig.lockFallbackMode;
+
 /// Implementation of [ISingleInstanceService] for Windows.
 ///
 /// Uses Windows mutexes to ensure only one instance runs at a time,
 /// and IPC to communicate between instances.
 class SingleInstanceService implements ISingleInstanceService {
   factory SingleInstanceService() => _instance;
-  SingleInstanceService._();
+  SingleInstanceService._({
+    int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
+    int Function()? getLastError,
+    int Function(int)? closeHandle,
+    bool Function()? isWindowsPlatform,
+    SingleInstanceLockFallbackMode Function()? lockFallbackModeProvider,
+    IpcService? ipcService,
+  }) : _createMutexFn = createMutex ?? _createMutex,
+       _getLastErrorFn = getLastError ?? GetLastError,
+       _closeHandleFn = closeHandle ?? CloseHandle,
+       _isWindowsPlatformFn = isWindowsPlatform ?? (() => Platform.isWindows),
+       _lockFallbackModeProvider =
+           lockFallbackModeProvider ?? _defaultLockFallbackModeProvider,
+       _ipcService = ipcService ?? IpcService();
   static final SingleInstanceService _instance = SingleInstanceService._();
+
+  SingleInstanceService.forTest({
+    int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
+    int Function()? getLastError,
+    int Function(int)? closeHandle,
+    bool Function()? isWindowsPlatform,
+    SingleInstanceLockFallbackMode Function()? lockFallbackModeProvider,
+    IpcService? ipcService,
+  }) : this._(
+         createMutex: createMutex,
+         getLastError: getLastError,
+         closeHandle: closeHandle,
+         isWindowsPlatform: isWindowsPlatform,
+         lockFallbackModeProvider: lockFallbackModeProvider,
+         ipcService: ipcService,
+       );
 
   int _mutexHandle = 0;
   bool _isFirstInstance = false;
-  final IpcService _ipcService = IpcService();
+  final int Function(Pointer<NativeType>, int, Pointer<Utf16>) _createMutexFn;
+  final int Function() _getLastErrorFn;
+  final int Function(int) _closeHandleFn;
+  final bool Function() _isWindowsPlatformFn;
+  final SingleInstanceLockFallbackMode Function() _lockFallbackModeProvider;
+  final IpcService _ipcService;
 
   @override
   Future<bool> checkAndLock({bool isServiceMode = false}) async {
     try {
-      if (!Platform.isWindows) {
+      if (!_isWindowsPlatformFn()) {
         LoggerService.warning(
           'Single instance check não suportado nesta plataforma',
         );
@@ -48,21 +85,28 @@ class SingleInstanceService implements ISingleInstanceService {
 
       SetLastError(0);
 
-      _mutexHandle = _createMutex(nullptr, 0, mutexNamePtr);
+      _mutexHandle = _createMutexFn(nullptr, 0, mutexNamePtr);
 
-      final lastError = GetLastError();
+      final lastError = _getLastErrorFn();
 
       calloc.free(mutexNamePtr);
 
       if (_mutexHandle == 0 || _mutexHandle == -1) {
-        // CreateMutex failed — we cannot guarantee exclusivity.
-        // Log explicitly so operators can diagnose this in service logs,
-        // but allow the process to continue (better than refusing to start
-        // when the mutex API itself is unavailable).
+        final fallbackMode = _lockFallbackModeProvider();
+        if (fallbackMode == SingleInstanceLockFallbackMode.failSafe) {
+          LoggerService.error(
+            '[SingleInstance] CreateMutex failed: handle=$_mutexHandle, '
+            'GetLastError=$lastError. '
+            'Fallback mode fail_safe: refusing startup to preserve exclusivity.',
+          );
+          _isFirstInstance = false;
+          return false;
+        }
+
         LoggerService.warning(
           '[SingleInstance] CreateMutex failed: handle=$_mutexHandle, '
           'GetLastError=$lastError. '
-          'Exclusivity cannot be guaranteed — proceeding as first instance.',
+          'Fallback mode fail_open: proceeding without exclusivity guarantee.',
         );
         _isFirstInstance = true;
         return true;
@@ -74,7 +118,7 @@ class SingleInstanceService implements ISingleInstanceService {
         );
         _isFirstInstance = false;
 
-        CloseHandle(_mutexHandle);
+        _closeHandleFn(_mutexHandle);
         _mutexHandle = 0;
 
         return false;
@@ -113,7 +157,7 @@ class SingleInstanceService implements ISingleInstanceService {
       await _ipcService.stop();
 
       if (_mutexHandle != 0) {
-        CloseHandle(_mutexHandle);
+        _closeHandleFn(_mutexHandle);
         _mutexHandle = 0;
         LoggerService.debug('Mutex liberado');
       }

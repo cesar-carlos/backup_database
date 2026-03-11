@@ -1,14 +1,26 @@
 import 'dart:io';
 
+import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/presentation/managers/window_manager_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+typedef ProcessRunner =
+    Future<ProcessResult> Function(String executable, List<String> arguments);
+
 class SystemSettingsProvider extends ChangeNotifier {
-  SystemSettingsProvider({WindowManagerService? windowManager})
-    : _windowManager = windowManager ?? WindowManagerService();
+  SystemSettingsProvider({
+    WindowManagerService? windowManager,
+    ProcessRunner? processRunner,
+    String Function()? executablePathProvider,
+  }) : _windowManager = windowManager ?? WindowManagerService(),
+       _processRunner = processRunner ?? Process.run,
+       _executablePathProvider =
+           executablePathProvider ?? (() => Platform.resolvedExecutable);
   final WindowManagerService _windowManager;
+  final ProcessRunner _processRunner;
+  final String Function() _executablePathProvider;
 
   static const String _minimizeToTrayKey = 'minimize_to_tray';
   static const String _closeToTrayKey = 'close_to_tray';
@@ -49,10 +61,10 @@ class SystemSettingsProvider extends ChangeNotifier {
         await prefs.setBool(_startMinimizedKey, _startMinimized);
         await prefs.setBool(_startWithWindowsKey, _startWithWindows);
         LoggerService.info('Primeira inicialização - valores padrão salvos');
+      }
 
-        if (_startWithWindows) {
-          await _updateStartWithWindows(true);
-        }
+      if (_startWithWindows) {
+        await _updateStartWithWindows(true);
       }
 
       _isInitialized = true;
@@ -133,17 +145,19 @@ class SystemSettingsProvider extends ChangeNotifier {
 
   Future<void> _updateStartWithWindows(bool enable) async {
     try {
-      final executablePath = Platform.resolvedExecutable;
+      final executablePath = _executablePathProvider();
 
       if (enable) {
         final prefs = await SharedPreferences.getInstance();
         final startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
 
+        const startupArg = SingleInstanceConfig.startupLaunchArgument;
+        const minimizedArg = SingleInstanceConfig.minimizedArgument;
         final command = startMinimized
-            ? '"$executablePath" --minimized'
-            : '"$executablePath"';
+            ? '"$executablePath" $minimizedArg $startupArg'
+            : '"$executablePath" $startupArg';
 
-        final result = await Process.run('reg', [
+        final result = await _processRunner('reg', [
           'add',
           r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run',
           '/v',
@@ -166,7 +180,7 @@ class SystemSettingsProvider extends ChangeNotifier {
           );
         }
       } else {
-        final result = await Process.run('reg', [
+        final result = await _processRunner('reg', [
           'delete',
           r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run',
           '/v',
