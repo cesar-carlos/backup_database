@@ -27,12 +27,14 @@ class SingleInstanceService implements ISingleInstanceService {
   factory SingleInstanceService() => _instance;
   SingleInstanceService._({
     int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
+    void Function(int)? setLastError,
     int Function()? getLastError,
     int Function(int)? closeHandle,
     bool Function()? isWindowsPlatform,
     SingleInstanceLockFallbackMode Function()? lockFallbackModeProvider,
     IpcService? ipcService,
   }) : _createMutexFn = createMutex ?? _createMutex,
+       _setLastErrorFn = setLastError ?? SetLastError,
        _getLastErrorFn = getLastError ?? GetLastError,
        _closeHandleFn = closeHandle ?? CloseHandle,
        _isWindowsPlatformFn = isWindowsPlatform ?? (() => Platform.isWindows),
@@ -43,6 +45,7 @@ class SingleInstanceService implements ISingleInstanceService {
 
   SingleInstanceService.forTest({
     int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
+    void Function(int)? setLastError,
     int Function()? getLastError,
     int Function(int)? closeHandle,
     bool Function()? isWindowsPlatform,
@@ -50,6 +53,7 @@ class SingleInstanceService implements ISingleInstanceService {
     IpcService? ipcService,
   }) : this._(
          createMutex: createMutex,
+         setLastError: setLastError,
          getLastError: getLastError,
          closeHandle: closeHandle,
          isWindowsPlatform: isWindowsPlatform,
@@ -60,6 +64,7 @@ class SingleInstanceService implements ISingleInstanceService {
   int _mutexHandle = 0;
   bool _isFirstInstance = false;
   final int Function(Pointer<NativeType>, int, Pointer<Utf16>) _createMutexFn;
+  final void Function(int) _setLastErrorFn;
   final int Function() _getLastErrorFn;
   final int Function(int) _closeHandleFn;
   final bool Function() _isWindowsPlatformFn;
@@ -83,7 +88,7 @@ class SingleInstanceService implements ISingleInstanceService {
       final modeName = isServiceMode ? 'Serviço' : 'UI';
       final mutexNamePtr = mutexName.toNativeUtf16();
 
-      SetLastError(0);
+      _setLastErrorFn(0);
 
       _mutexHandle = _createMutexFn(nullptr, 0, mutexNamePtr);
 

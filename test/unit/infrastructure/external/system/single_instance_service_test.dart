@@ -10,6 +10,7 @@ void main() {
       () async {
         final service = SingleInstanceService.forTest(
           createMutex: (_, _, _) => 0,
+          setLastError: (_) {},
           getLastError: () => 5,
           isWindowsPlatform: () => true,
           lockFallbackModeProvider: () =>
@@ -28,6 +29,7 @@ void main() {
       () async {
         final service = SingleInstanceService.forTest(
           createMutex: (_, _, _) => 0,
+          setLastError: (_) {},
           getLastError: () => 5,
           isWindowsPlatform: () => true,
           lockFallbackModeProvider: () =>
@@ -47,6 +49,7 @@ void main() {
         var closeHandleCallCount = 0;
         final service = SingleInstanceService.forTest(
           createMutex: (_, _, _) => 123,
+          setLastError: (_) {},
           getLastError: () => ERROR_ALREADY_EXISTS,
           closeHandle: (_) {
             closeHandleCallCount++;
