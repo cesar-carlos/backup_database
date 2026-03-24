@@ -17,12 +17,12 @@ void main() {
     test('should include logon trigger and task path URI', () {
       final xml = buildMachineLogonStartupTaskXml(
         command: r'C:\Apps\Backup.exe',
-        arguments: '--startup-launch',
+        arguments: '--launch-origin=windows-startup',
       );
 
       expect(xml, contains('<LogonTrigger>'));
       expect(xml, contains(r'\BackupDatabase\MachineStartup'));
-      expect(xml, contains('--startup-launch'));
+      expect(xml, contains('--launch-origin=windows-startup'));
     });
   });
 

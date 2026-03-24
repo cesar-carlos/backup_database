@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
@@ -15,6 +16,7 @@ import 'package:backup_database/infrastructure/socket/server/socket_server_servi
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
+import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
 import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
 import 'package:backup_database/presentation/boot/service_mode_initializer.dart';
 import 'package:backup_database/presentation/boot/single_instance_checker.dart';
@@ -28,38 +30,63 @@ void main() {
   runZonedGuarded(_runApp, _handleError);
 }
 
+void _logBootstrapPhase(Stopwatch watch, String phase) {
+  LoggerService.info(
+    '[main] bootstrap_timing phase=$phase elapsed_ms=${watch.elapsedMilliseconds}',
+  );
+}
+
 Future<void> _runApp() async {
-  // Log arguments and relevant environment variables for diagnostics.
-  LoggerService.info('[main] args=${Platform.executableArguments}');
+  final bootstrapWatch = Stopwatch()..start();
+  final rawArgs = Platform.executableArguments;
+
+  LoggerService.info('[main] args=$rawArgs');
   LoggerService.info(
     '[main] env: SERVICE_MODE=${Platform.environment['SERVICE_MODE']}, '
     'SERVICE_NAME=${Platform.environment['SERVICE_NAME']}, '
     'NSSM_SERVICE=${Platform.environment['NSSM_SERVICE']}',
   );
-  final isStartupLaunch = Platform.executableArguments.contains(
-    SingleInstanceConfig.startupLaunchArgument,
+  final bootstrapContext = LaunchBootstrapContextResolver.resolve(
+    rawArgs: rawArgs,
+    rawEnvironment: Platform.environment,
   );
-  LoggerService.info('[main] startup_launch=$isStartupLaunch');
+  _logBootstrapPhase(bootstrapWatch, 'context_resolved');
+  LoggerService.info(
+    '[main] processRole=${bootstrapContext.processRole.name}, '
+    'launchOrigin=${bootstrapContext.launchOrigin.name}, '
+    'isServiceMode=${bootstrapContext.isServiceMode}, '
+    'startMinimizedFromArgs=${bootstrapContext.startMinimizedFromArgs}, '
+    'windowsStartupCli=${bootstrapContext.usesLegacyWindowsStartupAlias ? 'legacy_alias' : 'canonical_or_manual'}',
+  );
 
   // Verifica modo serviço ANTES de inicializar Flutter binding
   // para evitar tentar criar rendering surface em Session 0
-  if (ServiceModeDetector.isServiceMode()) {
-    LoggerService.info('==> Modo Servico detectado - inicializando sem UI');
+  if (bootstrapContext.isServiceMode) {
+    LoggerService.info(
+      '[main] processRole=${ProcessRole.service.name} '
+      'bootstrap=service_no_ui_surface',
+    );
     await ServiceModeInitializer.initialize();
+    _logBootstrapPhase(bootstrapWatch, 'service_init_done');
     return;
   }
 
   // Só inicializa Flutter binding se não estiver em modo serviço
   LoggerService.info(
-    '==> Modo UI detectado - inicializando interface gráfica',
+    '[main] processRole=${ProcessRole.ui.name} '
+    'bootstrap=ui_single_instance_mutex=${SingleInstanceConfig.uiMutexName.split(r'\').last}',
   );
   WidgetsFlutterBinding.ensureInitialized();
 
   await _loadEnvironment();
-  setAppMode(getAppMode(Platform.executableArguments));
+  setAppMode(getAppMode(rawArgs));
   LoggerService.info('Modo do aplicativo: ${currentAppMode.name}');
 
   await service_locator.setupServiceLocator();
+  _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
+  LoggerService.info(
+    '[main] singleInstanceLockFallbackUi=${SingleInstanceConfig.lockFallbackMode.name}',
+  );
   _checkOsCompatibility();
 
   if (SingleInstanceConfig.isEnabled) {
@@ -67,7 +94,7 @@ Future<void> _runApp() async {
       singleInstanceService: service_locator.getIt<ISingleInstanceService>(),
       ipcClient: service_locator.getIt<ISingleInstanceIpcClient>(),
       messageBox: service_locator.getIt<IWindowsMessageBox>(),
-      isStartupLaunch: isStartupLaunch,
+      launchOrigin: bootstrapContext.launchOrigin,
     );
 
     final canContinue = await singleInstanceChecker
@@ -75,12 +102,7 @@ Future<void> _runApp() async {
     if (!canContinue) {
       return;
     }
-
-    final canContinueIpc = await singleInstanceChecker
-        .checkIpcServerAndHandle();
-    if (!canContinueIpc) {
-      return;
-    }
+    _logBootstrapPhase(bootstrapWatch, 'single_instance_ok');
   } else {
     LoggerService.info(
       'Single instance check desabilitado via configuração',
@@ -89,8 +111,12 @@ Future<void> _runApp() async {
 
   try {
     await AppInitializer.initialize();
+    _logBootstrapPhase(bootstrapWatch, 'app_initializer_done');
 
-    final launchConfig = await AppInitializer.getLaunchConfig();
+    final launchConfig = await AppInitializer.getLaunchConfig(
+      bootstrapContext: bootstrapContext,
+    );
+    _logBootstrapPhase(bootstrapWatch, 'launch_config_ready');
 
     if (launchConfig.scheduleId != null) {
       await ScheduledBackupExecutor.executeAndExit(launchConfig.scheduleId!);
@@ -100,9 +126,11 @@ Future<void> _runApp() async {
     await _initializeAppServices(launchConfig);
 
     runApp(const BackupDatabaseApp());
+    _logBootstrapPhase(bootstrapWatch, 'run_app_called');
 
     await _startScheduler();
     await _startSocketServer();
+    _logBootstrapPhase(bootstrapWatch, 'scheduler_and_socket_ready');
   } on Object catch (e, stackTrace) {
     LoggerService.error('Erro fatal na inicializacao', e, stackTrace);
     await AppCleanup.cleanup();
@@ -178,11 +206,7 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
       );
       LoggerService.info('IPC Server inicializado e pronto');
     } on Object catch (e) {
-      if (ServiceModeDetector.isServiceMode()) {
-        LoggerService.debug('IPC Server nao disponivel em modo servico');
-      } else {
-        LoggerService.warning('Erro ao inicializar IPC Server: $e');
-      }
+      LoggerService.warning('Erro ao inicializar IPC Server: $e');
     }
   } else {
     LoggerService.info(
@@ -194,11 +218,7 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   try {
     await trayManager.initialize(onMenuAction: TrayMenuHandler.handleAction);
   } on Object catch (e) {
-    if (ServiceModeDetector.isServiceMode()) {
-      LoggerService.debug('Tray Manager nao disponivel em modo servico');
-    } else {
-      LoggerService.warning('Erro ao inicializar tray manager: $e');
-    }
+    LoggerService.warning('Erro ao inicializar tray manager: $e');
   }
 
   windowManager.setCallbacks(
@@ -223,7 +243,8 @@ Future<void> _startScheduler() async {
         .shouldSkipSchedulerInUiMode();
     if (shouldSkipScheduler) {
       LoggerService.info(
-        'Scheduler local não iniciado: serviço do Windows em execução',
+        '[main] processRole=${ProcessRole.ui.name} '
+        'scheduler_local_skipped=windows_service_installed_and_running',
       );
       return;
     }

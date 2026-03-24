@@ -4,6 +4,7 @@ import 'package:backup_database/core/utils/windows_user_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
+import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
 
 class SingleInstanceChecker {
   SingleInstanceChecker({
@@ -11,7 +12,7 @@ class SingleInstanceChecker {
     required ISingleInstanceIpcClient ipcClient,
     required IWindowsMessageBox messageBox,
     String? Function()? getCurrentUsername,
-    bool isStartupLaunch = false,
+    LaunchOrigin launchOrigin = LaunchOrigin.manual,
     int maxRetryAttempts = SingleInstanceConfig.maxRetryAttempts,
     Duration retryDelay = SingleInstanceConfig.retryDelay,
   }) : _singleInstanceService = singleInstanceService,
@@ -19,7 +20,7 @@ class SingleInstanceChecker {
        _messageBox = messageBox,
        _getCurrentUsername =
            getCurrentUsername ?? WindowsUserService.getCurrentUsername,
-       _isStartupLaunch = isStartupLaunch,
+       _launchOrigin = launchOrigin,
        _maxRetryAttempts = maxRetryAttempts > 0 ? maxRetryAttempts : 1,
        _retryDelay = retryDelay;
 
@@ -27,7 +28,7 @@ class SingleInstanceChecker {
   final ISingleInstanceIpcClient _ipcClient;
   final IWindowsMessageBox _messageBox;
   final String? Function() _getCurrentUsername;
-  final bool _isStartupLaunch;
+  final LaunchOrigin _launchOrigin;
   final int _maxRetryAttempts;
   final Duration _retryDelay;
 
@@ -66,18 +67,15 @@ class SingleInstanceChecker {
     return false;
   }
 
-  Future<bool> checkIpcServerAndHandle() async {
-    final isServerRunning = await _ipcClient.checkServerRunning();
-
-    if (!isServerRunning) {
-      return true;
+  Future<void> handleSecondInstance() async {
+    if (_launchOrigin == LaunchOrigin.windowsStartup) {
+      LoggerService.info(
+        'duplicate_launch_suppressed_windows_startup: mutex negou UI; '
+        'encerrando sem IPC nem popup.',
+      );
+      return;
     }
 
-    await handleSecondInstance();
-    return false;
-  }
-
-  Future<void> handleSecondInstance() async {
     final currentUser = _getCurrentUsername() ?? 'Desconhecido';
 
     String? existingUser;
@@ -103,14 +101,6 @@ class SingleInstanceChecker {
         'SEGUNDA INSTANCIA DETECTADA (mesmo usuario). '
         'Usuario: $currentUser. Mostrando aviso ao usuario.',
       );
-    }
-
-    if (_isStartupLaunch) {
-      LoggerService.info(
-        'Segunda instancia detectada durante inicializacao automatica '
-        'do Windows. Encerrando sem popup.',
-      );
-      return;
     }
 
     var wasExistingWindowNotified = false;

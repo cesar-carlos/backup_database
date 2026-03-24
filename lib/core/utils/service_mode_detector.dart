@@ -16,12 +16,15 @@ class ServiceModeDetector {
   static bool _isServiceMode = false;
   static bool _checked = false;
 
-  static bool isServiceMode() {
+  static bool isServiceMode({List<String>? executableArguments}) {
     if (_checked) {
       return _isServiceMode;
     }
 
     _checked = true;
+
+    final argsForServiceFlag =
+        executableArguments ?? Platform.executableArguments;
 
     if (!Platform.isWindows) {
       _isServiceMode = false;
@@ -61,7 +64,7 @@ class ServiceModeDetector {
 
       // Layer 2: explicit --run-as-service argument injected by NSSM via
       // AppParameters. Semantically distinct from --mode=server (functional).
-      if (_hasServiceArgument(Platform.executableArguments)) {
+      if (_hasServiceArgument(argsForServiceFlag)) {
         _isServiceMode = true;
         LoggerService.info(
           '[ServiceModeDetector] MATCH layer-2: argument '
@@ -72,7 +75,7 @@ class ServiceModeDetector {
       LoggerService.info(
         '[ServiceModeDetector] layer-2 skip: argument '
         '"$_serviceArgFlag" not present '
-        '(args=${Platform.executableArguments})',
+        '(args=$argsForServiceFlag)',
       );
 
       // Layer 3: SERVICE_MODE environment variable injected by NSSM via

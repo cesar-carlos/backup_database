@@ -36,14 +36,25 @@ class SingleInstanceConfig {
     final envValue = dotenv.env['SINGLE_INSTANCE_LOCK_FALLBACK_MODE'];
     if (envValue != null) {
       final normalizedValue = envValue.trim().toLowerCase();
+      if (normalizedValue == 'fail_open') {
+        return SingleInstanceLockFallbackMode.failOpen;
+      }
       if (normalizedValue == 'fail_safe') {
         return SingleInstanceLockFallbackMode.failSafe;
       }
     }
-    return SingleInstanceLockFallbackMode.failOpen;
+    return SingleInstanceLockFallbackMode.failSafe;
   }
 
-  // Mutex configuration
+  static SingleInstanceLockFallbackMode lockFallbackModeFor({
+    required bool isServiceMode,
+  }) {
+    if (isServiceMode) {
+      return SingleInstanceLockFallbackMode.failSafe;
+    }
+    return lockFallbackMode;
+  }
+
   static const String uiMutexName =
       r'Global\BackupDatabase_UIMutex_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
   static const String serviceMutexName =
@@ -71,7 +82,17 @@ class SingleInstanceConfig {
   static const Duration ipcDiscoverySlowTimeout = Duration(milliseconds: 300);
   static const Duration ipcPortCacheTtl = Duration(minutes: 2);
 
-  // IPC commands
+  // IPC commands (legacy ping/pong still accepted by server for older clients)
+  static const String ipcProtocolId = 'BACKUP_DATABASE_IPC_V1';
+  static const int ipcProtocolVersion = 1;
+  static const String ipcInstanceRoleUi = 'ui';
+
+  static String get ipcPingMessage => '$ipcProtocolId|PING';
+  static String get ipcPongLinePrefix => '$ipcProtocolId|PONG|';
+  static String get ipcUserInfoLinePrefix => '$ipcProtocolId|USER_INFO|';
+  static String get ipcGetUserInfoMessage => '$ipcProtocolId|GET_USER_INFO';
+  static String get ipcShowWindowMessage => '$ipcProtocolId|SHOW_WINDOW';
+
   static const String showWindowCommand = 'SHOW_WINDOW';
   static const String getUserInfoCommand = 'GET_USER_INFO';
   static const String userInfoResponsePrefix = 'USER_INFO:';
@@ -80,5 +101,27 @@ class SingleInstanceConfig {
 
   // CLI arguments
   static const String minimizedArgument = '--minimized';
+
+  static const String launchOriginArgumentPrefix = '--launch-origin=';
+
+  static const String windowsStartupLaunchOriginValue = 'windows-startup';
+
+  static String get windowsStartupLaunchOriginArgument =>
+      '$launchOriginArgumentPrefix$windowsStartupLaunchOriginValue';
+
   static const String startupLaunchArgument = '--startup-launch';
+
+  static bool machineStartupArgsNeedProtocolMigration(String arguments) {
+    final trimmed = arguments.trim();
+    if (trimmed.isEmpty) {
+      return true;
+    }
+    if (trimmed.contains(startupLaunchArgument)) {
+      return true;
+    }
+    if (!trimmed.contains(windowsStartupLaunchOriginArgument)) {
+      return true;
+    }
+    return false;
+  }
 }

@@ -97,7 +97,9 @@ class SingleInstanceService implements ISingleInstanceService {
       calloc.free(mutexNamePtr);
 
       if (_mutexHandle == 0 || _mutexHandle == -1) {
-        final fallbackMode = _lockFallbackModeProvider();
+        final fallbackMode = isServiceMode
+            ? SingleInstanceLockFallbackMode.failSafe
+            : _lockFallbackModeProvider();
         if (fallbackMode == SingleInstanceLockFallbackMode.failSafe) {
           LoggerService.error(
             '[SingleInstance] CreateMutex failed: handle=$_mutexHandle, '
@@ -136,6 +138,17 @@ class SingleInstanceService implements ISingleInstanceService {
       return true;
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar instância única', e, stackTrace);
+      final fallbackMode = isServiceMode
+          ? SingleInstanceLockFallbackMode.failSafe
+          : _lockFallbackModeProvider();
+      if (fallbackMode == SingleInstanceLockFallbackMode.failSafe) {
+        LoggerService.error(
+          '[SingleInstance] Fallback mode fail_safe: refusing startup after '
+          'exception to preserve exclusivity.',
+        );
+        _isFirstInstance = false;
+        return false;
+      }
       _isFirstInstance = true;
       return true;
     }

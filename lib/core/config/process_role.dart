@@ -1,0 +1,4 @@
+enum ProcessRole {
+  ui,
+  service,
+}

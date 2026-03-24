@@ -65,5 +65,83 @@ void main() {
         expect(closeHandleCallCount, equals(1));
       },
     );
+
+    test(
+      'should return false on exception when fallback is fail_safe',
+      () async {
+        final service = SingleInstanceService.forTest(
+          createMutex: (_, _, _) => throw StateError('mutex_error'),
+          setLastError: (_) {},
+          getLastError: () => 0,
+          isWindowsPlatform: () => true,
+          lockFallbackModeProvider: () =>
+              SingleInstanceLockFallbackMode.failSafe,
+        );
+
+        final result = await service.checkAndLock();
+
+        expect(result, isFalse);
+        expect(service.isFirstInstance, isFalse);
+      },
+    );
+
+    test(
+      'should return true on exception when fallback is fail_open',
+      () async {
+        final service = SingleInstanceService.forTest(
+          createMutex: (_, _, _) => throw StateError('mutex_error'),
+          setLastError: (_) {},
+          getLastError: () => 0,
+          isWindowsPlatform: () => true,
+          lockFallbackModeProvider: () =>
+              SingleInstanceLockFallbackMode.failOpen,
+        );
+
+        final result = await service.checkAndLock();
+
+        expect(result, isTrue);
+        expect(service.isFirstInstance, isTrue);
+      },
+    );
+
+    test(
+      'should return false when service mode and CreateMutex fails even if '
+      'provider is fail_open',
+      () async {
+        final service = SingleInstanceService.forTest(
+          createMutex: (_, _, _) => 0,
+          setLastError: (_) {},
+          getLastError: () => 5,
+          isWindowsPlatform: () => true,
+          lockFallbackModeProvider: () =>
+              SingleInstanceLockFallbackMode.failOpen,
+        );
+
+        final result = await service.checkAndLock(isServiceMode: true);
+
+        expect(result, isFalse);
+        expect(service.isFirstInstance, isFalse);
+      },
+    );
+
+    test(
+      'should return false on exception in service mode even if provider is '
+      'fail_open',
+      () async {
+        final service = SingleInstanceService.forTest(
+          createMutex: (_, _, _) => throw StateError('mutex_error'),
+          setLastError: (_) {},
+          getLastError: () => 0,
+          isWindowsPlatform: () => true,
+          lockFallbackModeProvider: () =>
+              SingleInstanceLockFallbackMode.failOpen,
+        );
+
+        final result = await service.checkAndLock(isServiceMode: true);
+
+        expect(result, isFalse);
+        expect(service.isFirstInstance, isFalse);
+      },
+    );
   });
 }

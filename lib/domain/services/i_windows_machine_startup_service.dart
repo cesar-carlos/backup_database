@@ -14,12 +14,14 @@ class WindowsMachineStartupInspection {
     required this.hasLegacyRunEntry,
     required this.hasScheduledTask,
     this.diagnostics = '',
+    this.needsStartupLaunchProtocolMigration = false,
   });
 
   final bool ok;
   final bool hasLegacyRunEntry;
   final bool hasScheduledTask;
   final String diagnostics;
+  final bool needsStartupLaunchProtocolMigration;
 }
 
 abstract class IWindowsMachineStartupService {

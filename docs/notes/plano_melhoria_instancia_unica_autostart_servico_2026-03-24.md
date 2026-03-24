@@ -1,9 +1,20 @@
 # Plano: Melhoria de Instancia Unica, Auto Start e Convivencia UI + Servico
 
 Data base: 2026-03-24
-Status: Planejado
+Status: **Concluído (PR-1 a PR-5 + backlog pós-plano)** no repositório — args unificados no `main`, `getLaunchConfig` via contexto, detector com args explícitos, default mutex UI `fail_safe` com opt-in `fail_open`, logs `bootstrap_timing` / `singleInstanceLockFallbackUi`, debug `ipc_port_cache_hit`.
 Escopo: Windows desktop, bootstrap de UI, auto start, IPC local e modo servico
 Objetivo: aumentar confiabilidade e desempenho do controle de instancia unica, padronizar a deteccao de auto start e garantir que o servico Windows nao conte como instancia de UI
+
+## Registro de implementacao (manter atualizado)
+
+| Data       | Item                          | Notas |
+| ---------- | ----------------------------- | ----- |
+| 2026-03-24 | PR-1 — contrato de bootstrap  | `LaunchOrigin` + `LaunchBootstrapContext`; HKCU/HKLM com `--launch-origin=windows-startup`; legado `--startup-launch`; testes `launch_bootstrap_context_resolver_test.dart`.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 2026-03-24 | PR-2 — mutex-first            | Removido `checkIpcServerAndHandle()` do `main` e o método em `SingleInstanceChecker`; IPC só após mutex negar; `windowsStartup` duplicado sai antes de `getExistingInstanceUser`/`notify`; `SingleInstanceService.checkAndLock` em `catch` respeita `failSafe`; removidos ramos mortos `ServiceModeDetector` em `_initializeAppServices` (fluxo UI). Testes: `single_instance_checker_test`, `single_instance_service_test`.                                                                                                                                                                 |
+| 2026-03-24 | PR-3 — convivência UI+serviço | `ProcessRole` (`lib/core/config/process_role.dart`); `LaunchBootstrapContext.processRole`; logs `[main] processRole=…`, `[bootstrap] processRole=service … coexists_with_ui=independent_mutex`; `SingleInstanceConfig.lockFallbackModeFor(isServiceMode: true)` = failSafe; `checkAndLock(isServiceMode: true)` força failSafe independente do provider injetado; testes `instance_coexistence_contract_test.dart`, extensões em `single_instance_service_test` e `launch_bootstrap_context_resolver_test`. `UiSchedulerPolicy` inalterado (já coberto por `ui_scheduler_policy_test`).      |
+| 2026-03-24 | PR-4 — IPC endurecido         | Protocolo `BACKUP_DATABASE_IPC_V1`: ping/pong com `v`, `role=ui`, `pid`; `GET_USER_INFO` / resposta com `u64=` (base64url); cliente envia `ipcShowWindowMessage` / `ipcGetUserInfoMessage` / `ipcPingMessage`; servidor ainda aceita `PING`→`PONG` legado, `SHOW_WINDOW` e `GET_USER_INFO` legados; probe rejeita `PONG` solto ou `role`≠ui; logs `ipc_*`; `getExistingInstanceUser` retorna ao primeiro host que responde com payload inválido (evita varrer portas). Testes em `ipc_service_test.dart`. Named Pipe não implementado (fase opcional). Lista de portas alternativas mantida. |
+| 2026-03-24 | PR-5 — migração / rollout     | `usesLegacyWindowsStartupAlias`; logs `[startup_migration]`; inspeção XML + reaplicar tarefa; testes provider + `single_instance_config_startup_migration_test`. |
+| 2026-03-24 | Backlog pós-plano             | `rawArgs` único no `main`; `AppInitializer.getLaunchConfig(bootstrapContext:)`; `ServiceModeDetector.isServiceMode(executableArguments: rawArgs)`; default `SINGLE_INSTANCE_LOCK_FALLBACK_MODE` = fail_safe (`fail_open` explícito no .env); logs `[main] bootstrap_timing` e `ipc_port_cache_hit`; testes `single_instance_lock_fallback_mode_test`. |
 
 ## Objetivos de Negocio
 
@@ -624,9 +635,11 @@ class LaunchBootstrapContext {
   const LaunchBootstrapContext({
     required this.launchOrigin,
     required this.isServiceMode,
+    required this.processRole,
     required this.rawArgs,
     required this.rawEnvironment,
     required this.startMinimizedFromArgs,
+    required this.usesLegacyWindowsStartupAlias,
   });
 }
 ```
@@ -733,13 +746,13 @@ Mudancas esperadas:
 
 ### Sequencia recomendada de implementacao do PR-1
 
-1. Criar `LaunchOrigin` e `LaunchBootstrapContext`.
-2. Cobrir o resolver com testes unitarios independentes.
-3. Refatorar `main.dart` para usar o resolver.
-4. Refatorar `SingleInstanceChecker` para depender de `LaunchOrigin`.
-5. Atualizar `SystemSettingsProvider` para escrever o novo argumento.
-6. Atualizar `installer/setup.iss` para escrever o mesmo argumento.
-7. Ajustar testes existentes e adicionar casos de compatibilidade legada.
+1. ~~Criar `LaunchOrigin` e `LaunchBootstrapContext`.~~ **Feito**
+2. ~~Cobrir o resolver com testes unitarios independentes.~~ **Feito** (`launch_bootstrap_context_resolver_test.dart`)
+3. ~~Refatorar `main.dart` para usar o resolver.~~ **Feito**
+4. ~~Refatorar `SingleInstanceChecker` para depender de `LaunchOrigin`.~~ **Feito**
+5. ~~Atualizar `SystemSettingsProvider` para escrever o novo argumento.~~ **Feito**
+6. ~~Atualizar `installer/setup.iss` para escrever o mesmo argumento.~~ **Feito**
+7. ~~Ajustar testes existentes e adicionar casos de compatibilidade legada.~~ **Feito** (incl. `single_instance_checker_test`, `system_settings_provider_test`, `machine_startup_task_xml_test`)
 
 ### Testes do PR-1
 
@@ -769,12 +782,12 @@ Mudancas esperadas:
 
 ### Criterios de pronto do PR-1
 
-- existe um unico ponto de resolucao da origem do launch;
-- `SingleInstanceChecker` nao depende mais de `bool isStartupLaunch`;
-- HKCU e HKLM usam o mesmo marcador de startup;
-- `--startup-launch` continua aceito por compatibilidade;
-- nenhum comportamento de UI muda para launch manual;
-- testes unitarios novos e adaptados passam.
+- [x] existe um unico ponto de resolucao da origem do launch (`LaunchBootstrapContextResolver.resolve`);
+- [x] `SingleInstanceChecker` nao depende mais de `bool isStartupLaunch` (usa `LaunchOrigin`);
+- [x] HKCU e HKLM usam o mesmo marcador de startup (`--launch-origin=windows-startup`);
+- [x] `--startup-launch` continua aceito por compatibilidade;
+- [x] nenhum comportamento de UI muda para launch manual (apenas fonte da decisao de popup);
+- [x] testes unitarios novos e adaptados passam.
 
 ### Fora do escopo do PR-1
 
@@ -807,18 +820,18 @@ Arquivos candidatos:
 
 Entregas:
 
-- fluxo de startup simplificado;
-- IPC usado apenas quando o mutex negar abertura;
-- correcoes na politica de fallback para respeitar `failSafe` inclusive em excecao.
-- encerramento antecipado para `windowsStartup` duplicado, sem lookup de usuario.
+- ~~fluxo de startup simplificado;~~ **Feito**
+- ~~IPC usado apenas quando o mutex negar abertura;~~ **Feito**
+- ~~correcoes na politica de fallback para respeitar `failSafe` inclusive em excecao.~~ **Feito**
+- ~~encerramento antecipado para `windowsStartup` duplicado, sem lookup de usuario.~~ **Feito**
 
 Testes:
 
-- primeira UI com mutex valido nao faz probe preventivo de IPC;
-- `PONG` de processo estranho nao bloqueia abertura quando o mutex permitiu;
-- excecao em `checkAndLock()` respeita politica configurada;
-- servico continua usando mutex proprio.
-- launch `windowsStartup` duplicado nao busca `existingUser` nem mostra popup.
+- ~~primeira UI com mutex valido nao faz probe preventivo de IPC;~~ **Feito** (remoção do call em `main`)
+- ~~`PONG` de processo estranho nao bloqueia abertura quando o mutex permitiu;~~ **Coberto pelo desenho** (sem probe na primeira instância)
+- ~~excecao em `checkAndLock()` respeita politica configurada;~~ **Feito** (`single_instance_service_test`)
+- servico continua usando mutex proprio. _(inalterado; já isolado)_
+- ~~launch `windowsStartup` duplicado nao busca `existingUser` nem mostra popup.~~ **Feito** (`single_instance_checker_test`)
 
 ## PR-3 - Regra explicita de convivencia entre UI e servico
 
@@ -837,17 +850,17 @@ Arquivos candidatos:
 
 Entregas:
 
-- regra codificada por papel do processo;
-- logs de bootstrap com `processRole`;
-- cobertura de testes para coexistencia.
-- definicao explicita de politica de fallback por papel, se aprovada no rollout.
+- ~~regra codificada por papel do processo;~~ **Feito** (`ProcessRole`, mutexes distintos, failSafe obrigatório no processo serviço em `checkAndLock`)
+- ~~logs de bootstrap com `processRole`;~~ **Feito** (`main`, `ServiceModeInitializer`, log ao pular scheduler local)
+- ~~cobertura de testes para coexistencia.~~ **Feito** (contrato em `instance_coexistence_contract_test.dart` + testes de mutex serviço com provider failOpen)
+- ~~definicao explicita de politica de fallback por papel, se aprovada no rollout.~~ **Feito** (serviço: failSafe fixo em `SingleInstanceService` quando `isServiceMode`; UI: continua via `_lockFallbackModeProvider` / env)
 
 Testes:
 
-- UI abre normalmente com servico rodando;
-- servico inicia normalmente com UI aberta;
-- UI nao inicia scheduler local quando servico esta `installed + running`;
-- servico nao tenta abrir recursos de UI.
+- ~~UI abre normalmente com servico rodando;~~ **Contrato por mutex + PR-2** (sem integração E2E neste PR)
+- ~~servico inicia normalmente com UI aberta;~~ **Idem**
+- ~~UI nao inicia scheduler local quando servico esta `installed + running`;~~ **Já coberto** (`ui_scheduler_policy_test.dart`)
+- ~~servico nao tenta abrir recursos de UI.~~ **Arquitetural** (`ServiceModeInitializer` sem Flutter UI binding; sem teste de ausência de `runApp` neste PR)
 
 ## PR-4 - Endurecimento e desempenho do IPC
 
@@ -865,39 +878,39 @@ Arquivos candidatos:
 
 Entregas:
 
-- handshake com identidade do app;
-- resposta contendo metadados de instancia;
-- cleanup de timeouts e portas alternativas com base em uso real;
-- avaliacao de Named Pipe como etapa opcional.
-- logs mais granulares para descoberta e foco da instancia existente.
+- ~~handshake com identidade do app;~~ **Feito** (`BACKUP_DATABASE_IPC_V1`, linhas com prefixo + campos)
+- ~~resposta contendo metadados de instancia;~~ **Feito** (`v`, `role`, `pid` no PONG; USER_INFO com `u64`)
+- cleanup de timeouts e portas alternativas com base em uso real — **parcial** (lista de portas inalterada; saída antecipada em `getExistingInstanceUser` quando resposta inválida)
+- avaliacao de Named Pipe como etapa opcional — **documentado como fora de escopo** neste PR
+- ~~logs mais granulares para descoberta e foco da instancia existente.~~ **Feito** (`ipc_probe_*`, `ipc_show_window_*`, etc.)
 
 Testes:
 
-- resposta invalida nao e tratada como instancia valida;
-- app responde apenas ao protocolo esperado;
-- envio de `SHOW_WINDOW` continua funcional;
-- degradacao de tempo de descoberta fica limitada ao fluxo de segunda instancia.
+- ~~resposta invalida nao e tratada como instancia valida;~~ **Feito**
+- ~~app responde apenas ao protocolo esperado;~~ **Feito** (probe exige V1 + role ui)
+- ~~envio de `SHOW_WINDOW` continua funcional;~~ **Feito** (V1 + legado + teste de integração)
+- ~~degradacao de tempo de descoberta fica limitada ao fluxo de segunda instancia.~~ **Parcial** (PR-2 já limita probe na 1ª UI; USER_INFO não varre todas as portas após resposta inválida)
 
 ## Backlog de Quick Wins
 
 Estes itens podem ser absorvidos nos PRs acima sem abrir um PR separado:
 
-- [ ] curto-circuito de `windowsStartup` duplicado antes de `getExistingInstanceUser()`
-- [ ] reaproveitar `isServiceMode` do contexto em vez de redetectar no bootstrap
-- [ ] unificar leitura de `Platform.executableArguments` no resolver de contexto
-- [ ] adicionar logs de decisao com motivos tecnicos padronizados
-- [ ] cobrir explicitamente coexistencia `1 UI + 1 Servico`
-- [ ] cobrir caminho de excecao de `checkAndLock()` com `failSafe`
+- [x] curto-circuito de `windowsStartup` duplicado antes de `getExistingInstanceUser()` (PR-2)
+- [x] reaproveitar `isServiceMode` do contexto em vez de redetectar no bootstrap (detector recebe `executableArguments: rawArgs` do resolver; cache continua single-flight)
+- [x] unificar leitura de `Platform.executableArguments` no resolver de contexto (`rawArgs` no `main` + `getLaunchConfig` consome `bootstrapContext.rawArgs`)
+- [x] adicionar logs de decisao com motivos tecnicos padronizados (parcial: `duplicate_launch_suppressed_windows_startup` — PR-2)
+- [x] cobrir explicitamente coexistencia `1 UI + 1 Servico` (PR-3: contrato em testes + failSafe serviço)
+- [x] cobrir caminho de excecao de `checkAndLock()` com `failSafe` (PR-2)
 
 ## Backlog de Risco Estrutural
 
 Estes itens tem impacto maior e devem seguir a ordem dos PRs:
 
-- [ ] retirar o IPC do caminho feliz de primeira abertura
-- [ ] endurecer o handshake do protocolo local
-- [ ] revisar `failOpen` como default da UI
-- [ ] separar politica de fallback entre UI e servico
-- [ ] medir latencia do bootstrap por etapa
+- [x] retirar o IPC do caminho feliz de primeira abertura (PR-2: sem `checkIpcServerAndHandle` no bootstrap)
+- [x] endurecer o handshake do protocolo local (PR-4)
+- [x] revisar `failOpen` como default da UI (default **fail_safe**; `fail_open` só com env explícita; `.env.example` / README atualizados)
+- [x] separar politica de fallback entre UI e servico (PR-3: serviço sempre failSafe em `checkAndLock`; UI via env/provider)
+- [x] medir latencia do bootstrap por etapa (logs `[main] bootstrap_timing phase=… elapsed_ms=…`)
 
 ## PR-5 - Migracao e rollout controlado
 
@@ -908,48 +921,57 @@ Objetivo:
 
 Entregas:
 
-- leitura de alias legado `--startup-launch`;
-- reescrita das entradas de startup no primeiro fluxo administrativo possivel;
-- logs claros de modo legado vs modo novo;
-- checklist operacional para instalacoes ja existentes.
+- ~~leitura de alias legado `--startup-launch`;~~ **Feito** (resolver + `usesLegacyWindowsStartupAlias`)
+- ~~reescrita das entradas de startup no primeiro fluxo administrativo possivel;~~ **Feito** (primeira abertura da UI com autostart ativo: `SystemSettingsProvider` + `apply` da tarefa; remove HKCU Run legado como efeito colateral do `apply`)
+- ~~logs claros de modo legado vs modo novo;~~ **Feito** (`[main] windowsStartupCli=…`, `[startup_migration] …`)
+- ~~checklist operacional para instalacoes ja existentes.~~ **Feito** (abaixo)
 
 Testes:
 
-- entrada antiga ainda funciona sem popup indevido apos migracao;
-- entrada nova produz comportamento consistente em HKCU e HKLM.
+- ~~entrada antiga ainda funciona sem popup indevido apos migracao;~~ **Coberto** por alias no resolver + PR-2 `windowsStartup` sem IPC/popup; migração de args não altera `LaunchOrigin` após passar a usar `--launch-origin=windows-startup`
+- ~~entrada nova produz comportamento consistente em HKCU e HKLM.~~ **Feito** (HKLM via instalador PR-1; HKCU/tarefa via provider + inspeção PR-5)
+
+### Checklist operacional (instalações já existentes)
+
+1. **HKLM / instalador**: novas instalações já recebem `--launch-origin=windows-startup` na tarefa opcional de startup do instalador (`setup.iss`). Atualizações por cima: reexecutar o instalador ou abrir a UI uma vez com “Iniciar com o Windows” ligado para o app reaplicar a tarefa de logon.
+2. **HKCU Run `BackupDatabase`**: se ainda existir, a primeira reconciliação com autostart ativo dispara `[startup_migration]` e o `apply` remove o valor e recria a tarefa com args canônicos.
+3. **Tarefa `BackupDatabase\MachineStartup` com `--startup-launch` ou sem `--launch-origin=windows-startup`**: na primeira `initialize()` do `SystemSettingsProvider` com preferência ativa, a tarefa é recriada com args atuais (exige permissão para `schtasks` como hoje).
+4. **Modo servidor (UI)**: migração automática da tarefa de logon **não** roda (`installScheduledTask == false`); autostart suportado é o serviço Windows — ver logs existentes de tarefa remanescente.
+5. **Diagnóstico**: buscar nos logs `startup_migration`, `windowsStartupCli=legacy_alias` e `duplicate_launch_suppressed_windows_startup`.
 
 ## Checklist Tecnico por Tema
 
 ### Bootstrap
 
-- [ ] criar `LaunchContext`
-- [ ] remover checagens duplicadas de origem do launch
-- [ ] registrar logs com contexto consolidado
+- [x] criar contexto de bootstrap (`LaunchBootstrapContext` / `LaunchOrigin` — PR-1; nome alinhado ao plano ate unificar com `LaunchContext` completo)
+- [x] remover checagens duplicadas de origem do launch (`getLaunchConfig` usa `bootstrapContext.rawArgs` / `startMinimizedFromArgs`)
+- [x] registrar logs com contexto consolidado (`launchOrigin`, `isServiceMode`, `startMinimizedFromArgs` em `main` — PR-1)
 
 ### Instancia unica
 
-- [ ] manter mutex como fonte unica de verdade
-- [ ] rever `failOpen` como default
-- [ ] fazer `catch` de `checkAndLock()` respeitar a politica configurada
+- [x] manter mutex como fonte unica de verdade (PR-2: sem segundo veto por IPC no bootstrap)
+- [x] rever `failOpen` como default (padrão fail_safe; opt-in `fail_open`)
+- [x] fazer `catch` de `checkAndLock()` respeitar a politica configurada (PR-2)
 
 ### Auto start
 
-- [ ] padronizar argumento de origem
-- [ ] atualizar HKCU `Run`
-- [ ] atualizar HKLM `Run`
-- [ ] manter compatibilidade retroativa temporaria
+- [x] padronizar argumento de origem (PR-1)
+- [x] atualizar HKCU `Run` (via `SystemSettingsProvider` / tarefa — PR-1)
+- [x] atualizar HKLM `Run` (`installer/setup.iss` — PR-1)
+- [x] manter compatibilidade retroativa temporaria (`--startup-launch` — PR-1)
+- [x] migração automática de tarefa/Run para args canônicos na primeira UI com autostart (PR-5)
 
 ### UI + Servico
 
-- [ ] declarar em codigo que servico nao bloqueia UI
-- [ ] cobrir coexistencia com testes
-- [ ] manter a decisao de scheduler separada da decisao de instancia
+- [x] declarar em codigo que servico nao bloqueia UI (PR-3: mutexes distintos + logs `coexists_with_ui`)
+- [x] cobrir coexistencia com testes (PR-3: `instance_coexistence_contract_test` + serviço failSafe)
+- [x] manter a decisao de scheduler separada da decisao de instancia (inalterado; `UiSchedulerPolicy`)
 
 ### IPC
 
-- [ ] remover probe preventivo do caminho feliz
-- [ ] endurecer handshake
-- [ ] revisar cache de porta e timeouts
+- [x] remover probe preventivo do caminho feliz (PR-2)
+- [x] endurecer handshake (PR-4)
+- [x] revisar cache de porta e timeouts (log debug `ipc_port_cache_hit`; TTL existente mantido — Named Pipe continua opcional)
 
 ## Criterios de Aceite
 
@@ -977,18 +999,18 @@ Testes:
 
 ## Lacunas de Teste Atuais
 
-- Existe teste para "nao mostrar popup em startup launch" em `test/unit/presentation/boot/single_instance_checker_test.dart:129`, mas ele depende de injetar `isStartupLaunch` manualmente.
+- O teste "nao mostrar popup em startup launch" em `single_instance_checker_test.dart` agora injeta `LaunchOrigin.windowsStartup` (PR-1). Cobertura do resolver isolado: `launch_bootstrap_context_resolver_test.dart`.
 - Existe teste para fallback `failSafe` e `failOpen` em `test/unit/infrastructure/external/system/single_instance_service_test.dart:9` e `:28`, mas nao existe teste para caminho de excecao geral.
 - Existe teste para `UiSchedulerPolicy` com servico rodando em `test/unit/presentation/boot/ui_scheduler_policy_test.dart:34`, mas nao existe teste de bootstrap garantindo explicitamente que servico nao bloqueia a UI.
-- Existe teste de `IpcService` respondendo `PONG` em `test/unit/infrastructure/external/system/ipc_service_test.dart:11`, mas nao existe teste cobrindo falso positivo de IPC quando o mutex ja permitiu startup.
+- O bootstrap da UI ja nao faz probe IPC quando o mutex permite startup (PR-2), eliminando essa classe de falso positivo; teste de integracao dedicado continua opcional.
 
 ## Sequencia Recomendada
 
-1. PR-1
-2. PR-2
-3. PR-3
-4. PR-4
-5. PR-5
+1. PR-1 — feito
+2. PR-2 — feito
+3. PR-3 — feito
+4. PR-4 — feito
+5. PR-5 — feito
 
 ## Decisao Recomendada
 

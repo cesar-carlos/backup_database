@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_windows_machine_startup_service.dart';
 import 'package:backup_database/infrastructure/external/system/machine_startup_task_xml.dart';
 import 'package:path/path.dart' as p;
+import 'package:xml/xml.dart';
 
 class WindowsMachineStartupService implements IWindowsMachineStartupService {
   static const String _fullTaskPath = machineLogonStartupTaskPath;
@@ -24,11 +26,21 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
     final diagnostics = <String>[];
     final hasLegacyRun = await _hasHkcuRunEntry(diagnostics);
     final hasScheduledTask = await _hasScheduledTask(diagnostics);
+    final taskArguments = hasScheduledTask
+        ? await _readScheduledTaskArguments(diagnostics)
+        : null;
+    final taskArgsNeedMigration = taskArguments != null &&
+        SingleInstanceConfig.machineStartupArgsNeedProtocolMigration(
+          taskArguments,
+        );
+    final needsStartupLaunchProtocolMigration = hasScheduledTask &&
+        (hasLegacyRun || taskArgsNeedMigration);
     return WindowsMachineStartupInspection(
       ok: diagnostics.isEmpty,
       hasLegacyRunEntry: hasLegacyRun,
       hasScheduledTask: hasScheduledTask,
       diagnostics: diagnostics.join('\n'),
+      needsStartupLaunchProtocolMigration: needsStartupLaunchProtocolMigration,
     );
   }
 
@@ -150,6 +162,33 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
       'stderr=${result.stderr} stdout=${result.stdout}',
     );
     return false;
+  }
+
+  Future<String?> _readScheduledTaskArguments(List<String> diagnostics) async {
+    final result = await Process.run(
+      'schtasks',
+      ['/Query', '/TN', _fullTaskPath, '/XML'],
+      runInShell: true,
+    );
+    if (result.exitCode != 0) {
+      diagnostics.add(
+        'schtasks xml $_fullTaskPath exit=${result.exitCode} '
+        'stderr=${result.stderr}',
+      );
+      return null;
+    }
+    final stdout = '${result.stdout}';
+    try {
+      final document = XmlDocument.parse(stdout);
+      final arguments = document.findAllElements('Arguments');
+      if (arguments.isEmpty) {
+        return '';
+      }
+      return arguments.first.innerText;
+    } on Object catch (e) {
+      diagnostics.add('parse scheduled task XML: $e');
+      return null;
+    }
   }
 
   Future<void> _deleteScheduledTask() async {

@@ -1,6 +1,7 @@
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
+import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
 import 'package:backup_database/presentation/boot/single_instance_checker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -103,49 +104,30 @@ void main() {
       );
     });
 
-    test('should stop startup when ipc server is already running', () async {
-      final messageBox = _FakeWindowsMessageBox();
-      final checker = SingleInstanceChecker(
-        singleInstanceService: _FakeSingleInstanceService(
-          checkAndLockResult: true,
-        ),
-        ipcClient: _FakeSingleInstanceIpcClient(
-          isServerRunning: true,
-          existingUser: 'user_a',
-          notifyResults: [true],
-        ),
-        messageBox: messageBox,
-        getCurrentUsername: () => 'user_a',
-        maxRetryAttempts: 1,
-      );
-
-      final canContinue = await checker.checkIpcServerAndHandle();
-
-      expect(canContinue, isFalse);
-      expect(messageBox.warningMessage, isNotNull);
-    });
-
     test(
-      'should not show warning dialog when second instance starts from startup launch',
+      'should not use ipc when duplicate launch is windowsStartup',
       () async {
         final messageBox = _FakeWindowsMessageBox();
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingUser: 'admin_user',
+          notifyResults: [true],
+        );
         final checker = SingleInstanceChecker(
           singleInstanceService: _FakeSingleInstanceService(
             checkAndLockResult: false,
           ),
-          ipcClient: _FakeSingleInstanceIpcClient(
-            existingUser: 'admin_user',
-            notifyResults: [true],
-          ),
+          ipcClient: ipcClient,
           messageBox: messageBox,
           getCurrentUsername: () => 'local_user',
-          isStartupLaunch: true,
+          launchOrigin: LaunchOrigin.windowsStartup,
           maxRetryAttempts: 1,
         );
 
         final canContinue = await checker.checkAndHandleSecondInstance();
 
         expect(canContinue, isFalse);
+        expect(ipcClient.getExistingInstanceUserCallCount, 0);
+        expect(ipcClient.notifyAttemptCount, 0);
         expect(messageBox.warningMessage, isNull);
       },
     );
@@ -192,6 +174,8 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
 
   int get notifyAttemptCount => _notifyAttemptIndex;
 
+  int getExistingInstanceUserCallCount = 0;
+
   @override
   Future<bool> checkServerRunning() async {
     return isServerRunning;
@@ -199,6 +183,7 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
 
   @override
   Future<String?> getExistingInstanceUser() async {
+    getExistingInstanceUserCallCount++;
     return existingUser;
   }
 

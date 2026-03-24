@@ -152,12 +152,15 @@ class SystemSettingsProvider extends ChangeNotifier {
     try {
       final executablePath = _executablePathProvider();
       final startMinimized =
-          startMinimizedOverride ??
-          await _machineSettings.getStartMinimized();
-      const startupArg = SingleInstanceConfig.startupLaunchArgument;
+          startMinimizedOverride ?? await _machineSettings.getStartMinimized();
       const minimizedArg = SingleInstanceConfig.minimizedArgument;
+      final startupOriginArg =
+          SingleInstanceConfig.windowsStartupLaunchOriginArgument;
       final taskArguments = enable
-          ? (startMinimized ? '$minimizedArg $startupArg' : startupArg).trim()
+          ? (startMinimized
+                    ? '$minimizedArg $startupOriginArg'
+                    : startupOriginArg)
+                .trim()
           : '';
       final installScheduledTask = _appModeProvider() != AppMode.server;
 
@@ -209,8 +212,31 @@ class SystemSettingsProvider extends ChangeNotifier {
 
     if (inspection.hasLegacyRunEntry) {
       LoggerService.warning(
-        'Entrada legada HKCU Run/BackupDatabase ainda existe no sistema',
+        'HKCU Run/BackupDatabase ainda presente; modelo atual usa só a tarefa '
+        'de logon. Migração automática ocorre se início automático estiver ativo.',
       );
+    }
+
+    if (_startWithWindows &&
+        installScheduledTask &&
+        inspection.hasScheduledTask &&
+        inspection.needsStartupLaunchProtocolMigration) {
+      LoggerService.info(
+        '[startup_migration] reapply_machine_logon_task '
+        'reason=hkcu_run_or_stale_task_args '
+        'target_arg=${SingleInstanceConfig.windowsStartupLaunchOriginArgument}',
+      );
+      final outcome = await _updateStartWithWindows(
+        true,
+        startMinimizedOverride: _startMinimized,
+      );
+      if (outcome.ok) {
+        LoggerService.info('[startup_migration] completed_ok');
+      } else if (outcome.diagnostics.isNotEmpty) {
+        LoggerService.warning(
+          '[startup_migration] apply_failed diagnostics=${outcome.diagnostics}',
+        );
+      }
     }
 
     if (installScheduledTask && !inspection.hasScheduledTask) {

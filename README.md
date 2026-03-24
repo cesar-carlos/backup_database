@@ -83,10 +83,10 @@ Crie um arquivo `.env` na raiz do aplicativo (ou use `.env.example` como base):
 APP_NAME=Backup Database
 APP_VERSION=2.3.3
 SINGLE_INSTANCE_ENABLED=true
-SINGLE_INSTANCE_LOCK_FALLBACK_MODE=fail_open
+SINGLE_INSTANCE_LOCK_FALLBACK_MODE=fail_safe
 
-# fail_open (padrão): inicia scheduler local quando status do serviço falha
-# fail_safe: não inicia scheduler local
+# UI scheduler: fail_open inicia scheduler local se consulta ao serviço Windows falhar (padrão)
+# fail_safe não inicia scheduler local nesse caso
 UI_SCHEDULER_FALLBACK_MODE=fail_open
 
 # Override de modo (debug/desenvolvimento): server | client
@@ -103,8 +103,8 @@ FTP_IT_REMOTE_PATH=
 Para cenários de integração server/client em desenvolvimento, também existem os arquivos `.env.server` e `.env.client`.
 
 Sobre `SINGLE_INSTANCE_LOCK_FALLBACK_MODE`:
-- `fail_open` (padrão): se o `CreateMutexW` falhar, o app continua iniciando, mas sem garantia de exclusividade.
-- `fail_safe`: se o `CreateMutexW` falhar, o app bloqueia a inicialização para preservar o comportamento estrito de instância única.
+- `fail_safe` (padrão quando a variável está ausente ou definida assim): se o `CreateMutexW` falhar, o app bloqueia a inicialização para preservar instância única.
+- `fail_open`: se o mutex falhar, o app continua sem garantia de exclusividade (apenas para diagnóstico).
 
 ### SQL Server
 

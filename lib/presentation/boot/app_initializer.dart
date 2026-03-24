@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/application/services/initial_setup_service.dart';
@@ -8,6 +6,7 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppInitializer {
@@ -70,7 +69,9 @@ class AppInitializer {
     }
   }
 
-  static Future<LaunchConfig> getLaunchConfig() async {
+  static Future<LaunchConfig> getLaunchConfig({
+    required LaunchBootstrapContext bootstrapContext,
+  }) async {
     final startMinimizedFromSettings = await service_locator
         .getIt<IMachineSettingsRepository>()
         .getStartMinimized();
@@ -79,12 +80,10 @@ class AppInitializer {
       '$startMinimizedFromSettings',
     );
 
-    final args = Platform.executableArguments;
-    final startMinimizedFromArgs = args.contains(
-      SingleInstanceConfig.minimizedArgument,
-    );
+    final args = bootstrapContext.rawArgs;
+    final startMinimizedFromArgs = bootstrapContext.startMinimizedFromArgs;
     LoggerService.info(
-      'Argumentos de linha de comando: $args '
+      'Argumentos de linha de comando (via bootstrapContext): $args '
       '(${SingleInstanceConfig.minimizedArgument}: $startMinimizedFromArgs)',
     );
 

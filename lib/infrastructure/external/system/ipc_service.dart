@@ -7,7 +7,6 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
 import 'package:backup_database/domain/services/i_ipc_service.dart';
 
-/// Implementation of [IIpcService] using TCP sockets on localhost.
 class IpcService implements IIpcService {
   ServerSocket? _server;
   Function()? _onShowWindow;
@@ -30,7 +29,9 @@ class IpcService implements IIpcService {
 
     for (final port in portsToTry) {
       try {
-        LoggerService.debug('Tentando iniciar IPC Server na porta $port...');
+        LoggerService.debug(
+          'ipc_listen_try port=$port processRole=ui',
+        );
         _server = await ServerSocket.bind(
           InternetAddress.loopbackIPv4,
           port,
@@ -39,11 +40,14 @@ class IpcService implements IIpcService {
         _markActivePort(port);
         _isRunning = true;
 
-        LoggerService.info('IPC Server iniciado na porta $_currentPort');
+        LoggerService.info(
+          'IPC Server iniciado na porta $_currentPort '
+          'protocol=${SingleInstanceConfig.ipcProtocolId}',
+        );
 
         _server!.listen(
           _handleConnection,
-          onError: (error) {
+          onError: (Object error) {
             LoggerService.error('Erro no IPC Server', error);
           },
           onDone: () {
@@ -56,7 +60,7 @@ class IpcService implements IIpcService {
       } on SocketException catch (e) {
         if (e.osError?.errorCode == 10013 || e.osError?.errorCode == 10048) {
           LoggerService.debug(
-            'Porta $port nao disponivel (${e.osError?.errorCode}), tentando proxima...',
+            'ipc_listen_skip port=$port code=${e.osError?.errorCode}',
           );
           continue;
         }
@@ -76,44 +80,53 @@ class IpcService implements IIpcService {
   }
 
   void _handleConnection(Socket socket) {
-    LoggerService.debug('Nova conexao IPC recebida');
+    LoggerService.debug('ipc_connection_open');
 
     socket.listen(
-      (data) async {
+      (List<int> data) async {
         try {
           final message = utf8.decode(data).trim();
-          LoggerService.debug('Mensagem IPC recebida: $message');
+          LoggerService.debug('ipc_rx len=${message.length}');
 
-          if (message == SingleInstanceConfig.showWindowCommand) {
-            LoggerService.info('Comando SHOW_WINDOW recebido via IPC');
+          if (message == SingleInstanceConfig.showWindowCommand ||
+              message == SingleInstanceConfig.ipcShowWindowMessage) {
+            LoggerService.info(
+              'ipc_cmd SHOW_WINDOW processRole=ui',
+            );
             _onShowWindow?.call();
             return;
           }
 
-          if (message == SingleInstanceConfig.getUserInfoCommand) {
-            LoggerService.debug('Comando GET_USER_INFO recebido via IPC');
+          if (message == SingleInstanceConfig.getUserInfoCommand ||
+              message == SingleInstanceConfig.ipcGetUserInfoMessage) {
+            LoggerService.debug('ipc_cmd GET_USER_INFO');
             final username =
                 WindowsUserService.getCurrentUsername() ?? 'Desconhecido';
-            socket.add(
-              utf8.encode(
-                '${SingleInstanceConfig.userInfoResponsePrefix}$username',
-              ),
-            );
+            final line = _buildV1UserInfoLine(username);
+            socket.add(utf8.encode(line));
             await socket.flush();
-            LoggerService.debug('Resposta USER_INFO enviada: $username');
+            LoggerService.debug('ipc_tx USER_INFO ok');
             return;
           }
 
           if (message == SingleInstanceConfig.pingCommand) {
-            LoggerService.debug('Comando PING recebido via IPC');
+            LoggerService.debug('ipc_ping_legacy');
             socket.add(utf8.encode(SingleInstanceConfig.pongResponse));
             await socket.flush();
+            return;
+          }
+
+          if (message == SingleInstanceConfig.ipcPingMessage) {
+            LoggerService.debug('ipc_ping_v1');
+            socket.add(utf8.encode(_buildV1PongLine()));
+            await socket.flush();
+            return;
           }
         } on Object catch (e) {
           LoggerService.error('Erro ao processar mensagem IPC', e);
         }
       },
-      onError: (error) {
+      onError: (Object error) {
         LoggerService.error('Erro na conexao IPC', error);
       },
       onDone: () {
@@ -122,16 +135,13 @@ class IpcService implements IIpcService {
     );
   }
 
-  /// Sends a SHOW_WINDOW command to an existing instance.
   static Future<bool> sendShowWindow() async {
     final portsToTry = _getPortsToTry();
 
     for (final port in portsToTry) {
       Socket? socket;
       try {
-        LoggerService.debug(
-          'Tentando enviar comando SHOW_WINDOW na porta $port...',
-        );
+        LoggerService.debug('ipc_show_window_try port=$port');
 
         socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
@@ -139,31 +149,28 @@ class IpcService implements IIpcService {
           timeout: SingleInstanceConfig.connectionTimeout,
         );
 
-        socket.add(utf8.encode(SingleInstanceConfig.showWindowCommand));
+        socket.add(utf8.encode(SingleInstanceConfig.ipcShowWindowMessage));
         await socket.flush();
 
         await Future.delayed(SingleInstanceConfig.socketCloseDelay);
         await socket.close();
         _markActivePort(port);
 
-        LoggerService.info(
-          'Comando SHOW_WINDOW enviado com sucesso na porta $port',
-        );
+        LoggerService.info('ipc_show_window_sent port=$port');
         return true;
       } on Object catch (_) {
-        LoggerService.debug('Porta $port nao disponivel, tentando proxima...');
+        LoggerService.debug('ipc_show_window_miss port=$port');
       } finally {
         await _closeClientResources(socket: socket);
       }
     }
 
     LoggerService.warning(
-      'Nao foi possivel enviar comando IPC em nenhuma porta tentada',
+      'ipc_show_window_failed ports_tried=${portsToTry.length}',
     );
     return false;
   }
 
-  /// Checks if an IPC server is already running.
   static Future<bool> checkServerRunning() async {
     final portsToTry = _getPortsToTry();
     final firstRoundCount = portsToTry.length > 2 ? 2 : portsToTry.length;
@@ -188,7 +195,6 @@ class IpcService implements IIpcService {
     );
   }
 
-  /// Gets the username of the user running the existing instance.
   static Future<String?> getExistingInstanceUser() async {
     final portsToTry = _getPortsToTry();
 
@@ -201,19 +207,21 @@ class IpcService implements IIpcService {
           timeout: SingleInstanceConfig.connectionTimeout,
         );
 
-        socket.add(utf8.encode(SingleInstanceConfig.getUserInfoCommand));
+        socket.add(utf8.encode(SingleInstanceConfig.ipcGetUserInfoMessage));
         await socket.flush();
 
         final data = await socket.first.timeout(
           SingleInstanceConfig.connectionTimeout,
         );
         final message = utf8.decode(data).trim();
-        if (message.startsWith(SingleInstanceConfig.userInfoResponsePrefix)) {
+        final user = _parseUserInfoResponse(message);
+        if (user != null) {
           _markActivePort(port);
-          return message.substring(
-            SingleInstanceConfig.userInfoResponsePrefix.length,
-          );
+          LoggerService.debug('ipc_user_resolved port=$port');
+          return user;
         }
+        LoggerService.debug('ipc_user_invalid_response port=$port');
+        return null;
       } on Object catch (_) {
         continue;
       } finally {
@@ -221,9 +229,7 @@ class IpcService implements IIpcService {
       }
     }
 
-    LoggerService.debug(
-      'Nao foi possivel obter usuario da instancia existente',
-    );
+    LoggerService.debug('ipc_user_unresolved');
     return null;
   }
 
@@ -279,6 +285,10 @@ class IpcService implements IIpcService {
 
     final cacheAge = DateTime.now().difference(cachedAt);
     if (cacheAge <= SingleInstanceConfig.ipcPortCacheTtl) {
+      LoggerService.debug(
+        'ipc_port_cache_hit port=$cachedPort '
+        'age_ms=${cacheAge.inMilliseconds}',
+      );
       return cachedPort;
     }
 
@@ -299,7 +309,7 @@ class IpcService implements IIpcService {
     final results = await Future.wait(
       ports.map((port) => _probeServerPort(port: port, timeout: timeout)),
     );
-    return results.any((isActive) => isActive);
+    return results.any((bool isActive) => isActive);
   }
 
   static Future<bool> _probeServerPort({
@@ -314,21 +324,77 @@ class IpcService implements IIpcService {
         timeout: timeout,
       );
 
-      socket.add(utf8.encode(SingleInstanceConfig.pingCommand));
+      socket.add(utf8.encode(SingleInstanceConfig.ipcPingMessage));
       await socket.flush();
 
       final data = await socket.first.timeout(timeout);
       final response = utf8.decode(data).trim();
-      if (response == SingleInstanceConfig.pongResponse) {
+      if (_isValidV1Pong(response)) {
         _markActivePort(port);
+        LoggerService.debug('ipc_probe_ok port=$port');
         return true;
       }
 
+      LoggerService.debug('ipc_probe_invalid_pong port=$port');
       return false;
     } on Object catch (_) {
       return false;
     } finally {
       await _closeClientResources(socket: socket);
     }
+  }
+
+  static String _buildV1PongLine() {
+    return '${SingleInstanceConfig.ipcPongLinePrefix}'
+        'v=${SingleInstanceConfig.ipcProtocolVersion}|'
+        'role=${SingleInstanceConfig.ipcInstanceRoleUi}|'
+        'pid=$pid';
+  }
+
+  static String _buildV1UserInfoLine(String username) {
+    final u64 = base64Url.encode(utf8.encode(username));
+    return '${SingleInstanceConfig.ipcUserInfoLinePrefix}'
+        'v=${SingleInstanceConfig.ipcProtocolVersion}|'
+        'role=${SingleInstanceConfig.ipcInstanceRoleUi}|'
+        'pid=$pid|'
+        'u64=$u64';
+  }
+
+  static bool _isValidV1Pong(String response) {
+    if (!response.startsWith(SingleInstanceConfig.ipcPongLinePrefix)) {
+      return false;
+    }
+    if (!response.contains('v=${SingleInstanceConfig.ipcProtocolVersion}')) {
+      return false;
+    }
+    if (!response.contains('role=${SingleInstanceConfig.ipcInstanceRoleUi}')) {
+      return false;
+    }
+    if (!response.contains('pid=')) {
+      return false;
+    }
+    return true;
+  }
+
+  static String? _parseUserInfoResponse(String message) {
+    if (message.startsWith(SingleInstanceConfig.ipcUserInfoLinePrefix)) {
+      final match = RegExp(r'u64=([^|\s]+)').firstMatch(message);
+      if (match == null) {
+        return null;
+      }
+      try {
+        return utf8.decode(base64Url.decode(match.group(1)!));
+      } on Object {
+        return null;
+      }
+    }
+
+    if (message.startsWith(SingleInstanceConfig.userInfoResponsePrefix)) {
+      return message.substring(
+        SingleInstanceConfig.userInfoResponsePrefix.length,
+      );
+    }
+
+    return null;
   }
 }

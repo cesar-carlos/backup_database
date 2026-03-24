@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/application/services/service_health_checker.dart';
+import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
@@ -27,6 +28,11 @@ class ServiceModeInitializer {
 
     try {
       await _appendBootstrapLog('initialize: begin');
+      LoggerService.info(
+        '[bootstrap] processRole=service single_instance_mutex='
+        '${SingleInstanceConfig.serviceMutexName.split(r'\').last} '
+        'coexists_with_ui=independent_mutex',
+      );
       LoggerService.info('>>> [1/8] Iniciando ServiceModeInitializer');
       await _appendBootstrapLog('step 1/8: ServiceModeInitializer started');
 
