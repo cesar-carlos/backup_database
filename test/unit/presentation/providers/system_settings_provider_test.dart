@@ -1,5 +1,4 @@
 import 'package:backup_database/core/config/app_mode.dart';
-import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/domain/services/i_windows_machine_startup_service.dart';
 import 'package:backup_database/infrastructure/repositories/user_preferences_repository.dart';
@@ -27,17 +26,24 @@ void main() {
       expect(provider.startMinimized, isFalse);
       expect(provider.startWithWindows, isFalse);
       expect(startup.calls, isEmpty);
+      expect(startup.inspectCalls, equals(0));
     });
 
     test(
-      'should register machine startup with startup argument (client mode)',
+      'should keep machine startup enabled when scheduled task exists (client mode)',
       () async {
         SharedPreferences.setMockInitialValues({
           'minimize_to_tray': true,
           'close_to_tray': true,
         });
 
-        final startup = _FakeWindowsMachineStartupService();
+        final startup = _FakeWindowsMachineStartupService(
+          inspection: const WindowsMachineStartupInspection(
+            ok: true,
+            hasLegacyRunEntry: false,
+            hasScheduledTask: true,
+          ),
+        );
         final provider = SystemSettingsProvider(
           machineSettingsRepository: _FakeMachineSettingsRepository(
             startWithWindows: true,
@@ -50,27 +56,27 @@ void main() {
 
         await provider.initialize();
 
-        expect(startup.calls.length, equals(1));
-        final call = startup.calls.first;
-        expect(call.enabled, isTrue);
-        expect(call.installScheduledTask, isTrue);
-        expect(call.executablePath, r'C:\Apps\BackupDatabase.exe');
-        expect(
-          call.taskArguments,
-          SingleInstanceConfig.startupLaunchArgument,
-        );
+        expect(provider.startWithWindows, isTrue);
+        expect(startup.calls, isEmpty);
+        expect(startup.inspectCalls, equals(1));
       },
     );
 
     test(
-      'should register minimized and startup arguments when enabled',
+      'should keep startup enabled when scheduled task exists and start minimized is set',
       () async {
         SharedPreferences.setMockInitialValues({
           'minimize_to_tray': true,
           'close_to_tray': true,
         });
 
-        final startup = _FakeWindowsMachineStartupService();
+        final startup = _FakeWindowsMachineStartupService(
+          inspection: const WindowsMachineStartupInspection(
+            ok: true,
+            hasLegacyRunEntry: false,
+            hasScheduledTask: true,
+          ),
+        );
         final provider = SystemSettingsProvider(
           machineSettingsRepository: _FakeMachineSettingsRepository(
             startWithWindows: true,
@@ -84,19 +90,15 @@ void main() {
 
         await provider.initialize();
 
-        expect(startup.calls.length, equals(1));
-        expect(
-          startup.calls.first.taskArguments,
-          equals(
-            '${SingleInstanceConfig.minimizedArgument} '
-            '${SingleInstanceConfig.startupLaunchArgument}',
-          ),
-        );
+        expect(provider.startWithWindows, isTrue);
+        expect(provider.startMinimized, isTrue);
+        expect(startup.calls, isEmpty);
+        expect(startup.inspectCalls, equals(1));
       },
     );
 
     test(
-      'should not install scheduled task in server mode when startup enabled',
+      'should keep startup enabled in server mode without scheduled task',
       () async {
         SharedPreferences.setMockInitialValues({
           'minimize_to_tray': true,
@@ -116,9 +118,38 @@ void main() {
 
         await provider.initialize();
 
-        expect(startup.calls.length, equals(1));
-        expect(startup.calls.first.installScheduledTask, isFalse);
-        expect(startup.calls.first.enabled, isTrue);
+        expect(provider.startWithWindows, isTrue);
+        expect(startup.calls, isEmpty);
+        expect(startup.inspectCalls, equals(1));
+      },
+    );
+
+    test(
+      'should disable persisted startup on initialize when scheduled task is missing',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'minimize_to_tray': true,
+          'close_to_tray': true,
+        });
+
+        final machineSettings = _FakeMachineSettingsRepository(
+          startWithWindows: true,
+        );
+        final startup = _FakeWindowsMachineStartupService();
+        final provider = SystemSettingsProvider(
+          machineSettingsRepository: machineSettings,
+          userPreferencesRepository: UserPreferencesRepository(),
+          windowsMachineStartupService: startup,
+          executablePathProvider: () => r'C:\Apps\BackupDatabase.exe',
+          appModeProvider: () => AppMode.client,
+        );
+
+        await provider.initialize();
+
+        expect(provider.startWithWindows, isFalse);
+        expect(machineSettings.startWithWindows, isFalse);
+        expect(startup.calls, isEmpty);
+        expect(startup.inspectCalls, equals(1));
       },
     );
 
@@ -161,6 +192,11 @@ void main() {
             ok: false,
             diagnostics: 'schtasks failed',
           ),
+          inspection: const WindowsMachineStartupInspection(
+            ok: true,
+            hasLegacyRunEntry: false,
+            hasScheduledTask: true,
+          ),
         );
         final machineSettings = _FakeMachineSettingsRepository();
         final provider = SystemSettingsProvider(
@@ -189,6 +225,11 @@ void main() {
           outcome: const WindowsMachineStartupOutcome(
             ok: false,
             diagnostics: 'schtasks failed',
+          ),
+          inspection: const WindowsMachineStartupInspection(
+            ok: true,
+            hasLegacyRunEntry: false,
+            hasScheduledTask: true,
           ),
         );
         final machineSettings = _FakeMachineSettingsRepository(
@@ -245,8 +286,7 @@ class _FakeMachineSettingsRepository implements IMachineSettingsRepository {
   }
 
   @override
-  Future<String?> getCustomTempDownloadsPath() async =>
-      customTempDownloadsPath;
+  Future<String?> getCustomTempDownloadsPath() async => customTempDownloadsPath;
 
   @override
   Future<void> setCustomTempDownloadsPath(String? path) async {
@@ -290,10 +330,23 @@ class _FakeWindowsMachineStartupService
     implements IWindowsMachineStartupService {
   _FakeWindowsMachineStartupService({
     this.outcome = const WindowsMachineStartupOutcome(ok: true),
+    this.inspection = const WindowsMachineStartupInspection(
+      ok: true,
+      hasLegacyRunEntry: false,
+      hasScheduledTask: false,
+    ),
   });
 
   final List<_ApplyCall> calls = [];
   final WindowsMachineStartupOutcome outcome;
+  final WindowsMachineStartupInspection inspection;
+  int inspectCalls = 0;
+
+  @override
+  Future<WindowsMachineStartupInspection> inspect() async {
+    inspectCalls += 1;
+    return inspection;
+  }
 
   @override
   Future<WindowsMachineStartupOutcome> apply({

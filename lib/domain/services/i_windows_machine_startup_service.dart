@@ -8,7 +8,24 @@ class WindowsMachineStartupOutcome {
   final String diagnostics;
 }
 
+class WindowsMachineStartupInspection {
+  const WindowsMachineStartupInspection({
+    required this.ok,
+    required this.hasLegacyRunEntry,
+    required this.hasScheduledTask,
+    this.diagnostics = '',
+  });
+
+  final bool ok;
+  final bool hasLegacyRunEntry;
+  final bool hasScheduledTask;
+  final String diagnostics;
+}
+
 abstract class IWindowsMachineStartupService {
+  /// Inspects current Windows startup artifacts without mutating them.
+  Future<WindowsMachineStartupInspection> inspect();
+
   /// Applies machine-scope startup registration on Windows.
   ///
   /// Always removes legacy `HKCU\...\Run\BackupDatabase` and any existing

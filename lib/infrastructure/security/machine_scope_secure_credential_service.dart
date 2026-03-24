@@ -68,7 +68,38 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
     );
     final cipher = protectWithDpapiLocalMachine(plain);
     final file = await _blobFileForKey(key);
-    await file.writeAsBytes(cipher, flush: true);
+    final tempFile = File(
+      '${file.path}.${DateTime.now().microsecondsSinceEpoch}.tmp',
+    );
+    final backupFile = File('${file.path}.bak');
+    await tempFile.writeAsBytes(cipher, flush: true);
+
+    try {
+      if (await file.exists()) {
+        if (await backupFile.exists()) {
+          await backupFile.delete();
+        }
+        await file.rename(backupFile.path);
+      }
+
+      await tempFile.rename(file.path);
+
+      if (await backupFile.exists()) {
+        await backupFile.delete();
+      }
+    } on Object {
+      if (!await file.exists() && await backupFile.exists()) {
+        await backupFile.rename(file.path);
+      }
+      rethrow;
+    } finally {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+      if (await backupFile.exists() && !await file.exists()) {
+        await backupFile.rename(file.path);
+      }
+    }
   }
 
   Future<void> _deleteMachineFile(String key) async {

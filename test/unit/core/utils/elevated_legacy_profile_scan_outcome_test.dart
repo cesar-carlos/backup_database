@@ -2,6 +2,10 @@ import 'package:backup_database/core/utils/elevated_legacy_profile_scan_outcome.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+final p.Context _windowsPathContext = p.Context(
+  style: p.Style.windows,
+);
+
 void main() {
   group('decodeElevatedLegacyProfileScanJson', () {
     test('parses schemaVersion 1 and normalizes paths', () {
@@ -14,8 +18,10 @@ void main() {
       expect(o.userCancelledOrFailed, isFalse);
       expect(o.paths, hasLength(1));
       expect(
-        p.normalize(o.paths.single),
-        p.normalize(r'C:\Users\Bob\AppData\Roaming\Backup Database'),
+        _windowsPathContext.normalize(o.paths.single),
+        _windowsPathContext.normalize(
+          r'C:\Users\Bob\AppData\Roaming\Backup Database',
+        ),
       );
       expect(o.methodUsed, LegacyElevatedScanMethod.nativeExecutable);
     });

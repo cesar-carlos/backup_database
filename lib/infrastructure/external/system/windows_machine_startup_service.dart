@@ -12,6 +12,27 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
   static const String _runValueName = 'BackupDatabase';
 
   @override
+  Future<WindowsMachineStartupInspection> inspect() async {
+    if (!Platform.isWindows) {
+      return const WindowsMachineStartupInspection(
+        ok: true,
+        hasLegacyRunEntry: false,
+        hasScheduledTask: false,
+      );
+    }
+
+    final diagnostics = <String>[];
+    final hasLegacyRun = await _hasHkcuRunEntry(diagnostics);
+    final hasScheduledTask = await _hasScheduledTask(diagnostics);
+    return WindowsMachineStartupInspection(
+      ok: diagnostics.isEmpty,
+      hasLegacyRunEntry: hasLegacyRun,
+      hasScheduledTask: hasScheduledTask,
+      diagnostics: diagnostics.join('\n'),
+    );
+  }
+
+  @override
   Future<WindowsMachineStartupOutcome> apply({
     required bool enabled,
     required bool installScheduledTask,
@@ -91,6 +112,44 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
         'stderr=${result.stderr}',
       );
     }
+  }
+
+  Future<bool> _hasHkcuRunEntry(List<String> diagnostics) async {
+    final result = await Process.run('reg', [
+      'query',
+      _hkcuRunKey,
+      '/v',
+      _runValueName,
+    ]);
+    if (result.exitCode == 0) {
+      return true;
+    }
+    if (result.exitCode == 1) {
+      return false;
+    }
+    diagnostics.add(
+      'reg query Run/BackupDatabase exit=${result.exitCode} stderr=${result.stderr}',
+    );
+    return false;
+  }
+
+  Future<bool> _hasScheduledTask(List<String> diagnostics) async {
+    final result = await Process.run(
+      'schtasks',
+      ['/Query', '/TN', _fullTaskPath],
+      runInShell: true,
+    );
+    if (result.exitCode == 0) {
+      return true;
+    }
+    if (result.exitCode == 1) {
+      return false;
+    }
+    diagnostics.add(
+      'schtasks query $_fullTaskPath exit=${result.exitCode} '
+      'stderr=${result.stderr} stdout=${result.stdout}',
+    );
+    return false;
   }
 
   Future<void> _deleteScheduledTask() async {

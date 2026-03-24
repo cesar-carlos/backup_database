@@ -57,7 +57,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       _startWithWindows = await _machineSettings.getStartWithWindows();
 
       if (_startWithWindows) {
-        await _updateStartWithWindows(true);
+        await _reconcileStartupPreferenceWithSystem();
       }
 
       _isInitialized = true;
@@ -191,6 +191,43 @@ class SystemSettingsProvider extends ChangeNotifier {
     } on Object catch (e) {
       LoggerService.error('Erro ao atualizar início automático do Windows', e);
       return WindowsMachineStartupOutcome(ok: false, diagnostics: '$e');
+    }
+  }
+
+  Future<void> _reconcileStartupPreferenceWithSystem() async {
+    final installScheduledTask = _appModeProvider() != AppMode.server;
+    final inspection = await _windowsMachineStartup.inspect();
+    if (!inspection.ok) {
+      if (inspection.diagnostics.isNotEmpty) {
+        LoggerService.warning(
+          'Não foi possível inspecionar o estado atual do início automático: '
+          '${inspection.diagnostics}',
+        );
+      }
+      return;
+    }
+
+    if (inspection.hasLegacyRunEntry) {
+      LoggerService.warning(
+        'Entrada legada HKCU Run/BackupDatabase ainda existe no sistema',
+      );
+    }
+
+    if (installScheduledTask && !inspection.hasScheduledTask) {
+      LoggerService.warning(
+        'Preferência de início automático estava ativa, mas a tarefa '
+        'agendada não existe mais. A opção será desativada.',
+      );
+      _startWithWindows = false;
+      await _machineSettings.setStartWithWindows(false);
+      return;
+    }
+
+    if (!installScheduledTask && inspection.hasScheduledTask) {
+      LoggerService.warning(
+        'Modo servidor detectou tarefa agendada de logon remanescente; '
+        'o autostart suportado é o Windows Service.',
+      );
     }
   }
 

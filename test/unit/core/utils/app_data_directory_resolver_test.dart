@@ -2,11 +2,35 @@ import 'dart:io';
 
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/machine_storage_layout.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+const String _pathProviderChannelName = 'plugins.flutter.io/path_provider';
+const String _mockDocumentsDirectoryPath =
+    '/tmp/backup_database_test_documents';
+
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel(_pathProviderChannelName),
+      (call) async {
+        if (call.method == 'getApplicationDocumentsDirectory') {
+          return _mockDocumentsDirectoryPath;
+        }
+        return null;
+      },
+    );
+  });
+
+  tearDownAll(() {
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel(_pathProviderChannelName),
+      null,
+    );
+  });
 
   group('resolveLegacyWindowsUserAppDataDirectory', () {
     test(

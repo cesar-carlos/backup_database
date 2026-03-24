@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/application/services/legacy_sqlite_folder_import_service.dart';
+import 'package:backup_database/core/bootstrap/machine_scope_r1_legacy_paths_hint.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
@@ -32,11 +33,24 @@ class _MachineStorageSettingsSectionState
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _loadLegacyOtherProfilePaths();
-      }
-    });
+    _seedLegacyOtherProfilePathsFromBootstrapHint();
+  }
+
+  void _seedLegacyOtherProfilePathsFromBootstrapHint() {
+    if (!Platform.isWindows) {
+      return;
+    }
+    if (!getIt.isRegistered<MachineScopeR1LegacyPathsHint>()) {
+      return;
+    }
+    final hint = getIt<MachineScopeR1LegacyPathsHint>();
+    if (hint.otherProfilesLegacySqlitePaths.isEmpty) {
+      return;
+    }
+    _detectedOtherProfileLegacyPaths = List<String>.from(
+      hint.otherProfilesLegacySqlitePaths,
+    );
+    _selectedOtherProfileLegacyPath = _detectedOtherProfileLegacyPaths.first;
   }
 
   String? _scanRecencyCaption(BuildContext context) {

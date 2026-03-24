@@ -3,8 +3,9 @@ import 'dart:io';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/machine_bootstrap_flag_store.dart';
+import 'package:backup_database/core/utils/machine_storage_layout.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:pub_semver/pub_semver.dart';
@@ -13,13 +14,14 @@ import 'package:sqlite3/sqlite3.dart' as sqlite3;
 const _resetFlagKey = 'reset_v2_2_4_done';
 
 Future<Map<String, dynamic>?> runFullDatabaseMigration224() async {
-  const storage = FlutterSecureStorage();
   try {
-    final flag = await storage.read(key: _resetFlagKey);
-    if (flag == 'true') {
+    if (await hasMachineBootstrapFlag(
+      fileName: MachineStorageLayout.resetV224Marker,
+      legacySecureStorageKey: _resetFlagKey,
+    )) {
       return null;
     }
-  } on Exception catch (e) {
+  } on Object catch (e) {
     LoggerService.warning('Erro ao ler flag de migração 2.2.4: $e');
     return null;
   }
@@ -92,11 +94,13 @@ Future<Map<String, dynamic>?> runFullDatabaseMigration224() async {
 }
 
 Future<void> _markMigration224Done() async {
-  const storage = FlutterSecureStorage();
   try {
-    await storage.write(key: _resetFlagKey, value: 'true');
+    await markMachineBootstrapFlag(
+      fileName: MachineStorageLayout.resetV224Marker,
+      legacySecureStorageKey: _resetFlagKey,
+    );
     LoggerService.info('Flag de migração 2.2.4 marcada como concluída');
-  } on Exception catch (e) {
+  } on Object catch (e) {
     LoggerService.warning('Erro ao gravar flag de migração: $e');
   }
 }

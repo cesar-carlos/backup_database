@@ -10,6 +10,7 @@ import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/machine_bootstrap_flag_store.dart';
 import 'package:backup_database/core/utils/machine_storage_bootstrap_diagnostics.dart';
 import 'package:backup_database/core/utils/machine_storage_layout.dart';
 import 'package:backup_database/core/utils/machine_storage_migration.dart';
@@ -24,7 +25,6 @@ import 'package:backup_database/infrastructure/security/machine_scope_secure_cre
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -81,22 +81,25 @@ class _ResetPerformanceMetrics {
 }
 
 Future<bool> _hasAlreadyResetForVersion223() async {
-  const storage = FlutterSecureStorage();
   try {
-    final flag = await storage.read(key: _resetFlagKey);
-    return flag == 'true';
-  } on Exception catch (e) {
+    return await hasMachineBootstrapFlag(
+      fileName: MachineStorageLayout.resetV223Marker,
+      legacySecureStorageKey: _resetFlagKey,
+    );
+  } on Object catch (e) {
     LoggerService.warning('Erro ao ler flag de reset: $e');
     return false;
   }
 }
 
 Future<void> _markResetCompletedForVersion223() async {
-  const storage = FlutterSecureStorage();
   try {
-    await storage.write(key: _resetFlagKey, value: 'true');
+    await markMachineBootstrapFlag(
+      fileName: MachineStorageLayout.resetV223Marker,
+      legacySecureStorageKey: _resetFlagKey,
+    );
     LoggerService.info('Flag de reset v2.2.3 marcada como concluída');
-  } on Exception catch (e) {
+  } on Object catch (e) {
     LoggerService.warning('Erro ao gravar flag de reset: $e');
   }
 }

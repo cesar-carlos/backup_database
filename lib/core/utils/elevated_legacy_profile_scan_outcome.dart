@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:path/path.dart' as p;
 
 const int kElevatedLegacyScanJsonSchemaVersion = 1;
+final p.Context _windowsPathContext = p.Context(
+  style: p.Style.windows,
+);
 
 enum LegacyElevatedScanMethod {
   nativeExecutable,
@@ -91,7 +94,9 @@ ElevatedLegacyProfileScanOutcome decodeElevatedLegacyProfileScanJson(
       methodUsed: methodUsed,
     );
   }
-  final paths = list.map((dynamic e) => p.normalize(e.toString())).toList()
+  final paths = list
+      .map((dynamic e) => _windowsPathContext.normalize(e.toString()))
+      .toList()
     ..sort();
 
   return ElevatedLegacyProfileScanOutcome.success(

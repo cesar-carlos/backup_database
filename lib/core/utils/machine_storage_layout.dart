@@ -16,4 +16,7 @@ class MachineStorageLayout {
   static const String legacyImportedLogsSubdirectory = 'legacy_appdata';
 
   static const String migrationStateFile = 'migration_state.json';
+
+  static const String resetV223Marker = 'reset_v2_2_3.done';
+  static const String resetV224Marker = 'reset_v2_2_4.done';
 }
