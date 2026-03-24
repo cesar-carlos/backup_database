@@ -217,9 +217,9 @@ class SystemSettingsProvider extends ChangeNotifier {
       );
     }
 
+    var migrationApplied = false;
     if (_startWithWindows &&
         installScheduledTask &&
-        inspection.hasScheduledTask &&
         inspection.needsStartupLaunchProtocolMigration) {
       LoggerService.info(
         '[startup_migration] reapply_machine_logon_task '
@@ -232,6 +232,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       );
       if (outcome.ok) {
         LoggerService.info('[startup_migration] completed_ok');
+        migrationApplied = true;
       } else if (outcome.diagnostics.isNotEmpty) {
         LoggerService.warning(
           '[startup_migration] apply_failed diagnostics=${outcome.diagnostics}',
@@ -239,7 +240,9 @@ class SystemSettingsProvider extends ChangeNotifier {
       }
     }
 
-    if (installScheduledTask && !inspection.hasScheduledTask) {
+    if (installScheduledTask &&
+        !inspection.hasScheduledTask &&
+        !migrationApplied) {
       LoggerService.warning(
         'Preferência de início automático estava ativa, mas a tarefa '
         'agendada não existe mais. A opção será desativada.',

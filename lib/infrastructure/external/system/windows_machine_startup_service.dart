@@ -33,8 +33,8 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
         SingleInstanceConfig.machineStartupArgsNeedProtocolMigration(
           taskArguments,
         );
-    final needsStartupLaunchProtocolMigration = hasScheduledTask &&
-        (hasLegacyRun || taskArgsNeedMigration);
+    final needsStartupLaunchProtocolMigration =
+        hasLegacyRun || (hasScheduledTask && taskArgsNeedMigration);
     return WindowsMachineStartupInspection(
       ok: diagnostics.isEmpty,
       hasLegacyRunEntry: hasLegacyRun,

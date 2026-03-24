@@ -378,6 +378,12 @@ class IpcService implements IIpcService {
 
   static String? _parseUserInfoResponse(String message) {
     if (message.startsWith(SingleInstanceConfig.ipcUserInfoLinePrefix)) {
+      if (!message.contains('v=${SingleInstanceConfig.ipcProtocolVersion}')) {
+        return null;
+      }
+      if (!message.contains('role=${SingleInstanceConfig.ipcInstanceRoleUi}')) {
+        return null;
+      }
       final match = RegExp(r'u64=([^|\s]+)').firstMatch(message);
       if (match == null) {
         return null;

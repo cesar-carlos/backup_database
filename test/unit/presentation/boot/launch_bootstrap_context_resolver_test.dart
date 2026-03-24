@@ -8,8 +8,7 @@ void main() {
     test(
       'should return windowsStartup when args contain launch-origin windows-startup',
       () {
-        final LaunchBootstrapContext ctx =
-            LaunchBootstrapContextResolver.resolve(
+        final ctx = LaunchBootstrapContextResolver.resolve(
               rawArgs: <String>[
                 '--foo',
                 SingleInstanceConfig.windowsStartupLaunchOriginArgument,
@@ -28,8 +27,7 @@ void main() {
     test(
       'should return windowsStartup when args contain legacy --startup-launch',
       () {
-        final LaunchBootstrapContext ctx =
-            LaunchBootstrapContextResolver.resolve(
+        final ctx = LaunchBootstrapContextResolver.resolve(
               rawArgs: <String>[SingleInstanceConfig.startupLaunchArgument],
               rawEnvironment: const <String, String>{},
               isServiceModeOverride: false,
@@ -41,7 +39,7 @@ void main() {
     );
 
     test('should return manual when no startup marker is present', () {
-      final LaunchBootstrapContext ctx = LaunchBootstrapContextResolver.resolve(
+      final ctx = LaunchBootstrapContextResolver.resolve(
         rawArgs: const <String>['--mode=client'],
         rawEnvironment: const <String, String>{},
         isServiceModeOverride: false,
@@ -54,8 +52,7 @@ void main() {
     test(
       'should return serviceControlManager when service mode is detected',
       () {
-        final LaunchBootstrapContext ctx =
-            LaunchBootstrapContextResolver.resolve(
+        final ctx = LaunchBootstrapContextResolver.resolve(
               rawArgs: <String>[
                 SingleInstanceConfig.windowsStartupLaunchOriginArgument,
               ],
@@ -71,7 +68,7 @@ void main() {
     );
 
     test('should set startMinimizedFromArgs when args contain --minimized', () {
-      final LaunchBootstrapContext ctx = LaunchBootstrapContextResolver.resolve(
+      final ctx = LaunchBootstrapContextResolver.resolve(
         rawArgs: const <String>[
           SingleInstanceConfig.minimizedArgument,
         ],
@@ -85,8 +82,7 @@ void main() {
     test(
       'should return scheduledExecution when args contain --schedule-id=',
       () {
-        final LaunchBootstrapContext ctx =
-            LaunchBootstrapContextResolver.resolve(
+        final ctx = LaunchBootstrapContextResolver.resolve(
               rawArgs: const <String>['--schedule-id=job-1'],
               rawEnvironment: const <String, String>{},
               isServiceModeOverride: false,
@@ -99,8 +95,7 @@ void main() {
     test(
       'should prefer explicit launch-origin over scheduled id when both present',
       () {
-        final LaunchBootstrapContext ctx =
-            LaunchBootstrapContextResolver.resolve(
+        final ctx = LaunchBootstrapContextResolver.resolve(
               rawArgs: <String>[
                 '--schedule-id=job-1',
                 SingleInstanceConfig.windowsStartupLaunchOriginArgument,
@@ -114,7 +109,7 @@ void main() {
     );
 
     test('should return unknown for unrecognized launch-origin value', () {
-      final LaunchBootstrapContext ctx = LaunchBootstrapContextResolver.resolve(
+      final ctx = LaunchBootstrapContextResolver.resolve(
         rawArgs: const <String>['--launch-origin=other'],
         rawEnvironment: const <String, String>{},
         isServiceModeOverride: false,

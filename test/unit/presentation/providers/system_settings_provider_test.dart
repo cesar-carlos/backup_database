@@ -197,6 +197,46 @@ void main() {
     );
 
     test(
+      'should reapply startup when only legacy HKCU Run exists and task is missing',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'minimize_to_tray': true,
+          'close_to_tray': true,
+        });
+
+        final machineSettings = _FakeMachineSettingsRepository(
+          startWithWindows: true,
+        );
+        final startup = _FakeWindowsMachineStartupService(
+          inspection: const WindowsMachineStartupInspection(
+            ok: true,
+            hasLegacyRunEntry: true,
+            hasScheduledTask: false,
+            needsStartupLaunchProtocolMigration: true,
+          ),
+        );
+        final provider = SystemSettingsProvider(
+          machineSettingsRepository: machineSettings,
+          userPreferencesRepository: UserPreferencesRepository(),
+          windowsMachineStartupService: startup,
+          executablePathProvider: () => r'C:\Apps\BackupDatabase.exe',
+          appModeProvider: () => AppMode.client,
+        );
+
+        await provider.initialize();
+
+        expect(provider.startWithWindows, isTrue);
+        expect(machineSettings.startWithWindows, isTrue);
+        expect(startup.calls.length, equals(1));
+        final call = startup.calls.first;
+        expect(call.enabled, isTrue);
+        expect(call.installScheduledTask, isTrue);
+        expect(call.taskArguments, '--launch-origin=windows-startup');
+        expect(startup.inspectCalls, equals(1));
+      },
+    );
+
+    test(
       'should disable persisted startup on initialize when scheduled task is missing',
       () async {
         SharedPreferences.setMockInitialValues({

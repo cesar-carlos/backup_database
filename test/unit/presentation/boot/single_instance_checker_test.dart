@@ -161,12 +161,10 @@ class _FakeSingleInstanceService implements ISingleInstanceService {
 
 class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
   _FakeSingleInstanceIpcClient({
-    this.isServerRunning = false,
     this.existingUser,
     List<bool>? notifyResults,
   }) : _notifyResults = notifyResults ?? <bool>[true];
 
-  final bool isServerRunning;
   final String? existingUser;
   final List<bool> _notifyResults;
 
@@ -178,7 +176,7 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
 
   @override
   Future<bool> checkServerRunning() async {
-    return isServerRunning;
+    return false;
   }
 
   @override
