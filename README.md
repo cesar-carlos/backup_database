@@ -81,7 +81,7 @@ Crie um arquivo `.env` na raiz do aplicativo (ou use `.env.example` como base):
 
 ```env
 APP_NAME=Backup Database
-APP_VERSION=2.3.3
+APP_VERSION=2.4.0
 SINGLE_INSTANCE_ENABLED=true
 SINGLE_INSTANCE_LOCK_FALLBACK_MODE=fail_safe
 
