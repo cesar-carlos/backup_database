@@ -3,9 +3,9 @@
   <channel>
     <item>
       <title>Version 2.4.0</title>
-      <pubDate>Tue, 24 Mar 2026 19:15:56 +0000</pubDate>
+      <pubDate>Tue, 24 Mar 2026 19:21:14 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.4.0&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
-      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.4.0/BackupDatabase-Setup-2.4.0.exe" sparkle:version="2.4.0" sparkle:os="windows" length="38823617" type="application/octet-stream" />
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.4.0/BackupDatabase-Setup-2.4.0.exe" sparkle:version="2.4.0" sparkle:os="windows" length="38904494" type="application/octet-stream" />
     </item>
     <item>
       <title>Version 2.3.3</title>
