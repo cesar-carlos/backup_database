@@ -4,10 +4,12 @@ import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/routes/app_router.dart';
 import 'package:backup_database/core/theme/app_theme.dart';
-import 'package:backup_database/core/theme/theme_provider.dart';
+import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/presentation/managers/window_manager_service.dart';
-import 'package:backup_database/presentation/providers/system_settings_provider.dart';
+import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/widgets/backup/global_backup_progress_listener.dart';
+import 'package:backup_database/presentation/widgets/boot/r1_multi_profile_legacy_hint_host.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -20,7 +22,10 @@ class BackupDatabaseApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(
           create: (_) {
-            final provider = ThemeProvider();
+            final provider = ThemeProvider(
+              userPreferencesRepository: service_locator
+                  .getIt<IUserPreferencesRepository>(),
+            );
             provider.initialize();
             return provider;
           },
@@ -28,6 +33,12 @@ class BackupDatabaseApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) {
             final provider = SystemSettingsProvider(
+              machineSettingsRepository: service_locator
+                  .getIt<IMachineSettingsRepository>(),
+              userPreferencesRepository: service_locator
+                  .getIt<IUserPreferencesRepository>(),
+              windowsMachineStartupService: service_locator
+                  .getIt<IWindowsMachineStartupService>(),
               windowManager: WindowManagerService(),
             );
             provider.initialize();
@@ -101,8 +112,10 @@ class BackupDatabaseApp extends StatelessWidget {
                 : ThemeMode.light,
             routerConfig: appRouter,
             builder: (context, child) {
-              return GlobalBackupProgressListener(
-                child: child ?? const SizedBox.shrink(),
+              return R1MultiProfileLegacyHintHost(
+                child: GlobalBackupProgressListener(
+                  child: child ?? const SizedBox.shrink(),
+                ),
               );
             },
           );

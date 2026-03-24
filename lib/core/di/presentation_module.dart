@@ -142,6 +142,7 @@ Future<void> setupPresentationModule(GetIt getIt) async {
       getIt<IBackupDestinationRepository>(),
       getIt<ISendFileToDestinationService>(),
       getIt<TempDirectoryService>(),
+      getIt<IMachineSettingsRepository>(),
       fileTransferDao: getIt<AppDatabase>().fileTransferDao,
     ),
   );

@@ -4,10 +4,10 @@ import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
-import 'package:backup_database/core/theme/theme_provider.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/settings/machine_storage_settings_section.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -190,6 +190,35 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                     onChanged: systemSettings.setStartWithWindows,
                   ),
                 ),
+                if (currentAppMode == AppMode.server) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    appLocaleString(
+                      context,
+                      'No modo servidor o arranque automático é feito pelo '
+                          'Windows Service (aba Serviço). Esta opção apenas '
+                          'guarda a preferência na máquina.',
+                      'In server mode, automatic startup is handled by the '
+                          'Windows Service (Service tab). This option only '
+                          'stores the preference for this machine.',
+                    ),
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    appLocaleString(
+                      context,
+                      'A tarefa de início aplica-se a todos os utilizadores '
+                          'deste PC. Pode ser necessário executar a aplicação '
+                          'como administrador para criar ou remover a tarefa.',
+                      'The startup task applies to all users on this PC. '
+                          'You may need to run the app as administrator to '
+                          'create or remove the task.',
+                    ),
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 InfoLabel(
                   label: appLocaleString(
@@ -313,9 +342,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 16),
+                const MachineStorageSettingsSection(),
                 Text(
                   appLocaleString(context, 'Atualizações', 'Updates'),
                   style: FluentTheme.of(context).typography.subtitle,

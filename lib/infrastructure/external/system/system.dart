@@ -1,10 +1,12 @@
 export 'device_key_service.dart';
 export 'file_validator.dart';
 export 'ipc_service.dart';
+export 'machine_startup_task_xml.dart';
 export 'os_version_checker.dart';
 export 'single_instance_ipc_client.dart';
 export 'single_instance_service.dart';
 export 'storage_checker.dart';
 export 'windows_event_log_service.dart';
+export 'windows_machine_startup_service.dart';
 export 'windows_message_box.dart';
 export 'windows_service_service.dart';

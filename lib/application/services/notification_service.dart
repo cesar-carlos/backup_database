@@ -426,16 +426,17 @@ Data/Hora do teste: ${DateTime.now()}
     String? logPath,
   ) async {
     final enabledTargets = targets.where((target) => target.enabled).toList();
-    final results = await _runInBatches<EmailNotificationTarget, _RecipientDeliveryResult>(
-      enabledTargets,
-      _maxParallelRecipientSends,
-      (target) => _sendHistoryToTarget(
-        config,
-        target,
-        history,
-        logPath,
-      ),
-    );
+    final results =
+        await _runInBatches<EmailNotificationTarget, _RecipientDeliveryResult>(
+          enabledTargets,
+          _maxParallelRecipientSends,
+          (target) => _sendHistoryToTarget(
+            config,
+            target,
+            history,
+            logPath,
+          ),
+        );
     return _summarizeDeliveryResults(results);
   }
 
@@ -446,16 +447,17 @@ Data/Hora do teste: ${DateTime.now()}
     String warningMessage,
   ) async {
     final enabledTargets = targets.where((target) => target.enabled).toList();
-    final results = await _runInBatches<EmailNotificationTarget, _RecipientDeliveryResult>(
-      enabledTargets,
-      _maxParallelRecipientSends,
-      (target) => _sendWarningToTarget(
-        config: config,
-        target: target,
-        databaseName: databaseName,
-        warningMessage: warningMessage,
-      ),
-    );
+    final results =
+        await _runInBatches<EmailNotificationTarget, _RecipientDeliveryResult>(
+          enabledTargets,
+          _maxParallelRecipientSends,
+          (target) => _sendWarningToTarget(
+            config: config,
+            target: target,
+            databaseName: databaseName,
+            warningMessage: warningMessage,
+          ),
+        );
     return _summarizeDeliveryResults(results);
   }
 
@@ -493,7 +495,9 @@ Data/Hora do teste: ${DateTime.now()}
       );
       final result = sendResult.fold(
         (sent) => sent
-            ? _RecipientDeliveryResult.sent(recipientEmail: target.recipientEmail)
+            ? _RecipientDeliveryResult.sent(
+                recipientEmail: target.recipientEmail,
+              )
             : _RecipientDeliveryResult.skipped(
                 recipientEmail: target.recipientEmail,
                 reason: 'Envio não realizado pelo serviço SMTP',
@@ -537,7 +541,9 @@ Data/Hora do teste: ${DateTime.now()}
       );
       final result = sendResult.fold(
         (sent) => sent
-            ? _RecipientDeliveryResult.sent(recipientEmail: target.recipientEmail)
+            ? _RecipientDeliveryResult.sent(
+                recipientEmail: target.recipientEmail,
+              )
             : _RecipientDeliveryResult.skipped(
                 recipientEmail: target.recipientEmail,
                 reason: 'Envio não realizado pelo serviço SMTP',

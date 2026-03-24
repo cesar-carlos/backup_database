@@ -25,6 +25,7 @@ part 'database.g.dart';
     EmailNotificationTargetsTable,
     EmailTestAuditTable,
     LicensesTable,
+    MachineSettingsTable,
     ServerCredentialsTable,
     ConnectionLogsTable,
     ServerConnectionsTable,
@@ -43,6 +44,7 @@ part 'database.g.dart';
     EmailNotificationTargetDao,
     EmailTestAuditDao,
     LicenseDao,
+    MachineSettingsDao,
     ServerCredentialDao,
     ConnectionLogDao,
     ServerConnectionDao,
@@ -59,7 +61,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 28;
+  int get schemaVersion => 29;
 
   @override
   MigrationStrategy get migration {
@@ -924,6 +926,19 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v28 para índices de auditoria SMTP',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 29) {
+          try {
+            await m.createTable(machineSettingsTable);
+            LoggerService.info('Migração v29: machine_settings_table criada.');
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v29 para machine_settings_table',
               e,
               stackTrace,
             );
@@ -2003,7 +2018,8 @@ class AppDatabase extends _$AppDatabase {
 
 LazyDatabase _openConnection([String databaseName = 'backup_database']) {
   return LazyDatabase(() async {
-    final dbFolder = await resolveAppDataDirectory();
+    final dbFolder = await resolveMachineDataDirectory();
+    await dbFolder.create(recursive: true);
     final file = File(p.join(dbFolder.path, '$databaseName.db'));
     return NativeDatabase.createInBackground(file);
   });

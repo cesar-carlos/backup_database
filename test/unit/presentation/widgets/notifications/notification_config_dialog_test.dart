@@ -3,6 +3,18 @@ import 'package:backup_database/presentation/widgets/notifications/notification_
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Finder _findTextPtOrEn(String pt, String en) {
+  return find.byWidgetPredicate((widget) {
+    if (widget is Text) {
+      return widget.data == pt || widget.data == en;
+    }
+    if (widget is SelectableText) {
+      return widget.data == pt || widget.data == en;
+    }
+    return false;
+  });
+}
+
 void main() {
   Widget buildDialog({
     EmailConfig? initialConfig,
@@ -69,10 +81,16 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Nenhuma conta OAuth conectada'), findsOneWidget);
-        expect(find.text('Conectar'), findsOneWidget);
-        expect(find.text('Reconectar'), findsOneWidget);
-        expect(find.text('Desconectar'), findsOneWidget);
+        expect(
+          _findTextPtOrEn(
+            'Nenhuma conta OAuth conectada',
+            'No OAuth account connected',
+          ),
+          findsOneWidget,
+        );
+        expect(_findTextPtOrEn('Conectar', 'Connect'), findsOneWidget);
+        expect(_findTextPtOrEn('Reconectar', 'Reconnect'), findsOneWidget);
+        expect(_findTextPtOrEn('Desconectar', 'Disconnect'), findsOneWidget);
       },
     );
 
@@ -114,12 +132,16 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.ensureVisible(find.text('Conectar'));
-        await tester.tap(find.text('Conectar'));
+        final connectButton = _findTextPtOrEn('Conectar', 'Connect');
+        await tester.ensureVisible(connectButton);
+        await tester.tap(connectButton);
         await tester.pumpAndSettle();
 
         expect(
-          find.text('Conta OAuth SMTP conectada com sucesso.'),
+          _findTextPtOrEn(
+            'Conta OAuth SMTP conectada com sucesso.',
+            'SMTP OAuth account connected successfully.',
+          ),
           findsOneWidget,
         );
       },

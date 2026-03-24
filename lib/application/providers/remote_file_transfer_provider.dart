@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io' show File;
 
-import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
+import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/domain/services/i_send_file_to_destination_service.dart';
 import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/file_transfer_dao.dart';
@@ -16,7 +16,6 @@ import 'package:backup_database/infrastructure/socket/client/connection_manager.
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 typedef TransferProgressCallback =
@@ -31,7 +30,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     this._connectionManager,
     this._destinationRepository,
     this._sendFileToDestinationService,
-    this._tempDirectoryService, {
+    this._tempDirectoryService,
+    this._machineSettings, {
     FileTransferDao? fileTransferDao,
   }) : _fileTransferDao = fileTransferDao;
 
@@ -39,6 +39,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
   final IBackupDestinationRepository _destinationRepository;
   final ISendFileToDestinationService _sendFileToDestinationService;
   final TempDirectoryService _tempDirectoryService;
+  final IMachineSettingsRepository _machineSettings;
   final FileTransferDao? _fileTransferDao;
 
   ITransferStagingService? _stagingServiceCache;
@@ -116,22 +117,18 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> getDefaultOutputPath() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(AppConstants.receivedBackupsDefaultPathKey);
-  }
+  Future<String?> getDefaultOutputPath() async =>
+      _machineSettings.getReceivedBackupsDefaultPath();
 
   Future<void> setDefaultOutputPath(String path) async {
     final trimmed = path.trim();
     if (trimmed.isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.receivedBackupsDefaultPathKey, trimmed);
+    await _machineSettings.setReceivedBackupsDefaultPath(trimmed);
   }
 
   Future<List<String>> getLinkedDestinationIds(String scheduleId) async {
     if (scheduleId.isEmpty) return [];
-    final prefs = await SharedPreferences.getInstance();
-    final json = prefs.getString(AppConstants.scheduleTransferDestinationsKey);
+    final json = await _machineSettings.getScheduleTransferDestinationsJson();
     if (json == null || json.isEmpty) return [];
     try {
       final map = jsonDecode(json) as Map<String, dynamic>;
@@ -148,8 +145,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     List<String> destinationIds,
   ) async {
     if (scheduleId.isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
-    final json = prefs.getString(AppConstants.scheduleTransferDestinationsKey);
+    final json = await _machineSettings.getScheduleTransferDestinationsJson();
     var map = <String, dynamic>{};
     if (json != null && json.isNotEmpty) {
       try {
@@ -161,8 +157,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
       }
     }
     map[scheduleId] = destinationIds;
-    await prefs.setString(
-      AppConstants.scheduleTransferDestinationsKey,
+    await _machineSettings.setScheduleTransferDestinationsJson(
       jsonEncode(map),
     );
     notifyListeners();

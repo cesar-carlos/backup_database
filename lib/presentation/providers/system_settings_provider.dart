@@ -1,31 +1,36 @@
 import 'dart:io';
 
+import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
+import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
+import 'package:backup_database/domain/services/i_windows_machine_startup_service.dart';
 import 'package:backup_database/presentation/managers/window_manager_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-typedef ProcessRunner =
-    Future<ProcessResult> Function(String executable, List<String> arguments);
 
 class SystemSettingsProvider extends ChangeNotifier {
   SystemSettingsProvider({
+    required IMachineSettingsRepository machineSettingsRepository,
+    required IUserPreferencesRepository userPreferencesRepository,
+    required IWindowsMachineStartupService windowsMachineStartupService,
     WindowManagerService? windowManager,
-    ProcessRunner? processRunner,
     String Function()? executablePathProvider,
-  }) : _windowManager = windowManager ?? WindowManagerService(),
-       _processRunner = processRunner ?? Process.run,
+    AppMode Function()? appModeProvider,
+  }) : _machineSettings = machineSettingsRepository,
+       _userPreferences = userPreferencesRepository,
+       _windowsMachineStartup = windowsMachineStartupService,
+       _windowManager = windowManager ?? WindowManagerService(),
        _executablePathProvider =
-           executablePathProvider ?? (() => Platform.resolvedExecutable);
-  final WindowManagerService _windowManager;
-  final ProcessRunner _processRunner;
-  final String Function() _executablePathProvider;
+           executablePathProvider ?? (() => Platform.resolvedExecutable),
+       _appModeProvider = appModeProvider ?? (() => currentAppMode);
 
-  static const String _minimizeToTrayKey = 'minimize_to_tray';
-  static const String _closeToTrayKey = 'close_to_tray';
-  static const String _startMinimizedKey = 'start_minimized';
-  static const String _startWithWindowsKey = 'start_with_windows';
+  final IMachineSettingsRepository _machineSettings;
+  final IUserPreferencesRepository _userPreferences;
+  final IWindowsMachineStartupService _windowsMachineStartup;
+  final WindowManagerService _windowManager;
+  final String Function() _executablePathProvider;
+  final AppMode Function() _appModeProvider;
 
   bool _minimizeToTray = false;
   bool _closeToTray = false;
@@ -39,29 +44,17 @@ class SystemSettingsProvider extends ChangeNotifier {
   bool get startWithWindows => _startWithWindows;
 
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      return;
+    }
 
     try {
-      final prefs = await SharedPreferences.getInstance();
+      await _userPreferences.ensureTrayDefaults();
 
-      final isFirstRun =
-          !prefs.containsKey(_minimizeToTrayKey) &&
-          !prefs.containsKey(_closeToTrayKey) &&
-          !prefs.containsKey(_startMinimizedKey) &&
-          !prefs.containsKey(_startWithWindowsKey);
-
-      _minimizeToTray = prefs.getBool(_minimizeToTrayKey) ?? false;
-      _closeToTray = prefs.getBool(_closeToTrayKey) ?? false;
-      _startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
-      _startWithWindows = prefs.getBool(_startWithWindowsKey) ?? false;
-
-      if (isFirstRun) {
-        await prefs.setBool(_minimizeToTrayKey, _minimizeToTray);
-        await prefs.setBool(_closeToTrayKey, _closeToTray);
-        await prefs.setBool(_startMinimizedKey, _startMinimized);
-        await prefs.setBool(_startWithWindowsKey, _startWithWindows);
-        LoggerService.info('Primeira inicialização - valores padrão salvos');
-      }
+      _minimizeToTray = await _userPreferences.getMinimizeToTray();
+      _closeToTray = await _userPreferences.getCloseToTray();
+      _startMinimized = await _machineSettings.getStartMinimized();
+      _startWithWindows = await _machineSettings.getStartWithWindows();
 
       if (_startWithWindows) {
         await _updateStartWithWindows(true);
@@ -91,8 +84,7 @@ class SystemSettingsProvider extends ChangeNotifier {
     LoggerService.debug('Minimizar para bandeja alterado: $value');
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_minimizeToTrayKey, value);
+      await _userPreferences.setMinimizeToTray(value);
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração minimizeToTray', e);
     }
@@ -105,104 +97,100 @@ class SystemSettingsProvider extends ChangeNotifier {
     LoggerService.debug('Fechar para bandeja alterado: $value');
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_closeToTrayKey, value);
+      await _userPreferences.setCloseToTray(value);
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração closeToTray', e);
     }
   }
 
   Future<void> setStartMinimized(bool value) async {
-    _startMinimized = value;
-    notifyListeners();
-    LoggerService.debug('Iniciar minimizado alterado: $value');
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_startMinimizedKey, value);
-
       if (_startWithWindows) {
-        await _updateStartWithWindows(true);
+        final outcome = await _updateStartWithWindows(
+          true,
+          startMinimizedOverride: value,
+        );
+        if (!outcome.ok) {
+          notifyListeners();
+          return;
+        }
       }
+
+      _startMinimized = value;
+      notifyListeners();
+      LoggerService.debug('Iniciar minimizado alterado: $value');
+      await _machineSettings.setStartMinimized(value);
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração startMinimized', e);
     }
   }
 
   Future<void> setStartWithWindows(bool value) async {
-    _startWithWindows = value;
-    await _updateStartWithWindows(value);
-    notifyListeners();
-    LoggerService.debug('Iniciar com Windows alterado: $value');
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_startWithWindowsKey, value);
+      final outcome = await _updateStartWithWindows(
+        value,
+        startMinimizedOverride: _startMinimized,
+      );
+      if (!outcome.ok) {
+        notifyListeners();
+        return;
+      }
+
+      _startWithWindows = value;
+      notifyListeners();
+      LoggerService.debug('Iniciar com Windows alterado: $value');
+      await _machineSettings.setStartWithWindows(value);
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração startWithWindows', e);
     }
   }
 
-  Future<void> _updateStartWithWindows(bool enable) async {
+  Future<WindowsMachineStartupOutcome> _updateStartWithWindows(
+    bool enable, {
+    bool? startMinimizedOverride,
+  }) async {
     try {
       final executablePath = _executablePathProvider();
+      final startMinimized =
+          startMinimizedOverride ??
+          await _machineSettings.getStartMinimized();
+      const startupArg = SingleInstanceConfig.startupLaunchArgument;
+      const minimizedArg = SingleInstanceConfig.minimizedArgument;
+      final taskArguments = enable
+          ? (startMinimized ? '$minimizedArg $startupArg' : startupArg).trim()
+          : '';
+      final installScheduledTask = _appModeProvider() != AppMode.server;
 
-      if (enable) {
-        final prefs = await SharedPreferences.getInstance();
-        final startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
+      final outcome = await _windowsMachineStartup.apply(
+        enabled: enable,
+        installScheduledTask: installScheduledTask,
+        executablePath: executablePath,
+        taskArguments: taskArguments,
+      );
 
-        const startupArg = SingleInstanceConfig.startupLaunchArgument;
-        const minimizedArg = SingleInstanceConfig.minimizedArgument;
-        final command = startMinimized
-            ? '"$executablePath" $minimizedArg $startupArg'
-            : '"$executablePath" $startupArg';
-
-        final result = await _processRunner('reg', [
-          'add',
-          r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run',
-          '/v',
-          'BackupDatabase',
-          '/t',
-          'REG_SZ',
-          '/d',
-          command,
-          '/f',
-        ]);
-
-        if (result.exitCode == 0) {
-          LoggerService.info(
-            'Aplicativo adicionado ao início automático do Windows${startMinimized ? ' (minimizado)' : ''}',
-          );
-        } else {
-          LoggerService.error(
-            'Erro ao adicionar ao início automático',
-            Exception(result.stderr),
-          );
-        }
-      } else {
-        final result = await _processRunner('reg', [
-          'delete',
-          r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run',
-          '/v',
-          'BackupDatabase',
-          '/f',
-        ]);
-
-        if (result.exitCode == 0) {
-          LoggerService.info(
-            'Aplicativo removido do início automático do Windows',
-          );
-        } else {
-          if (result.exitCode != 1) {
-            LoggerService.error(
-              'Erro ao remover do início automático',
-              Exception(result.stderr),
+      if (outcome.ok) {
+        if (enable) {
+          if (installScheduledTask) {
+            LoggerService.info(
+              'Início automático (máquina) configurado'
+              '${startMinimized ? ' (minimizado)' : ''}',
             );
           }
+        } else {
+          LoggerService.info(
+            'Início automático removido (Run legado e tarefa de logon)',
+          );
         }
+      } else if (outcome.diagnostics.isNotEmpty) {
+        LoggerService.error(
+          'Erro ao atualizar início automático',
+          Exception(outcome.diagnostics),
+        );
       }
+      return outcome;
     } on Object catch (e) {
       LoggerService.error('Erro ao atualizar início automático do Windows', e);
+      return WindowsMachineStartupOutcome(ok: false, diagnostics: '$e');
     }
   }
 
@@ -212,11 +200,10 @@ class SystemSettingsProvider extends ChangeNotifier {
 
   Future<void> saveSettings() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_minimizeToTrayKey, _minimizeToTray);
-      await prefs.setBool(_closeToTrayKey, _closeToTray);
-      await prefs.setBool(_startMinimizedKey, _startMinimized);
-      await prefs.setBool(_startWithWindowsKey, _startWithWindows);
+      await _userPreferences.setMinimizeToTray(_minimizeToTray);
+      await _userPreferences.setCloseToTray(_closeToTray);
+      await _machineSettings.setStartMinimized(_startMinimized);
+      await _machineSettings.setStartWithWindows(_startWithWindows);
       LoggerService.info('Configurações salvas com sucesso');
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configurações', e);

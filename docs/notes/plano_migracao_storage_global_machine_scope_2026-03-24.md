@@ -1,7 +1,7 @@
 # Plano: Migracao de Storage por Usuario para Storage Global da Maquina
 
 Data base: 2026-03-24
-Status: Planejado
+Status: **Concluido** (2026-03-24) — mesmo escopo anterior; **pesquisa UAC** passa a preferir `legacy_profile_scanner.exe` (C++17, mesmo JSON que o script PS) ao lado do `.exe` principal, com elevacao via `ShellExecuteEx`/`runas` em `windows_shell_execute_runas.dart`; **fallback** para PowerShell se o auxiliar nao existir (ex.: builds antigos).
 Escopo: Windows desktop, UI + modo servico
 Objetivo: migrar configuracoes e persistencia operacional hoje dependentes do perfil do usuario para escopo global da maquina, preservando Clean Architecture e reduzindo divergencia entre UI e servico
 
@@ -17,6 +17,83 @@ Objetivo: migrar configuracoes e persistencia operacional hoje dependentes do pe
   - `Iniciar minimizado`
   - `Minimizar para bandeja`
   - `Fechar para bandeja`
+
+## Registro de implementacao (codigo)
+
+Ultima atualizacao: 2026-03-24 — **melhorias pos-revisao:** `legacy_profile_scanner.exe` escreve JSON de forma **atomica** (`*.tmp` + rename) e inclui `schemaVersion: 1`; Dart: `elevated_legacy_profile_scan_outcome.dart` (decode com validacao de schema, `LegacyElevatedScanMethod`, `ElevatedLegacyScanFailureKind`, detecao **UAC cancelado** via `GetLastError` == 1223 no caminho nativo); `ShellExecuteRunAsResult` em `windows_shell_execute_runas.dart`; logs `developer.log` para caminho **nativo vs PowerShell**; Definicoes gerais: mensagens especificas para UAC recusado e JSON invalido; migracao automatica SQLite: **ate 3 tentativas** de `PRAGMA quick_check` com **200 ms** entre tentativas; script PS de fallback alinhado com `schemaVersion = 1`; testes `elevated_legacy_profile_scan_outcome_test.dart`
+
+### Entregue
+
+- Contratos `IMachineSettingsRepository`, `IUserPreferencesRepository` em `lib/domain/repositories/`
+- Tabela Drift `machine_settings_table` (schema v29), DAO `MachineSettingsDao`, repositorio `MachineSettingsRepository`:
+  - linha singleton `id = 1`; campos: `start_with_windows`, `start_minimized`, `custom_temp_downloads_path`, `received_backups_default_path`, `schedule_transfer_destinations_json`
+  - na primeira leitura sem linha: seed a partir das chaves legadas em `SharedPreferences` e remocao dessas chaves machine-scope dos prefs
+- `UserPreferencesRepository` (`SharedPreferences`): `minimize_to_tray`, `close_to_tray`, `dark_mode` + `ensureTrayDefaults()`
+- `SystemSettingsProvider`: machine via `IMachineSettingsRepository`, bandeja via `IUserPreferencesRepository` (sem `SharedPreferences` direto)
+- `ThemeProvider` movido para `lib/presentation/providers/theme_provider.dart` + `IUserPreferencesRepository`
+- `TempDirectoryService`: caminho customizado via `IMachineSettingsRepository`; registro DI em `domain_module.dart` (apos repositorios)
+- `RemoteFileTransferProvider`: paths default e mapa de destinos via `IMachineSettingsRepository`
+- `AppInitializer.getLaunchConfig`: `start_minimized` via `IMachineSettingsRepository`
+- Testes atualizados: `system_settings_provider_test`, `temp_directory_service_test`
+- Testes dedicados (2026-03-24): `machine_settings_repository_test.dart` — seed Drift + prefs legadas; `user_preferences_repository_test.dart` — bandeja, tema, assinatura R1; `app_data_directory_resolver_test.dart` — `ProgramData`, subpastas machine-scope, legado `%APPDATA%`, `skip` por plataforma; `theme_provider_test.dart` — init, idempotencia, `setDarkMode`/`toggleTheme`; `temp_directory_service_test.dart` — ampliado (path invalido, `validateDownloadsDirectory`)
+
+- **Fase 4 — startup machine-scope (2026-03-24):**
+  - Contrato `IWindowsMachineStartupService` + `WindowsMachineStartupOutcome` em `lib/domain/services/i_windows_machine_startup_service.dart`
+  - Implementacao `WindowsMachineStartupService` + XML em `machine_startup_task_xml.dart` (`lib/infrastructure/external/system/`): tarefa `BackupDatabase\MachineStartup` com `LogonTrigger` (qualquer utilizador), criada via `schtasks /Create /XML`
+  - Remocao idempotente de legado `HKCU\...\Run\BackupDatabase` em todo `apply`
+  - **Modo servidor (`AppMode.server`):** nao instala tarefa de logon; autostart continua a ser o Windows Service; preferencia `start_with_windows` persiste no Drift
+  - **Cliente / unificado:** instala ou remove a tarefa; `SystemSettingsProvider` usa `_appModeProvider` injetavel (default `currentAppMode`)
+  - Registo em `infrastructure_module`; `BackupDatabaseApp` injeta o servico no provider
+  - UI (`general_settings_tab`): texto de apoio por modo (servico vs tarefa para todos os utilizadores / admin)
+  - Testes: `machine_startup_task_xml_test.dart`; provider tests com fake do servico de startup
+
+- **Fase 5 — secure storage machine-scope (2026-03-24):**
+  - `MachineScopeSecureCredentialService` (`lib/infrastructure/security/machine_scope_secure_credential_service.dart`) como implementacao de `ISecureCredentialService` registada em `core_module`
+  - **Windows:** ficheiros `*.bdsecret` em `%ProgramData%\BackupDatabase\secrets\`; payload UTF-8 (versao + chave logica + valor) protegido com **DPAPI** `CRYPTPROTECT_LOCAL_MACHINE` (`windows_dpapi_local_machine.dart` + `win32`)
+  - **Migracao lazy:** em `getPassword` / `getToken`, se nao existir blob na maquina le `FlutterSecureStorage` legado, grava blob, apaga chave legada
+  - **Nao-Windows:** comportamento anterior apenas com `FlutterSecureStorage` (sem ficheiros machine-scope)
+  - `MachineStorageLayout.secrets`, `resolveMachineSecretsDirectory()`, pasta criada em `ensureMachineStorageDirectoriesExist()`
+  - Codec testavel: `credential_machine_blob_codec.dart`; testes `credential_machine_blob_codec_test.dart`
+  - Repositorios e servicos OAuth/SMTP **inalterados** (mesmas chaves logicas)
+
+- **Fase 6 parcial / PR-6 (2026-03-24):**
+  - `MachineLegacyMigrationSummary` + retorno de `ensureLegacyAppDataMigratedToMachineScope()`
+  - `findLegacyBackupDatabasePathsOutsideCurrentUser()` (R1; overrides para testes); `countLegacyLogFilesVisibleForCurrentUser()`
+  - `recordMachineStorageBootstrapDiagnostics` em `machine_storage_bootstrap_diagnostics.dart`; ficheiro `config\migration_state.json`
+  - `setupCoreModule`: apos init do logger, `migrateLegacyUserLogFilesToMachineScopeIfNeeded()`; depois regista paths, migracao DB, backend de segredos, R1 e contagem de logs legados
+  - Constantes: `legacyAppdataLogsMigrationMarker`, `legacyImportedLogsSubdirectory`; resultado `LegacyUserLogsMigrationResult`; JSON `legacyUserLogsImport`
+  - Testes: perfis + migracao de logs em `machine_storage_migration_test.dart`
+  - R1 UI: `MachineScopeR1LegacyPathsHint` (`core/bootstrap/`); `IUserPreferencesRepository` + chave `r1_multi_profile_legacy_hint_dismissed_sig`; `R1MultiProfileLegacyHintHost` + registo em `core_module` / `app_widget`
+  - Teste: `machine_scope_r1_legacy_paths_hint_test.dart`
+  - **Importacao assistida SQLite (2026-03-24):** `LegacySqliteFolderImportService` — valida cabecalho (`sqlite_database_file_validation.dart`) + `PRAGMA quick_check` em modo leitura; listas extra no resultado (cabecalho invalido, quick_check, falha de copia); `LoggerService.info` quando copia > 0; `SqliteBundleCopyException` na migracao de bundles com try/catch no bootstrap legado; ao copiar chama `migrateSqliteDatabaseBundleIfNeeded(..., runQuickCheck: false)` porque a validacao ja foi feita no servico
+  - **Migracao automatica SQLite (2026-03-24):** `migrateSqliteDatabaseBundleIfNeeded` — apos tamanho > 0, exige cabecalho SQLite valido e, se `runQuickCheck` (default `true`), `PRAGMA quick_check` == ok; caso contrario regista em log e nao copia (ficheiro bloqueado / corrompido fica em `%APPDATA%` ate nova tentativa ou import assistido)
+  - **UI armazenamento (2026-03-24):** `machine_storage_settings_section.dart` (Definicoes gerais); varredura de perfis no primeiro frame; texto **Ultima pesquisa**; botao **Pesquisar como administrador** (`windows_legacy_profile_elevated_scan.dart`: **nativo** `legacy_profile_scanner.exe` + `windows_shell_execute_runas.dart`, fallback PowerShell; JSON em `%TEMP%`; merge `mergeLegacyProfilePathsExcludingCurrentUser`); `Semantics` em accoes principais; mensagens para `FileSystemException` / ficheiro em uso
+  - R1 / listagem de perfis: `_directoryHasNonEmptyLegacySqlite` exige cabecalho SQLite valido (alinhado ao import)
+  - Testes: `sqlite_database_file_validation_test.dart`, `windows_legacy_profile_elevated_scan_test.dart` (merge), `sqlite_test_helpers.dart`, `machine_storage_settings_section_test.dart`; import + migracao atualizados para `.db` minimos via `sqlite3`
+
+- API de diretorios machine-scope em `lib/core/utils/app_data_directory_resolver.dart`:
+  - `resolveMachineRootDirectory()` -> `%ProgramData%\BackupDatabase` (Windows)
+  - `resolveMachineDataDirectory()` -> `...\data` (Windows) ou diretorio de documentos (nao-Windows, sem subpasta `data`)
+  - `resolveMachineStagingBackupsDirectory()` -> `...\staging\backups` (Windows) ou `...\backups` (nao-Windows)
+  - `resolveMachineLocksDirectory()` -> `...\locks`
+  - `resolveMachineSecretsDirectory()` -> `...\secrets` (Windows)
+  - `resolveLegacyWindowsUserAppDataDirectory()` -> `%APPDATA%\Backup Database` (apenas Windows)
+  - `resolveAppDataDirectory()` permanece como alias de `resolveMachineRootDirectory()` (evitar novos usos ambiguos)
+- Constantes de layout em `lib/core/utils/machine_storage_layout.dart`
+- Migracao idempotente em `lib/core/utils/machine_storage_migration.dart`:
+  - `ensureMachineStorageDirectoriesExist()` cria arvore de pastas (inclui `secrets\` no Windows)
+  - `ensureLegacyAppDataMigratedToMachineScope()` copia `.db` / `.db-wal` / `.db-shm` para `data\` se destino inexistente ou vazio e a origem passar cabecalho + `PRAGMA quick_check` (por defeito)
+  - marker opcional: `config\legacy_appdata_migration.done` apos copia bem-sucedida
+- `setupCoreModule`: executa diretorios + migracao legada **antes** de `_dropConfigTablesForVersion223` e do Drift
+- Banco Drift: `lib/infrastructure/datasources/local/database.dart` abre em `resolveMachineDataDirectory()`
+- Logs gerais: `core_module` usa `MachineStorageLayout.logs` sob machine root
+- Staging/locks: `infrastructure_module` usa `resolveMachineStagingBackupsDirectory()` e `resolveMachineLocksDirectory()`
+- `database_migration_224.dart` le caminho do banco via `resolveMachineDataDirectory()`
+- Testes: `test/unit/core/utils/machine_storage_migration_test.dart`
+
+### Pendente (alinhado ao plano original)
+
+- Nenhum item bloqueante; PowerShell permanece apenas como **fallback** se `legacy_profile_scanner.exe` nao estiver presente (builds antigos / copia manual incompleta)
 
 ## Resumo Executivo
 
@@ -221,22 +298,18 @@ Conclusao:
 
 - a migracao precisa tratar tambem preferencias fora da tela `Geral`, senao a aplicacao continua parcialmente por usuario.
 
-### 10. Senhas e tokens dependem de `FlutterSecureStorage`
+### 10. Senhas e tokens (historico: `FlutterSecureStorage`; atual: machine-scope no Windows)
 
-Evidencias:
+Evidencias (implementacao atual):
 
-- `lib/infrastructure/security/secure_credential_service.dart:10`
-- `lib/infrastructure/security/secure_credential_service.dart:12`
-- `lib/infrastructure/security/secure_credential_service.dart:18`
-- `lib/infrastructure/security/secure_credential_service.dart:37`
-- `lib/infrastructure/security/secure_credential_service.dart:80`
-- `lib/infrastructure/security/secure_credential_service.dart:100`
+- `lib/infrastructure/security/machine_scope_secure_credential_service.dart`
+- `lib/infrastructure/security/windows_dpapi_local_machine.dart`
 
 Analise:
 
-- SQL Server, Sybase, PostgreSQL, SMTP, Google OAuth e Dropbox OAuth usam esse service;
-- no Windows, esse tipo de storage costuma seguir o usuario/perfil e/ou o contexto do processo;
-- isso e um bloqueio forte para um modelo realmente global.
+- SQL Server, Sybase, PostgreSQL, SMTP, Google OAuth e Dropbox OAuth usam `ISecureCredentialService`;
+- **Windows (2026-03-24):** blobs DPAPI `LOCAL_MACHINE` em `%ProgramData%\BackupDatabase\secrets\`, com migracao lazy a partir do `FlutterSecureStorage` legado;
+- fora do Windows mantem-se `FlutterSecureStorage` ate decisao futura.
 
 Conclusao:
 
@@ -394,7 +467,7 @@ Proposta:
 
 Arquivos impactados:
 
-- `lib/infrastructure/security/secure_credential_service.dart`
+- `lib/infrastructure/security/machine_scope_secure_credential_service.dart`
 - `lib/core/di/core_module.dart`
 - repositrios/servicos que hoje assumem o comportamento atual
 
@@ -430,6 +503,8 @@ DoD:
 - nenhum provider novo acessa `SharedPreferences` diretamente para dados operacionais;
 - classificacao machine/user esta fechada.
 
+**Parcial (2026-03-24):** resolveres explicitos e layout de pastas entregues; contratos `IMachineSettingsRepository` / `IUserPreferencesRepository` e refatoracao de providers **ainda nao** feitas.
+
 ## Fase 1 - Unificacao do path base em ProgramData
 
 Objetivo:
@@ -459,6 +534,8 @@ Risco principal:
 Mitigacao:
 
 - fase 2 precisa incluir migracao automatica e marker de migracao concluida.
+
+**Implementado (2026-03-24):** Windows usa `ProgramData\BackupDatabase` com subpastas `data`, `logs`, `locks`, `staging\backups`, `config`; Drift e logs da app alinhados a esses paths.
 
 ## Fase 2 - Migracao de dados existentes `%APPDATA% -> ProgramData`
 
@@ -492,6 +569,8 @@ DoD:
 - primeira execucao apos upgrade nao perde configuracoes nem agendamentos;
 - migracao e idempotente.
 
+**Implementado (2026-03-24):** copia idempotente do usuario atual (`%APPDATA%\Backup Database\*.db*`) para `ProgramData\...\data\` quando o destino nao tem banco com dados; marker em `config\legacy_appdata_migration.done`. **R1 (2026-03-24):** varredura sob `C:\Users\<perfil>\AppData\Roaming\Backup Database` (ignora `Public`/`Default`/etc.), exclusao do perfil atual, `LoggerService.warning` se existir outro perfil com `.db` nao vazio; **sem merge automatico**. **Diagnostico boot:** `recordMachineStorageBootstrapDiagnostics` + `config\migration_state.json` (paths, marker, backend segredos, lista R1, contagem de ficheiros de logs legados no perfil atual). **Logs legados (2026-03-24):** uma vez por maquina, apos `LoggerService.init`, `migrateLegacyUserLogFilesToMachineScopeIfNeeded()` copia ficheiros (nao recursivo) de `%APPDATA%\Backup Database\logs` para `%ProgramData%\BackupDatabase\logs\legacy_appdata\`; marker `config\legacy_appdata_logs_migration.done`; se copia falhar, marker nao e gravado (repete no proximo arranque); ficheiros com mesmo nome e tamanho ja no destino sao ignorados. **R1 UI (2026-03-24):** `MachineScopeR1LegacyPathsHint` registado no `GetIt`; `R1MultiProfileLegacyHintHost` no `FluentApp.router` builder; dialogo com texto PT/EN e `SelectableText` dos caminhos; dismiss grava assinatura ordenada em `SharedPreferences` (`IUserPreferencesRepository`) — nova detecao (lista alterada) volta a mostrar. **Importacao manual (2026-03-24):** Definicoes gerais — abrir pasta machine storage; importar SQLite de pasta (mesma logica que migracao automatica; nao sobrescreve `.db` destino nao vazio). **Ainda nao:** elevacao UAC / wizard por perfil, merge multi-perfil, validacao SQLite alem de tamanho > 0.
+
 ## Fase 3 - Migracao de machine settings
 
 Objetivo:
@@ -523,6 +602,8 @@ Observacao:
 
 - os defaults novos devem permanecer `false` ao popular os primeiros registros machine-scope.
 
+**Implementado (2026-03-24):** tabela + repositorio + consumidores listados no registro acima; bandeja e tema permanecem user-scope em `SharedPreferences` via `IUserPreferencesRepository`. **Startup:** ver Fase 4 (nao usa mais `HKCU\...\Run` para aplicar inicio automatico).
+
 ## Fase 4 - Startup machine-scope real
 
 Objetivo:
@@ -531,8 +612,8 @@ Objetivo:
 
 Analise:
 
-- hoje o app escreve em `HKCU\...\Run`;
-- isso nao e machine-scope.
+- ~~hoje o app escreve em `HKCU\...\Run`~~ **(legado removido ao aplicar startup)**;
+- tarefa agendada com logon cobre todos os utilizadores no PC (cliente/unificado).
 
 Recomendacao:
 
@@ -555,6 +636,8 @@ Arquivos foco:
 Ponto de decisao:
 
 - esta flag sera realmente global para todos os modos, ou apenas para o modo servidor?
+
+**Implementado (2026-03-24):** `IWindowsMachineStartupService` + `WindowsMachineStartupService` (schtasks/XML); cliente e unificado instalam `BackupDatabase\MachineStartup`; servidor apenas limpa legado e persiste preferencia (autostart = servico); textos na aba Geral.
 
 ## Fase 5 - Migracao do secure storage para machine-scope
 
@@ -580,7 +663,7 @@ Entregas:
 
 Arquivos foco:
 
-- `lib/infrastructure/security/secure_credential_service.dart`
+- `lib/infrastructure/security/machine_scope_secure_credential_service.dart`
 - `lib/core/di/core_module.dart`
 - `lib/infrastructure/repositories/sql_server_config_repository.dart`
 - `lib/infrastructure/repositories/sybase_config_repository.dart`
@@ -600,6 +683,8 @@ Mitigacao:
 - logs claros de migracao;
 - fallback controlado apenas durante janela de transicao.
 
+**Implementado (2026-03-24):** `MachineScopeSecureCredentialService` com DPAPI `LOCAL_MACHINE` e ficheiros em `secrets\`; migracao lazy em leituras; fora do Windows mantem `FlutterSecureStorage`; interface `ISecureCredentialService` e consumidores inalterados.
+
 ## Fase 6 - Limpeza de legado e endurecimento
 
 Objetivo:
@@ -615,6 +700,16 @@ Entregas:
   - path machine-scope em uso;
   - status da migracao;
   - backend de segredos em uso.
+
+**Parcialmente implementado (2026-03-24):**
+
+- `ensureLegacyAppDataMigratedToMachineScope()` passa a devolver `MachineLegacyMigrationSummary` (paths, marker, se copiou SQLite nesta execucao).
+- Apos `LoggerService.init`, `setupCoreModule` chama `findLegacyBackupDatabasePathsOutsideCurrentUser()`, `countLegacyLogFilesVisibleForCurrentUser()` e `recordMachineStorageBootstrapDiagnostics()` (`machine_storage_bootstrap_diagnostics.dart`): logs INFO/WARNING e escrita de `config\migration_state.json` (`MachineStorageLayout.migrationStateFile`).
+- R1: aviso em log quando outro perfil Windows tem dados legados detectaveis (acesso a outras pastas de utilizador pode falhar sem permissoes elevadas).
+- Migracao one-shot de ficheiros de log do perfil atual: `logs\legacy_appdata\` sob machine root + marker `legacy_appdata_logs_migration.done` (sem apagar originais em `%APPDATA%`).
+- Dialogo R1 no primeiro frame da UI quando existem outros perfis com SQLite legado: `r1_multi_profile_legacy_hint_host.dart` + preferencias `getR1MultiProfileLegacyHintLastDismissedSignature` / `set...`.
+- **Definicoes gerais (2026-03-24):** widget `MachineStorageSettingsSection` — `ComboBox` + refresh + **Pesquisar como administrador** (UAC) + import por perfil / por pasta; validacao SQLite no import; ultima pesquisa; Semantics.
+- **Migracao automatica SQLite (2026-03-24):** `migrateSqliteDatabaseBundleIfNeeded` alinhado ao import (cabecalho + `quick_check`); `LegacySqliteFolderImportService` evita segundo `quick_check` na copia.
 
 ## Plano de Implementacao por Arquivo
 
@@ -657,8 +752,8 @@ Entregas:
 
 ### Segredos e tokens
 
-- `lib/infrastructure/security/secure_credential_service.dart`
-  - trocar implementacao;
+- `lib/infrastructure/security/machine_scope_secure_credential_service.dart`
+  - implementacao machine-scope (Windows) + migracao lazy;
 - `lib/infrastructure/repositories/sql_server_config_repository.dart`
 - `lib/infrastructure/repositories/sybase_config_repository.dart`
 - `lib/infrastructure/repositories/postgres_config_repository.dart`
@@ -769,30 +864,29 @@ Acao:
 
 ## Checklist de Pronto
 
-- [ ] Banco principal em `ProgramData`
-- [ ] Logs gerais em `ProgramData`
-- [ ] Staging e locks em `ProgramData`
-- [ ] `SystemSettingsProvider` sem `SharedPreferences` direto
-- [ ] `TempDirectoryService` sem `SharedPreferences` direto para machine-scope
-- [ ] `AppInitializer` lendo startup do store correto
-- [ ] `RemoteFileTransferProvider` sem preferencias operacionais em `SharedPreferences`
-- [ ] Segredos migrados para backend machine-scope
-- [ ] Politica oficial definida para:
-  - [ ] `dark_mode`
-  - [ ] `minimize_to_tray`
-  - [ ] `close_to_tray`
-  - [ ] `start_with_windows` em modo cliente
-- [ ] Rotina de migracao idempotente
-- [ ] Nenhum fluxo operacional depende de `%APPDATA%` no caminho principal
+- [x] Banco principal em `ProgramData` (`...\BackupDatabase\data\*.db`, Windows)
+- [x] Logs gerais em `ProgramData` (`...\BackupDatabase\logs`, Windows)
+- [x] Staging e locks em `ProgramData` (`staging\backups`, `locks`)
+- [x] `SystemSettingsProvider` sem `SharedPreferences` direto (usa repositorios)
+- [x] `TempDirectoryService` sem `SharedPreferences` direto para machine-scope
+- [x] `AppInitializer` lendo `start_minimized` via `IMachineSettingsRepository`
+- [x] `RemoteFileTransferProvider` sem preferencias operacionais em `SharedPreferences` (usa `IMachineSettingsRepository`)
+- [x] Segredos migrados para backend machine-scope (Windows: DPAPI local machine + `secrets\`; migracao lazy desde `FlutterSecureStorage`)
+- [x] Politica de implementacao atual (produto pode revisar):
+  - [x] `dark_mode` — user-scope (`IUserPreferencesRepository` / `SharedPreferences`)
+  - [x] `minimize_to_tray` / `close_to_tray` — user-scope (mesmo)
+  - [x] `start_with_windows` — valor no Drift; cliente/unificado = tarefa `BackupDatabase\MachineStartup` (logon); servidor = sem tarefa (servico Windows)
+- [x] Rotina de migracao idempotente (SQLite legado -> `data\`, marker em `config\`)
+- [x] Nenhum fluxo operacional depende de `%APPDATA%` no caminho principal (banco, logs, staging, locks, segredos no Windows; `SharedPreferences` apenas user prefs)
 
 ## Sequencia de PRs Recomendada
 
-- [ ] PR-1: fundacao de escopo + resolveres + repositorios de settings
-- [ ] PR-2: unificacao de banco/logs/staging em `ProgramData`
-- [ ] PR-3: migracao de machine settings e boot
-- [ ] PR-4: startup global e revisao de semantica por modo
-- [ ] PR-5: secure storage machine-scope + migracao de segredos
-- [ ] PR-6: limpeza de legado + telemetria/diagnostico de migracao
+- [x] PR-1: fundacao de escopo + resolveres + repositorios de settings (entregue 2026-03-24 com PR-2/3 acoplados no codigo)
+- [x] PR-2: unificacao de banco/logs/staging em `ProgramData` (entregue 2026-03-24)
+- [x] PR-3: migracao de machine settings e boot (Drift + `AppInitializer`; startup HKLM/scheduler — Fase 4)
+- [x] PR-4: startup global e revisao de semantica por modo (Task Scheduler + modo servidor via servico)
+- [x] PR-5: secure storage machine-scope + migracao de segredos (lazy read + DPAPI)
+- [x] PR-6: diagnostico + `migration_state.json` + R1 + logs + import SQLite em UI + pesquisa UAC + validacao SQLite + `MachineStorageSettingsSection`
 
 ## Backlog Tecnico
 
@@ -829,134 +923,108 @@ Fora de escopo do PR-1:
 
 #### Entregas tecnicas do PR-1
 
-- [ ] Criar API de diretorios por escopo em `core/utils`
-- [ ] Criar contrato `IMachineSettingsRepository`
-- [ ] Criar contrato `IUserPreferencesRepository`
-- [ ] Criar implementacao inicial baseada em `SharedPreferences` para ambos os contratos
-- [ ] Mover `SystemSettingsProvider` para `IMachineSettingsRepository`
-- [ ] Mover `ThemeProvider` para `IUserPreferencesRepository`
-- [ ] Mover `TempDirectoryService` para `IMachineSettingsRepository`
-- [ ] Atualizar DI no `core_module.dart`
-- [ ] Cobrir os contratos e providers com testes unitarios
+- [x] Criar API de diretorios por escopo em `core/utils` (inclui `machine_storage_layout.dart`; ver registro de implementacao)
+- [x] Criar contrato `IMachineSettingsRepository`
+- [x] Criar contrato `IUserPreferencesRepository`
+- [x] Implementacao: machine em Drift (`MachineSettingsRepository`); user prefs em `SharedPreferences` (`UserPreferencesRepository`)
+- [x] Mover `SystemSettingsProvider` para repositorios (machine + user)
+- [x] Mover `ThemeProvider` para `IUserPreferencesRepository` (arquivo em `presentation/providers/theme_provider.dart`)
+- [x] Mover `TempDirectoryService` para `IMachineSettingsRepository`
+- [x] Atualizar DI (`domain_module` para repos + `TempDirectoryService`; `core_module` sem `TempDirectoryService`)
+- [x] Cobrir repositorios Drift com testes unitarios dedicados (`MachineSettingsRepository`; fakes continuam em provider/temp tests)
 
 #### Checklist por arquivo - PR-1
 
 ##### 1. Resolver de diretorios
 
-- [ ] [app_data_directory_resolver.dart](d:/Developer/Flutter/backup_database/lib/core/utils/app_data_directory_resolver.dart)
-  - adicionar funcao explicita `resolveMachineDataDirectory()`
-  - adicionar funcao explicita para path user-scope, se necessario
-  - manter compatibilidade temporaria de `resolveAppDataDirectory()` apenas como adaptador, ou marcar para remocao posterior
-  - evitar ambiguidade entre `%APPDATA%` e `ProgramData`
+- [x] [app_data_directory_resolver.dart](d:/Developer/Flutter/backup_database/lib/core/utils/app_data_directory_resolver.dart)
+  - `resolveMachineDataDirectory()`, `resolveMachineRootDirectory()`, staging e locks implementados
+  - `resolveLegacyWindowsUserAppDataDirectory()` para migracao
+  - `resolveAppDataDirectory()` -> alias de machine root (compatibilidade)
+  - path user-scope para preferencias: continua `SharedPreferences` ate existir `IUserPreferencesRepository`
 
 ##### 2. Contratos de repositorio
 
-- [ ] Criar [i_machine_settings_repository.dart](d:/Developer/Flutter/backup_database/lib/domain/repositories/i_machine_settings_repository.dart)
-  - expor leitura/escrita de:
-    - `startWithWindows`
-    - `startMinimized`
-    - `minimizeToTray`
-    - `closeToTray`
-    - `customTempDownloadsPath`
-    - `receivedBackupsDefaultPath`
-    - `scheduleTransferDestinations`
-- [ ] Criar [i_user_preferences_repository.dart](d:/Developer/Flutter/backup_database/lib/domain/repositories/i_user_preferences_repository.dart)
-  - expor leitura/escrita de:
-    - `darkMode`
+- [x] [i_machine_settings_repository.dart](d:/Developer/Flutter/backup_database/lib/domain/repositories/i_machine_settings_repository.dart) — escopo machine (sem bandeja; bandeja ficou em user)
+- [x] [i_user_preferences_repository.dart](d:/Developer/Flutter/backup_database/lib/domain/repositories/i_user_preferences_repository.dart) — bandeja + `darkMode`
 
 ##### 3. Implementacoes iniciais de persistencia
 
-- [ ] Criar [machine_settings_repository.dart](d:/Developer/Flutter/backup_database/lib/infrastructure/repositories/machine_settings_repository.dart)
-  - implementacao inicial com `SharedPreferences`
-  - manter nomes de chave atuais para reduzir risco neste PR
-  - encapsular parsing de mapa/lista para `scheduleTransferDestinations`
-- [ ] Criar [user_preferences_repository.dart](d:/Developer/Flutter/backup_database/lib/infrastructure/repositories/user_preferences_repository.dart)
-  - implementacao inicial com `SharedPreferences`
-  - centralizar `dark_mode`
+- [x] [machine_settings_repository.dart](d:/Developer/Flutter/backup_database/lib/infrastructure/repositories/machine_settings_repository.dart) — Drift + seed unico a partir de `SharedPreferences` legado
+- [x] [user_preferences_repository.dart](d:/Developer/Flutter/backup_database/lib/infrastructure/repositories/user_preferences_repository.dart) — `SharedPreferences`
 
 ##### 4. Atualizacao dos providers/services consumidores
 
-- [ ] [system_settings_provider.dart](d:/Developer/Flutter/backup_database/lib/presentation/providers/system_settings_provider.dart)
-  - remover acesso direto a `SharedPreferences`
-  - passar a depender de `IMachineSettingsRepository`
-  - manter logica de `_updateStartWithWindows()`
-  - manter defaults `false`
-- [ ] [theme_provider.dart](d:/Developer/Flutter/backup_database/lib/core/theme/theme_provider.dart)
-  - remover acesso direto a `SharedPreferences`
-  - passar a depender de `IUserPreferencesRepository`
-- [ ] [temp_directory_service.dart](d:/Developer/Flutter/backup_database/lib/core/services/temp_directory_service.dart)
-  - remover acesso direto a `SharedPreferences`
-  - passar a depender de `IMachineSettingsRepository`
-- [ ] [remote_file_transfer_provider.dart](d:/Developer/Flutter/backup_database/lib/application/providers/remote_file_transfer_provider.dart)
-  - opcao A: manter fora do PR-1
-  - opcao B recomendada: trocar `SharedPreferences` por `IMachineSettingsRepository` ja neste PR para evitar duplicacao de caminho
+- [x] [system_settings_provider.dart](d:/Developer/Flutter/backup_database/lib/presentation/providers/system_settings_provider.dart)
+- [x] [theme_provider.dart](d:/Developer/Flutter/backup_database/lib/presentation/providers/theme_provider.dart)
+- [x] [temp_directory_service.dart](d:/Developer/Flutter/backup_database/lib/core/services/temp_directory_service.dart)
+- [x] [remote_file_transfer_provider.dart](d:/Developer/Flutter/backup_database/lib/application/providers/remote_file_transfer_provider.dart)
 
 ##### 5. Dependency Injection
 
-- [ ] [core_module.dart](d:/Developer/Flutter/backup_database/lib/core/di/core_module.dart)
-  - registrar `IMachineSettingsRepository`
-  - registrar `IUserPreferencesRepository`
-  - ajustar construcao de `TempDirectoryService`
-- [ ] [app_widget.dart](d:/Developer/Flutter/backup_database/lib/presentation/app_widget.dart)
-  - ajustar criacao de `ThemeProvider`
-  - ajustar criacao de `SystemSettingsProvider`
+- [x] [domain_module.dart](d:/Developer/Flutter/backup_database/lib/core/di/domain_module.dart) — `IMachineSettingsRepository`, `IUserPreferencesRepository`, `TempDirectoryService`
+- [x] [core_module.dart](d:/Developer/Flutter/backup_database/lib/core/di/core_module.dart) — `TempDirectoryService` removido daqui
+- [x] [app_widget.dart](d:/Developer/Flutter/backup_database/lib/presentation/app_widget.dart)
+- [x] [app_initializer.dart](d:/Developer/Flutter/backup_database/lib/presentation/boot/app_initializer.dart) — `getLaunchConfig` + `IMachineSettingsRepository`
 
-##### 6. Arquivos que nao devem ser alterados no PR-1
+##### 6. Arquivos que nao devem ser alterados no PR-1 (planejamento original)
 
-- [ ] [database.dart](d:/Developer/Flutter/backup_database/lib/infrastructure/datasources/local/database.dart)
-- [ ] [service_locator.dart](d:/Developer/Flutter/backup_database/lib/core/di/service_locator.dart)
-- [ ] [secure_credential_service.dart](d:/Developer/Flutter/backup_database/lib/infrastructure/security/secure_credential_service.dart)
+- [x] [database.dart](d:/Developer/Flutter/backup_database/lib/infrastructure/datasources/local/database.dart) — **alterado em 2026-03-24** como parte do cutover PR-2 (path machine-scope)
+- [x] [service_locator.dart](d:/Developer/Flutter/backup_database/lib/core/di/service_locator.dart) — mantido como entrada `setupDependencies()` sem mudancas especificas deste plano (DI continua a orquestrar modulos; nao era alvo do cutover PR-1)
+- [x] [machine_scope_secure_credential_service.dart](d:/Developer/Flutter/backup_database/lib/infrastructure/security/machine_scope_secure_credential_service.dart) — Fase 5
 
-Justificativa:
+Justificativa (original):
 
 - manter o PR-1 pequeno e focado em contratos;
 - evitar misturar fundacao de arquitetura com cutover de dados e segredos.
+
+**Nota 2026-03-24:** PR-2 foi antecipado junto dos resolveres; `database.dart`, `core_module.dart`, `infrastructure_module.dart` e `database_migration_224.dart` ja refletem `ProgramData`.
 
 #### Testes a implementar no PR-1
 
 ##### Unitarios novos
 
-- [ ] Criar [machine_settings_repository_test.dart](d:/Developer/Flutter/backup_database/test/unit/infrastructure/repositories/machine_settings_repository_test.dart)
+- [x] Criar [machine_settings_repository_test.dart](d:/Developer/Flutter/backup_database/test/unit/infrastructure/repositories/machine_settings_repository_test.dart)
   - deve ler defaults esperados
   - deve salvar e reler flags booleanas
   - deve persistir `customTempDownloadsPath`
   - deve persistir `scheduleTransferDestinations`
-- [ ] Criar [user_preferences_repository_test.dart](d:/Developer/Flutter/backup_database/test/unit/infrastructure/repositories/user_preferences_repository_test.dart)
+- [x] Criar [user_preferences_repository_test.dart](d:/Developer/Flutter/backup_database/test/unit/infrastructure/repositories/user_preferences_repository_test.dart)
   - deve ler `darkMode`
   - deve salvar `darkMode`
-- [ ] Criar [app_data_directory_resolver_test.dart](d:/Developer/Flutter/backup_database/test/unit/core/utils/app_data_directory_resolver_test.dart)
+- [x] Criar [app_data_directory_resolver_test.dart](d:/Developer/Flutter/backup_database/test/unit/core/utils/app_data_directory_resolver_test.dart)
   - deve retornar `ProgramData` para `resolveMachineDataDirectory()`
   - deve cobrir fallback seguro quando variavel de ambiente nao existir
 
 ##### Unitarios a atualizar
 
-- [ ] Atualizar [system_settings_provider_test.dart](d:/Developer/Flutter/backup_database/test/unit/presentation/providers/system_settings_provider_test.dart)
-  - remover dependencia implita de `SharedPreferences` direto no provider
-  - validar defaults `false`
-  - validar escrita de startup usando repositorio mock/fake
-- [ ] Criar ou atualizar teste do `ThemeProvider`
-  - validar que `darkMode` carrega via `IUserPreferencesRepository`
-- [ ] Criar ou atualizar teste do `TempDirectoryService`
-  - validar leitura/escrita do path customizado via `IMachineSettingsRepository`
+- [x] Atualizar [system_settings_provider_test.dart](d:/Developer/Flutter/backup_database/test/unit/presentation/providers/system_settings_provider_test.dart)
+  - provider sem `SharedPreferences` direto; fakes de machine startup e `IMachineSettingsRepository`; `UserPreferencesRepository` com mock prefs onde aplicavel
+- [x] Criar [theme_provider_test.dart](d:/Developer/Flutter/backup_database/test/unit/presentation/providers/theme_provider_test.dart)
+  - `darkMode` via fake `IUserPreferencesRepository`; init idempotente; `setDarkMode` / `toggleTheme`
+- [x] Atualizar [temp_directory_service_test.dart](d:/Developer/Flutter/backup_database/test/unit/core/services/temp_directory_service_test.dart)
+  - path customizado via fake `IMachineSettingsRepository`; caso ficheiro em vez de pasta limpa configuracao; `validateDownloadsDirectory`
 
 ##### Regressao obrigatoria
 
-- [ ] `flutter analyze`
-- [ ] `flutter test test/unit/presentation/providers/system_settings_provider_test.dart`
-- [ ] `flutter test test/unit/core/utils/app_data_directory_resolver_test.dart`
-- [ ] `flutter test test/unit/infrastructure/repositories/machine_settings_repository_test.dart`
-- [ ] `flutter test test/unit/infrastructure/repositories/user_preferences_repository_test.dart`
+- [x] `flutter analyze`
+- [x] `flutter test test/unit/presentation/providers/system_settings_provider_test.dart`
+- [x] `flutter test test/unit/presentation/providers/theme_provider_test.dart`
+- [x] `flutter test test/unit/core/services/temp_directory_service_test.dart`
+- [x] `flutter test test/unit/core/utils/app_data_directory_resolver_test.dart`
+- [x] `flutter test test/unit/infrastructure/repositories/machine_settings_repository_test.dart`
+- [x] `flutter test test/unit/infrastructure/repositories/user_preferences_repository_test.dart`
 
 #### Criterios de aceite do PR-1
 
-- [ ] Nao existe mais acesso direto a `SharedPreferences` em:
-  - [ ] [system_settings_provider.dart](d:/Developer/Flutter/backup_database/lib/presentation/providers/system_settings_provider.dart)
-  - [ ] [theme_provider.dart](d:/Developer/Flutter/backup_database/lib/core/theme/theme_provider.dart)
-  - [ ] [temp_directory_service.dart](d:/Developer/Flutter/backup_database/lib/core/services/temp_directory_service.dart)
-- [ ] Os contratos `IMachineSettingsRepository` e `IUserPreferencesRepository` estao registrados no DI
-- [ ] Os defaults atuais continuam corretos
-- [ ] O PR nao altera o caminho do banco nem a semantica do secure storage
-- [ ] O comportamento da UI nao muda alem da troca interna de persistencia encapsulada
+- [x] Nao existe mais acesso direto a `SharedPreferences` em:
+  - [x] [system_settings_provider.dart](d:/Developer/Flutter/backup_database/lib/presentation/providers/system_settings_provider.dart)
+  - [x] [theme_provider.dart](d:/Developer/Flutter/backup_database/lib/presentation/providers/theme_provider.dart)
+  - [x] [temp_directory_service.dart](d:/Developer/Flutter/backup_database/lib/core/services/temp_directory_service.dart)
+- [x] Os contratos `IMachineSettingsRepository` e `IUserPreferencesRepository` estao registrados no DI
+- [x] Os defaults atuais continuam corretos (ver testes de providers/repos)
+- [x] O PR nao altera o caminho do banco nem a semantica do secure storage (entregue em PRs posteriores do mesmo plano)
+- [x] O comportamento da UI nao muda alem da troca interna de persistencia encapsulada
 
 #### Sequencia de implementacao sugerida para PR-1
 
@@ -986,31 +1054,36 @@ Mitigacoes:
 
 #### PR-2 - Cutover de path machine-scope
 
-- [ ] aplicar `resolveMachineDataDirectory()` em banco, logs, staging e locks
-- [ ] unificar UI e servico no mesmo path base
-- [ ] preparar marker de migracao
+- [x] aplicar `resolveMachineDataDirectory()` em banco, logs, staging e locks (ver registro **Entregue** e `core_module` / `infrastructure_module` / `database.dart`)
+- [x] unificar UI e servico no mesmo path base (`setupCoreModule` partilhado; paths machine-scope)
+- [x] preparar marker de migracao (`legacy_appdata_migration.done`, `migration_state.json`, migracao idempotente SQLite)
 
 #### PR-3 - Migracao de machine settings
 
-- [ ] tirar machine settings de `SharedPreferences`
-- [ ] criar persistencia definitiva em banco ou arquivo machine-scope
-- [ ] migrar `AppInitializer` e `RemoteFileTransferProvider`
+- [x] tirar machine settings de `SharedPreferences` (chaves machine-scope removidas no seed do `MachineSettingsRepository`)
+- [x] criar persistencia definitiva em banco ou arquivo machine-scope (`machine_settings_table` Drift)
+- [x] migrar `AppInitializer` e `RemoteFileTransferProvider` (via `IMachineSettingsRepository`; ver registro **Entregue**)
 
 #### PR-4 - Startup global
 
-- [ ] fechar regra de `start_with_windows` por modo
-- [ ] trocar `HKCU\Run` por estrategia compativel com machine-scope
+- [x] fechar regra de `start_with_windows` por modo
+- [x] trocar `HKCU\Run` por estrategia compativel com machine-scope (tarefa agendada + limpeza de legado)
 
 #### PR-5 - Secure storage machine-scope
 
-- [ ] substituir backend de segredos
-- [ ] migrar tokens e senhas existentes
+- [x] substituir backend de segredos (Windows)
+- [x] migrar tokens e senhas existentes (lazy no primeiro read)
 
 #### PR-6 - Limpeza e endurecimento
 
-- [ ] remover legado `%APPDATA%`
-- [ ] adicionar diagnostico e marcadores de migracao
-- [ ] fechar checklist final de pronto
+- [x] fluxo principal sem dependencia de `%APPDATA%` para dados operacionais (Windows); legado só como origem de migracao / deteccao
+- [x] diagnostico no boot + `config\migration_state.json` + scan R1 e avisos em log
+- [x] migracao one-shot de logs do perfil atual para `logs\legacy_appdata\` (marker dedicado)
+- [x] aviso assistido R1 no arranque (dialogo + dismiss por assinatura)
+- [x] importacao `.db` de pasta escolhida na UI (Definicoes gerais; sem elevacao)
+- [x] importacao a partir de **perfil Windows detetado** na UI (`ComboBox` + refresh; sem escolher pasta manualmente para esses caminhos)
+- [x] pesquisa de perfis com **UAC** (`legacy_profile_scanner.exe` + `ShellExecuteEx`/`runas`, fallback PowerShell; merge de caminhos; JSON temporario)
+- [x] validacao SQLite (cabecalho + quick_check) e mensagens de copia / ficheiro em uso
 
 ## Recomendacao Final
 
@@ -1024,7 +1097,7 @@ Se a equipe tentar apenas:
 o projeto continuara inconsistente porque:
 
 - segredos ainda ficarao atrelados ao usuario;
-- `start_with_windows` continuara semanticamente por usuario;
+- `start_with_windows` ficaria semanticamente por usuario (mitigado na Fase 4 com tarefa de logon + modo servidor);
 - parte da UX e parte da operacao continuarao misturadas.
 
 O caminho mais seguro e:

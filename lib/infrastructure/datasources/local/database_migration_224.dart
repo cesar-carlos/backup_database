@@ -43,9 +43,9 @@ Future<Map<String, dynamic>?> runFullDatabaseMigration224() async {
     return null;
   }
 
-  final appDataDir = await resolveAppDataDirectory();
+  final machineDataDir = await resolveMachineDataDirectory();
   final databaseName = getDatabaseNameForMode(currentAppMode);
-  final dbPath = p.join(appDataDir.path, '$databaseName.db');
+  final dbPath = p.join(machineDataDir.path, '$databaseName.db');
   final dbFile = File(dbPath);
 
   if (!await dbFile.exists()) {

@@ -1,20 +1,25 @@
 import 'package:backup_database/core/utils/logger_service.dart';
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
+import 'package:flutter/foundation.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  static const String _darkModeKey = 'dark_mode';
+  ThemeProvider({required IUserPreferencesRepository userPreferencesRepository})
+    : _userPreferences = userPreferencesRepository;
+
+  final IUserPreferencesRepository _userPreferences;
+
   bool _isDarkMode = false;
   bool _isInitialized = false;
 
   bool get isDarkMode => _isDarkMode;
 
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      return;
+    }
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _isDarkMode = prefs.getBool(_darkModeKey) ?? false;
+      _isDarkMode = await _userPreferences.getDarkMode();
       _isInitialized = true;
       notifyListeners();
     } on Object catch (e, s) {
@@ -33,8 +38,7 @@ class ThemeProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_darkModeKey, value);
+      await _userPreferences.setDarkMode(value);
     } on Object catch (e, s) {
       LoggerService.warning('Erro ao salvar preferência de tema', e, s);
     }

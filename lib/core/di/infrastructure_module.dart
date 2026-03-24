@@ -21,7 +21,6 @@ import 'package:backup_database/infrastructure/socket/server/socket_server_servi
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
 import 'package:backup_database/infrastructure/transfer_staging_service.dart';
 import 'package:get_it/get_it.dart';
-import 'package:path/path.dart' as p;
 
 /// Sets up infrastructure layer dependencies.
 ///
@@ -41,6 +40,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       getIt<ProcessService>(),
       metricsCollector: getIt<IMetricsCollector>(),
     ),
+  );
+  getIt.registerLazySingleton<IWindowsMachineStartupService>(
+    WindowsMachineStartupService.new,
   );
 
   // ========================================================================
@@ -210,9 +212,10 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     ),
   );
 
-  final appDir = await resolveAppDataDirectory();
-  final transferBasePath = p.join(appDir.path, 'backups');
-  final lockPath = p.join(appDir.path, 'locks');
+  final stagingDir = await resolveMachineStagingBackupsDirectory();
+  final lockDir = await resolveMachineLocksDirectory();
+  final transferBasePath = stagingDir.path;
+  final lockPath = lockDir.path;
 
   getIt.registerLazySingleton<IFileTransferLockService>(
     () => FileTransferLockService(lockBasePath: lockPath),

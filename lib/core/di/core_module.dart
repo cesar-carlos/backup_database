@@ -2,14 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/bootstrap/machine_scope_r1_legacy_paths_hint.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/logging/logging.dart';
-import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/machine_storage_bootstrap_diagnostics.dart';
+import 'package:backup_database/core/utils/machine_storage_layout.dart';
+import 'package:backup_database/core/utils/machine_storage_migration.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
@@ -17,7 +20,7 @@ import 'package:backup_database/infrastructure/datasources/local/database_migrat
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
 import 'package:backup_database/infrastructure/license/signed_revocation_list_service.dart';
-import 'package:backup_database/infrastructure/security/secure_credential_service.dart';
+import 'package:backup_database/infrastructure/security/machine_scope_secure_credential_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -152,8 +155,8 @@ Future<bool> _dropConfigTablesForVersion223() async {
   sqlite3.Database? database;
 
   try {
-    final appDataDir = await resolveAppDataDirectory();
-    final dbPath = p.join(appDataDir.path, 'backup_database.db');
+    final machineDataDir = await resolveMachineDataDirectory();
+    final dbPath = p.join(machineDataDir.path, 'backup_database.db');
     final dbFile = File(dbPath);
 
     if (!await dbFile.exists()) {
@@ -360,29 +363,55 @@ String _getErrorMessage(_DropErrorType type) {
   }
 }
 
-/// Obtém o diretório de dados do aplicativo sem duplicação de pastas
-Future<Directory> getAppDataDirectory() => resolveAppDataDirectory();
+Future<Directory> getAppDataDirectory() => resolveMachineRootDirectory();
 
 /// Sets up core services and utilities.
 ///
 /// This module registers fundamental services like logging,
 /// encryption, database, HTTP client, and system utilities.
 Future<void> setupCoreModule(GetIt getIt) async {
+  await ensureMachineStorageDirectoriesExist();
+  final migrationSummary = await ensureLegacyAppDataMigratedToMachineScope();
+
   await _dropConfigTablesForVersion223();
 
   final exportData224 = await runFullDatabaseMigration224();
 
   final appDataDir = await getAppDataDirectory();
-  final logsDirectory = p.join(appDataDir.path, 'logs');
+  final logsDirectory = p.join(
+    appDataDir.path,
+    MachineStorageLayout.logs,
+  );
 
   await LoggerService.init(logsDirectory: logsDirectory);
+
+  final legacyLogsMigration =
+      await migrateLegacyUserLogFilesToMachineScopeIfNeeded();
+  final otherLegacyProfilePaths =
+      await findLegacyBackupDatabasePathsOutsideCurrentUser();
+  getIt.registerSingleton<MachineScopeR1LegacyPathsHint>(
+    MachineScopeR1LegacyPathsHint(
+      otherProfilesLegacySqlitePaths: otherLegacyProfilePaths,
+    ),
+  );
+  final legacyLogsInfo = await countLegacyLogFilesVisibleForCurrentUser();
+  final secureCredentialBackendLabel = Platform.isWindows
+      ? 'windows_machine_dpapi_files'
+      : 'flutter_secure_storage';
+  await recordMachineStorageBootstrapDiagnostics(
+    migrationSummary: migrationSummary,
+    otherLegacyProfilePaths: otherLegacyProfilePaths,
+    legacyLogFileCount: legacyLogsInfo.count,
+    legacyLogsDirectoryPath: legacyLogsInfo.directoryPath,
+    legacyLogsMigration: legacyLogsMigration,
+    secureCredentialBackendLabel: secureCredentialBackendLabel,
+  );
 
   final socketLogger = SocketLoggerService(logsDirectory: logsDirectory);
   await socketLogger.initialize();
   getIt.registerSingleton<SocketLoggerService>(socketLogger);
 
   getIt.registerLazySingleton<ClipboardService>(ClipboardService.new);
-  getIt.registerLazySingleton<TempDirectoryService>(TempDirectoryService.new);
   getIt.registerLazySingleton<ISingleInstanceService>(
     SingleInstanceService.new,
   );
@@ -422,7 +451,7 @@ Future<void> setupCoreModule(GetIt getIt) async {
   }
 
   getIt.registerLazySingleton<ISecureCredentialService>(
-    SecureCredentialService.new,
+    MachineScopeSecureCredentialService.new,
   );
 
   // License

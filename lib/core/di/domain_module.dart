@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/license_policy_service.dart';
+import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
@@ -84,6 +85,20 @@ Future<void> setupDomainModule(GetIt getIt) async {
   );
   getIt.registerLazySingleton<IServerConnectionRepository>(
     () => ServerConnectionRepository(getIt<AppDatabase>()),
+  );
+
+  getIt.registerLazySingleton<IMachineSettingsRepository>(
+    () => MachineSettingsRepository(getIt<AppDatabase>()),
+  );
+
+  getIt.registerLazySingleton<IUserPreferencesRepository>(
+    UserPreferencesRepository.new,
+  );
+
+  getIt.registerLazySingleton<TempDirectoryService>(
+    () => TempDirectoryService(
+      machineSettings: getIt<IMachineSettingsRepository>(),
+    ),
   );
 
   // ========================================================================

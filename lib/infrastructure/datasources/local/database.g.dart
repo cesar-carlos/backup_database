@@ -8463,6 +8463,491 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
   }
 }
 
+class $MachineSettingsTableTable extends MachineSettingsTable
+    with TableInfo<$MachineSettingsTableTable, MachineSettingsTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MachineSettingsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startWithWindowsMeta = const VerificationMeta(
+    'startWithWindows',
+  );
+  @override
+  late final GeneratedColumn<bool> startWithWindows = GeneratedColumn<bool>(
+    'start_with_windows',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("start_with_windows" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _startMinimizedMeta = const VerificationMeta(
+    'startMinimized',
+  );
+  @override
+  late final GeneratedColumn<bool> startMinimized = GeneratedColumn<bool>(
+    'start_minimized',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("start_minimized" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _customTempDownloadsPathMeta =
+      const VerificationMeta('customTempDownloadsPath');
+  @override
+  late final GeneratedColumn<String> customTempDownloadsPath =
+      GeneratedColumn<String>(
+        'custom_temp_downloads_path',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _receivedBackupsDefaultPathMeta =
+      const VerificationMeta('receivedBackupsDefaultPath');
+  @override
+  late final GeneratedColumn<String> receivedBackupsDefaultPath =
+      GeneratedColumn<String>(
+        'received_backups_default_path',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _scheduleTransferDestinationsJsonMeta =
+      const VerificationMeta('scheduleTransferDestinationsJson');
+  @override
+  late final GeneratedColumn<String> scheduleTransferDestinationsJson =
+      GeneratedColumn<String>(
+        'schedule_transfer_destinations_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    startWithWindows,
+    startMinimized,
+    customTempDownloadsPath,
+    receivedBackupsDefaultPath,
+    scheduleTransferDestinationsJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'machine_settings_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MachineSettingsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('start_with_windows')) {
+      context.handle(
+        _startWithWindowsMeta,
+        startWithWindows.isAcceptableOrUnknown(
+          data['start_with_windows']!,
+          _startWithWindowsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('start_minimized')) {
+      context.handle(
+        _startMinimizedMeta,
+        startMinimized.isAcceptableOrUnknown(
+          data['start_minimized']!,
+          _startMinimizedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('custom_temp_downloads_path')) {
+      context.handle(
+        _customTempDownloadsPathMeta,
+        customTempDownloadsPath.isAcceptableOrUnknown(
+          data['custom_temp_downloads_path']!,
+          _customTempDownloadsPathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('received_backups_default_path')) {
+      context.handle(
+        _receivedBackupsDefaultPathMeta,
+        receivedBackupsDefaultPath.isAcceptableOrUnknown(
+          data['received_backups_default_path']!,
+          _receivedBackupsDefaultPathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('schedule_transfer_destinations_json')) {
+      context.handle(
+        _scheduleTransferDestinationsJsonMeta,
+        scheduleTransferDestinationsJson.isAcceptableOrUnknown(
+          data['schedule_transfer_destinations_json']!,
+          _scheduleTransferDestinationsJsonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MachineSettingsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MachineSettingsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      startWithWindows: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}start_with_windows'],
+      )!,
+      startMinimized: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}start_minimized'],
+      )!,
+      customTempDownloadsPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_temp_downloads_path'],
+      ),
+      receivedBackupsDefaultPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}received_backups_default_path'],
+      ),
+      scheduleTransferDestinationsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}schedule_transfer_destinations_json'],
+      ),
+    );
+  }
+
+  @override
+  $MachineSettingsTableTable createAlias(String alias) {
+    return $MachineSettingsTableTable(attachedDatabase, alias);
+  }
+}
+
+class MachineSettingsTableData extends DataClass
+    implements Insertable<MachineSettingsTableData> {
+  final int id;
+  final bool startWithWindows;
+  final bool startMinimized;
+  final String? customTempDownloadsPath;
+  final String? receivedBackupsDefaultPath;
+  final String? scheduleTransferDestinationsJson;
+  const MachineSettingsTableData({
+    required this.id,
+    required this.startWithWindows,
+    required this.startMinimized,
+    this.customTempDownloadsPath,
+    this.receivedBackupsDefaultPath,
+    this.scheduleTransferDestinationsJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['start_with_windows'] = Variable<bool>(startWithWindows);
+    map['start_minimized'] = Variable<bool>(startMinimized);
+    if (!nullToAbsent || customTempDownloadsPath != null) {
+      map['custom_temp_downloads_path'] = Variable<String>(
+        customTempDownloadsPath,
+      );
+    }
+    if (!nullToAbsent || receivedBackupsDefaultPath != null) {
+      map['received_backups_default_path'] = Variable<String>(
+        receivedBackupsDefaultPath,
+      );
+    }
+    if (!nullToAbsent || scheduleTransferDestinationsJson != null) {
+      map['schedule_transfer_destinations_json'] = Variable<String>(
+        scheduleTransferDestinationsJson,
+      );
+    }
+    return map;
+  }
+
+  MachineSettingsTableCompanion toCompanion(bool nullToAbsent) {
+    return MachineSettingsTableCompanion(
+      id: Value(id),
+      startWithWindows: Value(startWithWindows),
+      startMinimized: Value(startMinimized),
+      customTempDownloadsPath: customTempDownloadsPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customTempDownloadsPath),
+      receivedBackupsDefaultPath:
+          receivedBackupsDefaultPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(receivedBackupsDefaultPath),
+      scheduleTransferDestinationsJson:
+          scheduleTransferDestinationsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(scheduleTransferDestinationsJson),
+    );
+  }
+
+  factory MachineSettingsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MachineSettingsTableData(
+      id: serializer.fromJson<int>(json['id']),
+      startWithWindows: serializer.fromJson<bool>(json['startWithWindows']),
+      startMinimized: serializer.fromJson<bool>(json['startMinimized']),
+      customTempDownloadsPath: serializer.fromJson<String?>(
+        json['customTempDownloadsPath'],
+      ),
+      receivedBackupsDefaultPath: serializer.fromJson<String?>(
+        json['receivedBackupsDefaultPath'],
+      ),
+      scheduleTransferDestinationsJson: serializer.fromJson<String?>(
+        json['scheduleTransferDestinationsJson'],
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'startWithWindows': serializer.toJson<bool>(startWithWindows),
+      'startMinimized': serializer.toJson<bool>(startMinimized),
+      'customTempDownloadsPath': serializer.toJson<String?>(
+        customTempDownloadsPath,
+      ),
+      'receivedBackupsDefaultPath': serializer.toJson<String?>(
+        receivedBackupsDefaultPath,
+      ),
+      'scheduleTransferDestinationsJson': serializer.toJson<String?>(
+        scheduleTransferDestinationsJson,
+      ),
+    };
+  }
+
+  MachineSettingsTableData copyWith({
+    int? id,
+    bool? startWithWindows,
+    bool? startMinimized,
+    Value<String?> customTempDownloadsPath = const Value.absent(),
+    Value<String?> receivedBackupsDefaultPath = const Value.absent(),
+    Value<String?> scheduleTransferDestinationsJson = const Value.absent(),
+  }) => MachineSettingsTableData(
+    id: id ?? this.id,
+    startWithWindows: startWithWindows ?? this.startWithWindows,
+    startMinimized: startMinimized ?? this.startMinimized,
+    customTempDownloadsPath: customTempDownloadsPath.present
+        ? customTempDownloadsPath.value
+        : this.customTempDownloadsPath,
+    receivedBackupsDefaultPath: receivedBackupsDefaultPath.present
+        ? receivedBackupsDefaultPath.value
+        : this.receivedBackupsDefaultPath,
+    scheduleTransferDestinationsJson: scheduleTransferDestinationsJson.present
+        ? scheduleTransferDestinationsJson.value
+        : this.scheduleTransferDestinationsJson,
+  );
+  MachineSettingsTableData copyWithCompanion(
+    MachineSettingsTableCompanion data,
+  ) {
+    return MachineSettingsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      startWithWindows: data.startWithWindows.present
+          ? data.startWithWindows.value
+          : this.startWithWindows,
+      startMinimized: data.startMinimized.present
+          ? data.startMinimized.value
+          : this.startMinimized,
+      customTempDownloadsPath: data.customTempDownloadsPath.present
+          ? data.customTempDownloadsPath.value
+          : this.customTempDownloadsPath,
+      receivedBackupsDefaultPath: data.receivedBackupsDefaultPath.present
+          ? data.receivedBackupsDefaultPath.value
+          : this.receivedBackupsDefaultPath,
+      scheduleTransferDestinationsJson:
+          data.scheduleTransferDestinationsJson.present
+          ? data.scheduleTransferDestinationsJson.value
+          : this.scheduleTransferDestinationsJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MachineSettingsTableData(')
+          ..write('id: $id, ')
+          ..write('startWithWindows: $startWithWindows, ')
+          ..write('startMinimized: $startMinimized, ')
+          ..write('customTempDownloadsPath: $customTempDownloadsPath, ')
+          ..write('receivedBackupsDefaultPath: $receivedBackupsDefaultPath, ')
+          ..write(
+            'scheduleTransferDestinationsJson: $scheduleTransferDestinationsJson',
+          )
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    startWithWindows,
+    startMinimized,
+    customTempDownloadsPath,
+    receivedBackupsDefaultPath,
+    scheduleTransferDestinationsJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MachineSettingsTableData &&
+          other.id == this.id &&
+          other.startWithWindows == this.startWithWindows &&
+          other.startMinimized == this.startMinimized &&
+          other.customTempDownloadsPath == this.customTempDownloadsPath &&
+          other.receivedBackupsDefaultPath == this.receivedBackupsDefaultPath &&
+          other.scheduleTransferDestinationsJson ==
+              this.scheduleTransferDestinationsJson);
+}
+
+class MachineSettingsTableCompanion
+    extends UpdateCompanion<MachineSettingsTableData> {
+  final Value<int> id;
+  final Value<bool> startWithWindows;
+  final Value<bool> startMinimized;
+  final Value<String?> customTempDownloadsPath;
+  final Value<String?> receivedBackupsDefaultPath;
+  final Value<String?> scheduleTransferDestinationsJson;
+  const MachineSettingsTableCompanion({
+    this.id = const Value.absent(),
+    this.startWithWindows = const Value.absent(),
+    this.startMinimized = const Value.absent(),
+    this.customTempDownloadsPath = const Value.absent(),
+    this.receivedBackupsDefaultPath = const Value.absent(),
+    this.scheduleTransferDestinationsJson = const Value.absent(),
+  });
+  MachineSettingsTableCompanion.insert({
+    this.id = const Value.absent(),
+    this.startWithWindows = const Value.absent(),
+    this.startMinimized = const Value.absent(),
+    this.customTempDownloadsPath = const Value.absent(),
+    this.receivedBackupsDefaultPath = const Value.absent(),
+    this.scheduleTransferDestinationsJson = const Value.absent(),
+  });
+  static Insertable<MachineSettingsTableData> custom({
+    Expression<int>? id,
+    Expression<bool>? startWithWindows,
+    Expression<bool>? startMinimized,
+    Expression<String>? customTempDownloadsPath,
+    Expression<String>? receivedBackupsDefaultPath,
+    Expression<String>? scheduleTransferDestinationsJson,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (startWithWindows != null) 'start_with_windows': startWithWindows,
+      if (startMinimized != null) 'start_minimized': startMinimized,
+      if (customTempDownloadsPath != null)
+        'custom_temp_downloads_path': customTempDownloadsPath,
+      if (receivedBackupsDefaultPath != null)
+        'received_backups_default_path': receivedBackupsDefaultPath,
+      if (scheduleTransferDestinationsJson != null)
+        'schedule_transfer_destinations_json': scheduleTransferDestinationsJson,
+    });
+  }
+
+  MachineSettingsTableCompanion copyWith({
+    Value<int>? id,
+    Value<bool>? startWithWindows,
+    Value<bool>? startMinimized,
+    Value<String?>? customTempDownloadsPath,
+    Value<String?>? receivedBackupsDefaultPath,
+    Value<String?>? scheduleTransferDestinationsJson,
+  }) {
+    return MachineSettingsTableCompanion(
+      id: id ?? this.id,
+      startWithWindows: startWithWindows ?? this.startWithWindows,
+      startMinimized: startMinimized ?? this.startMinimized,
+      customTempDownloadsPath:
+          customTempDownloadsPath ?? this.customTempDownloadsPath,
+      receivedBackupsDefaultPath:
+          receivedBackupsDefaultPath ?? this.receivedBackupsDefaultPath,
+      scheduleTransferDestinationsJson:
+          scheduleTransferDestinationsJson ??
+          this.scheduleTransferDestinationsJson,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (startWithWindows.present) {
+      map['start_with_windows'] = Variable<bool>(startWithWindows.value);
+    }
+    if (startMinimized.present) {
+      map['start_minimized'] = Variable<bool>(startMinimized.value);
+    }
+    if (customTempDownloadsPath.present) {
+      map['custom_temp_downloads_path'] = Variable<String>(
+        customTempDownloadsPath.value,
+      );
+    }
+    if (receivedBackupsDefaultPath.present) {
+      map['received_backups_default_path'] = Variable<String>(
+        receivedBackupsDefaultPath.value,
+      );
+    }
+    if (scheduleTransferDestinationsJson.present) {
+      map['schedule_transfer_destinations_json'] = Variable<String>(
+        scheduleTransferDestinationsJson.value,
+      );
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MachineSettingsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('startWithWindows: $startWithWindows, ')
+          ..write('startMinimized: $startMinimized, ')
+          ..write('customTempDownloadsPath: $customTempDownloadsPath, ')
+          ..write('receivedBackupsDefaultPath: $receivedBackupsDefaultPath, ')
+          ..write(
+            'scheduleTransferDestinationsJson: $scheduleTransferDestinationsJson',
+          )
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ServerCredentialsTableTable extends ServerCredentialsTable
     with TableInfo<$ServerCredentialsTableTable, ServerCredentialsTableData> {
   @override
@@ -10907,6 +11392,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $EmailTestAuditTableTable emailTestAuditTable =
       $EmailTestAuditTableTable(this);
   late final $LicensesTableTable licensesTable = $LicensesTableTable(this);
+  late final $MachineSettingsTableTable machineSettingsTable =
+      $MachineSettingsTableTable(this);
   late final $ServerCredentialsTableTable serverCredentialsTable =
       $ServerCredentialsTableTable(this);
   late final $ConnectionLogsTableTable connectionLogsTable =
@@ -10943,6 +11430,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this as AppDatabase,
   );
   late final LicenseDao licenseDao = LicenseDao(this as AppDatabase);
+  late final MachineSettingsDao machineSettingsDao = MachineSettingsDao(
+    this as AppDatabase,
+  );
   late final ServerCredentialDao serverCredentialDao = ServerCredentialDao(
     this as AppDatabase,
   );
@@ -10972,6 +11462,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     emailNotificationTargetsTable,
     emailTestAuditTable,
     licensesTable,
+    machineSettingsTable,
     serverCredentialsTable,
     connectionLogsTable,
     serverConnectionsTable,
@@ -15885,6 +16376,254 @@ typedef $$LicensesTableTableProcessedTableManager =
       LicensesTableData,
       PrefetchHooks Function()
     >;
+typedef $$MachineSettingsTableTableCreateCompanionBuilder =
+    MachineSettingsTableCompanion Function({
+      Value<int> id,
+      Value<bool> startWithWindows,
+      Value<bool> startMinimized,
+      Value<String?> customTempDownloadsPath,
+      Value<String?> receivedBackupsDefaultPath,
+      Value<String?> scheduleTransferDestinationsJson,
+    });
+typedef $$MachineSettingsTableTableUpdateCompanionBuilder =
+    MachineSettingsTableCompanion Function({
+      Value<int> id,
+      Value<bool> startWithWindows,
+      Value<bool> startMinimized,
+      Value<String?> customTempDownloadsPath,
+      Value<String?> receivedBackupsDefaultPath,
+      Value<String?> scheduleTransferDestinationsJson,
+    });
+
+class $$MachineSettingsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $MachineSettingsTableTable> {
+  $$MachineSettingsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get startWithWindows => $composableBuilder(
+    column: $table.startWithWindows,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get startMinimized => $composableBuilder(
+    column: $table.startMinimized,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customTempDownloadsPath => $composableBuilder(
+    column: $table.customTempDownloadsPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get receivedBackupsDefaultPath => $composableBuilder(
+    column: $table.receivedBackupsDefaultPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scheduleTransferDestinationsJson =>
+      $composableBuilder(
+        column: $table.scheduleTransferDestinationsJson,
+        builder: (column) => ColumnFilters(column),
+      );
+}
+
+class $$MachineSettingsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $MachineSettingsTableTable> {
+  $$MachineSettingsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get startWithWindows => $composableBuilder(
+    column: $table.startWithWindows,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get startMinimized => $composableBuilder(
+    column: $table.startMinimized,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customTempDownloadsPath => $composableBuilder(
+    column: $table.customTempDownloadsPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get receivedBackupsDefaultPath => $composableBuilder(
+    column: $table.receivedBackupsDefaultPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scheduleTransferDestinationsJson =>
+      $composableBuilder(
+        column: $table.scheduleTransferDestinationsJson,
+        builder: (column) => ColumnOrderings(column),
+      );
+}
+
+class $$MachineSettingsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MachineSettingsTableTable> {
+  $$MachineSettingsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<bool> get startWithWindows => $composableBuilder(
+    column: $table.startWithWindows,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get startMinimized => $composableBuilder(
+    column: $table.startMinimized,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get customTempDownloadsPath => $composableBuilder(
+    column: $table.customTempDownloadsPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get receivedBackupsDefaultPath => $composableBuilder(
+    column: $table.receivedBackupsDefaultPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get scheduleTransferDestinationsJson =>
+      $composableBuilder(
+        column: $table.scheduleTransferDestinationsJson,
+        builder: (column) => column,
+      );
+}
+
+class $$MachineSettingsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MachineSettingsTableTable,
+          MachineSettingsTableData,
+          $$MachineSettingsTableTableFilterComposer,
+          $$MachineSettingsTableTableOrderingComposer,
+          $$MachineSettingsTableTableAnnotationComposer,
+          $$MachineSettingsTableTableCreateCompanionBuilder,
+          $$MachineSettingsTableTableUpdateCompanionBuilder,
+          (
+            MachineSettingsTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $MachineSettingsTableTable,
+              MachineSettingsTableData
+            >,
+          ),
+          MachineSettingsTableData,
+          PrefetchHooks Function()
+        > {
+  $$MachineSettingsTableTableTableManager(
+    _$AppDatabase db,
+    $MachineSettingsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MachineSettingsTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MachineSettingsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$MachineSettingsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> startWithWindows = const Value.absent(),
+                Value<bool> startMinimized = const Value.absent(),
+                Value<String?> customTempDownloadsPath = const Value.absent(),
+                Value<String?> receivedBackupsDefaultPath =
+                    const Value.absent(),
+                Value<String?> scheduleTransferDestinationsJson =
+                    const Value.absent(),
+              }) => MachineSettingsTableCompanion(
+                id: id,
+                startWithWindows: startWithWindows,
+                startMinimized: startMinimized,
+                customTempDownloadsPath: customTempDownloadsPath,
+                receivedBackupsDefaultPath: receivedBackupsDefaultPath,
+                scheduleTransferDestinationsJson:
+                    scheduleTransferDestinationsJson,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> startWithWindows = const Value.absent(),
+                Value<bool> startMinimized = const Value.absent(),
+                Value<String?> customTempDownloadsPath = const Value.absent(),
+                Value<String?> receivedBackupsDefaultPath =
+                    const Value.absent(),
+                Value<String?> scheduleTransferDestinationsJson =
+                    const Value.absent(),
+              }) => MachineSettingsTableCompanion.insert(
+                id: id,
+                startWithWindows: startWithWindows,
+                startMinimized: startMinimized,
+                customTempDownloadsPath: customTempDownloadsPath,
+                receivedBackupsDefaultPath: receivedBackupsDefaultPath,
+                scheduleTransferDestinationsJson:
+                    scheduleTransferDestinationsJson,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MachineSettingsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MachineSettingsTableTable,
+      MachineSettingsTableData,
+      $$MachineSettingsTableTableFilterComposer,
+      $$MachineSettingsTableTableOrderingComposer,
+      $$MachineSettingsTableTableAnnotationComposer,
+      $$MachineSettingsTableTableCreateCompanionBuilder,
+      $$MachineSettingsTableTableUpdateCompanionBuilder,
+      (
+        MachineSettingsTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $MachineSettingsTableTable,
+          MachineSettingsTableData
+        >,
+      ),
+      MachineSettingsTableData,
+      PrefetchHooks Function()
+    >;
 typedef $$ServerCredentialsTableTableCreateCompanionBuilder =
     ServerCredentialsTableCompanion Function({
       required String id,
@@ -17158,6 +17897,8 @@ class $AppDatabaseManager {
       $$EmailTestAuditTableTableTableManager(_db, _db.emailTestAuditTable);
   $$LicensesTableTableTableManager get licensesTable =>
       $$LicensesTableTableTableManager(_db, _db.licensesTable);
+  $$MachineSettingsTableTableTableManager get machineSettingsTable =>
+      $$MachineSettingsTableTableTableManager(_db, _db.machineSettingsTable);
   $$ServerCredentialsTableTableTableManager get serverCredentialsTable =>
       $$ServerCredentialsTableTableTableManager(
         _db,

@@ -99,6 +99,10 @@ Future<void> setupApplicationModule(GetIt getIt) async {
     ),
   );
 
+  getIt.registerLazySingleton<LegacySqliteFolderImportService>(
+    LegacySqliteFolderImportService.new,
+  );
+
   getIt.registerLazySingleton<ServiceHealthChecker>(
     () => ServiceHealthChecker(
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),

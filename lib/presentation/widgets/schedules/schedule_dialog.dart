@@ -1279,8 +1279,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 label: ScheduleDialogStrings.scriptFieldLabel,
                 child: TextBox(
                   controller: _postBackupScriptController,
-                  placeholder:
-                      ScheduleDialogStrings.scriptFieldPlaceholder,
+                  placeholder: ScheduleDialogStrings.scriptFieldPlaceholder,
                   maxLines: 15,
                   minLines: 10,
                   readOnly: !hasPostScript,

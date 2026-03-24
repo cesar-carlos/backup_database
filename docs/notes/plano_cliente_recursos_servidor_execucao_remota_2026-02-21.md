@@ -1,8 +1,8 @@
 # Plano: Cliente Consumindo Recursos do Servidor (Backup Remoto Orquestrado)
 
 Data base: 2026-02-21
-Atualizado em: 2026-02-28
-Status: Em andamento - infraestrutura base implementada; contrato REST-like e regras de concorrencia/fila pendentes
+Atualizado em: 2026-03-24
+Status: Em revisao - infraestrutura base implementada; plano ajustado para refletir gaps de arquitetura confirmados no codigo
 Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 
 ## Estado de Implementacao (2026-02-28)
@@ -39,22 +39,47 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 - Sem endpoint de diagnostico por execucao (`getRunLogs`, `getRunErrorDetails`)
 - Sem comandos de agendamento completos (`createSchedule`, `deleteSchedule`, `pauseSchedule`, `resumeSchedule`)
 - Sem idempotencia por `runId`
+- Execucao remota ainda envia para destinos no servidor antes de expor artefato ao cliente
+- Scheduler local do servidor continua disparando por timer; plano ainda nao fecha se a agenda sera cliente-driven ou servidor-persistida com orquestracao remota
+- Staging remoto e indexado por `scheduleId`, nao por `runId`, o que conflita com fila, retry e multiplas execucoes do mesmo agendamento
+- Fluxo remoto ainda depende de validacao de pasta local de downloads no cliente antes de iniciar comando no servidor
+- Contrato proposto usa `requestId` UUID string, mas o protocolo binario atual suporta `requestId` inteiro (`uint32`) no header
 
 ---
+
+### Correcao critica apos revisao do codigo (2026-03-24)
+
+- O objetivo "cliente controla destino final" ainda nao esta implementado de ponta a ponta:
+  - hoje o servidor executa upload para destinos em `SchedulerService`
+  - depois o cliente pode baixar e reenviar para destinos locais
+  - o plano agora precisa prever um modo remoto server-first sem distribuicao final no servidor
+- O plano tratava como concluido que a execucao remota so inicia por comando do cliente, mas o servidor ainda executa schedules via timer local
+- O staging remoto precisa migrar de `scheduleId` para `runId` para suportar fila, idempotencia e coexistencia segura de artefatos
+- O contrato REST-like precisa respeitar o wire format atual:
+  - `requestId` de transporte continua inteiro no header binario v1
+  - `runId` e `idempotencyKey` podem ser UUID no payload
+- A premissa "sem dependencia de configuracao local no cliente" ainda nao e verdadeira porque a execucao remota falha cedo se a pasta de downloads local nao estiver gravavel
 
 ## Objetivo
 
 - [ ] Padronizar API socket com comunicacao inspirada em REST (status code + erro estruturado + requestId).
 - [ ] Definir catalogo completo de recursos cliente->servidor com contrato padrao por endpoint.
 - [ ] Permitir que o cliente configure bases de dados no servidor e execute testes de conexao pelo servidor.
-- [ ] Garantir que o agendamento seja controlado pelo cliente.
-- [ ] Garantir que o destino final seja controlado pelo cliente.
+- [ ] Definir explicitamente o modelo de agenda remota:
+  - cliente-driven scheduling
+  - ou servidor com agenda persistida e controle remoto
+- [ ] Garantir que, no fluxo remoto server-first, o destino final seja controlado pelo cliente e nunca pelo servidor.
 - [ ] Garantir que todo fluxo de backup (dump, compactacao, validacao e artefato final) ocorra no servidor.
 - [ ] Garantir que compressao, checksum e demais opcoes sejam aplicadas no servidor conforme configuracao enviada pelo cliente.
 - [ ] Garantir limite de 1 backup em execucao por servidor.
 - [ ] Garantir que disparo manual durante execucao ativa seja rejeitado com erro claro para o cliente.
 - [ ] Garantir que disparo agendado durante execucao ativa entre em fila para execucao posterior.
 - [ ] Entregar ao cliente o arquivo final pronto para continuar o fluxo de distribuicao aos destinos finais.
+- [ ] Eliminar upload duplicado do mesmo backup:
+  - servidor prepara artefato
+  - cliente baixa
+  - cliente distribui
+- [ ] Isolar artefatos remotos, eventos e cleanup por `runId`, nao por `scheduleId`.
 
 ## Contrato de Comunicacao Padrao (REST-like sobre Socket)
 
@@ -63,9 +88,11 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 ```json
 {
   "type": "executeBackup",
-  "requestId": "uuid",
+  "requestId": 12345,
   "timestamp": "2026-02-28T12:00:00Z",
-  "payload": {}
+  "payload": {
+    "idempotencyKey": "uuid"
+  }
 }
 ```
 
@@ -74,7 +101,7 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 ```json
 {
   "type": "executeBackupResponse",
-  "requestId": "uuid",
+  "requestId": 12345,
   "statusCode": 202,
   "success": true,
   "data": {},
@@ -87,7 +114,7 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 ```json
 {
   "type": "error",
-  "requestId": "uuid",
+  "requestId": 12345,
   "statusCode": 409,
   "success": false,
   "data": null,
@@ -98,6 +125,11 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
   }
 }
 ```
+
+Observacao de compatibilidade:
+
+- em `v1`, `requestId` deve permanecer inteiro para compatibilidade com o header binario atual
+- correlacao de negocio deve usar `runId` e `idempotencyKey` no payload, nao substituir o `requestId` do transporte
 
 ### Tabela minima de status code
 
@@ -157,25 +189,29 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 - [~] Cliente autentica no servidor com licenca valida para controle remoto. _(auth implementado; bloqueio pre-auth tem gap - ver F0.1)_
 - [ ] Cliente cria/edita/remove configuracoes de banco de dados no servidor.
 - [ ] Cliente executa teste de conexao de banco remotamente, com validacao feita no servidor.
-- [~] Cliente controla agenda de execucao e envia comando de backup para o servidor no momento devido. _(executeSchedule implementado; executeBackup por comando direto pendente)_
+- [~] Cliente controla agenda de execucao e envia comando de backup para o servidor no momento devido. _(executeSchedule implementado; scheduler local do servidor ainda continua ativo e precisa ser alinhado com a decisao arquitetural)_
 - [x] Servidor executa backup (dump + compressao + verificacoes) somente quando recebe comando do cliente.
 - [ ] Servidor salva artefato em pasta temporaria padrao do servidor. _(fluxo local usa pasta configuravel; fluxo remoto sem policy dedicada)_
 - [x] Servidor publica progresso em tempo real para cliente.
 - [x] Servidor disponibiliza arquivo final em staging remoto para download resiliente.
 - [x] Cliente baixa arquivo pronto e continua seu fluxo local de envio para destinos finais.
+- [ ] Servidor nao envia artefato para destinos finais em execucoes remotas server-first.
+- [ ] Cliente nao precisa validar pasta local de downloads antes de autorizar o servidor a executar; essa validacao deve ocorrer no inicio do download/continuidade local.
 
 ## Premissas de Projeto
 
-- [~] Fonte de verdade do agendamento sera o cliente. _(schedules atualmente persistidos no servidor; cliente pode atualizar via updateSchedule)_
+- [ ] Fechar decisao arquitetural sobre a fonte de verdade do agendamento remoto antes da Fase 2.
 - [x] Cliente nao executa dump de banco; somente orquestra e consome artefato final.
 - [~] Controle de licenca remota deve ser fail-closed. _(licenca validada em auth e em executeSchedule; nao aplicada em CRUD de banco pois endpoints nao existem)_
 - [ ] API remota deve ser versionada e com contrato de erro padronizado.
 - [ ] API remota deve ter envelope com `statusCode` para todas as respostas.
-- [x] No fluxo remoto, nao havera configuracao manual de pasta temporaria no cliente.
+- [~] No fluxo remoto, cliente nao deve depender de configuracao manual de pasta temporaria para disparar a execucao. _(hoje ainda valida pasta local antes de iniciar o comando remoto)_
 - [ ] No fluxo remoto, o servidor usara pasta temporaria padrao do sistema operacional para staging de execucao/compactacao.
 - [ ] Execucao remota deve validar disponibilidade de ferramenta de compactacao no servidor antes de iniciar backup.
 - [ ] O servidor aceita somente 1 backup em execucao por vez.
 - [ ] Execucoes agendadas concorrentes devem ser enfileiradas.
+- [ ] `requestId` do transporte binario permanece `uint32` em `v1`; `runId` e `idempotencyKey` carregam correlacao de negocio.
+- [ ] Staging remoto, metadados e cleanup devem ser escopados por `runId`.
 
 ## Responsabilidade de Execucao (Servidor x Cliente)
 
@@ -183,6 +219,7 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 - [x] Cliente executa: controle de agenda, comando de execucao remota, UX, download do artefato pronto e envio para destino final.
 - [ ] Qualquer processo dependente de ambiente/ferramenta do servidor deve estar exposto em API remota para o cliente.
 - [ ] Pasta temporaria no fluxo remoto e responsabilidade exclusiva do servidor (padrao do SO, sem dependencia de configuracao no cliente).
+- [ ] Em execucoes remotas server-first, o servidor nao pode disparar upload para destinos finais configurados localmente no servidor.
 
 ## Contrato Minimo da API Remota (Cliente -> Servidor)
 
@@ -421,14 +458,18 @@ DoD Fase 1:
 
 Objetivo: garantir pipeline completo de execucao no servidor com configuracao originada no cliente e politica de concorrencia/fila.
 
+- [ ] F2.0 Fechar semantica de execucao remota:
+  - [ ] definir se o scheduler local do servidor continua ativo para schedules remotos
+  - [ ] ou se toda execucao remota passa a depender de comando do cliente
+  - [ ] explicitar diferenca entre execucao local do servidor e execucao remota server-first
 - [ ] F2.1 Definir contrato remoto de opcoes de backup e compactacao por agendamento.
 - [x] F2.2 Garantir aplicacao no servidor de: dump, compactacao, checksum, politicas de limpeza e post-script conforme permitido.
 - [x] F2.3 Publicar progresso detalhado por etapa para cliente (iniciando, dump, compactacao, verificacao, finalizando). _(`backupStep` implementado)_
-- [~] F2.4 Registrar historico e logs no servidor com correlacao (`runId`, `scheduleId`, `clientId`). _(`scheduleId` rastreado; `runId` e `clientId` nao formalizados no contrato de mensagens)_
+- [~] F2.4 Registrar historico e logs no servidor com correlacao (`runId`, `scheduleId`, `clientId`). _(`scheduleId` rastreado; `runId` ja existe internamente, mas nao formalizado no contrato remoto nem no staging)_
 - [ ] F2.5 Incluir idempotencia por `runId` para evitar duplicidade por retransmissao/reconexao.
 - [ ] F2.6 Padronizar uso da pasta temporaria padrao do servidor para este fluxo remoto (sem parametro de pasta temp vindo do cliente).
 - [ ] F2.7 Bloquear execucao remota quando prerequisitos de compactacao falharem no servidor.
-- [x] F2.8 Garantir que execucao no servidor so inicia por comando explicito recebido do cliente.
+- [ ] F2.8 Garantir que execucao remota server-first so inicia por comando explicito recebido do cliente. _(hoje o timer local do scheduler do servidor ainda existe)_
 - [ ] F2.9 Implementar mutex global de execucao de backup no servidor (`maxConcurrentBackups = 1`).
 - [ ] F2.10 Implementar fila FIFO para execucoes agendadas quando houver backup ativo.
 - [ ] F2.11 Retornar `409 BACKUP_ALREADY_RUNNING` para disparo manual durante execucao ativa.
@@ -443,11 +484,20 @@ Objetivo: garantir pipeline completo de execucao no servidor com configuracao or
 - [ ] F2.16 Persistir estado de execucao e fila para recuperacao apos reinicio do servidor.
 - [ ] F2.17 Adicionar `eventId` e `sequence` em todos eventos de execucao/fila para reprocessamento seguro no cliente.
 - [ ] F2.18 Garantir correlacao obrigatoria por `runId` em logs, eventos, diagnostico e metadados de artefato.
+- [ ] F2.19 Remover envio para destinos finais do servidor quando a origem da execucao for remota server-first.
+- [ ] F2.20 Migrar staging remoto e cleanup de `scheduleId` para `runId`.
+- [ ] F2.21 Separar `requestId` de transporte de correlacao de negocio:
+  - [ ] `requestId` inteiro no wire
+  - [ ] `runId` e `idempotencyKey` no payload
+- [ ] F2.22 Garantir que a validacao de pasta local no cliente ocorra apenas no inicio do download/continuidade local, nao como precondicao para o servidor executar.
 
 DoD Fase 2:
 
 - [x] Backup remoto e executado somente no servidor.
 - [ ] Artefato final no servidor corresponde exatamente a configuracao do agendamento remoto.
+- [ ] Execucao remota nao dispara upload para destinos finais no servidor.
+- [ ] Scheduler remoto segue semantica unica e documentada (cliente-driven ou hibrida controlada).
+- [ ] Cada execucao remota produz staging, eventos e cleanup isolados por `runId`.
 - [x] Cliente observa progresso confiavel ponta-a-ponta.
 - [ ] Artefato entregue ao cliente ja esta pronto para continuidade do fluxo no cliente.
 - [ ] Nao existe dependencia de configuracao de pasta temporaria do cliente no fluxo remoto.
@@ -534,6 +584,10 @@ DoD Fase 5:
       Criterio de aceite:
   - [ ] Nenhum handler executa acao mutavel fora desse pipeline.
   - [ ] Falhas retornam erro padronizado com `errorCode` acionavel.
+- [ ] P0.3a Fechar semantica de execucao remota server-first.
+      Criterio de aceite:
+  - [ ] Execucao remota nao compartilha caminho final de distribuicao com execucao local do servidor.
+  - [ ] Scheduler local do servidor nao contradiz o modelo remoto escolhido.
 - [ ] P0.4 Implementar modelo de execucao robusto (`maxConcurrentBackups = 1`, fila, maquina de estados).
       Criterio de aceite:
   - [ ] Nunca existem 2 backups simultaneos.
@@ -552,6 +606,7 @@ DoD Fase 5:
   - [ ] `getArtifactMetadata` retorna metadados completos (hash/tamanho/chunk/TTL).
   - [ ] Artefato expirado retorna `410 ARTIFACT_EXPIRED`.
   - [ ] `cleanupStaging` e remoto (sem chamada local no cliente).
+  - [ ] staging remoto e namespaced por `runId`.
 - [ ] P0.8 Cobertura de resiliencia e concorrencia em integracao.
       Criterio de aceite:
   - [ ] Testes com 2 clientes concorrentes.
@@ -584,11 +639,67 @@ Amarracao sugerida com PRs:
 
 - [ ] PR-1: Fase 0 (hardening + contrato base + status code) - proximo passo
 - [ ] PR-2: Fase 1 (CRUD remoto de base + teste de conexao + API de execucao por comando)
-- [ ] PR-3: Fase 2 (execucao completa no servidor + mutex + fila)
+- [ ] PR-3: Fase 2 (semantica de execucao remota + runId + mutex + fila)
 - [ ] PR-4: Fase 3 (entrega resiliente do artefato)
 - [ ] PR-5: Fase 4 e Fase 5 (continuidade local + observabilidade)
 
-## Quebra de Implementacao por PR (PR-1, PR-2, PR-3)
+## Backlog Tecnico Executavel por PR
+
+Regras de sequenciamento:
+
+- [ ] Merge linear: `PR-1 -> PR-2 -> PR-3 -> PR-4 -> PR-5`.
+- [ ] Nao abrir PR paralelo que altere `message_types.dart`, `message.dart` ou `connection_manager.dart`.
+- [ ] Toda mudanca de protocolo deve ser backward compatible no mesmo PR ou acompanhada de rollout coordenado `servidor -> cliente`.
+- [ ] `PR-3` e o marco de arquitetura: antes dele, o fluxo remoto ainda nao deve ser tratado como `server-first`.
+- [ ] `PR-4` depende do `runId` e do staging remoto por `runId`; nao antecipar download resiliente enquanto o staging ainda estiver em `scheduleId`.
+- [ ] `PR-5` so comeca depois de `PR-4` estabilizar `hash`, limpeza remota e metadados do artefato.
+
+Pacotes de entrega:
+
+- [ ] `PR-1`
+  - Objetivo: estabilizar contrato de socket, auth pre-operacional e endpoints minimos de sessao/health/capabilities.
+  - Dependencias: nenhuma.
+  - Entregavel de saida: cliente e servidor falam envelope padrao e rejeitam comando operacional sem auth.
+- [ ] `PR-2`
+  - Objetivo: expor recursos operacionais do servidor ao cliente sem reescrever regra de negocio.
+  - Dependencias: `PR-1`.
+  - Entregavel de saida: CRUD remoto, teste de conexao, preflight e status base de execucao.
+- [ ] `PR-3`
+  - Objetivo: corrigir a semantica remota para `server-first`, introduzir `runId` e controlar concorrencia/fila.
+  - Dependencias: `PR-2`.
+  - Entregavel de saida: servidor executa, enfileira, persiste estado e publica eventos coerentes por `runId`.
+- [ ] `PR-4`
+  - Objetivo: tornar download e retencao do artefato resilientes.
+  - Dependencias: `PR-3`.
+  - Entregavel de saida: cliente baixa, retoma, valida hash e limpa staging remotamente.
+- [ ] `PR-5`
+  - Objetivo: concluir o fluxo no cliente e tornar a operacao observavel.
+  - Dependencias: `PR-4`.
+  - Entregavel de saida: artefato remoto segue para destinos locais com diagnostico e re-sync previsiveis.
+
+Melhorias adicionais confirmadas na revisao do codigo:
+
+- [ ] `startBackup` deve virar comando assincrono de aceite imediato.
+  - O servidor retorna `accepted/queued/running + runId` rapidamente.
+  - O resultado final sai por `getExecutionStatus`, eventos e diagnostico.
+  - O cliente nao deve depender de `backupExecutionTimeout` para descobrir sucesso final.
+- [ ] O contexto de execucao remota deve ser indexado por `runId`.
+  - Progresso, cancelamento, diagnostico, cleanup e download nao podem ficar presos a campos singleton por `clientId/requestId/scheduleId`.
+- [ ] Resume de download, entrega local e limpeza remota devem ser orientados a `runId` ou `artifactId`.
+  - `scheduleId` permanece como referencia funcional, nao como chave tecnica da execucao.
+- [ ] O protocolo de transferencia deve escolher um caminho explicito:
+  - ou `ACK/backpressure` real por janela
+  - ou remover `fileAck` da estrategia atual e assumir streaming sem controle de janela
+- [ ] `getServerCapabilities` deve negociar recursos efetivos do servidor.
+  - Minimo: `protocolVersion`, `supportsRunId`, `supportsResume`, `supportsArtifactRetention`, `supportsChunkAck`, `chunkSize`, `compression`, `serverTimeUtc`.
+- [ ] O lock de transferencia deve virar lease com identidade.
+  - Incluir `owner/runId/acquiredAt/expiresAt`.
+  - Executar cleanup de lock expirado no bootstrap do servidor.
+- [ ] `metrics/health` devem incluir estado operacional do pipeline remoto.
+  - Minimo: `queueDepth`, `activeRunId`, `artifactExpiresAt`, `stagingUsageBytes`, `serverTimeUtc`.
+- [ ] Historico local de transferencia deve persistir `runId/artifactId` para rastreabilidade ponta a ponta.
+
+## Quebra de Implementacao por PR (PR-1, PR-2, PR-3, PR-4, PR-5)
 
 ### PR-1 - Contrato base REST-like + hardening pre-auth (fundacao)
 
@@ -599,7 +710,19 @@ Escopo:
 - [ ] Fechar matriz `ErrorCode -> statusCode -> retryable -> acao esperada do cliente`.
 - [ ] Bloquear processamento pre-auth para mensagens operacionais.
 - [ ] Entregar `getServerCapabilities`, `getServerHealth`, `getSession`.
+- [ ] Fazer `getServerCapabilities` negociar recursos reais do servidor:
+  - [ ] `protocolVersion`
+  - [ ] `supportsRunId`
+  - [ ] `supportsResume`
+  - [ ] `supportsArtifactRetention`
+  - [ ] `supportsChunkAck`
+  - [ ] `chunkSize`
+  - [ ] `compression`
+  - [ ] `serverTimeUtc`
 - [ ] Garantir parsing/serializacao do envelope no cliente.
+- [ ] Preservar compatibilidade do wire format atual:
+  - [ ] `requestId` continua inteiro no header binario
+  - [ ] UUID fica em `runId`/`idempotencyKey` no payload
 
 Arquivos foco:
 
@@ -626,12 +749,14 @@ Testes obrigatorios:
 - [ ] novo `test/unit/infrastructure/protocol/error_messages_test.dart`
 - [ ] `test/unit/infrastructure/socket/server/client_handler_test.dart` (rejeicao pre-auth)
 - [ ] `test/integration/socket_integration_test.dart` (auth -> capabilities -> health)
+- [ ] validar payload de `capabilities` com `serverTimeUtc` e flags de feature
 
 Gate de saida:
 
 - [ ] Nenhuma mensagem operacional passa sem auth.
 - [ ] Todas as respostas retornam `statusCode`.
 - [ ] Cliente recebe erro padronizado em falhas de contrato/auth.
+- [ ] `capabilities` representa feature negotiation real, nao apenas disponibilidade nominal.
 
 Roteiro executavel (ordem sugerida):
 
@@ -662,6 +787,7 @@ Roteiro executavel (ordem sugerida):
    - [ ] Criar `session_message_handler.dart` com:
      - `getSession`/`whoAmI`
    - [ ] Garantir que todos retornem envelope padrao e `statusCode`.
+   - [ ] Incluir `serverTimeUtc`, `chunkSize`, `compression` e flags de resume/ack em `capabilities`.
 5. Ajustes no cliente socket
    - [ ] Em `connection_manager.dart`, expor:
      - `getServerCapabilities()`
@@ -706,6 +832,11 @@ Escopo:
   - [ ] `cancelBackup`
   - [ ] `getExecutionStatus`
   - [ ] `getExecutionQueue` (consulta)
+- [ ] `startBackup` deve retornar aceite imediato:
+  - [ ] `accepted|queued|running`
+  - [ ] `runId`
+  - [ ] `queuePosition` quando aplicavel
+  - [ ] sem aguardar o termino do backup na mesma request
 - [ ] Completar comandos de agendamento faltantes:
   - [ ] `createSchedule`, `deleteSchedule`, `pauseSchedule`, `resumeSchedule`
 - [ ] Reaproveitamento obrigatorio de base atual:
@@ -748,12 +879,69 @@ Gate de saida:
 - [ ] Comandos remotos novos usam implementacoes existentes do servidor sem regressao funcional.
 - [ ] Contrato de `idempotencyKey` fechado e coberto por teste de protocolo.
 - [ ] Sem regressao no fluxo atual de schedule/list/download.
+- [ ] `startBackup` nao depende de timeout longo para retornar ao cliente.
+
+Dependencias:
+
+- [ ] `PR-1` mergeado e estabilizado no cliente e no servidor.
+- [ ] Envelope padrao e `statusCode` sem breaking change adicional.
+
+Fora de escopo:
+
+- [ ] Fila persistente e mutex operacional de execucao.
+- [ ] Migracao de staging para `runId`.
+- [ ] Download resiliente, hash e retencao de artefato.
+
+Roteiro executavel (ordem sugerida):
+
+1. Baseline e congelamento de contrato
+   - [ ] Rodar:
+     - `flutter analyze`
+     - `flutter test test/unit/infrastructure/socket/server/schedule_message_handler_test.dart`
+   - [ ] Confirmar que `PR-1` ja expoe `health/capabilities/session`.
+2. Contratos de protocolo do PR-2
+   - [ ] Criar `database_config_messages.dart`.
+   - [ ] Criar `execution_messages.dart`.
+   - [ ] Criar `system_messages.dart`.
+   - [ ] Ajustar `schedule_messages.dart` para `create/delete/pause/resume`.
+   - [ ] Checkpoint:
+     - `flutter test test/unit/infrastructure/protocol`
+3. Handlers de servidor sem reescrita de negocio
+   - [ ] Criar `database_config_message_handler.dart` reaproveitando repositorios existentes.
+   - [ ] Criar `execution_message_handler.dart` com `start/cancel/status/queue`.
+   - [ ] Fazer `startBackup` responder com aceite imediato + `runId`.
+   - [ ] Completar `schedule_message_handler.dart`.
+   - [ ] Conectar `validateServerBackupPrerequisites` no `system_message_handler.dart`.
+4. Integracao no cliente
+   - [ ] Expandir `connection_manager.dart` com novas APIs.
+   - [ ] Integrar `remote_schedules_provider.dart` e `server_connection_provider.dart`.
+   - [ ] Ajustar mensagens de erro no cliente para `statusCode + error.code`.
+   - [ ] Parar de tratar `startBackup` como request bloqueante ate conclusao final.
+5. Testes do PR-2
+   - [ ] Criar/ajustar testes de protocolo.
+   - [ ] Cobrir handlers de config, execution base e preflight.
+   - [ ] Validar fluxo de schedule remoto sem regressao.
+6. Validacao final do PR-2
+   - [ ] Rodar:
+     - `flutter analyze`
+     - `flutter test test/unit/infrastructure/protocol`
+     - `flutter test test/unit/infrastructure/socket/server`
+     - `flutter test test/integration/socket_integration_test.dart`
+   - [ ] Validar gates de saida do PR-2.
+
+Sequencia de commits sugerida:
+
+1. `protocol: add database, execution and system request contracts`
+2. `server: expose database config, preflight and execution base handlers`
+3. `client: integrate remote config, preflight and execution status APIs`
+4. `test: cover protocol contracts and execution base flow`
 
 ### PR-3 - Concorrencia, fila, diagnostico e artefato pronto (server-first)
 
 Escopo:
 
 - [ ] Incorporar diagnostico e staging a partir dos servicos ja existentes.
+- [ ] Substituir estado singleton de execucao remota por registry por `runId`.
 - [ ] Implementar `maxConcurrentBackups = 1`.
 - [ ] Implementar fila FIFO para disparos agendados concorrentes.
 - [ ] Implementar politica operacional de fila (`maxQueueSize`, TTL, overflow, duplicidade de `scheduleId`).
@@ -774,6 +962,7 @@ Escopo:
   - [ ] status/posicao de fila em tempo real
   - [ ] validacao de hash apos download
   - [ ] remover chamada local de cleanup no cliente e migrar para endpoint remoto
+  - [ ] reconciliar execucao por `runId`, nao por `scheduleId`
 
 Arquivos foco:
 
@@ -804,6 +993,7 @@ Testes obrigatorios:
 - [ ] novo `test/integration/server_restart_recovery_test.dart` (restaura fila/estado apos restart)
 - [ ] cobertura de idempotencia e deduplicacao de comando por `idempotencyKey`
 - [ ] cobertura de eventos com ordenacao por `sequence`
+- [ ] cobertura de reconnect/re-sync usando `runId` sem perder ownership da execucao
 
 Gate de saida:
 
@@ -814,6 +1004,235 @@ Gate de saida:
 - [ ] Limpeza de staging e sempre orquestrada remotamente pelo servidor.
 - [ ] Reinicio do servidor nao perde fila nem estado de execucao.
 - [ ] Duplicidade de comando nao dispara backup duplicado.
+- [ ] Progresso e cancelamento continuam consistentes apos reconnect do cliente por `runId`.
+
+Dependencias:
+
+- [ ] `PR-2` mergeado com `startBackup/cancelBackup/getExecutionStatus/getExecutionQueue`.
+- [ ] Contrato de `idempotencyKey` ativo no cliente e no servidor.
+
+Fora de escopo:
+
+- [ ] Resume de download em disco local do cliente.
+- [ ] Continuacao automatica para destinos locais apos download.
+- [ ] Dashboard/telemetria operacional de longo prazo.
+
+Roteiro executavel (ordem sugerida):
+
+1. Fechar semantica remota do servidor
+   - [ ] Introduzir `executionOrigin = remoteCommand`.
+   - [ ] Garantir que execucao remota seja `server-first`.
+   - [ ] Impedir envio para destinos finais quando a origem for remota.
+2. Introduzir `runId` e staging remoto correto
+   - [ ] Publicar `runId` em `startBackup`, `status`, eventos e diagnostico.
+   - [ ] Trocar contexto singleton em handlers por registry de execucao indexado por `runId`.
+   - [ ] Migrar `transfer_staging_service.dart` de `scheduleId` para `runId`.
+   - [ ] Ajustar cleanup e correlacao remota para `runId`.
+3. Concorrencia, mutex e fila
+   - [ ] Implementar `maxConcurrentBackups = 1`.
+   - [ ] Distinguir disparo manual concorrente (`409`) de disparo agendado concorrente (fila).
+   - [ ] Persistir fila/estado para restart.
+   - [ ] Implementar deduplicacao por `idempotencyKey`.
+4. Diagnostico e consumo resiliente
+   - [ ] Expor `getRunLogs`, `getRunErrorDetails`, `getArtifactMetadata`, `cleanupStaging`.
+   - [ ] Publicar `eventId` e `sequence`.
+   - [ ] Ajustar cliente para ordenar eventos e descartar duplicados.
+5. Integracao de providers
+   - [ ] Remover cleanup local por `scheduleId`.
+   - [ ] Mover validacao de pasta local para a fase de download.
+   - [ ] Propagar `runId` em `remote_schedules_provider.dart` e `remote_file_transfer_provider.dart`.
+6. Validacao final do PR-3
+   - [ ] Rodar:
+     - `flutter analyze`
+     - `flutter test test/unit/infrastructure/socket/server/execution_message_handler_test.dart`
+     - `flutter test test/integration/backup_queue_integration_test.dart`
+     - `flutter test test/integration/server_restart_recovery_test.dart`
+   - [ ] Validar fila, reinicio e ausencia de upload duplicado.
+
+Sequencia de commits sugerida:
+
+1. `server: make remote execution server-first and publish runId`
+2. `server: add queue, deduplication and persisted execution state`
+3. `protocol: expose diagnostics and ordered execution events`
+4. `client: consume runId based status, events and remote staging cleanup`
+
+### PR-4 - Entrega resiliente do artefato (download, hash, retencao)
+
+Escopo:
+
+- [ ] Consolidar entrega do artefato por `runId`.
+- [ ] Implementar download resiliente com retomada e validacao por hash.
+- [ ] Migrar resume metadata e retomada para `runId` ou `artifactId`.
+- [ ] Expor metadados completos do artefato:
+  - [ ] tamanho
+  - [ ] hash
+  - [ ] expiracao
+  - [ ] nome sugerido
+- [ ] Escolher estrategia explicita de fluxo:
+  - [ ] implementar `ACK/backpressure` real por janela
+  - [ ] ou remover `fileAck` da estrategia de transferencia `v1`
+- [ ] Endurecer lock de transferencia:
+  - [ ] trocar lock simples por lease com `owner/runId/acquiredAt/expiresAt`
+  - [ ] limpar locks expirados no bootstrap do servidor
+- [ ] Tornar limpeza remota idempotente e segura apos download concluido.
+- [ ] Retornar `410 ARTIFACT_EXPIRED` quando o artefato sair da retencao.
+- [ ] Garantir que falha de hash nao marque transferencia como concluida.
+
+Arquivos foco:
+
+- [ ] Protocol:
+  - [ ] `lib/infrastructure/protocol/file_transfer_messages.dart`
+  - [ ] `lib/infrastructure/protocol/diagnostics_messages.dart`
+- [ ] Server:
+  - [ ] `lib/infrastructure/socket/server/file_transfer_message_handler.dart`
+  - [ ] `lib/infrastructure/socket/server/diagnostics_message_handler.dart`
+  - [ ] `lib/infrastructure/transfer_staging_service.dart`
+- [ ] Client:
+  - [ ] `lib/infrastructure/socket/client/connection_manager.dart`
+  - [ ] `lib/infrastructure/socket/client/tcp_socket_client.dart`
+  - [ ] `lib/application/providers/remote_file_transfer_provider.dart`
+  - [ ] `lib/application/providers/backup_progress_provider.dart`
+
+Testes obrigatorios:
+
+- [ ] `test/integration/file_transfer_integration_test.dart` (download completo + hash)
+- [ ] novo `test/integration/file_transfer_resume_integration_test.dart`
+- [ ] novo `test/unit/application/providers/remote_file_transfer_provider_test.dart`
+- [ ] fluxo de erro com `ARTIFACT_EXPIRED` e retorno `410`
+- [ ] fluxo de limpeza remota idempotente apos sucesso e apos falha
+- [ ] fluxo de lease expirado/lock orfao na transferencia
+- [ ] fluxo de resume validando `runId/artifactId` incompatível
+
+Gate de saida:
+
+- [ ] Cliente consegue retomar download interrompido sem reiniciar a execucao no servidor.
+- [ ] Hash divergente falha explicitamente e nao aciona cleanup prematuro.
+- [ ] `cleanupStaging` remoto e idempotente.
+- [ ] Artefato expirado retorna `410` com erro padronizado.
+- [ ] Resume nao reaproveita arquivo parcial de outra execucao.
+- [ ] Estrategia de fluxo (`ACK` ou sem `ACK`) esta coerente e coberta por teste.
+
+Dependencias:
+
+- [ ] `PR-3` mergeado com `runId`, metadados e staging remoto por `runId`.
+
+Fora de escopo:
+
+- [ ] Upload do artefato para destinos locais do cliente.
+- [ ] UI final de historico e observabilidade.
+
+Roteiro executavel (ordem sugerida):
+
+1. Fechar contrato de metadados e expiracao
+   - [ ] Definir payload de `getArtifactMetadata`.
+   - [ ] Definir `errorCode/statusCode` para artefato expirado e hash invalido.
+   - [ ] Incluir `runId/artifactId`, `artifactExpiresAt` e `serverTimeUtc`.
+2. Endpoints de transferencia
+   - [ ] Ajustar `file_transfer_message_handler.dart` para download orientado a `runId`.
+   - [ ] Expor resume/range conforme protocolo atual suportar.
+   - [ ] Implementar estrategia de `ACK/backpressure` ou remover `fileAck` da negociacao.
+3. Persistencia local do progresso
+   - [ ] Registrar estado parcial no cliente.
+   - [ ] Retomar download com base em bytes ja recebidos.
+   - [ ] Validar compatibilidade por `runId/artifactId`.
+4. Validacao de integridade e cleanup remoto
+   - [ ] Validar hash no fim do download.
+   - [ ] Acionar `cleanupStaging` somente depois de integridade confirmada.
+   - [ ] Rodar cleanup de lease expirado de lock no bootstrap do servidor.
+5. Validacao final do PR-4
+   - [ ] Rodar testes de integracao de transferencia e resume.
+
+Sequencia de commits sugerida:
+
+1. `protocol: finalize artifact metadata and transfer error contracts`
+2. `server: support runId based download and retention semantics`
+3. `client: add resumable artifact download with hash validation`
+4. `test: cover artifact expiry, resume and remote cleanup idempotency`
+
+### PR-5 - Continuidade local e observabilidade operacional
+
+Escopo:
+
+- [ ] Concluir o fluxo local do cliente apos download valido:
+  - [ ] envio para destinos locais vinculados
+  - [ ] atualizacao de progresso local por `runId`
+  - [ ] recuperacao de contexto apos reconexao do cliente
+- [ ] Migrar vinculo de destinos locais e historico local de transferencia para `runId/artifactId`.
+- [ ] Expor diagnostico operacional para suporte:
+  - [ ] logs da execucao
+  - [ ] detalhes de erro
+  - [ ] estado da fila
+  - [ ] health/preflight no fluxo de conexao
+- [ ] Expandir `metrics/health` com visao operacional do pipeline remoto:
+  - [ ] `queueDepth`
+  - [ ] `activeRunId`
+  - [ ] `artifactExpiresAt`
+  - [ ] `stagingUsageBytes`
+  - [ ] `serverTimeUtc`
+- [ ] Garantir re-sync do cliente apos reconexao sem duplicar eventos.
+- [ ] Formalizar operacao e rollout com logs e testes de regressao.
+
+Arquivos foco:
+
+- [ ] Client:
+  - [ ] `lib/application/providers/remote_file_transfer_provider.dart`
+  - [ ] `lib/application/providers/backup_progress_provider.dart`
+  - [ ] `lib/application/providers/remote_schedules_provider.dart`
+  - [ ] `lib/application/providers/server_connection_provider.dart`
+  - [ ] `lib/infrastructure/socket/client/connection_manager.dart`
+- [ ] Server:
+  - [ ] `lib/infrastructure/socket/server/metrics_message_handler.dart`
+  - [ ] `lib/infrastructure/socket/server/diagnostics_message_handler.dart`
+  - [ ] `lib/application/services/log_service.dart`
+
+Testes obrigatorios:
+
+- [ ] novo `test/unit/application/providers/backup_progress_provider_test.dart`
+- [ ] novo `test/unit/application/providers/remote_schedules_provider_test.dart`
+- [ ] novo `test/integration/remote_execution_end_to_end_test.dart`
+- [ ] fluxo de reconexao com re-sync de fila/eventos por `sequence`
+- [ ] fluxo completo: executar remoto -> baixar -> enviar para destino local
+- [ ] fluxo de historico local e destinos vinculados orientados a `runId`
+
+Gate de saida:
+
+- [ ] Cliente completa o fluxo remoto ate o destino local sem depender de configuracao manual fora do fluxo.
+- [ ] Reconexao do cliente nao duplica progresso nem eventos.
+- [ ] Operacao consegue inspecionar health, fila e logs de execucao.
+- [ ] Sem regressao no fluxo atual de transferencia local.
+- [ ] Historico local e destinos vinculados conseguem rastrear uma execucao remota por `runId`.
+
+Dependencias:
+
+- [ ] `PR-4` mergeado com download resiliente e hash confiavel.
+
+Fora de escopo:
+
+- [ ] Redesign visual amplo da UI.
+- [ ] Telemetria externa ou integracao com observability stack de terceiros.
+
+Roteiro executavel (ordem sugerida):
+
+1. Continuacao local orientada a `runId`
+   - [ ] Mapear artefato baixado para destinos locais vinculados.
+   - [ ] Persistir correlacao minima para retomada apos reconexao.
+   - [ ] Migrar historico local e vinculo de destinos para `runId/artifactId`.
+2. Re-sync e resiliencia do cliente
+   - [ ] Reidratar status/fila/eventos usando `getExecutionStatus/getExecutionQueue`.
+   - [ ] Reconciliar eventos recebidos com `eventId/sequence`.
+3. Observabilidade operacional
+   - [ ] Expor no fluxo de conexao `health`, `preflight` e diagnostico.
+   - [ ] Expor `queueDepth`, `activeRunId`, `artifactExpiresAt`, `stagingUsageBytes`, `serverTimeUtc`.
+   - [ ] Padronizar logs de erro no cliente para suporte.
+4. Validacao final do PR-5
+   - [ ] Rodar testes ponta a ponta e regressao do fluxo local.
+
+Sequencia de commits sugerida:
+
+1. `client: continue local delivery from downloaded artifact by runId`
+2. `client: add reconnect resync for remote execution state`
+3. `ops: expose diagnostics and operational visibility in client flow`
+4. `test: cover end to end remote to local continuation flow`
 
 ## Checklist Tecnico de Implementacao por Arquivo (Server, Protocol, Client + Testes)
 
@@ -834,12 +1253,14 @@ Gate de saida:
     - `pauseScheduleRequest/Response`
     - `resumeScheduleRequest/Response`
     - `backupQueued`, `backupDequeued`, `backupStarted`
+    - `startBackupAccepted` ou resposta equivalente de aceite imediato
 - [ ] `message.dart`
   - [ ] Garantir serializacao/deserializacao do envelope padrao:
     - `requestId`, `statusCode`, `success`, `data`, `error`
   - [ ] Garantir validacao de campos obrigatorios para request/response
   - [ ] Incluir suporte a `idempotencyKey` para requests mutaveis
   - [ ] Incluir suporte a `eventId` e `sequence` para eventos
+  - [ ] Nao mudar tipo de `requestId` do transporte em `v1`
 - [ ] `error_codes.dart`
   - [ ] Adicionar codigos de erro obrigatorios:
     - `BACKUP_ALREADY_RUNNING`
@@ -858,12 +1279,19 @@ Gate de saida:
 - [ ] `execution_messages.dart` (novo)
   - [ ] Requests/responses para `startBackup`, `cancelBackup`, `getExecutionStatus`, `getExecutionQueue`, `cancelQueuedBackup`
   - [ ] Eventos `backupQueued`, `backupDequeued`, `backupStarted`
+  - [ ] `startBackup` deve responder com aceite imediato e `runId`
   - [ ] `getExecutionStatus` deve retornar estado formal + `queuedPosition` + `runId`
   - [ ] Eventos devem carregar `eventId`, `sequence`, `runId`, `occurredAt`
 - [ ] `system_messages.dart` (novo)
   - [ ] Requests/responses para `getServerHealth`, `validateServerBackupPrerequisites`, `capabilities`
+  - [ ] `capabilities` deve incluir `serverTimeUtc`, `chunkSize`, `compression`, `supportsRunId`, `supportsResume`, `supportsChunkAck`, `supportsArtifactRetention`
 - [ ] `diagnostics_messages.dart` (novo)
   - [ ] Requests/responses para `getRunLogs`, `getRunErrorDetails`, `getArtifactMetadata`, `cleanupStaging`
+- [ ] `file_transfer_messages.dart`
+  - [ ] Incluir `runId` ou `artifactId` no contrato de metadados e resume
+  - [ ] Formalizar estrategia de `fileAck/backpressure` ou explicitar ausencia dela em `v1`
+- [ ] `metrics_messages.dart`
+  - [ ] Incluir campos operacionais para fila, artefato ativo e tempo do servidor
 
 ### Server (`lib/infrastructure/socket/server`)
 
@@ -873,21 +1301,39 @@ Gate de saida:
 - [ ] `execution_message_handler.dart` (novo)
   - [ ] Reusar `SchedulerService.executeNow/cancelExecution`
   - [ ] Expor `getExecutionStatus/getExecutionQueue` com `runId/state/queuedPosition`
+  - [ ] Retornar aceite imediato de `startBackup` sem bloquear ate o fim da execucao
   - [ ] Aplicar regra: manual concorrente retorna `409 BACKUP_ALREADY_RUNNING`
   - [ ] Enforcar maquina de estados e bloquear transicoes invalidas
   - [ ] Implementar deduplicacao por `idempotencyKey`
   - [ ] Enforcar politica de fila (`maxQueueSize`, TTL, duplicidade de `scheduleId`)
+- [ ] `lib/application/services/scheduler_service.dart`
+  - [ ] Introduzir semantica explicita para execucao remota server-first
+  - [ ] Nao enviar para destinos finais quando a origem for comando remoto
+  - [ ] Publicar `runId` no contrato remoto
+  - [ ] Usar staging remoto por `runId`, nao por `scheduleId`
+- [ ] `lib/infrastructure/transfer_staging_service.dart`
+  - [ ] Migrar namespace remoto de `scheduleId` para `runId`
+  - [ ] Ajustar cleanup remoto para `runId`
 - [ ] `schedule_message_handler.dart`
   - [ ] Completar `create/delete/pause/resume`
   - [ ] Migrar erros para `createErrorMessage` com `statusCode/errorCode`
+  - [ ] Passar `executionOrigin`/`clientId`/`runId` para o pipeline remoto
+  - [ ] Remover dependencia de estado singleton para progresso/cancelamento por cliente
 - [ ] `system_message_handler.dart` (novo)
   - [ ] `getServerHealth`
   - [ ] `validateServerBackupPrerequisites` usando `ToolVerificationService`, `StorageChecker`, `validate_backup_directory`, `validate_sybase_log_backup_preflight`
 - [ ] `diagnostics_message_handler.dart` (novo)
   - [ ] Reusar `IBackupHistoryRepository`, `BackupLogRepository.getByBackupHistory`, `LogService.getLogs`
   - [ ] Expor `getRunLogs/getRunErrorDetails/getArtifactMetadata/cleanupStaging`
+- [ ] `metrics_message_handler.dart`
+  - [ ] Expor estado operacional resumido para fila, execucao e diagnostico no cliente
+  - [ ] Incluir `queueDepth`, `activeRunId`, `artifactExpiresAt`, `stagingUsageBytes`, `serverTimeUtc`
 - [ ] `file_transfer_message_handler.dart`
   - [ ] Retornar `410` + `ARTIFACT_EXPIRED` para artefato fora da retencao
+  - [ ] Implementar estrategia de `ACK/backpressure` ou remover `fileAck` do fluxo
+- [ ] `lib/infrastructure/file_transfer_lock_service.dart`
+  - [ ] Migrar lock simples para lease com `owner/runId/acquiredAt/expiresAt`
+  - [ ] Executar cleanup de locks expirados no bootstrap do servidor
 - [ ] `tcp_socket_server.dart`
   - [ ] Registrar roteamento dos novos handlers mantendo guard de autenticacao
   - [ ] Garantir recuperacao de estado/fila apos restart (bootstrap de runtime)
@@ -899,13 +1345,24 @@ Gate de saida:
   - [ ] Garantir parse de envelope padrao (`statusCode/success/data/error`)
   - [ ] Gerar e enviar `idempotencyKey` para comandos mutaveis
   - [ ] Reprocessar eventos por `sequence` e descartar duplicados por `eventId`
+  - [ ] Tratar `startBackup` como aceite imediato e acompanhar execucao por `runId`
+  - [ ] Persistir resume metadata por `runId/artifactId`
 - [ ] `remote_schedules_provider.dart`
   - [ ] Consumir comandos novos de agendamento (`create/delete/pause/resume`)
+  - [ ] Mover validacao de pasta local para o inicio do download, nao para o disparo da execucao remota
+  - [ ] Separar `aceite da execucao` de `conclusao da execucao`
 - [ ] `server_connection_provider.dart`
   - [ ] Integrar health/preflight no fluxo de conexao
+- [ ] `backup_progress_provider.dart`
+  - [ ] Reconciliar progresso remoto/local por `runId`
+  - [ ] Reidratar estado apos reconexao do cliente
 - [ ] `remote_file_transfer_provider.dart`
   - [ ] Remover chamada local `_transferStagingService.cleanupStaging(scheduleId)`
   - [ ] Chamar endpoint remoto `cleanupStaging` apos transferencia concluida
+  - [ ] Migrar correlacao de download/upload vinculado para `runId`
+  - [ ] Persistir historico e destinos vinculados por `runId/artifactId`
+- [ ] `file_transfer_resume_metadata_store.dart`
+  - [ ] Trocar compatibilidade baseada em `scheduleId` por `runId/artifactId`
 
 ### Testes (`test/unit` + `test/integration`)
 
@@ -914,22 +1371,32 @@ Gate de saida:
   - [ ] `system_messages_test.dart` (novo)
   - [ ] `diagnostics_messages_test.dart` (novo)
   - [ ] validar `idempotencyKey`, `eventId`, `sequence` no contrato
+  - [ ] validar payload de `capabilities` e aceite imediato de `startBackup`
 - [ ] Server unit:
   - [ ] `schedule_message_handler_test.dart` (erros padronizados + comandos faltantes)
   - [ ] `execution_message_handler_test.dart` (mutex, fila, 409 manual concorrente)
   - [ ] `system_message_handler_test.dart` (health + preflight)
   - [ ] `diagnostics_message_handler_test.dart` (logs/metadata/cleanup)
   - [ ] validar bloqueio de transicao invalida e deduplicacao por `idempotencyKey`
+  - [ ] validar registry por `runId` e reconnect do cliente sem perder contexto
+  - [ ] validar lease e cleanup de lock expirado
 - [ ] Client unit:
   - [ ] `connection_manager_test.dart` (novos endpoints + envelope)
   - [ ] `remote_file_transfer_provider_test.dart` (cleanup remoto)
+  - [ ] `backup_progress_provider_test.dart` (re-sync por `runId`)
+  - [ ] `remote_schedules_provider_test.dart` (disparo remoto sem pre-validacao local de pasta)
   - [ ] validar ordenacao/deduplicacao de eventos por `sequence/eventId`
+  - [ ] validar resume metadata por `runId/artifactId`
 - [ ] Integracao:
   - [ ] `socket_integration_test.dart` (fluxo completo de CRUD config + execucao + status)
   - [ ] `backup_queue_integration_test.dart` (2 clientes concorrentes)
   - [ ] `file_transfer_integration_test.dart` (`getArtifactMetadata` + hash + cleanup remoto)
+  - [ ] `file_transfer_resume_integration_test.dart` (retomada de download por `runId`)
   - [ ] `server_restart_recovery_test.dart` (recuperacao de fila/estado)
+  - [ ] `remote_execution_end_to_end_test.dart` (executar remoto -> baixar -> enviar local)
   - [ ] fluxo de artefato expirado com retorno `410`
+  - [ ] fluxo de `startBackup` com aceite imediato e acompanhamento posterior por `runId`
+  - [ ] fluxo de transferencia com estrategia final de janela/ACK validada
 
 ## Checklist de Qualidade por PR
 
@@ -938,12 +1405,21 @@ Gate de saida:
 - [ ] Sem bypass de auth/licenca no caminho remoto.
 - [ ] Contrato de erro estavel e documentado no codigo do protocolo.
 - [ ] Todas as respostas remotas retornam `statusCode` e envelope padrao.
+- [ ] `capabilities` negocia recursos reais do servidor e expõe `serverTimeUtc`.
 - [ ] Matriz `errorCode -> statusCode -> retryable -> acao cliente` publicada e coberta por teste.
+- [ ] `startBackup` retorna aceite imediato com `runId`, sem depender do timeout de conclusao para responder.
+- [ ] Execucao remota `server-first` validada: sem upload para destinos finais no servidor quando a origem for comando remoto.
 - [ ] Regras de concorrencia/fila testadas (1 execucao ativa + enfileiramento de agendados).
 - [ ] Maquina de estados de execucao validada em testes (incluindo transicao invalida).
 - [ ] Idempotencia validada para comandos mutaveis (sem duplicidade de execucao).
 - [ ] Eventos possuem `eventId/sequence` e cliente re-sincroniza corretamente apos reconexao.
+- [ ] Registry de execucao por `runId` validado: progresso, cancelamento e diagnostico sobrevivem a reconnect.
 - [ ] Reinicio de servidor preserva estado de fila/execucao.
 - [ ] Politica de retencao de artefato validada (inclui retorno `410` para expirado).
+- [ ] Download resiliente validado com resume e verificacao de hash antes do cleanup remoto.
+- [ ] Resume e cleanup remoto usam `runId/artifactId`, nao `scheduleId` como chave tecnica.
+- [ ] Lease de lock de transferencia validado com cleanup de expirados no bootstrap.
+- [ ] Estrategia final de transferencia (`ACK/backpressure` ou streaming sem ACK) esta explicita, coerente e coberta por teste.
+- [ ] Continuacao local apos download validada por `runId` sem duplicar progresso.
 - [ ] Endpoints de processos server-only cobertos na API remota para consumo do cliente.
 - [ ] Sem regressao funcional no fluxo atual cliente->servidor.

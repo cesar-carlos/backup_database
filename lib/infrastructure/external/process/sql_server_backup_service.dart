@@ -505,10 +505,15 @@ class SqlServerBackupService implements ISqlServerBackupService {
     }
   }
 
-  static const Duration _sqlBackupFileInitialDelay = Duration(milliseconds: 200);
-  static const Duration _sqlBackupFilePollInterval = Duration(milliseconds: 250);
-  static const Duration _sqlBackupFileStabilizeDelay =
-      Duration(milliseconds: 200);
+  static const Duration _sqlBackupFileInitialDelay = Duration(
+    milliseconds: 200,
+  );
+  static const Duration _sqlBackupFilePollInterval = Duration(
+    milliseconds: 250,
+  );
+  static const Duration _sqlBackupFileStabilizeDelay = Duration(
+    milliseconds: 200,
+  );
   static const Duration _sqlBackupFileMaxWait = Duration(seconds: 12);
 
   Future<bool> _waitForStableBackupFile(File backupFile) async {

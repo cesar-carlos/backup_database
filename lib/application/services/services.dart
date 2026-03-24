@@ -7,6 +7,7 @@ export 'backup_orchestrator_service.dart';
 export 'backup_persistence.dart';
 export 'cached_license_validation_service.dart';
 export 'i_license_cache_invalidator.dart';
+export 'legacy_sqlite_folder_import_service.dart';
 export 'license_decoder.dart';
 export 'license_generation_service.dart';
 export 'license_policy_service.dart';

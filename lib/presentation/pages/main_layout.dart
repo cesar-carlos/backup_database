@@ -10,7 +10,7 @@ import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
-import 'package:backup_database/core/theme/theme_provider.dart';
+import 'package:backup_database/presentation/providers/theme_provider.dart';
 import 'package:backup_database/presentation/widgets/navigation/navigation_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';

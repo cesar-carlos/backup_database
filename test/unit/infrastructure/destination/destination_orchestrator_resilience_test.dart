@@ -53,6 +53,15 @@ void main() {
         '"remotePath":"/backups"}',
   );
 
+  final ftpDestinationSingleAttempt = BackupDestination(
+    id: 'dest-ftp-1',
+    name: 'FTP Test',
+    type: DestinationType.ftp,
+    config:
+        '{"host":"ftp.example.com","port":21,"username":"u","password":"p",'
+        '"remotePath":"/backups","maxAttempts":1}',
+  );
+
   setUpAll(() {
     registerFallbackValue(
       const FtpDestinationConfig(
@@ -74,7 +83,7 @@ void main() {
     nextcloudDestinationService = _MockNextcloudDestinationService();
     licensePolicyService = _MockLicensePolicyService();
     circuitBreakerRegistry = CircuitBreakerRegistry(
-      openDuration: const Duration(milliseconds: 50),
+      openDuration: const Duration(hours: 1),
     );
 
     when(
@@ -190,13 +199,13 @@ void main() {
         for (var i = 0; i < 3; i++) {
           await orchestrator.uploadToDestination(
             sourceFilePath: '/tmp/backup.bak',
-            destination: ftpDestination,
+            destination: ftpDestinationSingleAttempt,
           );
         }
 
         final result = await orchestrator.uploadToDestination(
           sourceFilePath: '/tmp/backup.bak',
-          destination: ftpDestination,
+          destination: ftpDestinationSingleAttempt,
         );
 
         expect(result.isError(), isTrue);

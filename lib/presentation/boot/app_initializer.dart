@@ -7,8 +7,8 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AppInitializer {
   static Future<void> initialize() async {
@@ -71,9 +71,9 @@ class AppInitializer {
   }
 
   static Future<LaunchConfig> getLaunchConfig() async {
-    final prefs = await SharedPreferences.getInstance();
-    final startMinimizedFromSettings =
-        prefs.getBool('start_minimized') ?? false;
+    final startMinimizedFromSettings = await service_locator
+        .getIt<IMachineSettingsRepository>()
+        .getStartMinimized();
     LoggerService.info(
       'Configuração "Iniciar minimizado" carregada: '
       '$startMinimizedFromSettings',

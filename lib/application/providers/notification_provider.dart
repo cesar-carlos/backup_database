@@ -77,8 +77,10 @@ class NotificationProvider extends ChangeNotifier {
   bool get isConfigured => selectedConfig != null && selectedConfig!.enabled;
   bool isConfigUnderTest(String configId) =>
       _testingConfigIds.contains(configId);
-  bool isConfigUpdating(String configId) => _updatingConfigIds.contains(configId);
-  Set<String> get updatingConfigIds => Set<String>.unmodifiable(_updatingConfigIds);
+  bool isConfigUpdating(String configId) =>
+      _updatingConfigIds.contains(configId);
+  Set<String> get updatingConfigIds =>
+      Set<String>.unmodifiable(_updatingConfigIds);
 
   void _notifySafely() {
     if (_isDisposed) {

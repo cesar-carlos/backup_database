@@ -1,19 +1,20 @@
 import 'dart:io';
 
 import 'package:backup_database/core/services/temp_directory_service.dart';
+import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late TempDirectoryService tempService;
   late Directory testTempDir;
+  late _FakeMachineSettingsRepository machineSettings;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
-    tempService = TempDirectoryService();
+    machineSettings = _FakeMachineSettingsRepository();
+    tempService = TempDirectoryService(machineSettings: machineSettings);
     testTempDir = await Directory.systemTemp.createTemp(
       'temp_dir_service_test_',
     );
@@ -23,7 +24,7 @@ void main() {
     if (await testTempDir.exists()) {
       await testTempDir.delete(recursive: true);
     }
-    SharedPreferences.setMockInitialValues({});
+    machineSettings.customTempDownloadsPath = null;
     tempService.clearCache();
   });
 
@@ -114,7 +115,6 @@ void main() {
       await tempService.getDownloadsDirectory();
       tempService.clearCache();
 
-      // Nao deve lancar erro ao chamar novamente
       final dir = await tempService.getDownloadsDirectory();
       expect(dir, isNotNull);
     });
@@ -124,7 +124,6 @@ void main() {
       () async {
         final validDir = await testTempDir.createTemp('valid_');
 
-        // Metodo privado, testado indiretamente via setCustomTempPath
         final result = await tempService.setCustomTempPath(validDir.path);
 
         expect(result, isTrue);
@@ -143,5 +142,80 @@ void main() {
         expect(downloadsDir.path, contains('Downloads'));
       },
     );
+
+    test(
+      'getTempDirectory clears custom path when path is not a directory',
+      () async {
+        final blockingFile = File(p.join(testTempDir.path, 'not_a_directory'));
+        await blockingFile.writeAsString('x');
+        machineSettings.customTempDownloadsPath = blockingFile.path;
+
+        final tempDir = await tempService.getTempDirectory();
+
+        expect(
+          p.normalize(tempDir.path),
+          equals(p.normalize(Directory.systemTemp.path)),
+        );
+        expect(await tempService.getCustomTempPath(), isNull);
+      },
+    );
+
+    test(
+      'validateDownloadsDirectory returns true for writable folder',
+      () async {
+        final ok = await tempService.validateDownloadsDirectory();
+        expect(ok, isTrue);
+      },
+    );
   });
+}
+
+class _FakeMachineSettingsRepository implements IMachineSettingsRepository {
+  bool startWithWindows = false;
+  bool startMinimized = false;
+  String? customTempDownloadsPath;
+  String? receivedBackupsDefaultPath;
+  String? scheduleTransferDestinationsJson;
+
+  @override
+  Future<bool> getStartWithWindows() async => startWithWindows;
+
+  @override
+  Future<void> setStartWithWindows(bool value) async {
+    startWithWindows = value;
+  }
+
+  @override
+  Future<bool> getStartMinimized() async => startMinimized;
+
+  @override
+  Future<void> setStartMinimized(bool value) async {
+    startMinimized = value;
+  }
+
+  @override
+  Future<String?> getCustomTempDownloadsPath() async => customTempDownloadsPath;
+
+  @override
+  Future<void> setCustomTempDownloadsPath(String? path) async {
+    customTempDownloadsPath = path;
+  }
+
+  @override
+  Future<String?> getReceivedBackupsDefaultPath() async =>
+      receivedBackupsDefaultPath;
+
+  @override
+  Future<void> setReceivedBackupsDefaultPath(String? path) async {
+    receivedBackupsDefaultPath = path;
+  }
+
+  @override
+  Future<String?> getScheduleTransferDestinationsJson() async =>
+      scheduleTransferDestinationsJson;
+
+  @override
+  Future<void> setScheduleTransferDestinationsJson(String? json) async {
+    scheduleTransferDestinationsJson = json;
+  }
 }
