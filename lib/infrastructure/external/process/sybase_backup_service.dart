@@ -384,14 +384,12 @@ class SybaseBackupService implements ISybaseBackupService {
         var backupFound = false;
         for (var i = 0; i < 10; i++) {
           if (await backupDir.exists()) {
-            final files = await backupDir.list().toList();
-            if (files.isNotEmpty) {
-              for (final entity in files) {
-                if (entity is File) {
-                  totalSize += await entity.length();
-                }
-              }
-              if (totalSize > 0) {
+            final dirBytes = await _sumFileLengthsInDirectory(backupDir);
+            if (dirBytes > 0) {
+              await Future<void>.delayed(const Duration(milliseconds: 200));
+              final dirBytes2 = await _sumFileLengthsInDirectory(backupDir);
+              if (dirBytes2 == dirBytes) {
+                totalSize = dirBytes;
                 backupFound = true;
                 break;
               }
@@ -399,15 +397,20 @@ class SybaseBackupService implements ISybaseBackupService {
           }
 
           if (!backupFound && await backupFile.exists()) {
-            totalSize = await backupFile.length();
-            if (totalSize > 0) {
-              backupFound = true;
-              break;
+            final len = await backupFile.length();
+            if (len > 0) {
+              await Future<void>.delayed(const Duration(milliseconds: 200));
+              final len2 = await backupFile.length();
+              if (len2 == len) {
+                totalSize = len;
+                backupFound = true;
+                break;
+              }
             }
           }
 
           if (!backupFound && i < 9) {
-            await Future.delayed(const Duration(milliseconds: 500));
+            await Future<void>.delayed(const Duration(milliseconds: 500));
           }
         }
 
@@ -799,6 +802,19 @@ class SybaseBackupService implements ISybaseBackupService {
       case BackupType.convertedLog:
         return null;
     }
+  }
+
+  Future<int> _sumFileLengthsInDirectory(Directory dir) async {
+    var sum = 0;
+    if (!await dir.exists()) {
+      return 0;
+    }
+    await for (final entity in dir.list()) {
+      if (entity is File) {
+        sum += await entity.length();
+      }
+    }
+    return sum;
   }
 
   Future<File?> _tryFindLogFile(Directory backupDir) async {

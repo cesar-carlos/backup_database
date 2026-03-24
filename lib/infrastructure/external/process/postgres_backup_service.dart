@@ -1033,13 +1033,15 @@ class PostgresBackupService implements IPostgresBackupService {
         );
       }
 
-      fullBackups.sort((a, b) {
-        final aStat = a.statSync();
-        final bStat = b.statSync();
-        return bStat.modified.compareTo(aStat.modified);
-      });
+      final stamped = await Future.wait(
+        fullBackups.map((d) async {
+          final st = await d.stat();
+          return (dir: d, modified: st.modified);
+        }),
+      );
+      stamped.sort((a, b) => b.modified.compareTo(a.modified));
 
-      return rd.Success(fullBackups.first.path);
+      return rd.Success(stamped.first.dir.path);
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao buscar backup anterior', e, stackTrace);
       return rd.Failure(

@@ -43,6 +43,16 @@ class BackupHistoryDao extends DatabaseAccessor<AppDatabase>
   Future<List<BackupHistoryTableData>> getByStatus(String status) =>
       (select(backupHistoryTable)..where((t) => t.status.equals(status))).get();
 
+  Future<List<BackupHistoryTableData>> getRunningStartedBefore(
+    DateTime cutoff,
+  ) =>
+      (select(backupHistoryTable)..where(
+            (t) =>
+                t.status.equals('running') &
+                t.startedAt.isSmallerThanValue(cutoff),
+          ))
+          .get();
+
   Future<List<BackupHistoryTableData>> getByDateRange(
     DateTime start,
     DateTime end,

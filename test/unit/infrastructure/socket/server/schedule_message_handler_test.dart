@@ -72,7 +72,8 @@ void main() {
     executeBackup = _MockExecuteBackup();
     progressNotifier = _MockProgressNotifier();
 
-    when(() => progressNotifier.tryStartBackup()).thenReturn(true);
+    when(() => schedulerService.isExecutingBackup).thenReturn(false);
+    when(() => progressNotifier.tryStartBackup(any())).thenReturn(true);
     when(() => progressNotifier.currentSnapshot).thenReturn(null);
 
     handler = ScheduleMessageHandler(
@@ -131,6 +132,7 @@ void main() {
           contains('Backup diferencial requer licença'),
         );
         verifyNever(() => executeBackup(any()));
+        verifyNever(() => progressNotifier.tryStartBackup(any()));
       },
     );
 

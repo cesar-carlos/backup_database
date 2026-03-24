@@ -139,6 +139,29 @@ void main() {
       );
     });
 
+    test('forEachChunk matches chunkFile bytes and metadata', () async {
+      final path = tempPath('stream.bin');
+      final content = List<int>.generate(2500, (i) => i % 256);
+      await File(path).writeAsBytes(content);
+      final expected = await chunker.chunkFile(path, 800);
+      final collected = <FileChunk>[];
+      await chunker.forEachChunk(
+        path,
+        firstChunkIndex: 0,
+        useChunkSize: 800,
+        emit: (c) async {
+          collected.add(c);
+        },
+      );
+      expect(collected.length, expected.length);
+      for (var i = 0; i < collected.length; i++) {
+        expect(collected[i].chunkIndex, expected[i].chunkIndex);
+        expect(collected[i].totalChunks, expected[i].totalChunks);
+        expect(collected[i].data, orderedEquals(expected[i].data));
+        expect(collected[i].checksum, expected[i].checksum);
+      }
+    });
+
     test('assembleChunks throws when chunks empty', () async {
       expect(
         () => chunker.assembleChunks([], tempPath('out.bin')),

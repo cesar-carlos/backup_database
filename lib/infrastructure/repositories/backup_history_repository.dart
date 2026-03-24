@@ -130,9 +130,15 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
           ),
         );
       }
+      var updatedRows = 0;
       await _database.transaction(() async {
         final companion = _toCompanion(history);
-        await _database.backupHistoryDao.updateHistoryIfRunning(companion);
+        updatedRows = await _database.backupHistoryDao.updateHistoryIfRunning(
+          companion,
+        );
+        if (updatedRows == 0) {
+          return;
+        }
         final logCompanion = _backupLogRepository.buildIdempotentLogCompanion(
           backupHistoryId: history.id,
           step: logStep,
@@ -143,6 +149,15 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
         );
         await _database.backupLogDao.insertOrReplaceLog(logCompanion);
       });
+      if (updatedRows == 0) {
+        return rd.Failure(
+          ValidationFailure(
+            message:
+                'Histórico não estava em execução (status running); '
+                'não foi possível aplicar log: $logStep',
+          ),
+        );
+      }
       return rd.Success(history);
     } on Object catch (e) {
       return rd.Failure(
@@ -249,6 +264,44 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     } on Object catch (e) {
       return rd.Failure(
         DatabaseFailure(message: 'Erro ao deletar históricos antigos: $e'),
+      );
+    }
+  }
+
+  @override
+  Future<rd.Result<int>> reconcileStaleRunning({
+    required Duration maxAge,
+  }) async {
+    try {
+      final cutoff = DateTime.now().subtract(maxAge);
+      final rows = await _database.backupHistoryDao.getRunningStartedBefore(
+        cutoff,
+      );
+      var count = 0;
+      const message =
+          'Backup interrompido: processo encerrado durante a execução '
+          '(recuperação ao iniciar o agendador).';
+      for (final row in rows) {
+        final entity = _toEntity(row);
+        final finishedAt = DateTime.now();
+        final reconciled = entity.copyWith(
+          status: BackupStatus.error,
+          errorMessage: message,
+          finishedAt: finishedAt,
+          durationSeconds: finishedAt.difference(entity.startedAt).inSeconds,
+        );
+        final companion = _toCompanion(reconciled);
+        final ok = await _database.backupHistoryDao.updateHistory(companion);
+        if (ok) {
+          count++;
+        }
+      }
+      return rd.Success(count);
+    } on Object catch (e) {
+      return rd.Failure(
+        DatabaseFailure(
+          message: 'Erro ao reconciliar históricos running antigos: $e',
+        ),
       );
     }
   }

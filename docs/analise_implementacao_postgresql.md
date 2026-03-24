@@ -1,6 +1,6 @@
 # Analise da Implementacao PostgreSQL
 
-Atualizado em: 2026-02-28
+Atualizado em: 2026-03-24
 
 ## Resumo executivo
 
@@ -31,20 +31,21 @@ Porem, o documento anterior superestimava o estado atual em alguns pontos:
 - `BackupOrchestratorService` chama `IPostgresBackupService`
 - compressao continua no orchestrator apos gerar backup bruto
 - UI de agendamento permite os tipos PostgreSQL: `full`, `fullSingle`, `differential`, `log`
+- tipos de backup **convertidos** do Sybase (`convertedDifferential`, `convertedFullSingle`, `convertedLog`) **nao** se aplicam ao PostgreSQL: o servico retorna falha explicita se forem usados
 
 ## Estrategias (comportamento real)
 
 ### 1) Full
 
 - ferramenta: `pg_basebackup`
-- argumentos principais: `-D`, `-P`, `--manifest-checksums=sha256`, `--wal-method=stream`
+- argumentos principais: `-h`, `-p`, `-U` (conexao), `-D`, `-P`, `--manifest-checksums=sha256`, `--wal-method=stream`
 - saida: diretorio
 - verificacao opcional: `pg_verifybackup -D <backupPath>` (quando `verifyAfterBackup=true`)
 
 ### 2) Full Single
 
 - ferramenta: `pg_dump`
-- argumentos principais: `-F c`, `-f <arquivo.backup>`, `--no-owner`, `--no-privileges`
+- argumentos principais: `-h`, `-p`, `-U`, `-d` (conexao), `-F c`, `-f <arquivo.backup>`, `-v`, `--no-owner`, `--no-privileges`
 - escopo: banco configurado (`config.database`)
 - saida: arquivo `.backup`
 - verificacao opcional: `pg_restore -l <arquivo.backup>`
@@ -75,14 +76,14 @@ Variaveis suportadas:
 
 - `BACKUP_DATABASE_PG_LOG_USE_SLOT=true|false` (padrao: `false`)
 - `BACKUP_DATABASE_PG_LOG_SLOT_NAME=<nome>` (opcional)
-- `BACKUP_DATABASE_PG_LOG_TIMEOUT_SECONDS=<segundos>` (opcional, padrao: 3600)
+- `BACKUP_DATABASE_PG_LOG_TIMEOUT_SECONDS=<segundos>` (opcional; se ausente ou invalido, padrao **1 hora** = 3600 s no `Duration` do codigo)
 - `BACKUP_DATABASE_PG_LOG_COMPRESSION=<modo>` (opcional, ex.: `gzip`, `lz4`, `none`)
 
 Quando habilitado:
 
 - o servico cria/valida slot com `pg_receivewal --create-slot --if-not-exists`;
 - usa `--slot=<nome>` na captura WAL;
-- se `BACKUP_DATABASE_PG_LOG_SLOT_NAME` nao for informado, o nome e derivado de `config.id` e sanitizado.
+- se `BACKUP_DATABASE_PG_LOG_SLOT_NAME` nao for informado, o nome e `bd_wal_<config.id>` (prefixo fixo + id), depois **sanitizado** para caracteres permitidos e limite de tamanho.
 - no delete da configuracao, o sistema tenta remover o slot remoto em modo best effort.
 
 #### Saude de slot (observabilidade)
@@ -104,8 +105,10 @@ O orchestrator separa por tipo de backup:
   Full/
   Full Single/
   Diferencial/
-  Log de Transacoes/
+  Log de Transações/
 ```
+
+(O nome das pastas vem de `getBackupTypeDisplayName` / `BackupTypeExtension.displayName`.)
 
 Dentro de cada pasta, o `PostgresBackupService` gera nome com sufixo por tipo:
 
@@ -154,14 +157,13 @@ Cobertura atual identificada:
 3. erro de `psql` ausente no `testConnection`;
 4. erro de `pg_receivewal` ausente no tipo `log`.
 
-Lacunas recomendadas para priorizar:
+Lacunas recomendadas para priorizar (**cobertura de testes**; a funcionalidade em si ja existe onde indicado):
 
-1. descoberta de FULL anterior considerando pasta atual + pasta irma `Full`;
+1. testes unitarios para descoberta de FULL anterior na pasta atual **e** na pasta irma `Full` (`_resolveFullBackupSearchDirectories` / `_findPreviousFullBackup`);
 2. cenarios de verificacao (`pg_verifybackup` e `pg_restore`) por tipo;
 3. cenarios de WAL slot habilitado (`--slot`, `--create-slot`) e cleanup no delete da configuracao;
 4. fallback de compressao do `pg_receivewal --compress` para execucao sem compressao.
 
 ## Conclusao
 
-A implementacao PostgreSQL esta ampla e integrada, mas o documento anterior nao refletia com precisao o comportamento atual.
-Este arquivo agora descreve o estado real do codigo, incluindo limitacoes abertas.
+A implementacao PostgreSQL esta integrada nas camadas citadas; este arquivo descreve o comportamento atual do codigo, limitacoes de verificacao por tipo e lacunas de testes ainda abertas.

@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/notification_provider.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
@@ -30,7 +31,12 @@ class EmailTestHistoryPanel extends StatelessWidget {
   final ValueChanged<NotificationHistoryPeriod> onPeriodChanged;
   final VoidCallback onRefresh;
 
-  static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm:ss');
+  static String _formatCreatedAt(BuildContext context, DateTime date) {
+    if (appLocaleIsPortuguese(Localizations.localeOf(context))) {
+      return DateFormat('dd/MM/yyyy HH:mm:ss', 'pt_BR').format(date);
+    }
+    return DateFormat('M/d/yyyy h:mm:ss a', 'en_US').format(date);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +51,11 @@ class EmailTestHistoryPanel extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Historico de testes SMTP',
+                appLocaleString(
+                  context,
+                  'Histórico de testes SMTP',
+                  'SMTP test history',
+                ),
                 style: FluentTheme.of(context).typography.subtitle?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -56,12 +66,22 @@ class EmailTestHistoryPanel extends StatelessWidget {
                 child: SizedBox(
                   height: 34,
                   child: AppDropdown<String?>(
-                    label: 'Configuracao',
+                    label: appLocaleString(
+                      context,
+                      'Configuração',
+                      'Configuration',
+                    ),
                     compact: true,
                     value: selectedConfigId,
                     items: [
-                      const ComboBoxItem<String?>(
-                        child: Text('Todas configuracoes'),
+                      ComboBoxItem<String?>(
+                        child: Text(
+                          appLocaleString(
+                            context,
+                            'Todas as configurações',
+                            'All configurations',
+                          ),
+                        ),
                       ),
                       ...configs.map(
                         (config) => ComboBoxItem<String?>(
@@ -71,7 +91,13 @@ class EmailTestHistoryPanel extends StatelessWidget {
                       ),
                     ],
                     onChanged: onConfigChanged,
-                    placeholder: const Text('Todas configuracoes'),
+                    placeholder: Text(
+                      appLocaleString(
+                        context,
+                        'Todas as configurações',
+                        'All configurations',
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -81,25 +107,53 @@ class EmailTestHistoryPanel extends StatelessWidget {
                 child: SizedBox(
                   height: 34,
                   child: AppDropdown<NotificationHistoryPeriod>(
-                    label: 'Periodo',
+                    label: appLocaleString(
+                      context,
+                      'Período',
+                      'Period',
+                    ),
                     compact: true,
                     value: period,
-                    items: const [
+                    items: [
                       ComboBoxItem(
                         value: NotificationHistoryPeriod.last24Hours,
-                        child: Text('Ultimas 24h'),
+                        child: Text(
+                          appLocaleString(
+                            context,
+                            'Últimas 24h',
+                            'Last 24 hours',
+                          ),
+                        ),
                       ),
                       ComboBoxItem(
                         value: NotificationHistoryPeriod.last7Days,
-                        child: Text('Ultimos 7 dias'),
+                        child: Text(
+                          appLocaleString(
+                            context,
+                            'Últimos 7 dias',
+                            'Last 7 days',
+                          ),
+                        ),
                       ),
                       ComboBoxItem(
                         value: NotificationHistoryPeriod.last30Days,
-                        child: Text('Ultimos 30 dias'),
+                        child: Text(
+                          appLocaleString(
+                            context,
+                            'Últimos 30 dias',
+                            'Last 30 days',
+                          ),
+                        ),
                       ),
                       ComboBoxItem(
                         value: NotificationHistoryPeriod.all,
-                        child: Text('Todo periodo'),
+                        child: Text(
+                          appLocaleString(
+                            context,
+                            'Todo o período',
+                            'All time',
+                          ),
+                        ),
                       ),
                     ],
                     onChanged: (value) {
@@ -107,7 +161,13 @@ class EmailTestHistoryPanel extends StatelessWidget {
                         onPeriodChanged(value);
                       }
                     },
-                    placeholder: const Text('Ultimos 7 dias'),
+                    placeholder: Text(
+                      appLocaleString(
+                        context,
+                        'Últimos 7 dias',
+                        'Last 7 days',
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -116,12 +176,14 @@ class EmailTestHistoryPanel extends StatelessWidget {
                 height: 32,
                 child: Button(
                   onPressed: onRefresh,
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(FluentIcons.refresh, size: 16),
-                      SizedBox(width: 6),
-                      Text('Atualizar'),
+                      const Icon(FluentIcons.refresh, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        appLocaleString(context, 'Atualizar', 'Refresh'),
+                      ),
                     ],
                   ),
                 ),
@@ -137,34 +199,56 @@ class EmailTestHistoryPanel extends StatelessWidget {
           else if (error != null)
             InfoBar(
               severity: InfoBarSeverity.error,
-              title: const Text('Erro ao carregar historico'),
+              title: Text(
+                appLocaleString(
+                  context,
+                  'Erro ao carregar histórico',
+                  'Error loading history',
+                ),
+              ),
               content: Text(error!),
             )
           else if (history.isEmpty)
-            const EmptyState(
+            EmptyState(
               icon: FluentIcons.history,
-              message: 'Nenhum teste SMTP encontrado para o filtro atual',
+              message: appLocaleString(
+                context,
+                'Nenhum teste SMTP encontrado para o filtro atual',
+                'No SMTP tests found for the current filter',
+              ),
             )
           else
             AppDataGrid<EmailTestAudit>(
               minWidth: 1300,
               columns: [
                 AppDataGridColumn<EmailTestAudit>(
-                  label: 'Data/Hora',
+                  label: appLocaleString(
+                    context,
+                    'Data/hora',
+                    'Date/time',
+                  ),
                   width: const FlexColumnWidth(1.2),
-                  cellBuilder: (context, row) => Text(
-                    _dateFormat.format(row.createdAt),
+                  cellBuilder: (ctx, row) => Text(
+                    _formatCreatedAt(ctx, row.createdAt),
                   ),
                 ),
                 AppDataGridColumn<EmailTestAudit>(
-                  label: 'Configuracao',
+                  label: appLocaleString(
+                    context,
+                    'Configuração',
+                    'Configuration',
+                  ),
                   width: const FlexColumnWidth(1.4),
                   cellBuilder: (context, row) => Text(
                     configNameById[row.configId] ?? row.configId,
                   ),
                 ),
                 AppDataGridColumn<EmailTestAudit>(
-                  label: 'Destinatario',
+                  label: appLocaleString(
+                    context,
+                    'Destinatário',
+                    'Recipient',
+                  ),
                   width: const FlexColumnWidth(1.5),
                   cellBuilder: (context, row) => Text(row.recipientEmail),
                 ),
@@ -175,18 +259,30 @@ class EmailTestHistoryPanel extends StatelessWidget {
                       _StatusBadge(success: row.isSuccess),
                 ),
                 AppDataGridColumn<EmailTestAudit>(
-                  label: 'Tipo de erro',
+                  label: appLocaleString(
+                    context,
+                    'Tipo de erro',
+                    'Error type',
+                  ),
                   cellBuilder: (context, row) => Text(row.errorType ?? '-'),
                 ),
                 AppDataGridColumn<EmailTestAudit>(
-                  label: 'Tentativas',
+                  label: appLocaleString(
+                    context,
+                    'Tentativas',
+                    'Attempts',
+                  ),
                   width: const FixedColumnWidth(90),
                   cellAlignment: Alignment.center,
                   headerAlignment: Alignment.center,
                   cellBuilder: (context, row) => Text('${row.attempts}'),
                 ),
                 AppDataGridColumn<EmailTestAudit>(
-                  label: 'Correlation ID',
+                  label: appLocaleString(
+                    context,
+                    'ID de correlação',
+                    'Correlation ID',
+                  ),
                   width: const FlexColumnWidth(1.6),
                   cellBuilder: (context, row) => SelectableText(
                     row.correlationId,
@@ -194,7 +290,11 @@ class EmailTestHistoryPanel extends StatelessWidget {
                   ),
                 ),
                 AppDataGridColumn<EmailTestAudit>(
-                  label: 'Mensagem',
+                  label: appLocaleString(
+                    context,
+                    'Mensagem',
+                    'Message',
+                  ),
                   width: const FlexColumnWidth(2.2),
                   cellBuilder: (context, row) {
                     final message = row.errorMessage?.trim();
@@ -218,7 +318,6 @@ class EmailTestHistoryPanel extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _StatusBadge extends StatelessWidget {
@@ -236,7 +335,9 @@ class _StatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        success ? 'Sucesso' : 'Falha',
+        success
+            ? appLocaleString(context, 'Sucesso', 'Success')
+            : appLocaleString(context, 'Falha', 'Failure'),
         style:
             FluentTheme.of(
               context,

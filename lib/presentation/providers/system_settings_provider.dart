@@ -27,10 +27,10 @@ class SystemSettingsProvider extends ChangeNotifier {
   static const String _startMinimizedKey = 'start_minimized';
   static const String _startWithWindowsKey = 'start_with_windows';
 
-  bool _minimizeToTray = true;
-  bool _closeToTray = true;
+  bool _minimizeToTray = false;
+  bool _closeToTray = false;
   bool _startMinimized = false;
-  bool _startWithWindows = true;
+  bool _startWithWindows = false;
   bool _isInitialized = false;
 
   bool get minimizeToTray => _minimizeToTray;
@@ -50,10 +50,10 @@ class SystemSettingsProvider extends ChangeNotifier {
           !prefs.containsKey(_startMinimizedKey) &&
           !prefs.containsKey(_startWithWindowsKey);
 
-      _minimizeToTray = prefs.getBool(_minimizeToTrayKey) ?? true;
-      _closeToTray = prefs.getBool(_closeToTrayKey) ?? true;
+      _minimizeToTray = prefs.getBool(_minimizeToTrayKey) ?? false;
+      _closeToTray = prefs.getBool(_closeToTrayKey) ?? false;
       _startMinimized = prefs.getBool(_startMinimizedKey) ?? false;
-      _startWithWindows = prefs.getBool(_startWithWindowsKey) ?? true;
+      _startWithWindows = prefs.getBool(_startWithWindowsKey) ?? false;
 
       if (isFirstRun) {
         await prefs.setBool(_minimizeToTrayKey, _minimizeToTray);

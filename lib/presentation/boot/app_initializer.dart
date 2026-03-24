@@ -75,7 +75,8 @@ class AppInitializer {
     final startMinimizedFromSettings =
         prefs.getBool('start_minimized') ?? false;
     LoggerService.info(
-      'Configuracao "Iniciar Minimizado" carregada: $startMinimizedFromSettings',
+      'Configuração "Iniciar minimizado" carregada: '
+      '$startMinimizedFromSettings',
     );
 
     final args = Platform.executableArguments;
@@ -91,7 +92,9 @@ class AppInitializer {
     final startMinimized = startMinimizedFromArgs || startMinimizedFromSettings;
 
     LoggerService.info(
-      'Iniciar minimizado: $startMinimized (configuracao: $startMinimizedFromSettings, argumento: $startMinimizedFromArgs)',
+      'Iniciar minimizado: $startMinimized '
+      '(configuração: $startMinimizedFromSettings, argumento: '
+      '$startMinimizedFromArgs)',
     );
 
     return LaunchConfig(

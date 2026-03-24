@@ -1,6 +1,6 @@
 # Analise da Implementacao SQL Server
 
-Atualizado em: 2026-02-28
+Atualizado em: 2026-03-24
 
 ## Resumo executivo
 
@@ -36,6 +36,7 @@ A documentacao antiga estava desatualizada em pontos importantes, principalmente
 - `BackupOrchestratorService` chama `ISqlServerBackupService.executeBackup`;
 - compressao e script pos-backup continuam no orchestrator;
 - envio para destinos e notificacao final ocorrem no `SchedulerService`.
+- tipos de backup **convertidos** do Sybase (`convertedDifferential`, `convertedFullSingle`, `convertedLog`) **nao** se aplicam ao SQL Server: o servico retorna falha explicita se forem usados.
 
 ## Estrategias de backup (comportamento real)
 
@@ -43,14 +44,15 @@ A documentacao antiga estava desatualizada em pontos importantes, principalmente
 
 - comando: `BACKUP DATABASE`
 - extensao: `.bak`
-- clausulas: `NOFORMAT, INIT, SKIP, NOREWIND, NOUNLOAD, STATS = 10`
-- opcional: `CHECKSUM` quando `enableChecksum=true`
+- clausulas: `NOFORMAT, INIT, SKIP, NOREWIND, NOUNLOAD, STATS = <N>` (padrao `N = 10`, configuravel em `SqlServerBackupOptions.statsPercent`)
+- opcional: `CHECKSUM` e `STOP_ON_ERROR` quando `enableChecksum=true`
+- opcional: clausulas adicionais via `SqlServerBackupOptions.buildWithClause()` (ex.: `COMPRESSION`, `MAXTRANSFERSIZE`, `BUFFERCOUNT`, `BLOCKSIZE`)
 
 ### 2) Differential
 
 - comando: `BACKUP DATABASE ... WITH DIFFERENTIAL`
 - extensao: `.bak`
-- mesmas opcoes de integridade/logistica do full
+- mesmas opcoes de integridade/logistica do full (inclui `STATS`, `CHECKSUM`/`STOP_ON_ERROR`, opcoes avancadas)
 
 ### 3) Log
 
@@ -58,7 +60,7 @@ A documentacao antiga estava desatualizada em pontos importantes, principalmente
 - extensao: `.trn`
 - `truncateLog=true`: sem `COPY_ONLY`
 - `truncateLog=false`: adiciona `COPY_ONLY`
-- opcional: `CHECKSUM`
+- opcional: `CHECKSUM` e `STOP_ON_ERROR` quando `enableChecksum=true`; demais opcoes via `SqlServerBackupOptions` como no full
 
 ### 4) Full Single
 
@@ -75,8 +77,9 @@ O servico usa:
 - `-b` (retorno nao-zero em erro SQL)
 - `-r 1` (mensagens de erro em STDERR)
 - autenticacao:
-  - `-U` quando `username` informado + senha via variavel de ambiente `SQLCMDPASSWORD`
-  - `-E` quando `username` vazio
+  - `-U` quando ha autenticacao SQL (`useWindowsAuth == false` e `username`
+    nao vazio) + senha via `SQLCMDPASSWORD` (nao usa `-P` na linha de comando)
+  - `-E` quando `useWindowsAuth == true` ou `username` vazio
 
 ## Verificacao de integridade
 
@@ -130,8 +133,10 @@ No agendamento:
 <backupFolder>/
   Full/
   Diferencial/
-  Log de Transacoes/
+  Log de Transações/
 ```
+
+(O nome das pastas vem de `getBackupTypeDisplayName` / `BackupTypeExtension.displayName`.)
 
 O `SqlServerBackupService` cria arquivo com padrao:
 
@@ -180,5 +185,4 @@ Lacunas recomendadas para priorizar:
 
 ## Conclusao
 
-O suporte a SQL Server esta funcional e integrado, mas a documentacao antiga nao refletia o comportamento atual.
-Este arquivo agora descreve o estado real da implementacao, incluindo limitacoes e lacunas de teste.
+O suporte a SQL Server esta funcional e integrado nas camadas citadas. Este arquivo descreve o comportamento atual do codigo, fluxo scheduler/orchestrator e lacunas de teste ainda abertas.

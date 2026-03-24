@@ -13,4 +13,8 @@ class BackupConstants {
   /// Maximum age (days) of the last full backup for log backup preflight.
   /// If the last full is older, a warning is emitted (backup still proceeds).
   static const int maxDaysForLogBackupBaseFull = 7;
+
+  /// Running history rows older than this are closed as error when the
+  /// scheduler starts (recovery after crash or kill).
+  static const Duration staleRunningBackupMaxAge = Duration(hours: 24);
 }

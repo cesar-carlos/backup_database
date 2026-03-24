@@ -1,3 +1,4 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -44,7 +45,11 @@ class EmailConfigGrid extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Configuracoes SMTP',
+            appLocaleString(
+              context,
+              'Configurações SMTP',
+              'SMTP settings',
+            ),
             style: FluentTheme.of(context).typography.subtitle?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -53,8 +58,16 @@ class EmailConfigGrid extends StatelessWidget {
           if (configs.isEmpty)
             EmptyState(
               icon: FluentIcons.mail,
-              message: 'Nenhuma configuracao de e-mail cadastrada',
-              actionLabel: 'Nova configuracao',
+              message: appLocaleString(
+                context,
+                'Nenhuma configuração de e-mail cadastrada',
+                'No e-mail configuration registered',
+              ),
+              actionLabel: appLocaleString(
+                context,
+                'Nova configuração',
+                'New configuration',
+              ),
               onAction: canManage ? onCreate : null,
             )
           else
@@ -62,7 +75,7 @@ class EmailConfigGrid extends StatelessWidget {
               minWidth: 1100,
               columns: [
                 AppDataGridColumn<EmailConfig>(
-                  label: 'Selecionar',
+                  label: appLocaleString(context, 'Selecionar', 'Select'),
                   width: const FixedColumnWidth(90),
                   cellAlignment: Alignment.center,
                   cellBuilder: (context, row) => RadioButton(
@@ -72,27 +85,31 @@ class EmailConfigGrid extends StatelessWidget {
                   ),
                 ),
                 AppDataGridColumn<EmailConfig>(
-                  label: 'Nome',
+                  label: appLocaleString(context, 'Nome', 'Name'),
                   width: const FlexColumnWidth(1.5),
                   cellBuilder: (context, row) => Text(row.configName),
                 ),
                 AppDataGridColumn<EmailConfig>(
-                  label: 'Servidor SMTP',
+                  label: appLocaleString(
+                    context,
+                    'Servidor SMTP',
+                    'SMTP server',
+                  ),
                   width: const FlexColumnWidth(1.8),
                   cellBuilder: (context, row) => Text(row.smtpServer),
                 ),
                 AppDataGridColumn<EmailConfig>(
-                  label: 'Porta',
+                  label: appLocaleString(context, 'Porta', 'Port'),
                   width: const FlexColumnWidth(0.7),
                   cellBuilder: (context, row) => Text('${row.smtpPort}'),
                 ),
                 AppDataGridColumn<EmailConfig>(
-                  label: 'Usuario',
+                  label: appLocaleString(context, 'Usuário', 'User'),
                   width: const FlexColumnWidth(1.6),
                   cellBuilder: (context, row) => Text(row.username),
                 ),
                 AppDataGridColumn<EmailConfig>(
-                  label: 'Status',
+                  label: appLocaleString(context, 'Status', 'Status'),
                   width: const FlexColumnWidth(1.2),
                   cellBuilder: (context, row) {
                     final isUpdating = updatingConfigIds.contains(row.id);
@@ -113,7 +130,15 @@ class EmailConfigGrid extends StatelessWidget {
                             child: ProgressRing(strokeWidth: 2),
                           )
                         else
-                          Text(row.enabled ? 'Ativo' : 'Inativo'),
+                          Text(
+                            row.enabled
+                                ? appLocaleString(context, 'Ativo', 'Active')
+                                : appLocaleString(
+                                    context,
+                                    'Inativo',
+                                    'Inactive',
+                                  ),
+                          ),
                       ],
                     );
                   },
@@ -122,13 +147,13 @@ class EmailConfigGrid extends StatelessWidget {
               actions: [
                 AppDataGridAction<EmailConfig>(
                   icon: FluentIcons.edit,
-                  tooltip: 'Editar',
+                  tooltip: appLocaleString(context, 'Editar', 'Edit'),
                   onPressed: onEdit,
                   isEnabled: (_) => canManage,
                 ),
                 AppDataGridAction<EmailConfig>(
                   icon: FluentIcons.delete,
-                  tooltip: 'Excluir',
+                  tooltip: appLocaleString(context, 'Excluir', 'Delete'),
                   onPressed: onDelete,
                   isEnabled: (_) => canManage,
                 ),

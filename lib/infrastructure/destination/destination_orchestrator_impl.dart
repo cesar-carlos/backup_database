@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
@@ -174,7 +175,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       return [];
     }
 
-    const maxParallel = UploadParallelismConstants.maxParallelUploads;
+    final maxParallel = _resolveMaxParallelUploads();
     final results = List<rd.Result<void>>.filled(
       destinations.length,
       const rd.Success(()),
@@ -594,4 +595,17 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
+}
+
+int _resolveMaxParallelUploads() {
+  const envKey = 'BACKUP_DATABASE_MAX_PARALLEL_UPLOADS';
+  final raw = Platform.environment[envKey]?.trim();
+  final parsed = int.tryParse(raw ?? '');
+  if (parsed == null || parsed < 1) {
+    return UploadParallelismConstants.maxParallelUploads;
+  }
+  if (parsed > 16) {
+    return 16;
+  }
+  return parsed;
 }

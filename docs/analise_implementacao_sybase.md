@@ -1,6 +1,6 @@
 # Analise da Implementacao Sybase SQL Anywhere
 
-Atualizado em: 2026-02-28
+Atualizado em: 2026-03-24
 
 ## Resumo executivo
 
@@ -11,7 +11,8 @@ Pontos principais do estado atual:
 
 - backup via `dbisql` (SQL) com fallback para `dbbackup`;
 - `fullSingle` e tratado como `full` no servico;
-- `differential` e tratado como `log` no servico;
+- `differential` no servico vira `log` (effectiveType), mas na UI Sybase o tipo
+  e normalizado para `full` ao persistir — ver secao Differential;
 - fallback de verificacao `dbvalid -> dbverify` esta ativo;
 - fluxo de envio para destinos ocorre no `SchedulerService`, nao no orchestrator.
 
@@ -30,12 +31,20 @@ Pontos principais do estado atual:
 - tabela local guarda `password` vazio (`''`);
 - senha real lida por chave segura `sybase_password_<id>`.
 
-3. Integracao de execucao
+3. Validacao de ferramentas (UI)
+
+- `SybaseConfigProvider` dispara `ToolVerificationService.verifySybaseToolsDetailed()`
+  ao carregar configuracoes (`refreshToolsStatus`, nao bloqueante);
+- estado exposto em `toolsStatus` (`SybaseToolsStatus`) para indicar presenca dos
+  binarios no PATH (comparavel ao fluxo `sqlcmd` no SQL Server).
+
+4. Integracao de execucao
 
 - `BackupOrchestratorService` chama `ISybaseBackupService.executeBackup`;
 - compressao e script pos-backup permanecem no orchestrator;
 - upload para destinos, status final, notificacao final e cleanup ficam no
   `SchedulerService`.
+- tipos **convertidos** (`convertedDifferential`, `convertedFullSingle`, `convertedLog`) nao geram SQL valido em `_buildBackupSql`; o fluxo `dbisql` falha com mensagem orientando tipo nativo.
 
 ## Estrategias de backup (comportamento real)
 
@@ -44,10 +53,12 @@ Pontos principais do estado atual:
 - caminho final no servico: `<outputDirectory>/<databaseName>/`
 - tentativa principal: `dbisql` com `BACKUP DATABASE DIRECTORY '<path>'`
 - fallback: `dbbackup -c '<conn>' -y <path>`
-- opcoes Sybase aplicadas quando configuradas:
-  - `CHECKPOINT LOG ...`
-  - `AUTO TUNE WRITERS ON/OFF`
-  - modo server-side (`-s`) e block size (`-b`) no fluxo `dbbackup`
+- opcoes Sybase aplicadas quando configuradas (`SybaseBackupOptions`):
+  - `CHECKPOINT LOG COPY|NOCOPY|AUTO|RECOVER` (via `buildCheckpointLogClause`);
+  - `AUTO TUNE WRITERS ON/OFF`;
+  - modo server-side (`-s`) e block size (`-b`, limites 1–4096) no fluxo `dbbackup`;
+  - validacao: `CHECKPOINT LOG AUTO` exige `serverSide=true` (erro na UI se
+    violado).
 
 ### 2) Full Single
 
@@ -55,10 +66,13 @@ Pontos principais do estado atual:
 
 ### 3) Differential
 
-- no servico Sybase, `BackupType.differential` e convertido para `log`.
-- observacao de UI: no `ScheduleDialog`, Sybase normaliza `differential` para
-  `full` ao salvar/editar; ou seja, no fluxo padrao de UI ele nao segue para
-  execucao como diferencial.
+- no **servico** (`SybaseBackupService`), `BackupType.differential` e mapeado
+  para `effectiveType = log` antes de montar caminho, SQL e `dbbackup`.
+- na **UI** (`ScheduleDialog._normalizeBackupTypeForDatabase`), para Sybase,
+  `differential` e normalizado para **`full`** ao carregar/editar e ao gravar o
+  agendamento; o fluxo usual nao persiste `differential` para Sybase.
+- se um agendamento **legado** (ou outra origem) ainda entregar `differential`
+  ao orchestrator, a execucao segue o ramo **log** do servico.
 
 ### 4) Log
 
@@ -90,8 +104,42 @@ Pontos principais do estado atual:
 
 ### Cache de estrategia
 
-O servico usa `SybaseConnectionStrategyCache` por `config.id + backupType` para
-reutilizar a ultima estrategia bem-sucedida e invalidar cache em falha.
+O servico usa `SybaseConnectionStrategyCache` com chave `configId|backupType`,
+onde `backupType` passado e o **`effectiveType.name`** apos normalizar
+(`fullSingle` -> `full`, `differential` -> `log`), nao o enum bruto do
+agendamento.
+
+- **TTL padrao do cache**: 10 minutos (`SybaseConnectionStrategyCache`);
+- em falha de `dbisql`/`dbbackup`, a entrada correspondente e **invalidada** para
+  forcar nova descoberta na proxima execucao.
+
+## Variaveis de ambiente e PATH
+
+Diferente do PostgreSQL (WAL/slots com `BACKUP_DATABASE_PG_*`), **nao ha**
+variaveis de ambiente dedicadas ao fluxo de backup Sybase no
+`SybaseBackupService`.
+
+Comportamento pratico:
+
+- `dbisql`, `dbbackup`, `dbvalid` e `dbverify` precisam estar resolviveis via
+  **PATH** do processo (ou diretorio do executavel detectado pelo
+  `ProcessService`, que pode prefixar PATH do subprocesso);
+- mensagens de erro do `ProcessService` orientam pasta tipica **Bin64** do SQL
+  Anywhere e referencia a `docs/path_setup.md`.
+
+Opcoes de backup avancadas (checkpoint, server-side, block size, modo de log)
+vêm de **`SybaseBackupOptions`** no agendamento / serializacao, nao de env.
+
+## Timeouts
+
+Valores usados pelo `SybaseBackupService` (parametros do agendamento quando
+existem):
+
+| Etapa                          | Parametro       | Padrao no codigo |
+| ------------------------------ | --------------- | ---------------- |
+| `dbisql` / `dbbackup` (backup) | `backupTimeout` | **2 horas**      |
+| `dbvalid` / `dbverify`         | `verifyTimeout` | **30 minutos**   |
+| `testConnection` (`dbisql`)    | fixo            | **10 segundos**  |
 
 ## Verificacao de integridade
 
@@ -106,13 +154,43 @@ Semantica por politica:
 - `VerifyPolicy.bestEffort`: falha de verificacao gera warning e backup segue;
 - `VerifyPolicy.strict`: falha de verificacao (full) encerra com erro.
 
-Sinais em metricas (`BackupMetrics.flags.verifyPolicy`):
+### Metricas e observabilidade (`BackupMetrics`)
 
-- `none`
-- `log_unavailable`
-- `dbvalid`
-- `dbverify`
-- `dbvalid_falhou`
+Apos backup (e verificacao quando aplicavel), o servico monta `BackupMetrics`:
+
+- **Duracoes**: `backupDuration`, `verifyDuration`, `totalDuration` (soma);
+- **Tamanho / desempenho**: `backupSizeBytes`, `backupSpeedMbPerSec`;
+- **`backupType`**: nome do **`effectiveType`** (`full` ou `log`), nao o tipo
+  bruto do agendamento (ex.: `differential` executado como log aparece como
+  `log`).
+
+`BackupFlags` (Sybase) no codigo atual:
+
+- `compression`: `false` (compressao continua no orchestrator, pos-backup);
+- `stripingCount`: `1`;
+- `withChecksum`: `false`;
+- `stopOnError`: `true`;
+- **`verifyPolicy`** (string em `flags.verifyPolicy`, espelho operacional):
+
+| Valor             | Significado                                                            |
+| ----------------- | ---------------------------------------------------------------------- |
+| `none`            | `verifyAfterBackup=false`                                              |
+| `log_unavailable` | tipo efetivo `log` (verificacao nao aplicavel)                         |
+| `dbvalid`         | verificacao ok com `dbvalid`                                           |
+| `dbverify`        | `dbvalid` falhou e `dbverify` ok (fallback)                            |
+| `dbvalid_falhou`  | ambas falharam ou sem `.db`; em `bestEffort` o backup pode ter sucesso |
+
+**`sybaseOptions` (JSON em metricas)**: copia de `SybaseBackupOptions.toJson()`
+com campos adicionais preenchidos na execucao:
+
+- `verificationMethod`: mesmo sentido que `flags.verifyPolicy` (historico /
+  depuracao);
+- `backupMethod`: `dbisql` ou `dbbackup` (qual ramo venceu);
+- `connectionStrategy`: rotulo da string de conexao usada (ex.: nome da
+  estrategia em `connectionStrategies` ou indice).
+
+Esses dados entram em `BackupMetrics.toJson()` sob a chave `sybaseOptions` quando
+nao vazios.
 
 ## Preflight de log e regras de replicacao
 
@@ -142,9 +220,12 @@ tipo efetivo):
 ```text
 <backupFolder>/
   Full/
-  Log de Transacoes/
-  (Diferencial/ pode existir em cenarios legados)
+  Log de Transações/
 ```
+
+(O nome das pastas vem de `getBackupTypeDisplayName`. Uma pasta `Diferencial/`
+so aparece se o tipo efetivo do agendamento for diferencial; no fluxo Sybase
+atual via UI o tipo gravado tende a ser `full` ou `log`, nao `differential`.)
 
 Dentro da pasta do tipo para Sybase:
 
@@ -177,8 +258,7 @@ Lacunas recomendadas:
 
 ## Conclusao
 
-A implementacao Sybase esta ampla e integrada, mas havia contradicoes no
-documento anterior (principalmente em `differential`, fallback `dbverify` e
-modos de log do `dbbackup`).
-
-Este arquivo agora descreve o estado real do codigo em 2026-02-28.
+A implementacao Sybase esta integrada nas camadas citadas. Este arquivo descreve
+comportamento do servico, UI, PATH/timeouts, metricas e o descompasso entre
+normalizacao na UI (`differential` -> `full`) e mapeamento no servico
+(`differential` -> `log`) para dados legados.

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:archive/archive_io.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
@@ -73,8 +74,8 @@ class FileTransferMessageHandler {
         return;
       }
 
-      final file = File(resolved);
-      if (!await file.exists()) {
+      final entityType = await FileSystemEntity.type(resolved);
+      if (entityType == FileSystemEntityType.notFound) {
         await sendToClient(
           clientId,
           createFileTransferErrorMessage(
@@ -86,79 +87,151 @@ class FileTransferMessageHandler {
         return;
       }
 
-      final fileName = p.basename(resolved);
-      final fileSize = await file.length();
-      LoggerService.info(
-        '[FileTransferHandler] Iniciando transferência: $fileName ($fileSize bytes) para cliente $clientId',
-      );
-      LoggerService.info(
-        '[FileTransferHandler] startChunk solicitado pelo cliente: $startChunk',
-      );
+      File? tempZipFile;
+      late final String pathToChunk;
+      late final String transferFileName;
 
-      final chunks = await _chunker.chunkFile(resolved);
-      final totalChunks = chunks.length;
-      final normalizedStartChunk = startChunk < 0 ? 0 : startChunk;
-      final effectiveStartChunk = normalizedStartChunk > totalChunks
-          ? totalChunks
-          : normalizedStartChunk;
-      LoggerService.info(
-        '[FileTransferHandler] Arquivo dividido em $totalChunks chunks',
-      );
-      if (effectiveStartChunk != startChunk) {
-        LoggerService.warning(
-          '[FileTransferHandler] startChunk ajustado de '
-          '$startChunk para $effectiveStartChunk',
-        );
-      }
-
-      await sendToClient(
-        clientId,
-        createFileTransferStartMetadataMessage(
-          requestId: requestId,
-          fileName: fileName,
-          fileSize: fileSize,
-          totalChunks: totalChunks,
-          chunkSize: _chunker.chunkSize,
-        ),
-      );
-      LoggerService.info(
-        '[FileTransferHandler] Metadados enviados: fileName=$fileName, fileSize=$fileSize, totalChunks=$totalChunks',
-      );
-
-      // Enviar chunks um a um, aguardando confirmação do cliente
-      for (var i = effectiveStartChunk; i < chunks.length; i++) {
-        final chunk = chunks[i];
-        LoggerService.info(
-          '[FileTransferHandler] Enviando chunk ${chunk.chunkIndex + 1}/$totalChunks: ${chunk.data.length} bytes, checksum=${chunk.checksum}',
-        );
+      if (entityType == FileSystemEntityType.file) {
+        pathToChunk = resolved;
+        transferFileName = p.basename(resolved);
+      } else if (entityType == FileSystemEntityType.directory) {
+        final zipPath = await _zipDirectoryForTransfer(Directory(resolved));
+        if (zipPath == null) {
+          await sendToClient(
+            clientId,
+            createFileTransferErrorMessage(
+              requestId: requestId,
+              errorMessage: 'Failed to prepare folder for transfer',
+            ),
+          );
+          return;
+        }
+        tempZipFile = File(zipPath);
+        pathToChunk = zipPath;
+        transferFileName = '${p.basename(resolved)}.zip';
+      } else {
         await sendToClient(
           clientId,
-          createFileChunkMessage(requestId: requestId, chunk: chunk),
-        );
-
-        // Pequeno delay para garantir que o cliente processou
-        await Future.delayed(const Duration(milliseconds: 5));
-
-        await sendToClient(
-          clientId,
-          createFileTransferProgressMessage(
+          createFileTransferErrorMessage(
             requestId: requestId,
-            currentChunk: i + 1,
-            totalChunks: totalChunks,
+            errorMessage: 'File not found',
+            errorCode: ErrorCode.fileNotFound,
           ),
         );
-
-        // Delay adicional após cada chunk para evitar overflow do TCP buffer
-        await Future.delayed(const Duration(milliseconds: 5));
+        return;
       }
 
-      await sendToClient(
-        clientId,
-        createFileTransferCompleteMessage(requestId: requestId),
-      );
-      LoggerService.info(
-        '[FileTransferHandler] ✓ Transferência concluída: $fileName ($totalChunks chunks) para cliente $clientId',
-      );
+      final transferFile = File(pathToChunk);
+      if (!await transferFile.exists()) {
+        await sendToClient(
+          clientId,
+          createFileTransferErrorMessage(
+            requestId: requestId,
+            errorMessage: 'File not found',
+            errorCode: ErrorCode.fileNotFound,
+          ),
+        );
+        return;
+      }
+
+      try {
+        final fileSize = await transferFile.length();
+        LoggerService.info(
+          '[FileTransferHandler] Iniciando transferência: '
+          '$transferFileName ($fileSize bytes) para cliente $clientId',
+        );
+        LoggerService.info(
+          '[FileTransferHandler] startChunk solicitado pelo cliente: '
+          '$startChunk',
+        );
+
+        final normalizedStartChunk = startChunk < 0 ? 0 : startChunk;
+        final totalChunks = fileSize == 0
+            ? 1
+            : (fileSize / _chunker.chunkSize).ceil();
+        final effectiveStartChunk = normalizedStartChunk > totalChunks
+            ? totalChunks
+            : normalizedStartChunk;
+        LoggerService.info(
+          '[FileTransferHandler] Arquivo em $totalChunks chunks (streaming)',
+        );
+        if (effectiveStartChunk != startChunk) {
+          LoggerService.warning(
+            '[FileTransferHandler] startChunk ajustado de '
+            '$startChunk para $effectiveStartChunk',
+          );
+        }
+
+        await sendToClient(
+          clientId,
+          createFileTransferStartMetadataMessage(
+            requestId: requestId,
+            fileName: transferFileName,
+            fileSize: fileSize,
+            totalChunks: totalChunks,
+            chunkSize: _chunker.chunkSize,
+          ),
+        );
+        LoggerService.info(
+          '[FileTransferHandler] Metadados enviados: '
+          'fileName=$transferFileName, fileSize=$fileSize, '
+          'totalChunks=$totalChunks',
+        );
+
+        var sentIndex = effectiveStartChunk;
+        await _chunker.forEachChunk(
+          pathToChunk,
+          firstChunkIndex: effectiveStartChunk,
+          emit: (chunk) async {
+            LoggerService.info(
+              '[FileTransferHandler] Enviando chunk ${chunk.chunkIndex + 1}/'
+              '${chunk.totalChunks}: ${chunk.data.length} bytes, '
+              'checksum=${chunk.checksum}',
+            );
+            await sendToClient(
+              clientId,
+              createFileChunkMessage(requestId: requestId, chunk: chunk),
+            );
+
+            await Future<void>.delayed(const Duration(milliseconds: 5));
+
+            sentIndex = chunk.chunkIndex + 1;
+            await sendToClient(
+              clientId,
+              createFileTransferProgressMessage(
+                requestId: requestId,
+                currentChunk: sentIndex,
+                totalChunks: chunk.totalChunks,
+              ),
+            );
+
+            await Future<void>.delayed(const Duration(milliseconds: 5));
+          },
+        );
+
+        await sendToClient(
+          clientId,
+          createFileTransferCompleteMessage(requestId: requestId),
+        );
+        LoggerService.info(
+          '[FileTransferHandler] ✓ Transferência concluída: '
+          '$transferFileName ($totalChunks chunks) para cliente $clientId',
+        );
+      } finally {
+        if (tempZipFile != null) {
+          try {
+            if (await tempZipFile.exists()) {
+              await tempZipFile.delete();
+            }
+          } on Object catch (e, st) {
+            LoggerService.debug(
+              '[FileTransferHandler] temp zip delete: $e',
+              e,
+              st,
+            );
+          }
+        }
+      }
     } on Object catch (e, st) {
       LoggerService.warning(
         'FileTransferMessageHandler error for client $clientId',
@@ -182,6 +255,64 @@ class FileTransferMessageHandler {
     final normalized = p.normalize(p.absolute(resolvedPath));
     return normalized == _allowedBasePath ||
         p.isWithin(_allowedBasePath, normalized);
+  }
+
+  Future<String?> _zipDirectoryForTransfer(Directory source) async {
+    final base = p.basename(source.path);
+    final safe = base
+        .replaceAll(RegExp(r'[^\w\-.]+'), '_')
+        .replaceAll(RegExp('_+'), '_');
+    final zipPath = p.join(
+      Directory.systemTemp.path,
+      'bd_transfer_${DateTime.now().microsecondsSinceEpoch}_$safe.zip',
+    );
+    final encoder = ZipFileEncoder();
+    final normalizedDir = p.normalize(source.path);
+    try {
+      encoder.create(zipPath);
+      await for (final entity in source.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is File) {
+          final relativePath = p.relative(
+            entity.path,
+            from: normalizedDir,
+          );
+          encoder.addFile(entity, relativePath);
+        }
+      }
+      encoder.close();
+      return zipPath;
+    } on Object catch (e, st) {
+      LoggerService.warning(
+        'FileTransferMessageHandler: zip directory failed',
+        e,
+        st,
+      );
+      try {
+        encoder.close();
+      } on Object catch (e, st) {
+        LoggerService.debug(
+          'FileTransferMessageHandler: zip encoder close: $e',
+          e,
+          st,
+        );
+      }
+      try {
+        final zf = File(zipPath);
+        if (await zf.exists()) {
+          await zf.delete();
+        }
+      } on Object catch (e, st) {
+        LoggerService.debug(
+          'FileTransferMessageHandler: zip partial delete: $e',
+          e,
+          st,
+        );
+      }
+      return null;
+    }
   }
 
   Future<void> _handleListFiles(

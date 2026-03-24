@@ -26,4 +26,7 @@ abstract class IBackupHistoryRepository {
   );
   Future<rd.Result<BackupHistory>> getLastBySchedule(String scheduleId);
   Future<rd.Result<int>> deleteOlderThan(DateTime date);
+
+  /// Marks [BackupStatus.running] rows older than [maxAge] as error (startup recovery).
+  Future<rd.Result<int>> reconcileStaleRunning({required Duration maxAge});
 }

@@ -50,7 +50,9 @@ Future<void> _runApp() async {
   }
 
   // Só inicializa Flutter binding se não estiver em modo serviço
-  LoggerService.info('==> Modo UI detectado - inicializando interface grafica');
+  LoggerService.info(
+    '==> Modo UI detectado - inicializando interface gráfica',
+  );
   WidgetsFlutterBinding.ensureInitialized();
 
   await _loadEnvironment();

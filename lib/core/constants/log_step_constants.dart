@@ -11,6 +11,8 @@ class LogStepConstants {
   static const String backupSuccess = 'backup_success';
   static const String backupError = 'backup_error';
   static const String backupFileNotFound = 'backup_file_not_found';
+  static const String backupDirectoryUploadNotSupported =
+      'backup_directory_upload_not_supported';
   static const String backupCancelled = 'backup_cancelled';
   static const String uploadFailed = 'upload_failed';
 

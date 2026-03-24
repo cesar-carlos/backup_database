@@ -164,6 +164,22 @@ class CachedBackupHistoryRepository implements IBackupHistoryRepository {
     return result;
   }
 
+  @override
+  Future<rd.Result<int>> reconcileStaleRunning({
+    required Duration maxAge,
+  }) async {
+    final result = await _repository.reconcileStaleRunning(maxAge: maxAge);
+    result.fold(
+      (count) {
+        if (count > 0) {
+          _cache.clear();
+        }
+      },
+      (_) {},
+    );
+    return result;
+  }
+
   /// Clear all cached data
   void clearCache() {
     _cache.clear();

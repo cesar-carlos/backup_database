@@ -136,6 +136,70 @@ class FileChunker {
     return chunks;
   }
 
+  /// Reads [filePath] in fixed-size segments without loading the whole file.
+  Future<void> forEachChunk(
+    String filePath, {
+    required int firstChunkIndex,
+    required Future<void> Function(FileChunk chunk) emit,
+    int? useChunkSize,
+  }) async {
+    final segmentSize = useChunkSize ?? chunkSize;
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw FileSystemException('File not found', filePath);
+    }
+    final length = await file.length();
+    if (length == 0) {
+      if (firstChunkIndex > 0) {
+        throw ArgumentError('firstChunkIndex out of range for empty file');
+      }
+      final empty = Uint8List(0);
+      await emit(
+        FileChunk(
+          chunkIndex: 0,
+          totalChunks: 1,
+          data: empty,
+          checksum: Crc32.calculateUint8List(empty),
+        ),
+      );
+      return;
+    }
+
+    final totalChunks = (length / segmentSize).ceil();
+    if (firstChunkIndex < 0 || firstChunkIndex > totalChunks) {
+      throw ArgumentError('firstChunkIndex out of range');
+    }
+
+    LoggerService.info(
+      '[FileChunker.forEachChunk] Streaming: $filePath '
+      '($length bytes, $totalChunks chunks, start=$firstChunkIndex)',
+    );
+
+    final raf = await file.open();
+    try {
+      for (var i = firstChunkIndex; i < totalChunks; i++) {
+        final start = i * segmentSize;
+        final endExclusive = start + segmentSize < length
+            ? start + segmentSize
+            : length;
+        final toRead = endExclusive - start;
+        await raf.setPosition(start);
+        final chunkData = await raf.read(toRead);
+        final checksum = Crc32.calculateUint8List(chunkData);
+        await emit(
+          FileChunk(
+            chunkIndex: i,
+            totalChunks: totalChunks,
+            data: chunkData,
+            checksum: checksum,
+          ),
+        );
+      }
+    } finally {
+      await raf.close();
+    }
+  }
+
   Future<void> assembleChunks(List<FileChunk> chunks, String outputPath) async {
     LoggerService.info(
       '[FileChunker] Iniciando montagem de arquivo: $outputPath',

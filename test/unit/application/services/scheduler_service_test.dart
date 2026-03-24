@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
 import 'package:backup_database/application/services/scheduler_service.dart';
+import 'package:backup_database/core/constants/backup_constants.dart';
+import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
@@ -176,6 +178,11 @@ void main() {
         any(),
       ),
     ).thenAnswer((_) async => const rd.Success(rd.unit));
+    when(
+      () => backupHistoryRepository.reconcileStaleRunning(
+        maxAge: BackupConstants.staleRunningBackupMaxAge,
+      ),
+    ).thenAnswer((_) async => const rd.Success(0));
 
     service = SchedulerService(
       scheduleRepository: scheduleRepository,
@@ -199,6 +206,10 @@ void main() {
   });
 
   group('SchedulerService concurrency and cancellation', () {
+    test('isExecutingBackup is false when idle', () {
+      expect(service.isExecutingBackup, isFalse);
+    });
+
     test('rejects second executeNow while first is running', () async {
       final schedule = buildSchedule();
       final backupCompleter = Completer<rd.Result<BackupHistory>>();
@@ -324,6 +335,79 @@ void main() {
           () => backupOrchestratorService.executeBackup(
             schedule: any(named: 'schedule'),
             outputDirectory: any(named: 'outputDirectory'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'executeNow skips upload when artifact is directory and schedule has '
+      'destinations',
+      () async {
+        final artifactDir = Directory(
+          '${tempDir.path}${Platform.pathSeparator}backup_dir',
+        )..createSync();
+        File(
+          '${artifactDir.path}${Platform.pathSeparator}data.bin',
+        ).writeAsStringSync('x');
+
+        final destination = BackupDestination(
+          id: 'dest-1',
+          name: 'Local',
+          type: DestinationType.local,
+          config: '{"path":"D:/dest"}',
+        );
+        final schedule = buildSchedule().copyWith(
+          destinationIds: [destination.id],
+        );
+        final startedAt = DateTime.now().subtract(const Duration(seconds: 2));
+        final history = BackupHistory(
+          id: 'history-dir',
+          scheduleId: schedule.id,
+          databaseName: schedule.name,
+          databaseType: schedule.databaseType.name,
+          backupPath: artifactDir.path,
+          fileSize: 0,
+          status: BackupStatus.running,
+          startedAt: startedAt,
+        );
+
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () => destinationRepository.getByIds(any()),
+        ).thenAnswer((_) async => rd.Success([destination]));
+        when(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+          ),
+        ).thenAnswer((_) async => rd.Success(history));
+        when(
+          () => backupHistoryRepository.updateHistoryAndLogIfRunning(
+            history: any(named: 'history'),
+            logStep: LogStepConstants.backupDirectoryUploadNotSupported,
+            logLevel: LogLevel.error,
+            logMessage: any(named: 'logMessage'),
+          ),
+        ).thenAnswer((_) async => rd.Success(history));
+        when(() => progressNotifier.failBackup(any())).thenReturn(null);
+
+        final result = await service.executeNow(scheduleId);
+
+        expect(result.isError(), isTrue);
+        expect(
+          result.exceptionOrNull().toString(),
+          contains('pasta'),
+        );
+        verifyNever(
+          () => destinationOrchestrator.uploadToAllDestinations(
+            sourceFilePath: any(named: 'sourceFilePath'),
+            destinations: any(named: 'destinations'),
+            isCancelled: any(named: 'isCancelled'),
+            backupId: any(named: 'backupId'),
+            onProgress: any(named: 'onProgress'),
           ),
         );
       },

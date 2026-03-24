@@ -1,6 +1,7 @@
 import 'package:backup_database/application/providers/auto_update_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/core/theme/theme_provider.dart';
@@ -9,7 +10,6 @@ import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
@@ -28,12 +28,6 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
 
   final TempDirectoryService _tempService = getIt<TempDirectoryService>();
 
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -51,7 +45,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
         });
       }
     } on Object catch (e, s) {
-      LoggerService.warning('Erro ao carregar informacoes do pacote', e, s);
+      LoggerService.warning('Erro ao carregar informações do pacote', e, s);
       if (mounted) {
         setState(() {
           _isLoadingVersion = false;
@@ -72,7 +66,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
         });
       }
     } on Object catch (e, s) {
-      LoggerService.warning('Erro ao carregar pasta temporaria', e, s);
+      LoggerService.warning('Erro ao carregar pasta temporária', e, s);
       if (mounted) {
         setState(() => _isLoadingTempPath = false);
       }
@@ -81,8 +75,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
 
   Future<void> _changeTempPath() async {
     final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: _t(
-        'Selecionar pasta temporaria de downloads',
+      dialogTitle: appLocaleString(
+        context,
+        'Selecionar pasta temporária de downloads',
         'Select temporary downloads folder',
       ),
     );
@@ -94,8 +89,10 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
         if (!success) {
           MessageModal.showError(
             context,
-            message: _t(
-              'Nao foi possivel definir a pasta temporaria. Verifique se tem permissao de escrita.',
+            message: appLocaleString(
+              context,
+              'Não foi possível definir a pasta temporária. Verifique se tem '
+                  'permissão de escrita.',
               'Could not set temporary folder. Check write permissions.',
             ),
           );
@@ -107,8 +104,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
         }
         MessageModal.showSuccess(
           context,
-          message: _t(
-            'Pasta temporaria alterada com sucesso!',
+          message: appLocaleString(
+            context,
+            'Pasta temporária alterada com sucesso!',
             'Temporary folder changed successfully!',
           ),
         );
@@ -120,21 +118,22 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Confirmar', 'Confirm')),
+        title: Text(appLocaleString(context, 'Confirmar', 'Confirm')),
         content: Text(
-          _t(
-            'Deseja voltar a usar a pasta temporaria padrao do sistema?',
+          appLocaleString(
+            context,
+            'Deseja voltar a usar a pasta temporária padrão do sistema?',
             'Do you want to use the system default temporary folder again?',
           ),
         ),
         actions: [
           Button(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(_t('Cancelar', 'Cancel')),
+            child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(_t('Confirmar', 'Confirm')),
+            child: Text(appLocaleString(context, 'Confirmar', 'Confirm')),
           ),
         ],
       ),
@@ -161,12 +160,12 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _t('Aparencia', 'Appearance'),
+                  appLocaleString(context, 'Aparência', 'Appearance'),
                   style: FluentTheme.of(context).typography.subtitle,
                 ),
                 const SizedBox(height: 16),
                 InfoLabel(
-                  label: _t('Tema escuro', 'Dark theme'),
+                  label: appLocaleString(context, 'Tema escuro', 'Dark theme'),
                   child: ToggleSwitch(
                     checked: themeProvider.isDarkMode,
                     onChanged: themeProvider.setDarkMode,
@@ -176,12 +175,16 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 const Divider(),
                 const SizedBox(height: 16),
                 Text(
-                  _t('Sistema', 'System'),
+                  appLocaleString(context, 'Sistema', 'System'),
                   style: FluentTheme.of(context).typography.subtitle,
                 ),
                 const SizedBox(height: 16),
                 InfoLabel(
-                  label: _t('Iniciar com o Windows', 'Start with Windows'),
+                  label: appLocaleString(
+                    context,
+                    'Iniciar com o Windows',
+                    'Start with Windows',
+                  ),
                   child: ToggleSwitch(
                     checked: systemSettings.startWithWindows,
                     onChanged: systemSettings.setStartWithWindows,
@@ -189,7 +192,11 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 ),
                 const SizedBox(height: 16),
                 InfoLabel(
-                  label: _t('Iniciar minimizado', 'Start minimized'),
+                  label: appLocaleString(
+                    context,
+                    'Iniciar minimizado',
+                    'Start minimized',
+                  ),
                   child: ToggleSwitch(
                     checked: systemSettings.startMinimized,
                     onChanged: systemSettings.setStartMinimized,
@@ -197,7 +204,11 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 ),
                 const SizedBox(height: 16),
                 InfoLabel(
-                  label: _t('Minimizar para bandeja', 'Minimize to tray'),
+                  label: appLocaleString(
+                    context,
+                    'Minimizar para bandeja',
+                    'Minimize to tray',
+                  ),
                   child: ToggleSwitch(
                     checked: systemSettings.minimizeToTray,
                     onChanged: systemSettings.setMinimizeToTray,
@@ -205,7 +216,11 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 ),
                 const SizedBox(height: 16),
                 InfoLabel(
-                  label: _t('Fechar para bandeja', 'Close to tray'),
+                  label: appLocaleString(
+                    context,
+                    'Fechar para bandeja',
+                    'Close to tray',
+                  ),
                   child: ToggleSwitch(
                     checked: systemSettings.closeToTray,
                     onChanged: systemSettings.setCloseToTray,
@@ -216,27 +231,44 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   const Divider(),
                   const SizedBox(height: 16),
                   Text(
-                    _t(
-                      'Pasta temporaria de downloads (cliente)',
+                    appLocaleString(
+                      context,
+                      'Pasta temporária de downloads (cliente)',
                       'Temporary downloads folder (client)',
                     ),
                     style: FluentTheme.of(context).typography.subtitle,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _t(
-                      'Arquivos baixados do servidor sao salvos temporariamente aqui antes de serem enviados para os destinos finais.',
-                      'Files downloaded from server are saved here temporarily before being sent to final destinations.',
+                    appLocaleString(
+                      context,
+                      'Arquivos baixados do servidor são salvos temporariamente '
+                          'aqui antes de serem enviados para os destinos finais.',
+                      'Files downloaded from server are saved here temporarily '
+                          'before being sent to final destinations.',
                     ),
                     style: FluentTheme.of(context).typography.caption,
                   ),
                   const SizedBox(height: 16),
                   ListTile(
-                    title: Text(_t('Pasta atual', 'Current folder')),
+                    title: Text(
+                      appLocaleString(context, 'Pasta atual', 'Current folder'),
+                    ),
                     subtitle: _isLoadingTempPath
-                        ? Text(_t('Carregando...', 'Loading...'))
+                        ? Text(
+                            appLocaleString(
+                              context,
+                              'Carregando...',
+                              'Loading...',
+                            ),
+                          )
                         : Text(
-                            _tempDownloadsPath ?? _t('Desconhecida', 'Unknown'),
+                            _tempDownloadsPath ??
+                                appLocaleString(
+                                  context,
+                                  'Desconhecida',
+                                  'Unknown',
+                                ),
                           ),
                     trailing: _isLoadingTempPath
                         ? const SizedBox(
@@ -261,13 +293,20 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   const SizedBox(height: 8),
                   FilledButton(
                     onPressed: _changeTempPath,
-                    child: Text(_t('Alterar pasta', 'Change folder')),
+                    child: Text(
+                      appLocaleString(
+                        context,
+                        'Alterar pasta',
+                        'Change folder',
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Button(
                     onPressed: _resetTempPath,
                     child: Text(
-                      _t(
+                      appLocaleString(
+                        context,
                         'Usar padrao do sistema',
                         'Use system default',
                       ),
@@ -278,17 +317,22 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 const Divider(),
                 const SizedBox(height: 16),
                 Text(
-                  _t('Atualizacoes', 'Updates'),
+                  appLocaleString(context, 'Atualizações', 'Updates'),
                   style: FluentTheme.of(context).typography.subtitle,
                 ),
                 const SizedBox(height: 16),
                 if (!autoUpdateProvider.isInitialized)
                   ListTile(
                     title: Text(
-                      _t('Atualizacoes automaticas', 'Automatic updates'),
+                      appLocaleString(
+                        context,
+                        'Atualizações automáticas',
+                        'Automatic updates',
+                      ),
                     ),
                     subtitle: Text(
-                      _t(
+                      appLocaleString(
+                        context,
                         'Configure AUTO_UPDATE_FEED_URL no arquivo .env',
                         'Configure AUTO_UPDATE_FEED_URL in .env file',
                       ),
@@ -298,15 +342,23 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 else ...[
                   ListTile(
                     title: Text(
-                      _t('Verificar atualizacoes', 'Check for updates'),
+                      appLocaleString(
+                        context,
+                        'Verificar atualizações',
+                        'Check for updates',
+                      ),
                     ),
                     subtitle: Text(
                       autoUpdateProvider.lastCheckDate != null
-                          ? _t(
-                              'Última verificação: ${DateFormat('dd/MM/yyyy HH:mm').format(autoUpdateProvider.lastCheckDate!)}',
-                              'Last check: ${DateFormat('dd/MM/yyyy HH:mm').format(autoUpdateProvider.lastCheckDate!)}',
+                          ? appLocaleLastUpdateCheckSubtitle(
+                              context,
+                              autoUpdateProvider.lastCheckDate!,
                             )
-                          : _t('Nunca verificado', 'Never checked'),
+                          : appLocaleString(
+                              context,
+                              'Nunca verificado',
+                              'Never checked',
+                            ),
                     ),
                     trailing: autoUpdateProvider.isChecking
                         ? const SizedBox(
@@ -323,7 +375,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   ),
                   if (autoUpdateProvider.error != null)
                     ListTile(
-                      title: Text(_t('Erro', 'Error')),
+                      title: Text(
+                        appLocaleString(context, 'Erro', 'Error'),
+                      ),
                       subtitle: Text(
                         autoUpdateProvider.error!,
                         style: FluentTheme.of(context).typography.body
@@ -337,11 +391,16 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   if (autoUpdateProvider.updateAvailable)
                     ListTile(
                       title: Text(
-                        _t('Atualizacao disponivel', 'Update available'),
+                        appLocaleString(
+                          context,
+                          'Atualização disponível',
+                          'Update available',
+                        ),
                       ),
                       subtitle: Text(
-                        _t(
-                          'Uma nova versao esta disponivel para download',
+                        appLocaleString(
+                          context,
+                          'Uma nova versão está disponível para download',
                           'A new version is available for download',
                         ),
                       ),
@@ -355,24 +414,38 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 const Divider(),
                 const SizedBox(height: 16),
                 Text(
-                  _t('Sobre', 'About'),
+                  appLocaleString(context, 'Sobre', 'About'),
                   style: FluentTheme.of(context).typography.subtitle,
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  title: Text(_t('Versao', 'Version')),
+                  title: Text(
+                    appLocaleString(context, 'Versão', 'Version'),
+                  ),
                   subtitle: _isLoadingVersion
-                      ? Text(_t('Carregando...', 'Loading...'))
+                      ? Text(
+                          appLocaleString(
+                            context,
+                            'Carregando...',
+                            'Loading...',
+                          ),
+                        )
                       : Text(
                           _packageInfo != null
                               ? (_packageInfo!.buildNumber.isNotEmpty
                                     ? '${_packageInfo!.version}+${_packageInfo!.buildNumber}'
                                     : _packageInfo!.version)
-                              : _t('Desconhecida', 'Unknown'),
+                              : appLocaleString(
+                                  context,
+                                  'Desconhecida',
+                                  'Unknown',
+                                ),
                         ),
                 ),
                 ListTile(
-                  title: Text(_t('Licença', 'License')),
+                  title: Text(
+                    appLocaleString(context, 'Licença', 'License'),
+                  ),
                   subtitle: const Text('MIT License'),
                 ),
               ],

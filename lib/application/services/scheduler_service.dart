@@ -78,6 +78,9 @@ class SchedulerService implements ISchedulerService {
   final Set<String> _cancelRequestedSchedules = {};
 
   @override
+  bool get isExecutingBackup => _executingSchedules.isNotEmpty;
+
+  @override
   Future<void> start() async {
     if (_isRunning) return;
 
@@ -85,6 +88,7 @@ class SchedulerService implements ISchedulerService {
     _isRunning = true;
 
     await _updateAllNextRuns();
+    await _reconcileStaleRunningBackups();
 
     _checkTimer = Timer.periodic(
       const Duration(minutes: 1),
@@ -136,19 +140,67 @@ class SchedulerService implements ISchedulerService {
     final now = DateTime.now();
     final result = await _scheduleRepository.getEnabledDueForExecution(now);
 
-    result.fold((schedules) async {
-      if (schedules.isEmpty) return;
+    result.fold(
+      (schedules) {
+        if (schedules.isEmpty) return;
+        final schedule = schedules.first;
+        unawaited(_runDueScheduleFromTimer(schedule));
+      },
+      (failure) {
+        LoggerService.error(
+          'Falha ao buscar agendamentos vencidos para execução: $failure',
+        );
+      },
+    );
+  }
 
-      final schedule = schedules.first;
+  Future<void> _runDueScheduleFromTimer(Schedule schedule) async {
+    final result = await _runScheduleWithLock(schedule);
+    if (result.isError()) {
+      await _tryAdvanceScheduleNextRunOnFailure(schedule);
+    }
+  }
+
+  Future<void> _tryAdvanceScheduleNextRunOnFailure(Schedule schedule) async {
+    try {
       final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
       if (nextRunAt != null) {
         await _scheduleRepository.update(
           schedule.copyWith(nextRunAt: nextRunAt),
         );
+        LoggerService.info(
+          'Próxima execução de ${schedule.name} reagendada após falha '
+          '(timer): $nextRunAt',
+        );
       }
+    } on Object catch (e, st) {
+      LoggerService.warning(
+        'Falha ao reagendar nextRunAt após backup com erro (timer)',
+        e,
+        st,
+      );
+    }
+  }
 
-      unawaited(_runScheduleWithLock(schedule));
-    }, (failure) => null);
+  Future<void> _reconcileStaleRunningBackups() async {
+    final result = await _backupHistoryRepository.reconcileStaleRunning(
+      maxAge: BackupConstants.staleRunningBackupMaxAge,
+    );
+    result.fold(
+      (count) {
+        if (count > 0) {
+          LoggerService.warning(
+            'Reconciliados $count histórico(s) em execução órfãos '
+            '(possível encerramento abrupto anterior).',
+          );
+        }
+      },
+      (failure) {
+        LoggerService.warning(
+          'Não foi possível reconciliar históricos running antigos: $failure',
+        );
+      },
+    );
   }
 
   Future<rd.Result<void>> _executeScheduledBackup(Schedule schedule) async {
@@ -277,42 +329,39 @@ class SchedulerService implements ISchedulerService {
         return canceledAfterBackup;
       }
 
-      final backupFile = File(backupHistory.backupPath);
-      if (!await backupFile.exists()) {
+      if (!await _pathExistsAsBackupArtifact(backupHistory.backupPath)) {
         final errorMessage =
-            'Arquivo de backup não existe: ${backupHistory.backupPath}';
+            'Caminho do backup não encontrado (arquivo ou pasta): '
+            '${backupHistory.backupPath}';
         LoggerService.error(errorMessage);
-        final finishedAt = DateTime.now();
-        final failedHistory = backupHistory.copyWith(
-          status: BackupStatus.error,
+        return _failScheduledBackupAfterArtifactError(
+          backupHistory: backupHistory,
           errorMessage: errorMessage,
-          finishedAt: finishedAt,
-          durationSeconds: finishedAt
-              .difference(backupHistory.startedAt)
-              .inSeconds,
+          logStep: LogStepConstants.backupFileNotFound,
+          failure: BackupFailure(message: errorMessage),
         );
-        final updateResult = await _backupHistoryRepository
-            .updateHistoryAndLogIfRunning(
-              history: failedHistory,
-              logStep: LogStepConstants.backupFileNotFound,
-              logLevel: LogLevel.error,
-              logMessage: errorMessage,
-            );
-        updateResult.fold(
-          (_) {},
-          (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
-        );
-
-        try {
-          _progressNotifier.failBackup(errorMessage);
-        } on Object catch (e, s) {
-          LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
-        }
-
-        return rd.Failure(BackupFailure(message: errorMessage));
       }
 
       final hasDestinations = destinations.isNotEmpty;
+
+      if (hasDestinations) {
+        final artifactType = await FileSystemEntity.type(
+          backupHistory.backupPath,
+        );
+        if (artifactType == FileSystemEntityType.directory) {
+          const errorMessage =
+              'O backup resultou em uma pasta; os destinos configurados '
+              'esperam um arquivo único. Ative compactação no agendamento ou '
+              'remova os destinos até haver suporte a envio de pastas.';
+          LoggerService.error(errorMessage);
+          return _failScheduledBackupAfterArtifactError(
+            backupHistory: backupHistory,
+            errorMessage: errorMessage,
+            logStep: LogStepConstants.backupDirectoryUploadNotSupported,
+            failure: const ValidationFailure(message: errorMessage),
+          );
+        }
+      }
 
       if (hasDestinations) {
         try {
@@ -337,36 +386,17 @@ class SchedulerService implements ISchedulerService {
         return canceledBeforeUpload;
       }
 
-      if (!await backupFile.exists()) {
+      if (!await _pathExistsAsBackupArtifact(backupHistory.backupPath)) {
         final errorMessage =
-            'Arquivo de backup não existe: ${backupHistory.backupPath}';
+            'Caminho do backup não encontrado (arquivo ou pasta): '
+            '${backupHistory.backupPath}';
         LoggerService.error(errorMessage);
-        final finishedAt = DateTime.now();
-        final failedHistory = backupHistory.copyWith(
-          status: BackupStatus.error,
+        return _failScheduledBackupAfterArtifactError(
+          backupHistory: backupHistory,
           errorMessage: errorMessage,
-          finishedAt: finishedAt,
-          durationSeconds: finishedAt
-              .difference(backupHistory.startedAt)
-              .inSeconds,
+          logStep: LogStepConstants.backupFileNotFound,
+          failure: BackupFailure(message: errorMessage),
         );
-        final updateResult = await _backupHistoryRepository
-            .updateHistoryAndLogIfRunning(
-              history: failedHistory,
-              logStep: LogStepConstants.backupFileNotFound,
-              logLevel: LogLevel.error,
-              logMessage: errorMessage,
-            );
-        updateResult.fold(
-          (_) {},
-          (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
-        );
-        try {
-          _progressNotifier.failBackup(errorMessage);
-        } on Object catch (e, s) {
-          LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
-        }
-        return rd.Failure(BackupFailure(message: errorMessage));
       }
 
       final uploadStopwatch = Stopwatch()..start();
@@ -675,15 +705,6 @@ class SchedulerService implements ISchedulerService {
       );
     }
 
-    if (_executingSchedules.contains(schedule.id)) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'Este agendamento já está em execução.',
-          code: FailureCodes.scheduleAlreadyRunning,
-        ),
-      );
-    }
-
     _executingSchedules.add(schedule.id);
     try {
       return await _executeScheduledBackup(schedule);
@@ -877,6 +898,46 @@ class SchedulerService implements ISchedulerService {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+  }
+
+  Future<bool> _pathExistsAsBackupArtifact(String path) async {
+    final type = await FileSystemEntity.type(path);
+    return type == FileSystemEntityType.file ||
+        type == FileSystemEntityType.directory;
+  }
+
+  Future<rd.Result<void>> _failScheduledBackupAfterArtifactError({
+    required BackupHistory backupHistory,
+    required String errorMessage,
+    required String logStep,
+    required Failure failure,
+  }) async {
+    final finishedAt = DateTime.now();
+    final failedHistory = backupHistory.copyWith(
+      status: BackupStatus.error,
+      errorMessage: errorMessage,
+      finishedAt: finishedAt,
+      durationSeconds: finishedAt.difference(backupHistory.startedAt).inSeconds,
+    );
+    final updateResult = await _backupHistoryRepository
+        .updateHistoryAndLogIfRunning(
+          history: failedHistory,
+          logStep: logStep,
+          logLevel: LogLevel.error,
+          logMessage: errorMessage,
+        );
+    updateResult.fold(
+      (_) {},
+      (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
+    );
+
+    try {
+      _progressNotifier.failBackup(errorMessage);
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
+    }
+
+    return rd.Failure(failure);
   }
 
   static const _progressThrottleInterval = Duration(milliseconds: 250);

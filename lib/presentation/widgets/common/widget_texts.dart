@@ -22,7 +22,10 @@ class WidgetTexts {
     required this.scheduleLabel,
     required this.typeLabel,
     required this.statusLabel,
-  });
+    required bool isPortuguese,
+  }) : _isPortuguese = isPortuguese;
+
+  final bool _isPortuguese;
 
   final String cancel;
   final String save;
@@ -71,6 +74,7 @@ class WidgetTexts {
         scheduleLabel: 'Agendamento',
         typeLabel: 'Tipo',
         statusLabel: 'Status',
+        isPortuguese: true,
       );
     }
 
@@ -94,6 +98,7 @@ class WidgetTexts {
       scheduleLabel: 'Schedule',
       typeLabel: 'Type',
       statusLabel: 'Status',
+      isPortuguese: false,
     );
   }
 
@@ -112,10 +117,8 @@ class WidgetTexts {
     }
   }
 
-  String get _daily => _isPt ? 'Diário' : 'Daily';
-  String get _weekly => _isPt ? 'Semanal' : 'Weekly';
-  String get _monthly => _isPt ? 'Mensal' : 'Monthly';
-  String get _interval => _isPt ? 'Intervalo' : 'Interval';
-
-  bool get _isPt => cancel == 'Cancelar';
+  String get _daily => _isPortuguese ? 'Diário' : 'Daily';
+  String get _weekly => _isPortuguese ? 'Semanal' : 'Weekly';
+  String get _monthly => _isPortuguese ? 'Mensal' : 'Monthly';
+  String get _interval => _isPortuguese ? 'Intervalo' : 'Interval';
 }

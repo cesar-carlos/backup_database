@@ -1,5 +1,6 @@
-﻿import 'dart:io';
+import 'dart:io';
 
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -119,11 +120,27 @@ class TrayManagerService with TrayListener {
 
   Future<void> _updateMenu() async {
     try {
+      final locale = appLocaleFromPlatform();
       final menu = Menu(
         items: [
-          MenuItem(key: 'show', label: 'Abrir'),
+          MenuItem(
+            key: 'show',
+            label: appLocaleStringForLocale(locale, 'Abrir', 'Open'),
+          ),
           MenuItem.separator(),
-          MenuItem(key: 'exit', label: 'Sair'),
+          MenuItem(
+            key: 'settings',
+            label: appLocaleStringForLocale(
+              locale,
+              'Configurações',
+              'Settings',
+            ),
+          ),
+          MenuItem.separator(),
+          MenuItem(
+            key: 'exit',
+            label: appLocaleStringForLocale(locale, 'Sair', 'Exit'),
+          ),
         ],
       );
 
@@ -252,6 +269,9 @@ class TrayManagerService with TrayListener {
             .catchError((e) {
               LoggerService.error('Erro ao restaurar janela do menu', e);
             });
+
+      case 'settings':
+        _onMenuAction?.call(TrayMenuAction.settings);
 
       case 'exit':
         _onMenuAction?.call(TrayMenuAction.exit);

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -80,18 +78,11 @@ class ScheduleMessageHandler {
     );
 
     if (snapshot.step == 'Concluído') {
-      // Log para rastrear backupPath
-      LoggerService.info(
-        '[ScheduleMessageHandler] ===== ENVIANDO backupComplete =====',
-      );
-      LoggerService.info(
-        '[ScheduleMessageHandler] snapshot.backupPath: "${snapshot.backupPath}"',
-      );
-      LoggerService.info(
-        '[ScheduleMessageHandler] snapshot.backupPath está vazio? ${snapshot.backupPath == null || snapshot.backupPath!.isEmpty}',
+      LoggerService.debug(
+        '[ScheduleMessageHandler] backupComplete backupPath='
+        '${snapshot.backupPath == null || snapshot.backupPath!.isEmpty ? "(empty)" : "(set)"}',
       );
 
-      // AGUARDAR o envio da mensagem backupComplete completar
       await _sendToClient!(
         _currentClientId!,
         createBackupCompleteMessage(
@@ -101,19 +92,14 @@ class ScheduleMessageHandler {
           backupPath: snapshot.backupPath,
         ),
       );
-      LoggerService.info(
-        '[ScheduleMessageHandler] Mensagem backupComplete enviada',
-      );
       _clearCurrentBackup();
     } else if (snapshot.step == 'Erro') {
-      unawaited(
-        _sendToClient!(
-          _currentClientId!,
-          createBackupFailedMessage(
-            requestId: _currentRequestId!,
-            scheduleId: _currentScheduleId!,
-            error: snapshot.error ?? 'Erro desconhecido',
-          ),
+      await _sendToClient!(
+        _currentClientId!,
+        createBackupFailedMessage(
+          requestId: _currentRequestId!,
+          scheduleId: _currentScheduleId!,
+          error: snapshot.error ?? 'Erro desconhecido',
         ),
       );
       _clearCurrentBackup();
@@ -267,9 +253,9 @@ class ScheduleMessageHandler {
       return;
     }
 
-    if (!_progressNotifier.tryStartBackup()) {
+    if (_schedulerService.isExecutingBackup) {
       LoggerService.infoWithContext(
-        'Execute schedule rejected: backup already running',
+        'Execute schedule rejected: scheduler backup in progress',
         clientId: clientId,
         requestId: requestId.toString(),
         scheduleId: scheduleId,
@@ -293,13 +279,11 @@ class ScheduleMessageHandler {
       scheduleId: scheduleId,
     );
 
+    var progressSlotReserved = false;
     try {
       final scheduleResult = await _scheduleRepository.getById(scheduleId);
       if (scheduleResult.isError()) {
         final failure = scheduleResult.exceptionOrNull();
-        _progressNotifier.failBackup(
-          failure?.toString() ?? 'Agendamento não encontrado',
-        );
         await sendToClient(
           clientId,
           createScheduleErrorMessage(
@@ -312,7 +296,6 @@ class ScheduleMessageHandler {
 
       final schedule = scheduleResult.getOrNull();
       if (schedule == null) {
-        _progressNotifier.failBackup('Agendamento não encontrado');
         await sendToClient(
           clientId,
           createScheduleErrorMessage(
@@ -327,7 +310,6 @@ class ScheduleMessageHandler {
         schedule.destinationIds,
       );
       if (destinationsResult.isError()) {
-        _progressNotifier.failBackup('Não foi possível carregar destinos');
         await sendToClient(
           clientId,
           createScheduleErrorMessage(
@@ -347,7 +329,6 @@ class ScheduleMessageHandler {
         final failure = policyResult.exceptionOrNull();
         final errorMessage =
             failure?.toString() ?? 'Licença não permite execução';
-        _progressNotifier.failBackup(errorMessage);
         await sendToClient(
           clientId,
           createScheduleErrorMessage(
@@ -357,6 +338,26 @@ class ScheduleMessageHandler {
         );
         return;
       }
+
+      if (!_progressNotifier.tryStartBackup(schedule.name)) {
+        LoggerService.infoWithContext(
+          'Execute schedule rejected: progress slot busy',
+          clientId: clientId,
+          requestId: requestId.toString(),
+          scheduleId: scheduleId,
+        );
+        await sendToClient(
+          clientId,
+          createScheduleErrorMessage(
+            requestId: requestId,
+            error:
+                'Já existe um backup em execução no servidor. '
+                'Aguarde conclusão para iniciar novo.',
+          ),
+        );
+        return;
+      }
+      progressSlotReserved = true;
 
       _currentClientId = clientId;
       _currentRequestId = requestId;
@@ -440,7 +441,9 @@ class ScheduleMessageHandler {
         error: e,
         stackTrace: st,
       );
-      _progressNotifier.failBackup(e.toString());
+      if (progressSlotReserved) {
+        _progressNotifier.failBackup(e.toString());
+      }
       await sendToClient(
         clientId,
         createBackupFailedMessage(

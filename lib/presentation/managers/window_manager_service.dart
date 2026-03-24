@@ -14,8 +14,8 @@ class WindowManagerService with WindowListener {
   VoidCallback? _onFocus;
 
   bool _isInitialized = false;
-  bool _minimizeToTray = true;
-  bool _closeToTray = true;
+  bool _minimizeToTray = false;
+  bool _closeToTray = false;
 
   Future<void> initialize({
     ui.Size size = const ui.Size(1280, 800),

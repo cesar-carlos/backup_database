@@ -8,6 +8,7 @@ import 'package:backup_database/application/providers/server_credential_provider
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/route_names.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/core/theme/theme_provider.dart';
 import 'package:backup_database/presentation/widgets/navigation/navigation_item.dart';
@@ -26,74 +27,78 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
-  List<NavigationItem> get _navigationItems {
+  List<NavigationItem> _navigationItems(BuildContext context) {
     final mode = currentAppMode;
 
     final allItems = [
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.view_dashboard,
         selectedIcon: FluentIcons.view_dashboard,
-        label: 'Painel',
+        label: appLocaleString(context, 'Painel', 'Dashboard'),
         route: RouteNames.dashboard,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.database,
         selectedIcon: FluentIcons.database,
-        label: 'Bancos de Dados',
+        label: appLocaleString(context, 'Bancos de Dados', 'Databases'),
         route: RouteNames.sqlServerConfig,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.folder,
         selectedIcon: FluentIcons.folder,
-        label: 'Destinos',
+        label: appLocaleString(context, 'Destinos', 'Destinations'),
         route: RouteNames.destinations,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.calendar,
         selectedIcon: FluentIcons.calendar,
-        label: 'Agendamentos',
+        label: appLocaleString(context, 'Agendamentos', 'Schedules'),
         route: RouteNames.schedules,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.server,
         selectedIcon: FluentIcons.server,
-        label: 'Servidor',
+        label: appLocaleString(context, 'Servidor', 'Server'),
         route: RouteNames.serverSettings,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.plug,
         selectedIcon: FluentIcons.plug,
-        label: 'Conectar',
+        label: appLocaleString(context, 'Conectar', 'Connect'),
         route: RouteNames.serverLogin,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.calendar_agenda,
         selectedIcon: FluentIcons.calendar_agenda,
-        label: 'Agendamentos Remotos',
+        label: appLocaleString(
+          context,
+          'Agendamentos Remotos',
+          'Remote schedules',
+        ),
         route: RouteNames.remoteSchedules,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.history,
         selectedIcon: FluentIcons.history,
-        label: 'Log de Conexões',
+        label: appLocaleString(context, 'Log de Conexões', 'Connection log'),
         route: RouteNames.connectionLogs,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.megaphone,
         selectedIcon: FluentIcons.megaphone,
-        label: 'Notificações',
+        label: appLocaleString(context, 'Notificações', 'Notifications'),
         route: RouteNames.notifications,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.document,
         selectedIcon: FluentIcons.document,
-        label: 'Logs',
+        label: appLocaleString(context, 'Logs', 'Logs'),
         route: RouteNames.logs,
       ),
-      const NavigationItem(
+      NavigationItem(
         icon: FluentIcons.settings,
         selectedIcon: FluentIcons.settings,
-        label: 'Configurações',
+        label: appLocaleString(context, 'Configurações', 'Settings'),
         route: RouteNames.settings,
       ),
     ];
@@ -138,7 +143,8 @@ class _MainLayoutState extends State<MainLayout> {
 
   void _updateSelectedIndex() {
     final location = GoRouterState.of(context).uri.path;
-    final index = _navigationItems.indexWhere((item) => item.route == location);
+    final items = _navigationItems(context);
+    final index = items.indexWhere((item) => item.route == location);
     if (index >= 0 && index != _selectedIndex) {
       setState(() => _selectedIndex = index);
     }
@@ -178,7 +184,7 @@ class _MainLayoutState extends State<MainLayout> {
 
   void _onDestinationSelected(int index) {
     setState(() => _selectedIndex = index);
-    context.go(_navigationItems[index].route);
+    context.go(_navigationItems(context)[index].route);
   }
 
   @override
@@ -201,11 +207,12 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   Widget _buildNavigationPane() {
+    final items = _navigationItems(context);
     return Container(
       width: 200,
       color: FluentTheme.of(context).scaffoldBackgroundColor,
       child: ListView(
-        children: _navigationItems.asMap().entries.map(
+        children: items.asMap().entries.map(
           (entry) {
             final index = entry.key;
             final item = entry.value;
@@ -228,6 +235,7 @@ class _MainLayoutState extends State<MainLayout> {
 
   Widget _buildAppBar() {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final items = _navigationItems(context);
 
     return Container(
       height: 64,
@@ -243,12 +251,12 @@ class _MainLayoutState extends State<MainLayout> {
       child: Row(
         children: [
           Text(
-            _navigationItems[_selectedIndex].label,
+            items[_selectedIndex].label,
             style: FluentTheme.of(context).typography.title,
           ),
           const Spacer(),
           Tooltip(
-            message: 'Atualizar',
+            message: appLocaleString(context, 'Atualizar', 'Refresh'),
             child: IconButton(
               icon: const Icon(FluentIcons.refresh),
               onPressed: _handleRefresh,
@@ -256,7 +264,7 @@ class _MainLayoutState extends State<MainLayout> {
           ),
           const SizedBox(width: 8),
           Tooltip(
-            message: 'Alternar tema',
+            message: appLocaleString(context, 'Alternar tema', 'Toggle theme'),
             child: IconButton(
               icon: Icon(
                 themeProvider.isDarkMode

@@ -2,6 +2,7 @@ import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/application/providers/notification_provider.dart';
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/constants/route_names.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -37,7 +38,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (!_hasEmailNotificationFeature(licenseProvider)) {
       await MessageModal.showWarning(
         context,
-        message: 'Este recurso exige licença com notificação por e-mail',
+        message: appLocaleString(
+          context,
+          'Este recurso exige licença com notificação por e-mail',
+          'This feature requires a license with e-mail notification',
+        ),
       );
       return;
     }
@@ -53,11 +58,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
       context,
       initialConfig: initialConfig,
       onTestConfiguration: (config) async {
+        final smtpTestFailedMessage = appLocaleString(
+          context,
+          'Falha ao testar configuração SMTP',
+          'Failed to test SMTP configuration',
+        );
         final success = await provider.testDraftConfiguration(config);
         if (success) {
           return null;
         }
-        return provider.error ?? 'Falha ao testar configuracao SMTP';
+        return provider.error ?? smtpTestFailedMessage;
       },
       onConnectOAuth: (config, providerType) {
         return provider.connectOAuth(
@@ -85,12 +95,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (success) {
       await MessageModal.showSuccess(
         context,
-        message: 'Configuração salva com sucesso',
+        message: appLocaleString(
+          context,
+          'Configuração salva com sucesso',
+          'Configuration saved successfully',
+        ),
       );
     } else {
       await MessageModal.showError(
         context,
-        message: provider.error ?? 'Erro ao salvar configuração',
+        message:
+            provider.error ??
+            appLocaleString(
+              context,
+              'Erro ao salvar configuração',
+              'Error saving configuration',
+            ),
       );
     }
   }
@@ -101,7 +121,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (selectedConfig == null) {
       await MessageModal.showWarning(
         context,
-        message: 'Selecione uma configuração SMTP antes de adicionar destinatários',
+        message: appLocaleString(
+          context,
+          'Selecione uma configuração SMTP antes de adicionar destinatários',
+          'Select an SMTP configuration before adding recipients',
+        ),
       );
       return;
     }
@@ -125,14 +149,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (success) {
       await MessageModal.showSuccess(
         context,
-        message: 'Destinatário adicionado com sucesso',
+        message: appLocaleString(
+          context,
+          'Destinatário adicionado com sucesso',
+          'Recipient added successfully',
+        ),
       );
       return;
     }
 
     await MessageModal.showError(
       context,
-      message: provider.error ?? 'Erro ao adicionar destinatário',
+      message:
+          provider.error ??
+          appLocaleString(
+            context,
+            'Erro ao adicionar destinatário',
+            'Error adding recipient',
+          ),
     );
   }
 
@@ -163,22 +197,39 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (success) {
       await MessageModal.showSuccess(
         context,
-        message: 'Destinatário atualizado com sucesso',
+        message: appLocaleString(
+          context,
+          'Destinatário atualizado com sucesso',
+          'Recipient updated successfully',
+        ),
       );
       return;
     }
 
     await MessageModal.showError(
       context,
-      message: provider.error ?? 'Erro ao atualizar destinatário',
+      message:
+          provider.error ??
+          appLocaleString(
+            context,
+            'Erro ao atualizar destinatário',
+            'Error updating recipient',
+          ),
     );
   }
 
   Future<void> _deleteTarget(EmailNotificationTarget target) async {
     final confirmed = await _confirmDialog(
-      title: 'Excluir destinatário',
-      message:
-          'Deseja realmente excluir o destinatário "${target.recipientEmail}"?',
+      title: appLocaleString(
+        context,
+        'Excluir destinatário',
+        'Delete recipient',
+      ),
+      message: appLocaleString(
+        context,
+        'Deseja realmente excluir o destinatário "${target.recipientEmail}"?',
+        'Do you really want to delete recipient "${target.recipientEmail}"?',
+      ),
     );
     if (!confirmed || !mounted) {
       return;
@@ -193,14 +244,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (success) {
       await MessageModal.showSuccess(
         context,
-        message: 'Destinatário removido com sucesso',
+        message: appLocaleString(
+          context,
+          'Destinatário removido com sucesso',
+          'Recipient removed successfully',
+        ),
       );
       return;
     }
 
     await MessageModal.showError(
       context,
-      message: provider.error ?? 'Erro ao remover destinatário',
+      message:
+          provider.error ??
+          appLocaleString(
+            context,
+            'Erro ao remover destinatário',
+            'Error removing recipient',
+          ),
     );
   }
 
@@ -216,15 +277,28 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     await MessageModal.showError(
       context,
-      message: provider.error ?? 'Erro ao atualizar status do destinatário',
+      message:
+          provider.error ??
+          appLocaleString(
+            context,
+            'Erro ao atualizar status do destinatário',
+            'Error updating recipient status',
+          ),
     );
   }
 
   Future<void> _deleteConfig(EmailConfig config) async {
     final confirmed = await _confirmDialog(
-      title: 'Excluir configuração',
-      message:
-          'Deseja realmente excluir a configuração "${config.configName}"?',
+      title: appLocaleString(
+        context,
+        'Excluir configuração',
+        'Delete configuration',
+      ),
+      message: appLocaleString(
+        context,
+        'Deseja realmente excluir a configuração "${config.configName}"?',
+        'Do you really want to delete configuration "${config.configName}"?',
+      ),
     );
 
     if (!confirmed || !mounted) {
@@ -239,12 +313,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (success) {
       await MessageModal.showSuccess(
         context,
-        message: 'Configuração removida com sucesso',
+        message: appLocaleString(
+          context,
+          'Configuração removida com sucesso',
+          'Configuration removed successfully',
+        ),
       );
     } else {
       await MessageModal.showError(
         context,
-        message: provider.error ?? 'Erro ao remover configuração',
+        message:
+            provider.error ??
+            appLocaleString(
+              context,
+              'Erro ao remover configuração',
+              'Error removing configuration',
+            ),
       );
     }
   }
@@ -259,14 +343,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => ContentDialog(
+      builder: (dialogContext) => ContentDialog(
         title: Text(title),
         content: Text(message),
         actions: [
           const CancelButton(),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Confirmar'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              appLocaleString(context, 'Confirmar', 'Confirm'),
+            ),
           ),
         ],
       ),
@@ -279,7 +365,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Widget build(BuildContext context) {
     return ScaffoldPage(
       header: PageHeader(
-        title: const Text('Configuracoes de Notificacoes por E-mail'),
+        title: Text(
+          appLocaleString(
+            context,
+            'Configurações de notificações por e-mail',
+            'E-mail notification settings',
+          ),
+        ),
         commandBar: Consumer<LicenseProvider>(
           builder: (context, licenseProvider, _) {
             return _NotificationsCommandBar(
@@ -354,7 +446,9 @@ class _NotificationsCommandBar extends StatelessWidget {
         ),
         CommandBarButton(
           icon: const Icon(FluentIcons.add),
-          label: const Text('Nova configuração'),
+          label: Text(
+            appLocaleString(context, 'Nova configuração', 'New configuration'),
+          ),
           onPressed: hasEmailNotification ? onCreateConfig : null,
         ),
       ],
@@ -381,13 +475,26 @@ class _LicenseRequirementInfoCard extends StatelessWidget {
         width: double.infinity,
         child: InfoBar(
           severity: InfoBarSeverity.warning,
-          title: const Text('Recurso requer licença'),
-          content: const Text(
-            'As notificacoes por e-mail sao um recurso premium. '
-            'É necessária uma licença válida com permissão para este recurso.',
+          title: Text(
+            appLocaleString(
+              context,
+              'Recurso requer licença',
+              'License required',
+            ),
+          ),
+          content: Text(
+            appLocaleString(
+              context,
+              'As notificações por e-mail são um recurso premium. '
+                  'É necessária uma licença válida com permissão para este recurso.',
+              'E-mail notifications are a premium feature. '
+                  'A valid license with permission for this feature is required.',
+            ),
           ),
           action: Button(
-            child: const Text('Ver licenciamento'),
+            child: Text(
+              appLocaleString(context, 'Ver licenciamento', 'View licensing'),
+            ),
             onPressed: () {
               context.go(RouteNames.settings);
             },
@@ -430,11 +537,19 @@ class _NotificationsContentSection extends StatelessWidget {
       return AppCard(
         child: InfoBar(
           severity: InfoBarSeverity.error,
-          title: const Text('Erro ao carregar configuração'),
+          title: Text(
+            appLocaleString(
+              context,
+              'Erro ao carregar configuração',
+              'Error loading configuration',
+            ),
+          ),
           content: Text(provider.error!),
           action: Button(
             onPressed: onRefresh,
-            child: const Text('Tentar novamente'),
+            child: Text(
+              appLocaleString(context, 'Tentar novamente', 'Try again'),
+            ),
           ),
         ),
       );
@@ -493,33 +608,56 @@ class _EmailTargetsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final yes = appLocaleString(context, 'Sim', 'Yes');
+    final no = appLocaleString(context, 'Não', 'No');
+
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Destinatarios da configuracao selecionada',
+            appLocaleString(
+              context,
+              'Destinatários da configuração selecionada',
+              'Recipients for selected configuration',
+            ),
             style: FluentTheme.of(context).typography.subtitle?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Configure quais destinatários receberão as notificações e '
-            'quais tipos de evento (sucesso, erro ou aviso) cada um deve receber.',
+          Text(
+            appLocaleString(
+              context,
+              'Configure quais destinatários receberão as notificações e '
+                  'quais tipos de evento (sucesso, erro ou aviso) cada um deve receber.',
+              'Configure which recipients receive notifications and which '
+                  'event types (success, error, or warning) each one gets.',
+            ),
           ),
           const SizedBox(height: 16),
           if (selectedConfig == null)
-            const EmptyState(
+            EmptyState(
               icon: FluentIcons.group,
-              message:
-                  'Selecione uma configuração SMTP para gerenciar destinatários',
+              message: appLocaleString(
+                context,
+                'Selecione uma configuração SMTP para gerenciar destinatários',
+                'Select an SMTP configuration to manage recipients',
+              ),
             )
           else if (targets.isEmpty)
             EmptyState(
               icon: FluentIcons.group,
-              message: 'Nenhum destinatário cadastrado para esta configuração',
-              actionLabel: 'Novo destinatário',
+              message: appLocaleString(
+                context,
+                'Nenhum destinatário cadastrado para esta configuração',
+                'No recipients registered for this configuration',
+              ),
+              actionLabel: appLocaleString(
+                context,
+                'Novo destinatário',
+                'New recipient',
+              ),
               onAction: canManage ? onCreate : null,
             )
           else
@@ -527,39 +665,39 @@ class _EmailTargetsPanel extends StatelessWidget {
               minWidth: 980,
               columns: [
                 AppDataGridColumn<EmailNotificationTarget>(
-                  label: 'Destinatario',
+                  label: appLocaleString(context, 'Destinatário', 'Recipient'),
                   width: const FlexColumnWidth(2.2),
                   cellBuilder: (context, row) => Text(row.recipientEmail),
                 ),
                 AppDataGridColumn<EmailNotificationTarget>(
-                  label: 'Sucesso',
+                  label: appLocaleString(context, 'Sucesso', 'Success'),
                   width: const FlexColumnWidth(0.8),
                   cellAlignment: Alignment.center,
                   headerAlignment: Alignment.center,
                   cellBuilder: (context, row) => Text(
-                    row.notifyOnSuccess ? 'Sim' : 'Nao',
+                    row.notifyOnSuccess ? yes : no,
                   ),
                 ),
                 AppDataGridColumn<EmailNotificationTarget>(
-                  label: 'Erro',
+                  label: appLocaleString(context, 'Erro', 'Error'),
                   width: const FlexColumnWidth(0.8),
                   cellAlignment: Alignment.center,
                   headerAlignment: Alignment.center,
                   cellBuilder: (context, row) => Text(
-                    row.notifyOnError ? 'Sim' : 'Nao',
+                    row.notifyOnError ? yes : no,
                   ),
                 ),
                 AppDataGridColumn<EmailNotificationTarget>(
-                  label: 'Aviso',
+                  label: appLocaleString(context, 'Aviso', 'Warning'),
                   width: const FlexColumnWidth(0.8),
                   cellAlignment: Alignment.center,
                   headerAlignment: Alignment.center,
                   cellBuilder: (context, row) => Text(
-                    row.notifyOnWarning ? 'Sim' : 'Nao',
+                    row.notifyOnWarning ? yes : no,
                   ),
                 ),
                 AppDataGridColumn<EmailNotificationTarget>(
-                  label: 'Status',
+                  label: appLocaleString(context, 'Status', 'Status'),
                   cellBuilder: (context, row) => Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -570,7 +708,11 @@ class _EmailTargetsPanel extends StatelessWidget {
                             : null,
                       ),
                       const SizedBox(width: 8),
-                      Text(row.enabled ? 'Ativo' : 'Inativo'),
+                      Text(
+                        row.enabled
+                            ? appLocaleString(context, 'Ativo', 'Active')
+                            : appLocaleString(context, 'Inativo', 'Inactive'),
+                      ),
                     ],
                   ),
                 ),
@@ -578,13 +720,13 @@ class _EmailTargetsPanel extends StatelessWidget {
               actions: [
                 AppDataGridAction<EmailNotificationTarget>(
                   icon: FluentIcons.edit,
-                  tooltip: 'Editar',
+                  tooltip: appLocaleString(context, 'Editar', 'Edit'),
                   onPressed: onEdit,
                   isEnabled: (_) => canManage,
                 ),
                 AppDataGridAction<EmailNotificationTarget>(
                   icon: FluentIcons.delete,
-                  tooltip: 'Excluir',
+                  tooltip: appLocaleString(context, 'Excluir', 'Delete'),
                   onPressed: onDelete,
                   isEnabled: (_) => canManage,
                 ),
@@ -595,7 +737,9 @@ class _EmailTargetsPanel extends StatelessWidget {
             const SizedBox(height: 12),
             Button(
               onPressed: onCreate,
-              child: const Text('Novo destinatário'),
+              child: Text(
+                appLocaleString(context, 'Novo destinatário', 'New recipient'),
+              ),
             ),
           ],
         ],

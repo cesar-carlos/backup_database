@@ -345,7 +345,13 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             checksum: '',
           ),
         );
-      } on Object catch (_) {}
+      } on Object catch (e, st) {
+        LoggerService.debug(
+          'RemoteFileTransferProvider: insertTransfer history failed: $e',
+          e,
+          st,
+        );
+      }
       loadTransferHistory();
     }
 
@@ -428,7 +434,11 @@ class RemoteFileTransferProvider extends ChangeNotifier {
 
     LoggerService.info('✓ Pasta de downloads configurada: $destDir');
 
-    final outputFilePath = p.join(destDir, p.basename(relativePath));
+    final baseName = p.basename(relativePath);
+    final outputFileName = p.extension(baseName).isEmpty
+        ? '$baseName.zip'
+        : baseName;
+    final outputFilePath = p.join(destDir, outputFileName);
     LoggerService.info('Caminho completo do arquivo: $outputFilePath');
 
     _isTransferring = true;

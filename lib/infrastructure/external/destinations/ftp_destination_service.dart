@@ -232,7 +232,13 @@ class FtpDestinationService implements IFtpService {
         if (ftp != null) {
           try {
             await ftp.disconnect();
-          } on Object catch (_) {}
+          } on Object catch (e, st) {
+            LoggerService.debug(
+              'FTP disconnect after resume policy failure: $e',
+              e,
+              st,
+            );
+          }
         }
         return rd.Failure(e.failure);
       } on _UploadCancelledException {
@@ -240,7 +246,13 @@ class FtpDestinationService implements IFtpService {
           if (!config.keepPartOnCancel) {
             try {
               await _safeDeletePart(ftp, remotePartName);
-            } on Object catch (_) {}
+            } on Object catch (e, st) {
+              LoggerService.debug(
+                'FTP delete part after cancel: $e',
+                e,
+                st,
+              );
+            }
           }
           try {
             await ftp.disconnect();
@@ -510,7 +522,13 @@ class FtpDestinationService implements IFtpService {
     } finally {
       try {
         await tempFile.delete();
-      } on Object catch (_) {}
+      } on Object catch (e, st) {
+        LoggerService.debug(
+          'FTP sidecar temp delete: $e',
+          e,
+          st,
+        );
+      }
     }
   }
 
@@ -679,7 +697,13 @@ class FtpDestinationService implements IFtpService {
     // RFC 3659 extension used by many servers.
     try {
       await ftp.sendCustomCommand('OPTS HASH SHA-256');
-    } on Object catch (_) {}
+    } on Object catch (e, st) {
+      LoggerService.debug(
+        'FTP OPTS HASH not supported or failed: $e',
+        e,
+        st,
+      );
+    }
 
     final commands = <String>[
       'HASH $remoteFileName',
@@ -767,7 +791,13 @@ class FtpDestinationService implements IFtpService {
           if (await tempRemoteCopy.exists()) {
             await tempRemoteCopy.delete();
           }
-        } on Object catch (_) {}
+        } on Object catch (e, st) {
+          LoggerService.debug(
+            'FTP integrity temp copy delete: $e',
+            e,
+            st,
+          );
+        }
       }
     }
 
@@ -957,7 +987,13 @@ class FtpDestinationService implements IFtpService {
       } finally {
         try {
           await tempFile.delete();
-        } on Object catch (_) {}
+        } on Object catch (e, st) {
+          LoggerService.debug(
+            'FTP test temp delete: $e',
+            e,
+            st,
+          );
+        }
       }
 
       final supportsRestStream = await _checkRestStreamSupport(ftp);

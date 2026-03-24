@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/windows_service_provider.dart';
 import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -11,12 +12,6 @@ class ServiceSettingsTab extends StatefulWidget {
 }
 
 class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -35,7 +30,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                _t('Serviço do Windows', 'Windows Service'),
+                appLocaleString(
+                  context,
+                  'Serviço do Windows',
+                  'Windows Service',
+                ),
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -43,7 +42,8 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               ),
               const SizedBox(height: 8),
               Text(
-                _t(
+                appLocaleString(
+                  context,
                   'Instale o aplicativo como serviço do Windows para executar backups automaticamente, mesmo sem usuário logado.',
                   'Install the app as a Windows service to run backups automatically, even with no logged-in user.',
                 ),
@@ -56,7 +56,8 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               if (_shouldShowUacInfoBar(provider)) ...[
                 InfoBar(
                   title: Text(
-                    _t(
+                    appLocaleString(
+                      context,
                       'Aguardando confirmação do Administrador (UAC)',
                       'Waiting for Administrator confirmation (UAC)',
                     ),
@@ -96,12 +97,12 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t('Status do serviço', 'Service status'),
+              appLocaleString(context, 'Status do serviço', 'Service status'),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
             InfoLabel(
-              label: _t('Estado', 'State'),
+              label: appLocaleString(context, 'Estado', 'State'),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -123,7 +124,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             if (provider.status?.serviceName != null) ...[
               const SizedBox(height: 12),
               Text(
-                '${_t('Nome', 'Name')}: ${provider.status!.serviceName}',
+                '${appLocaleString(context, 'Nome', 'Name')}: ${provider.status!.serviceName}',
                 style: const TextStyle(fontSize: 13),
               ),
             ],
@@ -166,7 +167,13 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                 children: [
                   const Icon(FluentIcons.refresh, size: 16),
                   const SizedBox(width: 8),
-                  Text(_t('Atualizar status', 'Refresh status')),
+                  Text(
+                    appLocaleString(
+                      context,
+                      'Atualizar status',
+                      'Refresh status',
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -187,7 +194,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t('Ações', 'Actions'),
+              appLocaleString(context, 'Ações', 'Actions'),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
@@ -205,7 +212,13 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                       children: [
                         const Icon(FluentIcons.download, size: 16),
                         const SizedBox(width: 8),
-                        Text(_t('Instalar serviço', 'Install service')),
+                        Text(
+                          appLocaleString(
+                            context,
+                            'Instalar serviço',
+                            'Install service',
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -219,7 +232,13 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                       children: [
                         const Icon(FluentIcons.delete, size: 16),
                         const SizedBox(width: 8),
-                        Text(_t('Remover serviço', 'Remove service')),
+                        Text(
+                          appLocaleString(
+                            context,
+                            'Remover serviço',
+                            'Remove service',
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -233,7 +252,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                         children: [
                           const Icon(FluentIcons.stop, size: 16),
                           const SizedBox(width: 8),
-                          Text(_t('Parar', 'Stop')),
+                          Text(appLocaleString(context, 'Parar', 'Stop')),
                         ],
                       ),
                     ),
@@ -246,7 +265,9 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                         children: [
                           const Icon(FluentIcons.sync, size: 16),
                           const SizedBox(width: 8),
-                          Text(_t('Reiniciar', 'Restart')),
+                          Text(
+                            appLocaleString(context, 'Reiniciar', 'Restart'),
+                          ),
                         ],
                       ),
                     ),
@@ -260,7 +281,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                         children: [
                           const Icon(FluentIcons.play, size: 16),
                           const SizedBox(width: 8),
-                          Text(_t('Iniciar', 'Start')),
+                          Text(appLocaleString(context, 'Iniciar', 'Start')),
                         ],
                       ),
                     ),
@@ -274,7 +295,13 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                     children: [
                       const Icon(FluentIcons.refresh, size: 16),
                       const SizedBox(width: 8),
-                      Text(_t('Atualizar status', 'Refresh status')),
+                      Text(
+                        appLocaleString(
+                          context,
+                          'Atualizar status',
+                          'Refresh status',
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -294,14 +321,19 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t('Informações', 'Information'),
+              appLocaleString(context, 'Informações', 'Information'),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             _buildInfoItem(
               context,
-              _t('Funciona sem usuário logado', 'Works without logged-in user'),
-              _t(
+              appLocaleString(
+                context,
+                'Funciona sem usuário logado',
+                'Works without logged-in user',
+              ),
+              appLocaleString(
+                context,
                 'O serviço executará backups mesmo quando nenhum usuário estiver conectado.',
                 'The service will run backups even when no user is logged in.',
               ),
@@ -309,8 +341,13 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             const SizedBox(height: 8),
             _buildInfoItem(
               context,
-              _t('Inicialização automática', 'Automatic startup'),
-              _t(
+              appLocaleString(
+                context,
+                'Inicialização automática',
+                'Automatic startup',
+              ),
+              appLocaleString(
+                context,
                 'O serviço iniciará automaticamente com o Windows.',
                 'The service will start automatically with Windows.',
               ),
@@ -318,8 +355,8 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             const SizedBox(height: 8),
             _buildInfoItem(
               context,
-              _t('Logs', 'Logs'),
-              '${_t('Os logs são salvos em', 'Logs are saved at')}: '
+              appLocaleString(context, 'Logs', 'Logs'),
+              '${appLocaleString(context, 'Os logs são salvos em', 'Logs are saved at')}: '
               '${AppConstants.windowsServiceLogPath}\\',
             ),
           ],
@@ -362,36 +399,53 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   String _getStatusText(WindowsServiceProvider provider) {
     if (provider.isLoading) {
       return switch (provider.operation) {
-        WindowsServiceOperation.install => _t(
+        WindowsServiceOperation.install => appLocaleString(
+          context,
           'Instalando... aguardando confirmação do UAC',
           'Installing... waiting for UAC confirmation',
         ),
-        WindowsServiceOperation.uninstall => _t(
+        WindowsServiceOperation.uninstall => appLocaleString(
+          context,
           'Removendo... aguardando confirmação do UAC',
           'Removing... waiting for UAC confirmation',
         ),
-        WindowsServiceOperation.start => _t(
+        WindowsServiceOperation.start => appLocaleString(
+          context,
           'Iniciando... aguardando confirmação do UAC',
           'Starting... waiting for UAC confirmation',
         ),
-        WindowsServiceOperation.stop => _t(
+        WindowsServiceOperation.stop => appLocaleString(
+          context,
           'Parando... aguardando confirmação do UAC',
           'Stopping... waiting for UAC confirmation',
         ),
-        WindowsServiceOperation.restart => _t(
+        WindowsServiceOperation.restart => appLocaleString(
+          context,
           'Reiniciando... aguardando confirmação do UAC',
           'Restarting... waiting for UAC confirmation',
         ),
-        WindowsServiceOperation.check => _t('Verificando...', 'Checking...'),
-        WindowsServiceOperation.none => _t('Verificando...', 'Checking...'),
+        WindowsServiceOperation.check => appLocaleString(
+          context,
+          'Verificando...',
+          'Checking...',
+        ),
+        WindowsServiceOperation.none => appLocaleString(
+          context,
+          'Verificando...',
+          'Checking...',
+        ),
       };
     }
     if (provider.isInstalled) {
       return provider.isRunning
-          ? _t('Instalado e em execução', 'Installed and running')
-          : _t('Instalado', 'Installed');
+          ? appLocaleString(
+              context,
+              'Instalado e em execução',
+              'Installed and running',
+            )
+          : appLocaleString(context, 'Instalado', 'Installed');
     }
-    return _t('Não instalado', 'Not installed');
+    return appLocaleString(context, 'Não instalado', 'Not installed');
   }
 
   bool _shouldShowUacInfoBar(WindowsServiceProvider provider) {
@@ -407,27 +461,33 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
 
   String _getUacInfoBarMessage(WindowsServiceProvider provider) {
     return switch (provider.operation) {
-      WindowsServiceOperation.install => _t(
+      WindowsServiceOperation.install => appLocaleString(
+        context,
         'Confirme o prompt do Windows para instalar o serviço.',
         'Confirm the Windows prompt to install the service.',
       ),
-      WindowsServiceOperation.uninstall => _t(
+      WindowsServiceOperation.uninstall => appLocaleString(
+        context,
         'Confirme o prompt do Windows para remover o serviço.',
         'Confirm the Windows prompt to remove the service.',
       ),
-      WindowsServiceOperation.start => _t(
+      WindowsServiceOperation.start => appLocaleString(
+        context,
         'Confirme o prompt do Windows para iniciar o serviço.',
         'Confirm the Windows prompt to start the service.',
       ),
-      WindowsServiceOperation.stop => _t(
+      WindowsServiceOperation.stop => appLocaleString(
+        context,
         'Confirme o prompt do Windows para parar o serviço.',
         'Confirm the Windows prompt to stop the service.',
       ),
-      WindowsServiceOperation.restart => _t(
+      WindowsServiceOperation.restart => appLocaleString(
+        context,
         'Confirme o prompt do Windows para reiniciar o serviço.',
         'Confirm the Windows prompt to restart the service.',
       ),
-      _ => _t(
+      _ => appLocaleString(
+        context,
         'Confirme o prompt do Windows para continuar.',
         'Confirm the Windows prompt to continue.',
       ),
@@ -441,9 +501,12 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Instalar serviço', 'Install service')),
+        title: Text(
+          appLocaleString(context, 'Instalar serviço', 'Install service'),
+        ),
         content: Text(
-          _t(
+          appLocaleString(
+            context,
             'Deseja instalar o Backup Database como serviço do Windows?\n\nO serviço será configurado para:\n- Iniciar automaticamente com o Windows\n- Executar sem usuário logado\n- Rodar com conta LocalSystem\n\nRequisitos:\n- Configure os backups antes de instalar\n- Certifique-se de ter permissões de administrador',
             'Do you want to install Backup Database as a Windows service?\n\nThe service will be configured to:\n- Start automatically with Windows\n- Run without logged-in user\n- Run under LocalSystem account\n\nRequirements:\n- Configure backups before installing\n- Ensure you have administrator permissions',
           ),
@@ -451,11 +514,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         actions: [
           Button(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_t('Cancelar', 'Cancel')),
+            child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(_t('Instalar', 'Install')),
+            child: Text(appLocaleString(context, 'Instalar', 'Install')),
           ),
         ],
       ),
@@ -469,16 +532,20 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           context: context,
           builder: (context) => ContentDialog(
             title: Text(
-              success ? _t('Sucesso', 'Success') : _t('Erro', 'Error'),
+              success
+                  ? appLocaleString(context, 'Sucesso', 'Success')
+                  : appLocaleString(context, 'Erro', 'Error'),
             ),
             content: Text(
               success
-                  ? _t(
+                  ? appLocaleString(
+                      context,
                       'Serviço instalado com sucesso!\n\nO serviço foi configurado e iniciará automaticamente com o Windows.',
                       'Service installed successfully!\n\nThe service was configured and will start automatically with Windows.',
                     )
                   : provider.error ??
-                        _t(
+                        appLocaleString(
+                          context,
                           'Erro desconhecido ao instalar serviço.',
                           'Unknown error while installing service.',
                         ),
@@ -486,7 +553,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             actions: [
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text(_t('OK', 'OK')),
+                child: Text(appLocaleString(context, 'OK', 'OK')),
               ),
             ],
           ),
@@ -502,9 +569,12 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Remover serviço', 'Remove service')),
+        title: Text(
+          appLocaleString(context, 'Remover serviço', 'Remove service'),
+        ),
         content: Text(
-          _t(
+          appLocaleString(
+            context,
             'Deseja realmente remover o serviço do Windows?\n\nOs agendamentos e configurações não serão perdidos, mas o serviço não executará mais automaticamente.',
             'Do you really want to remove the Windows service?\n\nSchedules and settings will not be lost, but the service will no longer run automatically.',
           ),
@@ -512,11 +582,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         actions: [
           Button(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_t('Cancelar', 'Cancel')),
+            child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(_t('Remover', 'Remove')),
+            child: Text(appLocaleString(context, 'Remover', 'Remove')),
           ),
         ],
       ),
@@ -530,16 +600,20 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           context: context,
           builder: (context) => ContentDialog(
             title: Text(
-              success ? _t('Sucesso', 'Success') : _t('Erro', 'Error'),
+              success
+                  ? appLocaleString(context, 'Sucesso', 'Success')
+                  : appLocaleString(context, 'Erro', 'Error'),
             ),
             content: Text(
               success
-                  ? _t(
+                  ? appLocaleString(
+                      context,
                       'Serviço removido com sucesso!',
                       'Service removed successfully!',
                     )
                   : provider.error ??
-                        _t(
+                        appLocaleString(
+                          context,
                           'Erro desconhecido ao remover serviço.',
                           'Unknown error while removing service.',
                         ),
@@ -547,7 +621,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             actions: [
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text(_t('OK', 'OK')),
+                child: Text(appLocaleString(context, 'OK', 'OK')),
               ),
             ],
           ),
@@ -566,20 +640,29 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       await showDialog(
         context: context,
         builder: (context) => ContentDialog(
-          title: Text(success ? _t('Sucesso', 'Success') : _t('Erro', 'Error')),
+          title: Text(
+            success
+                ? appLocaleString(context, 'Sucesso', 'Success')
+                : appLocaleString(context, 'Erro', 'Error'),
+          ),
           content: Text(
             success
-                ? _t(
+                ? appLocaleString(
+                    context,
                     'Serviço iniciado com sucesso!',
                     'Service started successfully!',
                   )
                 : provider.error ??
-                      _t('Erro ao iniciar serviço.', 'Error starting service.'),
+                      appLocaleString(
+                        context,
+                        'Erro ao iniciar serviço.',
+                        'Error starting service.',
+                      ),
           ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text(_t('OK', 'OK')),
+              child: Text(appLocaleString(context, 'OK', 'OK')),
             ),
           ],
         ),
@@ -594,9 +677,12 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Reiniciar serviço', 'Restart service')),
+        title: Text(
+          appLocaleString(context, 'Reiniciar serviço', 'Restart service'),
+        ),
         content: Text(
-          _t(
+          appLocaleString(
+            context,
             'Deseja reiniciar o serviço?\n\nO serviço será parado e iniciado novamente. Os backups em execução serão interrompidos.',
             'Do you want to restart the service?\n\nThe service will be stopped and started again. Running backups will be interrupted.',
           ),
@@ -604,11 +690,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         actions: [
           Button(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_t('Cancelar', 'Cancel')),
+            child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(_t('Reiniciar', 'Restart')),
+            child: Text(appLocaleString(context, 'Reiniciar', 'Restart')),
           ),
         ],
       ),
@@ -622,16 +708,20 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           context: context,
           builder: (context) => ContentDialog(
             title: Text(
-              success ? _t('Sucesso', 'Success') : _t('Erro', 'Error'),
+              success
+                  ? appLocaleString(context, 'Sucesso', 'Success')
+                  : appLocaleString(context, 'Erro', 'Error'),
             ),
             content: Text(
               success
-                  ? _t(
+                  ? appLocaleString(
+                      context,
                       'Serviço reiniciado com sucesso!',
                       'Service restarted successfully!',
                     )
                   : provider.error ??
-                        _t(
+                        appLocaleString(
+                          context,
                           'Erro ao reiniciar serviço.',
                           'Error restarting service.',
                         ),
@@ -639,7 +729,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             actions: [
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text(_t('OK', 'OK')),
+                child: Text(appLocaleString(context, 'OK', 'OK')),
               ),
             ],
           ),
@@ -655,9 +745,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Parar serviço', 'Stop service')),
+        title: Text(appLocaleString(context, 'Parar serviço', 'Stop service')),
         content: Text(
-          _t(
+          appLocaleString(
+            context,
             'Deseja parar o serviço?\n\nOs backups agendados não serão executados até que o serviço seja iniciado novamente.',
             'Do you want to stop the service?\n\nScheduled backups will not run until the service is started again.',
           ),
@@ -665,11 +756,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         actions: [
           Button(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_t('Cancelar', 'Cancel')),
+            child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(_t('Parar', 'Stop')),
+            child: Text(appLocaleString(context, 'Parar', 'Stop')),
           ),
         ],
       ),
@@ -683,21 +774,28 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           context: context,
           builder: (context) => ContentDialog(
             title: Text(
-              success ? _t('Sucesso', 'Success') : _t('Erro', 'Error'),
+              success
+                  ? appLocaleString(context, 'Sucesso', 'Success')
+                  : appLocaleString(context, 'Erro', 'Error'),
             ),
             content: Text(
               success
-                  ? _t(
+                  ? appLocaleString(
+                      context,
                       'Serviço parado com sucesso!',
                       'Service stopped successfully!',
                     )
                   : provider.error ??
-                        _t('Erro ao parar serviço.', 'Error stopping service.'),
+                        appLocaleString(
+                          context,
+                          'Erro ao parar serviço.',
+                          'Error stopping service.',
+                        ),
             ),
             actions: [
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text(_t('OK', 'OK')),
+                child: Text(appLocaleString(context, 'OK', 'OK')),
               ),
             ],
           ),

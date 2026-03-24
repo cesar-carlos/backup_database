@@ -1,3 +1,4 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -103,7 +104,19 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
         children: [
           const Icon(FluentIcons.group),
           const SizedBox(width: 12),
-          Text(isEditing ? 'Editar destinatario' : 'Novo destinatario'),
+          Text(
+            isEditing
+                ? appLocaleString(
+                    context,
+                    'Editar destinatário',
+                    'Edit recipient',
+                  )
+                : appLocaleString(
+                    context,
+                    'Novo destinatário',
+                    'New recipient',
+                  ),
+          ),
         ],
       ),
       content: Form(
@@ -114,15 +127,31 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
           children: [
             AppTextField(
               controller: _recipientController,
-              label: 'E-mail do destinatario',
+              label: appLocaleString(
+                context,
+                'E-mail do destinatário',
+                'Recipient email',
+              ),
               keyboardType: TextInputType.emailAddress,
-              hint: 'destino@exemplo.com',
+              hint: appLocaleString(
+                context,
+                'destino@exemplo.com',
+                'recipient@example.com',
+              ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'E-mail é obrigatório';
+                  return appLocaleString(
+                    context,
+                    'E-mail é obrigatório',
+                    'Email is required',
+                  );
                 }
                 if (!value.contains('@')) {
-                  return 'E-mail invalido';
+                  return appLocaleString(
+                    context,
+                    'E-mail inválido',
+                    'Invalid email',
+                  );
                 }
                 return null;
               },
@@ -192,31 +221,53 @@ class _TargetStatusSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
-          'Defina quais tipos de evento este destinatário receberá. '
-          'Cada destinatário pode ter configurações diferentes de notificação.',
+        Text(
+          appLocaleString(
+            context,
+            'Defina quais tipos de evento este destinatário receberá. '
+                'Cada destinatário pode ter configurações diferentes de '
+                'notificação.',
+            'Choose which event types this recipient will receive. '
+                'Each recipient can have different notification settings.',
+          ),
         ),
         const SizedBox(height: 10),
         _TargetToggleField(
-          label: 'Receber notificação de sucesso',
+          label: appLocaleString(
+            context,
+            'Receber notificação de sucesso',
+            'Notify on success',
+          ),
           value: notifyOnSuccess,
           onChanged: onNotifyOnSuccessChanged,
         ),
         const SizedBox(height: 10),
         _TargetToggleField(
-          label: 'Receber notificação de erro',
+          label: appLocaleString(
+            context,
+            'Receber notificação de erro',
+            'Notify on error',
+          ),
           value: notifyOnError,
           onChanged: onNotifyOnErrorChanged,
         ),
         const SizedBox(height: 10),
         _TargetToggleField(
-          label: 'Receber notificação de aviso',
+          label: appLocaleString(
+            context,
+            'Receber notificação de aviso',
+            'Notify on warning',
+          ),
           value: notifyOnWarning,
           onChanged: onNotifyOnWarningChanged,
         ),
         const SizedBox(height: 10),
         _TargetToggleField(
-          label: 'Destinatario ativo',
+          label: appLocaleString(
+            context,
+            'Destinatário ativo',
+            'Recipient active',
+          ),
           value: enabled,
           onChanged: onEnabledChanged,
         ),

@@ -601,7 +601,13 @@ class ScheduleRepository implements IScheduleRepository {
           (key, value) => MapEntry(key.toString(), value),
         );
       }
-    } on Object catch (_) {}
+    } on Object catch (e, st) {
+      LoggerService.debug(
+        'ScheduleRepository: scheduleConfig JSON decode skipped: $e',
+        e,
+        st,
+      );
+    }
     return {};
   }
 

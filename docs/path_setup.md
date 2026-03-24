@@ -228,6 +228,25 @@ dbbackup -?
 - ✅ **Prefira o PATH do sistema** se múltiplos usuários usarão o Backup Database
 - ✅ **Teste sempre** após adicionar ao PATH usando `sqlcmd -?` ou `dbbackup -?`
 
+## Variáveis de ambiente opcionais (aplicativo)
+
+Além do PATH do Windows, o Backup Database pode ler variáveis **opcionais** do
+ambiente do processo (por exemplo variáveis de sistema ou de utilizador, ou
+definidas no atalho do executável).
+
+### Upload paralelo para destinos
+
+- **`BACKUP_DATABASE_MAX_PARALLEL_UPLOADS`**
+  - Número inteiro **≥ 1** de envios simultâneos ao processar vários destinos.
+  - Se ausente ou inválido, usa o valor por defeito **3**.
+  - Valores acima de **16** são limitados a **16**.
+
+### PostgreSQL (WAL / slots / timeouts)
+
+Variáveis como `BACKUP_DATABASE_PG_LOG_USE_SLOT`,
+`BACKUP_DATABASE_PG_LOG_TIMEOUT_SECONDS`, etc., são descritas em
+`docs/analise_implementacao_postgresql.md`.
+
 ## Referências
 
 - [Microsoft: Como adicionar ao PATH](https://docs.microsoft.com/en-us/windows/win32/procthread/environment-variables)

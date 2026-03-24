@@ -1,3 +1,4 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/presentation/widgets/settings/general_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/license_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/service_settings_tab.dart';
@@ -16,7 +17,11 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return ScaffoldPage(
-      header: const PageHeader(title: Text('Configurações')),
+      header: PageHeader(
+        title: Text(
+          appLocaleString(context, 'Configurações', 'Settings'),
+        ),
+      ),
       content: Column(
         children: [
           Expanded(
@@ -30,17 +35,27 @@ class _SettingsPageState extends State<SettingsPage> {
               tabs: [
                 Tab(
                   icon: const Icon(FluentIcons.settings),
-                  text: const Text('Geral'),
+                  text: Text(
+                    appLocaleString(context, 'Geral', 'General'),
+                  ),
                   body: const GeneralSettingsTab(),
                 ),
                 Tab(
                   icon: const Icon(FluentIcons.server),
-                  text: const Text('Serviço Windows'),
+                  text: Text(
+                    appLocaleString(
+                      context,
+                      'Serviço Windows',
+                      'Windows service',
+                    ),
+                  ),
                   body: const ServiceSettingsTab(),
                 ),
                 Tab(
                   icon: const Icon(FluentIcons.lock),
-                  text: const Text('Licenciamento'),
+                  text: Text(
+                    appLocaleString(context, 'Licenciamento', 'Licensing'),
+                  ),
                   body: const LicenseSettingsTab(),
                 ),
               ],

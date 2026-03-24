@@ -245,20 +245,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
           );
         }
 
-        await Future.delayed(const Duration(milliseconds: 1000));
-
         final backupFile = File(backupPath);
-
-        var fileExists = false;
-        for (var i = 0; i < 20; i++) {
-          if (await backupFile.exists()) {
-            fileExists = true;
-            break;
-          }
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
-
-        if (!fileExists) {
+        final ready = await _waitForStableBackupFile(backupFile);
+        if (!ready) {
           return rd.Failure(
             BackupFailure(
               message: 'Arquivo de backup não foi criado em: $backupPath',
@@ -514,6 +503,33 @@ class SqlServerBackupService implements ISqlServerBackupService {
         BackupFailure(message: 'Erro ao listar arquivos: $e'),
       );
     }
+  }
+
+  static const Duration _sqlBackupFileInitialDelay = Duration(milliseconds: 200);
+  static const Duration _sqlBackupFilePollInterval = Duration(milliseconds: 250);
+  static const Duration _sqlBackupFileStabilizeDelay =
+      Duration(milliseconds: 200);
+  static const Duration _sqlBackupFileMaxWait = Duration(seconds: 12);
+
+  Future<bool> _waitForStableBackupFile(File backupFile) async {
+    await Future<void>.delayed(_sqlBackupFileInitialDelay);
+    final deadline = DateTime.now().add(_sqlBackupFileMaxWait);
+
+    while (DateTime.now().isBefore(deadline)) {
+      if (await backupFile.exists()) {
+        final length = await backupFile.length();
+        if (length > 0) {
+          await Future<void>.delayed(_sqlBackupFileStabilizeDelay);
+          final length2 = await backupFile.length();
+          if (length2 == length) {
+            return true;
+          }
+        }
+      }
+      await Future<void>.delayed(_sqlBackupFilePollInterval);
+    }
+
+    return backupFile.existsSync() && backupFile.lengthSync() > 0;
   }
 
   String _formatBytes(int bytes) {

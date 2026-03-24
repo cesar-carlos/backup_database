@@ -12,19 +12,39 @@ class TransferStagingService implements ITransferStagingService {
 
   @override
   Future<String?> copyToStaging(String backupPath, String scheduleId) async {
-    final source = File(backupPath);
+    final normalized = p.normalize(p.absolute(backupPath));
+    final entityType = await FileSystemEntity.type(normalized);
+
+    if (entityType == FileSystemEntityType.file) {
+      return _copyFileToStaging(normalized, scheduleId);
+    }
+    if (entityType == FileSystemEntityType.directory) {
+      return _copyDirectoryToStaging(normalized, scheduleId);
+    }
+
+    LoggerService.warning(
+      'TransferStagingService: backup path not found: $backupPath',
+    );
+    return null;
+  }
+
+  Future<String?> _copyFileToStaging(
+    String normalizedFilePath,
+    String scheduleId,
+  ) async {
+    final source = File(normalizedFilePath);
     if (!await source.exists()) {
       LoggerService.warning(
-        'TransferStagingService: backup file not found: $backupPath',
+        'TransferStagingService: backup file not found: '
+        '$normalizedFilePath',
       );
       return null;
     }
 
-    final baseName = p.basename(backupPath);
+    final baseName = p.basename(normalizedFilePath);
     final relativePath = p.join('remote', scheduleId, baseName);
     final destPath = p.join(_transferBasePath, relativePath);
-    final destFile = File(destPath);
-    final destDir = destFile.parent;
+    final destDir = File(destPath).parent;
 
     try {
       if (!await destDir.exists()) {
@@ -39,6 +59,58 @@ class TransferStagingService implements ITransferStagingService {
         st,
       );
       return null;
+    }
+  }
+
+  Future<String?> _copyDirectoryToStaging(
+    String normalizedDirPath,
+    String scheduleId,
+  ) async {
+    final sourceDir = Directory(normalizedDirPath);
+    if (!await sourceDir.exists()) {
+      LoggerService.warning(
+        'TransferStagingService: backup directory not found: '
+        '$normalizedDirPath',
+      );
+      return null;
+    }
+
+    final baseName = p.basename(normalizedDirPath);
+    final relativePath = p.join('remote', scheduleId, baseName);
+    final destRoot = Directory(p.join(_transferBasePath, relativePath));
+
+    try {
+      if (await destRoot.exists()) {
+        await destRoot.delete(recursive: true);
+      }
+      await destRoot.create(recursive: true);
+      await _copyDirectoryTree(sourceDir, destRoot);
+      return p.join(relativePath).replaceAll(r'\', '/');
+    } on Object catch (e, st) {
+      LoggerService.warning(
+        'TransferStagingService: directory copy failed',
+        e,
+        st,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _copyDirectoryTree(
+    Directory source,
+    Directory destination,
+  ) async {
+    await for (final FileSystemEntity entity in source.list(
+      followLinks: false,
+    )) {
+      final name = p.basename(entity.path);
+      final destPath = p.join(destination.path, name);
+      if (entity is File) {
+        await entity.copy(destPath);
+      } else if (entity is Directory) {
+        await Directory(destPath).create(recursive: true);
+        await _copyDirectoryTree(Directory(entity.path), Directory(destPath));
+      }
     }
   }
 
@@ -104,8 +176,12 @@ class TransferStagingService implements ITransferStagingService {
             if (await entity.list().isEmpty) {
               await entity.delete();
             }
-          } on Object catch (_) {
-            // Ignora erro ao remover diretório vazio
+          } on Object catch (e, st) {
+            LoggerService.debug(
+              'TransferStagingService: skip empty dir removal: $e',
+              e,
+              st,
+            );
           }
         }
       }

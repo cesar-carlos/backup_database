@@ -7,6 +7,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('SystemSettingsProvider', () {
+    test('should initialize first run with all toggles disabled', () async {
+      SharedPreferences.setMockInitialValues({});
+
+      final runner = _ProcessRunnerFake();
+      final provider = SystemSettingsProvider(
+        processRunner: runner.run,
+        executablePathProvider: () => r'C:\Apps\BackupDatabase.exe',
+      );
+
+      await provider.initialize();
+
+      expect(provider.minimizeToTray, isFalse);
+      expect(provider.closeToTray, isFalse);
+      expect(provider.startMinimized, isFalse);
+      expect(provider.startWithWindows, isFalse);
+      expect(runner.calls, isEmpty);
+    });
+
     test('should register startup command with startup argument', () async {
       SharedPreferences.setMockInitialValues({
         'minimize_to_tray': true,
