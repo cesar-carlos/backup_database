@@ -3,6 +3,8 @@ import 'package:backup_database/presentation/widgets/notifications/notification_
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../../support/feature_availability_test_support.dart';
+
 Finder _findTextPtOrEn(String pt, String en) {
   return find.byWidgetPredicate((widget) {
     if (widget is Text) {
@@ -16,6 +18,9 @@ Finder _findTextPtOrEn(String pt, String en) {
 }
 
 void main() {
+  setUp(registerTestFeatureAvailability);
+  tearDown(unregisterTestFeatureAvailability);
+
   Widget buildDialog({
     EmailConfig? initialConfig,
     Future<EmailConfig?> Function(

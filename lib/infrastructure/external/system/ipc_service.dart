@@ -6,6 +6,7 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
 import 'package:backup_database/domain/services/i_ipc_service.dart';
+import 'package:meta/meta.dart';
 
 class IpcService implements IIpcService {
   ServerSocket? _server;
@@ -248,6 +249,15 @@ class IpcService implements IIpcService {
 
   @override
   bool get isRunning => _isRunning;
+
+  /// Port bound by [startServer], or [SingleInstanceConfig.ipcBasePort] before listen.
+  int get listenPort => _currentPort;
+
+  @visibleForTesting
+  static void resetPortCacheForTests() {
+    _cachedActivePort = null;
+    _cachedActivePortAt = null;
+  }
 
   static Future<void> _closeClientResources({
     Socket? socket,

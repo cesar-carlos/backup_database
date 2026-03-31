@@ -7,6 +7,8 @@ import 'package:backup_database/infrastructure/external/system/ipc_service.dart'
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  setUp(IpcService.resetPortCacheForTests);
+
   group('IpcService.checkServerRunning', () {
     test(
       'should return true when server responds with valid V1 PONG',
@@ -284,33 +286,36 @@ void main() {
       }
     });
 
-    test('should return null when V1 USER_INFO has wrong protocol version', () async {
-      final server = await _bindToIpcTestPort();
+    test(
+      'should return null when V1 USER_INFO has wrong protocol version',
+      () async {
+        final server = await _bindToIpcTestPort();
 
-      server.listen((Socket socket) {
-        socket.listen((List<int> data) async {
-          final message = utf8.decode(data).trim();
-          if (message == SingleInstanceConfig.ipcGetUserInfoMessage) {
-            final u64 = base64Url.encode(utf8.encode('test_user'));
-            socket.add(
-              utf8.encode(
-                '${SingleInstanceConfig.ipcUserInfoLinePrefix}'
-                'v=999|'
-                'role=${SingleInstanceConfig.ipcInstanceRoleUi}|pid=1|u64=$u64',
-              ),
-            );
-            await socket.flush();
-          }
+        server.listen((Socket socket) {
+          socket.listen((List<int> data) async {
+            final message = utf8.decode(data).trim();
+            if (message == SingleInstanceConfig.ipcGetUserInfoMessage) {
+              final u64 = base64Url.encode(utf8.encode('test_user'));
+              socket.add(
+                utf8.encode(
+                  '${SingleInstanceConfig.ipcUserInfoLinePrefix}'
+                  'v=999|'
+                  'role=${SingleInstanceConfig.ipcInstanceRoleUi}|pid=1|u64=$u64',
+                ),
+              );
+              await socket.flush();
+            }
+          });
         });
-      });
 
-      try {
-        final result = await IpcService.getExistingInstanceUser();
-        expect(result, isNull);
-      } finally {
-        await server.close();
-      }
-    });
+        try {
+          final result = await IpcService.getExistingInstanceUser();
+          expect(result, isNull);
+        } finally {
+          await server.close();
+        }
+      },
+    );
   });
 
   group('IpcService server (integration)', () {
@@ -325,11 +330,12 @@ void main() {
       expect(started, isTrue);
 
       try {
+        final listenPort = ipc.listenPort;
         Socket? s1;
         Socket? s2;
         s1 = await Socket.connect(
           InternetAddress.loopbackIPv4,
-          SingleInstanceConfig.ipcBasePort,
+          listenPort,
           timeout: const Duration(seconds: 2),
         );
         s1.add(utf8.encode(SingleInstanceConfig.ipcShowWindowMessage));
@@ -338,7 +344,7 @@ void main() {
 
         s2 = await Socket.connect(
           InternetAddress.loopbackIPv4,
-          SingleInstanceConfig.ipcBasePort,
+          listenPort,
           timeout: const Duration(seconds: 2),
         );
         s2.add(utf8.encode(SingleInstanceConfig.showWindowCommand));

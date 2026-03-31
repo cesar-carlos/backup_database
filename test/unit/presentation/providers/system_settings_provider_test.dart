@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/domain/services/i_windows_machine_startup_service.dart';
@@ -6,8 +8,21 @@ import 'package:backup_database/presentation/providers/system_settings_provider.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../support/feature_availability_test_support.dart';
+
 void main() {
   group('SystemSettingsProvider', () {
+    setUp(() {
+      if (Platform.isWindows) {
+        registerTestFeatureAvailability();
+      }
+    });
+    tearDown(() {
+      if (Platform.isWindows) {
+        unregisterTestFeatureAvailability();
+      }
+    });
+
     test('should initialize first run with all toggles disabled', () async {
       SharedPreferences.setMockInitialValues({});
 
