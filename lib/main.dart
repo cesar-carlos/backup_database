@@ -83,6 +83,7 @@ Future<void> _runApp() async {
   LoggerService.info('Modo do aplicativo: ${currentAppMode.name}');
 
   await service_locator.setupServiceLocator();
+  await registerFeatureAvailability(service_locator.getIt);
   _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
   LoggerService.info(
     '[main] singleInstanceLockFallbackUi=${SingleInstanceConfig.lockFallbackMode.name}',
@@ -150,7 +151,8 @@ Future<void> _loadEnvironment() async {
 void _checkOsCompatibility() {
   if (!OsVersionChecker.isCompatible()) {
     LoggerService.warning(
-      'Sistema operacional pode nao ser compativel. Requisito: Windows 8.1 (6.3) / Server 2012 R2 ou superior.',
+      'Sistema operacional pode nao ser compativel. Requisito: '
+      'Windows 8 (6.2) / Server 2012 ou superior.',
     );
     LoggerService.warning(
       'O aplicativo pode nao funcionar corretamente em versoes mais antigas do Windows.',
@@ -171,15 +173,23 @@ void _checkOsCompatibility() {
 }
 
 Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
+  final features = service_locator.getIt<FeatureAvailabilityService>();
   final windowManager = WindowManagerService();
-  try {
-    await windowManager.initialize(
-      title: getWindowTitleForMode(currentAppMode),
-      startMinimized: launchConfig.startMinimized,
-    );
-  } on Object catch (e) {
+  if (features.isWindowManagementEnabled) {
+    try {
+      await windowManager.initialize(
+        title: getWindowTitleForMode(currentAppMode),
+        startMinimized: launchConfig.startMinimized,
+      );
+    } on Object catch (e) {
+      LoggerService.warning(
+        'Erro ao inicializar window manager (continuando sem UI): $e',
+      );
+    }
+  } else {
     LoggerService.warning(
-      'Erro ao inicializar window manager (continuando sem UI): $e',
+      'Window manager omitido (compatibilidade): '
+      '${features.windowManagementDisabledReason?.diagnosticLabel ?? "unknown"}',
     );
   }
 
@@ -192,6 +202,9 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
           LoggerService.info(
             'Recebido comando SHOW_WINDOW via IPC de outra instancia',
           );
+          if (!features.isWindowManagementEnabled) {
+            return;
+          }
           try {
             await WindowManagerService().show();
             LoggerService.info('Janela trazida para frente apos comando IPC');
@@ -215,10 +228,17 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   }
 
   final trayManager = TrayManagerService();
-  try {
-    await trayManager.initialize(onMenuAction: TrayMenuHandler.handleAction);
-  } on Object catch (e) {
-    LoggerService.warning('Erro ao inicializar tray manager: $e');
+  if (features.isTrayEnabled) {
+    try {
+      await trayManager.initialize(onMenuAction: TrayMenuHandler.handleAction);
+    } on Object catch (e) {
+      LoggerService.warning('Erro ao inicializar tray manager: $e');
+    }
+  } else {
+    LoggerService.warning(
+      'Tray icon omitido (compatibilidade): '
+      '${features.trayDisabledReason?.diagnosticLabel ?? "unknown"}',
+    );
   }
 
   windowManager.setCallbacks(
@@ -231,6 +251,14 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
 
 Future<void> _startScheduler() async {
   try {
+    final features = service_locator.getIt<FeatureAvailabilityService>();
+    if (!features.isTaskSchedulerEnabled) {
+      LoggerService.warning(
+        'Agendamento local nao iniciado: Task Scheduler indisponivel para '
+        'esta versao do Windows.',
+      );
+      return;
+    }
     final fallbackMode = _getUiSchedulerFallbackModeFromEnv();
     final windowsServiceService = service_locator
         .getIt<IWindowsServiceService>();

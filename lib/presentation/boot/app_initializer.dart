@@ -60,6 +60,14 @@ class AppInitializer {
 
   static Future<void> _initializeAutoUpdate() async {
     try {
+      final features = service_locator.getIt<FeatureAvailabilityService>();
+      if (!features.isAutoUpdateEnabled) {
+        LoggerService.info(
+          'AutoUpdateService omitido (compatibilidade): '
+          '${features.autoUpdateDisabledReason?.diagnosticLabel ?? "unknown"}',
+        );
+        return;
+      }
       final autoUpdateService = service_locator.getIt<AutoUpdateService>();
       final feedUrl = dotenv.env['AUTO_UPDATE_FEED_URL'];
       await autoUpdateService.initialize(feedUrl);

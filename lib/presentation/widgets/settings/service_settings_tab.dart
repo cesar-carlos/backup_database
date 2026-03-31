@@ -1,7 +1,14 @@
 import 'package:backup_database/application/providers/windows_service_provider.dart';
+import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/utils/clipboard_service.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 class ServiceSettingsTab extends StatefulWidget {
@@ -12,16 +19,70 @@ class ServiceSettingsTab extends StatefulWidget {
 }
 
 class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
+  late final ClipboardService _clipboardService;
+
   @override
   void initState() {
     super.initState();
+    _clipboardService = getIt<ClipboardService>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<WindowsServiceProvider>().checkStatus();
     });
   }
 
+  Future<void> _copyCompatibilityDiagnostics(String summary) async {
+    final payload = await _buildCompatibilityDiagnosticsPayload(summary);
+    final copied = await _clipboardService.copyToClipboard(payload);
+    if (!mounted) {
+      return;
+    }
+    if (copied) {
+      MessageModal.showSuccess(
+        context,
+        message: appLocaleString(
+          context,
+          'Diagnóstico de compatibilidade copiado para a área de transferência.',
+          'Compatibility diagnostics copied to clipboard.',
+        ),
+      );
+      return;
+    }
+    MessageModal.showError(
+      context,
+      message: appLocaleString(
+        context,
+        'Não foi possível copiar o diagnóstico de compatibilidade.',
+        'Could not copy compatibility diagnostics.',
+      ),
+    );
+  }
+
+  Future<String> _buildCompatibilityDiagnosticsPayload(String summary) async {
+    final appVersion = await _resolveAppVersion();
+    final timestampIso = DateTime.now().toIso8601String();
+    return '[backup_database compatibility diagnostics]\n'
+        'timestamp=$timestampIso\n'
+        'app_version=$appVersion\n\n'
+        '$summary';
+  }
+
+  Future<String> _resolveAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (packageInfo.buildNumber.isNotEmpty) {
+        return '${packageInfo.version}+${packageInfo.buildNumber}';
+      }
+      return packageInfo.version;
+    } on Object catch (e, s) {
+      LoggerService.warning('Falha ao resolver versão do app', e, s);
+      return 'unknown';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final features = getIt<FeatureAvailabilityService>();
+    final serviceUiOk = features.isWindowsServiceManagementEnabled;
     return Consumer<WindowsServiceProvider>(
       builder: (context, provider, _) {
         return SingleChildScrollView(
@@ -53,6 +114,59 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                 ),
               ),
               const SizedBox(height: 32),
+              if (!serviceUiOk) ...[
+                InfoBar(
+                  title: Text(
+                    appLocaleString(
+                      context,
+                      'Serviço do Windows',
+                      'Windows Service',
+                    ),
+                  ),
+                  content: Text(
+                    localizeCompatibilityReason(
+                      context,
+                      reason: features.windowsServiceManagementDisabledReason,
+                      fallbackPt: 'Não disponível nesta versão do Windows.',
+                      fallbackEn: 'Not available on this Windows version.',
+                    ),
+                  ),
+                  severity: InfoBarSeverity.warning,
+                  isLong: true,
+                ),
+                const SizedBox(height: 24),
+              ],
+              InfoBar(
+                title: Text(
+                  appLocaleString(
+                    context,
+                    'Diagnóstico de compatibilidade',
+                    'Compatibility diagnostics',
+                  ),
+                ),
+                content: SelectableText(features.diagnosticSummary()),
+                isLong: true,
+              ),
+              const SizedBox(height: 8),
+              Button(
+                onPressed: () =>
+                    _copyCompatibilityDiagnostics(features.diagnosticSummary()),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(FluentIcons.copy, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      appLocaleString(
+                        context,
+                        'Copiar diagnóstico',
+                        'Copy diagnostics',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
               if (_shouldShowUacInfoBar(provider)) ...[
                 InfoBar(
                   title: Text(
@@ -76,7 +190,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                 _buildErrorCard(context, provider),
                 const SizedBox(height: 24),
               ],
-              _buildActionsCard(context, provider),
+              _buildActionsCard(context, provider, serviceUiOk),
               const SizedBox(height: 24),
               _buildInfoCard(context),
             ],
@@ -186,6 +300,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   Widget _buildActionsCard(
     BuildContext context,
     WindowsServiceProvider provider,
+    bool serviceActionsEnabled,
   ) {
     return Card(
       child: Padding(
@@ -204,7 +319,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               children: [
                 if (!provider.isInstalled)
                   FilledButton(
-                    onPressed: provider.isLoading
+                    onPressed: (!serviceActionsEnabled || provider.isLoading)
                         ? null
                         : () => _installService(context, provider),
                     child: Row(
@@ -224,7 +339,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                   ),
                 if (provider.isInstalled) ...[
                   FilledButton(
-                    onPressed: provider.isLoading
+                    onPressed: (!serviceActionsEnabled || provider.isLoading)
                         ? null
                         : () => _uninstallService(context, provider),
                     child: Row(
@@ -244,7 +359,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                   ),
                   if (provider.isRunning) ...[
                     Button(
-                      onPressed: provider.isLoading
+                      onPressed: (!serviceActionsEnabled || provider.isLoading)
                           ? null
                           : () => _stopService(context, provider),
                       child: Row(
@@ -257,7 +372,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                       ),
                     ),
                     Button(
-                      onPressed: provider.isLoading
+                      onPressed: (!serviceActionsEnabled || provider.isLoading)
                           ? null
                           : () => _restartService(context, provider),
                       child: Row(
@@ -273,7 +388,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                     ),
                   ] else
                     Button(
-                      onPressed: provider.isLoading
+                      onPressed: (!serviceActionsEnabled || provider.isLoading)
                           ? null
                           : () => _startService(context, provider),
                       child: Row(
@@ -498,6 +613,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     BuildContext context,
     WindowsServiceProvider provider,
   ) async {
+    if (!getIt<FeatureAvailabilityService>()
+        .isWindowsServiceManagementEnabled) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
@@ -566,6 +685,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     BuildContext context,
     WindowsServiceProvider provider,
   ) async {
+    if (!getIt<FeatureAvailabilityService>()
+        .isWindowsServiceManagementEnabled) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
@@ -634,6 +757,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     BuildContext context,
     WindowsServiceProvider provider,
   ) async {
+    if (!getIt<FeatureAvailabilityService>()
+        .isWindowsServiceManagementEnabled) {
+      return;
+    }
     final success = await provider.startService();
 
     if (context.mounted) {
@@ -674,6 +801,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     BuildContext context,
     WindowsServiceProvider provider,
   ) async {
+    if (!getIt<FeatureAvailabilityService>()
+        .isWindowsServiceManagementEnabled) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
@@ -742,6 +873,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     BuildContext context,
     WindowsServiceProvider provider,
   ) async {
+    if (!getIt<FeatureAvailabilityService>()
+        .isWindowsServiceManagementEnabled) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(

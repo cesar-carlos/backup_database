@@ -1,7 +1,11 @@
 import 'dart:ui' show PlatformDispatcher;
 
+import 'package:backup_database/core/compatibility/feature_availability_service.dart';
+import 'package:backup_database/core/compatibility/feature_disable_reason.dart';
+import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
+import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:uuid/uuid.dart';
@@ -128,6 +132,15 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     _oauthTokenKey = config?.oauthTokenKey;
     _oauthConnectedAt = config?.oauthConnectedAt;
     _attachLog = config?.attachLog ?? false;
+
+    final features = getIt<FeatureAvailabilityService>();
+    if (!features.isExternalBrowserOAuthEnabled && _authMode.isOAuth) {
+      _authMode = SmtpAuthMode.password;
+      _oauthProvider = null;
+      _oauthAccountEmail = null;
+      _oauthTokenKey = null;
+      _oauthConnectedAt = null;
+    }
   }
 
   @override
@@ -290,6 +303,9 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
   }
 
   Future<void> _connectOAuth() async {
+    if (!getIt<FeatureAvailabilityService>().isExternalBrowserOAuthEnabled) {
+      return;
+    }
     final onConnectOAuth = widget.onConnectOAuth;
     if (onConnectOAuth == null) {
       return;
@@ -361,6 +377,9 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
   }
 
   Future<void> _reconnectOAuth() async {
+    if (!getIt<FeatureAvailabilityService>().isExternalBrowserOAuthEnabled) {
+      return;
+    }
     final onReconnectOAuth = widget.onReconnectOAuth;
     if (onReconnectOAuth == null) {
       return;
@@ -528,6 +547,8 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final features = getIt<FeatureAvailabilityService>();
+    final oauthModesAvailable = features.isExternalBrowserOAuthEnabled;
     return ContentDialog(
       constraints: const BoxConstraints(
         minWidth: 720,
@@ -583,6 +604,9 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                   isBusy: _isConnectingOAuth,
                   oauthAccountEmail: _oauthAccountEmail,
                   oauthConnectedAt: _oauthConnectedAt,
+                  oauthModesAvailable: oauthModesAvailable,
+                  oauthUnavailableReason:
+                      features.externalBrowserOAuthDisabledReason,
                   onAuthModeChanged: (mode) {
                     setState(() {
                       _authMode = mode;
@@ -662,6 +686,8 @@ class _SmtpAuthenticationSection extends StatelessWidget {
     required this.isBusy,
     required this.oauthAccountEmail,
     required this.oauthConnectedAt,
+    required this.oauthModesAvailable,
+    required this.oauthUnavailableReason,
     required this.onAuthModeChanged,
     required this.onConnect,
     required this.onReconnect,
@@ -672,6 +698,8 @@ class _SmtpAuthenticationSection extends StatelessWidget {
   final bool isBusy;
   final String? oauthAccountEmail;
   final DateTime? oauthConnectedAt;
+  final bool oauthModesAvailable;
+  final FeatureDisableReason? oauthUnavailableReason;
   final ValueChanged<SmtpAuthMode> onAuthModeChanged;
   final Future<void> Function() onConnect;
   final Future<void> Function() onReconnect;
@@ -688,6 +716,28 @@ class _SmtpAuthenticationSection extends StatelessWidget {
       children: [
         const Divider(),
         const SizedBox(height: 10),
+        if (!oauthModesAvailable) ...[
+          InfoBar(
+            title: Text(
+              appLocaleString(
+                context,
+                'OAuth SMTP',
+                'SMTP OAuth',
+              ),
+            ),
+            content: Text(
+              localizeCompatibilityReason(
+                context,
+                reason: oauthUnavailableReason,
+                fallbackPt: 'Não disponível nesta versão do Windows.',
+                fallbackEn: 'Not available on this Windows version.',
+              ),
+            ),
+            severity: InfoBarSeverity.warning,
+            isLong: true,
+          ),
+          const SizedBox(height: 12),
+        ],
         Text(
           appLocaleString(context, 'Autenticação SMTP', 'SMTP authentication'),
           style: FluentTheme.of(context).typography.subtitle?.copyWith(
@@ -711,14 +761,16 @@ class _SmtpAuthenticationSection extends StatelessWidget {
                   appLocaleString(context, 'Senha SMTP', 'SMTP password'),
                 ),
               ),
-              const ComboBoxItem(
-                value: SmtpAuthMode.oauthGoogle,
-                child: Text('Google OAuth2'),
-              ),
-              const ComboBoxItem(
-                value: SmtpAuthMode.oauthMicrosoft,
-                child: Text('Microsoft OAuth2'),
-              ),
+              if (oauthModesAvailable) ...[
+                const ComboBoxItem(
+                  value: SmtpAuthMode.oauthGoogle,
+                  child: Text('Google OAuth2'),
+                ),
+                const ComboBoxItem(
+                  value: SmtpAuthMode.oauthMicrosoft,
+                  child: Text('Microsoft OAuth2'),
+                ),
+              ],
             ],
             onChanged: (value) {
               if (value != null) {

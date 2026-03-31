@@ -8,7 +8,7 @@ Este guia passo a passo irá ajudá-lo a instalar o **Backup Database** no Windo
 
 Antes de começar, certifique-se de ter:
 
-1. **Windows 10 ou superior / Windows Server 2012 R2 ou superior** (64 bits)
+1. **Windows 8 ou superior / Windows Server 2012 ou superior** (64 bits)
 2. **Permissões de Administrador** para instalação
 3. **Conexão com a Internet** (para baixar dependências, se necessário)
 4. **Espaço em disco** suficiente (mínimo 500 MB)

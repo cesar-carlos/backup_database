@@ -1,11 +1,14 @@
 import 'package:backup_database/application/providers/auto_update_provider.dart';
+import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/presentation/providers/providers.dart';
+import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/machine_storage_settings_section.dart';
 import 'package:file_picker/file_picker.dart';
@@ -27,12 +30,69 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
   bool _isLoadingTempPath = false;
 
   final TempDirectoryService _tempService = getIt<TempDirectoryService>();
+  late final ClipboardService _clipboardService;
 
   @override
   void initState() {
     super.initState();
+    _clipboardService = getIt<ClipboardService>();
     _loadPackageInfo();
     _loadTempPath();
+  }
+
+  Future<void> _copyCompatibilityDiagnostics(String summary) async {
+    final payload = await _buildCompatibilityDiagnosticsPayload(summary);
+    final copied = await _clipboardService.copyToClipboard(payload);
+    if (!mounted) {
+      return;
+    }
+    if (copied) {
+      MessageModal.showSuccess(
+        context,
+        message: appLocaleString(
+          context,
+          'Diagnóstico de compatibilidade copiado para a área de transferência.',
+          'Compatibility diagnostics copied to clipboard.',
+        ),
+      );
+      return;
+    }
+    MessageModal.showError(
+      context,
+      message: appLocaleString(
+        context,
+        'Não foi possível copiar o diagnóstico de compatibilidade.',
+        'Could not copy compatibility diagnostics.',
+      ),
+    );
+  }
+
+  Future<String> _buildCompatibilityDiagnosticsPayload(String summary) async {
+    final appVersion = await _resolveAppVersion();
+    final timestampIso = DateTime.now().toIso8601String();
+    return '[backup_database compatibility diagnostics]\n'
+        'timestamp=$timestampIso\n'
+        'app_version=$appVersion\n\n'
+        '$summary';
+  }
+
+  Future<String> _resolveAppVersion() async {
+    final packageInfo = _packageInfo;
+    if (packageInfo != null) {
+      if (packageInfo.buildNumber.isNotEmpty) {
+        return '${packageInfo.version}+${packageInfo.buildNumber}';
+      }
+      return packageInfo.version;
+    }
+    try {
+      final resolved = await PackageInfo.fromPlatform();
+      if (resolved.buildNumber.isNotEmpty) {
+        return '${resolved.version}+${resolved.buildNumber}';
+      }
+      return resolved.version;
+    } on Object {
+      return 'unknown';
+    }
   }
 
   Future<void> _loadPackageInfo() async {
@@ -149,6 +209,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final systemSettings = Provider.of<SystemSettingsProvider>(context);
     final autoUpdateProvider = Provider.of<AutoUpdateProvider>(context);
+    final features = getIt<FeatureAvailabilityService>();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -179,6 +240,58 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   style: FluentTheme.of(context).typography.subtitle,
                 ),
                 const SizedBox(height: 16),
+                if (!features.isTrayEnabled) ...[
+                  InfoBar(
+                    title: Text(
+                      appLocaleString(
+                        context,
+                        'Bandeja do sistema',
+                        'System tray',
+                      ),
+                    ),
+                    content: Text(
+                      localizeCompatibilityReason(
+                        context,
+                        reason: features.trayDisabledReason,
+                        fallbackPt:
+                            'Minimizar ou fechar para a bandeja não está '
+                            'disponível nesta versão do Windows.',
+                        fallbackEn:
+                            'Minimize or close to tray is not available on '
+                            'this Windows version.',
+                      ),
+                    ),
+                    severity: InfoBarSeverity.warning,
+                    isLong: true,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (!features.isStartupAtLogonTaskEnabled) ...[
+                  InfoBar(
+                    title: Text(
+                      appLocaleString(
+                        context,
+                        'Início com o Windows',
+                        'Start with Windows',
+                      ),
+                    ),
+                    content: Text(
+                      localizeCompatibilityReason(
+                        context,
+                        reason: features.startupAtLogonTaskDisabledReason,
+                        fallbackPt:
+                            'A tarefa de início no logon não está disponível '
+                            'nesta versão do Windows.',
+                        fallbackEn:
+                            'Logon startup task is not available on this '
+                            'Windows version.',
+                      ),
+                    ),
+                    severity: InfoBarSeverity.warning,
+                    isLong: true,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 InfoLabel(
                   label: appLocaleString(
                     context,
@@ -187,7 +300,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   ),
                   child: ToggleSwitch(
                     checked: systemSettings.startWithWindows,
-                    onChanged: systemSettings.setStartWithWindows,
+                    onChanged: features.isStartupAtLogonTaskEnabled
+                        ? systemSettings.setStartWithWindows
+                        : null,
                   ),
                 ),
                 if (currentAppMode == AppMode.server) ...[
@@ -240,7 +355,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   ),
                   child: ToggleSwitch(
                     checked: systemSettings.minimizeToTray,
-                    onChanged: systemSettings.setMinimizeToTray,
+                    onChanged: features.isTrayEnabled
+                        ? systemSettings.setMinimizeToTray
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -252,7 +369,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   ),
                   child: ToggleSwitch(
                     checked: systemSettings.closeToTray,
-                    onChanged: systemSettings.setCloseToTray,
+                    onChanged: features.isTrayEnabled
+                        ? systemSettings.setCloseToTray
+                        : null,
                   ),
                 ),
                 if (currentAppMode == AppMode.client) ...[
@@ -342,13 +461,77 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                Text(
+                  appLocaleString(
+                    context,
+                    'Diagnóstico de compatibilidade',
+                    'Compatibility diagnostics',
+                  ),
+                  style: FluentTheme.of(context).typography.subtitle,
+                ),
+                const SizedBox(height: 8),
+                InfoBar(
+                  title: Text(
+                    appLocaleString(
+                      context,
+                      'Snapshot atual de compatibilidade',
+                      'Current compatibility snapshot',
+                    ),
+                  ),
+                  content: SelectableText(features.diagnosticSummary()),
+                  isLong: true,
+                ),
+                const SizedBox(height: 8),
+                Button(
+                  onPressed: () => _copyCompatibilityDiagnostics(
+                    features.diagnosticSummary(),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(FluentIcons.copy, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        appLocaleString(
+                          context,
+                          'Copiar diagnóstico',
+                          'Copy diagnostics',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const MachineStorageSettingsSection(),
                 Text(
                   appLocaleString(context, 'Atualizações', 'Updates'),
                   style: FluentTheme.of(context).typography.subtitle,
                 ),
                 const SizedBox(height: 16),
-                if (!autoUpdateProvider.isInitialized)
+                if (!features.isAutoUpdateEnabled) ...[
+                  InfoBar(
+                    title: Text(
+                      appLocaleString(
+                        context,
+                        'Atualizações automáticas indisponíveis',
+                        'Automatic updates unavailable',
+                      ),
+                    ),
+                    content: Text(
+                      localizeCompatibilityReason(
+                        context,
+                        reason: features.autoUpdateDisabledReason,
+                        fallbackPt: 'Não suportado nesta versão do Windows.',
+                        fallbackEn: 'Not supported on this Windows version.',
+                      ),
+                    ),
+                    severity: InfoBarSeverity.warning,
+                    isLong: true,
+                  ),
+                  const SizedBox(height: 12),
+                ] else if (!autoUpdateProvider.isInitialized)
                   ListTile(
                     title: Text(
                       appLocaleString(

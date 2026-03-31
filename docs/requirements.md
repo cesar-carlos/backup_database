@@ -2,9 +2,13 @@
 
 ## Sistema Operacional
 
-- **Windows**: 10 ou superior / Windows Server 2012 R2 ou superior
+- **Windows**: 8 ou superior / Windows Server 2012 ou superior
 - **Arquitetura**: 64 bits apenas
 - **Permissões**: Administrador para instalação
+
+> Observação: alguns recursos são habilitados/desabilitados conforme a versão
+> do Windows detectada em runtime (por exemplo, auto update e fluxos OAuth
+> embutidos).
 
 ## Dependências Obrigatórias
 

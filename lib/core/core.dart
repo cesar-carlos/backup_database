@@ -1,3 +1,4 @@
+export 'compatibility/compatibility.dart';
 export 'config/app_mode.dart';
 export 'constants/constants.dart';
 export 'di/di.dart';

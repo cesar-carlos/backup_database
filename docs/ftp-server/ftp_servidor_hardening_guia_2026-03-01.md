@@ -16,18 +16,19 @@ Para que o backup use retomada de upload (REST + SIZE + STOR):
 ### Configuração para Retomada
 
 1. **keepPartialUploads**  
-   Permite que arquivos `.part` permaneçam no servidor após interrupção.  
+   Permite que arquivos `.part` permaneçam no servidor após interrupção.
    - `applicationHost.config` ou PowerShell:
+
    ```powershell
    Set-WebConfigurationProperty -Filter "/system.applicationHost/sites/siteDefaults/ftpServer" -Name "keepPartialUploads" -Value "True" -PSPath "IIS:\"
    ```
 
 2. **allowReplaceOnRename**  
-   Permite que RNFR/RNTO sobrescreva arquivo existente (útil para promover `.part` para nome final).  
+   Permite que RNFR/RNTO sobrescreva arquivo existente (útil para promover `.part` para nome final).
    - Verificar se o servidor aceita rename quando o destino já existe (comportamento varia).
 
 3. **Modo passivo**  
-   Recomendado para clientes atrás de firewall/NAT.  
+   Recomendado para clientes atrás de firewall/NAT.
    - Configurar intervalo de portas passivas no firewall.
    - Liberar portas no firewall (ex.: 50000-50100).
 
@@ -70,9 +71,9 @@ O sidecar `.sha256` é gerado automaticamente pelo backup ao enviar para FTP.
 
 ## Troubleshooting
 
-| Sintoma | Possível causa | Ação |
-|---------|----------------|------|
-| "Sem permissão de escrita" | Diretório somente leitura ou usuário sem permissão | Ajustar permissões NTFS/IIS |
-| "Renomear arquivos não permitido" | RNFR/RNTO bloqueado ou `allowReplaceOnRename` desabilitado | Revisar configuração do servidor |
-| "Não suporta retomada" | FEAT não reporta REST STREAM | Usar servidor compatível ou aceitar fallback (upload completo) |
-| Timeout na conexão | Firewall bloqueando porta de controle ou dados | Liberar portas e modo passivo |
+| Sintoma                           | Possível causa                                             | Ação                                                           |
+| --------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------- |
+| "Sem permissão de escrita"        | Diretório somente leitura ou usuário sem permissão         | Ajustar permissões NTFS/IIS                                    |
+| "Renomear arquivos não permitido" | RNFR/RNTO bloqueado ou `allowReplaceOnRename` desabilitado | Revisar configuração do servidor                               |
+| "Não suporta retomada"            | FEAT não reporta REST STREAM                               | Usar servidor compatível ou aceitar fallback (upload completo) |
+| Timeout na conexão                | Firewall bloqueando porta de controle ou dados             | Liberar portas e modo passivo                                  |

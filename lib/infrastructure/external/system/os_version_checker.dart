@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -41,7 +41,7 @@ class OsVersionChecker {
           '⚠️ SO não compatível: Windows $majorVersion.$minorVersion ($versionName)',
         );
         LoggerService.warning(
-          'Requisito mínimo: Windows 8.1 (6.3) / Server 2012 R2 ou superior',
+          'Requisito mínimo: Windows 8 (6.2) / Server 2012 ou superior',
         );
         LoggerService.warning(
           'O aplicativo pode não funcionar corretamente nesta versão.',
@@ -138,7 +138,7 @@ class OsVersionChecker {
     }
 
     if (majorVersion == 6) {
-      return (minorVersion ?? 0) >= 3;
+      return (minorVersion ?? 0) >= 2;
     }
 
     return false;
@@ -198,7 +198,7 @@ class OsVersionInfo {
   final bool isCompatible;
   final String rawVersion;
 
-  String get minimumRequired => 'Windows 8.1 (6.3) / Server 2012 R2';
+  String get minimumRequired => 'Windows 8 (6.2) / Server 2012';
 
   @override
   String toString() {

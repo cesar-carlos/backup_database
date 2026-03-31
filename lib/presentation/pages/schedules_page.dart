@@ -1,7 +1,10 @@
 import 'package:backup_database/application/providers/scheduler_provider.dart';
+import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/constants/integrity_ui_strings.dart';
+import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedules.dart';
@@ -26,6 +29,8 @@ class _SchedulesPageState extends State<SchedulesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final features = getIt<FeatureAvailabilityService>();
+    final schedulerOk = features.isTaskSchedulerEnabled;
     return ScaffoldPage(
       header: PageHeader(
         title: const Text('Agendamentos'),
@@ -41,7 +46,9 @@ class _SchedulesPageState extends State<SchedulesPage> {
             CommandBarButton(
               icon: const Icon(FluentIcons.add),
               label: const Text('Novo Agendamento'),
-              onPressed: () => _showScheduleDialog(context, null),
+              onPressed: schedulerOk
+                  ? () => _showScheduleDialog(context, null)
+                  : null,
             ),
           ],
         ),
@@ -51,6 +58,26 @@ class _SchedulesPageState extends State<SchedulesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (!schedulerOk) ...[
+              InfoBar(
+                title: const Text('Agendamentos'),
+                content: Text(
+                  localizeCompatibilityReason(
+                    context,
+                    reason: features.taskSchedulerDisabledReason,
+                    fallbackPt:
+                        'Task Scheduler não está disponível nesta versão do '
+                        'Windows.',
+                    fallbackEn:
+                        'Task Scheduler is not available on this Windows '
+                        'version.',
+                  ),
+                ),
+                severity: InfoBarSeverity.warning,
+                isLong: true,
+              ),
+              const SizedBox(height: 12),
+            ],
             Expanded(
               child: Consumer<SchedulerProvider>(
                 builder: (context, provider, child) {
@@ -97,14 +124,17 @@ class _SchedulesPageState extends State<SchedulesPage> {
                       child: EmptyState(
                         icon: FluentIcons.calendar,
                         message: 'Nenhum agendamento configurado',
-                        actionLabel: 'Criar Agendamento',
-                        onAction: () => _showScheduleDialog(context, null),
+                        actionLabel: schedulerOk ? 'Criar Agendamento' : null,
+                        onAction: schedulerOk
+                            ? () => _showScheduleDialog(context, null)
+                            : null,
                       ),
                     );
                   }
 
                   return ScheduleGrid(
                     schedules: provider.schedules,
+                    scheduleActionsEnabled: schedulerOk,
                     onEdit: (schedule) =>
                         _showScheduleDialog(context, schedule),
                     onDuplicate: (schedule) =>
@@ -127,6 +157,9 @@ class _SchedulesPageState extends State<SchedulesPage> {
     BuildContext context,
     Schedule? schedule,
   ) async {
+    if (!getIt<FeatureAvailabilityService>().isTaskSchedulerEnabled) {
+      return;
+    }
     final result = await ScheduleDialog.show(context, schedule: schedule);
 
     if (result != null && context.mounted) {
@@ -152,6 +185,9 @@ class _SchedulesPageState extends State<SchedulesPage> {
   }
 
   Future<void> _confirmDelete(BuildContext context, String id) async {
+    if (!getIt<FeatureAvailabilityService>().isTaskSchedulerEnabled) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
@@ -187,6 +223,9 @@ class _SchedulesPageState extends State<SchedulesPage> {
   }
 
   Future<void> _runNow(BuildContext context, String id) async {
+    if (!getIt<FeatureAvailabilityService>().isTaskSchedulerEnabled) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
@@ -224,6 +263,9 @@ class _SchedulesPageState extends State<SchedulesPage> {
     BuildContext context,
     Schedule schedule,
   ) async {
+    if (!getIt<FeatureAvailabilityService>().isTaskSchedulerEnabled) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(

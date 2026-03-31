@@ -25,7 +25,7 @@ WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
-MinVersion=6.3
+MinVersion=6.2
 CloseApplications=yes
 CloseApplicationsFilter=*.exe
 

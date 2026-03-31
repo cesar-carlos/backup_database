@@ -1,4 +1,4 @@
-﻿# Instalador - Backup Database
+# Instalador - Backup Database
 
 Este diretório contém os arquivos necessários para criar o instalador do Backup Database.
 
@@ -41,7 +41,7 @@ Certifique-se de que os seguintes arquivos existem:
 - `LICENSE` - Arquivo de licença
 - `.env.example` - Arquivo de exemplo de variáveis de ambiente
 - `assets\icons\icon-512-maskable.png` - Ícone do aplicativo
-- `docs\installation_guide.md` - Guia de instalação
+- `docs\install\installation_guide.md` - Guia de instalação
 - `docs\requirements.md` - Requisitos do sistema
 - `docs\path_setup.md` - Guia de configuração do PATH
 
@@ -217,4 +217,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Última atualização**: Versão 2.2.7
+**Última atualização**: Versão 2.4.0

@@ -12,6 +12,7 @@ class ScheduleGrid extends StatelessWidget {
     required this.onDelete,
     required this.onRunNow,
     required this.onToggleEnabled,
+    this.scheduleActionsEnabled = true,
     super.key,
   });
 
@@ -21,6 +22,7 @@ class ScheduleGrid extends StatelessWidget {
   final ValueChanged<String> onDelete;
   final ValueChanged<String> onRunNow;
   final void Function(Schedule schedule, bool enabled) onToggleEnabled;
+  final bool scheduleActionsEnabled;
 
   static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
@@ -74,7 +76,9 @@ class ScheduleGrid extends StatelessWidget {
               children: [
                 ToggleSwitch(
                   checked: row.enabled,
-                  onChanged: (enabled) => onToggleEnabled(row, enabled),
+                  onChanged: scheduleActionsEnabled
+                      ? (enabled) => onToggleEnabled(row, enabled)
+                      : null,
                 ),
                 const SizedBox(width: 8),
                 Text(row.enabled ? texts.active : texts.inactive),
@@ -87,23 +91,27 @@ class ScheduleGrid extends StatelessWidget {
             icon: FluentIcons.play,
             tooltip: 'Executar agora',
             onPressed: (row) => onRunNow(row.id),
-            isEnabled: (row) => row.enabled,
+            isEnabled: (row) =>
+                scheduleActionsEnabled && row.enabled,
           ),
           AppDataGridAction<Schedule>(
             icon: FluentIcons.edit,
             tooltip: 'Editar',
             onPressed: onEdit,
+            isEnabled: (_) => scheduleActionsEnabled,
           ),
           AppDataGridAction<Schedule>(
             icon: FluentIcons.copy,
             tooltip: 'Duplicar',
             onPressed: onDuplicate,
+            isEnabled: (_) => scheduleActionsEnabled,
           ),
           AppDataGridAction<Schedule>(
             icon: FluentIcons.delete,
             iconColor: AppColors.error,
             tooltip: 'Excluir',
             onPressed: (row) => onDelete(row.id),
+            isEnabled: (_) => scheduleActionsEnabled,
           ),
         ],
         rows: schedules,

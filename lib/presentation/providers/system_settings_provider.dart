@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/di/service_locator.dart' as service_locator;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
@@ -60,6 +62,17 @@ class SystemSettingsProvider extends ChangeNotifier {
         await _reconcileStartupPreferenceWithSystem();
       }
 
+      if (Platform.isWindows) {
+        final features = service_locator.getIt<FeatureAvailabilityService>();
+        if (!features.isTrayEnabled) {
+          _minimizeToTray = false;
+          _closeToTray = false;
+        }
+        if (!features.isStartupAtLogonTaskEnabled) {
+          _startWithWindows = false;
+        }
+      }
+
       _isInitialized = true;
 
       _windowManager.setMinimizeToTray(_minimizeToTray);
@@ -78,6 +91,13 @@ class SystemSettingsProvider extends ChangeNotifier {
   }
 
   Future<void> setMinimizeToTray(bool value) async {
+    if (Platform.isWindows) {
+      final features = service_locator.getIt<FeatureAvailabilityService>();
+      if (!features.isTrayEnabled) {
+        LoggerService.warning('minimizeToTray ignorado: bandeja indisponivel');
+        return;
+      }
+    }
     _minimizeToTray = value;
     _windowManager.setMinimizeToTray(value);
     notifyListeners();
@@ -91,6 +111,13 @@ class SystemSettingsProvider extends ChangeNotifier {
   }
 
   Future<void> setCloseToTray(bool value) async {
+    if (Platform.isWindows) {
+      final features = service_locator.getIt<FeatureAvailabilityService>();
+      if (!features.isTrayEnabled) {
+        LoggerService.warning('closeToTray ignorado: bandeja indisponivel');
+        return;
+      }
+    }
     _closeToTray = value;
     _windowManager.setCloseToTray(value);
     notifyListeners();
@@ -126,6 +153,15 @@ class SystemSettingsProvider extends ChangeNotifier {
   }
 
   Future<void> setStartWithWindows(bool value) async {
+    if (Platform.isWindows) {
+      final features = service_locator.getIt<FeatureAvailabilityService>();
+      if (!features.isStartupAtLogonTaskEnabled) {
+        LoggerService.warning(
+          'startWithWindows ignorado: tarefa de logon indisponivel',
+        );
+        return;
+      }
+    }
     try {
       final outcome = await _updateStartWithWindows(
         value,

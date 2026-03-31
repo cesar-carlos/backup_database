@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:backup_database/application/providers/dropbox_auth_provider.dart';
 import 'package:backup_database/application/providers/google_auth_provider.dart';
 import 'package:backup_database/application/providers/license_provider.dart';
+import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
@@ -12,6 +13,7 @@ import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/infrastructure/external/nextcloud/nextcloud.dart'
     as nextcloud;
+import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -1252,8 +1254,27 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return ListenableBuilder(
       listenable: googleAuth,
       builder: (context, _) {
+        final features = getIt<FeatureAvailabilityService>();
         return Column(
           children: [
+            if (!features.isExternalBrowserOAuthEnabled) ...[
+              InfoBar(
+                title: Text(
+                  _t('Inicio de sessao OAuth', 'OAuth sign-in'),
+                ),
+                content: Text(
+                  localizeCompatibilityReason(
+                    context,
+                    reason: features.externalBrowserOAuthDisabledReason,
+                    fallbackPt: 'Nao disponivel nesta versao do Windows.',
+                    fallbackEn: 'Not available on this Windows version.',
+                  ),
+                ),
+                severity: InfoBarSeverity.warning,
+                isLong: true,
+              ),
+              const SizedBox(height: 12),
+            ],
             _buildGoogleAuthStatus(googleAuth),
             const SizedBox(height: 16),
             if (!googleAuth.isConfigured) ...[
@@ -1316,6 +1337,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildGoogleAuthStatus(GoogleAuthProvider googleAuth) {
+    final features = getIt<FeatureAvailabilityService>();
+    final oauthOk = features.isExternalBrowserOAuthEnabled;
     final isSignedIn = googleAuth.isSignedIn;
     final isLoading = googleAuth.isLoading;
 
@@ -1386,7 +1409,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 )
               else if (googleAuth.isConfigured)
                 Button(
-                  onPressed: isLoading
+                  onPressed: (!oauthOk || isLoading)
                       ? null
                       : () => _connectToGoogle(googleAuth),
                   child: Row(
@@ -1480,6 +1503,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Future<void> _connectToGoogle(GoogleAuthProvider googleAuth) async {
+    if (!getIt<FeatureAvailabilityService>().isExternalBrowserOAuthEnabled) {
+      return;
+    }
     final success = await googleAuth.signIn();
     if (success && mounted) {
       _showSuccess(
@@ -1514,8 +1540,27 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return ListenableBuilder(
       listenable: dropboxAuth,
       builder: (context, _) {
+        final features = getIt<FeatureAvailabilityService>();
         return Column(
           children: [
+            if (!features.isExternalBrowserOAuthEnabled) ...[
+              InfoBar(
+                title: Text(
+                  _t('Inicio de sessao OAuth', 'OAuth sign-in'),
+                ),
+                content: Text(
+                  localizeCompatibilityReason(
+                    context,
+                    reason: features.externalBrowserOAuthDisabledReason,
+                    fallbackPt: 'Nao disponivel nesta versao do Windows.',
+                    fallbackEn: 'Not available on this Windows version.',
+                  ),
+                ),
+                severity: InfoBarSeverity.warning,
+                isLong: true,
+              ),
+              const SizedBox(height: 12),
+            ],
             _buildDropboxAuthStatus(dropboxAuth),
             const SizedBox(height: 16),
             if (!dropboxAuth.isSignedIn) ...[
@@ -1596,6 +1641,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildDropboxAuthStatus(DropboxAuthProvider dropboxAuth) {
+    final features = getIt<FeatureAvailabilityService>();
+    final oauthOk = features.isExternalBrowserOAuthEnabled;
     final isSignedIn = dropboxAuth.isSignedIn;
     final isLoading = dropboxAuth.isLoading;
 
@@ -1666,7 +1713,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 )
               else if (dropboxAuth.isConfigured)
                 Button(
-                  onPressed: isLoading
+                  onPressed: (!oauthOk || isLoading)
                       ? null
                       : () => _connectToDropbox(dropboxAuth),
                   child: Row(
@@ -1772,6 +1819,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Future<void> _connectToDropbox(DropboxAuthProvider dropboxAuth) async {
+    if (!getIt<FeatureAvailabilityService>().isExternalBrowserOAuthEnabled) {
+      return;
+    }
     final success = await dropboxAuth.signIn();
     if (success && mounted) {
       _showSuccess(
