@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 import urllib.request
@@ -16,6 +17,25 @@ VC_REDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
 
 def step(message: str) -> None:
     print(message)
+
+
+def find_flutter_executable() -> str | None:
+    for name in ("flutter", "flutter.bat"):
+        found = shutil.which(name)
+        if found:
+            return found
+    flutter_root = os.environ.get("FLUTTER_ROOT")
+    if flutter_root:
+        bat = Path(flutter_root) / "bin" / "flutter.bat"
+        if bat.is_file():
+            return str(bat.resolve())
+    if os.name == "nt":
+        home = Path.home()
+        for rel in ("dev/flutter/bin/flutter.bat", "flutter/bin/flutter.bat"):
+            candidate = home / rel
+            if candidate.is_file():
+                return str(candidate.resolve())
+    return None
 
 
 def find_iscc() -> Path | None:
@@ -120,8 +140,16 @@ def main() -> int:
             )
             print("Executando rebuild para alinhar versao...")
 
+        flutter_exe = find_flutter_executable()
+        if flutter_exe is None:
+            print(
+                "ERRO: flutter nao encontrado. Adicione o Flutter ao PATH ou defina "
+                "FLUTTER_ROOT.",
+            )
+            return 1
+
         code = run_command(
-            ["flutter", "build", "windows", "--release"],
+            [flutter_exe, "build", "windows", "--release"],
             cwd=project_root,
         )
         if code != 0:

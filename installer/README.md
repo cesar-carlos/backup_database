@@ -217,4 +217,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Última atualização**: Versão 2.4.0
+**Última atualização**: Versão 2.4.1
