@@ -3,7 +3,7 @@
   <channel>
     <item>
       <title>Version 2.4.1</title>
-      <pubDate>Tue, 31 Mar 2026 12:00:00 +0000</pubDate>
+      <pubDate>Tue, 31 Mar 2026 13:50:32 +0000</pubDate>
       <description>&lt;![CDATA[&lt;h2&gt;Nova Versão 2.4.1&lt;/h2&gt;&lt;p&gt;Atualização automática via GitHub Release.&lt;/p&gt;]]&gt;</description>
       <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.4.1/BackupDatabase-Setup-2.4.1.exe" sparkle:version="2.4.1" sparkle:os="windows" length="38919369" type="application/octet-stream" />
     </item>
