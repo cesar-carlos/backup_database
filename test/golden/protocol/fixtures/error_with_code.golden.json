@@ -2,6 +2,7 @@
   "type": "error",
   "payload": {
     "error": "Caminho não permitido",
+    "statusCode": 403,
     "errorCode": "PATH_NOT_ALLOWED"
   }
 }

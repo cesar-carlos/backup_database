@@ -1,6 +1,7 @@
 {
   "type": "error",
   "payload": {
-    "error": "Failure ao processar mensagem"
+    "error": "Failure ao processar mensagem",
+    "statusCode": 500
   }
 }
