@@ -1,0 +1,8 @@
+{
+  "type": "testDatabaseConnectionRequest",
+  "payload": {
+    "databaseType": "sybase",
+    "databaseConfigId": "cfg-123",
+    "timeoutMs": 5000
+  }
+}

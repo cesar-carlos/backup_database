@@ -42,4 +42,11 @@ enum MessageType {
   executionStatusResponse,
   executionQueueRequest,
   executionQueueResponse,
+  // PR-2: testDatabaseConnection. Permite cliente solicitar que o
+  // servidor sonde a conexao com um banco usando a `databaseConfig`
+  // ja persistida no servidor (por `databaseConfigId`) ou uma config
+  // ad-hoc no payload. Resposta inclui `connected: bool`,
+  // `latencyMs`, mensagem de erro quando aplicavel.
+  testDatabaseConnectionRequest,
+  testDatabaseConnectionResponse,
 }

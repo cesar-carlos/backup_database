@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
+import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
@@ -461,6 +462,56 @@ void main() {
       test('capabilitiesRequest tem payload vazio', () {
         final msg = createCapabilitiesRequestMessage();
         _assertGolden(msg, 'capabilities_request');
+      });
+
+      test('testDatabaseConnectionRequest por id', () {
+        final msg = createTestDatabaseConnectionRequest(
+          databaseType: RemoteDatabaseType.sybase,
+          databaseConfigId: 'cfg-123',
+          timeoutMs: 5000,
+          requestId: 1,
+        );
+        _assertGolden(msg, 'test_database_connection_request_by_id');
+      });
+
+      test('testDatabaseConnectionRequest ad-hoc', () {
+        final msg = createTestDatabaseConnectionRequest(
+          databaseType: RemoteDatabaseType.postgres,
+          config: <String, dynamic>{
+            'host': 'db.local',
+            'port': 5432,
+            'database': 'app',
+            'username': 'u',
+            'password': 'p',
+          },
+          requestId: 2,
+        );
+        _assertGolden(msg, 'test_database_connection_request_adhoc');
+      });
+
+      test('testDatabaseConnectionResponse sucesso', () {
+        final msg = createTestDatabaseConnectionResponse(
+          requestId: 1,
+          connected: true,
+          latencyMs: 142,
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+          details: const {
+            'serverVersion': '14.2',
+          },
+        );
+        _assertGolden(msg, 'test_database_connection_response_success');
+      });
+
+      test('testDatabaseConnectionResponse falha de auth', () {
+        final msg = createTestDatabaseConnectionResponse(
+          requestId: 1,
+          connected: false,
+          latencyMs: 87,
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+          error: 'usuario ou senha invalidos',
+          errorCode: ErrorCode.authenticationFailed,
+        );
+        _assertGolden(msg, 'test_database_connection_response_auth_failed');
       });
 
       test('capabilitiesResponse v1 com flags atuais', () {

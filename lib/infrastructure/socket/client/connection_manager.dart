@@ -11,6 +11,7 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
+import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
@@ -1285,6 +1286,85 @@ class ConnectionManager {
     } on TimeoutException {
       _pendingRequests.remove(requestId);
       return rd.Failure(TimeoutException('getExecutionQueue timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// Solicita ao servidor que sonde a conexao com um banco de dados
+  /// (PR-2). Permite testar uma config persistida (`databaseConfigId`)
+  /// ou uma config ad-hoc (`config`) sem precisar persistir antes.
+  ///
+  /// O resultado [TestDatabaseConnectionResult] traz `connected`,
+  /// `latencyMs`, `error`/`errorCode` (quando falha de sondagem) e
+  /// `details` (informacoes do servidor: versao do banco, charset etc.).
+  ///
+  /// **Importante**: o `Result.success` aqui significa "sondagem foi
+  /// processada pelo servidor sem erro de comunicacao". Se a CONEXAO
+  /// com o banco falhou, o cliente recebe `Success(connected=false)`,
+  /// nao `Failure`. `Failure` so retorna em erros de transporte
+  /// (socket nao conectado, timeout do servidor, resposta malformada).
+  Future<rd.Result<TestDatabaseConnectionResult>> testRemoteDatabaseConnection({
+    required RemoteDatabaseType databaseType,
+    String? databaseConfigId,
+    Map<String, dynamic>? config,
+    Duration? timeout,
+  }) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    if (databaseConfigId == null && config == null) {
+      return rd.Failure(
+        Exception('testRemoteDatabaseConnection: informe id OU config'),
+      );
+    }
+    if (databaseConfigId != null && config != null) {
+      return rd.Failure(
+        Exception('testRemoteDatabaseConnection: informe APENAS um (XOR)'),
+      );
+    }
+
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(
+        createTestDatabaseConnectionRequest(
+          databaseType: databaseType,
+          databaseConfigId: databaseConfigId,
+          config: config,
+          timeoutMs: timeout?.inMilliseconds,
+          requestId: requestId,
+        ),
+      );
+      // Timeout do CLIENTE = timeout do servidor + folga, com piso. Sem
+      // isso o cliente expirava antes do servidor responder em casos
+      // de banco lento/inalcancavel.
+      final clientTimeout = timeout != null
+          ? (timeout + const Duration(seconds: 5))
+          : SocketConfig.scheduleRequestTimeout;
+      final message = await completer.future.timeout(clientTimeout);
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (message.header.type !=
+          MessageType.testDatabaseConnectionResponse) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para testDatabaseConnection: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readTestDatabaseConnectionResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(
+        TimeoutException('testRemoteDatabaseConnection timeout'),
+      );
     } on Object catch (e) {
       _pendingRequests.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));

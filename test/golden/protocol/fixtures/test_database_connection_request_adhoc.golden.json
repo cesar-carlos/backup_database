@@ -1,0 +1,13 @@
+{
+  "type": "testDatabaseConnectionRequest",
+  "payload": {
+    "databaseType": "postgres",
+    "config": {
+      "host": "db.local",
+      "port": 5432,
+      "database": "app",
+      "username": "u",
+      "password": "p"
+    }
+  }
+}

@@ -95,6 +95,13 @@ class PayloadLimits {
     // ---- Metricas ----
     MessageType.metricsRequest: 1 * 1024,
     MessageType.metricsResponse: 256 * 1024,
+
+    // ---- Database connection test (PR-2) ----
+    // Request pode levar config ad-hoc inteira (host/port/credenciais)
+    // ou apenas `databaseConfigId`; 16KB cobre o caso ad-hoc com folga.
+    // Response e snapshot pequeno (connected, latencyMs, error).
+    MessageType.testDatabaseConnectionRequest: 16 * 1024,
+    MessageType.testDatabaseConnectionResponse: 8 * 1024,
   };
 
   /// Retorna o limite maximo de payload (em bytes) para o tipo de

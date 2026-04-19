@@ -15,6 +15,7 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
+import 'package:backup_database/infrastructure/socket/server/database_config_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
@@ -42,6 +43,7 @@ class TcpSocketServer implements SocketServerService {
     PreflightMessageHandler? preflightHandler,
     ExecutionStatusMessageHandler? executionStatusHandler,
     ExecutionQueueMessageHandler? executionQueueHandler,
+    DatabaseConfigMessageHandler? databaseConfigHandler,
     SocketLoggerService? socketLogger,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
@@ -63,6 +65,8 @@ class TcpSocketServer implements SocketServerService {
        _executionStatusHandler = executionStatusHandler,
        _executionQueueHandler =
            executionQueueHandler ?? ExecutionQueueMessageHandler(),
+       _databaseConfigHandler =
+           databaseConfigHandler ?? DatabaseConfigMessageHandler(),
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
     // SessionMessageHandler precisa consultar handlers vivos para
     // reportar a sessao do cliente. Construido aqui (em vez de no
@@ -89,6 +93,10 @@ class TcpSocketServer implements SocketServerService {
   // Sempre presente — wirings em PR-1 retornam fila vazia por default;
   // PR-3b cabeara provider que consulta tabela de fila persistida.
   final ExecutionQueueMessageHandler _executionQueueHandler;
+  // PR-2: testDatabaseConnection. Usa NotConfiguredProber por default
+  // (responde com erro indicando falta de wiring) ate o DI cabeçar
+  // implementacao real que consulta os repositorios + servicos.
+  final DatabaseConfigMessageHandler _databaseConfigHandler;
   final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
@@ -188,6 +196,9 @@ class TcpSocketServer implements SocketServerService {
         // Execution queue: cliente lista fila atual (vazia em PR-1;
         // PR-3b vai popular via provider que consulta tabela persistida).
         _executionQueueHandler.handle(clientId, msg, sendToClient);
+        // PR-2: testDatabaseConnection. Despacha por tipo de banco
+        // via DatabaseConnectionProber injetado.
+        _databaseConfigHandler.handle(clientId, msg, sendToClient);
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );

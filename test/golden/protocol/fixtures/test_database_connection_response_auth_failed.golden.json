@@ -1,0 +1,12 @@
+{
+  "type": "testDatabaseConnectionResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 401,
+    "connected": false,
+    "latencyMs": 87,
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "error": "usuario ou senha invalidos",
+    "errorCode": "AUTH_FAILED"
+  }
+}

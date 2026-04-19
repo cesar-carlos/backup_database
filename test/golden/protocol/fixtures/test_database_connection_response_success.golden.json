@@ -1,0 +1,13 @@
+{
+  "type": "testDatabaseConnectionResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 200,
+    "connected": true,
+    "latencyMs": 142,
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "details": {
+      "serverVersion": "14.2"
+    }
+  }
+}
