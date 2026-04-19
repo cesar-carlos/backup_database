@@ -1383,6 +1383,7 @@ class ConnectionManager {
   Future<rd.Result<StartBackupResult>> startRemoteBackup({
     required String scheduleId,
     String? idempotencyKey,
+    bool queueIfBusy = false,
   }) async {
     if (!isConnected) {
       return rd.Failure(Exception('ConnectionManager not connected'));
@@ -1395,6 +1396,7 @@ class ConnectionManager {
         createStartBackupRequest(
           scheduleId: scheduleId,
           idempotencyKey: idempotencyKey,
+          queueIfBusy: queueIfBusy,
           requestId: requestId,
         ),
       );

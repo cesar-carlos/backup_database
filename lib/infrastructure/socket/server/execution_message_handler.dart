@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/protocol/idempotency_registry.dar
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 
 /// Handler para `startBackup` nao-bloqueante (M2.2/PR-2) e
@@ -42,6 +43,7 @@ class ExecutionMessageHandler {
     required IBackupProgressNotifier progressNotifier,
     required RemoteExecutionRegistry executionRegistry,
     IdempotencyRegistry? idempotencyRegistry,
+    ExecutionQueueService? queueService,
     DateTime Function()? clock,
   })  : _scheduleRepository = scheduleRepository,
         _destinationRepository = destinationRepository,
@@ -51,6 +53,7 @@ class ExecutionMessageHandler {
         _progressNotifier = progressNotifier,
         _executionRegistry = executionRegistry,
         _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
+        _queueService = queueService ?? ExecutionQueueService(),
         _clock = clock ?? DateTime.now;
 
   final IScheduleRepository _scheduleRepository;
@@ -61,7 +64,12 @@ class ExecutionMessageHandler {
   final IBackupProgressNotifier _progressNotifier;
   final RemoteExecutionRegistry _executionRegistry;
   final IdempotencyRegistry _idempotencyRegistry;
+  final ExecutionQueueService _queueService;
   final DateTime Function() _clock;
+
+  /// Acesso ao queue service para wirings externos (ex.:
+  /// `ExecutionQueueMessageHandler` que reporta a fila ao cliente).
+  ExecutionQueueService get queueService => _queueService;
 
   Future<void> handle(
     String clientId,
@@ -104,14 +112,20 @@ class ExecutionMessageHandler {
       );
       return;
     }
+    final queueIfBusy = payload['queueIfBusy'] == true;
 
     final idempotencyKey = getIdempotencyKey(message);
 
     try {
       final response = await _idempotencyRegistry.runIdempotent<Message>(
         key: idempotencyKey,
-        compute: () =>
-            _doStart(clientId, requestId, scheduleId, sendToClient),
+        compute: () => _doStart(
+          clientId,
+          requestId,
+          scheduleId,
+          sendToClient,
+          queueIfBusy: queueIfBusy,
+        ),
       );
       await sendToClient(clientId, response);
     } on _StartFailure catch (f) {
@@ -136,8 +150,9 @@ class ExecutionMessageHandler {
     String clientId,
     int requestId,
     String scheduleId,
-    SendToClient sendToClient,
-  ) async {
+    SendToClient sendToClient, {
+    required bool queueIfBusy,
+  }) async {
     LoggerService.infoWithContext(
       'startBackup requested',
       clientId: clientId,
@@ -145,11 +160,58 @@ class ExecutionMessageHandler {
       scheduleId: scheduleId,
     );
 
-    if (_schedulerService.isExecutingBackup ||
-        _executionRegistry.hasActiveForSchedule(scheduleId)) {
+    final isBusy = _schedulerService.isExecutingBackup ||
+        _executionRegistry.hasActiveForSchedule(scheduleId);
+
+    if (isBusy && !queueIfBusy) {
+      // Disparo manual padrao: rejeita com 409.
       throw const _StartFailure(
         'Ja existe um backup em execucao no servidor',
         ErrorCode.backupAlreadyRunning,
+      );
+    }
+
+    if (isBusy && queueIfBusy) {
+      // Cliente aceita ser enfileirado. Verifica se schedule ja esta
+      // na fila (defesa contra cliente que retransmite enqueue) e
+      // se a fila tem espaco.
+      if (_queueService.isScheduleQueued(scheduleId)) {
+        throw const _StartFailure(
+          'Agendamento ja esta enfileirado',
+          ErrorCode.backupAlreadyRunning,
+        );
+      }
+      final item = _queueService.tryEnqueue(
+        scheduleId: scheduleId,
+        clientId: clientId,
+        requestId: requestId,
+        requestedBy: clientId,
+      );
+      if (item == null) {
+        // Fila cheia (queueSize >= maxQueueSize) -> 503 retryable.
+        // Cliente deve aplicar backoff e tentar de novo apos
+        // receber backupComplete/Failed do backup ativo.
+        throw const _StartFailure(
+          'Fila de execucao esta cheia, tente novamente em breve',
+          ErrorCode.unknown,
+        );
+      }
+      LoggerService.infoWithContext(
+        'startBackup queued',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        scheduleId: scheduleId,
+      );
+      return createStartBackupResponse(
+        requestId: requestId,
+        runId: item.runId,
+        state: ExecutionState.queued,
+        scheduleId: scheduleId,
+        serverTimeUtc: _clock(),
+        queuePosition: _queueService.snapshot()
+            .firstWhere((q) => q.runId == item.runId)
+            .queuedPosition,
+        message: 'Backup enfileirado',
       );
     }
 
@@ -305,8 +367,102 @@ class ExecutionMessageHandler {
       }
     } finally {
       _executionRegistry.unregister(runId);
+      // Drena proximo da fila (se houver). Sem await — cada drain e
+      // independente e roda em zona propria via unawaited.
+      unawaited(_drainNextFromQueue());
     }
   }
+
+  /// Tenta iniciar o proximo item da fila. Chamado quando um backup
+  /// termina ou quando uma execucao manual e cancelada. Idempotente
+  /// (no-op se a fila esta vazia ou se ainda ha backup em curso —
+  /// ultima checagem evita race entre dois drains concorrentes).
+  Future<void> _drainNextFromQueue() async {
+    if (_schedulerService.isExecutingBackup || _executionRegistry.hasAny) {
+      return; // ainda ha backup ativo; nao drena
+    }
+    final next = _queueService.dequeue();
+    if (next == null) return;
+
+    LoggerService.infoWithContext(
+      'queue drain: starting next backup',
+      clientId: next.clientId,
+      requestId: next.requestId.toString(),
+      scheduleId: next.scheduleId,
+    );
+
+    // Carrega schedule novamente (pode ter mudado entre enqueue e
+    // dequeue: ex.: deletado, desabilitado, modificado). Aborta com
+    // log se schedule nao existe mais.
+    final scheduleResult = await _scheduleRepository.getById(next.scheduleId);
+    final schedule = scheduleResult.getOrNull();
+    if (scheduleResult.isError() || schedule == null) {
+      LoggerService.warningWithContext(
+        'queue drain: schedule no longer exists, dropping queued backup',
+        clientId: next.clientId,
+        scheduleId: next.scheduleId,
+      );
+      // Recursivo (sem await — fire-and-forget) para tentar proximo
+      unawaited(_drainNextFromQueue());
+      return;
+    }
+
+    if (!_progressNotifier.tryStartBackup(schedule.name)) {
+      // Slot ocupado (race?) — re-enfileira para tentar depois.
+      LoggerService.warningWithContext(
+        'queue drain: progress slot busy, re-enqueueing',
+        scheduleId: next.scheduleId,
+      );
+      _queueService.tryEnqueue(
+        scheduleId: next.scheduleId,
+        clientId: next.clientId,
+        requestId: next.requestId,
+        requestedBy: next.requestedBy,
+      );
+      return;
+    }
+
+    _executionRegistry.register(
+      runId: next.runId,
+      scheduleId: next.scheduleId,
+      clientId: next.clientId,
+      requestId: next.requestId,
+      sendToClient: (clientId, message) async {
+        // Em PR-3 commit final, isso vira lookup pelo
+        // ClientManager para garantir entrega mesmo se o cliente
+        // desconectou e reconectou. Por agora, tenta o clientId
+        // original — se o socket morreu, o ClientHandler.send
+        // retorna sem efeito.
+        // Wiring real do sendToClient sera injetado pelo
+        // tcp_socket_server quando drain rodar — por enquanto
+        // o handler ainda usa o sendToClient capturado da request
+        // original via _sendToClientResolver.
+        await _sendToClientResolver(clientId, message);
+      },
+    );
+
+    LogContext.setContext(runId: next.runId, scheduleId: next.scheduleId);
+
+    unawaited(_runBackupAsync(
+      clientId: next.clientId,
+      requestId: next.requestId,
+      scheduleId: next.scheduleId,
+      runId: next.runId,
+      scheduleName: schedule.name,
+      sendToClient: _sendToClientResolver,
+    ));
+  }
+
+  /// Resolver de sendToClient para drains. Em PR-3 final sera injetado
+  /// como dependency e fara lookup via ClientManager. Por enquanto e
+  /// um stub que roda sem efeito quando ninguem cabeou — drain do
+  /// servidor continua funcionando, apenas sem notificar o cliente
+  /// original (cliente pode poll via getExecutionStatus).
+  SendToClient _sendToClientResolver = _noopSendToClient;
+  set sendToClientResolver(SendToClient resolver) =>
+      _sendToClientResolver = resolver;
+
+  static Future<void> _noopSendToClient(String _, Message __) async {}
 
   // ---------------------------------------------------------------------
   // cancelBackup

@@ -74,6 +74,11 @@ class TcpSocketServer implements SocketServerService {
        _executionHandler = executionHandler,
        _scheduleCrudHandler = scheduleCrudHandler,
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
+    // PR-3: quando ExecutionMessageHandler estiver cabeado, injeta
+    // resolver que despacha mensagens para o ClientHandler vivo
+    // pelo clientId. Sem isso, drains da fila perdem a capacidade de
+    // notificar o cliente original (cliente fallback para polling).
+    _executionHandler?.sendToClientResolver = sendToClient;
     // SessionMessageHandler precisa consultar handlers vivos para
     // reportar a sessao do cliente. Construido aqui (em vez de no
     // initializer list) porque depende de `this` para o lookup.

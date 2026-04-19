@@ -19,6 +19,7 @@ import 'package:backup_database/infrastructure/protocol/status_codes.dart';
 Message createStartBackupRequest({
   required String scheduleId,
   String? idempotencyKey,
+  bool queueIfBusy = false,
   int requestId = 0,
 }) {
   if (scheduleId.isEmpty) {
@@ -29,6 +30,11 @@ Message createStartBackupRequest({
     ...?(idempotencyKey != null && idempotencyKey.isNotEmpty
         ? {'idempotencyKey': idempotencyKey}
         : null),
+    // Cliente que aceita ser enfileirado quando ja ha backup em
+    // execucao envia true. Disparo manual padrao envia false (recebe
+    // 409 BACKUP_ALREADY_RUNNING). Default=false preserva comportamento
+    // legado da fase PR-2.
+    if (queueIfBusy) 'queueIfBusy': true,
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;

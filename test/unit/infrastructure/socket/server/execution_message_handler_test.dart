@@ -14,6 +14,7 @@ import 'package:backup_database/infrastructure/protocol/execution_messages.dart'
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -347,6 +348,124 @@ void main() {
 
       verify(() => schedulerService.cancelExecution(scheduleId)).called(1);
       expect(sent, hasLength(2));
+    });
+  });
+
+  group('startBackup com queueIfBusy (PR-3a)', () {
+    test(
+      'queueIfBusy=true quando ocupado: enfileira e responde state=queued + 202',
+      () async {
+        when(() => schedulerService.isExecutingBackup).thenReturn(true);
+        final queue = ExecutionQueueService();
+        handler = ExecutionMessageHandler(
+          scheduleRepository: scheduleRepository,
+          destinationRepository: destinationRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          queueService: queue,
+          clock: () => DateTime.utc(2026, 4, 19, 12),
+        );
+
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          queueIfBusy: true,
+        );
+        await handler.handle('c1', req, sendToClient);
+
+        final resp = sent.single.message;
+        expect(resp.header.type, MessageType.startBackupResponse);
+        expect(resp.payload['state'], 'queued');
+        expect(resp.payload['scheduleId'], scheduleId);
+        expect(resp.payload['queuePosition'], 1);
+        expect(resp.payload['statusCode'], 202);
+        expect(queue.queueSize, 1);
+        expect(queue.isScheduleQueued(scheduleId), isTrue);
+      },
+    );
+
+    test(
+      'queueIfBusy=false (default): rejeita com 409 quando ocupado',
+      () async {
+        when(() => schedulerService.isExecutingBackup).thenReturn(true);
+        final req = createStartBackupRequest(scheduleId: scheduleId);
+        await handler.handle('c1', req, sendToClient);
+        final resp = sent.single.message;
+        expect(resp.header.type, MessageType.error);
+        expect(
+          getErrorCodeFromMessage(resp),
+          ErrorCode.backupAlreadyRunning,
+        );
+      },
+    );
+
+    test(
+      'queueIfBusy=true mas mesmo schedule ja na fila: rejeita',
+      () async {
+        when(() => schedulerService.isExecutingBackup).thenReturn(true);
+        final queue = ExecutionQueueService();
+        queue.tryEnqueue(
+          scheduleId: scheduleId,
+          clientId: 'other',
+          requestId: 99,
+          requestedBy: 'other',
+        );
+        handler = ExecutionMessageHandler(
+          scheduleRepository: scheduleRepository,
+          destinationRepository: destinationRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          queueService: queue,
+          clock: () => DateTime.utc(2026),
+        );
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          queueIfBusy: true,
+        );
+        await handler.handle('c1', req, sendToClient);
+        final resp = sent.single.message;
+        expect(resp.header.type, MessageType.error);
+        expect(
+          getErrorCodeFromMessage(resp),
+          ErrorCode.backupAlreadyRunning,
+        );
+        expect(queue.queueSize, 1, reason: 'fila nao deve crescer');
+      },
+    );
+
+    test('queueIfBusy=true e fila cheia: rejeita com erro', () async {
+      when(() => schedulerService.isExecutingBackup).thenReturn(true);
+      final queue = ExecutionQueueService(maxQueueSize: 1);
+      queue.tryEnqueue(
+        scheduleId: 'other',
+        clientId: 'other',
+        requestId: 99,
+        requestedBy: 'other',
+      );
+      handler = ExecutionMessageHandler(
+        scheduleRepository: scheduleRepository,
+        destinationRepository: destinationRepository,
+        licensePolicyService: licensePolicyService,
+        schedulerService: schedulerService,
+        executeBackup: executeBackup,
+        progressNotifier: progressNotifier,
+        executionRegistry: executionRegistry,
+        queueService: queue,
+        clock: () => DateTime.utc(2026),
+      );
+      final req = createStartBackupRequest(
+        scheduleId: scheduleId,
+        queueIfBusy: true,
+      );
+      await handler.handle('c1', req, sendToClient);
+      final resp = sent.single.message;
+      expect(resp.header.type, MessageType.error);
+      expect(getErrorFromMessage(resp), contains('Fila'));
     });
   });
 
