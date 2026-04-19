@@ -14,6 +14,7 @@ import 'package:backup_database/infrastructure/protocol/capabilities_messages.da
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
+import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
@@ -1705,6 +1706,56 @@ class ConnectionManager {
       ),
       operationName: 'deleteDatabaseConfig',
     );
+  }
+
+  /// `cancelQueuedBackup` (PR-3a): cancela execucao que ainda esta
+  /// na fila (estado=queued). Diferente de `cancelRemoteBackup` (que
+  /// cancela execucao em curso). Cliente recebe state=cancelled em
+  /// sucesso ou state=notFound + 409 NO_ACTIVE_EXECUTION quando o
+  /// runId nao esta mais na fila (ja foi dequeued ou nunca existiu).
+  Future<rd.Result<CancelQueuedBackupResult>> cancelQueuedRemoteBackup({
+    required String runId,
+    String? idempotencyKey,
+  }) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    if (runId.isEmpty) {
+      return rd.Failure(Exception('cancelQueuedRemoteBackup: runId obrigatorio'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(createCancelQueuedBackupRequest(
+        runId: runId,
+        idempotencyKey: idempotencyKey,
+        requestId: requestId,
+      ));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (message.header.type != MessageType.cancelQueuedBackupResponse) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para cancelQueuedBackup: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readCancelQueuedBackupResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('cancelQueuedRemoteBackup timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
   }
 
   Future<rd.Result<Map<String, dynamic>>> getServerMetrics() async {

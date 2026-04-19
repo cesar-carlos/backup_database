@@ -121,6 +121,14 @@ class PayloadLimits {
     MessageType.resumeSchedule: 4 * 1024,
     MessageType.scheduleMutationResponse: 256 * 1024,
 
+    // ---- Queue events + cancelQueuedBackup (PR-3) ----
+    // Eventos pequenos (runId + scheduleId + eventId + sequence + msg).
+    MessageType.backupQueued: 4 * 1024,
+    MessageType.backupDequeued: 4 * 1024,
+    MessageType.backupStarted: 4 * 1024,
+    MessageType.cancelQueuedBackupRequest: 4 * 1024,
+    MessageType.cancelQueuedBackupResponse: 4 * 1024,
+
     // ---- Database config CRUD (PR-2) ----
     // Configs grandes (Sybase com replicacao + multiplos files etc.)
     // sao gerenciaveis em ate ~64KB. List pode retornar dezenas;

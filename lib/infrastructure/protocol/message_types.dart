@@ -64,6 +64,19 @@ enum MessageType {
   // estado final do backup ainda chega via `backupFailed`/`Complete`.
   cancelBackupRequest,
   cancelBackupResponse,
+  // PR-3: eventos de fila publicados pelo servidor para clientes
+  // observarem progresso da fila em tempo real. Carregam runId,
+  // scheduleId, eventId (uuid) e sequence (monotonico por servidor)
+  // para reprocessamento resiliente apos reconnect.
+  backupQueued,
+  backupDequeued,
+  backupStarted,
+  // PR-3: cancelQueuedBackup. Cliente cancela uma execucao que
+  // ainda esta na fila (estado=queued). Diferente de cancelBackup
+  // (que cancela execucao em curso). Servidor responde com state=
+  // cancelled + scheduleId + runId.
+  cancelQueuedBackupRequest,
+  cancelQueuedBackupResponse,
   // PR-2: schedule CRUD remoto (createSchedule, deleteSchedule,
   // pauseSchedule, resumeSchedule). `updateSchedule` ja existia desde
   // antes do PR-1; aqui adicionamos os 4 que faltam para CRUD completo.

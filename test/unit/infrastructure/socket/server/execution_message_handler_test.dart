@@ -12,6 +12,7 @@ import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
+import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
@@ -466,6 +467,97 @@ void main() {
       final resp = sent.single.message;
       expect(resp.header.type, MessageType.error);
       expect(getErrorFromMessage(resp), contains('Fila'));
+    });
+  });
+
+  group('cancelQueuedBackup (PR-3a)', () {
+    test('cancela item da fila e responde state=cancelled', () async {
+      final queue = ExecutionQueueService();
+      final item = queue.tryEnqueue(
+        scheduleId: 'sch-A',
+        clientId: 'c1',
+        requestId: 1,
+        requestedBy: 'c1',
+      )!;
+      handler = ExecutionMessageHandler(
+        scheduleRepository: scheduleRepository,
+        destinationRepository: destinationRepository,
+        licensePolicyService: licensePolicyService,
+        schedulerService: schedulerService,
+        executeBackup: executeBackup,
+        progressNotifier: progressNotifier,
+        executionRegistry: executionRegistry,
+        queueService: queue,
+        clock: () => DateTime.utc(2026),
+      );
+
+      final req = createCancelQueuedBackupRequest(runId: item.runId);
+      await handler.handle('c1', req, sendToClient);
+
+      final resp = sent.single.message;
+      expect(resp.header.type, MessageType.cancelQueuedBackupResponse);
+      expect(resp.payload['state'], 'cancelled');
+      expect(resp.payload['runId'], item.runId);
+      expect(resp.payload['scheduleId'], 'sch-A');
+      expect(queue.queueSize, 0);
+    });
+
+    test('runId desconhecido -> state=notFound + 409', () async {
+      final req = createCancelQueuedBackupRequest(runId: 'r-fake');
+      await handler.handle('c1', req, sendToClient);
+      final resp = sent.single.message;
+      expect(resp.header.type, MessageType.cancelQueuedBackupResponse);
+      expect(resp.payload['state'], 'notFound');
+      expect(resp.payload['statusCode'], 409);
+      expect(resp.payload['errorCode'], 'NO_ACTIVE_EXECUTION');
+    });
+
+    test('runId vazio -> error invalidRequest', () async {
+      final bad = Message(
+        header: MessageHeader(
+          type: MessageType.cancelQueuedBackupRequest,
+          length: 0,
+          requestId: 1,
+        ),
+        payload: const <String, dynamic>{'runId': ''},
+        checksum: 0,
+      );
+      await handler.handle('c1', bad, sendToClient);
+      expect(getErrorCodeFromMessage(sent.single.message), ErrorCode.invalidRequest);
+    });
+
+    test('idempotencyKey: 2a chamada reusa cache', () async {
+      final queue = ExecutionQueueService();
+      final item = queue.tryEnqueue(
+        scheduleId: 's', clientId: 'c1', requestId: 1, requestedBy: 'c1',
+      )!;
+      handler = ExecutionMessageHandler(
+        scheduleRepository: scheduleRepository,
+        destinationRepository: destinationRepository,
+        licensePolicyService: licensePolicyService,
+        schedulerService: schedulerService,
+        executeBackup: executeBackup,
+        progressNotifier: progressNotifier,
+        executionRegistry: executionRegistry,
+        queueService: queue,
+        clock: () => DateTime.utc(2026),
+      );
+
+      final req = createCancelQueuedBackupRequest(
+        runId: item.runId,
+        idempotencyKey: 'idem-cancel-q',
+      );
+      await handler.handle('c1', req, sendToClient);
+      // Re-enqueue para validar que 2a chamada NAO chama removeByRunId
+      queue.tryEnqueue(
+        scheduleId: 's', clientId: 'c1', requestId: 1, requestedBy: 'c1',
+      );
+      await handler.handle('c1', req, sendToClient);
+
+      // Mesma resposta cacheada — fila NAO mudou no segundo
+      expect(queue.queueSize, 1);
+      expect(sent, hasLength(2));
+      expect(sent[0].message.payload['runId'], sent[1].message.payload['runId']);
     });
   });
 

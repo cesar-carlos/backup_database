@@ -11,12 +11,15 @@ import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_ba
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
+import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 
 /// Handler para `startBackup` nao-bloqueante (M2.2/PR-2) e
@@ -44,6 +47,7 @@ class ExecutionMessageHandler {
     required RemoteExecutionRegistry executionRegistry,
     IdempotencyRegistry? idempotencyRegistry,
     ExecutionQueueService? queueService,
+    QueueEventBus? eventBus,
     DateTime Function()? clock,
   })  : _scheduleRepository = scheduleRepository,
         _destinationRepository = destinationRepository,
@@ -54,6 +58,7 @@ class ExecutionMessageHandler {
         _executionRegistry = executionRegistry,
         _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
         _queueService = queueService ?? ExecutionQueueService(),
+        _eventBus = eventBus,
         _clock = clock ?? DateTime.now;
 
   final IScheduleRepository _scheduleRepository;
@@ -65,6 +70,10 @@ class ExecutionMessageHandler {
   final RemoteExecutionRegistry _executionRegistry;
   final IdempotencyRegistry _idempotencyRegistry;
   final ExecutionQueueService _queueService;
+  // PR-3a: bus de eventos de fila. Optional — quando nao cabeado,
+  // backup ainda funciona, apenas sem publicar backupQueued/Dequeued/
+  // Started (cliente fallback para polling via getExecutionQueue).
+  final QueueEventBus? _eventBus;
   final DateTime Function() _clock;
 
   /// Acesso ao queue service para wirings externos (ex.:
@@ -78,14 +87,17 @@ class ExecutionMessageHandler {
   ) async {
     final type = message.header.type;
     if (type != MessageType.startBackupRequest &&
-        type != MessageType.cancelBackupRequest) {
+        type != MessageType.cancelBackupRequest &&
+        type != MessageType.cancelQueuedBackupRequest) {
       return;
     }
 
     if (type == MessageType.startBackupRequest) {
       await _handleStart(clientId, message, sendToClient);
-    } else {
+    } else if (type == MessageType.cancelBackupRequest) {
       await _handleCancel(clientId, message, sendToClient);
+    } else {
+      await _handleCancelQueued(clientId, message, sendToClient);
     }
   }
 
@@ -202,15 +214,29 @@ class ExecutionMessageHandler {
         requestId: requestId.toString(),
         scheduleId: scheduleId,
       );
+      final queuePosition = _queueService.snapshot()
+          .firstWhere((q) => q.runId == item.runId)
+          .queuedPosition;
+      // Publica `backupQueued` event (fire-and-forget). Cliente
+      // pode usar para mostrar "Aguardando na fila (posicao N)" em
+      // tempo real, em vez de fazer polling do `getExecutionQueue`.
+      unawaited(
+        _eventBus?.publishQueued(
+              clientId: clientId,
+              runId: item.runId,
+              scheduleId: scheduleId,
+              queuePosition: queuePosition,
+              requestedBy: clientId,
+            ) ??
+            Future<void>.value(),
+      );
       return createStartBackupResponse(
         requestId: requestId,
         runId: item.runId,
         state: ExecutionState.queued,
         scheduleId: scheduleId,
         serverTimeUtc: _clock(),
-        queuePosition: _queueService.snapshot()
-            .firstWhere((q) => q.runId == item.runId)
-            .queuedPosition,
+        queuePosition: queuePosition,
         message: 'Backup enfileirado',
       );
     }
@@ -391,6 +417,19 @@ class ExecutionMessageHandler {
       scheduleId: next.scheduleId,
     );
 
+    // Publica `backupDequeued(reason=dispatched)` antes de validar
+    // schedule — cliente sabe que o item saiu da fila mesmo se a
+    // tentativa de iniciar falhar (ex.: schedule deletado).
+    unawaited(
+      _eventBus?.publishDequeued(
+            clientId: next.clientId,
+            runId: next.runId,
+            scheduleId: next.scheduleId,
+            reason: 'dispatched',
+          ) ??
+          Future<void>.value(),
+    );
+
     // Carrega schedule novamente (pode ter mudado entre enqueue e
     // dequeue: ex.: deletado, desabilitado, modificado). Aborta com
     // log se schedule nao existe mais.
@@ -443,6 +482,17 @@ class ExecutionMessageHandler {
 
     LogContext.setContext(runId: next.runId, scheduleId: next.scheduleId);
 
+    // Publica `backupStarted` antes de iniciar — cliente atualiza
+    // UI para "Em execucao" sincronizado com o estado real.
+    unawaited(
+      _eventBus?.publishStarted(
+            clientId: next.clientId,
+            runId: next.runId,
+            scheduleId: next.scheduleId,
+          ) ??
+          Future<void>.value(),
+    );
+
     unawaited(_runBackupAsync(
       clientId: next.clientId,
       requestId: next.requestId,
@@ -453,16 +503,121 @@ class ExecutionMessageHandler {
     ));
   }
 
+  // ---------------------------------------------------------------------
+  // cancelQueuedBackup (PR-3a)
+  // ---------------------------------------------------------------------
+  Future<void> _handleCancelQueued(
+    String clientId,
+    Message message,
+    SendToClient sendToClient,
+  ) async {
+    final requestId = message.header.requestId;
+    final payload = message.payload;
+    final runId = payload['runId'] is String
+        ? payload['runId'] as String
+        : '';
+    if (runId.isEmpty) {
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        '`runId` ausente ou vazio',
+        ErrorCode.invalidRequest,
+        sendToClient,
+      );
+      return;
+    }
+
+    final idempotencyKey = getIdempotencyKey(message);
+
+    try {
+      final response = await _idempotencyRegistry.runIdempotent<Message>(
+        key: idempotencyKey,
+        compute: () => _doCancelQueued(clientId, requestId, runId),
+      );
+      await sendToClient(clientId, response);
+    } on _StartFailure catch (f) {
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        f.message,
+        f.errorCode,
+        sendToClient,
+      );
+    }
+  }
+
+  Future<Message> _doCancelQueued(
+    String clientId,
+    int requestId,
+    String runId,
+  ) async {
+    // Busca scheduleId associado (necessario para evento + response).
+    String? scheduleId;
+    final snap = _queueService.snapshot();
+    final found = snap
+        .cast<QueuedExecution?>()
+        .firstWhere((q) => q?.runId == runId, orElse: () => null);
+    if (found != null) scheduleId = found.scheduleId;
+
+    final removed = _queueService.removeByRunId(runId);
+    if (!removed) {
+      return createCancelQueuedBackupResponse(
+        requestId: requestId,
+        state: ExecutionState.notFound,
+        runId: runId,
+        serverTimeUtc: _clock(),
+        scheduleId: scheduleId,
+        message: 'Nenhuma execucao enfileirada com este runId',
+        errorCode: ErrorCode.noActiveExecution,
+      );
+    }
+
+    LoggerService.infoWithContext(
+      'cancelQueuedBackup',
+      clientId: clientId,
+      requestId: requestId.toString(),
+      scheduleId: scheduleId ?? 'unknown',
+    );
+
+    // Publica `backupDequeued(reason=cancelled)` para o cliente.
+    if (scheduleId != null) {
+      unawaited(
+        _eventBus?.publishDequeued(
+              clientId: clientId,
+              runId: runId,
+              scheduleId: scheduleId,
+              reason: 'cancelled',
+            ) ??
+            Future<void>.value(),
+      );
+    }
+
+    return createCancelQueuedBackupResponse(
+      requestId: requestId,
+      state: ExecutionState.cancelled,
+      runId: runId,
+      serverTimeUtc: _clock(),
+      scheduleId: scheduleId,
+      message: 'Execucao cancelada da fila',
+    );
+  }
+
   /// Resolver de sendToClient para drains. Em PR-3 final sera injetado
   /// como dependency e fara lookup via ClientManager. Por enquanto e
   /// um stub que roda sem efeito quando ninguem cabeou — drain do
   /// servidor continua funcionando, apenas sem notificar o cliente
   /// original (cliente pode poll via getExecutionStatus).
   SendToClient _sendToClientResolver = _noopSendToClient;
+
+  /// Acesso de leitura para wirings que precisam compor com bus.
+  SendToClient get sendToClientResolver => _sendToClientResolver;
   set sendToClientResolver(SendToClient resolver) =>
       _sendToClientResolver = resolver;
 
-  static Future<void> _noopSendToClient(String _, Message __) async {}
+  static Future<void> _noopSendToClient(
+    String clientId,
+    Message message,
+  ) async {}
 
   // ---------------------------------------------------------------------
   // cancelBackup
