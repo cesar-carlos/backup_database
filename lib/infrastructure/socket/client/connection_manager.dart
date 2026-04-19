@@ -10,7 +10,9 @@ import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
+import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
@@ -56,6 +58,20 @@ class ConnectionManager {
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
 
+  /// Cache do snapshot de capabilities da conexao atual.
+  ///
+  /// Populado por [refreshServerCapabilities] (tipicamente chamado logo
+  /// apos a autenticacao bem-sucedida). Permanece `null` ate o cliente
+  /// pedir explicitamente. Quando o servidor nao implementa
+  /// `capabilitiesRequest` (legado v1) ou a chamada falha, o cache e
+  /// preenchido com [ServerCapabilities.legacyDefault] para que
+  /// providers consumam um snapshot consistente sem ter que tratar
+  /// "ausencia de capabilities" caso a caso (M4.1 - degradacao graceful).
+  ///
+  /// Resetado para `null` em [disconnect] para evitar uso de capabilities
+  /// stale apos reconexao a um servidor potencialmente diferente.
+  ServerCapabilities? _cachedServerCapabilities;
+
   // Getter para verificar se há transferências ativas (usado pelo heartbeat)
   bool get hasActiveTransfers => _activeTransfers.isNotEmpty;
 
@@ -69,12 +85,58 @@ class ConnectionManager {
   Stream<Message>? get messageStream => _client?.messageStream;
   Stream<ConnectionStatus>? get statusStream => _client?.statusStream;
 
+  /// Snapshot atual das capabilities reportadas pelo servidor (M4.1).
+  ///
+  /// `null` ate [refreshServerCapabilities] ser chamado pela primeira
+  /// vez (ou ate o auto-refresh em [connect] completar). Apos populado,
+  /// fica disponivel para providers como gate de feature sincrono — sem
+  /// precisar fazer round-trip para o servidor a cada decisao.
+  ///
+  /// Convencao: prefira os getters de feature especificos
+  /// ([isRunIdSupported], [isExecutionQueueSupported], etc.) em vez
+  /// de inspecionar este snapshot diretamente — eles ja fazem o
+  /// fallback para [ServerCapabilities.legacyDefault] quando o cache
+  /// esta vazio.
+  ServerCapabilities? get serverCapabilities => _cachedServerCapabilities;
+
+  /// Capabilities efetivas: usa o cache quando disponivel, senao cai
+  /// em [ServerCapabilities.legacyDefault]. Garante que getters de
+  /// feature nunca retornem decisao indefinida — providers podem
+  /// consultar com seguranca em qualquer ponto do ciclo de vida.
+  ServerCapabilities get _effectiveCapabilities =>
+      _cachedServerCapabilities ?? ServerCapabilities.legacyDefault;
+
+  /// `true` quando o servidor anuncia suporte a `runId` no contrato
+  /// de progresso de backup (M2.3). Falso para servidor `v1` legado
+  /// ou quando capabilities ainda nao foram carregadas — fluxos
+  /// dependentes de `runId` devem usar `scheduleId` como fallback.
+  bool get isRunIdSupported => _effectiveCapabilities.supportsRunId;
+
+  /// `true` quando o servidor anuncia suporte a fila de execucao
+  /// (`backupQueued/Dequeued/Started`, `getExecutionQueue`,
+  /// `cancelQueuedBackup` — PR-3b). Falso por enquanto em todos os
+  /// servidores ate a fila ser implementada.
+  bool get isExecutionQueueSupported =>
+      _effectiveCapabilities.supportsExecutionQueue;
+
+  /// `true` quando o servidor anuncia retencao formal de artefato com
+  /// TTL e `getArtifactMetadata` (PR-4). Cliente deve usar este gate
+  /// antes de habilitar logica de re-download por `artifactExpiresAt`.
+  bool get isArtifactRetentionSupported =>
+      _effectiveCapabilities.supportsArtifactRetention;
+
+  /// `true` quando o servidor anuncia suporte a `fileAck`/janela na
+  /// transferencia de arquivos. Em `v1` e sempre falso por decisao
+  /// explicita de ADR-002.
+  bool get isChunkAckSupported => _effectiveCapabilities.supportsChunkAck;
+
   Future<void> connect({
     required String host,
     required int port,
     String? serverId,
     String? password,
     bool enableAutoReconnect = false,
+    bool refreshCapabilitiesOnConnect = true,
   }) async {
     await disconnect();
     _client = TcpSocketClient(
@@ -104,6 +166,27 @@ class ConnectionManager {
     } on Object {
       await disconnect();
       rethrow;
+    }
+
+    // Apos conexao estavel, popula cache de capabilities para que
+    // providers nao precisem chamar `refreshServerCapabilities()`
+    // manualmente. Em servidor `v1` que nao implementa o endpoint, o
+    // refresh cai no fallback `legacyDefault` (zero risco — ver
+    // `refreshServerCapabilities`). Pode ser desabilitado via
+    // [refreshCapabilitiesOnConnect] em testes especificos ou cenarios
+    // onde o consumidor quer controlar o timing.
+    if (refreshCapabilitiesOnConnect) {
+      try {
+        await refreshServerCapabilities();
+      } on Object catch (e) {
+        // `refreshServerCapabilities` ja faz fallback graceful, mas
+        // protege contra exception sincrona (raro — apenas se o futuro
+        // for cancelado durante shutdown concorrente).
+        LoggerService.warning(
+          '[ConnectionManager] Refresh automatico de capabilities falhou: $e. '
+          'Cache permanece ${_cachedServerCapabilities == null ? "vazio" : "populado"}.',
+        );
+      }
     }
   }
 
@@ -471,6 +554,19 @@ class ConnectionManager {
       '[ConnectionManager._handleBackupProgressMessage] Payload: ${message.payload}',
     );
 
+    // M2.3: captura `runId` do payload na primeira mensagem que o trouxer.
+    // Servidores `v1` nao enviam o campo (`getRunIdFromBackupMessage` retorna
+    // null) — o cliente continua operando normalmente sem rastreamento por
+    // execucao. Servidores `v2+` populam sempre, e o cliente passa a poder
+    // correlacionar progresso/conclusao/falha pela mesma execucao logica.
+    final messageRunId = getRunIdFromBackupMessage(message);
+    if (messageRunId != null && state.runId == null) {
+      state.runId = messageRunId;
+      LoggerService.debug(
+        '[ConnectionManager] runId capturado para backup: $messageRunId',
+      );
+    }
+
     if (isBackupProgressMessage(message)) {
       final step = getStepFromBackupProgress(message) ?? '';
       final progressMessage = getMessageFromBackupProgress(message) ?? '';
@@ -480,7 +576,8 @@ class ConnectionManager {
     }
     if (isBackupCompleteMessage(message)) {
       LoggerService.info(
-        '[ConnectionManager] ✓ Mensagem backupComplete recebida!',
+        '[ConnectionManager] ✓ Mensagem backupComplete recebida!'
+        '${state.runId != null ? ' (runId=${state.runId})' : ''}',
       );
       final path = getBackupPathFromBackupComplete(message);
       LoggerService.info('[ConnectionManager] backupPath extraído: "$path"');
@@ -494,6 +591,10 @@ class ConnectionManager {
     if (isBackupFailedMessage(message)) {
       _activeBackups.remove(message.header.requestId);
       final error = getErrorFromBackupFailed(message) ?? 'Erro desconhecido';
+      LoggerService.warning(
+        '[ConnectionManager] backupFailed'
+        '${state.runId != null ? ' (runId=${state.runId})' : ''}: $error',
+      );
       state.completer.complete(rd.Failure(Exception(error)));
       return;
     }
@@ -536,6 +637,11 @@ class ConnectionManager {
       }
     }
     _pendingRequests.clear();
+    // Invalida cache de capabilities: proxima conexao pode ser para
+    // um servidor diferente, com versao/flags distintas. Manter cache
+    // antigo levaria providers a habilitar features inexistentes no
+    // novo servidor.
+    _cachedServerCapabilities = null;
     if (_client != null) {
       await _client!.disconnect();
       _client = null;
@@ -879,6 +985,129 @@ class ConnectionManager {
     }
   }
 
+  /// Solicita capabilities, **cacheia** o resultado em
+  /// [serverCapabilities] e retorna o snapshot.
+  ///
+  /// Em caso de falha (servidor `v1` legado que nao implementa o
+  /// endpoint, timeout, erro de rede), o cache e populado com
+  /// [ServerCapabilities.legacyDefault] e a falha original e logada,
+  /// mas a chamada **retorna sucesso** com o snapshot legacy. Isso
+  /// garante que providers nunca encontrem `serverCapabilities == null`
+  /// apos chamarem este metodo, simplificando o gate de feature do
+  /// lado deles (M4.1 - degradacao graceful).
+  ///
+  /// Convencao: chamar logo apos [connect] bem-sucedido. Pode ser
+  /// chamado novamente para forcar refresh (ex.: apos hot-reload do
+  /// servidor em dev).
+  Future<rd.Result<ServerCapabilities>> refreshServerCapabilities() async {
+    final result = await getServerCapabilities();
+    final caps = result.fold(
+      (s) => s,
+      (failure) {
+        LoggerService.info(
+          '[ConnectionManager] getServerCapabilities falhou '
+          '(servidor v1 legado ou erro): $failure. '
+          'Usando ServerCapabilities.legacyDefault como fallback.',
+        );
+        return ServerCapabilities.legacyDefault;
+      },
+    );
+    _cachedServerCapabilities = caps;
+    return rd.Success(caps);
+  }
+
+  /// Solicita as capabilities atuais do servidor (M1.3 / M4.1) sem
+  /// alterar o cache. Use [refreshServerCapabilities] em vez disso
+  /// para padronizar o gate de feature em providers — esta variante
+  /// e util quando o consumidor quer tratar o erro explicitamente
+  /// (ex.: tela de diagnostico).
+  ///
+  /// Cliente deve usar o resultado como **gate de feature**: ler
+  /// `capabilities.supportsRunId` (etc.) antes de habilitar code paths
+  /// novos. Em servidor `v1` que ainda nao implementou
+  /// `capabilitiesRequest`, a chamada retorna `Failure` (timeout ou
+  /// erro generico) e o cliente deve usar
+  /// [ServerCapabilities.legacyDefault] como fallback.
+  Future<rd.Result<ServerCapabilities>> getServerCapabilities() async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(createCapabilitiesRequestMessage(requestId: requestId));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (!isCapabilitiesResponseMessage(message)) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para capabilities: ${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readCapabilitiesFromResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('getServerCapabilities timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// Solicita saude do servidor (M1.10 / PR-1).
+  ///
+  /// Retorna snapshot tipado [ServerHealth] com status agregado e
+  /// checks individuais. Cliente deve usar para:
+  /// - exibir status no dashboard;
+  /// - bloquear disparo de backup quando `isUnhealthy`;
+  /// - alertar operador quando `degraded`;
+  /// - calcular drift de relogio.
+  ///
+  /// Em servidor `v1` legado que nao implementa o endpoint, a chamada
+  /// retorna `Failure` (timeout). Cliente pode usar isso como sinal
+  /// de "servidor antigo, fluxo legado".
+  Future<rd.Result<ServerHealth>> getServerHealth() async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(createHealthRequestMessage(requestId: requestId));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (!isHealthResponseMessage(message)) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para health: ${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readHealthFromResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('getServerHealth timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
   Future<rd.Result<Map<String, dynamic>>> getServerMetrics() async {
     if (!isConnected) {
       return rd.Failure(Exception('ConnectionManager not connected'));
@@ -1026,4 +1255,11 @@ class _BackupProgressState {
 
   final Completer<rd.Result<String>> completer;
   final BackupProgressCallback? onProgress;
+
+  /// `runId` da execucao remota associada, capturado da primeira mensagem
+  /// do servidor que o popular (`backupProgress`/`Complete`/`Failed`). Em
+  /// servidores `v1` permanece `null` (comportamento legado preservado).
+  /// Pre-requisito para uso futuro em re-sync por reconexao (PR-3c) e
+  /// `getExecutionStatus(runId)` (PR-2).
+  String? runId;
 }

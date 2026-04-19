@@ -6,11 +6,16 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/compression.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/protocol_versions.dart';
 
 const int _headerSize = 16;
 const int _checksumSize = 4;
 const int _magicNumber = 0xFA000000;
-const int _protocolVersion = 0x01;
+
+/// Wire version corrente sempre que serializamos novas mensagens vem do
+/// proprio `MessageHeader` (default `kCurrentWireVersion`). O parser
+/// valida via [isWireVersionSupported] para tolerar bumps graduais
+/// (ver ADR-003).
 const int _flagCompressed = 0x01;
 
 class BinaryProtocol {
@@ -77,8 +82,14 @@ class BinaryProtocol {
       throw ProtocolException('Invalid magic: 0x${magic.toRadixString(16)}');
     }
     final version = headerData.getUint8(4);
-    if (version != _protocolVersion) {
-      throw ProtocolException('Unsupported version: $version');
+    if (!isWireVersionSupported(version)) {
+      // Lanca subclasse especifica para que `client_handler` possa
+      // responder com `ErrorCode.unsupportedProtocolVersion` em vez do
+      // generico `parseError` (ver ADR-003 + M1.3).
+      throw UnsupportedProtocolVersionException(
+        receivedVersion: version,
+        supportedVersions: kSupportedWireVersions,
+      );
     }
     final length = headerData.getUint32(5);
     if (data.length < _headerSize + length + _checksumSize) {
@@ -178,4 +189,26 @@ class ProtocolException implements Exception {
   final String message;
   @override
   String toString() => 'ProtocolException: $message';
+}
+
+/// Indica que o peer enviou um header com wire version nao suportada
+/// (`MessageHeader.version`). Lancada por [BinaryProtocol.deserializeMessage]
+/// para que handlers superiores possam responder com
+/// `ErrorCode.unsupportedProtocolVersion` em vez do generico
+/// `parseError`. Carrega [receivedVersion] para diagnostico e
+/// [supportedVersions] para informar o cliente quais versoes o servidor
+/// aceita (util quando rolagem de update e gradual).
+///
+/// Implementa parte de ADR-003 + M1.3 do plano remoto.
+class UnsupportedProtocolVersionException extends ProtocolException {
+  UnsupportedProtocolVersionException({
+    required this.receivedVersion,
+    required this.supportedVersions,
+  }) : super(
+          'Unsupported protocol wire version: $receivedVersion '
+          '(supported: ${supportedVersions.join(', ')})',
+        );
+
+  final int receivedVersion;
+  final Set<int> supportedVersions;
 }

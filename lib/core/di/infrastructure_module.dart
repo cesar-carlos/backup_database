@@ -13,13 +13,17 @@ import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/file_transfer_lock_service.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
+import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
 import 'package:backup_database/infrastructure/transfer_staging_service.dart';
+import 'package:backup_database/infrastructure/utils/staging_usage_measurer.dart';
 import 'package:get_it/get_it.dart';
 
 /// Sets up infrastructure layer dependencies.
@@ -203,6 +207,13 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<IBackupProgressNotifier>(
     getIt.get<BackupProgressProvider>,
   );
+  // Registry compartilhado entre o ScheduleMessageHandler (que registra
+  // execucoes) e o MetricsMessageHandler (que expoe activeRunId/Count
+  // para observabilidade — M2.1 + M5.3 + M7.1). Singleton garante uma
+  // unica fonte de verdade por servidor.
+  getIt.registerLazySingleton<RemoteExecutionRegistry>(
+    RemoteExecutionRegistry.new,
+  );
   getIt.registerLazySingleton<ScheduleMessageHandler>(
     () => ScheduleMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
@@ -212,6 +223,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       updateSchedule: getIt<UpdateSchedule>(),
       executeBackup: getIt<ExecuteScheduledBackup>(),
       progressNotifier: getIt<IBackupProgressNotifier>(),
+      executionRegistry: getIt<RemoteExecutionRegistry>(),
     ),
   );
 
@@ -239,7 +251,28 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       scheduleRepository: getIt<IScheduleRepository>(),
       backupRunningState: getIt<IBackupRunningState>(),
       metricsCollector: getIt<IMetricsCollector>(),
+      // Compartilhado com ScheduleMessageHandler — registra do lado de
+      // quem dispara, le do lado de quem reporta metricas (M5.3/M7.1).
+      executionRegistry: getIt<RemoteExecutionRegistry>(),
+      // Mede o uso atual do diretorio de staging (defensivo — falhas
+      // de I/O viram 0/parcial, nao crash). Usa o mesmo `transferBasePath`
+      // que `TransferStagingService` ja usa para escrita.
+      stagingUsageBytesProvider: () =>
+          StagingUsageMeasurer.measure(transferBasePath),
     ),
+  );
+  // CapabilitiesMessageHandler nao tem dependencias externas (apenas
+  // constantes de protocol_versions.dart). Registrado para consistencia
+  // com os outros handlers e para permitir override em testes/mocks
+  // futuros (ex.: clock injetado).
+  getIt.registerLazySingleton<CapabilitiesMessageHandler>(
+    CapabilitiesMessageHandler.new,
+  );
+  // HealthMessageHandler com checks minimos. Wirings em producao podem
+  // adicionar checks de banco/staging/license via override no DI ou
+  // instanciacao direta no TcpSocketServer (ver M1.10).
+  getIt.registerLazySingleton<HealthMessageHandler>(
+    HealthMessageHandler.new,
   );
   getIt.registerLazySingleton<TcpSocketServer>(
     () => TcpSocketServer(
@@ -250,6 +283,8 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       scheduleHandler: getIt<ScheduleMessageHandler>(),
       fileTransferHandler: getIt<FileTransferMessageHandler>(),
       metricsHandler: getIt<MetricsMessageHandler>(),
+      capabilitiesHandler: getIt<CapabilitiesMessageHandler>(),
+      healthHandler: getIt<HealthMessageHandler>(),
     ),
   );
   getIt.registerLazySingleton<SocketServerService>(getIt.get<TcpSocketServer>);

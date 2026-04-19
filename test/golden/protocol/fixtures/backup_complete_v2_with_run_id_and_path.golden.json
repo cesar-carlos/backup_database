@@ -1,0 +1,9 @@
+{
+  "type": "backupComplete",
+  "payload": {
+    "scheduleId": "schedule-1",
+    "message": "Backup concluído com sucesso",
+    "backupPath": "remote/schedule-1/backup-2026-04-19.zip",
+    "runId": "schedule-1_fixed-uuid-aaa"
+  }
+}

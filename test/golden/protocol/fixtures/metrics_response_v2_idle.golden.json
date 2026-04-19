@@ -1,0 +1,14 @@
+{
+  "type": "metricsResponse",
+  "payload": {
+    "totalBackups": 42,
+    "backupsToday": 3,
+    "failedToday": 0,
+    "activeSchedules": 5,
+    "recentBackups": [],
+    "backupInProgress": false,
+    "serverTimeUtc": "2026-04-19T15:30:00.000Z",
+    "activeRunCount": 0,
+    "stagingUsageBytes": 0
+  }
+}

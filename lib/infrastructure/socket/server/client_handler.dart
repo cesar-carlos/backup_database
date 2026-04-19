@@ -12,6 +12,8 @@ import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
+import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/payload_limits.dart';
 import 'package:backup_database/infrastructure/socket/heartbeat.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
 import 'package:uuid/uuid.dart';
@@ -148,6 +150,40 @@ class ClientHandler {
         return;
       }
 
+      // Validacao de limite por tipo de mensagem (M5.4). Le o `type`
+      // direto do header (offset 9) ANTES de gastar memoria com o
+      // sublist + deserializacao. Tipos desconhecidos (cliente futuro
+      // enviando MessageType novo que ainda nao existe no enum) caem
+      // no limite global por fallback — comportamento conservador.
+      // Encadeia `disconnect` ao final do flush via `whenComplete` para
+      // garantir que o cliente receba o erro antes da desconexao
+      // (mesmo padrao usado em wire version invalida — ADR-003).
+      final typeIndex = _buffer[9];
+      final type = typeIndex < MessageType.values.length
+          ? MessageType.values[typeIndex]
+          : null;
+      if (type != null) {
+        final maxForType = PayloadLimits.maxPayloadBytesFor(type);
+        if (length > maxForType) {
+          LoggerService.warning(
+            'ClientHandler $_clientId: payload de ${type.name} excede '
+            'limite ($length bytes; max $maxForType). Encerrando conexão.',
+          );
+          unawaited(
+            send(
+              createErrorMessage(
+                requestId: 0,
+                errorMessage:
+                    'Payload too large for ${type.name}: $length bytes '
+                    '(max $maxForType)',
+                errorCode: ErrorCode.payloadTooLarge,
+              ),
+            ).whenComplete(disconnect),
+          );
+          return;
+        }
+      }
+
       final totalNeeded = _headerSize + length + _checksumSize;
       if (_buffer.length < totalNeeded) break;
 
@@ -219,6 +255,29 @@ class ClientHandler {
           _lastHeartbeat = DateTime.now();
         }
         _safeAddMessage(message);
+      } on UnsupportedProtocolVersionException catch (e) {
+        // Wire version desconhecida: peer com protocolo binario
+        // incompativel. Responde com errorCode dedicado para que o
+        // cliente saiba que precisa atualizar (ver ADR-003 + M1.3).
+        // Encadeia `disconnect` ao final do `send` (via `whenComplete`)
+        // para garantir que a mensagem de erro chegue antes do socket
+        // ser destruido — `unawaited(send(...))` sozinho com
+        // `disconnect` em seguida derrubaria a conexao antes do flush.
+        LoggerService.warning(
+          'ClientHandler unsupported wire version for $_remoteAddress: '
+          'received=${e.receivedVersion}, '
+          'supported=${e.supportedVersions.join(',')}',
+        );
+        unawaited(
+          send(
+            createErrorMessage(
+              requestId: 0,
+              errorMessage: e.message,
+              errorCode: ErrorCode.unsupportedProtocolVersion,
+            ),
+          ).whenComplete(disconnect),
+        );
+        return;
       } on ProtocolException catch (e) {
         LoggerService.warning(
           'ClientHandler parse error for $_remoteAddress: ${e.message}',

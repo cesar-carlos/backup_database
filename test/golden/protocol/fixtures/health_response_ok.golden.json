@@ -1,0 +1,12 @@
+{
+  "type": "healthResponse",
+  "payload": {
+    "status": "ok",
+    "checks": {
+      "socket": true,
+      "database": true
+    },
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "uptimeSeconds": 3600
+  }
+}

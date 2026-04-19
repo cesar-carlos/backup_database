@@ -1,0 +1,9 @@
+{
+  "type": "backupProgress",
+  "payload": {
+    "scheduleId": "schedule-1",
+    "step": "Iniciando",
+    "message": "Iniciando backup",
+    "progress": 0.0
+  }
+}

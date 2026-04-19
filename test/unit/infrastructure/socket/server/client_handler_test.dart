@@ -4,8 +4,11 @@ import 'dart:typed_data';
 
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
+import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/payload_limits.dart';
 import 'package:backup_database/infrastructure/socket/heartbeat.dart';
 import 'package:backup_database/infrastructure/socket/server/client_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
@@ -267,6 +270,169 @@ void main() {
           onTimeout: () => throw TimeoutException('Auth message not emitted'),
         );
         handler.disconnect();
+      },
+    );
+
+    test(
+      'unsupported wire version: responds with UNSUPPORTED_PROTOCOL_VERSION and disconnects (ADR-003)',
+      () async {
+        final pair = await createSocketPair();
+        addTearDown(() {
+          pair.client.destroy();
+          pair.server.destroy();
+        });
+
+        String? disconnectedId;
+        final handler = ClientHandler(
+          socket: pair.server,
+          protocol: protocol,
+          onDisconnect: (id) => disconnectedId = id,
+        );
+        handler.start();
+
+        // Captura a resposta do servidor no socket cliente
+        final responseCompleter = Completer<Message>.sync();
+        final buffer = <int>[];
+        void onData(List<int> data) {
+          buffer.addAll(data);
+          if (buffer.length >= 16 + 4) {
+            final length = (buffer[5] << 24) |
+                (buffer[6] << 16) |
+                (buffer[7] << 8) |
+                buffer[8];
+            final total = 16 + length + 4;
+            if (buffer.length >= total) {
+              try {
+                final message = protocol.deserializeMessage(
+                  Uint8List.fromList(buffer.sublist(0, total)),
+                );
+                if (!responseCompleter.isCompleted) {
+                  responseCompleter.complete(message);
+                }
+              } on Object catch (_) {
+                // Ignora bytes parciais ate fechar a mensagem
+              }
+            }
+          }
+        }
+
+        pair.client.listen(onData);
+
+        // Constroi uma mensagem valida e corrompe o byte de wire version
+        final heartbeat = createHeartbeatMessage();
+        final bytes = protocol.serializeMessage(heartbeat);
+        bytes[4] = 0x99; // wire version desconhecida
+        pair.client.add(bytes);
+        await pair.client.flush();
+
+        final response = await responseCompleter.future.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () =>
+              throw TimeoutException('No error response received'),
+        );
+
+        expect(response.header.type, MessageType.error);
+        expect(
+          getErrorCodeFromMessage(response),
+          ErrorCode.unsupportedProtocolVersion,
+        );
+        // Mensagem deve identificar a versao recebida para diagnostico
+        expect(getErrorFromMessage(response), contains('153'));
+
+        // Servidor deve ter desconectado o handler apos enviar o erro
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(disconnectedId, equals(handler.clientId));
+      },
+    );
+
+    test(
+      'oversized payload for type: responds with PAYLOAD_TOO_LARGE and disconnects (M5.4)',
+      () async {
+        final pair = await createSocketPair();
+        addTearDown(() {
+          pair.client.destroy();
+          pair.server.destroy();
+        });
+
+        String? disconnectedId;
+        final handler = ClientHandler(
+          socket: pair.server,
+          protocol: protocol,
+          onDisconnect: (id) => disconnectedId = id,
+        );
+        handler.start();
+
+        // Captura a primeira mensagem do servidor (deve ser o erro)
+        final responseCompleter = Completer<Message>.sync();
+        final buffer = <int>[];
+        void onData(List<int> data) {
+          buffer.addAll(data);
+          if (buffer.length >= 16 + 4) {
+            final length = (buffer[5] << 24) |
+                (buffer[6] << 16) |
+                (buffer[7] << 8) |
+                buffer[8];
+            final total = 16 + length + 4;
+            if (buffer.length >= total) {
+              try {
+                final message = protocol.deserializeMessage(
+                  Uint8List.fromList(buffer.sublist(0, total)),
+                );
+                if (!responseCompleter.isCompleted) {
+                  responseCompleter.complete(message);
+                }
+              } on Object catch (_) {}
+            }
+          }
+        }
+
+        pair.client.listen(onData);
+
+        // Constroi um header artesanal com tipo `executeSchedule` (limite
+        // pequeno: ~4KB) declarando length 1MB no header. Nao envia o
+        // payload — o handler deve rejeitar so com base no header.
+        final maxForType =
+            PayloadLimits.maxPayloadBytesFor(MessageType.executeSchedule);
+        final oversizedLength = maxForType + 1024; // estoura o limite
+
+        final header = Uint8List(16);
+        // magic 0xFA000000
+        header[0] = 0xFA;
+        header[1] = 0x00;
+        header[2] = 0x00;
+        header[3] = 0x00;
+        // wire version
+        header[4] = 0x01;
+        // length (uint32 BE) = oversizedLength
+        header[5] = (oversizedLength >> 24) & 0xFF;
+        header[6] = (oversizedLength >> 16) & 0xFF;
+        header[7] = (oversizedLength >> 8) & 0xFF;
+        header[8] = oversizedLength & 0xFF;
+        // type = executeSchedule (index no enum)
+        header[9] = MessageType.executeSchedule.index;
+        // requestId = 0
+        // flags = 0
+        pair.client.add(header);
+        await pair.client.flush();
+
+        final response = await responseCompleter.future.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () =>
+              throw TimeoutException('No error response received'),
+        );
+
+        expect(response.header.type, MessageType.error);
+        expect(
+          getErrorCodeFromMessage(response),
+          ErrorCode.payloadTooLarge,
+        );
+        // Mensagem deve identificar o tipo e o tamanho recebido
+        expect(getErrorFromMessage(response), contains('executeSchedule'));
+        expect(getErrorFromMessage(response), contains('$oversizedLength'));
+
+        // Servidor deve ter desconectado o handler apos enviar o erro
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(disconnectedId, equals(handler.clientId));
       },
     );
 

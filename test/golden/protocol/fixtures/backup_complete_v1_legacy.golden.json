@@ -1,0 +1,7 @@
+{
+  "type": "backupComplete",
+  "payload": {
+    "scheduleId": "schedule-1",
+    "message": "Backup concluído"
+  }
+}

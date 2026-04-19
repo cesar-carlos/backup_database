@@ -13,7 +13,21 @@ enum ErrorCode {
   timeout('TIMEOUT', 'Operacao expirou'),
   ioError('IO_ERROR', 'Erro de entrada/saida'),
   diskFull('DISK_FULL', 'Disco cheio'),
-  invalidChecksum('INVALID_CHECKSUM', 'Checksum invalido')
+  invalidChecksum('INVALID_CHECKSUM', 'Checksum invalido'),
+
+  /// Wire version do `MessageHeader` nao reconhecida pelo servidor.
+  /// Indica peer com protocolo binario incompativel (ver ADR-003).
+  /// Cliente deve atualizar para versao compativel.
+  unsupportedProtocolVersion(
+    'UNSUPPORTED_PROTOCOL_VERSION',
+    'Versao do protocolo binario nao suportada',
+  ),
+
+  /// Payload da mensagem excede o limite permitido para o seu
+  /// `MessageType` (ver `PayloadLimits.maxPayloadBytesFor`). Defesa em
+  /// profundidade contra peer hostil ou bug de cliente que envia
+  /// payload muito maior que o uso esperado (M5.4 do plano).
+  payloadTooLarge('PAYLOAD_TOO_LARGE', 'Payload excede o limite permitido')
   ;
 
   final String code;

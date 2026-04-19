@@ -1,0 +1,8 @@
+{
+  "type": "metricsResponse",
+  "payload": {
+    "backupInProgress": false,
+    "totalBackupsToday": 3,
+    "uptimeSeconds": 86400
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "type": "cancelSchedule",
+  "payload": {
+    "scheduleId": "schedule-1"
+  }
+}

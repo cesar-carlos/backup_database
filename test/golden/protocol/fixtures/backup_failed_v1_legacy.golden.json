@@ -1,0 +1,7 @@
+{
+  "type": "backupFailed",
+  "payload": {
+    "scheduleId": "schedule-1",
+    "error": "Conexão com banco perdida"
+  }
+}

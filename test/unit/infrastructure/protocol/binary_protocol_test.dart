@@ -4,6 +4,7 @@ import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
 import 'package:backup_database/infrastructure/protocol/compression.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/protocol_versions.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -95,6 +96,95 @@ void main() {
         expect(restored.payload['data'], largePayload['data']);
       },
     );
+
+    group('wire version validation (ADR-003)', () {
+      test('aceita mensagem com kCurrentWireVersion', () {
+        final protocol = BinaryProtocol();
+        final message = Message(
+          header: MessageHeader(
+            type: MessageType.heartbeat,
+            length: 2,
+          ),
+          payload: <String, dynamic>{'a': 1},
+          checksum: 0,
+        );
+        final bytes = protocol.serializeMessage(message);
+
+        // Sanity check: serializou com a versao corrente
+        expect(bytes[4], kCurrentWireVersion);
+
+        final restored = protocol.deserializeMessage(bytes);
+        expect(restored.header.version, kCurrentWireVersion);
+      });
+
+      test(
+        'lanca UnsupportedProtocolVersionException com versao desconhecida',
+        () {
+          final protocol = BinaryProtocol();
+          final message = Message(
+            header: MessageHeader(
+              type: MessageType.heartbeat,
+              length: 2,
+            ),
+            payload: <String, dynamic>{'a': 1},
+            checksum: 0,
+          );
+          final bytes = protocol.serializeMessage(message);
+
+          // Forca wire version para um valor desconhecido (ex.: 0x99)
+          bytes[4] = 0x99;
+
+          expect(
+            () => protocol.deserializeMessage(bytes),
+            throwsA(
+              isA<UnsupportedProtocolVersionException>()
+                  .having(
+                    (e) => e.receivedVersion,
+                    'receivedVersion',
+                    0x99,
+                  )
+                  .having(
+                    (e) => e.supportedVersions,
+                    'supportedVersions',
+                    contains(kCurrentWireVersion),
+                  ),
+            ),
+          );
+        },
+      );
+
+      test(
+        'UnsupportedProtocolVersionException e subclasse de ProtocolException',
+        () {
+          // Garante que codigo legado que captura `ProtocolException`
+          // continua funcionando. Necessario para nao quebrar handlers
+          // que ainda nao foram atualizados.
+          final protocol = BinaryProtocol();
+          final message = Message(
+            header: MessageHeader(
+              type: MessageType.heartbeat,
+              length: 2,
+            ),
+            payload: <String, dynamic>{'a': 1},
+            checksum: 0,
+          );
+          final bytes = protocol.serializeMessage(message);
+          bytes[4] = 0x42;
+
+          expect(
+            () => protocol.deserializeMessage(bytes),
+            throwsA(isA<ProtocolException>()),
+          );
+        },
+      );
+
+      test('isWireVersionSupported reflete kSupportedWireVersions', () {
+        expect(isWireVersionSupported(kCurrentWireVersion), isTrue);
+        expect(isWireVersionSupported(0x00), isFalse);
+        expect(isWireVersionSupported(0x99), isFalse);
+        expect(isWireVersionSupported(0xFF), isFalse);
+      });
+    });
 
     test('calculateChecksum should match Crc32 of payload', () {
       final protocol = BinaryProtocol();

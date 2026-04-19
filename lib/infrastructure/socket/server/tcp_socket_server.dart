@@ -12,9 +12,11 @@ import 'package:backup_database/infrastructure/datasources/daos/server_credentia
 import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
 import 'package:backup_database/infrastructure/protocol/compression.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
+import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
@@ -30,6 +32,8 @@ class TcpSocketServer implements SocketServerService {
     ScheduleMessageHandler? scheduleHandler,
     FileTransferMessageHandler? fileTransferHandler,
     MetricsMessageHandler? metricsHandler,
+    CapabilitiesMessageHandler? capabilitiesHandler,
+    HealthMessageHandler? healthHandler,
     SocketLoggerService? socketLogger,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
@@ -44,6 +48,9 @@ class TcpSocketServer implements SocketServerService {
        _scheduleHandler = scheduleHandler,
        _fileTransferHandler = fileTransferHandler,
        _metricsHandler = metricsHandler,
+       _capabilitiesHandler =
+           capabilitiesHandler ?? CapabilitiesMessageHandler(),
+       _healthHandler = healthHandler ?? HealthMessageHandler(),
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>();
 
   final BinaryProtocol _protocol;
@@ -53,6 +60,8 @@ class TcpSocketServer implements SocketServerService {
   final ScheduleMessageHandler? _scheduleHandler;
   final FileTransferMessageHandler? _fileTransferHandler;
   final MetricsMessageHandler? _metricsHandler;
+  final CapabilitiesMessageHandler _capabilitiesHandler;
+  final HealthMessageHandler _healthHandler;
   final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
@@ -130,6 +139,13 @@ class TcpSocketServer implements SocketServerService {
         _scheduleHandler?.handle(clientId, msg, sendToClient);
         _fileTransferHandler?.handle(clientId, msg, sendToClient);
         _metricsHandler?.handle(clientId, msg, sendToClient);
+        // Capabilities sempre disponivel (sem dependencias externas).
+        // Permite ao cliente negociar features apos auth (M4.1).
+        _capabilitiesHandler.handle(clientId, msg, sendToClient);
+        // Health: cliente pode consultar saude do servidor antes de
+        // operar. Sempre disponivel (sem deps externas hard) — checks
+        // adicionais sao injetados no construtor (M1.10 / PR-1).
+        _healthHandler.handle(clientId, msg, sendToClient);
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );

@@ -26,4 +26,12 @@ enum MessageType {
   heartbeat,
   disconnect,
   error,
+  // Adicionados ao final do enum para preservar indices (wire-compat).
+  // Cliente legado que receber esses tipos cai no fallback
+  // `MessageType.error` em `BinaryProtocol.deserializeMessage`,
+  // sem quebrar a deserializacao (ver ADR-003).
+  capabilitiesRequest,
+  capabilitiesResponse,
+  healthRequest,
+  healthResponse,
 }

@@ -6,8 +6,8 @@ import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
-
-typedef SendToClient = Future<void> Function(String clientId, Message message);
+import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
+    show RemoteExecutionRegistry, SendToClient;
 
 class MetricsMessageHandler {
   MetricsMessageHandler({
@@ -15,15 +15,37 @@ class MetricsMessageHandler {
     required IScheduleRepository scheduleRepository,
     required IBackupRunningState backupRunningState,
     IMetricsCollector? metricsCollector,
-  }) : _backupHistoryRepository = backupHistoryRepository,
-       _scheduleRepository = scheduleRepository,
-       _backupRunningState = backupRunningState,
-       _metricsCollector = metricsCollector;
+    RemoteExecutionRegistry? executionRegistry,
+    Future<int> Function()? stagingUsageBytesProvider,
+    DateTime Function()? clock,
+  })  : _backupHistoryRepository = backupHistoryRepository,
+        _scheduleRepository = scheduleRepository,
+        _backupRunningState = backupRunningState,
+        _metricsCollector = metricsCollector,
+        _executionRegistry = executionRegistry,
+        _stagingUsageBytesProvider = stagingUsageBytesProvider,
+        _clock = clock ?? DateTime.now;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;
   final IBackupRunningState _backupRunningState;
   final IMetricsCollector? _metricsCollector;
+
+  /// Quando injetado, permite expor `activeRunId`/`activeRunCount` no
+  /// payload de metricas — campos operacionais do M5.3/M7.1 do plano.
+  /// Optional para preservar compat com testes/wiring antigos.
+  final RemoteExecutionRegistry? _executionRegistry;
+
+  /// Provider assincrono que retorna o uso atual em bytes do diretorio
+  /// de staging. Quando ausente, o campo nao e publicado (null-safe).
+  /// Use `StagingUsageMeasurer.measure` (em
+  /// `lib/infrastructure/utils/staging_usage_measurer.dart`) como
+  /// implementacao padrao.
+  final Future<int> Function()? _stagingUsageBytesProvider;
+
+  /// Relogio injetavel para `serverTimeUtc`. Em producao usa
+  /// `DateTime.now`; testes podem cravar valor para validar wire format.
+  final DateTime Function() _clock;
 
   Future<void> handle(
     String clientId,
@@ -55,7 +77,7 @@ class MetricsMessageHandler {
   }
 
   Future<Map<String, dynamic>> _buildMetricsPayload() async {
-    final now = DateTime.now();
+    final now = _clock();
     final startOfDay = DateTime(now.year, now.month, now.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
@@ -104,6 +126,9 @@ class MetricsMessageHandler {
       'activeSchedules': activeSchedules,
       'recentBackups': recentBackups,
       'backupInProgress': _backupRunningState.isRunning,
+      // Sempre publicado: permite cliente detectar drift de relogio e
+      // calcular `serverTimeUtc - clientTimeUtc` para timeouts (M7.1).
+      'serverTimeUtc': now.toUtc().toIso8601String(),
     };
 
     final metricsSnapshot = _metricsCollector?.getSnapshot();
@@ -114,6 +139,32 @@ class MetricsMessageHandler {
         _backupRunningState.currentBackupName != null) {
       payload['backupScheduleName'] = _backupRunningState.currentBackupName;
     }
+
+    // Campos operacionais do registry remoto (M2.1 + M5.3). Quando ha
+    // execucao remota em curso, `activeRunId` carrega o identificador
+    // atual — cliente pode fazer `getExecutionStatus(runId)` para
+    // detalhes (PR-2). `activeRunCount` permite detectar discrepancia
+    // entre `backupInProgress` (estado local) e o registry (estado
+    // remoto), util em PR-3b com fila.
+    if (_executionRegistry != null) {
+      payload['activeRunCount'] = _executionRegistry.activeCount;
+      // Hoje so existe 0 ou 1 runId ativo; futuramente com fila pode
+      // virar lista. Mantemos o campo como string singleton para nao
+      // quebrar contrato — fila aparece em endpoint dedicado
+      // (`getExecutionQueue`, PR-3b).
+      if (_executionRegistry.activeCount == 1) {
+        payload['activeRunId'] = _executionRegistry.all.first.runId;
+      }
+    }
+
+    // Uso de disco do staging remoto (M5.3 + M7.1). Apenas publicado
+    // quando o provider e injetado para preservar compat com wiring
+    // antigo. Erros do measurer ja sao convertidos em 0/parcial pelo
+    // proprio helper, entao aqui nao ha try/catch extra necessario.
+    if (_stagingUsageBytesProvider != null) {
+      payload['stagingUsageBytes'] = await _stagingUsageBytesProvider();
+    }
+
     return payload;
   }
 

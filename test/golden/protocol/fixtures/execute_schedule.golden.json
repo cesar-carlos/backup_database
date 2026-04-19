@@ -1,0 +1,6 @@
+{
+  "type": "executeSchedule",
+  "payload": {
+    "scheduleId": "schedule-1"
+  }
+}

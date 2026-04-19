@@ -1,0 +1,10 @@
+{
+  "type": "backupProgress",
+  "payload": {
+    "scheduleId": "schedule-1",
+    "step": "Executando backup",
+    "message": "Executando backup do banco de dados...",
+    "progress": 0.5,
+    "runId": "schedule-1_fixed-uuid-aaa"
+  }
+}

@@ -1,7 +1,11 @@
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/protocol_versions.dart';
 
 const int _magicNumber = 0xFA000000;
-const int _protocolVersion = 0x01;
+// `MessageHeader` default usa a wire version corrente. Quando ADR
+// dedicado bumpar para v2, basta atualizar [kCurrentWireVersion] em
+// `protocol_versions.dart`.
+const int _protocolVersion = kCurrentWireVersion;
 
 class MessageHeader {
   MessageHeader({

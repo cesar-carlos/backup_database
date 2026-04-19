@@ -1,0 +1,6 @@
+{
+  "type": "authResponse",
+  "payload": {
+    "success": true
+  }
+}

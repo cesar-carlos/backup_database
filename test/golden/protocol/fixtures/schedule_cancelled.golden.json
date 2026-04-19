@@ -1,0 +1,7 @@
+{
+  "type": "scheduleCancelled",
+  "payload": {
+    "scheduleId": "schedule-1",
+    "message": "Backup cancelado pelo usuário"
+  }
+}

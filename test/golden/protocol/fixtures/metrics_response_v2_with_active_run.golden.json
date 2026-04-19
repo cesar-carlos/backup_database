@@ -1,0 +1,16 @@
+{
+  "type": "metricsResponse",
+  "payload": {
+    "totalBackups": 42,
+    "backupsToday": 3,
+    "failedToday": 0,
+    "activeSchedules": 5,
+    "recentBackups": [],
+    "backupInProgress": true,
+    "serverTimeUtc": "2026-04-19T15:30:00.000Z",
+    "backupScheduleName": "Backup Diario Producao",
+    "activeRunCount": 1,
+    "activeRunId": "schedule-prod-1_fixed-uuid-aaa",
+    "stagingUsageBytes": 524288000
+  }
+}

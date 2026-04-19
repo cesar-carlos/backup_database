@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "payload": {
+    "error": "Failure ao processar mensagem"
+  }
+}

@@ -4,8 +4,11 @@ import 'package:backup_database/core/di/service_locator.dart' as di;
 import 'package:backup_database/core/logging/socket_logger_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
+import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/protocol_versions.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
@@ -201,6 +204,267 @@ void main() {
       expect(mgr.isConnected, isTrue);
       expect(mgr.activeHost, '127.0.0.1');
       expect(mgr.activePort, port);
+    });
+  });
+
+  group('ConnectionManager capabilities cache (M4.1)', () {
+    test(
+      'serverCapabilities is null when auto-refresh disabled and no manual call',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+        // Desabilita auto-refresh para testar comportamento bruto do cache
+        await manager.connect(
+          host: '127.0.0.1',
+          port: port,
+          refreshCapabilitiesOnConnect: false,
+        );
+
+        expect(manager.serverCapabilities, isNull);
+      },
+    );
+
+    test(
+      'getServerCapabilities returns Success with current versions but does '
+      'NOT populate cache (use refreshServerCapabilities for that)',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+        // Desabilita auto-refresh para isolar comportamento do
+        // getServerCapabilities sem o lado-efeito do connect.
+        await manager.connect(
+          host: '127.0.0.1',
+          port: port,
+          refreshCapabilitiesOnConnect: false,
+        );
+
+        final result = await manager.getServerCapabilities();
+        final caps = result.getOrNull();
+        expect(caps, isNotNull);
+        expect(caps!.protocolVersion, kCurrentProtocolVersion);
+        expect(caps.wireVersion, kCurrentWireVersion);
+        expect(caps.supportsRunId, isTrue, reason: 'M2.3 ja entregue');
+
+        // Variante getServerCapabilities() nao toca no cache.
+        expect(manager.serverCapabilities, isNull);
+      },
+    );
+
+    test(
+      'refreshServerCapabilities populates cache and returns the snapshot',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+        await manager.connect(
+          host: '127.0.0.1',
+          port: port,
+          refreshCapabilitiesOnConnect: false,
+        );
+
+        // Pre-condicao: cache vazio porque auto-refresh esta desligado
+        expect(manager.serverCapabilities, isNull);
+
+        final result = await manager.refreshServerCapabilities();
+        final caps = result.getOrNull();
+        expect(caps, isNotNull);
+
+        // Cache populado e identico ao retorno
+        expect(manager.serverCapabilities, isNotNull);
+        expect(manager.serverCapabilities!.protocolVersion, caps!.protocolVersion);
+        expect(manager.serverCapabilities!.supportsRunId, caps.supportsRunId);
+        expect(manager.serverCapabilities!.supportsResume, caps.supportsResume);
+      },
+    );
+
+    test('disconnect invalidates capabilities cache', () async {
+      final port = getPort();
+      await server.start(port: port);
+      // Connect com auto-refresh ja popula o cache
+      await manager.connect(host: '127.0.0.1', port: port);
+      expect(manager.serverCapabilities, isNotNull);
+
+      await manager.disconnect();
+      expect(manager.serverCapabilities, isNull);
+    });
+
+    test(
+      'reconnecting with auto-refresh disabled keeps cache null until '
+      'refreshServerCapabilities is called',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+        await manager.connect(
+          host: '127.0.0.1',
+          port: port,
+          refreshCapabilitiesOnConnect: false,
+        );
+        await manager.refreshServerCapabilities();
+        final firstSnapshot = manager.serverCapabilities;
+        expect(firstSnapshot, isNotNull);
+
+        await manager.disconnect();
+        expect(manager.serverCapabilities, isNull);
+
+        await manager.connect(
+          host: '127.0.0.1',
+          port: port,
+          refreshCapabilitiesOnConnect: false,
+        );
+        // Auto-refresh desligado: cache esta vazio ate refresh explicito
+        expect(manager.serverCapabilities, isNull);
+
+        await manager.refreshServerCapabilities();
+        expect(manager.serverCapabilities, isNotNull);
+      },
+    );
+
+    test(
+      'refreshServerCapabilities never returns Failure even when call '
+      'errors out — uses legacyDefault as graceful fallback',
+      () async {
+        // Cliente nao conectado: getServerCapabilities() falha,
+        // refreshServerCapabilities() deve cair no fallback legacy.
+        expect(manager.isConnected, isFalse);
+
+        final result = await manager.refreshServerCapabilities();
+        // Sucesso garantido (fallback)
+        expect(result.isSuccess(), isTrue);
+        final caps = result.getOrNull()!;
+        expect(caps.protocolVersion, ServerCapabilities.legacyDefault.protocolVersion);
+        expect(caps.supportsRunId, ServerCapabilities.legacyDefault.supportsRunId);
+        expect(caps.supportsResume, ServerCapabilities.legacyDefault.supportsResume);
+        // Cache populado com legacyDefault
+        expect(manager.serverCapabilities, isNotNull);
+      },
+    );
+  });
+
+  group('ConnectionManager auto-refresh & feature getters (M4.1)', () {
+    test(
+      'connect populates serverCapabilities cache automatically by default',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+
+        // Antes do connect, cache esta vazio
+        expect(manager.serverCapabilities, isNull);
+
+        await manager.connect(host: '127.0.0.1', port: port);
+
+        // Apos connect, cache ja deve estar populado sem chamar
+        // refreshServerCapabilities() manualmente
+        expect(manager.serverCapabilities, isNotNull);
+        expect(
+          manager.serverCapabilities!.protocolVersion,
+          kCurrentProtocolVersion,
+        );
+      },
+    );
+
+    test(
+      'connect with refreshCapabilitiesOnConnect=false leaves cache empty',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+
+        await manager.connect(
+          host: '127.0.0.1',
+          port: port,
+          refreshCapabilitiesOnConnect: false,
+        );
+
+        expect(manager.isConnected, isTrue);
+        expect(manager.serverCapabilities, isNull);
+      },
+    );
+
+    test(
+      'feature getters fall back to legacyDefault when cache is null',
+      () {
+        // Cliente nunca conectado, cache vazio
+        expect(manager.serverCapabilities, isNull);
+
+        // Getters devem retornar valores de legacyDefault sem crash
+        expect(
+          manager.isRunIdSupported,
+          ServerCapabilities.legacyDefault.supportsRunId,
+        );
+        expect(
+          manager.isExecutionQueueSupported,
+          ServerCapabilities.legacyDefault.supportsExecutionQueue,
+        );
+        expect(
+          manager.isArtifactRetentionSupported,
+          ServerCapabilities.legacyDefault.supportsArtifactRetention,
+        );
+        expect(
+          manager.isChunkAckSupported,
+          ServerCapabilities.legacyDefault.supportsChunkAck,
+        );
+      },
+    );
+
+    test(
+      'feature getters reflect cached capabilities after connect',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+        await manager.connect(host: '127.0.0.1', port: port);
+
+        // Servidor atual: supportsRunId=true (M2.3), demais conforme
+        // CapabilitiesMessageHandler.
+        expect(manager.isRunIdSupported, isTrue);
+        expect(manager.isChunkAckSupported, isFalse, reason: 'ADR-002');
+        expect(manager.isExecutionQueueSupported, isFalse, reason: 'pendente PR-3b');
+        expect(manager.isArtifactRetentionSupported, isFalse, reason: 'pendente PR-4');
+      },
+    );
+
+    test(
+      'feature getters revertem para legacyDefault apos disconnect',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+        await manager.connect(host: '127.0.0.1', port: port);
+
+        // Sanity check: getters refletem servidor atual
+        expect(manager.isRunIdSupported, isTrue);
+
+        await manager.disconnect();
+
+        // Cache invalidado, getters caem no legacyDefault (supportsRunId=false)
+        expect(manager.serverCapabilities, isNull);
+        expect(
+          manager.isRunIdSupported,
+          ServerCapabilities.legacyDefault.supportsRunId,
+        );
+      },
+    );
+  });
+
+  group('ConnectionManager getServerHealth (M1.10)', () {
+    test('retorna ok com checks minimos quando servidor saudavel', () async {
+      final port = getPort();
+      await server.start(port: port);
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final result = await manager.getServerHealth();
+      final health = result.getOrNull();
+      expect(health, isNotNull);
+      expect(health!.status, ServerHealthStatus.ok);
+      expect(health.isOk, isTrue);
+      expect(health.isUnhealthy, isFalse);
+      // Servidor default reporta socket=true
+      expect(health.checks['socket'], isTrue);
+      // Uptime sempre >= 0
+      expect(health.uptimeSeconds, greaterThanOrEqualTo(0));
+    });
+
+    test('falha quando nao conectado', () async {
+      expect(manager.isConnected, isFalse);
+
+      final result = await manager.getServerHealth();
+      expect(result.isError(), isTrue);
     });
   });
 }

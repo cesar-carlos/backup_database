@@ -1,0 +1,7 @@
+{
+  "type": "error",
+  "payload": {
+    "error": "Caminho não permitido",
+    "errorCode": "PATH_NOT_ALLOWED"
+  }
+}
