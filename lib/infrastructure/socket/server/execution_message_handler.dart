@@ -198,7 +198,7 @@ class ExecutionMessageHandler {
           ErrorCode.backupAlreadyRunning,
         );
       }
-      final item = _queueService.tryEnqueue(
+      final item = await _queueService.tryEnqueue(
         scheduleId: scheduleId,
         clientId: clientId,
         requestId: requestId,
@@ -412,7 +412,7 @@ class ExecutionMessageHandler {
     if (_schedulerService.isExecutingBackup || _executionRegistry.hasAny) {
       return; // ainda ha backup ativo; nao drena
     }
-    final next = _queueService.dequeue();
+    final next = await _queueService.dequeue();
     if (next == null) return;
 
     LoggerService.infoWithContext(
@@ -457,7 +457,7 @@ class ExecutionMessageHandler {
         'queue drain: progress slot busy, re-enqueueing',
         scheduleId: next.scheduleId,
       );
-      _queueService.tryEnqueue(
+      await _queueService.tryEnqueue(
         scheduleId: next.scheduleId,
         clientId: next.clientId,
         requestId: next.requestId,
@@ -564,7 +564,7 @@ class ExecutionMessageHandler {
         .firstWhere((q) => q?.runId == runId, orElse: () => null);
     if (found != null) scheduleId = found.scheduleId;
 
-    final removed = _queueService.removeByRunId(runId);
+    final removed = await _queueService.removeByRunId(runId);
     if (!removed) {
       return createCancelQueuedBackupResponse(
         requestId: requestId,

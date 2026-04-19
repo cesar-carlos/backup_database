@@ -1,31 +1,13 @@
 import 'dart:collection';
 
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_persistence.dart';
+import 'package:backup_database/infrastructure/socket/server/queued_execution_item.dart';
 import 'package:uuid/uuid.dart';
 
-/// Item enfileirado no [ExecutionQueueService]. Mantem callbacks de
-/// envio para que, quando dequeueado, o backup continue podendo
-/// notificar o cliente original (mesmo apos clientes terem entrado/
-/// saido entre o enqueue e o dequeue).
-class QueuedExecutionItem {
-  QueuedExecutionItem({
-    required this.runId,
-    required this.scheduleId,
-    required this.clientId,
-    required this.requestId,
-    required this.requestedBy,
-    required this.queuedAt,
-  });
+export 'queued_execution_item.dart';
 
-  final String runId;
-  final String scheduleId;
-  final String clientId;
-  final int requestId;
-  final String requestedBy; // identificador legivel (ex.: clientId hash)
-  final DateTime queuedAt;
-}
-
-/// Servico de fila FIFO para execucoes remotas (PR-3a).
+/// Servico de fila FIFO para execucoes remotas (PR-3a / F2.16).
 ///
 /// Garante:
 /// - **maxConcurrentBackups = 1** via [hasActive] (consultado pelo
@@ -39,25 +21,48 @@ class QueuedExecutionItem {
 ///   duas vezes simultaneamente — defesa contra cliente buggy ou
 ///   scheduler local agendando varios disparos do mesmo schedule.
 /// - **runId estavel**: cada item recebe runId proprio assim que
-///   enfileirado, persistido em [QueuedExecutionItem.runId]. Cliente
-///   pode consultar status/cancel pelo runId mesmo enquanto na fila.
+///   enfileirado. Cliente pode consultar status/cancel pelo runId
+///   mesmo enquanto na fila.
 ///
-/// Persistencia entra em PR-3 commit 5 (in-memory por enquanto).
+/// Com persistencia configurada, chame `initialize` antes do primeiro
+/// uso (ex.: no bootstrap do socket server) para reidratar a fila
+/// apos reinicio do processo.
 class ExecutionQueueService {
   ExecutionQueueService({
     int maxQueueSize = 50,
     Uuid? uuid,
     DateTime Function()? clock,
+    ExecutionQueuePersistence? persistence,
   })  : _maxQueueSize = maxQueueSize,
         _uuid = uuid ?? const Uuid(),
-        _clock = clock ?? DateTime.now;
+        _clock = clock ?? DateTime.now,
+        _persistence = persistence;
 
   final int _maxQueueSize;
   final Uuid _uuid;
   final DateTime Function() _clock;
+  final ExecutionQueuePersistence? _persistence;
+
+  bool _initialized = false;
 
   final Queue<QueuedExecutionItem> _queue = Queue<QueuedExecutionItem>();
   final Set<String> _scheduleIdsInQueue = <String>{};
+
+  /// Reidrata a fila a partir do armazenamento (no-op se sem
+  /// persistencia ou ja inicializado).
+  Future<void> initialize() async {
+    final persistence = _persistence;
+    if (persistence == null || _initialized) return;
+    await persistence.trimToMaxSize(_maxQueueSize);
+    final items = await persistence.loadOrderedFifo();
+    _queue.clear();
+    _scheduleIdsInQueue.clear();
+    for (final item in items) {
+      _queue.addLast(item);
+      _scheduleIdsInQueue.add(item.scheduleId);
+    }
+    _initialized = true;
+  }
 
   /// Indica se ha backup em execucao agora. Setado externamente pelo
   /// handler que reserva o slot global via `progressNotifier.tryStartBackup`.
@@ -100,12 +105,12 @@ class ExecutionQueueService {
   ///
   /// O `runId` segue o formato `<scheduleId>_<uuid>` para correlacao
   /// com `RemoteExecutionRegistry` (mesma convencao).
-  QueuedExecutionItem? tryEnqueue({
+  Future<QueuedExecutionItem?> tryEnqueue({
     required String scheduleId,
     required String clientId,
     required int requestId,
     required String requestedBy,
-  }) {
+  }) async {
     if (isFull) return null;
     if (isScheduleQueued(scheduleId)) return null;
 
@@ -118,24 +123,54 @@ class ExecutionQueueService {
       requestedBy: requestedBy,
       queuedAt: _clock(),
     );
+
+    final persistence = _persistence;
+    if (persistence != null) {
+      final ok = await persistence.tryInsert(
+        item: item,
+        maxQueueSize: _maxQueueSize,
+      );
+      if (!ok) return null;
+    }
+
     _queue.addLast(item);
     _scheduleIdsInQueue.add(scheduleId);
     return item;
   }
 
   /// Remove e retorna o proximo item da fila (FIFO). `null` se vazia.
-  QueuedExecutionItem? dequeue() {
-    if (_queue.isEmpty) return null;
-    final it = _queue.removeFirst();
-    _scheduleIdsInQueue.remove(it.scheduleId);
-    return it;
+  Future<QueuedExecutionItem?> dequeue() async {
+    while (true) {
+      if (_queue.isEmpty) return null;
+      final head = _queue.first;
+
+      final persistence = _persistence;
+      if (persistence != null) {
+        final deleted = await persistence.deleteByRunId(head.runId);
+        if (deleted == 0) {
+          await _reloadFromPersistence();
+          continue;
+        }
+      }
+
+      _queue.removeFirst();
+      _scheduleIdsInQueue.remove(head.scheduleId);
+      return head;
+    }
   }
 
   /// Remove um item da fila por `runId`. Usado pelo
   /// `cancelQueuedBackup`. Retorna `true` se removido, `false` se
   /// nao encontrado.
-  bool removeByRunId(String runId) {
-    final beforeLen = _queue.length;
+  Future<bool> removeByRunId(String runId) async {
+    final exists = _queue.any((it) => it.runId == runId);
+    if (!exists) return false;
+
+    final persistence = _persistence;
+    if (persistence != null) {
+      await persistence.deleteByRunId(runId);
+    }
+
     _queue.removeWhere((it) {
       if (it.runId == runId) {
         _scheduleIdsInQueue.remove(it.scheduleId);
@@ -143,12 +178,28 @@ class ExecutionQueueService {
       }
       return false;
     });
-    return _queue.length < beforeLen;
+    return true;
   }
 
   /// Remove todos os itens (shutdown / testes).
-  void clear() {
+  Future<void> clear() async {
+    final persistence = _persistence;
+    if (persistence != null) {
+      await persistence.deleteAll();
+    }
     _queue.clear();
     _scheduleIdsInQueue.clear();
+  }
+
+  Future<void> _reloadFromPersistence() async {
+    final persistence = _persistence;
+    if (persistence == null) return;
+    final items = await persistence.loadOrderedFifo();
+    _queue.clear();
+    _scheduleIdsInQueue.clear();
+    for (final item in items) {
+      _queue.addLast(item);
+      _scheduleIdsInQueue.add(item.scheduleId);
+    }
   }
 }

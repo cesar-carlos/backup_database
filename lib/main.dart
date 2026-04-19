@@ -13,6 +13,7 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
@@ -318,6 +319,8 @@ Future<void> _startSocketServer() async {
   }
 
   try {
+    await service_locator.getIt<ExecutionQueueService>().initialize();
+
     final socketServer = service_locator.getIt<SocketServerService>();
 
     if (socketServer.isRunning) {

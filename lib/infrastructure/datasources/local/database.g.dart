@@ -8948,6 +8948,483 @@ class MachineSettingsTableCompanion
   }
 }
 
+class $ExecutionQueueItemsTableTable extends ExecutionQueueItemsTable
+    with
+        TableInfo<
+          $ExecutionQueueItemsTableTable,
+          ExecutionQueueItemsTableData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExecutionQueueItemsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _scheduleIdMeta = const VerificationMeta(
+    'scheduleId',
+  );
+  @override
+  late final GeneratedColumn<String> scheduleId = GeneratedColumn<String>(
+    'schedule_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestIdMeta = const VerificationMeta(
+    'requestId',
+  );
+  @override
+  late final GeneratedColumn<int> requestId = GeneratedColumn<int>(
+    'request_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestedByMeta = const VerificationMeta(
+    'requestedBy',
+  );
+  @override
+  late final GeneratedColumn<String> requestedBy = GeneratedColumn<String>(
+    'requested_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _queuedAtMicrosMeta = const VerificationMeta(
+    'queuedAtMicros',
+  );
+  @override
+  late final GeneratedColumn<int> queuedAtMicros = GeneratedColumn<int>(
+    'queued_at_micros',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    runId,
+    scheduleId,
+    clientId,
+    requestId,
+    requestedBy,
+    queuedAtMicros,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'execution_queue_items_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ExecutionQueueItemsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_runIdMeta);
+    }
+    if (data.containsKey('schedule_id')) {
+      context.handle(
+        _scheduleIdMeta,
+        scheduleId.isAcceptableOrUnknown(data['schedule_id']!, _scheduleIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scheduleIdMeta);
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clientIdMeta);
+    }
+    if (data.containsKey('request_id')) {
+      context.handle(
+        _requestIdMeta,
+        requestId.isAcceptableOrUnknown(data['request_id']!, _requestIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_requestIdMeta);
+    }
+    if (data.containsKey('requested_by')) {
+      context.handle(
+        _requestedByMeta,
+        requestedBy.isAcceptableOrUnknown(
+          data['requested_by']!,
+          _requestedByMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_requestedByMeta);
+    }
+    if (data.containsKey('queued_at_micros')) {
+      context.handle(
+        _queuedAtMicrosMeta,
+        queuedAtMicros.isAcceptableOrUnknown(
+          data['queued_at_micros']!,
+          _queuedAtMicrosMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_queuedAtMicrosMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ExecutionQueueItemsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ExecutionQueueItemsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      )!,
+      scheduleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}schedule_id'],
+      )!,
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      )!,
+      requestId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}request_id'],
+      )!,
+      requestedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}requested_by'],
+      )!,
+      queuedAtMicros: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}queued_at_micros'],
+      )!,
+    );
+  }
+
+  @override
+  $ExecutionQueueItemsTableTable createAlias(String alias) {
+    return $ExecutionQueueItemsTableTable(attachedDatabase, alias);
+  }
+}
+
+class ExecutionQueueItemsTableData extends DataClass
+    implements Insertable<ExecutionQueueItemsTableData> {
+  final int id;
+  final String runId;
+  final String scheduleId;
+  final String clientId;
+  final int requestId;
+  final String requestedBy;
+  final int queuedAtMicros;
+  const ExecutionQueueItemsTableData({
+    required this.id,
+    required this.runId,
+    required this.scheduleId,
+    required this.clientId,
+    required this.requestId,
+    required this.requestedBy,
+    required this.queuedAtMicros,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['run_id'] = Variable<String>(runId);
+    map['schedule_id'] = Variable<String>(scheduleId);
+    map['client_id'] = Variable<String>(clientId);
+    map['request_id'] = Variable<int>(requestId);
+    map['requested_by'] = Variable<String>(requestedBy);
+    map['queued_at_micros'] = Variable<int>(queuedAtMicros);
+    return map;
+  }
+
+  ExecutionQueueItemsTableCompanion toCompanion(bool nullToAbsent) {
+    return ExecutionQueueItemsTableCompanion(
+      id: Value(id),
+      runId: Value(runId),
+      scheduleId: Value(scheduleId),
+      clientId: Value(clientId),
+      requestId: Value(requestId),
+      requestedBy: Value(requestedBy),
+      queuedAtMicros: Value(queuedAtMicros),
+    );
+  }
+
+  factory ExecutionQueueItemsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ExecutionQueueItemsTableData(
+      id: serializer.fromJson<int>(json['id']),
+      runId: serializer.fromJson<String>(json['runId']),
+      scheduleId: serializer.fromJson<String>(json['scheduleId']),
+      clientId: serializer.fromJson<String>(json['clientId']),
+      requestId: serializer.fromJson<int>(json['requestId']),
+      requestedBy: serializer.fromJson<String>(json['requestedBy']),
+      queuedAtMicros: serializer.fromJson<int>(json['queuedAtMicros']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'runId': serializer.toJson<String>(runId),
+      'scheduleId': serializer.toJson<String>(scheduleId),
+      'clientId': serializer.toJson<String>(clientId),
+      'requestId': serializer.toJson<int>(requestId),
+      'requestedBy': serializer.toJson<String>(requestedBy),
+      'queuedAtMicros': serializer.toJson<int>(queuedAtMicros),
+    };
+  }
+
+  ExecutionQueueItemsTableData copyWith({
+    int? id,
+    String? runId,
+    String? scheduleId,
+    String? clientId,
+    int? requestId,
+    String? requestedBy,
+    int? queuedAtMicros,
+  }) => ExecutionQueueItemsTableData(
+    id: id ?? this.id,
+    runId: runId ?? this.runId,
+    scheduleId: scheduleId ?? this.scheduleId,
+    clientId: clientId ?? this.clientId,
+    requestId: requestId ?? this.requestId,
+    requestedBy: requestedBy ?? this.requestedBy,
+    queuedAtMicros: queuedAtMicros ?? this.queuedAtMicros,
+  );
+  ExecutionQueueItemsTableData copyWithCompanion(
+    ExecutionQueueItemsTableCompanion data,
+  ) {
+    return ExecutionQueueItemsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      runId: data.runId.present ? data.runId.value : this.runId,
+      scheduleId: data.scheduleId.present
+          ? data.scheduleId.value
+          : this.scheduleId,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      requestId: data.requestId.present ? data.requestId.value : this.requestId,
+      requestedBy: data.requestedBy.present
+          ? data.requestedBy.value
+          : this.requestedBy,
+      queuedAtMicros: data.queuedAtMicros.present
+          ? data.queuedAtMicros.value
+          : this.queuedAtMicros,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExecutionQueueItemsTableData(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('clientId: $clientId, ')
+          ..write('requestId: $requestId, ')
+          ..write('requestedBy: $requestedBy, ')
+          ..write('queuedAtMicros: $queuedAtMicros')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    runId,
+    scheduleId,
+    clientId,
+    requestId,
+    requestedBy,
+    queuedAtMicros,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExecutionQueueItemsTableData &&
+          other.id == this.id &&
+          other.runId == this.runId &&
+          other.scheduleId == this.scheduleId &&
+          other.clientId == this.clientId &&
+          other.requestId == this.requestId &&
+          other.requestedBy == this.requestedBy &&
+          other.queuedAtMicros == this.queuedAtMicros);
+}
+
+class ExecutionQueueItemsTableCompanion
+    extends UpdateCompanion<ExecutionQueueItemsTableData> {
+  final Value<int> id;
+  final Value<String> runId;
+  final Value<String> scheduleId;
+  final Value<String> clientId;
+  final Value<int> requestId;
+  final Value<String> requestedBy;
+  final Value<int> queuedAtMicros;
+  const ExecutionQueueItemsTableCompanion({
+    this.id = const Value.absent(),
+    this.runId = const Value.absent(),
+    this.scheduleId = const Value.absent(),
+    this.clientId = const Value.absent(),
+    this.requestId = const Value.absent(),
+    this.requestedBy = const Value.absent(),
+    this.queuedAtMicros = const Value.absent(),
+  });
+  ExecutionQueueItemsTableCompanion.insert({
+    this.id = const Value.absent(),
+    required String runId,
+    required String scheduleId,
+    required String clientId,
+    required int requestId,
+    required String requestedBy,
+    required int queuedAtMicros,
+  }) : runId = Value(runId),
+       scheduleId = Value(scheduleId),
+       clientId = Value(clientId),
+       requestId = Value(requestId),
+       requestedBy = Value(requestedBy),
+       queuedAtMicros = Value(queuedAtMicros);
+  static Insertable<ExecutionQueueItemsTableData> custom({
+    Expression<int>? id,
+    Expression<String>? runId,
+    Expression<String>? scheduleId,
+    Expression<String>? clientId,
+    Expression<int>? requestId,
+    Expression<String>? requestedBy,
+    Expression<int>? queuedAtMicros,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (runId != null) 'run_id': runId,
+      if (scheduleId != null) 'schedule_id': scheduleId,
+      if (clientId != null) 'client_id': clientId,
+      if (requestId != null) 'request_id': requestId,
+      if (requestedBy != null) 'requested_by': requestedBy,
+      if (queuedAtMicros != null) 'queued_at_micros': queuedAtMicros,
+    });
+  }
+
+  ExecutionQueueItemsTableCompanion copyWith({
+    Value<int>? id,
+    Value<String>? runId,
+    Value<String>? scheduleId,
+    Value<String>? clientId,
+    Value<int>? requestId,
+    Value<String>? requestedBy,
+    Value<int>? queuedAtMicros,
+  }) {
+    return ExecutionQueueItemsTableCompanion(
+      id: id ?? this.id,
+      runId: runId ?? this.runId,
+      scheduleId: scheduleId ?? this.scheduleId,
+      clientId: clientId ?? this.clientId,
+      requestId: requestId ?? this.requestId,
+      requestedBy: requestedBy ?? this.requestedBy,
+      queuedAtMicros: queuedAtMicros ?? this.queuedAtMicros,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (scheduleId.present) {
+      map['schedule_id'] = Variable<String>(scheduleId.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (requestId.present) {
+      map['request_id'] = Variable<int>(requestId.value);
+    }
+    if (requestedBy.present) {
+      map['requested_by'] = Variable<String>(requestedBy.value);
+    }
+    if (queuedAtMicros.present) {
+      map['queued_at_micros'] = Variable<int>(queuedAtMicros.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExecutionQueueItemsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('runId: $runId, ')
+          ..write('scheduleId: $scheduleId, ')
+          ..write('clientId: $clientId, ')
+          ..write('requestId: $requestId, ')
+          ..write('requestedBy: $requestedBy, ')
+          ..write('queuedAtMicros: $queuedAtMicros')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ServerCredentialsTableTable extends ServerCredentialsTable
     with TableInfo<$ServerCredentialsTableTable, ServerCredentialsTableData> {
   @override
@@ -11394,6 +11871,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LicensesTableTable licensesTable = $LicensesTableTable(this);
   late final $MachineSettingsTableTable machineSettingsTable =
       $MachineSettingsTableTable(this);
+  late final $ExecutionQueueItemsTableTable executionQueueItemsTable =
+      $ExecutionQueueItemsTableTable(this);
   late final $ServerCredentialsTableTable serverCredentialsTable =
       $ServerCredentialsTableTable(this);
   late final $ConnectionLogsTableTable connectionLogsTable =
@@ -11433,6 +11912,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final MachineSettingsDao machineSettingsDao = MachineSettingsDao(
     this as AppDatabase,
   );
+  late final ExecutionQueueDao executionQueueDao = ExecutionQueueDao(
+    this as AppDatabase,
+  );
   late final ServerCredentialDao serverCredentialDao = ServerCredentialDao(
     this as AppDatabase,
   );
@@ -11463,6 +11945,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     emailTestAuditTable,
     licensesTable,
     machineSettingsTable,
+    executionQueueItemsTable,
     serverCredentialsTable,
     connectionLogsTable,
     serverConnectionsTable,
@@ -16624,6 +17107,263 @@ typedef $$MachineSettingsTableTableProcessedTableManager =
       MachineSettingsTableData,
       PrefetchHooks Function()
     >;
+typedef $$ExecutionQueueItemsTableTableCreateCompanionBuilder =
+    ExecutionQueueItemsTableCompanion Function({
+      Value<int> id,
+      required String runId,
+      required String scheduleId,
+      required String clientId,
+      required int requestId,
+      required String requestedBy,
+      required int queuedAtMicros,
+    });
+typedef $$ExecutionQueueItemsTableTableUpdateCompanionBuilder =
+    ExecutionQueueItemsTableCompanion Function({
+      Value<int> id,
+      Value<String> runId,
+      Value<String> scheduleId,
+      Value<String> clientId,
+      Value<int> requestId,
+      Value<String> requestedBy,
+      Value<int> queuedAtMicros,
+    });
+
+class $$ExecutionQueueItemsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $ExecutionQueueItemsTableTable> {
+  $$ExecutionQueueItemsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scheduleId => $composableBuilder(
+    column: $table.scheduleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get requestId => $composableBuilder(
+    column: $table.requestId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get queuedAtMicros => $composableBuilder(
+    column: $table.queuedAtMicros,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ExecutionQueueItemsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $ExecutionQueueItemsTableTable> {
+  $$ExecutionQueueItemsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scheduleId => $composableBuilder(
+    column: $table.scheduleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get requestId => $composableBuilder(
+    column: $table.requestId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get queuedAtMicros => $composableBuilder(
+    column: $table.queuedAtMicros,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ExecutionQueueItemsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ExecutionQueueItemsTableTable> {
+  $$ExecutionQueueItemsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get runId =>
+      $composableBuilder(column: $table.runId, builder: (column) => column);
+
+  GeneratedColumn<String> get scheduleId => $composableBuilder(
+    column: $table.scheduleId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+
+  GeneratedColumn<int> get requestId =>
+      $composableBuilder(column: $table.requestId, builder: (column) => column);
+
+  GeneratedColumn<String> get requestedBy => $composableBuilder(
+    column: $table.requestedBy,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get queuedAtMicros => $composableBuilder(
+    column: $table.queuedAtMicros,
+    builder: (column) => column,
+  );
+}
+
+class $$ExecutionQueueItemsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ExecutionQueueItemsTableTable,
+          ExecutionQueueItemsTableData,
+          $$ExecutionQueueItemsTableTableFilterComposer,
+          $$ExecutionQueueItemsTableTableOrderingComposer,
+          $$ExecutionQueueItemsTableTableAnnotationComposer,
+          $$ExecutionQueueItemsTableTableCreateCompanionBuilder,
+          $$ExecutionQueueItemsTableTableUpdateCompanionBuilder,
+          (
+            ExecutionQueueItemsTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $ExecutionQueueItemsTableTable,
+              ExecutionQueueItemsTableData
+            >,
+          ),
+          ExecutionQueueItemsTableData,
+          PrefetchHooks Function()
+        > {
+  $$ExecutionQueueItemsTableTableTableManager(
+    _$AppDatabase db,
+    $ExecutionQueueItemsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExecutionQueueItemsTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ExecutionQueueItemsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ExecutionQueueItemsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> runId = const Value.absent(),
+                Value<String> scheduleId = const Value.absent(),
+                Value<String> clientId = const Value.absent(),
+                Value<int> requestId = const Value.absent(),
+                Value<String> requestedBy = const Value.absent(),
+                Value<int> queuedAtMicros = const Value.absent(),
+              }) => ExecutionQueueItemsTableCompanion(
+                id: id,
+                runId: runId,
+                scheduleId: scheduleId,
+                clientId: clientId,
+                requestId: requestId,
+                requestedBy: requestedBy,
+                queuedAtMicros: queuedAtMicros,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String runId,
+                required String scheduleId,
+                required String clientId,
+                required int requestId,
+                required String requestedBy,
+                required int queuedAtMicros,
+              }) => ExecutionQueueItemsTableCompanion.insert(
+                id: id,
+                runId: runId,
+                scheduleId: scheduleId,
+                clientId: clientId,
+                requestId: requestId,
+                requestedBy: requestedBy,
+                queuedAtMicros: queuedAtMicros,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ExecutionQueueItemsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ExecutionQueueItemsTableTable,
+      ExecutionQueueItemsTableData,
+      $$ExecutionQueueItemsTableTableFilterComposer,
+      $$ExecutionQueueItemsTableTableOrderingComposer,
+      $$ExecutionQueueItemsTableTableAnnotationComposer,
+      $$ExecutionQueueItemsTableTableCreateCompanionBuilder,
+      $$ExecutionQueueItemsTableTableUpdateCompanionBuilder,
+      (
+        ExecutionQueueItemsTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $ExecutionQueueItemsTableTable,
+          ExecutionQueueItemsTableData
+        >,
+      ),
+      ExecutionQueueItemsTableData,
+      PrefetchHooks Function()
+    >;
 typedef $$ServerCredentialsTableTableCreateCompanionBuilder =
     ServerCredentialsTableCompanion Function({
       required String id,
@@ -17899,6 +18639,11 @@ class $AppDatabaseManager {
       $$LicensesTableTableTableManager(_db, _db.licensesTable);
   $$MachineSettingsTableTableTableManager get machineSettingsTable =>
       $$MachineSettingsTableTableTableManager(_db, _db.machineSettingsTable);
+  $$ExecutionQueueItemsTableTableTableManager get executionQueueItemsTable =>
+      $$ExecutionQueueItemsTableTableTableManager(
+        _db,
+        _db.executionQueueItemsTable,
+      );
   $$ServerCredentialsTableTableTableManager get serverCredentialsTable =>
       $$ServerCredentialsTableTableTableManager(
         _db,

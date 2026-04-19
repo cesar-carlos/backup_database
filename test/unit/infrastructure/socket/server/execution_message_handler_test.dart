@@ -407,7 +407,7 @@ void main() {
       () async {
         when(() => schedulerService.isExecutingBackup).thenReturn(true);
         final queue = ExecutionQueueService();
-        queue.tryEnqueue(
+        await queue.tryEnqueue(
           scheduleId: scheduleId,
           clientId: 'other',
           requestId: 99,
@@ -442,7 +442,7 @@ void main() {
     test('queueIfBusy=true e fila cheia: rejeita com erro', () async {
       when(() => schedulerService.isExecutingBackup).thenReturn(true);
       final queue = ExecutionQueueService(maxQueueSize: 1);
-      queue.tryEnqueue(
+      await queue.tryEnqueue(
         scheduleId: 'other',
         clientId: 'other',
         requestId: 99,
@@ -473,12 +473,12 @@ void main() {
   group('cancelQueuedBackup (PR-3a)', () {
     test('cancela item da fila e responde state=cancelled', () async {
       final queue = ExecutionQueueService();
-      final item = queue.tryEnqueue(
+      final item = (await queue.tryEnqueue(
         scheduleId: 'sch-A',
         clientId: 'c1',
         requestId: 1,
         requestedBy: 'c1',
-      )!;
+      ))!;
       handler = ExecutionMessageHandler(
         scheduleRepository: scheduleRepository,
         destinationRepository: destinationRepository,
@@ -528,9 +528,9 @@ void main() {
 
     test('idempotencyKey: 2a chamada reusa cache', () async {
       final queue = ExecutionQueueService();
-      final item = queue.tryEnqueue(
+      final item = (await queue.tryEnqueue(
         scheduleId: 's', clientId: 'c1', requestId: 1, requestedBy: 'c1',
-      )!;
+      ))!;
       handler = ExecutionMessageHandler(
         scheduleRepository: scheduleRepository,
         destinationRepository: destinationRepository,
@@ -549,7 +549,7 @@ void main() {
       );
       await handler.handle('c1', req, sendToClient);
       // Re-enqueue para validar que 2a chamada NAO chama removeByRunId
-      queue.tryEnqueue(
+      await queue.tryEnqueue(
         scheduleId: 's', clientId: 'c1', requestId: 1, requestedBy: 'c1',
       );
       await handler.handle('c1', req, sendToClient);

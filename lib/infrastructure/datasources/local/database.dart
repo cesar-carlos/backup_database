@@ -26,6 +26,7 @@ part 'database.g.dart';
     EmailTestAuditTable,
     LicensesTable,
     MachineSettingsTable,
+    ExecutionQueueItemsTable,
     ServerCredentialsTable,
     ConnectionLogsTable,
     ServerConnectionsTable,
@@ -45,6 +46,7 @@ part 'database.g.dart';
     EmailTestAuditDao,
     LicenseDao,
     MachineSettingsDao,
+    ExecutionQueueDao,
     ServerCredentialDao,
     ConnectionLogDao,
     ServerConnectionDao,
@@ -61,7 +63,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 30;
 
   @override
   MigrationStrategy get migration {
@@ -939,6 +941,22 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v29 para machine_settings_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 30) {
+          try {
+            await m.createTable(executionQueueItemsTable);
+            LoggerService.info(
+              'Migração v30: execution_queue_items_table criada (fila '
+              'persistente F2.16).',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v30 para execution_queue_items_table',
               e,
               stackTrace,
             );

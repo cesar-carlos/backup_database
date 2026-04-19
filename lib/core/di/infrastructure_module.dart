@@ -11,9 +11,9 @@ import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/destination/destination_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/file_transfer_lock_service.dart';
+import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
-import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/database_config_message_handler.dart';
@@ -23,6 +23,7 @@ import 'package:backup_database/infrastructure/socket/server/diagnostics_message
 import 'package:backup_database/infrastructure/socket/server/diagnostics_provider.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_persistence.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
@@ -315,11 +316,15 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // sejam deduplicadas mesmo se chegarem em handlers diferentes.
   getIt.registerLazySingleton<IdempotencyRegistry>(IdempotencyRegistry.new);
 
-  // ExecutionQueueService compartilhado: ExecutionMessageHandler escreve
-  // (enqueue/drain), ExecutionQueueMessageHandler le (snapshot para
-  // getExecutionQueue). Em PR-3 commit 5 sera trocado por implementacao
-  // persistida.
-  getIt.registerLazySingleton<ExecutionQueueService>(ExecutionQueueService.new);
+  // ExecutionQueueService compartilhado: persistencia Drift (F2.16).
+  // Chame `initialize()` no bootstrap antes do socket server (main.dart).
+  getIt.registerLazySingleton<ExecutionQueueService>(
+    () => ExecutionQueueService(
+      persistence: DriftExecutionQueuePersistence(
+        getIt<AppDatabase>().executionQueueDao,
+      ),
+    ),
+  );
 
   // ExecutionMessageHandler com todas as dependencias reais.
   getIt.registerLazySingleton<ExecutionMessageHandler>(
