@@ -1,0 +1,12 @@
+{
+  "type": "startBackupResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 202,
+    "runId": "sch-1_uuid-123",
+    "state": "running",
+    "scheduleId": "sch-1",
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "message": "Backup iniciado em background"
+  }
+}

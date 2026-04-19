@@ -6,6 +6,7 @@ import 'package:backup_database/infrastructure/protocol/capabilities_messages.da
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
@@ -500,6 +501,60 @@ void main() {
           },
         );
         _assertGolden(msg, 'test_database_connection_response_success');
+      });
+
+      test('startBackupRequest com idempotencyKey', () {
+        final msg = createStartBackupRequest(
+          scheduleId: 'sch-1',
+          idempotencyKey: 'idem-abc',
+          requestId: 1,
+        );
+        _assertGolden(msg, 'start_backup_request');
+      });
+
+      test('startBackupResponse 202 accepted (running)', () {
+        final msg = createStartBackupResponse(
+          requestId: 1,
+          runId: 'sch-1_uuid-123',
+          state: ExecutionState.running,
+          scheduleId: 'sch-1',
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+          message: 'Backup iniciado em background',
+        );
+        _assertGolden(msg, 'start_backup_response_running');
+      });
+
+      test('cancelBackupRequest por runId', () {
+        final msg = createCancelBackupRequest(
+          runId: 'sch-1_uuid-123',
+          idempotencyKey: 'idem-cancel',
+          requestId: 2,
+        );
+        _assertGolden(msg, 'cancel_backup_request_by_runid');
+      });
+
+      test('cancelBackupResponse cancelled', () {
+        final msg = createCancelBackupResponse(
+          requestId: 2,
+          state: ExecutionState.cancelled,
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+          runId: 'sch-1_uuid-123',
+          scheduleId: 'sch-1',
+          message: 'Cancelamento sinalizado ao scheduler',
+        );
+        _assertGolden(msg, 'cancel_backup_response_cancelled');
+      });
+
+      test('cancelBackupResponse noActiveExecution', () {
+        final msg = createCancelBackupResponse(
+          requestId: 2,
+          state: ExecutionState.notFound,
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+          runId: 'sch-1_uuid-xxx',
+          message: 'Nenhuma execucao ativa com este runId',
+          errorCode: ErrorCode.noActiveExecution,
+        );
+        _assertGolden(msg, 'cancel_backup_response_no_active');
       });
 
       test('testDatabaseConnectionResponse falha de auth', () {

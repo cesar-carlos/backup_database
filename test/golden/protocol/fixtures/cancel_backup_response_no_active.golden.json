@@ -1,0 +1,12 @@
+{
+  "type": "cancelBackupResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 409,
+    "state": "notFound",
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "runId": "sch-1_uuid-xxx",
+    "message": "Nenhuma execucao ativa com este runId",
+    "errorCode": "NO_ACTIVE_EXECUTION"
+  }
+}

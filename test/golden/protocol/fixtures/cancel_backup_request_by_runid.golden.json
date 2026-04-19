@@ -1,0 +1,7 @@
+{
+  "type": "cancelBackupRequest",
+  "payload": {
+    "runId": "sch-1_uuid-123",
+    "idempotencyKey": "idem-cancel"
+  }
+}

@@ -49,4 +49,19 @@ enum MessageType {
   // `latencyMs`, mensagem de erro quando aplicavel.
   testDatabaseConnectionRequest,
   testDatabaseConnectionResponse,
+  // PR-2: startBackup nao-bloqueante (M2.2). Cliente envia
+  // `scheduleId` + `idempotencyKey?` e recebe IMEDIATAMENTE
+  // `startBackupResponse(runId, state)` — sem aguardar conclusao.
+  // Eventos `backupProgress/Complete/Failed` chegam separados via
+  // stream com o mesmo `runId`. Substitui `executeSchedule` no novo
+  // contrato; `executeSchedule` legacy continua existindo para
+  // compat com clientes v1.
+  startBackupRequest,
+  startBackupResponse,
+  // PR-2: cancelBackup. Cliente envia `runId` (ou `scheduleId`
+  // legado) e recebe `cancelBackupResponse(state, message?)`.
+  // Cancelamento e best-effort no servidor (delegado ao scheduler);
+  // estado final do backup ainda chega via `backupFailed`/`Complete`.
+  cancelBackupRequest,
+  cancelBackupResponse,
 }

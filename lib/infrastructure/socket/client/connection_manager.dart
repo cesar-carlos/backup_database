@@ -12,6 +12,7 @@ import 'package:backup_database/infrastructure/datasources/daos/server_connectio
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
@@ -1365,6 +1366,114 @@ class ConnectionManager {
       return rd.Failure(
         TimeoutException('testRemoteDatabaseConnection timeout'),
       );
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// `startBackup` nao-bloqueante (M2.2/PR-2). Cliente recebe IMEDIATAMENTE
+  /// `runId` + `state`, sem aguardar a conclusao do backup. Eventos
+  /// `backupProgress/Complete/Failed` chegam separados via stream com
+  /// o mesmo `runId`.
+  ///
+  /// `idempotencyKey` opcional protege contra retransmissao por
+  /// reconexao — mesma chave dentro do TTL retorna a mesma resposta
+  /// (sem disparar backup duplicado).
+  Future<rd.Result<StartBackupResult>> startRemoteBackup({
+    required String scheduleId,
+    String? idempotencyKey,
+  }) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(
+        createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: idempotencyKey,
+          requestId: requestId,
+        ),
+      );
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (message.header.type != MessageType.startBackupResponse) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para startBackup: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readStartBackupResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('startRemoteBackup timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// `cancelBackup` (PR-2). Cliente envia `runId` (preferido) OU
+  /// `scheduleId` (compat). Cancelamento e best-effort no servidor;
+  /// estado final ainda chega via `backupFailed`/`Complete` event.
+  Future<rd.Result<CancelBackupResult>> cancelRemoteBackup({
+    String? runId,
+    String? scheduleId,
+    String? idempotencyKey,
+  }) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final hasRun = runId != null && runId.isNotEmpty;
+    final hasSch = scheduleId != null && scheduleId.isNotEmpty;
+    if (hasRun == hasSch) {
+      return rd.Failure(
+        Exception('cancelRemoteBackup: informe APENAS um (runId XOR scheduleId)'),
+      );
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(
+        createCancelBackupRequest(
+          runId: runId,
+          scheduleId: scheduleId,
+          idempotencyKey: idempotencyKey,
+          requestId: requestId,
+        ),
+      );
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (message.header.type != MessageType.cancelBackupResponse) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para cancelBackup: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readCancelBackupResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('cancelRemoteBackup timeout'));
     } on Object catch (e) {
       _pendingRequests.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));

@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/socket/server/capabilities_messag
 import 'package:backup_database/infrastructure/socket/server/client_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/database_config_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
@@ -44,6 +45,7 @@ class TcpSocketServer implements SocketServerService {
     ExecutionStatusMessageHandler? executionStatusHandler,
     ExecutionQueueMessageHandler? executionQueueHandler,
     DatabaseConfigMessageHandler? databaseConfigHandler,
+    ExecutionMessageHandler? executionHandler,
     SocketLoggerService? socketLogger,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
@@ -67,6 +69,7 @@ class TcpSocketServer implements SocketServerService {
            executionQueueHandler ?? ExecutionQueueMessageHandler(),
        _databaseConfigHandler =
            databaseConfigHandler ?? DatabaseConfigMessageHandler(),
+       _executionHandler = executionHandler,
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
     // SessionMessageHandler precisa consultar handlers vivos para
     // reportar a sessao do cliente. Construido aqui (em vez de no
@@ -97,6 +100,10 @@ class TcpSocketServer implements SocketServerService {
   // (responde com erro indicando falta de wiring) ate o DI cabeçar
   // implementacao real que consulta os repositorios + servicos.
   final DatabaseConfigMessageHandler _databaseConfigHandler;
+  // PR-2 / M2.2: startBackup nao-bloqueante + cancelBackup. Optional —
+  // wiring depende de ScheduleRepository, SchedulerService etc., nem
+  // sempre disponivel em testes leves.
+  final ExecutionMessageHandler? _executionHandler;
   final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
@@ -199,6 +206,10 @@ class TcpSocketServer implements SocketServerService {
         // PR-2: testDatabaseConnection. Despacha por tipo de banco
         // via DatabaseConnectionProber injetado.
         _databaseConfigHandler.handle(clientId, msg, sendToClient);
+        // PR-2 / M2.2: startBackup nao-bloqueante + cancelBackup.
+        // Optional — quando nao cabeado, mensagens de start/cancel
+        // caem em timeout no cliente.
+        _executionHandler?.handle(clientId, msg, sendToClient);
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );

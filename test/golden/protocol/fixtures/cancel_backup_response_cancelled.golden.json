@@ -1,0 +1,12 @@
+{
+  "type": "cancelBackupResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 200,
+    "state": "cancelled",
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "runId": "sch-1_uuid-123",
+    "scheduleId": "sch-1",
+    "message": "Cancelamento sinalizado ao scheduler"
+  }
+}

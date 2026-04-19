@@ -1,0 +1,7 @@
+{
+  "type": "startBackupRequest",
+  "payload": {
+    "scheduleId": "sch-1",
+    "idempotencyKey": "idem-abc"
+  }
+}

@@ -1,0 +1,479 @@
+import 'dart:async';
+
+import 'package:backup_database/core/logging/log_context.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
+import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
+import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
+import 'package:backup_database/domain/services/i_license_policy_service.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
+import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
+import 'package:backup_database/infrastructure/protocol/error_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
+import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
+import 'package:backup_database/infrastructure/protocol/message.dart';
+import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+
+/// Handler para `startBackup` nao-bloqueante (M2.2/PR-2) e
+/// `cancelBackup` (PR-2).
+///
+/// Diferenca chave em relacao a `ScheduleMessageHandler.executeSchedule`:
+/// `startBackup` responde IMEDIATAMENTE com `runId` + `state`, sem
+/// aguardar a conclusao real do backup. O backup roda em background
+/// (`unawaited`) e os eventos `backupProgress/Complete/Failed` chegam
+/// separados via stream — cada um carregando o `runId` para
+/// correlacao no cliente.
+///
+/// `executeSchedule` legacy (bloqueante) continua existindo no
+/// `ScheduleMessageHandler` para compat com clientes v1; novos
+/// clientes devem usar `startBackup` quando o servidor anunciar
+/// suporte via `capabilities.supportsAsyncStart` (futura flag).
+class ExecutionMessageHandler {
+  ExecutionMessageHandler({
+    required IScheduleRepository scheduleRepository,
+    required IBackupDestinationRepository destinationRepository,
+    required ILicensePolicyService licensePolicyService,
+    required ISchedulerService schedulerService,
+    required ExecuteScheduledBackup executeBackup,
+    required IBackupProgressNotifier progressNotifier,
+    required RemoteExecutionRegistry executionRegistry,
+    IdempotencyRegistry? idempotencyRegistry,
+    DateTime Function()? clock,
+  })  : _scheduleRepository = scheduleRepository,
+        _destinationRepository = destinationRepository,
+        _licensePolicyService = licensePolicyService,
+        _schedulerService = schedulerService,
+        _executeBackup = executeBackup,
+        _progressNotifier = progressNotifier,
+        _executionRegistry = executionRegistry,
+        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
+        _clock = clock ?? DateTime.now;
+
+  final IScheduleRepository _scheduleRepository;
+  final IBackupDestinationRepository _destinationRepository;
+  final ILicensePolicyService _licensePolicyService;
+  final ISchedulerService _schedulerService;
+  final ExecuteScheduledBackup _executeBackup;
+  final IBackupProgressNotifier _progressNotifier;
+  final RemoteExecutionRegistry _executionRegistry;
+  final IdempotencyRegistry _idempotencyRegistry;
+  final DateTime Function() _clock;
+
+  Future<void> handle(
+    String clientId,
+    Message message,
+    SendToClient sendToClient,
+  ) async {
+    final type = message.header.type;
+    if (type != MessageType.startBackupRequest &&
+        type != MessageType.cancelBackupRequest) {
+      return;
+    }
+
+    if (type == MessageType.startBackupRequest) {
+      await _handleStart(clientId, message, sendToClient);
+    } else {
+      await _handleCancel(clientId, message, sendToClient);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // startBackup (nao-bloqueante)
+  // ---------------------------------------------------------------------
+  Future<void> _handleStart(
+    String clientId,
+    Message message,
+    SendToClient sendToClient,
+  ) async {
+    final requestId = message.header.requestId;
+    final payload = message.payload;
+    final scheduleId = payload['scheduleId'] is String
+        ? payload['scheduleId'] as String
+        : '';
+    if (scheduleId.isEmpty) {
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        '`scheduleId` ausente ou vazio',
+        ErrorCode.invalidRequest,
+        sendToClient,
+      );
+      return;
+    }
+
+    final idempotencyKey = getIdempotencyKey(message);
+
+    try {
+      final response = await _idempotencyRegistry.runIdempotent<Message>(
+        key: idempotencyKey,
+        compute: () =>
+            _doStart(clientId, requestId, scheduleId, sendToClient),
+      );
+      await sendToClient(clientId, response);
+    } on _StartFailure catch (f) {
+      // Falha de validacao -> error message (NAO cacheada pela
+      // idempotency registry conforme regra "fail-NO-cache").
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        f.message,
+        f.errorCode,
+        sendToClient,
+      );
+    }
+  }
+
+  /// Executa toda validacao + reserva runId + dispara backup async +
+  /// retorna a `startBackupResponse` que sera entregue ao cliente.
+  /// Quando algo falha, lanca [_StartFailure] (capturado pelo caller
+  /// para emitir error response — assim o registry de idempotencia
+  /// nao cacheia a falha).
+  Future<Message> _doStart(
+    String clientId,
+    int requestId,
+    String scheduleId,
+    SendToClient sendToClient,
+  ) async {
+    LoggerService.infoWithContext(
+      'startBackup requested',
+      clientId: clientId,
+      requestId: requestId.toString(),
+      scheduleId: scheduleId,
+    );
+
+    if (_schedulerService.isExecutingBackup ||
+        _executionRegistry.hasActiveForSchedule(scheduleId)) {
+      throw const _StartFailure(
+        'Ja existe um backup em execucao no servidor',
+        ErrorCode.backupAlreadyRunning,
+      );
+    }
+
+    final scheduleResult = await _scheduleRepository.getById(scheduleId);
+    final schedule = scheduleResult.getOrNull();
+    if (scheduleResult.isError() || schedule == null) {
+      throw const _StartFailure(
+        'Agendamento nao encontrado',
+        ErrorCode.scheduleNotFound,
+      );
+    }
+
+    // Pre-checagens caras (license, destinations) ANTES de reservar
+    // runId/slot — senao um runId fica orfao em caso de license fail.
+    final destinationsResult =
+        await _destinationRepository.getByIds(schedule.destinationIds);
+    if (destinationsResult.isError()) {
+      throw const _StartFailure(
+        'Falha ao carregar destinos para validacao',
+        ErrorCode.unknown,
+      );
+    }
+    final destinations = destinationsResult.getOrNull()!;
+    final policyResult = await _licensePolicyService
+        .validateExecutionCapabilities(schedule, destinations);
+    if (policyResult.isError()) {
+      throw const _StartFailure(
+        'Licenca nao permite execucao deste agendamento',
+        ErrorCode.licenseDenied,
+      );
+    }
+
+    // Reserva slot global de progresso. Se ja estiver ocupado por
+    // outro fluxo (executeSchedule legacy disparado em paralelo),
+    // rejeita com 409.
+    if (!_progressNotifier.tryStartBackup(schedule.name)) {
+      throw const _StartFailure(
+        'Slot de progresso ja em uso',
+        ErrorCode.backupAlreadyRunning,
+      );
+    }
+
+    final runId = _executionRegistry.generateRunId(scheduleId);
+    _executionRegistry.register(
+      runId: runId,
+      scheduleId: scheduleId,
+      clientId: clientId,
+      requestId: requestId,
+      sendToClient: sendToClient,
+    );
+
+    LogContext.setContext(runId: runId, scheduleId: scheduleId);
+
+    // Dispara o backup em background. O Future NAO e awaited aqui —
+    // por isso `startBackup` retorna IMEDIATAMENTE. O backup
+    // continua rodando; eventos chegam via progressNotifier->stream.
+    unawaited(_runBackupAsync(
+      clientId: clientId,
+      requestId: requestId,
+      scheduleId: scheduleId,
+      runId: runId,
+      scheduleName: schedule.name,
+      sendToClient: sendToClient,
+    ));
+
+    return createStartBackupResponse(
+      requestId: requestId,
+      runId: runId,
+      state: ExecutionState.running,
+      scheduleId: scheduleId,
+      serverTimeUtc: _clock(),
+      message: 'Backup iniciado em background',
+    );
+  }
+
+  /// Executa o backup em background. Captura erros e emite
+  /// `backupFailed`/`backupComplete` com `runId`. NUNCA propaga
+  /// exception (rodando em fire-and-forget — qualquer erro nao-tratado
+  /// viraria uncaught zone error).
+  Future<void> _runBackupAsync({
+    required String clientId,
+    required int requestId,
+    required String scheduleId,
+    required String runId,
+    required String scheduleName,
+    required SendToClient sendToClient,
+  }) async {
+    try {
+      _progressNotifier.setCurrentBackupName(scheduleName);
+      _progressNotifier.updateProgress(
+        step: 'Iniciando',
+        message: 'Iniciando backup: $scheduleName',
+        progress: 0,
+      );
+
+      final result = await _executeBackup(scheduleId);
+
+      if (result.isError()) {
+        final failure = result.exceptionOrNull();
+        final errorMessage = failure?.toString() ?? 'Falha desconhecida';
+        LoggerService.warningWithContext(
+          'startBackup async: backup failed',
+          clientId: clientId,
+          requestId: requestId.toString(),
+          scheduleId: scheduleId,
+          error: failure,
+        );
+        await sendToClient(
+          clientId,
+          createBackupFailedMessage(
+            requestId: requestId,
+            scheduleId: scheduleId,
+            error: errorMessage,
+            runId: runId,
+          ),
+        );
+        _progressNotifier.failBackup(errorMessage);
+        return;
+      }
+
+      LoggerService.infoWithContext(
+        'startBackup async: backup completed',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        scheduleId: scheduleId,
+      );
+
+      // backupComplete e enviado pelo SchedulerService via
+      // progressNotifier; aqui apenas garantimos o cleanup do
+      // registry. unregister e idempotente.
+    } on Object catch (e, st) {
+      LoggerService.warningWithContext(
+        'startBackup async: unexpected error',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        scheduleId: scheduleId,
+        error: e,
+        stackTrace: st,
+      );
+      try {
+        await sendToClient(
+          clientId,
+          createBackupFailedMessage(
+            requestId: requestId,
+            scheduleId: scheduleId,
+            error: e.toString(),
+            runId: runId,
+          ),
+        );
+        _progressNotifier.failBackup(e.toString());
+      } on Object {
+        // ignore: client may have disconnected
+      }
+    } finally {
+      _executionRegistry.unregister(runId);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // cancelBackup
+  // ---------------------------------------------------------------------
+  Future<void> _handleCancel(
+    String clientId,
+    Message message,
+    SendToClient sendToClient,
+  ) async {
+    final requestId = message.header.requestId;
+    final payload = message.payload;
+    final runIdRaw = payload['runId'] is String
+        ? payload['runId'] as String
+        : null;
+    final scheduleIdRaw = payload['scheduleId'] is String
+        ? payload['scheduleId'] as String
+        : null;
+    final hasRun = runIdRaw != null && runIdRaw.isNotEmpty;
+    final hasSch = scheduleIdRaw != null && scheduleIdRaw.isNotEmpty;
+    if (hasRun == hasSch) {
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        'Informe APENAS um de `runId` ou `scheduleId`',
+        ErrorCode.invalidRequest,
+        sendToClient,
+      );
+      return;
+    }
+
+    final idempotencyKey = getIdempotencyKey(message);
+
+    try {
+      final response = await _idempotencyRegistry.runIdempotent<Message>(
+        key: idempotencyKey,
+        compute: () => _doCancel(
+          clientId,
+          requestId,
+          runIdRaw,
+          scheduleIdRaw,
+          sendToClient,
+        ),
+      );
+      await sendToClient(clientId, response);
+    } on _StartFailure catch (f) {
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        f.message,
+        f.errorCode,
+        sendToClient,
+      );
+    }
+  }
+
+  Future<Message> _doCancel(
+    String clientId,
+    int requestId,
+    String? runIdRaw,
+    String? scheduleIdRaw,
+    SendToClient sendToClient,
+  ) async {
+    var scheduleId = scheduleIdRaw;
+    final runId = runIdRaw;
+
+    // Resolve scheduleId quando cliente passou apenas runId.
+    if (runId != null && scheduleId == null) {
+      final ctx = _executionRegistry.getByRunId(runId);
+      if (ctx == null) {
+        return createCancelBackupResponse(
+          requestId: requestId,
+          state: ExecutionState.notFound,
+          serverTimeUtc: _clock(),
+          runId: runId,
+          message: 'Nenhuma execucao ativa com este runId',
+          errorCode: ErrorCode.noActiveExecution,
+        );
+      }
+      scheduleId = ctx.scheduleId;
+    }
+
+    if (scheduleId == null) {
+      // Defesa: deveria ter sido pego acima
+      throw const _StartFailure(
+        'scheduleId nao pode ser resolvido',
+        ErrorCode.invalidRequest,
+      );
+    }
+
+    // Verifica se ha execucao ativa para o schedule
+    final ctx = _executionRegistry.getActiveByScheduleId(scheduleId);
+    if (ctx == null) {
+      return createCancelBackupResponse(
+        requestId: requestId,
+        state: ExecutionState.notFound,
+        serverTimeUtc: _clock(),
+        scheduleId: scheduleId,
+        message: 'Nenhuma execucao ativa para este agendamento',
+        errorCode: ErrorCode.noActiveExecution,
+      );
+    }
+
+    LoggerService.infoWithContext(
+      'cancelBackup requested',
+      clientId: clientId,
+      requestId: requestId.toString(),
+      scheduleId: scheduleId,
+    );
+
+    final result = await _schedulerService.cancelExecution(scheduleId);
+    if (result.isError()) {
+      final err = result.exceptionOrNull();
+      LoggerService.warningWithContext(
+        'cancelBackup failed',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        scheduleId: scheduleId,
+        error: err,
+      );
+      return createCancelBackupResponse(
+        requestId: requestId,
+        state: ExecutionState.failed,
+        serverTimeUtc: _clock(),
+        runId: ctx.runId,
+        scheduleId: scheduleId,
+        message: 'Falha ao cancelar: ${err ?? "desconhecido"}',
+        errorCode: ErrorCode.unknown,
+      );
+    }
+
+    return createCancelBackupResponse(
+      requestId: requestId,
+      state: ExecutionState.cancelled,
+      serverTimeUtc: _clock(),
+      runId: ctx.runId,
+      scheduleId: scheduleId,
+      message: 'Cancelamento sinalizado ao scheduler',
+    );
+  }
+
+  Future<void> _sendErrorMsg(
+    String clientId,
+    int requestId,
+    String message,
+    ErrorCode errorCode,
+    SendToClient sendToClient,
+  ) async {
+    await sendToClient(
+      clientId,
+      createErrorMessage(
+        requestId: requestId,
+        errorMessage: message,
+        errorCode: errorCode,
+      ),
+    );
+  }
+}
+
+/// Excecao interna usada para sair cedo do `compute` do
+/// IdempotencyRegistry sinalizando falha NAO-cacheavel — o registry
+/// limpa o entry quando o compute joga, e o handler externo emite
+/// `error message` (nao a response cacheavel).
+class _StartFailure implements Exception {
+  const _StartFailure(this.message, this.errorCode);
+  final String message;
+  final ErrorCode errorCode;
+
+  @override
+  String toString() => 'StartFailure(${errorCode.code}): $message';
+}

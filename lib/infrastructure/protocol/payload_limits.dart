@@ -102,6 +102,14 @@ class PayloadLimits {
     // Response e snapshot pequeno (connected, latencyMs, error).
     MessageType.testDatabaseConnectionRequest: 16 * 1024,
     MessageType.testDatabaseConnectionResponse: 8 * 1024,
+
+    // ---- Execution (start/cancel backup nao-bloqueante, PR-2) ----
+    // Request carrega scheduleId + idempotencyKey opcional (~100 bytes).
+    // Response carrega runId + state + scheduleId + queuePosition? + msg.
+    MessageType.startBackupRequest: 4 * 1024,
+    MessageType.startBackupResponse: 4 * 1024,
+    MessageType.cancelBackupRequest: 4 * 1024,
+    MessageType.cancelBackupResponse: 4 * 1024,
   };
 
   /// Retorna o limite maximo de payload (em bytes) para o tipo de
