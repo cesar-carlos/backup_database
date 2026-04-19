@@ -34,4 +34,6 @@ enum MessageType {
   capabilitiesResponse,
   healthRequest,
   healthResponse,
+  sessionRequest,
+  sessionResponse,
 }

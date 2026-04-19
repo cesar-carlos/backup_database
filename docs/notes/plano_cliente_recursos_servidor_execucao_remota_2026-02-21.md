@@ -38,6 +38,7 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 - (2026-04-19) M5.3 + M7.1 parciais: `MetricsMessageHandler` enriquecido com `serverTimeUtc` (sempre), `activeRunCount`/`activeRunId` (do `RemoteExecutionRegistry` agora compartilhado via DI entre schedule e metrics handlers) e `stagingUsageBytes` (via novo `StagingUsageMeasurer` que percorre o staging defensivamente). Cliente pode detectar drift de relogio, saber qual `runId` esta ativo sem polling extra, e montar dashboard de uso de disco. 14 testes novos (8 handler + 6 measurer). 180 testes na suite, 0 issue.
 - (2026-04-19) M6.1 expandido: 2 fixtures golden novas para o `metricsResponse` enriquecido — `metrics_response_v2_idle.golden.json` (servidor sem execucao ativa) e `metrics_response_v2_with_active_run.golden.json` (1 backup rodando + staging com ~500MB). Trava o contrato dos campos novos (`serverTimeUtc`, `activeRunCount`, `activeRunId`, `stagingUsageBytes`) contra mudancas acidentais. Suite golden cresce de 19 para 21 fixtures. 182 testes na suite total, 0 issue.
 - (2026-04-19) M1.10 (`getServerHealth`) entregue: novos `MessageType.healthRequest/Response`; `lib/infrastructure/protocol/health_messages.dart` com factories + `ServerHealthStatus` enum (ok/degraded/unhealthy) + `ServerHealth` snapshot tipado (defensivo: status invalido vira `unhealthy` fail-closed); `HealthMessageHandler` com checks injetaveis (required + optional) + politica de agregacao + tolerancia a checks que lancam excecao; `ConnectionManager.getServerHealth()` retorna `Result<ServerHealth>`; entradas em `PayloadLimits` (1KB/16KB); 3 fixtures golden novas. Cobertura: 8 protocolo + 8 handler + 2 e2e + 3 golden = 21 testes novos. 203 testes na suite, 0 issue. Cliente pode bloquear disparo de backup quando `isUnhealthy` ou alertar operador quando `degraded` — fechando outro gate explicito do PR-1.
+- (2026-04-19) M1.10 (`getSession`/`whoAmI`) entregue: completa o trio do handshake do PR-1 (capabilities + health + session). Novos `MessageType.sessionRequest/Response`; `lib/infrastructure/protocol/session_messages.dart` com factories + `ServerSession` snapshot tipado (clientId, isAuthenticated, host:port, connectedAt, serverTimeUtc, serverId opcional); `ClientHandler` agora persiste `authenticatedServerId` apos auth bem-sucedida (campo publico para lookup); `SessionMessageHandler` com `SessionInfoLookup` injetavel (zero acoplamento com `_handlers`/`_clientManager`); `TcpSocketServer._lookupSessionInfo` consulta handlers vivos e retorna `null` em race condition; `ClientManager.getConnectedAt()` exposto; `ConnectionManager.getServerSession()` retorna `Result<ServerSession>`; entradas em `PayloadLimits` (1KB/8KB); 3 fixtures golden (request, response autenticado, response sem auth). Cobertura: 6 protocolo + 5 handler + 2 e2e + 3 golden = 16 testes novos. 219 testes na suite, 0 issue. Cliente pode confirmar identidade percebida pelo servidor, correlacionar com logs de suporte e detectar mudanca de identidade apos reconexao.
 
 ### Lacunas identificadas (bloqueiam P0)
 
@@ -53,7 +54,7 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 - Sem regra formal de concorrencia: existe apenas o set in-memory `_executingSchedules`, sem mutex global persistido nem `errorCode` padronizado
 - Sem regra formal de fila para disparos agendados quando ha backup em execucao
 - Sem endpoint formal para health do servidor (`getServerHealth`)
-- Sem endpoint formal para sessao atual (`getSession` / `whoAmI`)
+- ~~Sem endpoint formal para sessao atual (`getSession` / `whoAmI`)~~ — entregue em 2026-04-19 (ver Avancos confirmados)
 - Sem endpoint para cancelar item enfileirado (`cancelQueuedBackup`)
 - Sem endpoint para metadados do artefato (`getArtifactMetadata`)
 - Sem endpoint de diagnostico por execucao (`getRunLogs`, `getRunErrorDetails`)
@@ -423,9 +424,9 @@ Data de verificacao: 2026-04-19
 
 ### Recursos ainda nao disponiveis para consumo do cliente
 
-- [ ] `getServerHealth` (endpoint dedicado)
-- [ ] `getSession` / `whoAmI`
-- [ ] `capabilitiesRequest` / `capabilitiesResponse`
+- [x] `getServerHealth` (endpoint dedicado) _(entregue em 2026-04-19)_
+- [x] `getSession` / `whoAmI` _(entregue em 2026-04-19)_
+- [x] `capabilitiesRequest` / `capabilitiesResponse` _(entregue em 2026-04-19)_
 - [ ] `validateServerBackupPrerequisites`
 - [ ] CRUD remoto completo de configuracao de banco (`createDatabaseConfig`, `deleteDatabaseConfig`, etc.)
 - [ ] `testDatabaseConnection` remoto

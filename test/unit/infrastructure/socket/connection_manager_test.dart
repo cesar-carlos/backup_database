@@ -467,4 +467,32 @@ void main() {
       expect(result.isError(), isTrue);
     });
   });
+
+  group('ConnectionManager getServerSession (M1.10)', () {
+    test('retorna sessao com clientId atribuido pelo servidor', () async {
+      final port = getPort();
+      await server.start(port: port);
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final result = await manager.getServerSession();
+      final session = result.getOrNull();
+      expect(session, isNotNull);
+      // Sem auth no test, isAuthenticated=true porque
+      // ClientHandler.start() seta como true quando _authentication==null
+      expect(session!.isAuthenticated, isTrue);
+      // Servidor atribui UUID v4 — confere que e nao-vazio
+      expect(session.clientId, isNotEmpty);
+      expect(session.host, '127.0.0.1');
+      expect(session.port, greaterThan(0));
+      // serverId nao foi declarado (sem auth) -> null
+      expect(session.serverId, isNull);
+    });
+
+    test('falha quando nao conectado', () async {
+      expect(manager.isConnected, isFalse);
+
+      final result = await manager.getServerSession();
+      expect(result.isError(), isTrue);
+    });
+  });
 }

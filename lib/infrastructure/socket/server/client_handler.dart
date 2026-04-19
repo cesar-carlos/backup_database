@@ -57,6 +57,12 @@ class ClientHandler {
   final List<int> _buffer = [];
   bool isAuthenticated = false;
   String clientName = '';
+
+  /// `serverId` declarado pelo cliente no `authRequest` (preservado
+  /// apos auth bem-sucedida). Usado por `SessionMessageHandler` para
+  /// reportar a sessao corrente. `null` quando handler opera sem
+  /// autenticacao ou antes do auth completar.
+  String? authenticatedServerId;
   DateTime _lastHeartbeat = DateTime.now();
   HeartbeatManager? _heartbeatManager;
   StreamSubscription<List<int>>? _socketSubscription;
@@ -212,6 +218,12 @@ class ClientHandler {
                 final valid = validationResult.isValid;
                 isAuthenticated = valid;
                 final serverId = message.payload['serverId'] as String?;
+                if (valid && serverId != null && serverId.isNotEmpty) {
+                  // Persiste para que SessionMessageHandler possa
+                  // reportar a sessao corrente sem depender do payload
+                  // original do auth.
+                  authenticatedServerId = serverId;
+                }
                 try {
                   await _connectionLogDao?.insertConnectionAttempt(
                     clientHost: _remoteAddress,

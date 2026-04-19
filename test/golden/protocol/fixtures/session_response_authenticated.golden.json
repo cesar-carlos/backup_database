@@ -1,0 +1,12 @@
+{
+  "type": "sessionResponse",
+  "payload": {
+    "clientId": "client-uuid-123",
+    "isAuthenticated": true,
+    "host": "192.168.1.10",
+    "port": 51234,
+    "connectedAt": "2026-04-19T10:00:00.000Z",
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "serverId": "server-A"
+  }
+}

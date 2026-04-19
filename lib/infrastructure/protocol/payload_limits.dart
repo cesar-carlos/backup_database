@@ -41,6 +41,10 @@ class PayloadLimits {
     MessageType.healthRequest: 1 * 1024,
     MessageType.healthResponse: 16 * 1024, // suporta lista de checks com mensagens
 
+    // ---- Session (M1.10 / PR-1) ----
+    MessageType.sessionRequest: 1 * 1024,
+    MessageType.sessionResponse: 8 * 1024,
+
     // ---- Schedule commands ----
     // Lista pode ser grande se tiver muitos schedules; update/scheduleUpdated
     // carregam um schedule completo com config JSON.

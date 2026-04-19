@@ -17,6 +17,7 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:backup_database/infrastructure/socket/client/file_transfer_resume_metadata_store.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:backup_database/infrastructure/socket/client/tcp_socket_client.dart';
@@ -1102,6 +1103,47 @@ class ConnectionManager {
     } on TimeoutException {
       _pendingRequests.remove(requestId);
       return rd.Failure(TimeoutException('getServerHealth timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// Solicita a sessao corrente do cliente do ponto de vista do
+  /// servidor (M1.10 / PR-1).
+  ///
+  /// Retorna `ServerSession` com `clientId` (atribuido pelo servidor),
+  /// `serverId` (declarado no auth), `isAuthenticated`, peer address
+  /// e timestamps. Util para confirmar identidade, correlacionar com
+  /// logs de suporte e detectar mudanca de identidade apos reconexao.
+  Future<rd.Result<ServerSession>> getServerSession() async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(createSessionRequestMessage(requestId: requestId));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (!isSessionResponseMessage(message)) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para session: ${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readSessionFromResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('getServerSession timeout'));
     } on Object catch (e) {
       _pendingRequests.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));

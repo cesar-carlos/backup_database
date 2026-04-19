@@ -9,6 +9,7 @@ import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Golden tests do envelope JSON do protocolo socket (M6.1).
@@ -263,6 +264,40 @@ void main() {
           message: 'staging optional check failed',
         );
         _assertGolden(msg, 'health_response_degraded');
+      });
+    });
+
+    group('session (M1.10)', () {
+      test('sessionRequest tem payload vazio', () {
+        final msg = createSessionRequestMessage();
+        _assertGolden(msg, 'session_request');
+      });
+
+      test('sessionResponse com cliente autenticado e serverId', () {
+        final msg = createSessionResponseMessage(
+          requestId: 1,
+          clientId: 'client-uuid-123',
+          isAuthenticated: true,
+          host: '192.168.1.10',
+          port: 51234,
+          connectedAt: DateTime.utc(2026, 4, 19, 10),
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+          serverId: 'server-A',
+        );
+        _assertGolden(msg, 'session_response_authenticated');
+      });
+
+      test('sessionResponse com cliente nao autenticado (sem serverId)', () {
+        final msg = createSessionResponseMessage(
+          requestId: 1,
+          clientId: 'client-uuid-456',
+          isAuthenticated: false,
+          host: '127.0.0.1',
+          port: 51235,
+          connectedAt: DateTime.utc(2026, 4, 19, 10),
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+        );
+        _assertGolden(msg, 'session_response_unauthenticated');
       });
     });
 

@@ -20,6 +20,7 @@ import 'package:backup_database/infrastructure/socket/server/health_message_hand
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
+import 'package:backup_database/infrastructure/socket/server/session_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 
 class TcpSocketServer implements SocketServerService {
@@ -34,6 +35,7 @@ class TcpSocketServer implements SocketServerService {
     MetricsMessageHandler? metricsHandler,
     CapabilitiesMessageHandler? capabilitiesHandler,
     HealthMessageHandler? healthHandler,
+    SessionMessageHandler? sessionHandler,
     SocketLoggerService? socketLogger,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
@@ -51,7 +53,13 @@ class TcpSocketServer implements SocketServerService {
        _capabilitiesHandler =
            capabilitiesHandler ?? CapabilitiesMessageHandler(),
        _healthHandler = healthHandler ?? HealthMessageHandler(),
-       _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>();
+       _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
+    // SessionMessageHandler precisa consultar handlers vivos para
+    // reportar a sessao do cliente. Construido aqui (em vez de no
+    // initializer list) porque depende de `this` para o lookup.
+    _sessionHandler = sessionHandler ??
+        SessionMessageHandler(sessionLookup: _lookupSessionInfo);
+  }
 
   final BinaryProtocol _protocol;
   final ServerAuthentication? _authentication;
@@ -62,6 +70,7 @@ class TcpSocketServer implements SocketServerService {
   final MetricsMessageHandler? _metricsHandler;
   final CapabilitiesMessageHandler _capabilitiesHandler;
   final HealthMessageHandler _healthHandler;
+  late final SessionMessageHandler _sessionHandler;
   final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
@@ -146,6 +155,9 @@ class TcpSocketServer implements SocketServerService {
         // operar. Sempre disponivel (sem deps externas hard) — checks
         // adicionais sao injetados no construtor (M1.10 / PR-1).
         _healthHandler.handle(clientId, msg, sendToClient);
+        // Session: cliente pode confirmar identidade percebida pelo
+        // servidor. Lookup pega snapshot do ClientHandler vivo.
+        _sessionHandler.handle(clientId, msg, sendToClient);
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );
@@ -231,6 +243,27 @@ class TcpSocketServer implements SocketServerService {
         LoggerService.warning('broadcastToAll send error: $e');
       }
     }
+  }
+
+  /// Lookup usado pelo `SessionMessageHandler`. Retorna o snapshot da
+  /// sessao para o `clientId` informado, ou `null` quando o cliente ja
+  /// foi desregistrado (race condition entre `sessionRequest` e
+  /// `disconnect`).
+  Future<SessionInfo?> _lookupSessionInfo(String clientId) async {
+    final handler =
+        _clientManager?.getHandler(clientId) ?? _handlers[clientId];
+    if (handler == null) return null;
+    final connectedAt = _clientManager != null
+        ? _clientManager.getConnectedAt(clientId)
+        : _connectedAt[clientId];
+    return SessionInfo(
+      clientId: handler.clientId,
+      isAuthenticated: handler.isAuthenticated,
+      host: handler.host,
+      port: handler.port,
+      connectedAt: connectedAt ?? DateTime.now(),
+      serverId: handler.authenticatedServerId,
+    );
   }
 
   @override

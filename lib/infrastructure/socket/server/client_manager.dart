@@ -22,6 +22,12 @@ class ClientManager {
 
   ClientHandler? getHandler(String clientId) => _handlers[clientId];
 
+  /// Timestamp em que o `clientId` informado se conectou. Retorna
+  /// `null` quando o cliente nao esta registrado (ja desconectado ou
+  /// nunca existiu). Usado pelo `SessionMessageHandler` para reportar
+  /// `connectedAt` na resposta de `getSession`.
+  DateTime? getConnectedAt(String clientId) => _connectedAt[clientId];
+
   Future<List<ConnectedClient>> getConnectedClients() async {
     final clients = <ConnectedClient>[];
     for (final entry in _handlers.entries) {
