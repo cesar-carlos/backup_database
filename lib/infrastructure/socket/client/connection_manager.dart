@@ -11,6 +11,7 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -1187,6 +1188,60 @@ class ConnectionManager {
       return rd.Failure(
         TimeoutException('validateServerBackupPrerequisites timeout'),
       );
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// Consulta status de uma execucao remota por `runId` (PR-2 base).
+  ///
+  /// Cliente passa o `runId` recebido em `backupProgress`/`Complete`/
+  /// `Failed` (M2.3) e recebe snapshot tipado [ExecutionStatusResult].
+  /// Util para reidratar UI apos reconexao ou polling alternativo.
+  ///
+  /// Em servidor `v1` legado que nao implementa o endpoint, a chamada
+  /// retorna `Failure` (timeout). Cliente pode usar `state == notFound`
+  /// como sinal de "execucao ja terminou" (registry limpou o contexto).
+  Future<rd.Result<ExecutionStatusResult>> getExecutionStatus(
+    String runId,
+  ) async {
+    if (runId.isEmpty) {
+      return rd.Failure(Exception('runId must not be empty'));
+    }
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(
+        createExecutionStatusRequestMessage(
+          requestId: requestId,
+          runId: runId,
+        ),
+      );
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (!isExecutionStatusResponseMessage(message)) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para executionStatus: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readExecutionStatusFromResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('getExecutionStatus timeout'));
     } on Object catch (e) {
       _pendingRequests.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));

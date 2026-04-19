@@ -1,0 +1,9 @@
+{
+  "type": "executionStatusResponse",
+  "payload": {
+    "runId": "unknown-runid",
+    "state": "notFound",
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "message": "Execucao nao encontrada no registry ativo"
+  }
+}

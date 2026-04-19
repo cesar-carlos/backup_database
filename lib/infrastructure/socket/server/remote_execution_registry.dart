@@ -122,6 +122,21 @@ class RemoteExecutionRegistry {
 
   RemoteExecutionContext? getByRunId(String runId) => _byRunId[runId];
 
+  /// Snapshot publico (sem `sendToClient`) para handlers que apenas
+  /// reportam status — ex.: `ExecutionStatusMessageHandler`. Mantem
+  /// callback fora do payload para evitar exposicao acidental.
+  RemoteExecutionSnapshot? getSnapshotByRunId(String runId) {
+    final ctx = _byRunId[runId];
+    if (ctx == null) return null;
+    return RemoteExecutionSnapshot(
+      runId: ctx.runId,
+      scheduleId: ctx.scheduleId,
+      clientId: ctx.clientId,
+      requestId: ctx.requestId,
+      startedAt: ctx.startedAt,
+    );
+  }
+
   /// Retorna o contexto ativo associado a `scheduleId`, se houver.
   /// Ponte para o contrato remoto atual que cancela por `scheduleId`.
   RemoteExecutionContext? getActiveByScheduleId(String scheduleId) {
@@ -147,4 +162,27 @@ class RemoteExecutionRegistry {
     _byRunId.clear();
     _scheduleToRunId.clear();
   }
+}
+
+/// Snapshot publico de uma execucao, sem o callback `sendToClient`.
+///
+/// Usado por handlers que apenas reportam status (ex.:
+/// `ExecutionStatusMessageHandler`) — o callback fica restrito ao
+/// `ScheduleMessageHandler` que precisa enviar progress/complete/failed.
+/// Separar evita exposicao acidental do callback em payloads de
+/// resposta ou logs.
+class RemoteExecutionSnapshot {
+  const RemoteExecutionSnapshot({
+    required this.runId,
+    required this.scheduleId,
+    required this.clientId,
+    required this.requestId,
+    required this.startedAt,
+  });
+
+  final String runId;
+  final String scheduleId;
+  final String clientId;
+  final int requestId;
+  final DateTime startedAt;
 }

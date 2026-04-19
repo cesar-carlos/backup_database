@@ -5,12 +5,15 @@ import 'package:backup_database/core/logging/socket_logger_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/protocol_versions.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
@@ -520,6 +523,79 @@ void main() {
       expect(manager.isConnected, isFalse);
 
       final result = await manager.validateServerBackupPrerequisites();
+      expect(result.isError(), isTrue);
+    });
+  });
+
+  group('ConnectionManager getExecutionStatus (PR-2 base / M2.3)', () {
+    test('retorna notFound para runId desconhecido (registry vazio)', () async {
+      // Setup: TcpSocketServer customizado com handler + registry novos
+      final registry = RemoteExecutionRegistry();
+      final customServer = TcpSocketServer(
+        executionStatusHandler: ExecutionStatusMessageHandler(
+          executionRegistry: registry,
+        ),
+      );
+      final port = getPort();
+      await customServer.start(port: port);
+      addTearDown(() async {
+        await customServer.stop();
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final result = await manager.getExecutionStatus('never-registered');
+      final status = result.getOrNull();
+      expect(status, isNotNull);
+      expect(status!.state, ExecutionState.notFound);
+      expect(status.isNotFound, isTrue);
+      expect(status.runId, 'never-registered');
+    });
+
+    test('retorna running quando registry tem entrada ativa', () async {
+      final registry = RemoteExecutionRegistry();
+      final runId = registry.generateRunId('sched-prod');
+      registry.register(
+        runId: runId,
+        scheduleId: 'sched-prod',
+        clientId: 'client-A',
+        requestId: 1,
+        sendToClient: (clientId, msg) async {},
+      );
+
+      final customServer = TcpSocketServer(
+        executionStatusHandler: ExecutionStatusMessageHandler(
+          executionRegistry: registry,
+        ),
+      );
+      final port = getPort();
+      await customServer.start(port: port);
+      addTearDown(() async {
+        await customServer.stop();
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final result = await manager.getExecutionStatus(runId);
+      final status = result.getOrNull();
+      expect(status, isNotNull);
+      expect(status!.state, ExecutionState.running);
+      expect(status.isActive, isTrue);
+      expect(status.scheduleId, 'sched-prod');
+      expect(status.clientId, 'client-A');
+    });
+
+    test('falha quando runId vazio (validacao client-side)', () async {
+      final result = await manager.getExecutionStatus('');
+      expect(result.isError(), isTrue);
+    });
+
+    test('falha quando nao conectado', () async {
+      expect(manager.isConnected, isFalse);
+
+      final result = await manager.getExecutionStatus('any-runid');
       expect(result.isError(), isTrue);
     });
   });

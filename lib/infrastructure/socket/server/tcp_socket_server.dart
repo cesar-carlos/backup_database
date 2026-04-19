@@ -15,6 +15,7 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
@@ -38,6 +39,7 @@ class TcpSocketServer implements SocketServerService {
     HealthMessageHandler? healthHandler,
     SessionMessageHandler? sessionHandler,
     PreflightMessageHandler? preflightHandler,
+    ExecutionStatusMessageHandler? executionStatusHandler,
     SocketLoggerService? socketLogger,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
@@ -56,6 +58,7 @@ class TcpSocketServer implements SocketServerService {
            capabilitiesHandler ?? CapabilitiesMessageHandler(),
        _healthHandler = healthHandler ?? HealthMessageHandler(),
        _preflightHandler = preflightHandler ?? PreflightMessageHandler(),
+       _executionStatusHandler = executionStatusHandler,
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
     // SessionMessageHandler precisa consultar handlers vivos para
     // reportar a sessao do cliente. Construido aqui (em vez de no
@@ -75,6 +78,10 @@ class TcpSocketServer implements SocketServerService {
   final HealthMessageHandler _healthHandler;
   late final SessionMessageHandler _sessionHandler;
   final PreflightMessageHandler _preflightHandler;
+  // Optional: registry-aware handler. Quando o servidor e construido
+  // sem registry compartilhado (testes leves), o handler nao existe e
+  // o endpoint simplesmente nao responde (cliente recebe timeout).
+  final ExecutionStatusMessageHandler? _executionStatusHandler;
   final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
@@ -166,6 +173,11 @@ class TcpSocketServer implements SocketServerService {
         // (ferramenta de compactacao, pasta temp, espaco) antes de
         // disparar backup remoto (F1.8 do plano).
         _preflightHandler.handle(clientId, msg, sendToClient);
+        // Execution status: cliente reidrata progresso de runId apos
+        // reconexao ou faz polling alternativo (PR-2 base / M2.3
+        // complement). Optional — so existe quando registry compartilhado
+        // foi cabeado no DI.
+        _executionStatusHandler?.handle(clientId, msg, sendToClient);
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );

@@ -1,0 +1,6 @@
+{
+  "type": "executionStatusRequest",
+  "payload": {
+    "runId": "sched-1_uuid-aaa"
+  }
+}

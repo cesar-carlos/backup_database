@@ -51,6 +51,11 @@ class PayloadLimits {
     MessageType.preflightRequest: 1 * 1024,
     MessageType.preflightResponse: 64 * 1024,
 
+    // ---- Execution status (PR-2 base / M2.3 complement) ----
+    // Request carrega so o runId; response e snapshot pequeno.
+    MessageType.executionStatusRequest: 1 * 1024,
+    MessageType.executionStatusResponse: 4 * 1024,
+
     // ---- Schedule commands ----
     // Lista pode ser grande se tiver muitos schedules; update/scheduleUpdated
     // carregam um schedule completo com config JSON.

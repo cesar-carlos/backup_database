@@ -38,4 +38,6 @@ enum MessageType {
   sessionResponse,
   preflightRequest,
   preflightResponse,
+  executionStatusRequest,
+  executionStatusResponse,
 }

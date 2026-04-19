@@ -5,6 +5,7 @@ import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
@@ -359,6 +360,43 @@ void main() {
             message: 'Bloqueado: compression_tool, disk_space',
           );
           _assertGolden(msg, 'preflight_response_blocked');
+        },
+      );
+    });
+
+    group('execution status (PR-2 base / M2.3)', () {
+      test('executionStatusRequest carrega runId', () {
+        final msg = createExecutionStatusRequestMessage(
+          requestId: 1,
+          runId: 'sched-1_uuid-aaa',
+        );
+        _assertGolden(msg, 'execution_status_request');
+      });
+
+      test('executionStatusResponse running com snapshot completo', () {
+        final msg = createExecutionStatusResponseMessage(
+          requestId: 1,
+          runId: 'sched-1_uuid-aaa',
+          state: ExecutionState.running,
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+          scheduleId: 'sched-1',
+          clientId: 'client-X',
+          startedAt: DateTime.utc(2026, 4, 19, 11, 30),
+        );
+        _assertGolden(msg, 'execution_status_response_running');
+      });
+
+      test(
+        'executionStatusResponse notFound com mensagem diagnostica',
+        () {
+          final msg = createExecutionStatusResponseMessage(
+            requestId: 1,
+            runId: 'unknown-runid',
+            state: ExecutionState.notFound,
+            serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+            message: 'Execucao nao encontrada no registry ativo',
+          );
+          _assertGolden(msg, 'execution_status_response_not_found');
         },
       );
     });

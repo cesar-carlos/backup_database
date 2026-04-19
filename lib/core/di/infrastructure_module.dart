@@ -15,6 +15,7 @@ import 'package:backup_database/infrastructure/scripts/backup_script_orchestrato
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
@@ -282,6 +283,14 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<PreflightMessageHandler>(
     PreflightMessageHandler.new,
   );
+  // ExecutionStatusMessageHandler compartilha o RemoteExecutionRegistry
+  // ja registrado para o ScheduleMessageHandler (M2.1) — fonte unica
+  // de verdade do estado de execucoes em curso.
+  getIt.registerLazySingleton<ExecutionStatusMessageHandler>(
+    () => ExecutionStatusMessageHandler(
+      executionRegistry: getIt<RemoteExecutionRegistry>(),
+    ),
+  );
   getIt.registerLazySingleton<TcpSocketServer>(
     () => TcpSocketServer(
       serverCredentialDao: getIt<AppDatabase>().serverCredentialDao,
@@ -294,6 +303,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       capabilitiesHandler: getIt<CapabilitiesMessageHandler>(),
       healthHandler: getIt<HealthMessageHandler>(),
       preflightHandler: getIt<PreflightMessageHandler>(),
+      executionStatusHandler: getIt<ExecutionStatusMessageHandler>(),
     ),
   );
   getIt.registerLazySingleton<SocketServerService>(getIt.get<TcpSocketServer>);
