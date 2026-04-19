@@ -148,15 +148,20 @@ void main() {
     });
 
     test(
-      'should return false when remote control is denied by license',
+      'should return false when serverConnection feature denied by license',
       () async {
+        // F0.4: este teste antes mockava `remoteControl`, mas o codigo
+        // real consulta `serverConnection`. Mocktail jogava
+        // MissingStubError, capturado pelo `catch` generico, retornando
+        // licenseDenied por COINCIDENCIA — falso positivo. Agora o stub
+        // bate com a feature exata.
         authentication = ServerAuthentication(
           mockDao,
           licenseValidationService: mockLicenseValidationService,
         );
         when(
           () => mockLicenseValidationService.isFeatureAllowed(
-            LicenseFeatures.remoteControl,
+            LicenseFeatures.serverConnection,
           ),
         ).thenAnswer((_) async => const rd.Success(false));
 
@@ -169,17 +174,22 @@ void main() {
         expect(result.isValid, isFalse);
         expect(result.errorCode, ErrorCode.licenseDenied);
         verifyNever(() => mockDao.getByServerId(any()));
+        verify(
+          () => mockLicenseValidationService.isFeatureAllowed(
+            LicenseFeatures.serverConnection,
+          ),
+        ).called(1);
       },
     );
 
-    test('should return false when license validation fails', () async {
+    test('should return false when license validation throws Failure', () async {
       authentication = ServerAuthentication(
         mockDao,
         licenseValidationService: mockLicenseValidationService,
       );
       when(
         () => mockLicenseValidationService.isFeatureAllowed(
-          LicenseFeatures.remoteControl,
+          LicenseFeatures.serverConnection,
         ),
       ).thenAnswer((_) async => rd.Failure(Exception('license error')));
 
@@ -193,5 +203,158 @@ void main() {
       expect(result.errorCode, ErrorCode.licenseDenied);
       verifyNever(() => mockDao.getByServerId(any()));
     });
+
+    test(
+      'should return false when license service throws synchronously',
+      () async {
+        // F0.4: cobre o ramo `catch (e, st)` em
+        // ServerAuthentication.validateAuthRequest. Antes desse teste o
+        // ramo era exercitado apenas por coincidencia (MissingStubError).
+        authentication = ServerAuthentication(
+          mockDao,
+          licenseValidationService: mockLicenseValidationService,
+        );
+        when(
+          () => mockLicenseValidationService.isFeatureAllowed(
+            LicenseFeatures.serverConnection,
+          ),
+        ).thenThrow(StateError('license subsystem corrompido'));
+
+        final message = createAuthRequestMessage(
+          serverId: serverId,
+          passwordHash: passwordHash,
+        );
+        final result = await authentication.validateAuthRequest(message);
+
+        expect(result.isValid, isFalse);
+        expect(result.errorCode, ErrorCode.licenseDenied);
+        verifyNever(() => mockDao.getByServerId(any()));
+      },
+    );
+
+    test(
+      'should return false when passwordHash is empty (defesa F0.4)',
+      () async {
+        // Antes coberto apenas para serverId — o `||` na verificacao
+        // protege ambos, mas teste explicito ancora o comportamento.
+        final message = Message(
+          header: MessageHeader(
+            type: MessageType.authRequest,
+            length: 0,
+          ),
+          payload: <String, dynamic>{
+            'serverId': serverId,
+            'passwordHash': '',
+          },
+          checksum: 0,
+        );
+        final result = await authentication.validateAuthRequest(message);
+        expect(result.isValid, isFalse);
+        expect(result.errorCode, ErrorCode.invalidRequest);
+        verifyNever(() => mockDao.getByServerId(any()));
+      },
+    );
+
+    test(
+      'should return false when payload field has wrong type (defesa F0.4)',
+      () async {
+        // Cliente buggy / peer hostil envia int em vez de string.
+        // Cast `as String?` retorna null → cai no ramo de invalidRequest.
+        final message = Message(
+          header: MessageHeader(
+            type: MessageType.authRequest,
+            length: 0,
+          ),
+          payload: const <String, dynamic>{
+            'serverId': 12345,
+            'passwordHash': true,
+          },
+          checksum: 0,
+        );
+        final result = await authentication.validateAuthRequest(message);
+        expect(result.isValid, isFalse);
+        expect(result.errorCode, ErrorCode.invalidRequest);
+        verifyNever(() => mockDao.getByServerId(any()));
+      },
+    );
+
+    test(
+      'should reject non-authRequest message type (defesa F0.4)',
+      () async {
+        // ServerAuthentication usado isoladamente: handler poderia
+        // chama-lo com tipo errado. Comportamento defensivo: rejeita
+        // sem consultar DAO.
+        final message = Message(
+          header: MessageHeader(
+            type: MessageType.heartbeat,
+            length: 0,
+          ),
+          payload: const <String, dynamic>{},
+          checksum: 0,
+        );
+        final result = await authentication.validateAuthRequest(message);
+        expect(result.isValid, isFalse);
+        expect(result.errorCode, ErrorCode.invalidRequest);
+        verifyNever(() => mockDao.getByServerId(any()));
+      },
+    );
+
+    test(
+      'should accept serverId with control characters (defesa F0.4)',
+      () async {
+        // serverId com chars de controle nao deve quebrar o fluxo —
+        // Drift parametriza queries (SQLi safe). O teste garante que
+        // o codigo nao explode e segue o fluxo normal de comparacao.
+        const weirdServerId = 'srv\x00\n\r\t<script>';
+        final credential = ServerCredentialsTableData(
+          id: '1',
+          serverId: weirdServerId,
+          passwordHash: passwordHash,
+          name: 'Weird',
+          isActive: true,
+          createdAt: DateTime.now(),
+        );
+        when(
+          () => mockDao.getByServerId(weirdServerId),
+        ).thenAnswer((_) async => credential);
+
+        final message = createAuthRequestMessage(
+          serverId: weirdServerId,
+          passwordHash: passwordHash,
+        );
+        final result = await authentication.validateAuthRequest(message);
+
+        expect(result.isValid, isTrue);
+      },
+    );
+
+    test(
+      'should reject when DAO returns credential with mismatched hash length',
+      () async {
+        // Defesa contra credencial corrompida no DB (hash truncado).
+        // constantTimeEquals retorna false imediatamente quando lengths
+        // diferem (early-return aceitavel: lengths sao publicos).
+        final credential = ServerCredentialsTableData(
+          id: '1',
+          serverId: serverId,
+          passwordHash: 'short',
+          name: 'Test',
+          isActive: true,
+          createdAt: DateTime.now(),
+        );
+        when(
+          () => mockDao.getByServerId(serverId),
+        ).thenAnswer((_) async => credential);
+
+        final message = createAuthRequestMessage(
+          serverId: serverId,
+          passwordHash: passwordHash,
+        );
+        final result = await authentication.validateAuthRequest(message);
+
+        expect(result.isValid, isFalse);
+        expect(result.errorCode, ErrorCode.authenticationFailed);
+      },
+    );
   });
 }

@@ -37,8 +37,14 @@ class ServerAuthentication {
       );
     }
 
-    final serverId = message.payload['serverId'] as String?;
-    final passwordHash = message.payload['passwordHash'] as String?;
+    // Defesa F0.4: payload pode chegar com tipos errados (peer
+    // hostil ou cliente buggy enviando int em vez de string). Cast
+    // direto `as String?` jogaria `TypeError` nao-tratado e poderia
+    // crashar o handler. Usa pattern matching seguro.
+    final rawServerId = message.payload['serverId'];
+    final rawPasswordHash = message.payload['passwordHash'];
+    final serverId = rawServerId is String ? rawServerId : null;
+    final passwordHash = rawPasswordHash is String ? rawPasswordHash : null;
     if (serverId == null ||
         serverId.isEmpty ||
         passwordHash == null ||
