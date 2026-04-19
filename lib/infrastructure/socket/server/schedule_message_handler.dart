@@ -1,4 +1,5 @@
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -9,8 +10,7 @@ import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_ba
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
-
-typedef SendToClient = Future<void> Function(String clientId, Message message);
+import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 
 /// Handles remote schedule commands from the client. When the client sends
 /// executeSchedule, the server runs the same backup flow as a local "Run now"
@@ -26,13 +26,15 @@ class ScheduleMessageHandler {
     required UpdateSchedule updateSchedule,
     required ExecuteScheduledBackup executeBackup,
     required IBackupProgressNotifier progressNotifier,
+    RemoteExecutionRegistry? executionRegistry,
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
        _licensePolicyService = licensePolicyService,
        _schedulerService = schedulerService,
        _updateSchedule = updateSchedule,
        _executeBackup = executeBackup,
-       _progressNotifier = progressNotifier {
+       _progressNotifier = progressNotifier,
+       _executionRegistry = executionRegistry ?? RemoteExecutionRegistry() {
     _progressNotifier.addListener(_onProgressChanged);
   }
 
@@ -44,74 +46,79 @@ class ScheduleMessageHandler {
   final ExecuteScheduledBackup _executeBackup;
   final IBackupProgressNotifier _progressNotifier;
 
-  String? _currentClientId;
-  int? _currentRequestId;
-  String? _currentScheduleId;
-  SendToClient? _sendToClient;
+  /// Substitui os campos singleton anteriores (`_currentClientId`,
+  /// `_currentRequestId`, `_currentScheduleId`, `_sendToClient`). Cada
+  /// execucao remota agora vive como um `RemoteExecutionContext` proprio,
+  /// indexado por `runId`. Hoje so existe 1 ativo por vez (mutex global
+  /// no scheduler), mas a estrutura suporta a fila planejada para PR-3b
+  /// sem reescrita do handler.
+  final RemoteExecutionRegistry _executionRegistry;
 
   void dispose() {
     _progressNotifier.removeListener(_onProgressChanged);
+    _executionRegistry.clear();
   }
 
+  /// Itera o registry em vez de usar campos singleton. Hoje sempre
+  /// processa 0 ou 1 contexto (mutex de 1 backup por vez), mas a
+  /// iteracao garante correcao caso a fila futura permita mais de uma
+  /// execucao ativa simultaneamente (ex.: priorizacao de manual sobre
+  /// agendado, ou pool de workers).
   Future<void> _onProgressChanged() async {
-    if (_currentClientId == null ||
-        _currentRequestId == null ||
-        _currentScheduleId == null ||
-        _sendToClient == null) {
-      return;
-    }
+    if (!_executionRegistry.hasAny) return;
 
     final snapshot = _progressNotifier.currentSnapshot;
     if (snapshot == null) return;
 
     final progressValue = snapshot.progress ?? 0.0;
 
-    // AGUARDAR o envio da primeira mensagem completar antes de continuar
-    await _sendToClient!(
-      _currentClientId!,
-      createBackupProgressMessage(
-        requestId: _currentRequestId!,
-        scheduleId: _currentScheduleId!,
-        step: snapshot.step,
-        message: snapshot.message,
-        progress: progressValue,
-      ),
-    );
+    // Snapshot defensivo da lista — se um contexto for desregistrado
+    // durante o envio (ex.: dispose concorrente), nao quebra a iteracao.
+    final contexts = _executionRegistry.all.toList(growable: false);
 
-    if (snapshot.step == 'Concluído') {
-      LoggerService.debug(
-        '[ScheduleMessageHandler] backupComplete backupPath='
-        '${snapshot.backupPath == null || snapshot.backupPath!.isEmpty ? "(empty)" : "(set)"}',
-      );
-
-      await _sendToClient!(
-        _currentClientId!,
-        createBackupCompleteMessage(
-          requestId: _currentRequestId!,
-          scheduleId: _currentScheduleId!,
+    for (final context in contexts) {
+      await context.sendToClient(
+        context.clientId,
+        createBackupProgressMessage(
+          requestId: context.requestId,
+          scheduleId: context.scheduleId,
+          step: snapshot.step,
           message: snapshot.message,
-          backupPath: snapshot.backupPath,
+          progress: progressValue,
+          runId: context.runId,
         ),
       );
-      _clearCurrentBackup();
-    } else if (snapshot.step == 'Erro') {
-      await _sendToClient!(
-        _currentClientId!,
-        createBackupFailedMessage(
-          requestId: _currentRequestId!,
-          scheduleId: _currentScheduleId!,
-          error: snapshot.error ?? 'Erro desconhecido',
-        ),
-      );
-      _clearCurrentBackup();
-    }
-  }
 
-  void _clearCurrentBackup() {
-    _currentClientId = null;
-    _currentRequestId = null;
-    _currentScheduleId = null;
-    _sendToClient = null;
+      if (snapshot.step == 'Concluído') {
+        LoggerService.debug(
+          '[ScheduleMessageHandler] backupComplete runId=${context.runId} '
+          'backupPath=${snapshot.backupPath == null || snapshot.backupPath!.isEmpty ? "(empty)" : "(set)"}',
+        );
+
+        await context.sendToClient(
+          context.clientId,
+          createBackupCompleteMessage(
+            requestId: context.requestId,
+            scheduleId: context.scheduleId,
+            message: snapshot.message,
+            backupPath: snapshot.backupPath,
+            runId: context.runId,
+          ),
+        );
+        _executionRegistry.unregister(context.runId);
+      } else if (snapshot.step == 'Erro') {
+        await context.sendToClient(
+          context.clientId,
+          createBackupFailedMessage(
+            requestId: context.requestId,
+            scheduleId: context.scheduleId,
+            error: snapshot.error ?? 'Erro desconhecido',
+            runId: context.runId,
+          ),
+        );
+        _executionRegistry.unregister(context.runId);
+      }
+    }
   }
 
   Future<void> handle(
@@ -258,6 +265,25 @@ class ScheduleMessageHandler {
       return;
     }
 
+    // Defesa em profundidade: se o registry ja tem execucao ativa para
+    // este scheduleId, rejeita antes de chamar `tryStartBackup` (evita
+    // janela TOCTOU entre `isExecutingBackup` e o registro efetivo).
+    if (_executionRegistry.hasActiveForSchedule(scheduleId)) {
+      LoggerService.infoWithContext(
+        'Execute schedule rejected: schedule already active in registry',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        scheduleId: scheduleId,
+      );
+      await _sendError(
+        clientId,
+        requestId,
+        'Já existe um backup em execução para este agendamento.',
+        sendToClient,
+      );
+      return;
+    }
+
     LoggerService.infoWithContext(
       'Execute schedule started',
       clientId: clientId,
@@ -266,6 +292,7 @@ class ScheduleMessageHandler {
     );
 
     var progressSlotReserved = false;
+    RemoteExecutionContext? executionContext;
     try {
       final scheduleResult = await _scheduleRepository.getById(scheduleId);
       if (scheduleResult.isError()) {
@@ -341,10 +368,21 @@ class ScheduleMessageHandler {
       }
       progressSlotReserved = true;
 
-      _currentClientId = clientId;
-      _currentRequestId = requestId;
-      _currentScheduleId = scheduleId;
-      _sendToClient = sendToClient;
+      // Registra o contexto antes de iniciar o backup para que eventos
+      // de progresso encontrem o destinatario correto. O `runId` aqui
+      // pertence ao escopo do handler remoto; o `SchedulerService` gera
+      // outro internamente para uso em logs/historico — ambos podem
+      // coexistir ate PR-2 unificar a geracao no contrato remoto.
+      final runId = _executionRegistry.generateRunId(scheduleId);
+      executionContext = _executionRegistry.register(
+        runId: runId,
+        scheduleId: scheduleId,
+        clientId: clientId,
+        requestId: requestId,
+        sendToClient: sendToClient,
+      );
+
+      LogContext.setContext(runId: runId, scheduleId: scheduleId);
 
       _progressNotifier.setCurrentBackupName(schedule.name);
       _progressNotifier.updateProgress(
@@ -359,8 +397,6 @@ class ScheduleMessageHandler {
       );
 
       final result = await _executeBackup(scheduleId);
-
-      if (_currentClientId == null) return;
 
       // Antes: `await result.fold(asyncSuccess, asyncFailure)` com fold
       // aninhado dentro do success. O fold externo tinha `await`, mas o
@@ -379,7 +415,7 @@ class ScheduleMessageHandler {
         );
         await _sendError(clientId, requestId, errorMessage, sendToClient);
         _progressNotifier.failBackup(errorMessage);
-        _clearCurrentBackup();
+        _executionRegistry.unregister(runId);
         return;
       }
 
@@ -408,6 +444,14 @@ class ScheduleMessageHandler {
           sendToClient,
         );
       }
+
+      // Desregistra explicitamente no caminho de sucesso. `unregister` e
+      // idempotente, entao nao colide com a limpeza tardia disparada por
+      // `_onProgressChanged` quando o snapshot reportar `Concluído`. Sem
+      // isso, o registry mantinha o contexto orfao caso o `progressNotifier`
+      // nao publicasse o evento final por algum motivo (ex.: backup
+      // sucedido sem snapshot terminal — cenario observado em testes).
+      _executionRegistry.unregister(executionContext.runId);
     } on Object catch (e, st) {
       LoggerService.warningWithContext(
         'Execute schedule error',
@@ -426,9 +470,12 @@ class ScheduleMessageHandler {
           requestId: requestId,
           scheduleId: scheduleId,
           error: e.toString(),
+          runId: executionContext?.runId,
         ),
       );
-      _clearCurrentBackup();
+      if (executionContext != null) {
+        _executionRegistry.unregister(executionContext.runId);
+      }
     }
   }
 
@@ -449,8 +496,8 @@ class ScheduleMessageHandler {
       return;
     }
 
-    // Só pode cancelar o backup do cliente atual
-    if (scheduleId != _currentScheduleId) {
+    final activeContext = _executionRegistry.getActiveByScheduleId(scheduleId);
+    if (activeContext == null) {
       await _sendError(
         clientId,
         requestId,
@@ -481,7 +528,7 @@ class ScheduleMessageHandler {
       return;
     }
 
-    _clearCurrentBackup();
+    _executionRegistry.unregister(activeContext.runId);
 
     await sendToClient(
       clientId,

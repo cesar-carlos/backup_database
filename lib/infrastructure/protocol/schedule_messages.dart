@@ -147,18 +147,24 @@ bool isScheduleUpdatedMessage(Message message) =>
 bool isExecuteScheduleMessage(Message message) =>
     message.header.type == MessageType.executeSchedule;
 
+/// `runId` e opcional para preservar compatibilidade com clientes `v1`
+/// que ignoram o campo. Servidor `v2+` passa a popular sempre, viabilizando
+/// correlacao end-to-end por execucao (ver M2.3 do plano e
+/// `RemoteExecutionRegistry`).
 Message createBackupProgressMessage({
   required int requestId,
   required String scheduleId,
   required String step,
   required String message,
   double progress = 0.0,
+  String? runId,
 }) {
   final payload = <String, dynamic>{
     'scheduleId': scheduleId,
     'step': step,
     'message': message,
     'progress': progress,
+    ...?(runId != null ? {'runId': runId} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -178,11 +184,13 @@ Message createBackupCompleteMessage({
   required String scheduleId,
   String? message,
   String? backupPath,
+  String? runId,
 }) {
   final payload = <String, dynamic>{
     'scheduleId': scheduleId,
     'message': message ?? 'Backup concluído',
     ...?(backupPath != null ? {'backupPath': backupPath} : null),
+    ...?(runId != null ? {'runId': runId} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -201,10 +209,12 @@ Message createBackupFailedMessage({
   required int requestId,
   required String scheduleId,
   required String error,
+  String? runId,
 }) {
   final payload = <String, dynamic>{
     'scheduleId': scheduleId,
     'error': error,
+    ...?(runId != null ? {'runId': runId} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -241,6 +251,14 @@ double? getProgressFromBackupProgress(Message message) {
 
 String? getErrorFromBackupFailed(Message message) {
   return message.payload['error'] as String?;
+}
+
+/// Extrai o `runId` quando presente no payload de backup
+/// (`backupProgress`, `backupComplete`, `backupFailed`). Retorna `null`
+/// quando o servidor e anterior a M2.3 (`v1`) ou quando o cliente
+/// processa mensagens legadas, garantindo backward compat.
+String? getRunIdFromBackupMessage(Message message) {
+  return message.payload['runId'] as String?;
 }
 
 bool isBackupProgressMessage(Message message) =>

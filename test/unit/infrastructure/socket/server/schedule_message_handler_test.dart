@@ -1,5 +1,6 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/entities/backup_progress_snapshot.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -9,7 +10,9 @@ import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
+import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -38,6 +41,7 @@ void main() {
   late _MockUpdateSchedule updateSchedule;
   late _MockExecuteBackup executeBackup;
   late _MockProgressNotifier progressNotifier;
+  late RemoteExecutionRegistry executionRegistry;
   late ScheduleMessageHandler handler;
 
   const scheduleId = 'schedule-1';
@@ -76,6 +80,7 @@ void main() {
     when(() => progressNotifier.tryStartBackup(any())).thenReturn(true);
     when(() => progressNotifier.currentSnapshot).thenReturn(null);
 
+    executionRegistry = RemoteExecutionRegistry();
     handler = ScheduleMessageHandler(
       scheduleRepository: scheduleRepository,
       destinationRepository: destinationRepository,
@@ -84,6 +89,7 @@ void main() {
       updateSchedule: updateSchedule,
       executeBackup: executeBackup,
       progressNotifier: progressNotifier,
+      executionRegistry: executionRegistry,
     );
   });
 
@@ -169,6 +175,394 @@ void main() {
 
         expect(sentMessage, isNotNull);
         verify(() => executeBackup(scheduleId)).called(1);
+      },
+    );
+  });
+
+  group('ScheduleMessageHandler execution registry integration', () {
+    test(
+      'execucao bem-sucedida desregistra contexto do registry',
+      () async {
+        when(() => scheduleRepository.getById(scheduleId))
+            .thenAnswer((_) async => rd.Success(schedule));
+        when(() => destinationRepository.getByIds(any()))
+            .thenAnswer((_) async => rd.Success([destination]));
+        when(
+          () => licensePolicyService.validateExecutionCapabilities(any(), any()),
+        ).thenAnswer((_) async => const rd.Success(rd.unit));
+        when(() => executeBackup(scheduleId))
+            .thenAnswer((_) async => const rd.Success(rd.unit));
+
+        Future<void> noopSend(String clientId, Message msg) async {}
+
+        await handler.handle(
+          'client-1',
+          createExecuteScheduleMessage(requestId: 1, scheduleId: scheduleId),
+          noopSend,
+        );
+
+        // Apos execucao bem-sucedida o contexto deve sair do registry
+        // (caso contrario o proximo disparo seria rejeitado por
+        // `hasActiveForSchedule`).
+        expect(executionRegistry.hasActiveForSchedule(scheduleId), isFalse);
+        expect(executionRegistry.activeCount, 0);
+      },
+    );
+
+    test(
+      'execucao com falha no executeBackup tambem desregistra contexto',
+      () async {
+        when(() => scheduleRepository.getById(scheduleId))
+            .thenAnswer((_) async => rd.Success(schedule));
+        when(() => destinationRepository.getByIds(any()))
+            .thenAnswer((_) async => rd.Success([destination]));
+        when(
+          () => licensePolicyService.validateExecutionCapabilities(any(), any()),
+        ).thenAnswer((_) async => const rd.Success(rd.unit));
+        when(() => executeBackup(scheduleId)).thenAnswer(
+          (_) async => const rd.Failure(BackupFailure(message: 'erro')),
+        );
+
+        Future<void> noopSend(String clientId, Message msg) async {}
+
+        await handler.handle(
+          'client-1',
+          createExecuteScheduleMessage(requestId: 1, scheduleId: scheduleId),
+          noopSend,
+        );
+
+        expect(executionRegistry.hasActiveForSchedule(scheduleId), isFalse);
+        expect(executionRegistry.activeCount, 0);
+      },
+    );
+
+    test(
+      'cancelSchedule responde "Não há backup em execução" quando registry esta vazio',
+      () async {
+        Message? sentMessage;
+        Future<void> sendToClient(String clientId, Message msg) async {
+          sentMessage = msg;
+        }
+
+        await handler.handle(
+          'client-X',
+          createCancelScheduleMessage(
+            requestId: 99,
+            scheduleId: 'schedule-inexistente',
+          ),
+          sendToClient,
+        );
+
+        expect(sentMessage, isNotNull);
+        expect(sentMessage!.header.type, MessageType.error);
+        expect(
+          sentMessage!.payload['error'],
+          contains('Não há backup em execução'),
+        );
+        verifyNever(() => schedulerService.cancelExecution(any()));
+      },
+    );
+
+    test(
+      'cancelSchedule de schedule diferente do ativo nao cancela o ativo',
+      () async {
+        // Pre-popula registry simulando execucao em curso de schedule-A
+        const activeSchedule = 'schedule-A';
+        executionRegistry.register(
+          runId: executionRegistry.generateRunId(activeSchedule),
+          scheduleId: activeSchedule,
+          clientId: 'client-A',
+          requestId: 100,
+          sendToClient: (clientId, msg) async {},
+        );
+
+        Message? sentMessage;
+        Future<void> sendToClient(String clientId, Message msg) async {
+          sentMessage = msg;
+        }
+
+        // Outro cliente tenta cancelar um schedule DIFERENTE
+        await handler.handle(
+          'client-B',
+          createCancelScheduleMessage(
+            requestId: 200,
+            scheduleId: 'schedule-B',
+          ),
+          sendToClient,
+        );
+
+        // Resposta deve ser erro padronizado, nao deve afetar schedule-A
+        expect(sentMessage, isNotNull);
+        expect(sentMessage!.header.type, MessageType.error);
+        expect(
+          sentMessage!.payload['error'],
+          contains('Não há backup em execução'),
+        );
+        // schedule-A continua ativo no registry (nao foi cancelado)
+        expect(executionRegistry.hasActiveForSchedule(activeSchedule), isTrue);
+        verifyNever(() => schedulerService.cancelExecution(any()));
+      },
+    );
+
+    test(
+      'segundo execute para o mesmo scheduleId e rejeitado mesmo se '
+      'isExecutingBackup retornar false (defesa em profundidade do registry)',
+      () async {
+        // Simula janela TOCTOU: scheduler ainda nao reportou ocupado,
+        // mas o registry ja tem entrada (cenario possivel se o scheduler
+        // local e o handler remoto tiverem timing distintos).
+        const targetSchedule = 'schedule-shared';
+        executionRegistry.register(
+          runId: executionRegistry.generateRunId(targetSchedule),
+          scheduleId: targetSchedule,
+          clientId: 'client-A',
+          requestId: 1,
+          sendToClient: (clientId, msg) async {},
+        );
+
+        when(() => schedulerService.isExecutingBackup).thenReturn(false);
+
+        Message? sentMessage;
+        Future<void> sendToClient(String clientId, Message msg) async {
+          sentMessage = msg;
+        }
+
+        await handler.handle(
+          'client-B',
+          createExecuteScheduleMessage(
+            requestId: 2,
+            scheduleId: targetSchedule,
+          ),
+          sendToClient,
+        );
+
+        expect(sentMessage, isNotNull);
+        expect(sentMessage!.header.type, MessageType.error);
+        expect(
+          sentMessage!.payload['error'],
+          contains('Já existe um backup em execução para este agendamento'),
+        );
+        verifyNever(() => executeBackup(any()));
+        verifyNever(() => progressNotifier.tryStartBackup(any()));
+        // client-A continua ativo (nao foi sobrescrito como acontecia
+        // com os singletons antigos).
+        expect(
+          executionRegistry.getActiveByScheduleId(targetSchedule)!.clientId,
+          'client-A',
+        );
+      },
+    );
+
+    test(
+      'execucao popula o registry com clientId/requestId corretos durante o backup',
+      () async {
+        when(() => scheduleRepository.getById(scheduleId))
+            .thenAnswer((_) async => rd.Success(schedule));
+        when(() => destinationRepository.getByIds(any()))
+            .thenAnswer((_) async => rd.Success([destination]));
+        when(
+          () => licensePolicyService.validateExecutionCapabilities(any(), any()),
+        ).thenAnswer((_) async => const rd.Success(rd.unit));
+
+        // Captura o estado do registry no momento em que o backup esta
+        // rodando — antes da chamada terminar e desregistrar.
+        RemoteExecutionContext? capturedContext;
+        when(() => executeBackup(scheduleId)).thenAnswer((_) async {
+          capturedContext = executionRegistry.getActiveByScheduleId(scheduleId);
+          return const rd.Success(rd.unit);
+        });
+
+        Future<void> noopSend(String clientId, Message msg) async {}
+
+        await handler.handle(
+          'client-Z',
+          createExecuteScheduleMessage(requestId: 777, scheduleId: scheduleId),
+          noopSend,
+        );
+
+        expect(capturedContext, isNotNull);
+        expect(capturedContext!.clientId, 'client-Z');
+        expect(capturedContext!.requestId, 777);
+        expect(capturedContext!.scheduleId, scheduleId);
+        expect(capturedContext!.runId, startsWith('${scheduleId}_'));
+      },
+    );
+  });
+
+  group('ScheduleMessageHandler runId in events (M2.3)', () {
+    test(
+      'mensagens de progresso enviadas durante backup carregam runId do contexto',
+      () async {
+        // Snapshot precisa retornar algo para o listener disparar
+        when(() => progressNotifier.currentSnapshot).thenReturn(
+          const BackupProgressSnapshot(
+            step: 'Executando',
+            message: 'em andamento',
+            progress: 0.4,
+          ),
+        );
+
+        // Captura listener registrado pelo handler para invoca-lo manualmente
+        void Function()? capturedListener;
+        when(() => progressNotifier.addListener(any())).thenAnswer((inv) {
+          capturedListener = inv.positionalArguments.first as void Function();
+        });
+        when(() => progressNotifier.removeListener(any())).thenAnswer((_) {});
+
+        // Recria handler com este mock especifico
+        final localRegistry = RemoteExecutionRegistry();
+        final localHandler = ScheduleMessageHandler(
+          scheduleRepository: scheduleRepository,
+          destinationRepository: destinationRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          updateSchedule: updateSchedule,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: localRegistry,
+        );
+
+        // Simula execucao em curso no registry
+        final runId = localRegistry.generateRunId('schedule-X');
+        final sentMessages = <Message>[];
+        Future<void> capture(String clientId, Message msg) async {
+          sentMessages.add(msg);
+        }
+
+        localRegistry.register(
+          runId: runId,
+          scheduleId: 'schedule-X',
+          clientId: 'client-X',
+          requestId: 555,
+          sendToClient: capture,
+        );
+
+        // Dispara o listener manualmente (simula update do progressNotifier)
+        expect(capturedListener, isNotNull);
+        await Future(() => capturedListener!());
+        // Aguarda microtask interno do handler async
+        await Future.delayed(Duration.zero);
+
+        expect(sentMessages, isNotEmpty);
+        final progressMsg = sentMessages.firstWhere(
+          isBackupProgressMessage,
+        );
+        expect(getRunIdFromBackupMessage(progressMsg), runId);
+        expect(progressMsg.payload['scheduleId'], 'schedule-X');
+        expect(progressMsg.header.requestId, 555);
+
+        localHandler.dispose();
+      },
+    );
+
+    test(
+      'backupComplete enviado ao final inclui runId do contexto',
+      () async {
+        when(() => progressNotifier.currentSnapshot).thenReturn(
+          const BackupProgressSnapshot(
+            step: 'Concluído',
+            message: 'ok',
+            progress: 1,
+            backupPath: '/tmp/x.zip',
+          ),
+        );
+
+        void Function()? capturedListener;
+        when(() => progressNotifier.addListener(any())).thenAnswer((inv) {
+          capturedListener = inv.positionalArguments.first as void Function();
+        });
+        when(() => progressNotifier.removeListener(any())).thenAnswer((_) {});
+
+        final localRegistry = RemoteExecutionRegistry();
+        final localHandler = ScheduleMessageHandler(
+          scheduleRepository: scheduleRepository,
+          destinationRepository: destinationRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          updateSchedule: updateSchedule,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: localRegistry,
+        );
+
+        final runId = localRegistry.generateRunId('schedule-Y');
+        final sentMessages = <Message>[];
+        Future<void> capture(String clientId, Message msg) async {
+          sentMessages.add(msg);
+        }
+
+        localRegistry.register(
+          runId: runId,
+          scheduleId: 'schedule-Y',
+          clientId: 'client-Y',
+          requestId: 888,
+          sendToClient: capture,
+        );
+
+        await Future(() => capturedListener!());
+        await Future.delayed(Duration.zero);
+
+        final completeMsg = sentMessages.firstWhere(isBackupCompleteMessage);
+        expect(getRunIdFromBackupMessage(completeMsg), runId);
+        expect(completeMsg.payload['backupPath'], '/tmp/x.zip');
+        // Apos enviar Concluído o registry desregistra (limpeza)
+        expect(localRegistry.hasActiveForSchedule('schedule-Y'), isFalse);
+
+        localHandler.dispose();
+      },
+    );
+
+    test(
+      'backupFailed enviado em snapshot Erro inclui runId',
+      () async {
+        when(() => progressNotifier.currentSnapshot).thenReturn(
+          const BackupProgressSnapshot(
+            step: 'Erro',
+            message: 'falhou',
+            error: 'erro x',
+          ),
+        );
+
+        void Function()? capturedListener;
+        when(() => progressNotifier.addListener(any())).thenAnswer((inv) {
+          capturedListener = inv.positionalArguments.first as void Function();
+        });
+        when(() => progressNotifier.removeListener(any())).thenAnswer((_) {});
+
+        final localRegistry = RemoteExecutionRegistry();
+        final localHandler = ScheduleMessageHandler(
+          scheduleRepository: scheduleRepository,
+          destinationRepository: destinationRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          updateSchedule: updateSchedule,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: localRegistry,
+        );
+
+        final runId = localRegistry.generateRunId('schedule-Z');
+        final sentMessages = <Message>[];
+        Future<void> capture(String clientId, Message msg) async {
+          sentMessages.add(msg);
+        }
+
+        localRegistry.register(
+          runId: runId,
+          scheduleId: 'schedule-Z',
+          clientId: 'client-Z',
+          requestId: 999,
+          sendToClient: capture,
+        );
+
+        await Future(() => capturedListener!());
+        await Future.delayed(Duration.zero);
+
+        final failedMsg = sentMessages.firstWhere(isBackupFailedMessage);
+        expect(getRunIdFromBackupMessage(failedMsg), runId);
+        expect(failedMsg.payload['error'], 'erro x');
+
+        localHandler.dispose();
       },
     );
   });
