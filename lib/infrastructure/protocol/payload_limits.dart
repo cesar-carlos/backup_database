@@ -129,6 +129,19 @@ class PayloadLimits {
     MessageType.cancelQueuedBackupRequest: 4 * 1024,
     MessageType.cancelQueuedBackupResponse: 4 * 1024,
 
+    // ---- Diagnostico operacional (PR-3 commit final) ----
+    // request: so runId/configId. response: pode ter logs (256KB
+    // confortavel para milhares de linhas), error details (16KB),
+    // metadata de artefato (4KB), confirmacao cleanup (4KB).
+    MessageType.getRunLogsRequest: 1 * 1024,
+    MessageType.getRunLogsResponse: 256 * 1024,
+    MessageType.getRunErrorDetailsRequest: 1 * 1024,
+    MessageType.getRunErrorDetailsResponse: 16 * 1024,
+    MessageType.getArtifactMetadataRequest: 1 * 1024,
+    MessageType.getArtifactMetadataResponse: 4 * 1024,
+    MessageType.cleanupStagingRequest: 4 * 1024,
+    MessageType.cleanupStagingResponse: 4 * 1024,
+
     // ---- Database config CRUD (PR-2) ----
     // Configs grandes (Sybase com replicacao + multiplos files etc.)
     // sao gerenciaveis em ate ~64KB. List pode retornar dezenas;

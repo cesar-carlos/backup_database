@@ -12,6 +12,7 @@ import 'package:backup_database/infrastructure/datasources/daos/server_connectio
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
+import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/queue_events.dart';
@@ -1756,6 +1757,107 @@ class ConnectionManager {
       _pendingRequests.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));
     }
+  }
+
+  /// Helper unificado para diagnostico (PR-3 commit final).
+  Future<rd.Result<TResult>> _runDiagnosticsRequest<TResult extends Object>(
+    Message Function(int requestId) build,
+    TResult Function(Message) parse, {
+    required MessageType expectedResponseType,
+    required String operationName,
+  }) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(build(requestId));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (message.header.type != expectedResponseType) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para $operationName: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(parse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('$operationName timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  Future<rd.Result<RunLogsResult>> getRunLogs({
+    required String runId,
+    int? maxLines,
+  }) {
+    return _runDiagnosticsRequest(
+      (requestId) => createGetRunLogsRequest(
+        runId: runId,
+        maxLines: maxLines,
+        requestId: requestId,
+      ),
+      readRunLogsResponse,
+      expectedResponseType: MessageType.getRunLogsResponse,
+      operationName: 'getRunLogs',
+    );
+  }
+
+  Future<rd.Result<RunErrorDetailsResult>> getRunErrorDetails({
+    required String runId,
+  }) {
+    return _runDiagnosticsRequest(
+      (requestId) => createGetRunErrorDetailsRequest(
+        runId: runId,
+        requestId: requestId,
+      ),
+      readRunErrorDetailsResponse,
+      expectedResponseType: MessageType.getRunErrorDetailsResponse,
+      operationName: 'getRunErrorDetails',
+    );
+  }
+
+  Future<rd.Result<ArtifactMetadataResult>> getArtifactMetadata({
+    required String runId,
+  }) {
+    return _runDiagnosticsRequest(
+      (requestId) => createGetArtifactMetadataRequest(
+        runId: runId,
+        requestId: requestId,
+      ),
+      readArtifactMetadataResponse,
+      expectedResponseType: MessageType.getArtifactMetadataResponse,
+      operationName: 'getArtifactMetadata',
+    );
+  }
+
+  Future<rd.Result<CleanupStagingResult>> cleanupRemoteStaging({
+    required String runId,
+    String? idempotencyKey,
+  }) {
+    return _runDiagnosticsRequest(
+      (requestId) => createCleanupStagingRequest(
+        runId: runId,
+        idempotencyKey: idempotencyKey,
+        requestId: requestId,
+      ),
+      readCleanupStagingResponse,
+      expectedResponseType: MessageType.cleanupStagingResponse,
+      operationName: 'cleanupStaging',
+    );
   }
 
   Future<rd.Result<Map<String, dynamic>>> getServerMetrics() async {

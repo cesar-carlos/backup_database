@@ -152,6 +152,14 @@ class ScheduleCrudMessageHandler {
       case MessageType.backupStarted:
       case MessageType.cancelQueuedBackupRequest:
       case MessageType.cancelQueuedBackupResponse:
+      case MessageType.getRunLogsRequest:
+      case MessageType.getRunLogsResponse:
+      case MessageType.getRunErrorDetailsRequest:
+      case MessageType.getRunErrorDetailsResponse:
+      case MessageType.getArtifactMetadataRequest:
+      case MessageType.getArtifactMetadataResponse:
+      case MessageType.cleanupStagingRequest:
+      case MessageType.cleanupStagingResponse:
         // Filtrado em `handle` antes de chegar aqui — defesa em
         // profundidade. Tipo nao deveria chegar a este switch.
         throw const _CrudFailure(

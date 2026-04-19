@@ -77,6 +77,18 @@ enum MessageType {
   // cancelled + scheduleId + runId.
   cancelQueuedBackupRequest,
   cancelQueuedBackupResponse,
+  // PR-3 commit final: diagnostico operacional. Endpoints somente
+  // leitura para o cliente investigar problemas de execucao remota.
+  // Implementacao concreta delegada via DI (Diagnostics provider) —
+  // contratos prontos no protocolo.
+  getRunLogsRequest,
+  getRunLogsResponse,
+  getRunErrorDetailsRequest,
+  getRunErrorDetailsResponse,
+  getArtifactMetadataRequest,
+  getArtifactMetadataResponse,
+  cleanupStagingRequest,
+  cleanupStagingResponse,
   // PR-2: schedule CRUD remoto (createSchedule, deleteSchedule,
   // pauseSchedule, resumeSchedule). `updateSchedule` ja existia desde
   // antes do PR-1; aqui adicionamos os 4 que faltam para CRUD completo.

@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/socket/server/capabilities_messag
 import 'package:backup_database/infrastructure/socket/server/client_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/database_config_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/diagnostics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_crud_message_handler.dart';
@@ -48,6 +49,7 @@ class TcpSocketServer implements SocketServerService {
     DatabaseConfigMessageHandler? databaseConfigHandler,
     ExecutionMessageHandler? executionHandler,
     ScheduleCrudMessageHandler? scheduleCrudHandler,
+    DiagnosticsMessageHandler? diagnosticsHandler,
     SocketLoggerService? socketLogger,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
@@ -73,6 +75,8 @@ class TcpSocketServer implements SocketServerService {
            databaseConfigHandler ?? DatabaseConfigMessageHandler(),
        _executionHandler = executionHandler,
        _scheduleCrudHandler = scheduleCrudHandler,
+       _diagnosticsHandler =
+           diagnosticsHandler ?? DiagnosticsMessageHandler(),
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
     // PR-3: quando ExecutionMessageHandler estiver cabeado, injeta
     // resolver que despacha mensagens para o ClientHandler vivo
@@ -114,6 +118,9 @@ class TcpSocketServer implements SocketServerService {
   final ExecutionMessageHandler? _executionHandler;
   // PR-2: schedule CRUD remoto (create/delete/pause/resume).
   final ScheduleCrudMessageHandler? _scheduleCrudHandler;
+  // PR-3 commit final: endpoints de diagnostico operacional. Default
+  // usa NotConfiguredDiagnosticsProvider — wiring real fica para DI.
+  final DiagnosticsMessageHandler _diagnosticsHandler;
   final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
@@ -223,6 +230,9 @@ class TcpSocketServer implements SocketServerService {
         // PR-2: schedule CRUD (create/delete/pause/resume). Optional
         // — wiring depende de IScheduleRepository.
         _scheduleCrudHandler?.handle(clientId, msg, sendToClient);
+        // PR-3 commit final: diagnostico operacional. NotConfigured
+        // por default — DI cabea provider real que consulta logs/staging.
+        _diagnosticsHandler.handle(clientId, msg, sendToClient);
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );
