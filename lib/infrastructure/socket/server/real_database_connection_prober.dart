@@ -107,10 +107,7 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
           sw.stop();
           return _mapBoolResult(result, sw);
         }
-        // ignore: avoid_catching_errors
-        // ArgumentError aqui sinaliza payload de cliente malformado
-        // (campo obrigatorio faltando) — mapeamos para
-        // ErrorCode.invalidRequest. Nao e bug do servidor.
+        // ignore: avoid_catching_errors -- ArgumentError do serializer (map ad-hoc remoto).
         on ArgumentError catch (e) {
           sw.stop();
           return DatabaseProbeOutcome.failure(
@@ -148,8 +145,7 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
           sw.stop();
           return _mapBoolResult(result, sw);
         }
-        // ignore: avoid_catching_errors — ArgumentError sinaliza payload
-        // malformado do cliente, nao bug do servidor.
+        // ignore: avoid_catching_errors -- ArgumentError do serializer (map ad-hoc remoto).
         on ArgumentError catch (e) {
           sw.stop();
           return DatabaseProbeOutcome.failure(
@@ -187,8 +183,7 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
           sw.stop();
           return _mapBoolResult(result, sw);
         }
-        // ignore: avoid_catching_errors — ArgumentError sinaliza payload
-        // malformado do cliente, nao bug do servidor.
+        // ignore: avoid_catching_errors -- ArgumentError do serializer (map ad-hoc remoto).
         on ArgumentError catch (e) {
           sw.stop();
           return DatabaseProbeOutcome.failure(

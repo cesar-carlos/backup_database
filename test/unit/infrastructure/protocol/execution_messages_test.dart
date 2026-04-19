@@ -137,7 +137,7 @@ void main() {
     });
 
     test('XOR: rejeita nenhum', () {
-      expect(() => createCancelBackupRequest(), throwsArgumentError);
+      expect(createCancelBackupRequest, throwsArgumentError);
     });
   });
 

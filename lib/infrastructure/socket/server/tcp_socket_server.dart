@@ -19,12 +19,12 @@ import 'package:backup_database/infrastructure/socket/server/database_config_mes
 import 'package:backup_database/infrastructure/socket/server/diagnostics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
-import 'package:backup_database/infrastructure/socket/server/schedule_crud_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/preflight_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/schedule_crud_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
 import 'package:backup_database/infrastructure/socket/server/session_message_handler.dart';

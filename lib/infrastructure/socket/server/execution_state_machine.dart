@@ -8,7 +8,7 @@ import 'package:backup_database/infrastructure/protocol/execution_status_message
 ///
 /// Tabela oficial de transicoes (todas no servidor):
 ///
-/// ```
+/// ```text
 ///                  +-----------+
 ///                  |  queued   |---> cancelled  (cancelQueuedBackup)
 ///                  +-----------+

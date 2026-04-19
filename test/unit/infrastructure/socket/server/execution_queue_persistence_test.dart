@@ -1,7 +1,6 @@
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_persistence.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
-import 'package:backup_database/infrastructure/socket/server/queued_execution_item.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

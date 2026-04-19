@@ -85,7 +85,7 @@ void main() {
       final resp = sent.single;
       expect(resp.header.type, MessageType.listDatabaseConfigsResponse);
       expect(resp.payload['databaseType'], 'sybase');
-      expect((resp.payload['configs'] as List), hasLength(2));
+      expect(resp.payload['configs'] as List, hasLength(2));
       expect(resp.payload['statusCode'], 200);
       expect(resp.payload['success'], isTrue);
     });

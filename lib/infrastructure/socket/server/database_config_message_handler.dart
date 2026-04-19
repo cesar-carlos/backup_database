@@ -311,7 +311,6 @@ class DatabaseConfigMessageHandler {
         return _doUpdate(requestId, dbType, payload);
       case MessageType.deleteDatabaseConfigRequest:
         return _doDelete(requestId, dbType, payload);
-      // ignore: no_default_cases — defensivo, filtrado em _handleMutation
       default:
         throw const _DbConfigFailure(
           'Tipo de mutacao desconhecido',

@@ -47,7 +47,7 @@ class ExecutionMessageHandler {
     required RemoteExecutionRegistry executionRegistry,
     IdempotencyRegistry? idempotencyRegistry,
     ExecutionQueueService? queueService,
-    QueueEventBus? eventBus,
+    this.eventBus,
     DateTime Function()? clock,
   })  : _scheduleRepository = scheduleRepository,
         _destinationRepository = destinationRepository,
@@ -58,7 +58,6 @@ class ExecutionMessageHandler {
         _executionRegistry = executionRegistry,
         _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
         _queueService = queueService ?? ExecutionQueueService(),
-        _eventBus = eventBus,
         _clock = clock ?? DateTime.now;
 
   final IScheduleRepository _scheduleRepository;
@@ -73,12 +72,9 @@ class ExecutionMessageHandler {
   // PR-3a: bus de eventos de fila. Optional — quando nao cabeado,
   // backup ainda funciona, apenas sem publicar backupQueued/Dequeued/
   // Started (cliente fallback para polling via getExecutionQueue).
-  // **Mutavel via setter** para resolver dependencia circular DI:
-  // QueueEventBus precisa do `sendToClient` do TcpSocketServer, que
-  // por sua vez precisa do ExecutionMessageHandler. Cabeamos depois
-  // do registro de ambos (ver infrastructure_module.dart).
-  QueueEventBus? _eventBus;
-  set eventBus(QueueEventBus? bus) => _eventBus = bus;
+  // Mutavel pos-construcao para dependencia circular DI
+  // (ver infrastructure_module.dart).
+  QueueEventBus? eventBus;
   final DateTime Function() _clock;
 
   /// Acesso ao queue service para wirings externos (ex.:
@@ -226,7 +222,7 @@ class ExecutionMessageHandler {
       // pode usar para mostrar "Aguardando na fila (posicao N)" em
       // tempo real, em vez de fazer polling do `getExecutionQueue`.
       unawaited(
-        _eventBus?.publishQueued(
+        eventBus?.publishQueued(
               clientId: clientId,
               runId: item.runId,
               scheduleId: scheduleId,
@@ -426,7 +422,7 @@ class ExecutionMessageHandler {
     // schedule — cliente sabe que o item saiu da fila mesmo se a
     // tentativa de iniciar falhar (ex.: schedule deletado).
     unawaited(
-      _eventBus?.publishDequeued(
+      eventBus?.publishDequeued(
             clientId: next.clientId,
             runId: next.runId,
             scheduleId: next.scheduleId,
@@ -480,8 +476,8 @@ class ExecutionMessageHandler {
         // Wiring real do sendToClient sera injetado pelo
         // tcp_socket_server quando drain rodar — por enquanto
         // o handler ainda usa o sendToClient capturado da request
-        // original via _sendToClientResolver.
-        await _sendToClientResolver(clientId, message);
+        // original via sendToClientResolver.
+        await sendToClientResolver(clientId, message);
       },
     );
 
@@ -490,7 +486,7 @@ class ExecutionMessageHandler {
     // Publica `backupStarted` antes de iniciar — cliente atualiza
     // UI para "Em execucao" sincronizado com o estado real.
     unawaited(
-      _eventBus?.publishStarted(
+      eventBus?.publishStarted(
             clientId: next.clientId,
             runId: next.runId,
             scheduleId: next.scheduleId,
@@ -504,7 +500,7 @@ class ExecutionMessageHandler {
       scheduleId: next.scheduleId,
       runId: next.runId,
       scheduleName: schedule.name,
-      sendToClient: _sendToClientResolver,
+      sendToClient: sendToClientResolver,
     ));
   }
 
@@ -587,7 +583,7 @@ class ExecutionMessageHandler {
     // Publica `backupDequeued(reason=cancelled)` para o cliente.
     if (scheduleId != null) {
       unawaited(
-        _eventBus?.publishDequeued(
+        eventBus?.publishDequeued(
               clientId: clientId,
               runId: runId,
               scheduleId: scheduleId,
@@ -612,12 +608,8 @@ class ExecutionMessageHandler {
   /// um stub que roda sem efeito quando ninguem cabeou — drain do
   /// servidor continua funcionando, apenas sem notificar o cliente
   /// original (cliente pode poll via getExecutionStatus).
-  SendToClient _sendToClientResolver = _noopSendToClient;
-
-  /// Acesso de leitura para wirings que precisam compor com bus.
-  SendToClient get sendToClientResolver => _sendToClientResolver;
-  set sendToClientResolver(SendToClient resolver) =>
-      _sendToClientResolver = resolver;
+  /// Injeta o envio real pos-conexao (ex.: drain da fila). Padrao: no-op.
+  SendToClient sendToClientResolver = _noopSendToClient;
 
   static Future<void> _noopSendToClient(
     String clientId,

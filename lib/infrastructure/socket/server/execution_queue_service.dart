@@ -64,14 +64,9 @@ class ExecutionQueueService {
     _initialized = true;
   }
 
-  /// Indica se ha backup em execucao agora. Setado externamente pelo
-  /// handler que reserva o slot global via `progressNotifier.tryStartBackup`.
-  /// Mantido aqui apenas para visibilidade — _service NAO controla
-  /// o slot de execucao real (apenas a fila pendente).
-  bool _hasActive = false;
-  bool get hasActive => _hasActive;
-  // ignore: avoid_setters_without_getters — semantica e clara.
-  set hasActive(bool value) => _hasActive = value;
+  /// Visibilidade de backup ativo (setado pelo handler de execucao; o slot
+  /// real vem do `progressNotifier`). Esta fila nao controla a execucao.
+  bool hasActive = false;
 
   /// Tamanho atual da fila.
   int get queueSize => _queue.length;

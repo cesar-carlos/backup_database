@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
@@ -13,7 +14,6 @@ import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/preflight_messages.dart';
-import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:flutter_test/flutter_test.dart';

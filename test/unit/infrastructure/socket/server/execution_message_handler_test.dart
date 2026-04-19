@@ -12,8 +12,8 @@ import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
-import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
@@ -87,7 +87,7 @@ void main() {
     when(() => progressNotifier.tryStartBackup(any())).thenReturn(true);
     // Default: backup async resolve sucesso (mas testes que querem
     // observar runtime async substituem isso por Completer<...>)
-    when(() => executeBackup(any())).thenAnswer((_) async => rd.Success(true));
+    when(() => executeBackup(any())).thenAnswer((_) async => const rd.Success(true));
     when(
       () => scheduleRepository.getById(scheduleId),
     ).thenAnswer((_) async => rd.Success(schedule));
@@ -128,7 +128,7 @@ void main() {
       expect(resp.payload['state'], 'running');
       expect(resp.payload['scheduleId'], scheduleId);
       expect(resp.payload['runId'], isA<String>());
-      expect((resp.payload['runId'] as String), startsWith('$scheduleId\_'));
+      expect(resp.payload['runId'] as String, startsWith('${scheduleId}_'));
       expect(executionRegistry.activeCount, 1);
 
       // Libera para evitar pending Future warnings
@@ -244,7 +244,7 @@ void main() {
         scheduleId: scheduleId,
         clientId: 'c1',
         requestId: 0,
-        sendToClient: (_, __) async {},
+        sendToClient: (_, _) async {},
       );
       when(
         () => schedulerService.cancelExecution(scheduleId),
@@ -266,7 +266,7 @@ void main() {
         scheduleId: scheduleId,
         clientId: 'c1',
         requestId: 0,
-        sendToClient: (_, __) async {},
+        sendToClient: (_, _) async {},
       );
       when(
         () => schedulerService.cancelExecution(scheduleId),
@@ -315,7 +315,7 @@ void main() {
         scheduleId: scheduleId,
         clientId: 'c1',
         requestId: 0,
-        sendToClient: (_, __) async {},
+        sendToClient: (_, _) async {},
       );
       when(
         () => schedulerService.cancelExecution(scheduleId),
@@ -334,7 +334,7 @@ void main() {
         scheduleId: scheduleId,
         clientId: 'c1',
         requestId: 0,
-        sendToClient: (_, __) async {},
+        sendToClient: (_, _) async {},
       );
       when(
         () => schedulerService.cancelExecution(scheduleId),

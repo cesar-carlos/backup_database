@@ -77,7 +77,7 @@ void main() {
       final resp = sent.single;
       expect(resp.header.type, MessageType.getRunLogsResponse);
       expect(resp.payload['runId'], 'r1');
-      expect((resp.payload['lines'] as List), ['log1', 'log2']);
+      expect(resp.payload['lines'] as List, ['log1', 'log2']);
       expect(resp.payload['truncated'], isTrue);
       expect(resp.payload['totalLines'], 2);
     });
@@ -138,7 +138,7 @@ void main() {
 
   group('getArtifactMetadata', () {
     test('found com size+hash+expiresAt', () async {
-      final expires = DateTime.utc(2026, 5, 1);
+      final expires = DateTime.utc(2026, 5);
       provider.metaOutcome = DiagnosticsOutcome.found(
         ArtifactMetadataData(
           sizeBytes: 1024,

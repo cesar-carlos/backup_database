@@ -26,7 +26,7 @@ Message createGetRunLogsRequest({
   }
   final payload = <String, dynamic>{
     'runId': runId,
-    if (maxLines != null) 'maxLines': maxLines,
+    'maxLines': ?maxLines,
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -143,9 +143,9 @@ Message createGetRunErrorDetailsResponse({
     'runId': runId,
     'found': found,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
-    if (errorMessage != null) 'errorMessage': errorMessage,
-    if (errorCode != null) 'errorCode': errorCode.code,
-    if (stackTrace != null) 'stackTrace': stackTrace,
+    'errorMessage': ?errorMessage,
+    'errorCode': ?errorCode?.code,
+    'stackTrace': ?stackTrace,
     if (context != null && context.isNotEmpty) 'context': context,
   };
   final statusCode = found ? StatusCodes.ok : StatusCodes.notFound;
@@ -241,11 +241,11 @@ Message createGetArtifactMetadataResponse({
     'runId': runId,
     'found': found,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
-    if (sizeBytes != null) 'sizeBytes': sizeBytes,
-    if (hashAlgorithm != null) 'hashAlgorithm': hashAlgorithm,
-    if (hashValue != null) 'hashValue': hashValue,
-    if (stagingPath != null) 'stagingPath': stagingPath,
-    if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
+    'sizeBytes': ?sizeBytes,
+    'hashAlgorithm': ?hashAlgorithm,
+    'hashValue': ?hashValue,
+    'stagingPath': ?stagingPath,
+    'expiresAt': ?expiresAt?.toUtc().toIso8601String(),
   };
   final statusCode = found ? StatusCodes.ok : StatusCodes.notFound;
   final payload = wrapSuccessResponse(base, statusCode: statusCode);
@@ -321,8 +321,9 @@ Message createCleanupStagingRequest({
   }
   final payload = <String, dynamic>{
     'runId': runId,
-    if (idempotencyKey != null && idempotencyKey.isNotEmpty)
-      'idempotencyKey': idempotencyKey,
+    'idempotencyKey': ?((idempotencyKey?.isNotEmpty ?? false)
+        ? idempotencyKey
+        : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -349,8 +350,8 @@ Message createCleanupStagingResponse({
     'runId': runId,
     'cleaned': cleaned,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
-    if (bytesFreed != null) 'bytesFreed': bytesFreed,
-    if (message != null) 'message': message,
+    'bytesFreed': ?bytesFreed,
+    'message': ?message,
   };
   final payload = wrapSuccessResponse(base);
   final payloadJson = jsonEncode(payload);

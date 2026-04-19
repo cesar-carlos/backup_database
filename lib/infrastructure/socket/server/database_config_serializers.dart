@@ -36,10 +36,9 @@ class DatabaseConfigSerializers {
       port: PortNumber(_intOr(map, 'port', 2638)),
       username: _requireString(map, 'username'),
       password: map['password'] is String ? map['password'] as String : '',
-      enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
-      isReplicationEnvironment: map['isReplicationEnvironment'] is bool
-          ? map['isReplicationEnvironment'] as bool
-          : false,
+      enabled: map['enabled'] is! bool || (map['enabled'] as bool),
+      isReplicationEnvironment: map['isReplicationEnvironment'] is bool &&
+          (map['isReplicationEnvironment'] as bool),
       createdAt: _dateOrNow(map, 'createdAt'),
       updatedAt: _dateOrNow(map, 'updatedAt'),
     );
@@ -82,10 +81,9 @@ class DatabaseConfigSerializers {
       username: map['username'] is String ? map['username'] as String : '',
       password: map['password'] is String ? map['password'] as String : '',
       port: PortNumber(_intOr(map, 'port', 1433)),
-      enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
-      useWindowsAuth: map['useWindowsAuth'] is bool
-          ? map['useWindowsAuth'] as bool
-          : false,
+      enabled: map['enabled'] is! bool || (map['enabled'] as bool),
+      useWindowsAuth:
+          map['useWindowsAuth'] is bool && (map['useWindowsAuth'] as bool),
       createdAt: _dateOrNow(map, 'createdAt'),
       updatedAt: _dateOrNow(map, 'updatedAt'),
     );
@@ -123,7 +121,7 @@ class DatabaseConfigSerializers {
       username: _requireString(map, 'username'),
       password: map['password'] is String ? map['password'] as String : '',
       port: PortNumber(_intOr(map, 'port', 5432)),
-      enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
+      enabled: map['enabled'] is! bool || (map['enabled'] as bool),
       createdAt: _dateOrNow(map, 'createdAt'),
       updatedAt: _dateOrNow(map, 'updatedAt'),
     );

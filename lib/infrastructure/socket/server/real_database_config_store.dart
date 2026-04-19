@@ -133,8 +133,7 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
           );
       }
     }
-    // ignore: avoid_catching_errors — ArgumentError sinaliza payload
-    // malformado do cliente, nao bug do servidor.
+    // ignore: avoid_catching_errors -- ArgumentError do serializer (payload remoto).
     on ArgumentError catch (e) {
       return DatabaseConfigOutcome.failure(
         error: 'Payload de config invalido: $e',
@@ -204,8 +203,7 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
           );
       }
     }
-    // ignore: avoid_catching_errors — ArgumentError sinaliza payload
-    // malformado do cliente, nao bug do servidor.
+    // ignore: avoid_catching_errors -- ArgumentError do serializer (payload remoto).
     on ArgumentError catch (e) {
       return DatabaseConfigOutcome.failure(
         error: 'Payload de config invalido: $e',

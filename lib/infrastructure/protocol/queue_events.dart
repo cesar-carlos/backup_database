@@ -44,8 +44,8 @@ Message createBackupQueuedEvent({
       eventId: eventId,
       serverTimeUtc: serverTimeUtc,
       extra: <String, dynamic>{
-        if (queuePosition != null) 'queuePosition': queuePosition,
-        if (requestedBy != null) 'requestedBy': requestedBy,
+        'queuePosition': ?queuePosition,
+        'requestedBy': ?requestedBy,
       },
       message: message,
     );
@@ -67,7 +67,7 @@ Message createBackupDequeuedEvent({
       eventId: eventId,
       serverTimeUtc: serverTimeUtc,
       extra: <String, dynamic>{
-        if (reason != null) 'reason': reason,
+        'reason': ?reason,
       },
       message: message,
     );
@@ -106,7 +106,7 @@ Message _buildQueueEvent({
     'eventId': eventId,
     'sequence': sequence,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
-    if (message != null) 'message': message,
+    'message': ?message,
     ...extra,
   };
   final payload = wrapSuccessResponse(base);
@@ -195,8 +195,9 @@ Message createCancelQueuedBackupRequest({
   }
   final payload = <String, dynamic>{
     'runId': runId,
-    if (idempotencyKey != null && idempotencyKey.isNotEmpty)
-      'idempotencyKey': idempotencyKey,
+    'idempotencyKey': ?((idempotencyKey?.isNotEmpty ?? false)
+        ? idempotencyKey
+        : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -226,9 +227,9 @@ Message createCancelQueuedBackupResponse({
     'state': state.name,
     'runId': runId,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
-    if (scheduleId != null) 'scheduleId': scheduleId,
-    if (message != null) 'message': message,
-    if (errorCode != null) 'errorCode': errorCode.code,
+    'scheduleId': ?scheduleId,
+    'message': ?message,
+    'errorCode': ?errorCode?.code,
   };
   final statusCode = errorCode != null
       ? StatusCodes.forErrorCode(errorCode)

@@ -10,10 +10,7 @@ void main() {
     test('sem chave: compute SEMPRE roda (idempotencia opt-in)', () async {
       final registry = IdempotencyRegistry();
       var calls = 0;
-      Future<int> compute() async {
-        calls++;
-        return calls;
-      }
+      Future<int> compute() async => ++calls;
 
       final r1 = await registry.runIdempotent(key: null, compute: compute);
       final r2 = await registry.runIdempotent(key: '', compute: compute);
