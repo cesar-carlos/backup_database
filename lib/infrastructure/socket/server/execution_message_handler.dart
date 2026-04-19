@@ -73,7 +73,12 @@ class ExecutionMessageHandler {
   // PR-3a: bus de eventos de fila. Optional — quando nao cabeado,
   // backup ainda funciona, apenas sem publicar backupQueued/Dequeued/
   // Started (cliente fallback para polling via getExecutionQueue).
-  final QueueEventBus? _eventBus;
+  // **Mutavel via setter** para resolver dependencia circular DI:
+  // QueueEventBus precisa do `sendToClient` do TcpSocketServer, que
+  // por sua vez precisa do ExecutionMessageHandler. Cabeamos depois
+  // do registro de ambos (ver infrastructure_module.dart).
+  QueueEventBus? _eventBus;
+  set eventBus(QueueEventBus? bus) => _eventBus = bus;
   final DateTime Function() _clock;
 
   /// Acesso ao queue service para wirings externos (ex.:

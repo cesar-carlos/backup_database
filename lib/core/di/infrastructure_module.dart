@@ -13,15 +13,28 @@ import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/file_transfer_lock_service.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
+import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
+import 'package:backup_database/infrastructure/socket/server/database_config_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/database_config_store.dart';
+import 'package:backup_database/infrastructure/socket/server/database_connection_prober.dart';
+import 'package:backup_database/infrastructure/socket/server/diagnostics_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/diagnostics_provider.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/preflight_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart';
+import 'package:backup_database/infrastructure/socket/server/real_database_config_store.dart';
+import 'package:backup_database/infrastructure/socket/server/real_database_connection_prober.dart';
+import 'package:backup_database/infrastructure/socket/server/real_diagnostics_provider.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/schedule_crud_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
@@ -292,14 +305,118 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       executionRegistry: getIt<RemoteExecutionRegistry>(),
     ),
   );
-  // ExecutionQueueMessageHandler default sem provider — retorna fila
-  // vazia. Wirings em PR-3b (fila persistida) injetarao QueueProvider
-  // que consulta tabela `remote_execution_queue`.
-  getIt.registerLazySingleton<ExecutionQueueMessageHandler>(
-    ExecutionQueueMessageHandler.new,
+  // ========================================================================
+  // PR-2 / PR-3: Wirings concretos para handlers cabeados ao dominio
+  // ========================================================================
+
+  // IdempotencyRegistry compartilhado entre todos os handlers que aceitam
+  // `idempotencyKey` (start/cancel backup, schedule CRUD, database CRUD,
+  // cleanupStaging). Singleton garante que retransmissoes via reconnect
+  // sejam deduplicadas mesmo se chegarem em handlers diferentes.
+  getIt.registerLazySingleton<IdempotencyRegistry>(IdempotencyRegistry.new);
+
+  // ExecutionQueueService compartilhado: ExecutionMessageHandler escreve
+  // (enqueue/drain), ExecutionQueueMessageHandler le (snapshot para
+  // getExecutionQueue). Em PR-3 commit 5 sera trocado por implementacao
+  // persistida.
+  getIt.registerLazySingleton<ExecutionQueueService>(ExecutionQueueService.new);
+
+  // ExecutionMessageHandler com todas as dependencias reais.
+  getIt.registerLazySingleton<ExecutionMessageHandler>(
+    () => ExecutionMessageHandler(
+      scheduleRepository: getIt<IScheduleRepository>(),
+      destinationRepository: getIt<IBackupDestinationRepository>(),
+      licensePolicyService: getIt<ILicensePolicyService>(),
+      schedulerService: getIt<ISchedulerService>(),
+      executeBackup: getIt<ExecuteScheduledBackup>(),
+      progressNotifier: getIt<IBackupProgressNotifier>(),
+      executionRegistry: getIt<RemoteExecutionRegistry>(),
+      idempotencyRegistry: getIt<IdempotencyRegistry>(),
+      queueService: getIt<ExecutionQueueService>(),
+      // QueueEventBus injetado mais abaixo apos TcpSocketServer existir
+      // (precisa do `sendToClient` para broadcast).
+    ),
   );
-  getIt.registerLazySingleton<TcpSocketServer>(
-    () => TcpSocketServer(
+
+  // ScheduleCrudMessageHandler compartilhando idempotency com os demais.
+  getIt.registerLazySingleton<ScheduleCrudMessageHandler>(
+    () => ScheduleCrudMessageHandler(
+      scheduleRepository: getIt<IScheduleRepository>(),
+      idempotencyRegistry: getIt<IdempotencyRegistry>(),
+    ),
+  );
+
+  // RealDatabaseConnectionProber: despacha por tipo aos 3 backup
+  // services existentes (que ja tem `testConnection`). Reaproveita
+  // toda a infra de probe sem reescrever.
+  getIt.registerLazySingleton<DatabaseConnectionProber>(
+    () => RealDatabaseConnectionProber(
+      sybaseService: getIt<ISybaseBackupService>(),
+      sqlServerService: getIt<ISqlServerBackupService>(),
+      postgresService: getIt<IPostgresBackupService>(),
+      sybaseRepository: getIt<ISybaseConfigRepository>(),
+      sqlServerRepository: getIt<ISqlServerConfigRepository>(),
+      postgresRepository: getIt<IPostgresConfigRepository>(),
+    ),
+  );
+
+  // RealDatabaseConfigStore: despacha CRUD por tipo aos 3 repositorios.
+  // Senhas NAO sao incluidas em respostas de listagem por default
+  // (controlado pelo serializer).
+  getIt.registerLazySingleton<DatabaseConfigStore>(
+    () => RealDatabaseConfigStore(
+      sybaseRepository: getIt<ISybaseConfigRepository>(),
+      sqlServerRepository: getIt<ISqlServerConfigRepository>(),
+      postgresRepository: getIt<IPostgresConfigRepository>(),
+    ),
+  );
+
+  // DatabaseConfigMessageHandler com prober + store reais + idempotency
+  // compartilhada.
+  getIt.registerLazySingleton<DatabaseConfigMessageHandler>(
+    () => DatabaseConfigMessageHandler(
+      prober: getIt<DatabaseConnectionProber>(),
+      store: getIt<DatabaseConfigStore>(),
+      idempotencyRegistry: getIt<IdempotencyRegistry>(),
+    ),
+  );
+
+  // RealDiagnosticsProvider: best-effort v1, mapeia runId -> scheduleId
+  // (formato `<scheduleId>_<uuid>`) para consultar BackupHistory/Log
+  // existentes. Em PR final substituir por lookup direto quando coluna
+  // `runId` for adicionada.
+  getIt.registerLazySingleton<DiagnosticsProvider>(
+    () => RealDiagnosticsProvider(
+      historyRepository: getIt<IBackupHistoryRepository>(),
+      logRepository: getIt<IBackupLogRepository>(),
+      stagingBasePath: transferBasePath,
+    ),
+  );
+
+  // DiagnosticsMessageHandler com provider real + idempotency.
+  getIt.registerLazySingleton<DiagnosticsMessageHandler>(
+    () => DiagnosticsMessageHandler(
+      provider: getIt<DiagnosticsProvider>(),
+      idempotencyRegistry: getIt<IdempotencyRegistry>(),
+    ),
+  );
+
+  // ExecutionQueueMessageHandler compartilha snapshot da fila com
+  // ExecutionMessageHandler. Wiring usa o queueService.snapshot() como
+  // QueueProvider.
+  getIt.registerLazySingleton<ExecutionQueueMessageHandler>(
+    () => ExecutionQueueMessageHandler(
+      queueProvider: () async => getIt<ExecutionQueueService>().snapshot(),
+    ),
+  );
+
+  // TcpSocketServer com TODOS os handlers cabeados. Apos a instanciacao,
+  // resolvemos a dependencia circular `ExecutionMessageHandler ↔
+  // QueueEventBus ↔ TcpSocketServer.sendToClient` via setter no
+  // handler. Lazy: o cabeamento so acontece quando o servidor e de
+  // fato resolvido pela primeira vez (na chamada `start()` da app).
+  getIt.registerLazySingleton<TcpSocketServer>(() {
+    final server = TcpSocketServer(
       serverCredentialDao: getIt<AppDatabase>().serverCredentialDao,
       licenseValidationService: getIt<ILicenseValidationService>(),
       clientManager: getIt<ClientManager>(),
@@ -312,7 +429,26 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       preflightHandler: getIt<PreflightMessageHandler>(),
       executionStatusHandler: getIt<ExecutionStatusMessageHandler>(),
       executionQueueHandler: getIt<ExecutionQueueMessageHandler>(),
-    ),
-  );
+      databaseConfigHandler: getIt<DatabaseConfigMessageHandler>(),
+      executionHandler: getIt<ExecutionMessageHandler>(),
+      scheduleCrudHandler: getIt<ScheduleCrudMessageHandler>(),
+      diagnosticsHandler: getIt<DiagnosticsMessageHandler>(),
+    );
+    // Resolve dependencia circular pos-instanciacao:
+    // QueueEventBus precisa do `sendToClient` do server; o
+    // ExecutionMessageHandler ja foi construido e recebe o bus
+    // por setter. Sem isso, eventos backupQueued/Dequeued/Started
+    // nao seriam publicados no socket.
+    final eventBus = QueueEventBus(
+      broadcast: server.sendToClient,
+    );
+    getIt<ExecutionMessageHandler>().eventBus = eventBus;
+    if (!getIt.isRegistered<QueueEventBus>()) {
+      getIt.registerSingleton<QueueEventBus>(eventBus);
+    }
+    return server;
+  });
+
+  // SocketServerService aliasing
   getIt.registerLazySingleton<SocketServerService>(getIt.get<TcpSocketServer>);
 }
