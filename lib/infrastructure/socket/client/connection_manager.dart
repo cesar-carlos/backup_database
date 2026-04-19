@@ -11,6 +11,7 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
@@ -1242,6 +1243,48 @@ class ConnectionManager {
     } on TimeoutException {
       _pendingRequests.remove(requestId);
       return rd.Failure(TimeoutException('getExecutionStatus timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// Lista a fila atual de execucoes aguardando slot livre (PR-3b).
+  ///
+  /// Hoje (PR-1) o servidor retorna lista vazia — mutex global de 1
+  /// backup ainda rejeita disparo concorrente em vez de enfileirar.
+  /// Quando PR-3b habilitar fila persistida, o mesmo endpoint retornara
+  /// itens reais sem mudanca no contrato (forward-compat ja garantida
+  /// pelo `ExecutionQueueResult`).
+  Future<rd.Result<ExecutionQueueResult>> getExecutionQueue() async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(createExecutionQueueRequestMessage(requestId: requestId));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (!isExecutionQueueResponseMessage(message)) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para executionQueue: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readExecutionQueueFromResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('getExecutionQueue timeout'));
     } on Object catch (e) {
       _pendingRequests.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));

@@ -599,4 +599,30 @@ void main() {
       expect(result.isError(), isTrue);
     });
   });
+
+  group('ConnectionManager getExecutionQueue (PR-3b base)', () {
+    test('retorna fila vazia quando servidor sem provider customizado',
+        () async {
+      final port = getPort();
+      await server.start(port: port);
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final result = await manager.getExecutionQueue();
+      final queue = result.getOrNull();
+      expect(queue, isNotNull);
+      // ExecutionQueueMessageHandler default vem com provider vazio
+      expect(queue!.queue, isEmpty);
+      expect(queue.totalQueued, 0);
+      expect(queue.maxQueueSize, 50, reason: 'M8 default');
+      expect(queue.isEmpty, isTrue);
+      expect(queue.isFull, isFalse);
+    });
+
+    test('falha quando nao conectado', () async {
+      expect(manager.isConnected, isFalse);
+
+      final result = await manager.getExecutionQueue();
+      expect(result.isError(), isTrue);
+    });
+  });
 }

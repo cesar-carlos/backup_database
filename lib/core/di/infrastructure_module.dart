@@ -15,6 +15,7 @@ import 'package:backup_database/infrastructure/scripts/backup_script_orchestrato
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
@@ -291,6 +292,12 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       executionRegistry: getIt<RemoteExecutionRegistry>(),
     ),
   );
+  // ExecutionQueueMessageHandler default sem provider — retorna fila
+  // vazia. Wirings em PR-3b (fila persistida) injetarao QueueProvider
+  // que consulta tabela `remote_execution_queue`.
+  getIt.registerLazySingleton<ExecutionQueueMessageHandler>(
+    ExecutionQueueMessageHandler.new,
+  );
   getIt.registerLazySingleton<TcpSocketServer>(
     () => TcpSocketServer(
       serverCredentialDao: getIt<AppDatabase>().serverCredentialDao,
@@ -304,6 +311,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       healthHandler: getIt<HealthMessageHandler>(),
       preflightHandler: getIt<PreflightMessageHandler>(),
       executionStatusHandler: getIt<ExecutionStatusMessageHandler>(),
+      executionQueueHandler: getIt<ExecutionQueueMessageHandler>(),
     ),
   );
   getIt.registerLazySingleton<SocketServerService>(getIt.get<TcpSocketServer>);

@@ -1,0 +1,23 @@
+{
+  "type": "executionQueueResponse",
+  "payload": {
+    "queue": [
+      {
+        "runId": "sched-A_uuid-aaa",
+        "scheduleId": "sched-A",
+        "queuedAt": "2026-04-19T11:30:00.000Z",
+        "queuedPosition": 1,
+        "requestedBy": "client-X"
+      },
+      {
+        "runId": "sched-B_uuid-bbb",
+        "scheduleId": "sched-B",
+        "queuedAt": "2026-04-19T11:45:00.000Z",
+        "queuedPosition": 2
+      }
+    ],
+    "totalQueued": 2,
+    "maxQueueSize": 50,
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z"
+  }
+}

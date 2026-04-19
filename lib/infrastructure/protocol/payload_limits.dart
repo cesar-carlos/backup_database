@@ -56,6 +56,13 @@ class PayloadLimits {
     MessageType.executionStatusRequest: 1 * 1024,
     MessageType.executionStatusResponse: 4 * 1024,
 
+    // ---- Execution queue (PR-3b base) ----
+    // Request vazio; response cresce com lista de itens enfileirados
+    // mas e limitada por `maxQueueSize` (default 50 conforme M8).
+    // ~200 bytes por item -> 50 * 200 = ~10KB; 32KB cobre folgado.
+    MessageType.executionQueueRequest: 1 * 1024,
+    MessageType.executionQueueResponse: 32 * 1024,
+
     // ---- Schedule commands ----
     // Lista pode ser grande se tiver muitos schedules; update/scheduleUpdated
     // carregam um schedule completo com config JSON.

@@ -1,0 +1,9 @@
+{
+  "type": "executionQueueResponse",
+  "payload": {
+    "queue": [],
+    "totalQueued": 0,
+    "maxQueueSize": 50,
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z"
+  }
+}

@@ -40,4 +40,6 @@ enum MessageType {
   preflightResponse,
   executionStatusRequest,
   executionStatusResponse,
+  executionQueueRequest,
+  executionQueueResponse,
 }

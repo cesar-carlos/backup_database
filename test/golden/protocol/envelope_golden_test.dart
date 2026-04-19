@@ -5,6 +5,7 @@ import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -397,6 +398,50 @@ void main() {
             message: 'Execucao nao encontrada no registry ativo',
           );
           _assertGolden(msg, 'execution_status_response_not_found');
+        },
+      );
+    });
+
+    group('execution queue (PR-3b base)', () {
+      test('executionQueueRequest tem payload vazio', () {
+        final msg = createExecutionQueueRequestMessage();
+        _assertGolden(msg, 'execution_queue_request');
+      });
+
+      test('executionQueueResponse fila vazia (PR-1 default)', () {
+        final msg = createExecutionQueueResponseMessage(
+          requestId: 1,
+          queue: const <QueuedExecution>[],
+          maxQueueSize: 50,
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+        );
+        _assertGolden(msg, 'execution_queue_response_empty');
+      });
+
+      test(
+        'executionQueueResponse com 2 itens enfileirados (PR-3b futuro)',
+        () {
+          final msg = createExecutionQueueResponseMessage(
+            requestId: 1,
+            queue: [
+              QueuedExecution(
+                runId: 'sched-A_uuid-aaa',
+                scheduleId: 'sched-A',
+                queuedAt: DateTime.utc(2026, 4, 19, 11, 30),
+                queuedPosition: 1,
+                requestedBy: 'client-X',
+              ),
+              QueuedExecution(
+                runId: 'sched-B_uuid-bbb',
+                scheduleId: 'sched-B',
+                queuedAt: DateTime.utc(2026, 4, 19, 11, 45),
+                queuedPosition: 2,
+              ),
+            ],
+            maxQueueSize: 50,
+            serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+          );
+          _assertGolden(msg, 'execution_queue_response_with_items');
         },
       );
     });
