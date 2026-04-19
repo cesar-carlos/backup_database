@@ -14,7 +14,8 @@ Este script:
 1. ✅ Sincroniza a versão do `pubspec.yaml` com o `setup.iss`
 2. ✅ Verifica se o projeto foi compilado
 3. ✅ Baixa `vc_redist.x64.exe` automaticamente se ausente
-4. ✅ Compila o instalador automaticamente
+4. ✅ Garante `nssm.exe` (win64) — baixa o zip oficial se necessário
+5. ✅ Compila o instalador automaticamente
 
 ### Método Manual
 

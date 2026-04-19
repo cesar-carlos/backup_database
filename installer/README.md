@@ -98,8 +98,9 @@ Este script:
 1. Sincroniza a versão do `pubspec.yaml` com o `setup.iss`
 2. Verifica o build do Flutter (`backup_database.exe`)
 3. Baixa `vc_redist.x64.exe` automaticamente se ausente
-4. Compila o instalador usando Inno Setup
-5. Informa onde o instalador foi criado
+4. Garante `nssm.exe` (win64) em `dependencies\nssm-2.24\win64\`, baixando o zip oficial se necessário
+5. Compila o instalador usando Inno Setup
+6. Informa onde o instalador foi criado
 
 ## Estrutura do Instalador
 
@@ -171,6 +172,15 @@ O `build_installer.py` baixa automaticamente o `vc_redist.x64.exe` se não exist
 
 Se o download automático falhar (ex.: sem internet), baixe manualmente de https://aka.ms/vs/17/release/vc_redist.x64.exe e salve em `installer\dependencies\vc_redist.x64.exe`.
 
+## NSSM (instalação como serviço Windows)
+
+O `setup.iss` empacota o **NSSM** em `{app}\tools\nssm.exe` para os scripts `install_service.ps1` / `uninstall_service.ps1`.
+
+- O `build_installer.py` baixa o zip oficial [nssm 2.24](https://nssm.cc/release/nssm-2.24.zip) se `installer\dependencies\nssm-2.24\win64\nssm.exe` não existir e extrai só o binário **win64**.
+- Se o download falhar, baixe o zip manualmente, extraia `win64\nssm.exe` e coloque em `installer\dependencies\nssm-2.24\win64\nssm.exe` (caminho exato usado pelo Inno Setup).
+
+Em ambientes Windows 10 **Creators Update** ou mais novos, a página do NSSM recomenda builds mais recentes para um edge case de serviço; o **2.24** permanece o padrão do instalador por ser estável e reproduzível. Para trocar de versão, substitua o `nssm.exe` nessa pasta e ajuste o caminho em `setup.iss` se mudar a árvore de pastas.
+
 ## Testando o Instalador
 
 Antes de distribuir:
@@ -217,4 +227,4 @@ Para problemas ou dúvidas:
 
 ---
 
-**Última atualização**: Versão 2.4.1
+**Última atualização**: fluxo de build com NSSM automático (alinhado ao `pubspec` 3.x)

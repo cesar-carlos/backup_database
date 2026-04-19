@@ -9,10 +9,14 @@ import shutil
 import subprocess
 import sys
 import urllib.request
+import zipfile
 from pathlib import Path
 
 
 VC_REDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+# Binario oficial 2.24 (win64) — mesmo layout esperado por setup.iss
+NSSM_ZIP_URL = "https://nssm.cc/release/nssm-2.24.zip"
+NSSM_ZIP_MEMBER = "nssm-2.24/win64/nssm.exe"
 
 
 def step(message: str) -> None:
@@ -93,6 +97,45 @@ def normalize_version(version: str | None) -> str | None:
     if not version:
         return None
     return version.split("+", 1)[0].strip()
+
+
+def ensure_nssm_exe(script_root: Path) -> bool:
+    """Garante installer/dependencies/nssm-2.24/win64/nssm.exe (setup.iss)."""
+    nssm_exe = script_root / "dependencies" / "nssm-2.24" / "win64" / "nssm.exe"
+    if nssm_exe.is_file():
+        print("OK: nssm.exe encontrado")
+        return True
+
+    nssm_exe.parent.mkdir(parents=True, exist_ok=True)
+    zip_path = script_root / "dependencies" / ".nssm-2.24.zip.tmp"
+    print("  Baixando nssm-2.24.zip (win64)...")
+    try:
+        urllib.request.urlretrieve(NSSM_ZIP_URL, zip_path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERRO: falha ao baixar NSSM: {exc}")
+        print(f"Baixe manualmente de: {NSSM_ZIP_URL}")
+        print(f"Extraia win64/nssm.exe para: {nssm_exe}")
+        return False
+
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            try:
+                data = zf.read(NSSM_ZIP_MEMBER)
+            except KeyError:
+                names = [n for n in zf.namelist() if n.replace("\\", "/").endswith("win64/nssm.exe")]
+                if not names:
+                    print("ERRO: win64/nssm.exe nao encontrado no zip do NSSM.")
+                    return False
+                data = zf.read(names[0])
+        nssm_exe.write_bytes(data)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERRO: falha ao extrair nssm.exe: {exc}")
+        return False
+    finally:
+        zip_path.unlink(missing_ok=True)
+
+    print(f"OK: nssm.exe extraido para {nssm_exe}")
+    return True
 
 
 def main() -> int:
@@ -186,7 +229,12 @@ def main() -> int:
         print("OK: vc_redist.x64.exe encontrado")
     print()
 
-    step("Passo 4: Localizando Inno Setup Compiler...")
+    step("Passo 4: Verificando NSSM (servico Windows)...")
+    if not ensure_nssm_exe(script_root):
+        return 1
+    print()
+
+    step("Passo 5: Localizando Inno Setup Compiler...")
     iscc_path = find_iscc()
     if iscc_path is None:
         print("ERRO: Inno Setup Compiler nao encontrado.")
@@ -195,7 +243,7 @@ def main() -> int:
     print(f"OK: Inno Setup encontrado: {iscc_path}")
     print()
 
-    step("Passo 5: Compilando instalador...")
+    step("Passo 6: Compilando instalador...")
     print("Aguarde, isso pode levar alguns minutos...")
 
     code = run_command([str(iscc_path), str(setup_iss_path.resolve())], cwd=script_root)
