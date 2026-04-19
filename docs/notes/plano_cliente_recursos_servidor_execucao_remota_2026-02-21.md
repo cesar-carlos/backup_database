@@ -2,7 +2,7 @@
 
 Data base: 2026-02-21
 Atualizado em: 2026-04-19
-Status: Em revisao - infraestrutura base estavel; PR-1 ainda nao iniciado, mas avancos pontuais (pre-auth guard implicito, runId interno, lock cleanup) ja existem no codigo
+Status: PR-1 majoritariamente entregue em infraestrutura — 6 endpoints de inspecao do servidor (capabilities, health, session, preflight, executionStatus, executionQueue), wire version validation, payload limits per type, runId no contrato, registry sem singleton. **Nao entregue de PR-1**: envelope REST-like (`statusCode`/`success`/`data`/`error`), guard explicito pre-auth, errorCode em todos handlers (inclusive `createScheduleErrorMessage`), checks reais cabeados em preflight/health, observabilidade completa. **PR-2/PR-3/PR-4 ainda nao iniciados** mas estruturas-base ja preparadas (registry runId-aware, capabilities como gate, fila vazia retornavel).
 Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 
 ## Estado de Implementacao (2026-04-19)
@@ -46,31 +46,38 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 
 ### Lacunas identificadas (bloqueiam P0)
 
+Itens marcados ~~assim~~ foram resolvidos durante esta sessao (ver "Avancos
+confirmados" para detalhes). Itens sem marca ainda bloqueiam.
+
 - `client_handler.dart` ja garante ordenacao auth-first via pause/resume do subscription, mas ainda falta o guard explicito que retorna erro padronizado quando uma mensagem operacional chega com `isAuthenticated == false` (cenario de implementacoes terceiras ou regressao)
 - `createScheduleErrorMessage` omite `errorCode` no payload - erro de schedule nao segue contrato padronizado
 - Sem envelope de resposta REST-like com `statusCode` padronizado
 - Sem tabela oficial de status code para operacoes remotas
-- Sem `capabilitiesRequest` / `capabilitiesResponse` no protocolo
+- ~~Sem `capabilitiesRequest` / `capabilitiesResponse` no protocolo~~ — entregue em 2026-04-19
 - Sem CRUD remoto de configuracao de banco (`createDatabaseConfig`, etc.)
 - Sem `testDatabaseConnection` remoto
-- ~~Sem `getExecutionStatus` para polling de execucao em curso~~ — entregue em 2026-04-19 (ver Avancos confirmados)
-- Sem `validateServerBackupPrerequisites` (preflight de compactacao/pasta temp)
+- ~~Sem `getExecutionStatus` para polling de execucao em curso~~ — entregue em 2026-04-19
+- ~~Sem `validateServerBackupPrerequisites` (preflight de compactacao/pasta temp)~~ — entregue em 2026-04-19 (infraestrutura; checks reais pendentes)
 - Sem regra formal de concorrencia: existe apenas o set in-memory `_executingSchedules`, sem mutex global persistido nem `errorCode` padronizado
-- Sem regra formal de fila para disparos agendados quando ha backup em execucao
-- Sem endpoint formal para health do servidor (`getServerHealth`)
-- ~~Sem endpoint formal para sessao atual (`getSession` / `whoAmI`)~~ — entregue em 2026-04-19 (ver Avancos confirmados)
+- Sem regra formal de fila para disparos agendados quando ha backup em execucao (endpoint `getExecutionQueue` existe mas retorna vazio; PR-3b precisa popular)
+- ~~Sem endpoint formal para health do servidor (`getServerHealth`)~~ — entregue em 2026-04-19 (infraestrutura; checks reais pendentes)
+- ~~Sem endpoint formal para sessao atual (`getSession` / `whoAmI`)~~ — entregue em 2026-04-19
 - Sem endpoint para cancelar item enfileirado (`cancelQueuedBackup`)
 - Sem endpoint para metadados do artefato (`getArtifactMetadata`)
 - Sem endpoint de diagnostico por execucao (`getRunLogs`, `getRunErrorDetails`)
 - Sem comandos de agendamento completos (`createSchedule`, `deleteSchedule`, `pauseSchedule`, `resumeSchedule`)
-- Sem idempotencia por `runId` ou `idempotencyKey` (apesar do `runId` ja existir internamente em logs)
+- Sem idempotencia por `runId` ou `idempotencyKey` (apesar do `runId` ja existir internamente em logs e exposto em eventos `backupProgress/Complete/Failed`)
 - Execucao remota ainda envia para destinos no servidor antes de expor artefato ao cliente
-- Scheduler local do servidor continua disparando por timer (`_checkTimer` periodico de 1 minuto); plano ainda nao fecha se a agenda sera cliente-driven ou servidor-persistida com orquestracao remota
+- Scheduler local do servidor continua disparando por timer (`_checkTimer` periodico de 1 minuto); plano ja decidido como hibrido via ADR-001 mas implementacao do `executionOrigin` pendente
 - Staging remoto continua indexado por `scheduleId` em `TransferStagingService.copyToStaging/cleanupStaging` (pasta `remote/<scheduleId>/...`), o que conflita com fila, retry e multiplas execucoes do mesmo agendamento
 - Fluxo remoto ainda depende de validacao de pasta local de downloads no cliente antes de iniciar comando no servidor
 - Contrato proposto usa `requestId` UUID string, mas o protocolo binario atual suporta `requestId` inteiro (`uint32`) no header
 - `ConnectionManager.executeSchedule` continua bloqueante (aguarda completer com `SocketConfig.backupExecutionTimeout` ate o backup terminar) - precisa virar aceite imediato com acompanhamento por `runId`
 - `RemoteFileTransferProvider.transferCompletedBackupToClient` continua chamando `_transferStagingService.cleanupStaging(scheduleId)` localmente em vez de delegar ao servidor (mesmo gap apontado em 2026-03-24)
+- ~~Sem cobertura de regressao em forma de golden tests do envelope JSON~~ — entregue em 2026-04-19 (36 fixtures cobrindo todos os tipos)
+- ~~Sem mecanismo de validacao de wire version no parser~~ — entregue em 2026-04-19 (`UnsupportedProtocolVersionException` + `ErrorCode.unsupportedProtocolVersion`)
+- ~~Sem limite de payload por tipo de mensagem~~ — entregue em 2026-04-19 (`PayloadLimits` + `ErrorCode.payloadTooLarge`)
+- ~~Singleton bug em `ScheduleMessageHandler` (`_currentClientId` etc.) corrompendo estado em cenarios concorrentes~~ — eliminado em 2026-04-19 via `RemoteExecutionRegistry`
 
 ---
 
@@ -350,29 +357,35 @@ Politica oficial:
 
 ## Contrato Minimo da API Remota (Cliente -> Servidor)
 
-- [~] Auth e sessao:
+- [x] Auth e sessao: _(trio do handshake completo em 2026-04-19)_
   - [x] `authRequest`, `authResponse`
-  - [ ] `capabilitiesRequest`, `capabilitiesResponse`
+  - [x] `capabilitiesRequest`, `capabilitiesResponse`
+  - [x] `healthRequest`, `healthResponse`
+  - [x] `sessionRequest`, `sessionResponse`
 - [ ] Configuracao de banco:
   - [ ] `createDatabaseConfig`, `updateDatabaseConfig`, `deleteDatabaseConfig`
   - [ ] `listDatabaseConfigs`, `getDatabaseConfigById`
   - [ ] `testDatabaseConnection`
+- [~] Preflight: _(infraestrutura entregue em 2026-04-19)_
+  - [x] `preflightRequest`, `preflightResponse` (`validateServerBackupPrerequisites`)
+  - [ ] checks reais cabeados no DI (`ToolVerificationService`, `validate_backup_directory`, `StorageChecker`, `validate_sybase_log_backup_preflight`)
 - [~] Execucao remota sob comando do cliente:
   - [x] `executeBackup` _(implementado como `executeSchedule`)_
   - [x] `cancelBackup` _(implementado como `cancelSchedule`)_
-  - [ ] `getExecutionStatus`
-  - [ ] `getExecutionQueue`
+  - [x] `getExecutionStatus` _(entregue em 2026-04-19)_
+  - [~] `getExecutionQueue` _(endpoint entregue em 2026-04-19; provider sempre vazio em PR-1; PR-3b vai popular via fila persistida)_
 - [x] Execucao e progresso:
-  - [x] `backupProgress`, `backupComplete`, `backupFailed`
+  - [x] `backupProgress`, `backupComplete`, `backupFailed` (com `runId` opcional desde M2.3)
   - [ ] `backupQueued`, `backupDequeued`, `backupStarted`
 - [x] Artefato final:
   - [x] `listFiles`, `fileTransferStart`, `fileChunk`, `fileTransferProgress`, `fileTransferComplete`
-- [x] Metricas:
-  - [x] `metricsRequest`, `metricsResponse`
+- [x] Metricas: _(enriquecida em 2026-04-19)_
+  - [x] `metricsRequest`, `metricsResponse` (com `serverTimeUtc`, `activeRunCount`, `activeRunId`, `stagingUsageBytes`)
 - [~] Erros:
   - [x] `error` com `errorCode`, `errorMessage`, `requestId` - estrutura existe em `createErrorMessage`
   - [ ] `statusCode` e payload de erro padrao para todos handlers
   - [ ] `createScheduleErrorMessage` nao inclui `errorCode` - contrato inconsistente
+  - [x] novos `errorCode`: `unsupportedProtocolVersion`, `payloadTooLarge` _(entregues em 2026-04-19)_
 
 ## Matriz de Disponibilidade Atual (Confirmado no Codigo)
 
@@ -405,23 +418,41 @@ Data de verificacao: 2026-04-19
   - cliente: `ConnectionManager.requestFile(...)`
   - observacao: resume por `startChunk` e validacao de integridade por tamanho/hash no cliente
 - [x] Consultar metricas do servidor:
-  - mensagens: `metricsRequest` -> `metricsResponse`
+  - mensagens: `metricsRequest` -> `metricsResponse` (enriquecido em 2026-04-19 com `serverTimeUtc`, `activeRunCount`, `activeRunId`, `stagingUsageBytes`)
   - cliente: `ConnectionManager.getServerMetrics()`
+- [x] Negociar features com o servidor (capabilities):
+  - mensagens: `capabilitiesRequest` -> `capabilitiesResponse` (entregue em 2026-04-19)
+  - cliente: `ConnectionManager.getServerCapabilities()` + `refreshServerCapabilities()` + auto-refresh em `connect()` + 4 getters convenientes (`isRunIdSupported` etc.)
+  - provider: `ServerConnectionProvider` faz passa-through dos getters
+- [x] Consultar saude do servidor:
+  - mensagens: `healthRequest` -> `healthResponse` (entregue em 2026-04-19)
+  - cliente: `ConnectionManager.getServerHealth()`
+  - provider: `ServerConnectionProvider.serverHealth` cacheado via `refreshServerStatus()`
+  - observacao: hoje servidor responde apenas com check `socket=true`; checks reais (database, license, staging) cabeados no DI ficam para PR-1
+- [x] Confirmar identidade da sessao:
+  - mensagens: `sessionRequest` -> `sessionResponse` (entregue em 2026-04-19)
+  - cliente: `ConnectionManager.getServerSession()` + `ServerConnectionProvider.serverSession`
+- [x] Validar prerequisites para backup remoto (preflight):
+  - mensagens: `preflightRequest` -> `preflightResponse` (entregue em 2026-04-19)
+  - cliente: `ConnectionManager.validateServerBackupPrerequisites()`
+  - observacao: handler aceita lista vazia de checks por default; checks reais cabeados no DI ficam para PR-1
+- [x] Consultar status de execucao por `runId`:
+  - mensagens: `executionStatusRequest` -> `executionStatusResponse` (entregue em 2026-04-19)
+  - cliente: `ConnectionManager.getExecutionStatus(runId)`
+  - observacao: hoje retorna `running` (registry tem entrada) ou `notFound` (registry vazio); states `queued/completed/failed/cancelled` ficam para PR-3b/3c quando fila e historico forem persistidos
+- [x] Consultar fila de execucoes pendentes:
+  - mensagens: `executionQueueRequest` -> `executionQueueResponse` (entregue em 2026-04-19)
+  - cliente: `ConnectionManager.getExecutionQueue()`
+  - observacao: handler retorna fila vazia por default em PR-1; PR-3b cabeara `QueueProvider` consultando tabela persistida
 
 ### Recursos parcialmente disponiveis (indireto/sem endpoint dedicado)
 
-- [~] Verificar servidor online:
-  - hoje: indireto via `connect()/status/isConnected` no cliente
-  - gap: sem endpoint formal `getServerHealth`
-- [~] Saber se existe backup em andamento:
-  - hoje: indireto via `metricsResponse.backupInProgress` e `SchedulerService.isExecutingBackup`
-  - gap: sem endpoint formal `getExecutionStatus` com `runId`/`state`/`queuedPosition`
 - [~] Regra de concorrencia de backup:
   - hoje: servidor bloqueia segunda execucao concorrente em dois pontos (`SchedulerService.isExecutingBackup` set in-memory + `progressNotifier.tryStartBackup`) e retorna erro textual via `createScheduleErrorMessage`
-  - gap: sem `statusCode`/`errorCode` dedicado (`BACKUP_ALREADY_RUNNING`), sem fila e sem persistencia do estado de execucao
+  - gap: sem `statusCode`/`errorCode` dedicado (`BACKUP_ALREADY_RUNNING`), sem fila persistida e sem persistencia do estado de execucao apos restart
 - [~] Correlacao por `runId`:
-  - hoje: `runId` ja e gerado em `SchedulerService._executeScheduledBackup` (`'${schedule.id}_<uuid>'`) e propagado em `LogContext` e `LicensePolicyService`
-  - gap: nao chega ao contrato remoto (eventos, status, staging e cleanup continuam por `scheduleId`)
+  - hoje: `runId` gerado pelo `RemoteExecutionRegistry` (M2.1) + propagado em `backupProgress/Complete/Failed` (M2.3) + exposto em `metricsResponse.activeRunId` + consultavel via `getExecutionStatus(runId)`
+  - gap: ainda nao chega no staging (continua por `scheduleId`) nem no cleanup remoto; idempotencia por `runId`/`idempotencyKey` ainda pendente
 - [~] Lock de transferencia:
   - hoje: `FileTransferLockService` ja tem `cleanupExpiredLocks(maxAge=30m)` e expira lock apos a janela
   - gap: lock continua sendo arquivo `.lock` por hash do path, sem `owner/runId/acquiredAt/expiresAt` e sem cleanup obrigatorio no bootstrap
@@ -514,11 +545,12 @@ Objetivo: fechar lacunas de seguranca e contrato antes de expandir API.
   - `lib/infrastructure/protocol/schedule_messages.dart` - adicionar `errorCode` em `createScheduleErrorMessage`
   - `lib/infrastructure/socket/server/schedule_message_handler.dart` - propagar `ErrorCode` apropriado em `_sendError` (ex.: `BACKUP_ALREADY_RUNNING` para rejeicao concorrente)
   - `lib/infrastructure/socket/server/metrics_message_handler.dart` - verificar e padronizar
-- [ ] F0.3 Adicionar endpoint de capacidades (`capabilities`) e versao de API remota.
-      Arquivos candidatos:
-  - `lib/infrastructure/protocol/message_types.dart` - adicionar `capabilitiesRequest`, `capabilitiesResponse`
-  - `lib/infrastructure/socket/server/*_message_handler.dart` - novo `CapabilitiesMessageHandler`
-  - `lib/infrastructure/socket/client/connection_manager.dart` - expor `getServerCapabilities()`
+- [x] F0.3 Adicionar endpoint de capacidades (`capabilities`) e versao de API remota. _(entregue em 2026-04-19)_
+  - [x] `MessageType.capabilitiesRequest`, `capabilitiesResponse` adicionados.
+  - [x] `CapabilitiesMessageHandler` criado e roteado em `tcp_socket_server.dart`.
+  - [x] `ConnectionManager.getServerCapabilities()` + `refreshServerCapabilities()` + auto-refresh em `connect()` + 4 getters convenientes.
+  - [x] `protocol_versions.dart` define `kCurrentWireVersion` e `kCurrentProtocolVersion` (ADR-003).
+  - [x] `BinaryProtocol` valida wire version e lanca `UnsupportedProtocolVersionException`; `client_handler` responde com `errorCode = unsupportedProtocolVersion` + disconnect apos flush.
 - [ ] F0.4 Criar testes de seguranca do handshake e rejeicao pre-auth.
 - [ ] F0.5 Definir envelope padrao de response REST-like no socket com `statusCode`, `success`, `data`, `error`.
 - [ ] F0.6 Definir tabela de mapeamento `ErrorCode -> statusCode`.
@@ -527,7 +559,7 @@ DoD Fase 0:
 
 - [ ] Nenhuma mensagem operacional e aceita antes de auth bem-sucedida.
 - [ ] Cliente recebe motivo de erro consistente e acionavel (`statusCode` + `errorCode` + `errorMessage`) em todos os handlers.
-- [ ] Cliente consegue descobrir capacidades/versao do servidor antes de operar.
+- [x] Cliente consegue descobrir capacidades/versao do servidor antes de operar. _(entregue em 2026-04-19 — `ServerCapabilities` snapshot com `protocolVersion`/`wireVersion`/5 flags `supports*`/`chunkSize`/`compression`/`serverTimeUtc`)_
 
 ---
 
@@ -551,12 +583,12 @@ Objetivo: expor na API remota tudo que e necessario para o cliente operar recurs
   - [ ] Validacao e execucao do teste no servidor
   - [ ] Retorno estruturado com motivo de sucesso/falha e `statusCode`/`errorCode`
   - [ ] reutilizar `SybaseBackupService.testConnection`, `SqlServerBackupService.testConnection`, `PostgresBackupService.testConnection`
-- [ ] F1.3 Adicionar API remota de execucao sob comando do cliente:
+- [~] F1.3 Adicionar API remota de execucao sob comando do cliente:
   - [x] `executeBackup` _(via `executeSchedule`)_
   - [x] `cancelBackup` _(via `cancelSchedule`)_
-  - [ ] `getExecutionStatus` - polling de status de execucao em curso
-  - [ ] `getExecutionQueue` - consulta de fila ativa
-  - [ ] reutilizar `SchedulerService.executeNow/cancelExecution` e estado atual exposto em `metricsResponse`
+  - [x] `getExecutionStatus` - polling de status de execucao em curso _(entregue em 2026-04-19; states `running`/`notFound` populados; `queued/completed/failed/cancelled` ficam para PR-3b/3c)_
+  - [~] `getExecutionQueue` - consulta de fila ativa _(endpoint entregue em 2026-04-19; provider sempre vazio em PR-1; PR-3b vai popular)_
+  - [~] reutilizar `SchedulerService.executeNow/cancelExecution` e estado atual exposto em `metricsResponse` _(metricsResponse enriquecido com `activeRunId`/`activeRunCount`)_
 - [ ] F1.4 Enforcar policy de licenca no servidor para configuracao de banco, teste de conexao e execucao.
 - [ ] F1.5 Adaptar `ConnectionManager` e providers de cliente para consumir os novos endpoints sem quebrar fronteiras da arquitetura.
 - [ ] F1.6 Garantir persistencia no servidor de configuracao completa de backup remoto (compressao, checksum, script etc).
