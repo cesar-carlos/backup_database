@@ -13,6 +13,7 @@ import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/preflight_messages.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -501,6 +502,61 @@ void main() {
           },
         );
         _assertGolden(msg, 'test_database_connection_response_success');
+      });
+
+      test('createSchedule request', () {
+        final s = Schedule(
+          id: 's-new',
+          name: 'Backup Diario',
+          databaseConfigId: 'db-1',
+          databaseType: DatabaseType.sqlServer,
+          scheduleType: ScheduleType.daily.name,
+          scheduleConfig: '{}',
+          destinationIds: const ['dest-1'],
+          backupFolder: r'C:\backup',
+          createdAt: DateTime.utc(2026, 4, 19, 12),
+          updatedAt: DateTime.utc(2026, 4, 19, 12),
+        );
+        final msg = createCreateScheduleMessage(
+          requestId: 1,
+          schedule: s,
+          idempotencyKey: 'idem-create',
+        );
+        _assertGolden(msg, 'create_schedule_request');
+      });
+
+      test('deleteSchedule request', () {
+        final msg = createDeleteScheduleMessage(
+          requestId: 2,
+          scheduleId: 's-1',
+          idempotencyKey: 'idem-del',
+        );
+        _assertGolden(msg, 'delete_schedule_request');
+      });
+
+      test('pauseSchedule request', () {
+        final msg = createPauseScheduleMessage(
+          requestId: 3,
+          scheduleId: 's-1',
+        );
+        _assertGolden(msg, 'pause_schedule_request');
+      });
+
+      test('resumeSchedule request', () {
+        final msg = createResumeScheduleMessage(
+          requestId: 4,
+          scheduleId: 's-1',
+        );
+        _assertGolden(msg, 'resume_schedule_request');
+      });
+
+      test('scheduleMutationResponse deleted (sem schedule)', () {
+        final msg = createScheduleMutationResponse(
+          requestId: 2,
+          operation: 'deleted',
+          scheduleId: 's-1',
+        );
+        _assertGolden(msg, 'schedule_mutation_response_deleted');
       });
 
       test('startBackupRequest com idempotencyKey', () {

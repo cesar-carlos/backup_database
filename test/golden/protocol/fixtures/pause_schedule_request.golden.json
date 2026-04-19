@@ -1,0 +1,6 @@
+{
+  "type": "pauseSchedule",
+  "payload": {
+    "scheduleId": "s-1"
+  }
+}

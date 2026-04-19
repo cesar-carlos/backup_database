@@ -1,0 +1,6 @@
+{
+  "type": "resumeSchedule",
+  "payload": {
+    "scheduleId": "s-1"
+  }
+}

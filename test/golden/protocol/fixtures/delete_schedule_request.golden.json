@@ -1,0 +1,7 @@
+{
+  "type": "deleteSchedule",
+  "payload": {
+    "scheduleId": "s-1",
+    "idempotencyKey": "idem-del"
+  }
+}

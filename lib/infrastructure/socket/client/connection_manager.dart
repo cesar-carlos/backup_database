@@ -1480,6 +1480,103 @@ class ConnectionManager {
     }
   }
 
+  /// CRUD remoto de schedule (PR-2). Helper unificado que envia uma
+  /// mensagem mutavel (`create`/`delete`/`pause`/`resume`) e aguarda
+  /// `scheduleMutationResponse`.
+  Future<rd.Result<ScheduleMutationResult>> _runScheduleMutation(
+    Message Function(int requestId) build, {
+    required String operationName,
+  }) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(build(requestId));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (!isScheduleMutationResponseMessage(message)) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para $operationName: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readScheduleMutationResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('$operationName timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  Future<rd.Result<ScheduleMutationResult>> createRemoteSchedule({
+    required Schedule schedule,
+    String? idempotencyKey,
+  }) {
+    return _runScheduleMutation(
+      (requestId) => createCreateScheduleMessage(
+        requestId: requestId,
+        schedule: schedule,
+        idempotencyKey: idempotencyKey,
+      ),
+      operationName: 'createSchedule',
+    );
+  }
+
+  Future<rd.Result<ScheduleMutationResult>> deleteRemoteSchedule({
+    required String scheduleId,
+    String? idempotencyKey,
+  }) {
+    return _runScheduleMutation(
+      (requestId) => createDeleteScheduleMessage(
+        requestId: requestId,
+        scheduleId: scheduleId,
+        idempotencyKey: idempotencyKey,
+      ),
+      operationName: 'deleteSchedule',
+    );
+  }
+
+  Future<rd.Result<ScheduleMutationResult>> pauseRemoteSchedule({
+    required String scheduleId,
+    String? idempotencyKey,
+  }) {
+    return _runScheduleMutation(
+      (requestId) => createPauseScheduleMessage(
+        requestId: requestId,
+        scheduleId: scheduleId,
+        idempotencyKey: idempotencyKey,
+      ),
+      operationName: 'pauseSchedule',
+    );
+  }
+
+  Future<rd.Result<ScheduleMutationResult>> resumeRemoteSchedule({
+    required String scheduleId,
+    String? idempotencyKey,
+  }) {
+    return _runScheduleMutation(
+      (requestId) => createResumeScheduleMessage(
+        requestId: requestId,
+        scheduleId: scheduleId,
+        idempotencyKey: idempotencyKey,
+      ),
+      operationName: 'resumeSchedule',
+    );
+  }
+
   Future<rd.Result<Map<String, dynamic>>> getServerMetrics() async {
     if (!isConnected) {
       return rd.Failure(Exception('ConnectionManager not connected'));

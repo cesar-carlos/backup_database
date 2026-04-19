@@ -1,0 +1,27 @@
+{
+  "type": "createSchedule",
+  "payload": {
+    "schedule": {
+      "id": "s-new",
+      "name": "Backup Diario",
+      "databaseConfigId": "db-1",
+      "databaseType": "sqlServer",
+      "scheduleType": "daily",
+      "scheduleConfig": "{}",
+      "destinationIds": [
+        "dest-1"
+      ],
+      "backupFolder": "C:\\backup",
+      "backupType": "full",
+      "truncateLog": true,
+      "compressBackup": true,
+      "compressionFormat": "none",
+      "enabled": true,
+      "enableChecksum": false,
+      "verifyAfterBackup": false,
+      "createdAt": "2026-04-19T12:00:00.000Z",
+      "updatedAt": "2026-04-19T12:00:00.000Z"
+    },
+    "idempotencyKey": "idem-create"
+  }
+}

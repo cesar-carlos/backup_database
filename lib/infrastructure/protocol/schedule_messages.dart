@@ -4,6 +4,7 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_serialization.dart';
 import 'package:backup_database/infrastructure/protocol/status_codes.dart';
 
@@ -95,6 +96,210 @@ Message createExecuteScheduleMessage({
     checksum: 0,
   );
 }
+
+/// CRUD remoto de schedule (PR-2). Operacoes mutaveis aceitam
+/// `idempotencyKey` opcional para protecao contra retransmissao.
+///
+/// `create`: payload contem schedule serializado completo. Servidor
+/// responde com `scheduleMutationResponse` carregando o schedule
+/// criado (id pode ter sido gerado pelo servidor) + envelope.
+///
+/// `delete`/`pause`/`resume`: payload contem `scheduleId`. Resposta
+/// sem schedule (apenas envelope + scheduleId + state).
+
+Message createCreateScheduleMessage({
+  required int requestId,
+  required Schedule schedule,
+  String? idempotencyKey,
+}) {
+  final payload = <String, dynamic>{
+    'schedule': scheduleToMap(schedule),
+    ...?(idempotencyKey != null && idempotencyKey.isNotEmpty
+        ? {'idempotencyKey': idempotencyKey}
+        : null),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.createSchedule,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+Message createDeleteScheduleMessage({
+  required int requestId,
+  required String scheduleId,
+  String? idempotencyKey,
+}) {
+  final payload = <String, dynamic>{
+    'scheduleId': scheduleId,
+    ...?(idempotencyKey != null && idempotencyKey.isNotEmpty
+        ? {'idempotencyKey': idempotencyKey}
+        : null),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.deleteSchedule,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+Message createPauseScheduleMessage({
+  required int requestId,
+  required String scheduleId,
+  String? idempotencyKey,
+}) {
+  final payload = <String, dynamic>{
+    'scheduleId': scheduleId,
+    ...?(idempotencyKey != null && idempotencyKey.isNotEmpty
+        ? {'idempotencyKey': idempotencyKey}
+        : null),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.pauseSchedule,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+Message createResumeScheduleMessage({
+  required int requestId,
+  required String scheduleId,
+  String? idempotencyKey,
+}) {
+  final payload = <String, dynamic>{
+    'scheduleId': scheduleId,
+    ...?(idempotencyKey != null && idempotencyKey.isNotEmpty
+        ? {'idempotencyKey': idempotencyKey}
+        : null),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.resumeSchedule,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+/// Resposta unificada para create/delete/pause/resume. `operation`
+/// identifica qual mutacao gerou a resposta (`created`/`deleted`/
+/// `paused`/`resumed`). `schedule` e o snapshot pos-mutacao quando
+/// aplicavel (pode ser `null` para `delete`). Envelope REST-like
+/// aplicado.
+Message createScheduleMutationResponse({
+  required int requestId,
+  required String operation,
+  required String scheduleId,
+  Schedule? schedule,
+}) {
+  final base = <String, dynamic>{
+    'operation': operation,
+    'scheduleId': scheduleId,
+    ...?(schedule != null ? {'schedule': scheduleToMap(schedule)} : null),
+  };
+  final payload = wrapSuccessResponse(base);
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.scheduleMutationResponse,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+/// Snapshot tipado da resposta de mutacao.
+class ScheduleMutationResult {
+  const ScheduleMutationResult({
+    required this.operation,
+    required this.scheduleId,
+    this.schedule,
+  });
+
+  final String operation;
+  final String scheduleId;
+  final Schedule? schedule;
+
+  bool get isCreated => operation == 'created';
+  bool get isDeleted => operation == 'deleted';
+  bool get isPaused => operation == 'paused';
+  bool get isResumed => operation == 'resumed';
+}
+
+ScheduleMutationResult readScheduleMutationResponse(Message message) {
+  final p = message.payload;
+  final operation = p['operation'] is String ? p['operation'] as String : '';
+  final scheduleId = p['scheduleId'] is String ? p['scheduleId'] as String : '';
+  Schedule? schedule;
+  if (p['schedule'] is Map) {
+    try {
+      schedule = scheduleFromMap(Map<String, dynamic>.from(p['schedule'] as Map));
+    } on Object {
+      schedule = null;
+    }
+  }
+  return ScheduleMutationResult(
+    operation: operation,
+    scheduleId: scheduleId,
+    schedule: schedule,
+  );
+}
+
+/// Helpers para extrair payload do CRUD.
+Schedule getScheduleFromCreatePayload(Message message) {
+  final raw = message.payload['schedule'];
+  if (raw is! Map) {
+    throw ArgumentError(
+      'createSchedule: payload sem campo `schedule` (Map esperado)',
+    );
+  }
+  return scheduleFromMap(Map<String, dynamic>.from(raw));
+}
+
+String getScheduleIdFromMutationPayload(Message message) {
+  final raw = message.payload['scheduleId'];
+  return raw is String ? raw : '';
+}
+
+bool isCreateScheduleMessage(Message message) =>
+    message.header.type == MessageType.createSchedule;
+
+bool isDeleteScheduleMessage(Message message) =>
+    message.header.type == MessageType.deleteSchedule;
+
+bool isPauseScheduleMessage(Message message) =>
+    message.header.type == MessageType.pauseSchedule;
+
+bool isResumeScheduleMessage(Message message) =>
+    message.header.type == MessageType.resumeSchedule;
+
+bool isScheduleMutationResponseMessage(Message message) =>
+    message.header.type == MessageType.scheduleMutationResponse;
 
 /// Constroi mensagem de erro de schedule com envelope REST-like.
 ///

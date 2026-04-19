@@ -1,0 +1,9 @@
+{
+  "type": "scheduleMutationResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 200,
+    "operation": "deleted",
+    "scheduleId": "s-1"
+  }
+}

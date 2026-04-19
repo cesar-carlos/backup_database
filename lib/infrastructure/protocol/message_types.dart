@@ -64,4 +64,14 @@ enum MessageType {
   // estado final do backup ainda chega via `backupFailed`/`Complete`.
   cancelBackupRequest,
   cancelBackupResponse,
+  // PR-2: schedule CRUD remoto (createSchedule, deleteSchedule,
+  // pauseSchedule, resumeSchedule). `updateSchedule` ja existia desde
+  // antes do PR-1; aqui adicionamos os 4 que faltam para CRUD completo.
+  // Resposta unificada `scheduleMutationResponse` carrega o `schedule`
+  // resultante (ou nada quando delete) + envelope REST-like.
+  createSchedule,
+  deleteSchedule,
+  pauseSchedule,
+  resumeSchedule,
+  scheduleMutationResponse,
 }

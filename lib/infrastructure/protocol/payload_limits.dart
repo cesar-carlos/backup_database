@@ -110,6 +110,16 @@ class PayloadLimits {
     MessageType.startBackupResponse: 4 * 1024,
     MessageType.cancelBackupRequest: 4 * 1024,
     MessageType.cancelBackupResponse: 4 * 1024,
+
+    // ---- Schedule CRUD (create/delete/pause/resume, PR-2) ----
+    // create: payload com schedule completo (~256KB worst-case com
+    // configs ricas). delete/pause/resume: scheduleId + idempotency.
+    // Response unificado carrega schedule resultante.
+    MessageType.createSchedule: 256 * 1024,
+    MessageType.deleteSchedule: 4 * 1024,
+    MessageType.pauseSchedule: 4 * 1024,
+    MessageType.resumeSchedule: 4 * 1024,
+    MessageType.scheduleMutationResponse: 256 * 1024,
   };
 
   /// Retorna o limite maximo de payload (em bytes) para o tipo de

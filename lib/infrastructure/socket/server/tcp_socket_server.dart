@@ -18,6 +18,7 @@ import 'package:backup_database/infrastructure/socket/server/client_manager.dart
 import 'package:backup_database/infrastructure/socket/server/database_config_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/schedule_crud_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
@@ -46,6 +47,7 @@ class TcpSocketServer implements SocketServerService {
     ExecutionQueueMessageHandler? executionQueueHandler,
     DatabaseConfigMessageHandler? databaseConfigHandler,
     ExecutionMessageHandler? executionHandler,
+    ScheduleCrudMessageHandler? scheduleCrudHandler,
     SocketLoggerService? socketLogger,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
@@ -70,6 +72,7 @@ class TcpSocketServer implements SocketServerService {
        _databaseConfigHandler =
            databaseConfigHandler ?? DatabaseConfigMessageHandler(),
        _executionHandler = executionHandler,
+       _scheduleCrudHandler = scheduleCrudHandler,
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
     // SessionMessageHandler precisa consultar handlers vivos para
     // reportar a sessao do cliente. Construido aqui (em vez de no
@@ -104,6 +107,8 @@ class TcpSocketServer implements SocketServerService {
   // wiring depende de ScheduleRepository, SchedulerService etc., nem
   // sempre disponivel em testes leves.
   final ExecutionMessageHandler? _executionHandler;
+  // PR-2: schedule CRUD remoto (create/delete/pause/resume).
+  final ScheduleCrudMessageHandler? _scheduleCrudHandler;
   final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
@@ -210,6 +215,9 @@ class TcpSocketServer implements SocketServerService {
         // Optional — quando nao cabeado, mensagens de start/cancel
         // caem em timeout no cliente.
         _executionHandler?.handle(clientId, msg, sendToClient);
+        // PR-2: schedule CRUD (create/delete/pause/resume). Optional
+        // — wiring depende de IScheduleRepository.
+        _scheduleCrudHandler?.handle(clientId, msg, sendToClient);
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );
