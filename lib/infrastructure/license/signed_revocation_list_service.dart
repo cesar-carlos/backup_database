@@ -94,6 +94,15 @@ class SignedRevocationListService implements IRevocationChecker {
 
     final raw = await _loadRevocationListRaw();
     if (raw == null || raw.isEmpty) {
+      // Sem fonte de revogação configurada: nada a aplicar. Anota
+      // explicitamente no log a primeira vez para a operação ter
+      // ciência de que não há enforcement remoto.
+      if (_cachedRevokedKeys == null) {
+        LoggerService.info(
+          'Sem fonte de revogação configurada — nenhum deviceKey '
+          'considerado revogado.',
+        );
+      }
       _cacheExpiresAt = now.add(_cacheTtl);
       _cachedRevokedKeys ??= {};
       return _cachedRevokedKeys!;
@@ -110,12 +119,39 @@ class SignedRevocationListService implements IRevocationChecker {
         );
       },
       (failure) {
-        LoggerService.warning(
-          'Lista de revogação inválida ou não verificada: $failure. '
-          'Usando cache anterior ou lista vazia como fallback seguro.',
-        );
-        _cacheExpiresAt = now.add(_cacheTtl);
-        _cachedRevokedKeys ??= {};
+        // FIX: antes esta ramificação fazia `_cachedRevokedKeys ??= {}`,
+        // o que era fail-OPEN (atacante corrompia a lista → nenhum
+        // device aparecia revogado). Agora preservamos o último
+        // `_cachedRevokedKeys` válido, e só caímos para set vazio se
+        // jamais carregamos uma lista boa antes (estado inicial).
+        // A operação fica com o último snapshot bom até a próxima
+        // tentativa (cache TTL menor para acelerar recuperação).
+        final shortenedTtl =
+            _cacheTtl < const Duration(minutes: 1)
+                ? _cacheTtl
+                : const Duration(minutes: 1);
+        _cacheExpiresAt = now.add(shortenedTtl);
+        // Antes interpolava `$failure` direto na string — para `Failure`
+        // gerava `Failure(message: ..., code: null)` no log. Extraímos
+        // `.message` quando é Failure (caso comum aqui — o
+        // `_parseAndVerify` sempre retorna `ValidationFailure`).
+        final detail = failure is Failure ? failure.message : failure.toString();
+        if (_cachedRevokedKeys == null) {
+          // Nunca tivemos um snapshot bom — fail-CLOSED não é viável
+          // sem quebrar o fluxo, então logamos de forma conspícua.
+          _cachedRevokedKeys = {};
+          LoggerService.error(
+            'Lista de revogação inválida e sem snapshot anterior em cache: '
+            '$detail. Operando SEM enforcement de revogação até a próxima '
+            'tentativa em ${shortenedTtl.inSeconds}s.',
+          );
+        } else {
+          LoggerService.warning(
+            'Lista de revogação inválida ($detail) — preservando snapshot '
+            'anterior (${_cachedRevokedKeys!.length} chaves) por '
+            '${shortenedTtl.inSeconds}s.',
+          );
+        }
       },
     );
     return _cachedRevokedKeys!;

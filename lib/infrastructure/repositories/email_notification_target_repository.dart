@@ -2,6 +2,7 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/domain/repositories/i_email_notification_target_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -14,125 +15,86 @@ class EmailNotificationTargetRepository
   @override
   Future<rd.Result<List<EmailNotificationTarget>>> getByConfigId(
     String emailConfigId,
-  ) async {
-    try {
-      final targets = await _database.emailNotificationTargetDao.getByConfigId(
-        emailConfigId,
-      );
-      return rd.Success(targets.map(_toEntity).toList());
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao buscar destinatarios da configuracao: $e',
-        ),
-      );
-    }
+  ) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar destinatarios da configuracao',
+      action: () async {
+        final targets = await _database.emailNotificationTargetDao
+            .getByConfigId(emailConfigId);
+        return targets.map(_toEntity).toList();
+      },
+    );
   }
 
   @override
-  Future<rd.Result<EmailNotificationTarget>> getById(String id) async {
-    try {
-      final target = await _database.emailNotificationTargetDao.getById(id);
-      if (target == null) {
-        return const rd.Failure(
-          NotFoundFailure(
+  Future<rd.Result<EmailNotificationTarget>> getById(String id) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar destinatario de notificacao',
+      action: () async {
+        final target = await _database.emailNotificationTargetDao.getById(id);
+        if (target == null) {
+          throw const NotFoundFailure(
             message: 'Destinatario de notificacao nao encontrado',
-          ),
-        );
-      }
-      return rd.Success(_toEntity(target));
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao buscar destinatario de notificacao: $e',
-        ),
-      );
-    }
+          );
+        }
+        return _toEntity(target);
+      },
+    );
   }
 
   @override
   Future<rd.Result<EmailNotificationTarget>> create(
     EmailNotificationTarget target,
-  ) async {
+  ) {
     final normalizedTarget = _normalizeTarget(target);
-    try {
-      await _database.emailNotificationTargetDao.insertTarget(
-        _toCompanion(normalizedTarget),
-      );
-      return rd.Success(normalizedTarget);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao criar destinatario de notificacao',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao criar destinatario de notificacao: $e',
-        ),
-      );
-    }
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao criar destinatario de notificacao',
+      action: () async {
+        await _database.emailNotificationTargetDao.insertTarget(
+          _toCompanion(normalizedTarget),
+        );
+        return normalizedTarget;
+      },
+    );
   }
 
   @override
   Future<rd.Result<EmailNotificationTarget>> update(
     EmailNotificationTarget target,
-  ) async {
+  ) {
     final normalizedTarget = _normalizeTarget(target);
-    try {
-      final updated = await _database.emailNotificationTargetDao.updateTarget(
-        _toCompanion(normalizedTarget),
-      );
-      if (!updated) {
-        return const rd.Failure(
-          NotFoundFailure(
-            message: 'Destinatario de notificacao nao encontrado',
-          ),
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao atualizar destinatario de notificacao',
+      action: () async {
+        final updated = await _database.emailNotificationTargetDao.updateTarget(
+          _toCompanion(normalizedTarget),
         );
-      }
-      return rd.Success(normalizedTarget);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao atualizar destinatario de notificacao',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao atualizar destinatario de notificacao: $e',
-        ),
-      );
-    }
+        if (!updated) {
+          throw const NotFoundFailure(
+            message: 'Destinatario de notificacao nao encontrado',
+          );
+        }
+        return normalizedTarget;
+      },
+    );
   }
 
   @override
-  Future<rd.Result<void>> deleteById(String id) async {
-    try {
-      await _database.emailNotificationTargetDao.deleteById(id);
-      return const rd.Success(unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao remover destinatario de notificacao: $e',
-        ),
-      );
-    }
+  Future<rd.Result<void>> deleteById(String id) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao remover destinatario de notificacao',
+      action: () => _database.emailNotificationTargetDao.deleteById(id),
+    );
   }
 
   @override
-  Future<rd.Result<void>> deleteByConfigId(String emailConfigId) async {
-    try {
-      await _database.emailNotificationTargetDao.deleteByConfigId(
+  Future<rd.Result<void>> deleteByConfigId(String emailConfigId) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao remover destinatarios da configuracao',
+      action: () => _database.emailNotificationTargetDao.deleteByConfigId(
         emailConfigId,
-      );
-      return const rd.Success(unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao remover destinatarios da configuracao: $e',
-        ),
-      );
-    }
+      ),
+    );
   }
 
   EmailNotificationTarget _toEntity(EmailNotificationTargetsTableData data) {
@@ -170,4 +132,5 @@ class EmailNotificationTargetRepository
       updatedAt: Value(target.updatedAt),
     );
   }
+
 }

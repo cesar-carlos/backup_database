@@ -1,7 +1,7 @@
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
 import 'package:backup_database/domain/repositories/i_email_test_audit_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -11,17 +11,14 @@ class EmailTestAuditRepository implements IEmailTestAuditRepository {
   final AppDatabase _database;
 
   @override
-  Future<rd.Result<EmailTestAudit>> create(EmailTestAudit audit) async {
-    try {
-      await _database.emailTestAuditDao.insertAudit(_toCompanion(audit));
-      return rd.Success(audit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao salvar auditoria de teste SMTP: $e',
-        ),
-      );
-    }
+  Future<rd.Result<EmailTestAudit>> create(EmailTestAudit audit) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao salvar auditoria de teste SMTP',
+      action: () async {
+        await _database.emailTestAuditDao.insertAudit(_toCompanion(audit));
+        return audit;
+      },
+    );
   }
 
   @override
@@ -30,22 +27,19 @@ class EmailTestAuditRepository implements IEmailTestAuditRepository {
     DateTime? startAt,
     DateTime? endAt,
     int limit = 100,
-  }) async {
-    try {
-      final rows = await _database.emailTestAuditDao.getRecent(
-        configId: configId,
-        startAt: startAt,
-        endAt: endAt,
-        limit: limit,
-      );
-      return rd.Success(rows.map(_toEntity).toList());
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao consultar auditoria de teste SMTP: $e',
-        ),
-      );
-    }
+  }) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao consultar auditoria de teste SMTP',
+      action: () async {
+        final rows = await _database.emailTestAuditDao.getRecent(
+          configId: configId,
+          startAt: startAt,
+          endAt: endAt,
+          limit: limit,
+        );
+        return rows.map(_toEntity).toList();
+      },
+    );
   }
 
   EmailTestAudit _toEntity(EmailTestAuditTableData data) {

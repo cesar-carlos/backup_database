@@ -344,7 +344,7 @@ class WindowsServiceService implements IWindowsServiceService {
         _metrics?.incrementCounter(
           ObservabilityMetrics.windowsServiceInstallFailure,
         );
-        return rd.Failure(preflightFailure as Failure);
+        return rd.Failure(_asFailure(preflightFailure));
       }
 
       LoggerService.info('Instalando serviço do Windows...');
@@ -481,7 +481,7 @@ class WindowsServiceService implements IWindowsServiceService {
               arguments: ['remove', _serviceName, 'confirm'],
               timeout: _timing.longTimeout,
             );
-            return rd.Failure(configFailure as Failure);
+            return rd.Failure(_asFailure(configFailure));
           }
 
           final postStatus = await getStatus();
@@ -894,7 +894,7 @@ class WindowsServiceService implements IWindowsServiceService {
           _metrics?.incrementCounter(
             ObservabilityMetrics.windowsServiceStartFailure,
           );
-          return rd.Failure(stopFailure as Failure);
+          return rd.Failure(_asFailure(stopFailure));
         }
         await Future.delayed(_timing.serviceDelay);
       }
@@ -1922,6 +1922,19 @@ try {
       return true;
     }
     return status.stateCode == WindowsServiceStateCode.stopped;
+  }
+
+  /// Converte o `Object?` que sai de `Result.exceptionOrNull()` em
+  /// `Failure` de forma segura. Os 3 call sites originais usavam
+  /// `failure as Failure` (cast direto), que crashava quando vinha um
+  /// `Exception` puro (ex.: erro do binding). Agora normalizamos
+  /// preservando a mensagem e o erro original.
+  Failure _asFailure(Object failure) {
+    if (failure is Failure) return failure;
+    return ServerFailure(
+      message: failure.toString(),
+      originalError: failure,
+    );
   }
 
   void _appendControlDiagnostics(String message, {String? output}) {

@@ -16,4 +16,12 @@ class SocketConfig {
   static const Duration downloadRetryInitialDelay = Duration(seconds: 2);
   static const Duration downloadRetryMaxDelay = Duration(seconds: 30);
   static const int downloadRetryBackoffMultiplier = 2;
+
+  // Limites de proteção contra peers maliciosos / dados malformados.
+  // [maxMessagePayloadBytes] limita o `length` declarado em cada header
+  // para evitar OOM quando o peer envia um valor absurdo (ex.: 4 GB).
+  // [maxBufferOverhead] é a folga máxima permitida no buffer de leitura
+  // antes de cortar a conexão (peer envia dados sem cabeçalho válido).
+  static const int maxMessagePayloadBytes = 64 * 1024 * 1024; // 64 MB
+  static const int maxBufferOverhead = 128 * 1024 * 1024; // 128 MB
 }

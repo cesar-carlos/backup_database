@@ -67,74 +67,19 @@ class CleanOldBackups {
       try {
         final configJson =
             jsonDecode(destination.config) as Map<String, dynamic>;
+        final deleted = await _cleanForDestination(destination, configJson);
 
         switch (destination.type) {
           case DestinationType.local:
-            final config = LocalDestinationConfig(
-              path: configJson['path'] as String,
-              createSubfoldersByDate:
-                  configJson['createSubfoldersByDate'] as bool? ?? true,
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
-            final result = await _localService.cleanOldBackups(config: config);
-            result.fold((count) => localDeleted += count, (exception) {
-              final failure = exception as Failure;
-              LoggerService.warning('Erro ao limpar local: ${failure.message}');
-            });
-
+            localDeleted += deleted;
           case DestinationType.ftp:
-            final config = FtpDestinationConfig.fromJson(configJson);
-            final result = await _ftpService.cleanOldBackups(config: config);
-            result.fold((count) => ftpDeleted += count, (exception) {
-              final failure = exception as Failure;
-              LoggerService.warning('Erro ao limpar FTP: ${failure.message}');
-            });
-
+            ftpDeleted += deleted;
           case DestinationType.googleDrive:
-            final config = GoogleDriveDestinationConfig(
-              folderId: configJson['folderId'] as String,
-              folderName: configJson['folderName'] as String? ?? 'Backups',
-              accessToken: configJson['accessToken'] as String? ?? '',
-              refreshToken: configJson['refreshToken'] as String? ?? '',
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
-            final result = await _googleDriveService.cleanOldBackups(
-              config: config,
-            );
-            result.fold((count) => googleDriveDeleted += count, (exception) {
-              final failure = exception as Failure;
-              LoggerService.warning(
-                'Erro ao limpar Google Drive: ${failure.message}',
-              );
-            });
-
+            googleDriveDeleted += deleted;
           case DestinationType.dropbox:
-            final config = DropboxDestinationConfig(
-              folderPath: configJson['folderPath'] as String? ?? '',
-              folderName: configJson['folderName'] as String? ?? 'Backups',
-              retentionDays: configJson['retentionDays'] as int? ?? 30,
-            );
-            final result = await _dropboxService.cleanOldBackups(
-              config: config,
-            );
-            result.fold((count) => dropboxDeleted += count, (exception) {
-              final failure = exception as Failure;
-              LoggerService.warning(
-                'Erro ao limpar Dropbox: ${failure.message}',
-              );
-            });
-
+            dropboxDeleted += deleted;
           case DestinationType.nextcloud:
-            final config = NextcloudDestinationConfig.fromJson(configJson);
-            final result = await _nextcloudService.cleanOldBackups(
-              config: config,
-            );
-            result.fold((count) => nextcloudDeleted += count, (exception) {
-              final failure = exception as Failure;
-              LoggerService.warning(
-                'Erro ao limpar Nextcloud: ${failure.message}',
-              );
-            });
+            nextcloudDeleted += deleted;
         }
       } on Object catch (e) {
         LoggerService.warning(
@@ -154,4 +99,72 @@ class CleanOldBackups {
     LoggerService.info('Limpeza concluída: ${result.total} arquivos removidos');
     return rd.Success(result);
   }
+
+  /// Despacha a limpeza para o serviço apropriado e retorna o número de
+  /// arquivos removidos. Centraliza o pattern de fold/log/cast inseguro
+  /// que antes era replicado por destino (5 cópias quase idênticas).
+  Future<int> _cleanForDestination(
+    BackupDestination destination,
+    Map<String, dynamic> configJson,
+  ) async {
+    final result = await _runCleanupByType(destination.type, configJson);
+    return result.fold(
+      (count) => count,
+      (failure) {
+        LoggerService.warning(
+          'Erro ao limpar ${destination.type.name}: ${_failureMessage(failure)}',
+        );
+        return 0;
+      },
+    );
+  }
+
+  Future<rd.Result<int>> _runCleanupByType(
+    DestinationType type,
+    Map<String, dynamic> configJson,
+  ) {
+    switch (type) {
+      case DestinationType.local:
+        return _localService.cleanOldBackups(
+          config: LocalDestinationConfig(
+            path: configJson['path'] as String,
+            createSubfoldersByDate:
+                configJson['createSubfoldersByDate'] as bool? ?? true,
+            retentionDays: configJson['retentionDays'] as int? ?? 30,
+          ),
+        );
+      case DestinationType.ftp:
+        return _ftpService.cleanOldBackups(
+          config: FtpDestinationConfig.fromJson(configJson),
+        );
+      case DestinationType.googleDrive:
+        return _googleDriveService.cleanOldBackups(
+          config: GoogleDriveDestinationConfig(
+            folderId: configJson['folderId'] as String,
+            folderName: configJson['folderName'] as String? ?? 'Backups',
+            accessToken: configJson['accessToken'] as String? ?? '',
+            refreshToken: configJson['refreshToken'] as String? ?? '',
+            retentionDays: configJson['retentionDays'] as int? ?? 30,
+          ),
+        );
+      case DestinationType.dropbox:
+        return _dropboxService.cleanOldBackups(
+          config: DropboxDestinationConfig(
+            folderPath: configJson['folderPath'] as String? ?? '',
+            folderName: configJson['folderName'] as String? ?? 'Backups',
+            retentionDays: configJson['retentionDays'] as int? ?? 30,
+          ),
+        );
+      case DestinationType.nextcloud:
+        return _nextcloudService.cleanOldBackups(
+          config: NextcloudDestinationConfig.fromJson(configJson),
+        );
+    }
+  }
+
+  /// Helper para extrair mensagem amigável de qualquer Failure/Exception.
+  /// Antes era reimplementado inline com `failure as Failure` (cast direto,
+  /// crashava com tipos inesperados).
+  String _failureMessage(Object failure) =>
+      failure is Failure ? failure.message : failure.toString();
 }

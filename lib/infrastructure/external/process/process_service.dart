@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:path/path.dart' as path;
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -24,6 +25,15 @@ class ProcessResult {
 
 class ProcessService {
   static const Duration _executableCacheTtl = Duration(minutes: 10);
+
+  /// Limite máximo de bytes capturados por stream (stdout/stderr) por
+  /// execução. Backups longos (`pg_basebackup -P`, `sqlcmd STATS=10`) podem
+  /// produzir muitos megabytes de progresso; manter tudo em memória pode
+  /// causar OOM. Acima do limite, descartamos os bytes mais antigos
+  /// preservando a parte final, que é onde mensagens de erro tendem a
+  /// aparecer.
+  static const int _maxOutputBytes = 5 * 1024 * 1024; // 5 MB
+
   final Map<String, _ExecutableCacheEntry> _executablePathCache = {};
   final Map<String, Process> _runningProcesses = {};
 
@@ -308,110 +318,9 @@ class ProcessService {
 
       if (!executableFound) {
         _executablePathCache.remove(cacheKey);
-        final executableLower = executable.toLowerCase();
-        final isPostgresTool =
-            executableLower.contains('psql') ||
-            executableLower.contains('pg_basebackup') ||
-            executableLower.contains('pg_verifybackup') ||
-            executableLower.contains('pg_restore') ||
-            executableLower.contains('pg_dump') ||
-            executableLower.contains('pg_receivewal');
-
-        final isSqlCmdTool = executableLower.contains('sqlcmd');
-
-        final isSybaseTool =
-            executableLower.contains('dbisql') ||
-            executableLower.contains('dbbackup') ||
-            executableLower.contains('dbverify') ||
-            executableLower.contains('dbvalid');
-
-        String message;
-
-        if (isPostgresTool) {
-          final toolName = executableLower.contains('pg_basebackup')
-              ? 'pg_basebackup'
-              : executableLower.contains('pg_verifybackup')
-              ? 'pg_verifybackup'
-              : executableLower.contains('pg_restore')
-              ? 'pg_restore'
-              : executableLower.contains('pg_receivewal')
-              ? 'pg_receivewal'
-              : executableLower.contains('pg_dump')
-              ? 'pg_dump'
-              : 'psql';
-
-          message =
-              '$toolName não encontrado no PATH do sistema.\n\n'
-              'INSTRUÇÕES PARA ADICIONAR AO PATH:\n\n'
-              '1. Localize a pasta bin do PostgreSQL instalado\n'
-              '   (geralmente: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-              '2. Adicione ao PATH do Windows:\n'
-              '   - Pressione Win + X e selecione "Sistema"\n'
-              '   - Clique em "Configurações avançadas do sistema"\n'
-              '   - Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
-              '   - Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
-              '   - Clique em "Novo" e adicione o caminho completo da pasta bin\n'
-              '   - Clique em "OK" em todas as janelas\n\n'
-              '3. Reinicie o aplicativo de backup\n\n'
-              r'Consulte: docs\path_setup.md para mais detalhes.';
-        } else if (isSqlCmdTool) {
-          message =
-              'sqlcmd não encontrado no PATH do sistema.\n\n'
-              'O sqlcmd é uma ferramenta de linha de comando do SQL Server.\n\n'
-              'OPÇÕES PARA RESOLVER:\n\n'
-              'Opção 1: Instalar SQL Server Command Line Tools\n'
-              '  - Baixe SQL Server Command Line Tools da Microsoft\n'
-              '  - Durante a instalação, selecione "SQL Server Command Line Tools"\n'
-              '  - O instalador configurará o PATH automaticamente\n\n'
-              'Opção 2: Adicionar ao PATH manualmente\n'
-              '  - Localize a pasta Tools\\Binn do SQL Server instalado\n'
-              '    (ex: C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn)\n'
-              '  - Adicione ao PATH do Windows:\n'
-              '    * Pressione Win + X → "Sistema"\n'
-              '    * Clique em "Configurações avançadas do sistema"\n'
-              '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
-              '    * Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
-              '    * Clique em "Novo" e adicione o caminho completo da pasta\n'
-              '    * Clique em "OK" em todas as janelas\n\n'
-              'Opção 3: Usar SQL Server Management Studio (SSMS)\n'
-              '  - SSMS inclui sqlcmd\n'
-              '  - Localize sqlcmd.exe na pasta do SSMS\n'
-              '  - Adicione a pasta ao PATH conforme Opção 2\n\n'
-              r'Consulte: docs\path_setup.md para mais detalhes.';
-        } else if (isSybaseTool) {
-          final toolName = executableLower.contains('dbisql')
-              ? 'dbisql'
-              : executableLower.contains('dbbackup')
-              ? 'dbbackup'
-              : 'dbverify';
-
-          message =
-              '$toolName não encontrado no PATH do sistema.\n\n'
-              'As ferramentas do Sybase SQL Anywhere não estão disponíveis.\n\n'
-              'OPÇÕES PARA RESOLVER:\n\n'
-              'Opção 1: Adicionar ao PATH manualmente\n'
-              '  - Localize a pasta Bin64 do SQL Anywhere instalado\n'
-              '    (ex: C:\\Program Files\\SQL Anywhere 16\\Bin64)\n'
-              '  - Adicione ao PATH do Windows:\n'
-              '    * Pressione Win + X → "Sistema"\n'
-              '    * Clique em "Configurações avançadas do sistema"\n'
-              '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
-              '    * Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
-              '    * Clique em "Novo" e adicione o caminho completo da pasta Bin64\n'
-              '    * Clique em "OK" em todas as janelas\n\n'
-              'Opção 2: SQL Anywhere não instalado?\n'
-              '  - Baixe e instale SQL Anywhere (versões 11, 12, 16 ou 17)\n'
-              '  - Durante a instalação, selecione "Add to PATH"\n\n'
-              r'Consulte: docs\path_setup.md para mais detalhes.';
-        } else {
-          message =
-              '$executable não encontrado no PATH do sistema.\n\n'
-              'Verifique se a ferramenta está instalada e adicionada ao PATH.';
-        }
-
         return rd.Failure(
           BackupFailure(
-            message: message,
+            message: ToolPathHelp.buildMessage(executable),
             originalError: Exception('$executable não encontrado no PATH'),
           ),
         );
@@ -462,8 +371,8 @@ class ProcessService {
         _runningProcesses[tag] = process;
       }
 
-      final stdoutBytes = <int>[];
-      final stderrBytes = <int>[];
+      final stdoutBuffer = _BoundedByteBuffer(_maxOutputBytes);
+      final stderrBuffer = _BoundedByteBuffer(_maxOutputBytes);
       String? stdoutError;
       String? stderrError;
 
@@ -471,7 +380,7 @@ class ProcessService {
           .listen(
             (chunk) {
               try {
-                stdoutBytes.addAll(chunk);
+                stdoutBuffer.add(chunk);
               } on Object catch (e) {
                 stdoutError = 'Erro ao processar stdout: $e';
                 LoggerService.warning(stdoutError!);
@@ -488,7 +397,7 @@ class ProcessService {
           .listen(
             (chunk) {
               try {
-                stderrBytes.addAll(chunk);
+                stderrBuffer.add(chunk);
               } on Object catch (e) {
                 stderrError = 'Erro ao processar stderr: $e';
                 LoggerService.warning(stderrError!);
@@ -532,8 +441,18 @@ class ProcessService {
         _runningProcesses.remove(tag);
       }
 
-      final stdout = _decodeProcessOutput(stdoutBytes);
-      var stderr = _decodeProcessOutput(stderrBytes);
+      final stdout = _decorateTruncated(
+        _decodeProcessOutput(stdoutBuffer.takeBytes()),
+        truncated: stdoutBuffer.wasTruncated,
+        droppedBytes: stdoutBuffer.droppedBytes,
+        streamName: 'stdout',
+      );
+      var stderr = _decorateTruncated(
+        _decodeProcessOutput(stderrBuffer.takeBytes()),
+        truncated: stderrBuffer.wasTruncated,
+        droppedBytes: stderrBuffer.droppedBytes,
+        streamName: 'stderr',
+      );
 
       if (stdoutError != null) {
         stderr = '${stderr.isEmpty ? '' : '$stderr\n'}$stdoutError';
@@ -589,104 +508,7 @@ class ProcessService {
           errorString.contains('cmdlet') ||
           errorString.contains('programa operável')) {
         _executablePathCache.remove(executable.toLowerCase());
-        final executableLower = executable.toLowerCase();
-        final isPostgresTool =
-            executableLower.contains('psql') ||
-            executableLower.contains('pg_basebackup') ||
-            executableLower.contains('pg_verifybackup') ||
-            executableLower.contains('pg_restore') ||
-            executableLower.contains('pg_dump') ||
-            executableLower.contains('pg_receivewal');
-
-        final isSqlCmdTool = executableLower.contains('sqlcmd');
-
-        final isSybaseTool =
-            executableLower.contains('dbisql') ||
-            executableLower.contains('dbbackup') ||
-            executableLower.contains('dbverify') ||
-            executableLower.contains('dbvalid');
-
-        if (isPostgresTool) {
-          final toolName = executableLower.contains('pg_basebackup')
-              ? 'pg_basebackup'
-              : executableLower.contains('pg_verifybackup')
-              ? 'pg_verifybackup'
-              : executableLower.contains('pg_restore')
-              ? 'pg_restore'
-              : executableLower.contains('pg_receivewal')
-              ? 'pg_receivewal'
-              : executableLower.contains('pg_dump')
-              ? 'pg_dump'
-              : 'psql';
-
-          message =
-              '$toolName não encontrado no PATH do sistema.\n\n'
-              'INSTRUÇÕES PARA ADICIONAR AO PATH:\n\n'
-              '1. Localize a pasta bin do PostgreSQL instalado\n'
-              '   (geralmente: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-              '2. Adicione ao PATH do Windows:\n'
-              '   - Pressione Win + X e selecione "Sistema"\n'
-              '   - Clique em "Configurações avançadas do sistema"\n'
-              '   - Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
-              '   - Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
-              '   - Clique em "Novo" e adicione o caminho completo da pasta bin\n'
-              '   - Clique em "OK" em todas as janelas\n\n'
-              '3. Reinicie o aplicativo de backup\n\n'
-              r'Consulte: docs\path_setup.md para mais detalhes.';
-        } else if (isSqlCmdTool) {
-          message =
-              'sqlcmd não encontrado no PATH do sistema.\n\n'
-              'O sqlcmd é uma ferramenta de linha de comando do SQL Server.\n\n'
-              'OPÇÕES PARA RESOLVER:\n\n'
-              'Opção 1: Instalar SQL Server Command Line Tools\n'
-              '  - Baixe SQL Server Command Line Tools da Microsoft\n'
-              '  - Durante a instalação, selecione "SQL Server Command Line Tools"\n'
-              '  - O instalador configurará o PATH automaticamente\n\n'
-              'Opção 2: Adicionar ao PATH manualmente\n'
-              '  - Localize a pasta Tools\\Binn do SQL Server instalado\n'
-              '    (ex: C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn)\n'
-              '  - Adicione ao PATH do Windows:\n'
-              '    * Pressione Win + X → "Sistema"\n'
-              '    * Clique em "Configurações avançadas do sistema"\n'
-              '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
-              '    * Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
-              '    * Clique em "Novo" e adicione o caminho completo da pasta\n'
-              '    * Clique em "OK" em todas as janelas\n\n'
-              'Opção 3: Usar SQL Server Management Studio (SSMS)\n'
-              '  - SSMS inclui sqlcmd\n'
-              '  - Localize sqlcmd.exe na pasta do SSMS\n'
-              '  - Adicione a pasta ao PATH conforme Opção 2\n\n'
-              r'Consulte: docs\path_setup.md para mais detalhes.';
-        } else if (isSybaseTool) {
-          final toolName = executableLower.contains('dbisql')
-              ? 'dbisql'
-              : executableLower.contains('dbbackup')
-              ? 'dbbackup'
-              : 'dbverify';
-
-          message =
-              '$toolName não encontrado no PATH do sistema.\n\n'
-              'As ferramentas do Sybase SQL Anywhere não estão disponíveis.\n\n'
-              'OPÇÕES PARA RESOLVER:\n\n'
-              'Opção 1: Adicionar ao PATH manualmente\n'
-              '  - Localize a pasta Bin64 do SQL Anywhere instalado\n'
-              '    (ex: C:\\Program Files\\SQL Anywhere 16\\Bin64)\n'
-              '  - Adicione ao PATH do Windows:\n'
-              '    * Pressione Win + X → "Sistema"\n'
-              '    * Clique em "Configurações avançadas do sistema"\n'
-              '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
-              '    * Em "Variáveis do sistema", encontre "Path" e clique em "Editar"\n'
-              '    * Clique em "Novo" e adicione o caminho completo da pasta Bin64\n'
-              '    * Clique em "OK" em todas as janelas\n\n'
-              'Opção 2: SQL Anywhere não instalado?\n'
-              '  - Baixe e instale SQL Anywhere (versões 11, 12, 16 ou 17)\n'
-              '  - Durante a instalação, selecione "Add to PATH"\n\n'
-              r'Consulte: docs\path_setup.md para mais detalhes.';
-        } else {
-          message =
-              '$executable não encontrado no PATH do sistema.\n\n'
-              'Verifique se a ferramenta está instalada e adicionada ao PATH.';
-        }
+        message = ToolPathHelp.buildMessage(executable);
       }
 
       return rd.Failure(
@@ -705,6 +527,33 @@ class ProcessService {
       process.kill();
       _runningProcesses.remove(tag);
     }
+  }
+
+  /// Cancela todos os processos rastreados (qualquer tag). Usado pelo
+  /// shutdown da aplicação para impedir que processos do SGBD fiquem
+  /// órfãos depois que a UI fecha. Itera sobre cópia das chaves para
+  /// não modificar o map enquanto percorre.
+  int cancelAllRunning() {
+    if (_runningProcesses.isEmpty) return 0;
+    final tags = List<String>.from(_runningProcesses.keys);
+    LoggerService.info(
+      'Cancelando ${tags.length} processo(s) em execução: $tags',
+    );
+    var cancelled = 0;
+    for (final tag in tags) {
+      final process = _runningProcesses.remove(tag);
+      if (process != null) {
+        try {
+          process.kill();
+          cancelled++;
+        } on Object catch (e) {
+          LoggerService.warning(
+            'Falha ao matar processo com tag $tag: $e',
+          );
+        }
+      }
+    }
+    return cancelled;
   }
 
   String _decodeProcessOutput(List<int> bytes) {
@@ -744,6 +593,50 @@ class ProcessService {
     }
     return score + garbledMarker.allMatches(text).length;
   }
+
+  /// Acrescenta um cabeçalho informando truncamento quando o buffer
+  /// descartou bytes. Mantém os usuários cientes de que parte do output
+  /// não está disponível, e reduz risco de diagnósticos enganosos quando
+  /// stdout/stderr foram cortados.
+  String _decorateTruncated(
+    String text, {
+    required bool truncated,
+    required int droppedBytes,
+    required String streamName,
+  }) {
+    if (!truncated) return text;
+    final droppedKb = (droppedBytes / 1024).toStringAsFixed(0);
+    return '[Aviso: $streamName foi truncado; '
+        '$droppedKb KB iniciais descartados '
+        '(limite ${(_maxOutputBytes / 1024 / 1024).toStringAsFixed(0)} MB).]\n'
+        '$text';
+  }
+}
+
+/// Buffer com janela rolante de bytes. Mantém no máximo [maxBytes] em
+/// memória, descartando os bytes mais antigos quando excedido. Usado para
+/// proteger contra OOM em comandos de longa duração com muito output
+/// (ex.: `pg_basebackup -P`, `sqlcmd STATS=10`).
+class _BoundedByteBuffer {
+  _BoundedByteBuffer(this.maxBytes);
+
+  final int maxBytes;
+  final List<int> _bytes = <int>[];
+  int _droppedBytes = 0;
+
+  bool get wasTruncated => _droppedBytes > 0;
+  int get droppedBytes => _droppedBytes;
+
+  void add(List<int> chunk) {
+    _bytes.addAll(chunk);
+    if (_bytes.length > maxBytes) {
+      final overflow = _bytes.length - maxBytes;
+      _bytes.removeRange(0, overflow);
+      _droppedBytes += overflow;
+    }
+  }
+
+  List<int> takeBytes() => List<int>.unmodifiable(_bytes);
 }
 
 class _ExecutableCacheEntry {

@@ -8,6 +8,7 @@ import 'package:backup_database/domain/repositories/i_backup_history_repository.
 import 'package:backup_database/domain/value_objects/backup_history_state_machine.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/repositories/backup_log_repository.dart';
+import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -17,99 +18,108 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
   final BackupLogRepository _backupLogRepository;
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getAll({
-    int? limit,
-    int? offset,
-  }) async {
-    try {
-      final histories = await _database.backupHistoryDao.getAll(
-        limit: limit,
-        offset: offset,
-      );
-      final entities = histories.map(_toEntity).toList();
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar histórico: $e'),
-      );
-    }
-  }
-
-  @override
-  Future<rd.Result<BackupHistory>> getById(String id) async {
-    try {
-      final history = await _database.backupHistoryDao.getById(id);
-      if (history == null) {
-        return const rd.Failure(
-          NotFoundFailure(message: 'Histórico não encontrado'),
+  Future<rd.Result<List<BackupHistory>>> getAll({int? limit, int? offset}) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar histórico',
+      action: () async {
+        final histories = await _database.backupHistoryDao.getAll(
+          limit: limit,
+          offset: offset,
         );
-      }
-      return rd.Success(_toEntity(history));
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar histórico: $e'),
-      );
-    }
+        return histories.map(_toEntity).toList();
+      },
+    );
   }
 
   @override
-  Future<rd.Result<BackupHistory>> create(BackupHistory history) async {
-    try {
-      final companion = _toCompanion(history);
-      await _database.backupHistoryDao.insertHistory(companion);
-      return rd.Success(history);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao criar histórico: $e'),
-      );
-    }
+  Future<rd.Result<BackupHistory>> getById(String id) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar histórico',
+      action: () async {
+        final history = await _database.backupHistoryDao.getById(id);
+        if (history == null) {
+          // `NotFoundFailure` é um `Failure`, então o `RepositoryGuard.run`
+          // o propaga sem reembrulhar (ver branch `on Failure catch`).
+          throw const NotFoundFailure(message: 'Histórico não encontrado');
+        }
+        return _toEntity(history);
+      },
+    );
   }
 
   @override
-  Future<rd.Result<BackupHistory>> update(BackupHistory history) async {
-    try {
-      final companion = _toCompanion(history);
-      await _database.backupHistoryDao.updateHistory(companion);
-      return rd.Success(history);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao atualizar histórico: $e'),
-      );
-    }
+  Future<rd.Result<BackupHistory>> create(BackupHistory history) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao criar histórico',
+      action: () async {
+        await _database.backupHistoryDao.insertHistory(_toCompanion(history));
+        return history;
+      },
+    );
   }
 
   @override
-  Future<rd.Result<BackupHistory>> updateIfRunning(
-    BackupHistory history,
-  ) async {
-    try {
-      if (!BackupHistoryStateMachine.isTerminal(history.status)) {
-        return rd.Failure(
+  Future<rd.Result<BackupHistory>> update(BackupHistory history) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao atualizar histórico',
+      action: () async {
+        // Valida a transição de estado antes de gravar para evitar regressões
+        // (ex.: success → running) que tornariam o histórico inconsistente.
+        // A validação é melhor-esforço: se o registro não existir ainda no
+        // banco, simplesmente cai para o `replace` normal.
+        final current = await _database.backupHistoryDao.getById(history.id);
+        if (current != null) {
+          final currentStatus = _statusFromString(
+            current.status,
+            fallbackId: current.id,
+          );
+          if (!BackupHistoryStateMachine.canTransition(
+            currentStatus,
+            history.status,
+          )) {
+            // Lançar uma `ValidationFailure` (que é um `Failure`) faz o
+            // `RepositoryGuard.run` propagá-la diretamente sem wrappar
+            // em `DatabaseFailure`. Mantemos a semântica original.
+            throw ValidationFailure(
+              message:
+                  'Transição de status inválida para histórico ${history.id}: '
+                  '${currentStatus.name} → ${history.status.name}.',
+            );
+          }
+        }
+        await _database.backupHistoryDao.updateHistory(_toCompanion(history));
+        return history;
+      },
+    );
+  }
+
+  @override
+  Future<rd.Result<BackupHistory>> updateIfRunning(BackupHistory history) {
+    if (!BackupHistoryStateMachine.isTerminal(history.status)) {
+      return Future.value(
+        rd.Failure(
           ValidationFailure(
             message:
                 'updateIfRunning exige status terminal (success, error ou warning). '
                 'Recebido: ${history.status.name}.',
           ),
-        );
-      }
-      final companion = _toCompanion(history);
-      final updated = await _database.backupHistoryDao.updateHistoryIfRunning(
-        companion,
-      );
-      if (updated == 0) {
-        final current = await _database.backupHistoryDao.getById(history.id);
-        if (current != null) {
-          return rd.Success(_toEntity(current));
-        }
-      }
-      return rd.Success(history);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao atualizar histórico (updateIfRunning): $e',
         ),
       );
     }
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao atualizar histórico (updateIfRunning)',
+      action: () async {
+        final updated = await _database.backupHistoryDao
+            .updateHistoryIfRunning(_toCompanion(history));
+        if (updated == 0) {
+          // Quando o registro já saiu de `running`, lê o estado real para
+          // devolver ao caller — preserva o comportamento original.
+          final current = await _database.backupHistoryDao.getById(history.id);
+          if (current != null) return _toEntity(current);
+        }
+        return history;
+      },
+    );
   }
 
   @override
@@ -119,191 +129,160 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     required LogLevel logLevel,
     required String logMessage,
     String? logDetails,
-  }) async {
-    try {
-      if (!BackupHistoryStateMachine.isTerminal(history.status)) {
-        return rd.Failure(
+  }) {
+    if (!BackupHistoryStateMachine.isTerminal(history.status)) {
+      return Future.value(
+        rd.Failure(
           ValidationFailure(
             message:
                 'updateHistoryAndLogIfRunning exige status terminal. '
                 'Recebido: ${history.status.name}.',
           ),
-        );
-      }
-      var updatedRows = 0;
-      await _database.transaction(() async {
-        final companion = _toCompanion(history);
-        updatedRows = await _database.backupHistoryDao.updateHistoryIfRunning(
-          companion,
-        );
+        ),
+      );
+    }
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao atualizar histórico e log (atômico)',
+      action: () async {
+        var updatedRows = 0;
+        await _database.transaction(() async {
+          final companion = _toCompanion(history);
+          updatedRows = await _database.backupHistoryDao
+              .updateHistoryIfRunning(companion);
+          if (updatedRows == 0) return;
+          final logCompanion =
+              _backupLogRepository.buildIdempotentLogCompanion(
+            backupHistoryId: history.id,
+            step: logStep,
+            level: logLevel,
+            category: LogCategory.execution,
+            message: logMessage,
+            details: logDetails,
+          );
+          await _database.backupLogDao.insertOrReplaceLog(logCompanion);
+        });
         if (updatedRows == 0) {
-          return;
-        }
-        final logCompanion = _backupLogRepository.buildIdempotentLogCompanion(
-          backupHistoryId: history.id,
-          step: logStep,
-          level: logLevel,
-          category: LogCategory.execution,
-          message: logMessage,
-          details: logDetails,
-        );
-        await _database.backupLogDao.insertOrReplaceLog(logCompanion);
-      });
-      if (updatedRows == 0) {
-        return rd.Failure(
-          ValidationFailure(
+          throw ValidationFailure(
             message:
                 'Histórico não estava em execução (status running); '
                 'não foi possível aplicar log: $logStep',
-          ),
-        );
-      }
-      return rd.Success(history);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao atualizar histórico e log (atômico): $e',
-        ),
-      );
-    }
+          );
+        }
+        return history;
+      },
+    );
   }
 
   @override
-  Future<rd.Result<void>> delete(String id) async {
-    try {
-      await _database.backupHistoryDao.deleteHistory(id);
-      return const rd.Success(unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao deletar histórico: $e'),
-      );
-    }
+  Future<rd.Result<void>> delete(String id) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao deletar histórico',
+      action: () => _database.backupHistoryDao.deleteHistory(id),
+    );
   }
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getBySchedule(
-    String scheduleId,
-  ) async {
-    try {
-      final histories = await _database.backupHistoryDao.getBySchedule(
-        scheduleId,
-      );
-      final entities = histories.map(_toEntity).toList();
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao buscar histórico por agendamento: $e',
-        ),
-      );
-    }
+  Future<rd.Result<List<BackupHistory>>> getBySchedule(String scheduleId) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar histórico por agendamento',
+      action: () async {
+        final histories =
+            await _database.backupHistoryDao.getBySchedule(scheduleId);
+        return histories.map(_toEntity).toList();
+      },
+    );
   }
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getByStatus(
-    BackupStatus status,
-  ) async {
-    try {
-      final histories = await _database.backupHistoryDao.getByStatus(
-        status.name,
-      );
-      final entities = histories.map(_toEntity).toList();
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar histórico por status: $e'),
-      );
-    }
+  Future<rd.Result<List<BackupHistory>>> getByStatus(BackupStatus status) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar histórico por status',
+      action: () async {
+        final histories =
+            await _database.backupHistoryDao.getByStatus(status.name);
+        return histories.map(_toEntity).toList();
+      },
+    );
   }
 
   @override
   Future<rd.Result<List<BackupHistory>>> getByDateRange(
     DateTime start,
     DateTime end,
-  ) async {
-    try {
-      final histories = await _database.backupHistoryDao.getByDateRange(
-        start,
-        end,
-      );
-      final entities = histories.map(_toEntity).toList();
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar histórico por período: $e'),
-      );
-    }
+  ) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar histórico por período',
+      action: () async {
+        final histories =
+            await _database.backupHistoryDao.getByDateRange(start, end);
+        return histories.map(_toEntity).toList();
+      },
+    );
   }
 
   @override
-  Future<rd.Result<BackupHistory>> getLastBySchedule(String scheduleId) async {
-    try {
-      final history = await _database.backupHistoryDao.getLastBySchedule(
-        scheduleId,
-      );
-      if (history == null) {
-        return const rd.Failure(
-          NotFoundFailure(
+  Future<rd.Result<BackupHistory>> getLastBySchedule(String scheduleId) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar último histórico',
+      action: () async {
+        final history =
+            await _database.backupHistoryDao.getLastBySchedule(scheduleId);
+        if (history == null) {
+          throw const NotFoundFailure(
             message: 'Nenhum histórico encontrado para este agendamento',
-          ),
-        );
-      }
-      return rd.Success(_toEntity(history));
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar último histórico: $e'),
-      );
-    }
-  }
-
-  @override
-  Future<rd.Result<int>> deleteOlderThan(DateTime date) async {
-    try {
-      final count = await _database.backupHistoryDao.deleteOlderThan(date);
-      return rd.Success(count);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao deletar históricos antigos: $e'),
-      );
-    }
-  }
-
-  @override
-  Future<rd.Result<int>> reconcileStaleRunning({
-    required Duration maxAge,
-  }) async {
-    try {
-      final cutoff = DateTime.now().subtract(maxAge);
-      final rows = await _database.backupHistoryDao.getRunningStartedBefore(
-        cutoff,
-      );
-      var count = 0;
-      const message =
-          'Backup interrompido: processo encerrado durante a execução '
-          '(recuperação ao iniciar o agendador).';
-      for (final row in rows) {
-        final entity = _toEntity(row);
-        final finishedAt = DateTime.now();
-        final reconciled = entity.copyWith(
-          status: BackupStatus.error,
-          errorMessage: message,
-          finishedAt: finishedAt,
-          durationSeconds: finishedAt.difference(entity.startedAt).inSeconds,
-        );
-        final companion = _toCompanion(reconciled);
-        final ok = await _database.backupHistoryDao.updateHistory(companion);
-        if (ok) {
-          count++;
+          );
         }
-      }
-      return rd.Success(count);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao reconciliar históricos running antigos: $e',
-        ),
-      );
-    }
+        return _toEntity(history);
+      },
+    );
+  }
+
+  @override
+  Future<rd.Result<int>> deleteOlderThan(DateTime date) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao deletar históricos antigos',
+      action: () => _database.backupHistoryDao.deleteOlderThan(date),
+    );
+  }
+
+  @override
+  Future<rd.Result<int>> reconcileStaleRunning({required Duration maxAge}) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao reconciliar históricos running antigos',
+      action: () async {
+        final cutoff = DateTime.now().subtract(maxAge);
+        final rows =
+            await _database.backupHistoryDao.getRunningStartedBefore(cutoff);
+        if (rows.isEmpty) return 0;
+
+        const message =
+            'Backup interrompido: processo encerrado durante a execução '
+            '(recuperação ao iniciar o agendador).';
+
+        // Envolve todos os updates em uma transação para garantir
+        // atomicidade (`reconcileStaleRunning` não pode deixar parte dos
+        // jobs zumbis em estado intermediário se o app cair no meio).
+        var updated = 0;
+        await _database.transaction(() async {
+          for (final row in rows) {
+            final entity = _toEntity(row);
+            final finishedAt = DateTime.now();
+            final reconciled = entity.copyWith(
+              status: BackupStatus.error,
+              errorMessage: message,
+              finishedAt: finishedAt,
+              durationSeconds:
+                  finishedAt.difference(entity.startedAt).inSeconds,
+            );
+            final companion = _toCompanion(reconciled);
+            final ok =
+                await _database.backupHistoryDao.updateHistory(companion);
+            if (ok) updated++;
+          }
+        });
+        return updated;
+      },
+    );
   }
 
   BackupHistory _toEntity(BackupHistoryTableData data) {
@@ -315,13 +294,28 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       backupPath: data.backupPath,
       fileSize: data.fileSize,
       backupType: data.backupType,
-      status: BackupStatus.values.firstWhere((e) => e.name == data.status),
+      status: _statusFromString(data.status, fallbackId: data.id),
       errorMessage: data.errorMessage,
       startedAt: data.startedAt,
       finishedAt: data.finishedAt,
       durationSeconds: data.durationSeconds,
       metrics: BackupMetrics.fromJson(data.metrics),
     );
+  }
+
+  /// Converte a string persistida em [BackupStatus] tolerando dados legados.
+  /// Em vez de lançar [StateError] quando o valor não corresponde a nenhum
+  /// caso atual, registra um warning e retorna [BackupStatus.error] para que
+  /// o resto do histórico ainda possa ser lido.
+  BackupStatus _statusFromString(String value, {required String fallbackId}) {
+    for (final status in BackupStatus.values) {
+      if (status.name == value) return status;
+    }
+    LoggerService.warning(
+      'BackupHistory $fallbackId com status desconhecido "$value"; '
+      'tratando como "error".',
+    );
+    return BackupStatus.error;
   }
 
   BackupHistoryTableCompanion _toCompanion(BackupHistory history) {
@@ -342,4 +336,5 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       metrics: Value(metricsJson != null ? jsonEncode(metricsJson) : null),
     );
   }
+
 }

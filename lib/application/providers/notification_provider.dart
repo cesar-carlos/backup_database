@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
@@ -18,7 +18,7 @@ enum NotificationHistoryPeriod {
   all,
 }
 
-class NotificationProvider extends ChangeNotifier {
+class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
   NotificationProvider({
     required IEmailConfigRepository emailConfigRepository,
     required IEmailNotificationTargetRepository
@@ -41,11 +41,15 @@ class NotificationProvider extends ChangeNotifier {
   List<EmailConfig> _configs = const [];
   String? _selectedConfigId;
   List<EmailNotificationTarget> _targets = const [];
-  bool _isLoading = false;
-  String? _error;
+
+  // Estado granular de testes por configuração: a UI mostra spinner por
+  // linha, o que não cabe no contador único do mixin.
   bool _isTesting = false;
   String? _testingConfigId;
   final Set<String> _testingConfigIds = <String>{};
+
+  // Estado granular do histórico: tem ciclo de vida independente do
+  // CRUD principal de configs (recarregamento debounced + filtros).
   List<EmailTestAudit> _testHistory = const [];
   String? _historyError;
   bool _isHistoryLoading = false;
@@ -54,7 +58,10 @@ class NotificationProvider extends ChangeNotifier {
   String? _historyConfigIdFilter;
   Timer? _historyReloadTimer;
   int _historyLoadRequestId = 0;
+
+  // Atualizações otimistas por configuração (toggle enabled).
   final Set<String> _updatingConfigIds = <String>{};
+
   bool _isDisposed = false;
 
   List<EmailConfig> get configs => _configs;
@@ -65,8 +72,6 @@ class NotificationProvider extends ChangeNotifier {
 
   // Compatibilidade com tela antiga (single-config).
   EmailConfig? get emailConfig => selectedConfig;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
   List<EmailTestAudit> get testHistory => _testHistory;
   String? get historyError => _historyError;
   bool get isHistoryLoading => _isHistoryLoading;
@@ -82,11 +87,14 @@ class NotificationProvider extends ChangeNotifier {
   Set<String> get updatingConfigIds =>
       Set<String>.unmodifiable(_updatingConfigIds);
 
-  void _notifySafely() {
-    if (_isDisposed) {
-      return;
-    }
-    notifyListeners();
+  /// Sobrescreve `notifyListeners` para curto-circuitar após dispose.
+  /// Necessário porque `runAsync` (mixin) e os timers debounced de
+  /// histórico podem disparar notificações depois que o provider já foi
+  /// descartado pelo Provider tree.
+  @override
+  void notifyListeners() {
+    if (_isDisposed) return;
+    super.notifyListeners();
   }
 
   Future<void> loadConfig() async {
@@ -94,69 +102,54 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   Future<void> loadConfigs() async {
-    _isLoading = true;
-    _error = null;
-    _notifySafely();
+    await runAsync<void>(
+      genericErrorMessage: 'Erro ao carregar configuração de e-mail',
+      action: () async {
+        final result = await _emailConfigRepository.getAll();
+        await result.fold(
+          (configs) async {
+            _configs = configs;
 
-    try {
-      final result = await _emailConfigRepository.getAll();
-      await result.fold(
-        (configs) async {
-          _configs = configs;
+            if (_configs.isEmpty) {
+              _selectedConfigId = null;
+              _targets = const [];
+              _testHistory = const [];
+              _historyConfigIdFilter = null;
+              _historyError = null;
+              return;
+            }
 
-          if (_configs.isEmpty) {
+            final hasSelected =
+                _configs.any((c) => c.id == _selectedConfigId);
+            if (!hasSelected) {
+              _selectedConfigId = _configs.first.id;
+            }
+            _historyConfigIdFilter ??= _selectedConfigId;
+            final hasHistoryFilter = _configs.any(
+              (c) => c.id == _historyConfigIdFilter,
+            );
+            if (!hasHistoryFilter) {
+              _historyConfigIdFilter = _selectedConfigId;
+            }
+
+            final selected = selectedConfig;
+            if (selected != null) {
+              await _loadTargetsByConfigId(selected.id, notify: false);
+            }
+            await _loadTestHistory(notify: false);
+          },
+          (failure) {
+            _configs = const [];
             _selectedConfigId = null;
             _targets = const [];
             _testHistory = const [];
             _historyConfigIdFilter = null;
             _historyError = null;
-            _error = null;
-            return;
-          }
-
-          final hasSelected = _configs.any((c) => c.id == _selectedConfigId);
-          if (!hasSelected) {
-            _selectedConfigId = _configs.first.id;
-          }
-          _historyConfigIdFilter ??= _selectedConfigId;
-          final hasHistoryFilter = _configs.any(
-            (c) => c.id == _historyConfigIdFilter,
-          );
-          if (!hasHistoryFilter) {
-            _historyConfigIdFilter = _selectedConfigId;
-          }
-
-          _error = null;
-
-          final selected = selectedConfig;
-          if (selected != null) {
-            await _loadTargetsByConfigId(selected.id, notify: false);
-          }
-          await _loadTestHistory(notify: false);
-        },
-        (failure) async {
-          final f = failure as Failure;
-          _configs = const [];
-          _selectedConfigId = null;
-          _targets = const [];
-          _testHistory = const [];
-          _historyConfigIdFilter = null;
-          _historyError = null;
-          _error = f.message;
-        },
-      );
-    } on Object catch (e) {
-      _configs = const [];
-      _selectedConfigId = null;
-      _targets = const [];
-      _testHistory = const [];
-      _historyConfigIdFilter = null;
-      _historyError = null;
-      _error = 'Erro ao carregar configuração de e-mail: $e';
-    } finally {
-      _isLoading = false;
-      _notifySafely();
-    }
+            throw failure;
+          },
+        );
+      },
+    );
   }
 
   Future<void> selectConfig(String? configId) async {
@@ -166,12 +159,12 @@ class NotificationProvider extends ChangeNotifier {
 
     _selectedConfigId = configId;
     _historyConfigIdFilter = configId;
-    _notifySafely();
+    notifyListeners();
 
     if (configId == null) {
       _targets = const [];
       _testHistory = const [];
-      _notifySafely();
+      notifyListeners();
       return;
     }
 
@@ -190,86 +183,69 @@ class NotificationProvider extends ChangeNotifier {
     result.fold(
       (targets) {
         _targets = targets;
-        _error = null;
+        clearError();
       },
       (failure) {
-        final f = failure as Failure;
         _targets = const [];
-        _error = f.message;
+        setErrorManual(AsyncStateMixin.extractFailureMessage(failure));
       },
     );
 
     if (notify) {
-      _notifySafely();
+      notifyListeners();
     }
   }
 
   Future<bool> saveConfig(EmailConfig config) async {
-    _isLoading = true;
-    _error = null;
-    _notifySafely();
-
-    try {
-      final result = await _emailConfigRepository.save(config);
-
-      return result.fold(
-        (savedConfig) async {
-          _selectedConfigId = savedConfig.id;
-          await loadConfigs();
-          return true;
-        },
-        (failure) {
-          final f = failure as Failure;
-          _error = f.message;
-          _isLoading = false;
-          _notifySafely();
-          return false;
-        },
-      );
-    } on Object catch (e) {
-      _error = 'Erro ao salvar configuração: $e';
-      _isLoading = false;
-      _notifySafely();
-      return false;
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao salvar configuração',
+      action: () async {
+        final result = await _emailConfigRepository.save(config);
+        return result.fold(
+          (savedConfig) {
+            _selectedConfigId = savedConfig.id;
+            return true;
+          },
+          (failure) => throw failure,
+        );
+      },
+    );
+    if (ok ?? false) {
+      // Recarrega para puxar lista atualizada (inclui campos calculados
+      // pelo backend de persistência).
+      await loadConfigs();
+      return true;
     }
+    return false;
   }
 
   Future<bool> deleteConfigById(String id) async {
-    _isLoading = true;
-    _error = null;
-    _notifySafely();
-
-    try {
-      final result = await _emailConfigRepository.deleteById(id);
-      return result.fold(
-        (_) async {
-          if (_selectedConfigId == id) {
-            _selectedConfigId = null;
-          }
-          await loadConfigs();
-          return true;
-        },
-        (failure) {
-          final f = failure as Failure;
-          _error = f.message;
-          _isLoading = false;
-          _notifySafely();
-          return false;
-        },
-      );
-    } on Object catch (e) {
-      _error = 'Erro ao remover configuração: $e';
-      _isLoading = false;
-      _notifySafely();
-      return false;
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao remover configuração',
+      action: () async {
+        final result = await _emailConfigRepository.deleteById(id);
+        return result.fold(
+          (_) {
+            if (_selectedConfigId == id) {
+              _selectedConfigId = null;
+            }
+            return true;
+          },
+          (failure) => throw failure,
+        );
+      },
+    );
+    if (ok ?? false) {
+      await loadConfigs();
+      return true;
     }
+    return false;
   }
 
   Future<bool> deleteSelectedConfig() async {
     final selected = selectedConfig;
     if (selected == null) {
-      _error = 'Nenhuma configuração selecionada';
-      _notifySafely();
+      setErrorManual('Nenhuma configuração selecionada');
       return false;
     }
 
@@ -282,38 +258,21 @@ class NotificationProvider extends ChangeNotifier {
         : _findConfigById(configId);
 
     if (config == null) {
-      _error = 'Nenhuma configuração de e-mail definida';
-      _notifySafely();
+      setErrorManual('Nenhuma configuração de e-mail definida');
       return false;
     }
 
-    if (!_beginTesting(config.id)) {
-      return false;
-    }
-
-    try {
-      final result = await _testEmailConfiguration(config);
-      return result.fold(
-        (success) {
-          _error = null;
-          return success;
-        },
-        (failure) {
-          final f = failure as Failure;
-          _error = _formatTestErrorMessage(f.message);
-          return false;
-        },
-      );
-    } on Object catch (e) {
-      _error = _formatTestErrorMessage('Erro ao testar configuração: $e');
-      return false;
-    } finally {
-      _endTesting(config.id);
-      _scheduleHistoryReload();
-    }
+    return _runTest(config);
   }
 
   Future<bool> testDraftConfiguration(EmailConfig config) async {
+    return _runTest(config);
+  }
+
+  /// Helper unificado para `testConfiguration` / `testDraftConfiguration`.
+  /// Antes da centralização, esses dois métodos tinham try/catch/finally
+  /// idênticos, com risco de divergir na manutenção.
+  Future<bool> _runTest(EmailConfig config) async {
     if (!_beginTesting(config.id)) {
       return false;
     }
@@ -322,17 +281,23 @@ class NotificationProvider extends ChangeNotifier {
       final result = await _testEmailConfiguration(config);
       return result.fold(
         (success) {
-          _error = null;
+          clearError();
           return success;
         },
         (failure) {
-          final f = failure as Failure;
-          _error = _formatTestErrorMessage(f.message);
+          setErrorManual(
+            _formatTestErrorMessage(
+              AsyncStateMixin.extractFailureMessage(failure),
+            ),
+            code: AsyncStateMixin.extractFailureCode(failure),
+          );
           return false;
         },
       );
     } on Object catch (e) {
-      _error = _formatTestErrorMessage('Erro ao testar configuração: $e');
+      setErrorManual(
+        _formatTestErrorMessage('Erro ao testar configuração: $e'),
+      );
       return false;
     } finally {
       _endTesting(config.id);
@@ -347,8 +312,7 @@ class NotificationProvider extends ChangeNotifier {
 
     final config = _findConfigById(configId);
     if (config == null) {
-      _error = 'Configuração não encontrada';
-      _notifySafely();
+      setErrorManual('Configuração não encontrada');
       return false;
     }
 
@@ -356,31 +320,30 @@ class NotificationProvider extends ChangeNotifier {
     final optimisticConfig = config.copyWith(enabled: enabled);
     _replaceConfigInMemory(optimisticConfig);
     _updatingConfigIds.add(configId);
-    _error = null;
-    _notifySafely();
+    clearError();
+    notifyListeners();
 
     try {
       final result = await _emailConfigRepository.save(optimisticConfig);
 
       return result.fold(
         (_) {
-          _error = null;
+          clearError();
           return true;
         },
         (failure) {
-          final f = failure as Failure;
           _replaceConfigInMemory(previousConfig);
-          _error = f.message;
+          setErrorManual(AsyncStateMixin.extractFailureMessage(failure));
           return false;
         },
       );
     } on Object catch (e) {
       _replaceConfigInMemory(previousConfig);
-      _error = 'Erro ao atualizar status da configuração: $e';
+      setErrorManual('Erro ao atualizar status da configuração: $e');
       return false;
     } finally {
       _updatingConfigIds.remove(configId);
-      _notifySafely();
+      notifyListeners();
     }
   }
 
@@ -388,34 +351,13 @@ class NotificationProvider extends ChangeNotifier {
     required EmailConfig config,
     required SmtpOAuthProvider provider,
   }) async {
-    _error = null;
-    _notifySafely();
-
-    final result = await _oauthSmtpService.connect(
-      configId: config.id,
+    return _runOAuthOperation(
+      () => _oauthSmtpService.connect(
+        configId: config.id,
+        provider: provider,
+      ),
+      config: config,
       provider: provider,
-    );
-
-    return result.fold(
-      (state) {
-        final updated = config.copyWith(
-          authMode: provider == SmtpOAuthProvider.google
-              ? SmtpAuthMode.oauthGoogle
-              : SmtpAuthMode.oauthMicrosoft,
-          oauthProvider: provider,
-          oauthAccountEmail: state.accountEmail,
-          oauthTokenKey: state.tokenKey,
-          oauthConnectedAt: state.connectedAt,
-        );
-        _error = null;
-        return updated;
-      },
-      (failure) {
-        final f = failure as Failure;
-        _error = f.message;
-        _notifySafely();
-        return null;
-      },
     );
   }
 
@@ -423,49 +365,60 @@ class NotificationProvider extends ChangeNotifier {
     required EmailConfig config,
     required SmtpOAuthProvider provider,
   }) async {
-    _error = null;
-    _notifySafely();
-
-    final result = await _oauthSmtpService.reconnect(
-      configId: config.id,
+    return _runOAuthOperation(
+      () => _oauthSmtpService.reconnect(
+        configId: config.id,
+        provider: provider,
+      ),
+      config: config,
       provider: provider,
     );
+  }
 
-    return result.fold(
+  /// Helper para `connectOAuth` / `reconnectOAuth`. Ambos retornam o mesmo
+  /// shape e fazem o mesmo `copyWith` no sucesso — DRY puro.
+  Future<EmailConfig?> _runOAuthOperation(
+    Future<dynamic> Function() operation, {
+    required EmailConfig config,
+    required SmtpOAuthProvider provider,
+  }) async {
+    clearError();
+    notifyListeners();
+
+    final result = await operation();
+    return (result as dynamic).fold(
       (state) {
-        final updated = config.copyWith(
+        clearError();
+        return config.copyWith(
           authMode: provider == SmtpOAuthProvider.google
               ? SmtpAuthMode.oauthGoogle
               : SmtpAuthMode.oauthMicrosoft,
           oauthProvider: provider,
-          oauthAccountEmail: state.accountEmail,
-          oauthTokenKey: state.tokenKey,
-          oauthConnectedAt: state.connectedAt,
+          oauthAccountEmail: state.accountEmail as String?,
+          oauthTokenKey: state.tokenKey as String?,
+          oauthConnectedAt: state.connectedAt as DateTime?,
         );
-        _error = null;
-        return updated;
       },
       (failure) {
-        final f = failure as Failure;
-        _error = f.message;
-        _notifySafely();
+        setErrorManual(
+          AsyncStateMixin.extractFailureMessage(failure as Object),
+        );
         return null;
       },
-    );
+    ) as EmailConfig?;
   }
 
   Future<EmailConfig> disconnectOAuth(EmailConfig config) async {
-    _error = null;
-    _notifySafely();
+    clearError();
+    notifyListeners();
 
     final tokenKey = config.oauthTokenKey?.trim() ?? '';
     if (tokenKey.isNotEmpty) {
       final result = await _oauthSmtpService.disconnect(tokenKey: tokenKey);
       if (result.isError()) {
         final failure = result.exceptionOrNull();
-        if (failure is Failure) {
-          _error = failure.message;
-          _notifySafely();
+        if (failure != null) {
+          setErrorManual(AsyncStateMixin.extractFailureMessage(failure));
         }
       }
     }
@@ -523,9 +476,7 @@ class NotificationProvider extends ChangeNotifier {
         return true;
       },
       (failure) {
-        final f = failure as Failure;
-        _error = f.message;
-        _notifySafely();
+        setErrorManual(AsyncStateMixin.extractFailureMessage(failure));
         return false;
       },
     );
@@ -539,9 +490,7 @@ class NotificationProvider extends ChangeNotifier {
         return true;
       },
       (failure) {
-        final f = failure as Failure;
-        _error = f.message;
-        _notifySafely();
+        setErrorManual(AsyncStateMixin.extractFailureMessage(failure));
         return false;
       },
     );
@@ -560,9 +509,7 @@ class NotificationProvider extends ChangeNotifier {
         return true;
       },
       (failure) {
-        final f = failure as Failure;
-        _error = f.message;
-        _notifySafely();
+        setErrorManual(AsyncStateMixin.extractFailureMessage(failure));
         return false;
       },
     );
@@ -571,8 +518,7 @@ class NotificationProvider extends ChangeNotifier {
   Future<bool> toggleTargetEnabled(String targetId, bool enabled) async {
     final target = _findTargetById(targetId);
     if (target == null) {
-      _error = 'Destinatário não encontrado';
-      _notifySafely();
+      setErrorManual('Destinatário não encontrado');
       return false;
     }
 
@@ -601,11 +547,6 @@ class NotificationProvider extends ChangeNotifier {
     }
 
     return null;
-  }
-
-  void clearError() {
-    _error = null;
-    _notifySafely();
   }
 
   Future<void> refreshTestHistory() async {
@@ -649,7 +590,7 @@ class NotificationProvider extends ChangeNotifier {
     _isHistoryLoading = true;
     _historyError = null;
     if (notify) {
-      _notifySafely();
+      notifyListeners();
     }
 
     final startAt = _resolveHistoryStart(_historyPeriod);
@@ -670,15 +611,14 @@ class NotificationProvider extends ChangeNotifier {
         _historyError = null;
       },
       (failure) {
-        final f = failure as Failure;
         _testHistory = const [];
-        _historyError = f.message;
+        _historyError = AsyncStateMixin.extractFailureMessage(failure);
       },
     );
 
     _isHistoryLoading = false;
     if (notify) {
-      _notifySafely();
+      notifyListeners();
     }
   }
 
@@ -724,17 +664,17 @@ class NotificationProvider extends ChangeNotifier {
 
   bool _beginTesting(String configId) {
     if (_testingConfigIds.contains(configId)) {
-      _error =
-          'Já existe um teste de conexão em execução para esta configuração';
-      _notifySafely();
+      setErrorManual(
+        'Já existe um teste de conexão em execução para esta configuração',
+      );
       return false;
     }
 
     _testingConfigIds.add(configId);
     _isTesting = _testingConfigIds.isNotEmpty;
     _testingConfigId = configId;
-    _error = null;
-    _notifySafely();
+    clearError();
+    notifyListeners();
     return true;
   }
 
@@ -744,7 +684,7 @@ class NotificationProvider extends ChangeNotifier {
     _testingConfigId = _testingConfigIds.isEmpty
         ? null
         : _testingConfigIds.first;
-    _notifySafely();
+    notifyListeners();
   }
 
   void _replaceConfigInMemory(EmailConfig nextConfig) {
@@ -752,9 +692,10 @@ class NotificationProvider extends ChangeNotifier {
     if (index < 0) {
       return;
     }
-    final updatedConfigs = List<EmailConfig>.from(_configs);
-    updatedConfigs[index] = nextConfig;
-    _configs = updatedConfigs;
+    _configs = [
+      for (var i = 0; i < _configs.length; i++)
+        if (i == index) nextConfig else _configs[i],
+    ];
   }
 
   @override

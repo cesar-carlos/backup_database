@@ -11,6 +11,7 @@ import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -22,60 +23,33 @@ class ScheduleRepository implements IScheduleRepository {
   static const _sybaseBackupOptionsKey = '_sybaseBackupOptions';
 
   @override
-  Future<rd.Result<List<Schedule>>> getAll() async {
-    try {
-      LoggerService.info('[ScheduleRepository] Loading schedules...');
-      final schedules = await _database.scheduleDao.getAll();
-      final destinationIdsBySchedule = await _loadDestinationIdsBatch(
-        schedules.map((s) => s.id).toList(),
-      );
-
-      final entities = <Schedule>[];
-      for (final schedule in schedules) {
-        final destinationIds =
-            destinationIdsBySchedule[schedule.id] ??
-            await _loadDestinationIdsFallback(
-              schedule.id,
-              schedule.destinationIds,
-            );
-        final entity = await _toEntity(schedule, destinationIds);
-        entities.add(entity);
-      }
-
-      return rd.Success(entities);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        '[ScheduleRepository] Failed to load schedules',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar agendamentos: $e'),
-      );
-    }
+  Future<rd.Result<List<Schedule>>> getAll() {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar agendamentos',
+      action: () async {
+        LoggerService.info('[ScheduleRepository] Loading schedules...');
+        final schedules = await _database.scheduleDao.getAll();
+        return _hydrateSchedules(schedules);
+      },
+    );
   }
 
   @override
-  Future<rd.Result<Schedule>> getById(String id) async {
-    try {
-      final schedule = await _database.scheduleDao.getById(id);
-      if (schedule == null) {
-        return const rd.Failure(
-          NotFoundFailure(message: 'Agendamento nao encontrado'),
+  Future<rd.Result<Schedule>> getById(String id) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar agendamento',
+      action: () async {
+        final schedule = await _database.scheduleDao.getById(id);
+        if (schedule == null) {
+          throw const NotFoundFailure(message: 'Agendamento nao encontrado');
+        }
+        final destinationIds = await _loadDestinationIds(
+          schedule.id,
+          schedule.destinationIds,
         );
-      }
-
-      final destinationIds = await _loadDestinationIds(
-        schedule.id,
-        schedule.destinationIds,
-      );
-      final entity = await _toEntity(schedule, destinationIds);
-      return rd.Success(entity);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar agendamento: $e'),
-      );
-    }
+        return _toEntity(schedule, destinationIds);
+      },
+    );
   }
 
   @override
@@ -134,180 +108,108 @@ class ScheduleRepository implements IScheduleRepository {
 
   @override
   Future<rd.Result<Schedule>> update(Schedule schedule) async {
-    try {
-      final validationResult = await _validateAllDestinationsExist(
-        schedule.destinationIds,
-      );
-      if (validationResult != null) {
-        return validationResult;
-      }
-
-      final companion = _toCompanion(schedule);
-      await _database.transaction(() async {
-        await _database.scheduleDao.updateSchedule(companion);
-        await _replaceScheduleDestinations(
-          schedule.id,
-          schedule.destinationIds,
-        );
-      });
-
-      return rd.Success(schedule);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao atualizar agendamento: $e'),
-      );
+    final validationResult = await _validateAllDestinationsExist(
+      schedule.destinationIds,
+    );
+    if (validationResult != null) {
+      return validationResult;
     }
+
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao atualizar agendamento',
+      action: () async {
+        final companion = _toCompanion(schedule);
+        await _database.transaction(() async {
+          await _database.scheduleDao.updateSchedule(companion);
+          await _replaceScheduleDestinations(
+            schedule.id,
+            schedule.destinationIds,
+          );
+        });
+        return schedule;
+      },
+    );
   }
 
   @override
-  Future<rd.Result<void>> delete(String id) async {
-    try {
-      await _database.transaction(() async {
+  Future<rd.Result<void>> delete(String id) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao deletar agendamento',
+      action: () => _database.transaction(() async {
         await _database.scheduleDestinationDao.deleteByScheduleId(id);
         await _database.scheduleDao.deleteSchedule(id);
-      });
-      return const rd.Success(unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao deletar agendamento: $e'),
-      );
-    }
+      }),
+    );
   }
 
   @override
-  Future<rd.Result<List<Schedule>>> getEnabled() async {
-    try {
-      final schedules = await _database.scheduleDao.getEnabled();
-      final destinationIdsBySchedule = await _loadDestinationIdsBatch(
-        schedules.map((s) => s.id).toList(),
-      );
-
-      final entities = <Schedule>[];
-      for (final schedule in schedules) {
-        final destinationIds =
-            destinationIdsBySchedule[schedule.id] ??
-            await _loadDestinationIdsFallback(
-              schedule.id,
-              schedule.destinationIds,
-            );
-        final entity = await _toEntity(schedule, destinationIds);
-        entities.add(entity);
-      }
-
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar agendamentos ativos: $e'),
-      );
-    }
+  Future<rd.Result<List<Schedule>>> getEnabled() {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar agendamentos ativos',
+      action: () async {
+        final schedules = await _database.scheduleDao.getEnabled();
+        return _hydrateSchedules(schedules);
+      },
+    );
   }
 
   @override
   Future<rd.Result<List<Schedule>>> getEnabledDueForExecution(
     DateTime beforeOrAt,
-  ) async {
-    try {
-      final schedules = await _database.scheduleDao.getEnabledDueForExecution(
-        beforeOrAt,
-      );
-      if (schedules.isEmpty) {
-        return const rd.Success([]);
-      }
-      final destinationIdsBySchedule = await _loadDestinationIdsBatch(
-        schedules.map((s) => s.id).toList(),
-      );
-
-      final entities = <Schedule>[];
-      for (final schedule in schedules) {
-        final destinationIds =
-            destinationIdsBySchedule[schedule.id] ??
-            await _loadDestinationIdsFallback(
-              schedule.id,
-              schedule.destinationIds,
-            );
-        final entity = await _toEntity(schedule, destinationIds);
-        entities.add(entity);
-      }
-
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao buscar agendamentos vencidos: $e',
-        ),
-      );
-    }
+  ) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar agendamentos vencidos',
+      action: () async {
+        final schedules =
+            await _database.scheduleDao.getEnabledDueForExecution(beforeOrAt);
+        if (schedules.isEmpty) return <Schedule>[];
+        return _hydrateSchedules(schedules);
+      },
+    );
   }
 
   @override
   Future<rd.Result<List<Schedule>>> getByDatabaseConfig(
     String databaseConfigId,
-  ) async {
-    try {
-      final schedules = await _database.scheduleDao.getByDatabaseConfig(
-        databaseConfigId,
-      );
-      final destinationIdsBySchedule = await _loadDestinationIdsBatch(
-        schedules.map((s) => s.id).toList(),
-      );
-
-      final entities = <Schedule>[];
-      for (final schedule in schedules) {
-        final destinationIds =
-            destinationIdsBySchedule[schedule.id] ??
-            await _loadDestinationIdsFallback(
-              schedule.id,
-              schedule.destinationIds,
-            );
-        final entity = await _toEntity(schedule, destinationIds);
-        entities.add(entity);
-      }
-
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao buscar agendamentos por configuracao: $e',
-        ),
-      );
-    }
+  ) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar agendamentos por configuracao',
+      action: () async {
+        final schedules = await _database.scheduleDao.getByDatabaseConfig(
+          databaseConfigId,
+        );
+        return _hydrateSchedules(schedules);
+      },
+    );
   }
 
   @override
   Future<rd.Result<List<Schedule>>> getByDestinationId(
     String destinationId,
-  ) async {
-    try {
-      final relations = await _database.scheduleDestinationDao
-          .getByDestinationId(
-            destinationId,
-          );
-      final entities = <Schedule>[];
+  ) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar agendamentos por destino',
+      action: () async {
+        final relations = await _database.scheduleDestinationDao
+            .getByDestinationId(destinationId);
+        final entities = <Schedule>[];
 
-      for (final relation in relations) {
-        final schedule = await _database.scheduleDao.getById(
-          relation.scheduleId,
-        );
-        if (schedule == null) {
-          continue;
+        for (final relation in relations) {
+          final schedule = await _database.scheduleDao.getById(
+            relation.scheduleId,
+          );
+          if (schedule == null) continue;
+
+          final destinationIds = await _loadDestinationIds(
+            schedule.id,
+            schedule.destinationIds,
+          );
+          entities.add(await _toEntity(schedule, destinationIds));
         }
 
-        final destinationIds = await _loadDestinationIds(
-          schedule.id,
-          schedule.destinationIds,
-        );
-        final entity = await _toEntity(schedule, destinationIds);
-        entities.add(entity);
-      }
-
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao buscar agendamentos por destino: $e',
-        ),
-      );
-    }
+        return entities;
+      },
+    );
   }
 
   @override
@@ -315,15 +217,33 @@ class ScheduleRepository implements IScheduleRepository {
     String id,
     DateTime lastRunAt,
     DateTime? nextRunAt,
+  ) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao atualizar ultima execucao',
+      action: () => _database.scheduleDao.updateLastRun(id, lastRunAt, nextRunAt),
+    );
+  }
+
+  /// Centraliza o "hydrate" de uma lista de `SchedulesTableData` em
+  /// `Schedule` resolvendo destinos via batch + fallback. Antes este
+  /// loop era reimplementado em ~5 métodos (`getAll`, `getEnabled`,
+  /// `getEnabledDueForExecution`, `getByDatabaseConfig`, etc.).
+  Future<List<Schedule>> _hydrateSchedules(
+    List<SchedulesTableData> schedules,
   ) async {
-    try {
-      await _database.scheduleDao.updateLastRun(id, lastRunAt, nextRunAt);
-      return const rd.Success(unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao atualizar ultima execucao: $e'),
-      );
+    final destinationIdsBySchedule = await _loadDestinationIdsBatch(
+      schedules.map((s) => s.id).toList(),
+    );
+    final entities = <Schedule>[];
+    for (final schedule in schedules) {
+      final destinationIds = destinationIdsBySchedule[schedule.id] ??
+          await _loadDestinationIdsFallback(
+            schedule.id,
+            schedule.destinationIds,
+          );
+      entities.add(await _toEntity(schedule, destinationIds));
     }
+    return entities;
   }
 
   Future<Schedule> _toEntity(

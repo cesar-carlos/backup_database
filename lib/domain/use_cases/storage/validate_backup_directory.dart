@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart' as core_errors;
+import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:result_dart/result_dart.dart';
 
@@ -45,8 +46,12 @@ class ValidateBackupDirectory {
       }
     }
 
-    // Verify write permissions
-    final hasPermission = await _checkWritePermission(dir);
+    // Verify write permissions via probe file. Centralized helper
+    // (`DirectoryPermissionCheck`) substitui a implementação que era
+    // duplicada em SchedulerService / ScheduleDialog / aqui.
+    final hasPermission = await DirectoryPermissionCheck.hasWritePermission(
+      dir,
+    );
     if (!hasPermission) {
       LoggerService.warning('No write permission for directory: $path');
       return Failure(
@@ -57,33 +62,5 @@ class ValidateBackupDirectory {
     }
 
     return const Success(unit);
-  }
-
-  /// Checks if the directory has write permissions.
-  ///
-  /// Creates a temporary test file and attempts to write to it.
-  /// Returns true if successful, false otherwise.
-  Future<bool> _checkWritePermission(Directory directory) async {
-    try {
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final testFileName = '.backup_permission_test_$timestamp';
-      final testFile = File(
-        '${directory.path}${Platform.pathSeparator}$testFileName',
-      );
-
-      await testFile.writeAsString('test');
-
-      if (await testFile.exists()) {
-        await testFile.delete();
-        return true;
-      }
-
-      return false;
-    } on Object catch (e) {
-      LoggerService.warning(
-        'Error checking write permission for ${directory.path}: $e',
-      );
-      return false;
-    }
   }
 }

@@ -31,7 +31,7 @@ class BackupHistory {
   final DateTime startedAt;
   final DateTime? finishedAt;
   final int? durationSeconds;
-  BackupMetrics? metrics;
+  final BackupMetrics? metrics;
 
   BackupHistory copyWith({
     String? id,

@@ -7,6 +7,7 @@ import 'package:backup_database/core/errors/failure.dart'
     hide GoogleDriveFailure;
 import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/google_drive_failure.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/file_stream_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -89,7 +90,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
 
       if (useResumableUpload) {
         LoggerService.info(
-          'Arquivo grande detectado (${_formatFileSize(fileSize)}). Usando upload resumável.',
+          'Arquivo grande detectado (${ByteFormat.format(fileSize)}). Usando upload resumável.',
         );
       }
 
@@ -195,7 +196,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
           stopwatch.stop();
 
           LoggerService.info(
-            'Upload Google Drive concluído: ${result.id} (${_formatFileSize(fileSize)} em ${stopwatch.elapsed.inSeconds}s)',
+            'Upload Google Drive concluído: ${result.id} (${ByteFormat.format(fileSize)} em ${stopwatch.elapsed.inSeconds}s)',
           );
 
           return rd.Success(
@@ -244,14 +245,6 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
     }
   }
 
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
 
   String _getGoogleDriveErrorMessage(dynamic e) {
     if (e is Failure && e.code != null) {

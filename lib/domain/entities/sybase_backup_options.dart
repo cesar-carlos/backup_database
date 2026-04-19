@@ -99,6 +99,18 @@ class SybaseBackupOptions {
     return ' AUTO TUNE WRITERS ${autoTuneWriters ? 'ON' : 'OFF'}';
   }
 
+  /// Resolve o modo de backup de log efetivo combinando o que está nas
+  /// opções (preferência) e o flag `truncateLog` legado. Centralizar aqui
+  /// evita divergência entre `BackupOrchestratorService` e
+  /// `SybaseBackupService`, que antes implementavam a mesma regra
+  /// separadamente.
+  SybaseLogBackupMode effectiveLogMode({required bool truncateLog}) {
+    if (logBackupMode != null) return logBackupMode!;
+    return truncateLog
+        ? SybaseLogBackupMode.truncate
+        : SybaseLogBackupMode.only;
+  }
+
   static SybaseCheckpointLog? checkpointLogFromString(String? value) {
     if (value == null || value.isEmpty) return null;
     final lower = value.toLowerCase();

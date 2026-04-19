@@ -196,11 +196,40 @@ class LicenseDecoder {
   rd.Result<Map<String, dynamic>> _validateRequiredFields(
     Map<String, dynamic> data,
   ) {
-    final deviceKey = data['deviceKey'] as String?;
-    if (deviceKey == null || deviceKey.trim().isEmpty) {
-      return const rd.Failure(
+    // Antes este método tinha 4 cópias verbatim do pattern
+    // `if (field == null || field.trim().isEmpty) return Failure(...)`.
+    // Agora delega a `_requireString` que retorna a string trimada ou
+    // uma `Failure` semântica.
+    final deviceKey = _requireString(data, 'deviceKey');
+    if (deviceKey == null) return _missingField('deviceKey');
+
+    final issuedAt = _requireString(data, 'issuedAt');
+    if (issuedAt == null) return _missingField('issuedAt');
+    final issuedAtParseResult = _parseIsoDate(issuedAt, 'issuedAt');
+    if (issuedAtParseResult.isError()) {
+      return rd.Failure(issuedAtParseResult.exceptionOrNull()!);
+    }
+
+    final keyId = _requireString(data, 'keyId');
+    if (keyId == null) return _missingField('keyId');
+    if (keyId != LicenseConstants.keyIdDefault) {
+      return rd.Failure(
         core.ValidationFailure(
-          message: 'Campo obrigatório ausente: deviceKey',
+          message:
+              'keyId inválido. Esperado "${LicenseConstants.keyIdDefault}", '
+              'recebido "$keyId".',
+        ),
+      );
+    }
+
+    final issuer = _requireString(data, 'issuer');
+    if (issuer == null) return _missingField('issuer');
+    if (issuer != LicenseConstants.issuerDefault) {
+      return rd.Failure(
+        core.ValidationFailure(
+          message:
+              'Emissor inválido. Esperado "${LicenseConstants.issuerDefault}", '
+              'recebido "$issuer".',
         ),
       );
     }
@@ -213,63 +242,6 @@ class LicenseDecoder {
         ),
       );
     }
-
-    final issuedAt = data['issuedAt'] as String?;
-    if (issuedAt == null || issuedAt.trim().isEmpty) {
-      return const rd.Failure(
-        core.ValidationFailure(
-          message: 'Campo obrigatório ausente: issuedAt',
-        ),
-      );
-    }
-
-    try {
-      DateTime.parse(issuedAt);
-    } on Object {
-      return const rd.Failure(
-        core.ValidationFailure(
-          message: 'Campo issuedAt com formato inválido',
-        ),
-      );
-    }
-
-    final keyId = data['keyId'] as String?;
-    if (keyId == null || keyId.trim().isEmpty) {
-      return const rd.Failure(
-        core.ValidationFailure(
-          message: 'Campo obrigatório ausente: keyId',
-        ),
-      );
-    }
-    if (keyId != LicenseConstants.keyIdDefault) {
-      return rd.Failure(
-        core.ValidationFailure(
-          message:
-              'keyId inválido. Esperado "${LicenseConstants.keyIdDefault}", '
-              'recebido "$keyId".',
-        ),
-      );
-    }
-
-    final issuer = data['issuer'] as String?;
-    if (issuer == null || issuer.trim().isEmpty) {
-      return const rd.Failure(
-        core.ValidationFailure(
-          message: 'Campo obrigatório ausente: issuer',
-        ),
-      );
-    }
-
-    if (issuer != LicenseConstants.issuerDefault) {
-      return rd.Failure(
-        core.ValidationFailure(
-          message:
-              'Emissor inválido. Esperado "${LicenseConstants.issuerDefault}", '
-              'recebido "$issuer".',
-        ),
-      );
-    }
-
     final featureValues = allowedFeatures.whereType<String>().toList();
     if (featureValues.length != allowedFeatures.length) {
       return const rd.Failure(
@@ -290,6 +262,41 @@ class LicenseDecoder {
     }
 
     return const rd.Success({});
+  }
+
+  /// Helper de validação: extrai e valida que [fieldName] em [data] é uma
+  /// string não-vazia (após trim). Retorna a string trimada em caso de
+  /// sucesso, ou `null` (que o caller traduz via `_missingField`).
+  String? _requireString(Map<String, dynamic> data, String fieldName) {
+    final value = data[fieldName] as String?;
+    if (value == null || value.trim().isEmpty) return null;
+    return value.trim();
+  }
+
+  /// Builder de `Failure` para campo obrigatório ausente. Centralizado
+  /// para garantir que a mensagem seja consistente em todas as
+  /// validações (antes era hard-coded em cada `if` block).
+  rd.Result<Map<String, dynamic>> _missingField(String fieldName) {
+    return rd.Failure(
+      core.ValidationFailure(
+        message: 'Campo obrigatório ausente: $fieldName',
+      ),
+    );
+  }
+
+  /// Helper de parsing de data ISO-8601. Centraliza o pattern
+  /// `try { DateTime.parse(value); } on Object { return Failure(...); }`
+  /// que aparecia 3 vezes (issuedAt, notBefore, expiresAt).
+  rd.Result<DateTime> _parseIsoDate(String value, String fieldName) {
+    try {
+      return rd.Success(DateTime.parse(value));
+    } on Object {
+      return rd.Failure(
+        core.ValidationFailure(
+          message: 'Campo $fieldName com formato inválido',
+        ),
+      );
+    }
   }
 
   rd.Result<List<int>> _decodeSignature(Object signature) {
@@ -323,23 +330,23 @@ class LicenseDecoder {
   ) {
     final now = DateTime.now();
 
+    // Antes este método tinha 2 try/catch quase idênticos para `notBefore`
+    // e `expiresAt`. Agora delega o parsing ao `_parseIsoDate` (já usado
+    // no `_validateRequiredFields` para `issuedAt`) e mantém apenas a
+    // lógica específica de cada janela.
     final notBefore = data['notBefore'] as String?;
     if (notBefore != null && notBefore.isNotEmpty) {
-      try {
-        final notBeforeDt = DateTime.parse(notBefore);
-        if (now.isBefore(notBeforeDt)) {
-          return rd.Failure(
-            core.ValidationFailure(
-              message:
-                  'Licença ainda não válida. Válida a partir de: '
-                  '${notBeforeDt.toIso8601String()}',
-            ),
-          );
-        }
-      } on Object {
-        return const rd.Failure(
+      final parseResult = _parseIsoDate(notBefore, 'notBefore');
+      if (parseResult.isError()) {
+        return rd.Failure(parseResult.exceptionOrNull()!);
+      }
+      final notBeforeDt = parseResult.getOrThrow();
+      if (now.isBefore(notBeforeDt)) {
+        return rd.Failure(
           core.ValidationFailure(
-            message: 'Campo notBefore com formato inválido',
+            message:
+                'Licença ainda não válida. Válida a partir de: '
+                '${notBeforeDt.toIso8601String()}',
           ),
         );
       }
@@ -347,19 +354,15 @@ class LicenseDecoder {
 
     final expiresAt = data['expiresAt'] as String?;
     if (expiresAt != null && expiresAt.isNotEmpty) {
-      try {
-        final expiresAtDt = DateTime.parse(expiresAt);
-        if (now.isAfter(expiresAtDt)) {
-          return rd.Failure(
-            core.ValidationFailure(
-              message: 'Licença expirada em: ${expiresAtDt.toIso8601String()}',
-            ),
-          );
-        }
-      } on Object {
-        return const rd.Failure(
+      final parseResult = _parseIsoDate(expiresAt, 'expiresAt');
+      if (parseResult.isError()) {
+        return rd.Failure(parseResult.exceptionOrNull()!);
+      }
+      final expiresAtDt = parseResult.getOrThrow();
+      if (now.isAfter(expiresAtDt)) {
+        return rd.Failure(
           core.ValidationFailure(
-            message: 'Campo expiresAt com formato inválido',
+            message: 'Licença expirada em: ${expiresAtDt.toIso8601String()}',
           ),
         );
       }

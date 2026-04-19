@@ -7,8 +7,15 @@ class BackupConstants {
   static const int bytesInGB = 1024 * 1024 * 1024;
 
   /// Minimum free disk space (bytes) required before starting a backup.
-  /// Configurable margin to avoid running out of space during backup.
+  /// Used como fallback quando não conseguimos estimar o tamanho real
+  /// do banco. Configurable margin to avoid running out of space during
+  /// backup.
   static const int minFreeSpaceForBackupBytes = 500 * bytesInMB;
+
+  /// Multiplicador aplicado ao tamanho real do banco (quando conhecido)
+  /// para reservar espaço para arquivos temporários, compressão e
+  /// crescimento durante o backup. Ex.: 2.0 = 2× o tamanho do banco.
+  static const double backupSpaceSafetyFactor = 2;
 
   /// Maximum age (days) of the last full backup for log backup preflight.
   /// If the last full is older, a warning is emitted (backup still proceeds).

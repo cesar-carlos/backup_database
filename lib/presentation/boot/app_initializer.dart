@@ -1,6 +1,7 @@
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/application/services/initial_setup_service.dart';
+import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
@@ -11,10 +12,15 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppInitializer {
   static Future<void> initialize() async {
-    await _loadEnvironment();
+    await EnvironmentLoader.loadIfNeeded(logPrefix: '[app_init]');
     await _initializeDefaultCredential();
-    await _initializeAuthProviders();
-    await _initializeAutoUpdate();
+    // Auth providers e auto-update são independentes — paralelizar reduz
+    // latência percebida no boot, especialmente em redes lentas onde o
+    // initialize de OAuth providers pode ter round-trip não-trivial.
+    await Future.wait([
+      _initializeAuthProviders(),
+      _initializeAutoUpdate(),
+    ]);
   }
 
   static Future<void> _initializeDefaultCredential() async {
@@ -31,30 +37,37 @@ class AppInitializer {
     }
   }
 
-  static Future<void> _loadEnvironment() async {
-    if (dotenv.isInitialized) {
-      LoggerService.debug('Variaveis de ambiente ja carregadas');
-      return;
-    }
-
-    await dotenv.load();
-    LoggerService.info('Variaveis de ambiente carregadas');
+  static Future<void> _initializeAuthProviders() async {
+    // Google e Dropbox são independentes; rodar em paralelo evita esperar
+    // dois round-trips em série.
+    await Future.wait([
+      _safeInit(
+        'GoogleAuthProvider',
+        () => service_locator.getIt<GoogleAuthProvider>().initialize(),
+      ),
+      _safeInit(
+        'DropboxAuthProvider',
+        () => service_locator.getIt<DropboxAuthProvider>().initialize(),
+        logLevel: _LogLevel.debug,
+      ),
+    ]);
   }
 
-  static Future<void> _initializeAuthProviders() async {
+  static Future<void> _safeInit(
+    String name,
+    Future<void> Function() init, {
+    _LogLevel logLevel = _LogLevel.warning,
+  }) async {
     try {
-      final googleAuthProvider = service_locator.getIt<GoogleAuthProvider>();
-      await googleAuthProvider.initialize();
-      LoggerService.info('GoogleAuthProvider inicializado');
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao inicializar GoogleAuthProvider: $e');
-    }
-
-    try {
-      final dropboxAuthProvider = service_locator.getIt<DropboxAuthProvider>();
-      await dropboxAuthProvider.initialize();
-    } on Object catch (e) {
-      LoggerService.debug('Erro ao inicializar DropboxAuthProvider: $e');
+      await init();
+      LoggerService.info('$name inicializado');
+    } on Object catch (e, s) {
+      switch (logLevel) {
+        case _LogLevel.debug:
+          LoggerService.debug('Erro ao inicializar $name: $e');
+        case _LogLevel.warning:
+          LoggerService.warning('Erro ao inicializar $name: $e', e, s);
+      }
     }
   }
 
@@ -132,3 +145,5 @@ class LaunchConfig {
   final bool startMinimized;
   final List<String> args;
 }
+
+enum _LogLevel { debug, warning }

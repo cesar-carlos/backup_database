@@ -5,6 +5,7 @@ import 'package:backup_database/core/constants/destination_retry_constants.dart'
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/logging/log_context.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/retry_utils.dart';
@@ -100,7 +101,11 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
             }
           : null;
 
-      final configJson = jsonDecode(destination.config) as Map<String, dynamic>;
+      final configResult = _parseConfigJson(destination);
+      if (configResult.isError()) {
+        return rd.Failure(configResult.exceptionOrNull()!);
+      }
+      final configJson = configResult.getOrNull()!;
 
       switch (destination.type) {
         case DestinationType.local:
@@ -250,17 +255,10 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       'Preparando cópia para pasta local: ${destination.name}',
     );
 
-    final customFileName = backupId != null
-        ? SybaseBackupPathSuffix.buildDestinationName(
-            p.basename(sourceFilePath),
-            backupId,
-          )
-        : null;
-
     final uploadResult = await _localDestinationService.upload(
       sourceFilePath: sourceFilePath,
       config: config,
-      customFileName: customFileName,
+      customFileName: _buildCustomFileName(sourceFilePath, backupId),
       onProgress: onProgress,
     );
 
@@ -269,7 +267,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         LoggerService.info(
           'Upload local concluído com sucesso: '
           '${result.destinationPath} '
-          '(${_formatBytes(result.fileSize)} em '
+          '(${ByteFormat.format(result.fileSize)} em '
           '${result.duration.inSeconds}s)',
         );
         return const rd.Success(());
@@ -292,20 +290,9 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   ) async {
+    final breakerFailure = _circuitBreakerGuard(destination);
+    if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
-    if (!breaker.allowsRequest) {
-      LoggerService.warning(
-        'Circuit breaker aberto para ${destination.name}, pulando upload FTP',
-      );
-      return rd.Failure(
-        BackupFailure(
-          message:
-              'Destino ${destination.name} temporariamente indisponível '
-              '(circuit breaker aberto). Tente novamente mais tarde.',
-          code: FailureCodes.circuitBreakerOpen,
-        ),
-      );
-    }
 
     final config = FtpDestinationConfig(
       host: configJson['host'] as String,
@@ -337,23 +324,12 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       maxAttempts: config.effectiveMaxAttempts,
       operation: () async {
         if (isCancelled != null && isCancelled()) {
-          return const rd.Failure(
-            BackupFailure(
-              message: 'Upload cancelado pelo usuário.',
-              code: FailureCodes.uploadCancelled,
-            ),
-          );
+          return _cancelledFailure();
         }
-        final customFileName = backupId != null
-            ? SybaseBackupPathSuffix.buildDestinationName(
-                p.basename(sourceFilePath),
-                backupId,
-              )
-            : null;
         return _sendToFtp.call(
           sourceFilePath: sourceFilePath,
           config: config,
-          customFileName: customFileName,
+          customFileName: _buildCustomFileName(sourceFilePath, backupId),
           isCancelled: isCancelled,
           onProgress: onProgress,
           runId: LogContext.runId,
@@ -368,7 +344,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         breaker.recordSuccess();
         LoggerService.info(
           'Upload FTP concluído com sucesso: ${result.remotePath} '
-          '(${_formatBytes(result.fileSize)} em '
+          '(${ByteFormat.format(result.fileSize)} em '
           '${result.duration.inSeconds}s)',
         );
         return const rd.Success(());
@@ -392,20 +368,9 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   ) async {
+    final breakerFailure = _circuitBreakerGuard(destination);
+    if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
-    if (!breaker.allowsRequest) {
-      LoggerService.warning(
-        'Circuit breaker aberto para ${destination.name}, pulando upload',
-      );
-      return rd.Failure(
-        BackupFailure(
-          message:
-              'Destino ${destination.name} temporariamente indisponível '
-              '(circuit breaker aberto). Tente novamente mais tarde.',
-          code: FailureCodes.circuitBreakerOpen,
-        ),
-      );
-    }
 
     final config = GoogleDriveDestinationConfig(
       folderId: configJson['folderId'] as String,
@@ -416,23 +381,12 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     final result = await executeResultWithRetry<GoogleDriveUploadResult>(
       operation: () async {
         if (isCancelled != null && isCancelled()) {
-          return const rd.Failure(
-            BackupFailure(
-              message: 'Upload cancelado pelo usuário.',
-              code: FailureCodes.uploadCancelled,
-            ),
-          );
+          return _cancelledFailure();
         }
-        final customFileName = backupId != null
-            ? SybaseBackupPathSuffix.buildDestinationName(
-                p.basename(sourceFilePath),
-                backupId,
-              )
-            : null;
         return _googleDriveDestinationService.upload(
           sourceFilePath: sourceFilePath,
           config: config,
-          customFileName: customFileName,
+          customFileName: _buildCustomFileName(sourceFilePath, backupId),
           onProgress: onProgress,
         );
       },
@@ -458,20 +412,9 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   ) async {
+    final breakerFailure = _circuitBreakerGuard(destination);
+    if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
-    if (!breaker.allowsRequest) {
-      LoggerService.warning(
-        'Circuit breaker aberto para ${destination.name}, pulando upload',
-      );
-      return rd.Failure(
-        BackupFailure(
-          message:
-              'Destino ${destination.name} temporariamente indisponível '
-              '(circuit breaker aberto). Tente novamente mais tarde.',
-          code: FailureCodes.circuitBreakerOpen,
-        ),
-      );
-    }
 
     final config = DropboxDestinationConfig(
       folderPath: configJson['folderPath'] as String? ?? '',
@@ -480,23 +423,12 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     final result = await executeResultWithRetry<DropboxUploadResult>(
       operation: () async {
         if (isCancelled != null && isCancelled()) {
-          return const rd.Failure(
-            BackupFailure(
-              message: 'Upload cancelado pelo usuário.',
-              code: FailureCodes.uploadCancelled,
-            ),
-          );
+          return _cancelledFailure();
         }
-        final customFileName = backupId != null
-            ? SybaseBackupPathSuffix.buildDestinationName(
-                p.basename(sourceFilePath),
-                backupId,
-              )
-            : null;
         return _sendToDropbox.call(
           sourceFilePath: sourceFilePath,
           config: config,
-          customFileName: customFileName,
+          customFileName: _buildCustomFileName(sourceFilePath, backupId),
           onProgress: onProgress,
         );
       },
@@ -522,42 +454,20 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   ) async {
+    final breakerFailure = _circuitBreakerGuard(destination);
+    if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
-    if (!breaker.allowsRequest) {
-      LoggerService.warning(
-        'Circuit breaker aberto para ${destination.name}, pulando upload',
-      );
-      return rd.Failure(
-        BackupFailure(
-          message:
-              'Destino ${destination.name} temporariamente indisponível '
-              '(circuit breaker aberto). Tente novamente mais tarde.',
-          code: FailureCodes.circuitBreakerOpen,
-        ),
-      );
-    }
 
     final config = NextcloudDestinationConfig.fromJson(configJson);
     final result = await executeResultWithRetry<NextcloudUploadResult>(
       operation: () async {
         if (isCancelled != null && isCancelled()) {
-          return const rd.Failure(
-            BackupFailure(
-              message: 'Upload cancelado pelo usuário.',
-              code: FailureCodes.uploadCancelled,
-            ),
-          );
+          return _cancelledFailure();
         }
-        final customFileName = backupId != null
-            ? SybaseBackupPathSuffix.buildDestinationName(
-                p.basename(sourceFilePath),
-                backupId,
-              )
-            : null;
         return _sendToNextcloud.call(
           sourceFilePath: sourceFilePath,
           config: config,
-          customFileName: customFileName,
+          customFileName: _buildCustomFileName(sourceFilePath, backupId),
           onProgress: onProgress,
         );
       },
@@ -585,27 +495,124 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     );
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+  /// Faz parse defensivo do JSON de configuração da destination. Antes
+  /// um JSON inválido virava `BackupFailure` genérica vinda do
+  /// `try/catch` externo, sem indicar a causa real para o usuário. Agora
+  /// devolvemos uma `ValidationFailure` com mensagem clara.
+  rd.Result<Map<String, dynamic>> _parseConfigJson(
+    BackupDestination destination,
+  ) {
+    try {
+      final decoded = jsonDecode(destination.config);
+      if (decoded is! Map<String, dynamic>) {
+        return rd.Failure(
+          ValidationFailure(
+            message:
+                'Configuração da destination "${destination.name}" não é '
+                'um objeto JSON válido.',
+          ),
+        );
+      }
+      return rd.Success(decoded);
+    } on FormatException catch (e) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Configuração JSON da destination "${destination.name}" está '
+              'malformada: ${e.message}',
+          originalError: e,
+        ),
+      );
+    } on Object catch (e) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Erro inesperado ao ler configuração de "${destination.name}": '
+              '$e',
+          originalError: e,
+        ),
+      );
     }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  /// Verifica se o circuit breaker permite o request. Retorna `null` se
+  /// permite, ou uma `Failure` pré-construída se está aberto. Centraliza
+  /// o bloco de 12 linhas que era duplicado em FTP/Drive/Dropbox/Nextcloud.
+  rd.Failure<void, Exception>? _circuitBreakerGuard(
+    BackupDestination destination,
+  ) {
+    final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
+    if (breaker.allowsRequest) return null;
+    LoggerService.warning(
+      'Circuit breaker aberto para ${destination.name}, pulando upload',
+    );
+    return rd.Failure(
+      BackupFailure(
+        message:
+            'Destino ${destination.name} temporariamente indisponível '
+            '(circuit breaker aberto). Tente novamente mais tarde.',
+        code: FailureCodes.circuitBreakerOpen,
+      ),
+    );
+  }
+
+  /// Constrói o nome customizado para a destination quando há `backupId`.
+  /// Antes essa lógica estava duplicada em 5 pontos do orchestrator.
+  String? _buildCustomFileName(String sourceFilePath, String? backupId) {
+    if (backupId == null) return null;
+    return SybaseBackupPathSuffix.buildDestinationName(
+      p.basename(sourceFilePath),
+      backupId,
+    );
+  }
+
+  /// Falha pré-construída para upload cancelado pelo usuário. Centraliza
+  /// o `Failure(...)` usado em vários pontos durante checagens de
+  /// `isCancelled`.
+  rd.Failure<T, Exception> _cancelledFailure<T extends Object>() {
+    return rd.Failure(
+      const BackupFailure(
+        message: 'Upload cancelado pelo usuário.',
+        code: FailureCodes.uploadCancelled,
+      ),
+    );
   }
 }
 
+/// Resolve o paralelismo máximo de uploads simultâneos a partir da
+/// variável `BACKUP_DATABASE_MAX_PARALLEL_UPLOADS`, com clamp em [1, 16].
+/// Antes valores inválidos caíam silenciosamente no default — agora
+/// emitimos warning para facilitar diagnóstico de typos.
 int _resolveMaxParallelUploads() {
   const envKey = 'BACKUP_DATABASE_MAX_PARALLEL_UPLOADS';
+  const hardCap = 16;
+
   final raw = Platform.environment[envKey]?.trim();
-  final parsed = int.tryParse(raw ?? '');
-  if (parsed == null || parsed < 1) {
+  if (raw == null || raw.isEmpty) {
     return UploadParallelismConstants.maxParallelUploads;
   }
-  if (parsed > 16) {
-    return 16;
+
+  final parsed = int.tryParse(raw);
+  if (parsed == null) {
+    LoggerService.warning(
+      '[destination_orchestrator] $envKey="$raw" não é um inteiro válido. '
+      'Usando default ${UploadParallelismConstants.maxParallelUploads}.',
+    );
+    return UploadParallelismConstants.maxParallelUploads;
+  }
+  if (parsed < 1) {
+    LoggerService.warning(
+      '[destination_orchestrator] $envKey=$parsed inválido (precisa ser '
+      '>= 1). Usando default ${UploadParallelismConstants.maxParallelUploads}.',
+    );
+    return UploadParallelismConstants.maxParallelUploads;
+  }
+  if (parsed > hardCap) {
+    LoggerService.warning(
+      '[destination_orchestrator] $envKey=$parsed excede o teto de '
+      '$hardCap (proteção contra exaustão de conexões). Limitando.',
+    );
+    return hardCap;
   }
   return parsed;
 }

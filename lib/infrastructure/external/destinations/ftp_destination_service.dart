@@ -4,6 +4,7 @@ import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/failure.dart' hide FtpFailure;
 import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/ftp_failure.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -58,7 +59,7 @@ class FtpDestinationService implements IFtpService {
       if (sha256Hash != null) {
         LoggerService.debug(
           'SHA-256 calculado em ${hashStopwatch.elapsedMilliseconds}ms '
-          '(${_formatFileSize(fileSize)})',
+          '(${ByteFormat.format(fileSize)})',
         );
       }
 
@@ -468,14 +469,6 @@ class FtpDestinationService implements IFtpService {
     return true;
   }
 
-  static String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB';
-  }
 
   Future<String?> _computeSha256Streaming(File file) async {
     try {

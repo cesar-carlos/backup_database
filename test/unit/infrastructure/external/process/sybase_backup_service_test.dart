@@ -27,7 +27,11 @@ void main() {
 
   setUp(() async {
     processService = _MockProcessService();
-    service = SybaseBackupService(processService);
+    // Desabilita o uso de arquivo de credenciais nos testes para que os
+    // mocks possam inspecionar diretamente os argumentos passados ao
+    // ProcessService. Em produção, o arquivo é usado por padrão para
+    // evitar expor a senha em `tasklist /v`.
+    service = SybaseBackupService(processService, useCredentialsFile: false);
     tempDir = await Directory.systemTemp.createTemp('sybase_backup_test_');
     config = SybaseConfig(
       id: 'cfg-1',
@@ -109,6 +113,7 @@ void main() {
         final result = await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
         );
 
@@ -146,6 +151,7 @@ void main() {
         await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
           backupTimeout: backupTimeout,
           verifyTimeout: verifyTimeout,
@@ -453,6 +459,7 @@ void main() {
       final result = await service.executeBackup(
         config: config,
         outputDirectory: tempDir.path,
+        customFileName: config.databaseNameValue,
         verifyAfterBackup: true,
         sybaseBackupOptions: const SybaseBackupOptions(autoTuneWriters: true),
       );
@@ -498,6 +505,7 @@ void main() {
       final result = await service.executeBackup(
         config: config,
         outputDirectory: tempDir.path,
+        customFileName: config.databaseNameValue,
         verifyAfterBackup: true,
       );
 
@@ -523,6 +531,7 @@ void main() {
         final result = await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
         );
 
@@ -591,6 +600,7 @@ void main() {
         final result = await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
         );
 
@@ -659,6 +669,7 @@ void main() {
         final result = await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
         );
 
@@ -707,6 +718,7 @@ void main() {
         final result = await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
         );
 
@@ -771,6 +783,7 @@ void main() {
         final result = await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
           verifyPolicy: VerifyPolicy.strict,
         );
@@ -831,6 +844,7 @@ void main() {
         final result = await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
         );
 
@@ -897,6 +911,7 @@ void main() {
         final result = await service.executeBackup(
           config: config,
           outputDirectory: tempDir.path,
+          customFileName: config.databaseNameValue,
           verifyAfterBackup: true,
         );
 

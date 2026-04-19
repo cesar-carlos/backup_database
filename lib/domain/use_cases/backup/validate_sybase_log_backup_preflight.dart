@@ -69,26 +69,29 @@ class ValidateSybaseLogBackupPreflight {
       schedule.id,
     );
     if (historyResult.isError()) {
+      // Bug histórico: usar `historyResult.exceptionOrNull()` direto na
+      // string interpolation gera "Failure(message: ..., code: null)"
+      // — feio para o usuário e expõe internals. Extrai `.message` quando
+      // for `Failure`.
+      final raw = historyResult.exceptionOrNull();
+      final detail = raw is Failure ? raw.message : raw?.toString() ?? '';
       return rd.Failure(
         ValidationFailure(
-          message:
-              'Não foi possível verificar histórico de backup: '
-              '${historyResult.exceptionOrNull()}',
+          message: 'Não foi possível verificar histórico de backup: $detail',
         ),
       );
     }
 
     final histories = historyResult.getOrNull()!;
-    final successfulFulls = histories
-        .where(
-          (h) =>
-              (h.backupType == BackupType.full.name ||
-                  h.backupType == BackupType.fullSingle.name) &&
-              h.status == BackupStatus.success,
-        )
-        .toList();
 
-    if (successfulFulls.isEmpty) {
+    // Single-pass classification: antes este método iterava `histories` em
+    // 4 passes separados (`successfulFulls.where`, `terminalHistories.where`,
+    // `lastBackup.reduce`, `logsSinceFull.where`). Para schedules com
+    // muitos backups históricos, isso era O(4N). Agora colapsamos tudo
+    // em 1 pass O(N) usando comparações in-place para max.
+    final classification = _classifyHistories(histories);
+
+    if (classification.lastFull == null) {
       LoggerService.warning(
         'Preflight Sybase log: nenhum backup full encontrado para '
         'schedule ${schedule.name}',
@@ -103,11 +106,7 @@ class ValidateSybaseLogBackupPreflight {
       );
     }
 
-    successfulFulls.sort(
-      (a, b) =>
-          (b.finishedAt ?? b.startedAt).compareTo(a.finishedAt ?? a.startedAt),
-    );
-    final lastFull = successfulFulls.first;
+    final lastFull = classification.lastFull!;
     final lastFullAt = lastFull.finishedAt ?? lastFull.startedAt;
     final daysSinceFull = DateTime.now().difference(lastFullAt).inDays;
 
@@ -119,16 +118,7 @@ class ValidateSybaseLogBackupPreflight {
       LoggerService.warning('Preflight Sybase log: $warning');
     }
 
-    final lastBackup = histories.isNotEmpty
-        ? histories.reduce(
-            (a, b) =>
-                (a.finishedAt ?? a.startedAt).isAfter(
-                  b.finishedAt ?? b.startedAt,
-                )
-                ? a
-                : b,
-          )
-        : null;
+    final lastBackup = classification.lastTerminal;
     if (lastBackup != null && lastBackup.status == BackupStatus.error) {
       const chainWarning =
           'Último backup falhou. A cadeia de logs pode estar comprometida.';
@@ -136,14 +126,10 @@ class ValidateSybaseLogBackupPreflight {
       LoggerService.warning('Preflight Sybase log: $chainWarning');
     }
 
-    final logsSinceFull = histories
-        .where(
-          (h) =>
-              h.backupType == BackupType.log.name &&
-              h.status == BackupStatus.success &&
-              (h.finishedAt ?? h.startedAt).isAfter(lastFullAt),
-        )
-        .length;
+    // `logsSinceFull` precisa do `lastFullAt`, então só conseguimos calcular
+    // depois de ter o `lastFull`. Mantemos como segundo pass intencional
+    // (agora O(N) total — 1 pass de classificação + 1 de contagem).
+    final logsSinceFull = histories.where(_isLogAfter(lastFullAt)).length;
 
     return rd.Success(
       SybaseLogBackupPreflightResult(
@@ -154,4 +140,66 @@ class ValidateSybaseLogBackupPreflight {
       ),
     );
   }
+
+  /// Classifica `histories` em uma única passada O(N) capturando:
+  /// - O backup full (ou fullSingle) com sucesso mais recente.
+  /// - O backup mais recente em estado terminal (não-running) — usado para
+  ///   detectar cadeia comprometida quando o último foi `error`.
+  ///
+  /// Substitui 3 passes separados (sort, where, reduce) que eram a maior
+  /// fonte de O(K·N) deste método em schedules com muitos backups.
+  _ClassificationResult _classifyHistories(List<BackupHistory> histories) {
+    BackupHistory? lastFull;
+    DateTime? lastFullAt;
+    BackupHistory? lastTerminal;
+    DateTime? lastTerminalAt;
+
+    for (final h in histories) {
+      final eventAt = h.finishedAt ?? h.startedAt;
+
+      // Last successful full: aceita `full` e `fullSingle` (compatibilidade
+      // com schedules legados que usavam fullSingle como sinônimo).
+      if (h.status == BackupStatus.success &&
+          (h.backupType == BackupType.full.name ||
+              h.backupType == BackupType.fullSingle.name)) {
+        if (lastFullAt == null || eventAt.isAfter(lastFullAt)) {
+          lastFull = h;
+          lastFullAt = eventAt;
+        }
+      }
+
+      // Last terminal (não-running): protege contra zumbis ainda não
+      // reconciliados que poderiam falsamente disparar warning de cadeia
+      // quebrada usando `startedAt` como proxy.
+      if (h.status != BackupStatus.running) {
+        if (lastTerminalAt == null || eventAt.isAfter(lastTerminalAt)) {
+          lastTerminal = h;
+          lastTerminalAt = eventAt;
+        }
+      }
+    }
+
+    return _ClassificationResult(
+      lastFull: lastFull,
+      lastTerminal: lastTerminal,
+    );
+  }
+
+  /// Predicate compilado para o pass de contagem de logs após o último full.
+  /// Extraído para evitar capturar `lastFullAt` em closure no hot path.
+  bool Function(BackupHistory) _isLogAfter(DateTime lastFullAt) {
+    return (h) =>
+        h.backupType == BackupType.log.name &&
+        h.status == BackupStatus.success &&
+        (h.finishedAt ?? h.startedAt).isAfter(lastFullAt);
+  }
+}
+
+class _ClassificationResult {
+  const _ClassificationResult({
+    required this.lastFull,
+    required this.lastTerminal,
+  });
+  final BackupHistory? lastFull;
+  final BackupHistory? lastTerminal;
 }

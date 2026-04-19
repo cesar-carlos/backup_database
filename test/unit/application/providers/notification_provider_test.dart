@@ -128,26 +128,26 @@ void main() {
     );
 
     test('saveConfig persists config and refreshes selection', () async {
-        when(
-          () => emailConfigRepository.getAll(),
-        ).thenAnswer((_) async => const rd.Success(<EmailConfig>[]));
-        await provider.loadConfigs();
+      when(
+        () => emailConfigRepository.getAll(),
+      ).thenAnswer((_) async => const rd.Success(<EmailConfig>[]));
+      await provider.loadConfigs();
 
-        when(
-          () => emailConfigRepository.getAll(),
-        ).thenAnswer((_) async => rd.Success([configA]));
-        when(
-          () => targetRepository.getByConfigId(configA.id),
-        ).thenAnswer(
-          (_) async => const rd.Success(<EmailNotificationTarget>[]),
-        );
-        final result = await provider.saveConfig(configA);
+      when(
+        () => emailConfigRepository.getAll(),
+      ).thenAnswer((_) async => rd.Success([configA]));
+      when(
+        () => targetRepository.getByConfigId(configA.id),
+      ).thenAnswer(
+        (_) async => const rd.Success(<EmailNotificationTarget>[]),
+      );
+      final result = await provider.saveConfig(configA);
 
-        expect(result, isTrue);
-        expect(provider.selectedConfigId, configA.id);
-        expect(provider.configs.length, 1);
-        verify(() => emailConfigRepository.save(any())).called(1);
-      });
+      expect(result, isTrue);
+      expect(provider.selectedConfigId, configA.id);
+      expect(provider.configs.length, 1);
+      verify(() => emailConfigRepository.save(any())).called(1);
+    });
 
     test(
       'getPrimaryRecipientEmail falls back to notification target when config recipients are empty',

@@ -32,18 +32,18 @@ python test/scripts/stop_all.py
 
 ## Scripts Disponiveis
 
-| Script | Proposito |
-|--------|-----------|
-| `verify_env.py` | Verifica configuracao do ambiente |
-| `start_server.py` | Inicia app em modo servidor |
-| `start_client.py` | Inicia app em modo cliente |
-| `start_both.py` | Inicia server + client automaticamente |
-| `check_server.py` | Verifica se server esta respondendo |
-| `test_socket.py` | Testa configuracao de socket |
-| `stop_all.py` | Para todas as instancias do Flutter |
-| `find_logs.py` | Encontra e exibe logs recentes |
-| `get_logs.py` | Coleta todos os logs para analise |
-| `run_integration_tests.py` | Executa testes de integracao (Socket, File Transfer) |
+| Script                         | Proposito                                                           |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `verify_env.py`                | Verifica configuracao do ambiente                                   |
+| `start_server.py`              | Inicia app em modo servidor                                         |
+| `start_client.py`              | Inicia app em modo cliente                                          |
+| `start_both.py`                | Inicia server + client automaticamente                              |
+| `check_server.py`              | Verifica se server esta respondendo                                 |
+| `test_socket.py`               | Testa configuracao de socket                                        |
+| `stop_all.py`                  | Para todas as instancias do Flutter                                 |
+| `find_logs.py`                 | Encontra e exibe logs recentes                                      |
+| `get_logs.py`                  | Coleta todos os logs para analise                                   |
+| `run_integration_tests.py`     | Executa testes de integracao (Socket, File Transfer)                |
 | `run_ftp_integration_tests.py` | Executa testes de integracao FTP (upload, fallback, testConnection) |
 
 ## Documentacao

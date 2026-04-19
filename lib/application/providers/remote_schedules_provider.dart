@@ -159,20 +159,11 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         .validateDownloadsDirectory();
     if (!hasPermission) {
       final downloadsDir = await _tempDirectoryService.getDownloadsDirectory();
-      _error =
-          'Sem permissão de escrita na pasta temporária:\n${downloadsDir.path}\n\n'
-          'Execute o aplicativo como Administrador ou configure outra pasta em Configurações > Geral.';
-      _lastErrorCode = null;
-      _isExecuting = false;
-      _executingScheduleId = null;
-      _backupStep = null;
-      _backupMessage = null;
-      _backupProgress = null;
-      _transferStep = null;
-      _transferMessage = null;
-      _transferProgress = null;
-      _isTransferringFile = false;
-      notifyListeners();
+      _resetExecutionState(
+        error:
+            'Sem permissão de escrita na pasta temporária:\n${downloadsDir.path}\n\n'
+            'Execute o aplicativo como Administrador ou configure outra pasta em Configurações > Geral.',
+      );
       return false;
     }
 
@@ -201,14 +192,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           LoggerService.warning(
             '⚠️ DOWNLOAD CANCELADO: backupPath.isEmpty=${backupPath.isEmpty}, _transferProvider==null=${_transferProvider == null}',
           );
-          _error = null;
-          _lastErrorCode = null;
-          _isExecuting = false;
-          _executingScheduleId = null;
-          _backupStep = null;
-          _backupMessage = null;
-          _backupProgress = null;
-          notifyListeners();
+          _resetExecutionState();
           return true;
         }
 
@@ -242,40 +226,36 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           },
         );
 
-        _isTransferringFile = false;
         LoggerService.info('===== DOWNLOAD FINALIZADO =====');
         LoggerService.info('DownloadSuccess: $downloadSuccess');
-
-        _error = null;
-        _lastErrorCode = null;
-        _isExecuting = false;
-        _executingScheduleId = null;
-        _backupStep = null;
-        _backupMessage = null;
-        _backupProgress = null;
-        _transferStep = null;
-        _transferMessage = null;
-        _transferProgress = null;
-        notifyListeners();
-
+        _resetExecutionState();
         return downloadSuccess;
       },
       (exception) {
-        _error = mapExceptionToMessage(exception);
-        _lastErrorCode = exception is Failure ? exception.code : null;
-        _isExecuting = false;
-        _executingScheduleId = null;
-        _backupStep = null;
-        _backupMessage = null;
-        _backupProgress = null;
-        _transferStep = null;
-        _transferMessage = null;
-        _transferProgress = null;
-        _isTransferringFile = false;
-        notifyListeners();
+        _resetExecutionState(
+          error: mapExceptionToMessage(exception),
+          errorCode: exception is Failure ? exception.code : null,
+        );
         return false;
       },
     );
+  }
+
+  /// Reseta todo o estado de execução em uma única operação. Centraliza o
+  /// padrão repetido que existia em ~4 pontos do método executeSchedule.
+  void _resetExecutionState({String? error, String? errorCode}) {
+    _isExecuting = false;
+    _executingScheduleId = null;
+    _backupStep = null;
+    _backupMessage = null;
+    _backupProgress = null;
+    _transferStep = null;
+    _transferMessage = null;
+    _transferProgress = null;
+    _isTransferringFile = false;
+    _error = error;
+    _lastErrorCode = errorCode;
+    notifyListeners();
   }
 
   Future<bool> cancelSchedule() async {
@@ -299,21 +279,13 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
     return result.fold(
       (_) {
-        _isExecuting = false;
-        _executingScheduleId = null;
-        _backupStep = null;
-        _backupMessage = null;
-        _backupProgress = null;
-        _transferStep = null;
-        _transferMessage = null;
-        _transferProgress = null;
-        _isTransferringFile = false;
-        _error = null;
-        _lastErrorCode = null;
-        notifyListeners();
+        _resetExecutionState();
         return true;
       },
       (exception) {
+        // Mesmo no insucesso do cancel, registra o erro mas mantém o
+        // estado de execução para o usuário poder tentar de novo. Apenas
+        // atualizamos a mensagem de erro.
         _error = mapExceptionToMessage(exception);
         _lastErrorCode = exception is Failure ? exception.code : null;
         notifyListeners();

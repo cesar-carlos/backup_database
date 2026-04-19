@@ -170,6 +170,27 @@ void main() {
       ),
     );
     when(() => processService.cancelByTag(any())).thenReturn(null);
+    // Stubs do progress notifier que o SchedulerService agora invoca
+    // sempre que executa um backup local (antes só o socket handler
+    // chamava `tryStartBackup`). Fornecer defaults aqui mantém os testes
+    // de cenário focados em validar a lógica do scheduler, não o
+    // notifier.
+    when(() => progressNotifier.tryStartBackup(any())).thenReturn(true);
+    when(() => progressNotifier.setCurrentBackupName(any())).thenReturn(null);
+    when(
+      () => progressNotifier.updateProgress(
+        step: any(named: 'step'),
+        message: any(named: 'message'),
+        progress: any(named: 'progress'),
+      ),
+    ).thenReturn(null);
+    when(() => progressNotifier.failBackup(any())).thenReturn(null);
+    when(
+      () => progressNotifier.completeBackup(
+        message: any(named: 'message'),
+        backupPath: any(named: 'backupPath'),
+      ),
+    ).thenReturn(null);
 
     licensePolicyService = _MockLicensePolicyService();
     when(
@@ -304,22 +325,29 @@ void main() {
     });
 
     test(
-      'executeNow falha quando espaco livre minimo nao e atendido',
+      'executeNow propaga ValidationFailure de espaço insuficiente vinda '
+      'do BackupOrchestratorService',
       () async {
+        // A validação de espaço livre foi movida do SchedulerService
+        // para o BackupOrchestratorService._estimateRequiredSpaceBytes
+        // (usa tamanho real do banco × safetyFactor em vez do mínimo
+        // fixo de 500 MB que dava false-positive em bancos grandes).
+        // O teste agora valida apenas que o scheduler propaga
+        // corretamente uma falha de validação retornada pelo orchestrator.
         final schedule = buildSchedule();
 
         when(
           () => scheduleRepository.getById(scheduleId),
         ).thenAnswer((_) async => rd.Success(schedule));
         when(
-          () => storageChecker.checkSpace(any()),
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+          ),
         ).thenAnswer(
-          (_) async => const rd.Success(
-            DiskSpaceInfo(
-              totalBytes: 10 * 1024 * 1024 * 1024,
-              freeBytes: 100 * 1024 * 1024,
-              usedBytes: 9900 * 1024 * 1024,
-              usedPercentage: 99,
+          (_) async => const rd.Failure(
+            ValidationFailure(
+              message: 'Espaço livre insuficiente na pasta de backup',
             ),
           ),
         );
@@ -330,12 +358,6 @@ void main() {
         expect(
           result.exceptionOrNull().toString(),
           contains('Espaço livre insuficiente na pasta de backup'),
-        );
-        verifyNever(
-          () => backupOrchestratorService.executeBackup(
-            schedule: any(named: 'schedule'),
-            outputDirectory: any(named: 'outputDirectory'),
-          ),
         );
       },
     );

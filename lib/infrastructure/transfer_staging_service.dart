@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:path/path.dart' as p;
@@ -189,7 +190,7 @@ class TransferStagingService implements ITransferStagingService {
       if (deletedCount > 0) {
         LoggerService.info(
           'TransferStagingService: cleaned up $deletedCount old backup(s) '
-          '(${_formatBytes(totalSize)}) older than $maxAge',
+          '(${ByteFormat.format(totalSize)}) older than $maxAge',
         );
       }
     } on Object catch (e, st) {
@@ -201,14 +202,4 @@ class TransferStagingService implements ITransferStagingService {
     }
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
 }

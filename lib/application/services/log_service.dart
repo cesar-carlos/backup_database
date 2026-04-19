@@ -206,8 +206,12 @@ class LogService {
     result.fold(
       (count) => LoggerService.info('$count logs antigos removidos'),
       (failure) {
-        final f = failure as Failure;
-        LoggerService.warning('Erro ao limpar logs antigos: ${f.message}');
+        // Cast inseguro `failure as Failure` substituído por verificação
+        // explícita: protege contra exceptions inesperadas que não
+        // implementam `Failure`.
+        final message =
+            failure is Failure ? failure.message : failure.toString();
+        LoggerService.warning('Erro ao limpar logs antigos: $message');
       },
     );
 

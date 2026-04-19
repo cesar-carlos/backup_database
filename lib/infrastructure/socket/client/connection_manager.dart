@@ -47,6 +47,12 @@ class ConnectionManager {
   final Map<int, Completer<Message>> _pendingRequests = {};
   StreamSubscription<Message>? _messageSubscription;
 
+  /// Subscription do `statusStream` do client. Antes não havia listener
+  /// — quando a conexão caía abruptamente (timeout, RST), os completers
+  /// em `_pendingRequests` ficavam pendurados para sempre, vazando
+  /// memória e deixando UIs esperando indefinidamente.
+  StreamSubscription<ConnectionStatus>? _statusSubscription;
+
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
 
@@ -85,6 +91,9 @@ class ConnectionManager {
     _activeHost = host;
     _activePort = port;
     _messageSubscription = _client!.messageStream.listen(_onMessage);
+    // Observa transições de status para abortar requests pendentes
+    // quando a conexão cair sem chamar `disconnect()` explicitamente.
+    _statusSubscription = _client!.statusStream.listen(_onStatusChanged);
     final useAuth =
         serverId != null &&
         serverId.isNotEmpty &&
@@ -145,6 +154,60 @@ class ConnectionManager {
     throw TimeoutException(
       'Tempo esgotado aguardando resposta de autenticação do servidor',
     );
+  }
+
+  /// Callback do `statusStream`: quando a conexão entra em estado
+  /// terminal sem `disconnect()` explícito, faz cleanup dos completers
+  /// pendentes para evitar vazamento e UIs travadas. O cleanup é
+  /// idempotente — se `disconnect()` for chamado depois, encontra os
+  /// maps vazios.
+  void _onStatusChanged(ConnectionStatus status) {
+    final isTerminal =
+        status == ConnectionStatus.disconnected ||
+        status == ConnectionStatus.error ||
+        status == ConnectionStatus.authenticationFailed;
+    if (!isTerminal) return;
+    if (_pendingRequests.isEmpty &&
+        _activeBackups.isEmpty &&
+        _activeTransfers.isEmpty) {
+      return;
+    }
+    LoggerService.warning(
+      '[ConnectionManager] Conexão entrou em estado $status com '
+      '${_pendingRequests.length} request(s), '
+      '${_activeTransfers.length} transferência(s) e '
+      '${_activeBackups.length} backup(s) pendente(s) — abortando.',
+    );
+    _abortPending(status);
+  }
+
+  /// Aborta todas as operações pendentes com um erro indicando o estado
+  /// da conexão. Extraído para reuso entre [_onStatusChanged] e
+  /// [disconnect] no futuro (atualmente `disconnect` ainda tem sua
+  /// própria implementação ligeiramente diferente para fileSink close).
+  void _abortPending(ConnectionStatus status) {
+    final stateError = StateError(
+      'Conexão encerrada (status: $status) com operações pendentes',
+    );
+    final exception = Exception(stateError.message);
+    for (final completer in _pendingRequests.values) {
+      if (!completer.isCompleted) {
+        completer.completeError(stateError);
+      }
+    }
+    _pendingRequests.clear();
+    for (final state in _activeBackups.values) {
+      if (!state.completer.isCompleted) {
+        state.completer.complete(rd.Failure(exception));
+      }
+    }
+    _activeBackups.clear();
+    for (final state in _activeTransfers.values) {
+      if (!state.completer.isCompleted) {
+        state.completer.complete(rd.Failure(exception));
+      }
+    }
+    _activeTransfers.clear();
   }
 
   void _onMessage(Message message) {
@@ -439,6 +502,8 @@ class ConnectionManager {
   Future<void> disconnect() async {
     _messageSubscription?.cancel();
     _messageSubscription = null;
+    _statusSubscription?.cancel();
+    _statusSubscription = null;
 
     // Fechar todos os fileSinks antes de limpar
     for (final entry in _activeTransfers.entries) {

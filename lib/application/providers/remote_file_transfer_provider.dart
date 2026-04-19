@@ -3,6 +3,7 @@ import 'dart:io' show File;
 
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
@@ -190,7 +191,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure.toString();
+        _error = failure is Failure ? failure.message : failure.toString();
         _isLoading = false;
       },
     );
@@ -403,48 +404,37 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     String relativePath, {
     TransferProgressCallback? onTransferProgress,
   }) async {
-    LoggerService.info('===== INÍCIO TRANSFERÊNCIA BACKUP PARA CLIENTE =====');
-    LoggerService.info('ScheduleID: $scheduleId');
-    LoggerService.info('RelativePath recebido do servidor: $relativePath');
+    LoggerService.info(
+      'Iniciando transferência de backup: scheduleId=$scheduleId, '
+      'relativePath=$relativePath',
+    );
 
     if (!_connectionManager.isConnected) {
-      LoggerService.error('Cliente não está conectado ao servidor!');
+      LoggerService.error('Cliente não está conectado ao servidor');
       return false;
     }
-    LoggerService.info('Cliente conectado ao servidor ✓');
 
     final linkedIds = await getLinkedDestinationIds(scheduleId);
-    LoggerService.info(
-      'Destinos vinculados encontrados: ${linkedIds.length} destinos',
+    LoggerService.debug(
+      'Destinos vinculados: ${linkedIds.length} '
+      '${linkedIds.isEmpty ? '' : '(${linkedIds.join(', ')})'}',
     );
-    if (linkedIds.isNotEmpty) {
-      LoggerService.info('IDs dos destinos: ${linkedIds.join(', ')}');
-    }
 
-    // Usa TempDirectoryService para obter pasta de downloads
-    LoggerService.info('Obtendo pasta de downloads do TempDirectoryService...');
     final downloadsDir = await _tempDirectoryService.getDownloadsDirectory();
     final destDir = downloadsDir.path;
-    final tempPathForCleanup = destDir;
-
-    LoggerService.info('✓ Pasta de downloads configurada: $destDir');
 
     final baseName = p.basename(relativePath);
     final outputFileName = p.extension(baseName).isEmpty
         ? '$baseName.zip'
         : baseName;
     final outputFilePath = p.join(destDir, outputFileName);
-    LoggerService.info('Caminho completo do arquivo: $outputFilePath');
+    LoggerService.debug('Caminho de download: $outputFilePath');
 
     _isTransferring = true;
     _error = null;
     _transferCurrentChunk = null;
     _transferTotalChunks = null;
     notifyListeners();
-
-    LoggerService.info('===== INICIANDO DOWNLOAD =====');
-    LoggerService.info('Solicitando arquivo: $relativePath');
-    LoggerService.info('Salvando em: $outputFilePath');
 
     onTransferProgress?.call(
       'Baixando arquivo do servidor',
@@ -467,7 +457,6 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             'Transferindo: ${(progress * 100).toStringAsFixed(1)}%',
             progress,
           );
-          LoggerService.debug('Progresso: $currentChunk/$totalChunks chunks');
         },
       ),
       operationName: 'Download backup $scheduleId',
@@ -480,14 +469,13 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     final success = result.fold(
       (_) {
         _error = null;
-        LoggerService.info('✓ DOWNLOAD CONCLUÍDO COM SUCESSO!');
+        LoggerService.info('Download de backup concluído: $outputFilePath');
         return true;
       },
       (failure) {
         _error =
             'Falha ao baixar backup após ${SocketConfig.maxRetries} tentativas: $failure';
-        LoggerService.error('✗ FALHA NO DOWNLOAD: $_error');
-        LoggerService.error('Failure details: $failure');
+        LoggerService.error('Falha no download de backup', failure);
         return false;
       },
     );
@@ -497,7 +485,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
       if (!await downloadedFile.exists()) {
         _error =
             'Arquivo baixado não encontrado após transferência: $outputFilePath';
-        LoggerService.error('✗ $_error');
+        LoggerService.error(_error!);
         _isTransferring = false;
         notifyListeners();
         return false;
@@ -507,7 +495,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         _error =
             'Arquivo baixado está vazio (0 bytes). Não é possível enviar para '
             'destinos. Verifique o backup no servidor.';
-        LoggerService.error('✗ $_error');
+        LoggerService.error(_error!);
         _isTransferring = false;
         notifyListeners();
         return false;
@@ -517,172 +505,143 @@ class RemoteFileTransferProvider extends ChangeNotifier {
       );
 
       try {
-        LoggerService.info('Limpando staging do servidor...');
         await _transferStagingService.cleanupStaging(scheduleId);
-        LoggerService.info('✓ Staging limpo');
+        LoggerService.debug('Staging do servidor limpo');
       } on Object catch (e) {
         LoggerService.warning('Erro ao limpar staging (não crítico): $e');
       }
 
+      var uploadHadErrors = false;
       if (linkedIds.isNotEmpty) {
-        LoggerService.info('===== INICIANDO UPLOAD PARA DESTINOS =====');
-        LoggerService.info('Arquivo local: $outputFilePath');
-        LoggerService.info('Quantidade de destinos: ${linkedIds.length}');
-
-        _isUploadingToRemotes = true;
-        _uploadError = null;
-        notifyListeners();
-
-        final errors = <String>[];
-        var completedUploads = 0;
-
-        for (final id in linkedIds) {
-          LoggerService.info('--- Processando destino: $id ---');
-
-          final uploadProgress = linkedIds.isNotEmpty
-              ? completedUploads / linkedIds.length
-              : 0.0;
-          onTransferProgress?.call(
-            'Enviando para destinos',
-            'Processando destino ${completedUploads + 1} de ${linkedIds.length}',
-            uploadProgress,
-          );
-
-          final destResult = await _destinationRepository.getById(id);
-
-          final destination = destResult.fold(
-            (dest) {
-              LoggerService.info(
-                'Destino carregado: ${dest.name} (tipo: ${dest.type.name})',
-              );
-              return dest;
-            },
-            (failure) {
-              final errMsg = 'Destino $id não encontrado';
-              LoggerService.error(errMsg);
-              errors.add(errMsg);
-              return null;
-            },
-          );
-
-          if (destination == null) {
-            LoggerService.warning('Pulando destino $id (não encontrado)');
-            completedUploads++;
-            continue;
-          }
-
-          LoggerService.info('Enviando para: ${destination.name}');
-          onTransferProgress?.call(
-            'Enviando para ${destination.name}',
-            'Iniciando upload...',
-            uploadProgress,
-          );
-
-          final sendResult = await _sendFileToDestinationService.sendFile(
-            localFilePath: outputFilePath,
-            destination: destination,
-            onProgress: (uploadProgressValue, [String? stepOverride]) {
-              final baseProgress = completedUploads / linkedIds.length;
-              final destinationProgress =
-                  (1 / linkedIds.length) * uploadProgressValue;
-              final totalProgress = baseProgress + destinationProgress;
-
-              onTransferProgress?.call(
-                stepOverride ?? 'Enviando para ${destination.name}',
-                '${(uploadProgressValue * 100).toStringAsFixed(1)}%',
-                totalProgress,
-              );
-            },
-          );
-
-          sendResult.fold(
-            (_) {
-              LoggerService.info('✓ Upload concluído: ${destination.name}');
-              completedUploads++;
-              final finalProgress = completedUploads / linkedIds.length;
-              onTransferProgress?.call(
-                'Enviando para ${destination.name}',
-                'Concluído',
-                finalProgress,
-              );
-            },
-            (failure) {
-              final errMsg = '${destination.name}: $failure';
-              LoggerService.error('✗ Erro no upload: $errMsg');
-              errors.add(errMsg);
-            },
-          );
-        }
-
-        _isUploadingToRemotes = false;
-        _uploadError = errors.isEmpty ? null : errors.join('; ');
-        notifyListeners();
-
-        if (errors.isEmpty) {
-          LoggerService.info('✓ TODOS OS UPLOADS CONCLUÍDOS COM SUCESSO!');
-        } else {
-          LoggerService.warning(
-            '⚠ Uploads concluídos com erros: $_uploadError',
-          );
-        }
-
-        if (errors.isEmpty) {
-          LoggerService.info('===== LIMPANDO ARQUIVO TEMPORÁRIO =====');
-          LoggerService.info('TempPath: $tempPathForCleanup');
-          try {
-            final tempFile = File(outputFilePath);
-            if (await tempFile.exists()) {
-              await tempFile.delete();
-              LoggerService.info(
-                '✓ Arquivo temporário removido: $outputFilePath',
-              );
-            } else {
-              LoggerService.warning(
-                'Arquivo temporário não encontrado (pode já ter sido removido)',
-              );
-            }
-          } on Object catch (e) {
-            LoggerService.warning(
-              'Não foi possível remover arquivo temporário: $e',
-            );
-          }
-        } else {
-          LoggerService.info(
-            'Arquivo temporário PRESERVADO (houve erros no upload)',
-          );
-        }
-      } else {
-        LoggerService.info('Nenhum destino vinculado, pulando upload');
-
-        // Limpar arquivo temporário mesmo sem destinos vinculados
-        LoggerService.info(
-          '===== LIMPANDO ARQUIVO TEMPORÁRIO (sem destinos) =====',
+        uploadHadErrors = await _uploadDownloadedFileToDestinations(
+          outputFilePath: outputFilePath,
+          linkedIds: linkedIds,
+          onTransferProgress: onTransferProgress,
         );
-        try {
-          final tempFile = File(outputFilePath);
-          if (await tempFile.exists()) {
-            await tempFile.delete();
-            LoggerService.info(
-              '✓ Arquivo temporário removido: $outputFilePath',
-            );
-          } else {
-            LoggerService.warning(
-              'Arquivo temporário não encontrado (pode já ter sido removido)',
-            );
-          }
-        } on Object catch (e) {
-          LoggerService.warning(
-            'Não foi possível remover arquivo temporário: $e',
-          );
-        }
+      } else {
+        LoggerService.debug('Nenhum destino vinculado, pulando upload');
+      }
+
+      // Política unificada: só remove o arquivo temporário quando não houve
+      // erros (preserva para retry manual) ou quando não há destinos
+      // vinculados (não há retry possível, então é seguro remover).
+      if (!uploadHadErrors) {
+        await _safeDeleteTempFile(outputFilePath);
+      } else {
+        LoggerService.info(
+          'Arquivo temporário preservado para retry: $outputFilePath',
+        );
       }
     }
 
-    LoggerService.info('===== FIM DA TRANSFERÊNCIA =====');
-    LoggerService.info('Resultado final: ${success ? "SUCESSO" : "FALHA"}');
+    LoggerService.info(
+      'Transferência finalizada: ${success ? 'SUCESSO' : 'FALHA'}',
+    );
 
     notifyListeners();
     return success;
+  }
+
+  /// Faz upload do arquivo baixado para todos os destinos vinculados.
+  /// Retorna `true` se houve algum erro (para preservar o arquivo temporário).
+  Future<bool> _uploadDownloadedFileToDestinations({
+    required String outputFilePath,
+    required List<String> linkedIds,
+    required TransferProgressCallback? onTransferProgress,
+  }) async {
+    LoggerService.info(
+      'Iniciando upload para ${linkedIds.length} destinos vinculados',
+    );
+
+    _isUploadingToRemotes = true;
+    _uploadError = null;
+    notifyListeners();
+
+    final errors = <String>[];
+    var completedUploads = 0;
+
+    for (final id in linkedIds) {
+      final uploadProgress = completedUploads / linkedIds.length;
+      onTransferProgress?.call(
+        'Enviando para destinos',
+        'Processando destino ${completedUploads + 1} de ${linkedIds.length}',
+        uploadProgress,
+      );
+
+      final destResult = await _destinationRepository.getById(id);
+      final destination = destResult.fold((dest) => dest, (_) => null);
+      if (destination == null) {
+        final errMsg = 'Destino $id não encontrado';
+        LoggerService.warning(errMsg);
+        errors.add(errMsg);
+        completedUploads++;
+        continue;
+      }
+
+      LoggerService.debug('Enviando para destino: ${destination.name}');
+      onTransferProgress?.call(
+        'Enviando para ${destination.name}',
+        'Iniciando upload...',
+        uploadProgress,
+      );
+
+      final sendResult = await _sendFileToDestinationService.sendFile(
+        localFilePath: outputFilePath,
+        destination: destination,
+        onProgress: (uploadProgressValue, [String? stepOverride]) {
+          final baseProgress = completedUploads / linkedIds.length;
+          final destinationProgress =
+              (1 / linkedIds.length) * uploadProgressValue;
+          final totalProgress = baseProgress + destinationProgress;
+          onTransferProgress?.call(
+            stepOverride ?? 'Enviando para ${destination.name}',
+            '${(uploadProgressValue * 100).toStringAsFixed(1)}%',
+            totalProgress,
+          );
+        },
+      );
+
+      sendResult.fold(
+        (_) {
+          LoggerService.info('Upload concluído: ${destination.name}');
+          completedUploads++;
+          onTransferProgress?.call(
+            'Enviando para ${destination.name}',
+            'Concluído',
+            completedUploads / linkedIds.length,
+          );
+        },
+        (failure) {
+          final errMsg = '${destination.name}: $failure';
+          LoggerService.error('Erro no upload para ${destination.name}', failure);
+          errors.add(errMsg);
+        },
+      );
+    }
+
+    _isUploadingToRemotes = false;
+    _uploadError = errors.isEmpty ? null : errors.join('; ');
+    notifyListeners();
+
+    if (errors.isEmpty) {
+      LoggerService.info('Todos os uploads concluídos com sucesso');
+    } else {
+      LoggerService.warning('Uploads concluídos com erros: $_uploadError');
+    }
+    return errors.isNotEmpty;
+  }
+
+  /// Remove o arquivo temporário com tratamento defensivo de erros.
+  Future<void> _safeDeleteTempFile(String path) async {
+    try {
+      final tempFile = File(path);
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+        LoggerService.debug('Arquivo temporário removido: $path');
+      }
+    } on Object catch (e) {
+      LoggerService.warning('Não foi possível remover arquivo temporário: $e');
+    }
   }
 }
 

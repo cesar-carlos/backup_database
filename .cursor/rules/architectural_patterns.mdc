@@ -1,0 +1,717 @@
+---
+description: Padrões arquiteturais consolidados (helpers DRY, anti-patterns) para o projeto backup_database
+globs: ["lib/**/*.dart"]
+alwaysApply: true
+---
+
+# Architectural Patterns — backup_database
+
+Este arquivo documenta os padrões consolidados após várias waves de
+auditoria/refactoring do codebase. Use os helpers listados aqui em vez de
+reimplementar boilerplate equivalente. Antes de adicionar uma nova função
+"format bytes", "wrap try/catch para Result", ou "gerencia isLoading no
+provider", verifique se já existe um helper para o caso.
+
+---
+
+## 1. Repositórios — `RepositoryGuard`
+
+Localização: `lib/infrastructure/repositories/repository_guard.dart`
+
+### ✅ Padrão correto
+
+```dart
+class FooRepository implements IFooRepository {
+  FooRepository(this._database);
+  final AppDatabase _database;
+
+  @override
+  Future<rd.Result<List<Foo>>> getAll() {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar foos',
+      action: () async {
+        final rows = await _database.fooDao.getAll();
+        return rows.map(_toEntity).toList();
+      },
+    );
+  }
+
+  @override
+  Future<rd.Result<Foo>> getById(String id) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar foo',
+      action: () async {
+        final row = await _database.fooDao.getById(id);
+        if (row == null) {
+          // `Failure` semântico — passa direto pelo guard sem ser
+          // reembrulhado em `DatabaseFailure`.
+          throw const NotFoundFailure(message: 'Foo não encontrado');
+        }
+        return _toEntity(row);
+      },
+    );
+  }
+
+  @override
+  Future<rd.Result<void>> delete(String id) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao deletar foo',
+      action: () => _database.fooDao.deleteFoo(id),
+    );
+  }
+}
+```
+
+### ❌ Anti-patterns
+
+```dart
+// ❌ NUNCA reimplemente o try/catch boilerplate
+Future<rd.Result<List<Foo>>> getAll() async {
+  try {
+    final rows = await _database.fooDao.getAll();
+    return rd.Success(rows.map(_toEntity).toList());
+  } on Object catch (e) {
+    return rd.Failure(DatabaseFailure(message: 'Erro: $e'));
+  }
+}
+
+// ❌ NUNCA crie classes sentinel `_NotFoundException` + `_mapNotFound`
+// (esse padrão era usado antes do `RepositoryGuard.run` fazer
+// passthrough de `Failure`). Throw `NotFoundFailure` direto.
+
+// ❌ NUNCA use `failure as Failure` — pode crashar com Object não-Failure
+final f = failure as Failure;  // BUG potencial
+
+// ✅ Use verificação explícita ou `_asFailure` helper
+final message = failure is Failure ? failure.message : failure.toString();
+```
+
+### Comportamento do helper
+
+- Captura qualquer `Object` lançado pelo `action`.
+- Se for `Failure` (subtipo): propaga sem alterar (logger.warning).
+- Caso contrário: embrulha em `DatabaseFailure(message: '$errorMessage: $e', originalError: e)` e logger.error com stack trace.
+- `failureBuilder` permite customizar o tipo de wrap (ex.: `NetworkFailure`).
+
+### Checklist de revisão
+
+- [ ] Repositório usa `RepositoryGuard.run` em vez de try/catch manual?
+- [ ] "Not found" é sinalizado via `throw const NotFoundFailure(message: ...)` em vez de sentinel + `_mapNotFound`?
+- [ ] Validação de domínio (transição de estado, etc.) é sinalizada via `throw const ValidationFailure(message: ...)`?
+- [ ] Helper `_storePasswordOrThrow` é usado em vez de duplicar o pattern de secure storage?
+
+---
+
+## 2. Providers — `AsyncStateMixin`
+
+Localização: `lib/application/providers/async_state_mixin.dart`
+
+### ✅ Padrão correto
+
+```dart
+class FooProvider extends ChangeNotifier with AsyncStateMixin {
+  FooProvider(this._repository);
+  final IFooRepository _repository;
+
+  List<Foo> _foos = [];
+  List<Foo> get foos => _foos;
+
+  Future<void> loadFoos() async {
+    await runAsync<void>(
+      genericErrorMessage: 'Erro ao carregar foos',
+      action: () async {
+        final result = await _repository.getAll();
+        result.fold(
+          (foos) => _foos = foos,
+          (failure) => throw failure,  // Failure passa pelo mixin
+        );
+      },
+    );
+  }
+
+  Future<bool> createFoo(Foo foo) async {
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao criar foo',
+      action: () async {
+        final result = await _repository.create(foo);
+        return result.fold(
+          (_) {
+            _foos = [..._foos, foo];  // reassign imutável
+            return true;
+          },
+          (failure) => throw failure,
+        );
+      },
+    );
+    return ok ?? false;
+  }
+
+  /// Validação síncrona — usa `setErrorManual` para não inflar o
+  /// contador de operações do mixin.
+  Future<bool> deleteFoo(String id) async {
+    if (id.isEmpty) {
+      setErrorManual('ID inválido');
+      return false;
+    }
+    final ok = await runAsync<bool>(
+      action: () async {
+        final result = await _repository.delete(id);
+        return result.fold((_) {
+          _foos = _foos.where((f) => f.id != id).toList();
+          return true;
+        }, (failure) => throw failure);
+      },
+    );
+    return ok ?? false;
+  }
+}
+```
+
+### ❌ Anti-patterns
+
+```dart
+// ❌ NUNCA reimplemente isLoading/error manualmente
+class FooProvider extends ChangeNotifier {
+  bool _isLoading = false;
+  String? _error;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  Future<void> loadFoos() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      // ...
+    } on Object catch (e) {
+      _error = 'Erro: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+}
+
+// ❌ NUNCA mutate listas in-place (listeners que comparam por
+//   `identical()` não detectam a mudança)
+_foos.add(newFoo);                     // BUG: mutação in-place
+_foos.removeWhere((f) => f.id == id);  // BUG idem
+
+// ✅ SEMPRE faça reassignment imutável
+_foos = [..._foos, newFoo];
+_foos = _foos.where((f) => f.id != id).toList();
+
+// ❌ NUNCA cast `failure as Failure` direto
+result.fold((s) => ..., (f) {
+  final failure = f as Failure;  // BUG potencial
+  _error = failure.message;
+});
+
+// ✅ Use AsyncStateMixin.extractFailureMessage ou throw
+result.fold((s) => ..., (failure) => throw failure);
+```
+
+### Quando NÃO usar o mixin
+
+- Provider que precisa de **múltiplos flags de loading granulares por
+  ação/entidade** (ex.: `_updatingScheduleId`, `_isExecuting`,
+  `_isTransferringFile` na mesma classe). Nesses casos, o contador único
+  do mixin não é suficiente — mantenha flags separados, mas use
+  `setErrorManual` para erros e considere extrair um helper similar ao
+  `_runOperation` do `WindowsServiceProvider`.
+
+### Reentrância e dispose
+
+- O mixin usa **contador atômico** em vez de boolean para `isLoading`,
+  resolvendo race em operações concorrentes.
+- `notifyListeners` no `finally` garante consistência mesmo se a action
+  lançar.
+- Para providers que podem ser disposed durante operação assíncrona
+  (ex.: `NotificationProvider` com timers debounced), sobrescreva
+  `notifyListeners` para curto-circuitar após `dispose`:
+
+```dart
+bool _isDisposed = false;
+
+@override
+void notifyListeners() {
+  if (_isDisposed) return;
+  super.notifyListeners();
+}
+
+@override
+void dispose() {
+  _isDisposed = true;
+  super.dispose();
+}
+```
+
+---
+
+## 3. Formatação de bytes — `ByteFormat`
+
+Localização: `lib/core/utils/byte_format.dart`
+
+### ✅ Padrão correto
+
+```dart
+import 'package:backup_database/core/utils/byte_format.dart';
+
+LoggerService.info('Backup tamanho: ${ByteFormat.format(fileSize)}');
+
+final speed = ByteFormat.speedMbPerSec(sizeInBytes, durationSeconds);
+final speedFromDuration = ByteFormat.speedMbPerSecFromDuration(
+  sizeInBytes,
+  duration,
+);
+```
+
+### ❌ Anti-pattern
+
+```dart
+// ❌ NUNCA reimplemente _formatBytes / _formatFileSize localmente
+String _formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
+  // ...
+}
+```
+
+A versão `domain/entities/backup_metrics.dart::backupSizeFormatted` é
+deliberadamente diferente (sem caso GB) para preservar contrato visual de
+UI legada — não a tome como referência.
+
+---
+
+## 3b. Verificação de permissão de escrita — `DirectoryPermissionCheck`
+
+Localização: `lib/core/utils/directory_permission_check.dart`
+
+### ✅ Padrão correto
+
+```dart
+import 'package:backup_database/core/utils/directory_permission_check.dart';
+
+final ok = await DirectoryPermissionCheck.hasWritePermission(directory);
+if (!ok) {
+  // mostra erro ao usuário
+}
+
+// Variante para path string
+final ok = await DirectoryPermissionCheck.hasWritePermissionForPath(path);
+```
+
+### ❌ Anti-pattern
+
+```dart
+// ❌ NUNCA reimplemente o probe-file pattern manualmente
+Future<bool> _checkWritePermission(Directory directory) async {
+  try {
+    final testFile = File('${directory.path}/.test_${ts}');
+    await testFile.writeAsString('test');
+    if (await testFile.exists()) {
+      await testFile.delete();
+      return true;
+    }
+    return false;
+  } on Object {
+    return false;
+  }
+}
+
+// ❌ NUNCA use apenas timestamp no probe filename — race condition
+//    quando múltiplas chamadas concorrentes pegam o mesmo millisegundo
+final probe = '.test_${DateTime.now().millisecondsSinceEpoch}';
+```
+
+### Por quê probe file (não `stat`)?
+
+- `stat` no Windows não reflete permissões de write reais confiavelmente
+  (UAC, ACLs herdadas, redirects de pasta protegida).
+- O write de um probe é a única forma robusta de garantir que o caller
+  realmente conseguirá criar o backup ali.
+
+A implementação inclui sufixo aleatório no probe filename para evitar
+colisão entre chamadas concorrentes (o teste de paralelismo do helper
+captura essa regressão).
+
+---
+
+## 4. Wrappers defensivos para notifiers/eventos externos
+
+Pattern usado em `BackupOrchestratorService` e `SchedulerService`. Quando
+um serviço orquestrador atualiza um notifier externo (UI progress,
+notification email, metrics collector) que pode falhar de forma
+"best-effort", encapsule a chamada em um helper local:
+
+```dart
+void _safeNotifierCall(void Function() action, String errorMessage) {
+  try {
+    action();
+  } on Object catch (e, s) {
+    LoggerService.warning(errorMessage, e, s);
+  }
+}
+
+Future<void> _safeNotifyComplete(BackupHistory history) async {
+  try {
+    await _notificationService.notifyBackupComplete(history);
+  } on Object catch (e, s) {
+    LoggerService.warning('Falha ao enviar notificação', e, s);
+  }
+}
+```
+
+**Por quê**: erro em notifier não deve abortar o backup propriamente
+dito. Antes da consolidação, esse padrão era duplicado inline em vários
+pontos do mesmo método; cada cópia divergia ligeiramente e algumas
+silenciavam o stack trace.
+
+---
+
+## 5. Bugs recorrentes identificados na auditoria — não reintroduzir
+
+### 5.1. `result.fold((x) async { await ... })` sem `await` no fold
+
+```dart
+// ❌ BUG: o callback async NÃO é aguardado
+result.fold(
+  (success) async {
+    await someAsyncWork();   // roda em background, não bloqueia
+  },
+  (failure) => null,
+);
+return result;  // retorna antes do async work terminar
+```
+
+```dart
+// ✅ Correto: extraia e use await diretamente
+final value = result.getOrNull();
+if (value != null) {
+  await someAsyncWork();
+}
+return result;
+
+// ✅ OU: return result.fold(asyncCb, syncCb) — Dart auto-awaits no
+//    return de função `async` declarada como Future<T>
+return result.fold(
+  (success) async => doStuff(),
+  rd.Failure.new,
+);
+```
+
+### 5.2. Cast inseguro `failure as Failure`
+
+```dart
+// ❌ Pode crashar com Object não-Failure
+final f = failure as Failure;
+```
+
+```dart
+// ✅ Verifique explicitamente
+final message = failure is Failure ? failure.message : failure.toString();
+
+// ✅ Ou use helper estático
+final message = AsyncStateMixin.extractFailureMessage(failure);
+
+// ✅ Em repositórios, use _asFailure local helper
+Failure _asFailure(Object failure) {
+  if (failure is Failure) return failure;
+  return DatabaseFailure(message: failure.toString(), originalError: failure);
+}
+```
+
+### 5.3. Histórico em `running` esquecido após failure intermediário
+
+Quando um caminho de erro intermediário (ex.: falha de compressão,
+upload, ou validação pós-backup) retorna `rd.Failure(...)` sem antes
+atualizar o `BackupHistory.status` para `error`, o registro permanece em
+`running` indefinidamente até a próxima reconciliação. Sintoma na UI:
+backup "rodando" há horas que na verdade já tinha falhado.
+
+```dart
+// ✅ SEMPRE atualize o histórico antes de retornar Failure no meio do fluxo
+final finishedAt = DateTime.now();
+final failedHistory = backupHistory.copyWith(
+  status: BackupStatus.error,
+  errorMessage: 'Falha em XYZ: $msg',
+  finishedAt: finishedAt,
+  durationSeconds: finishedAt.difference(backupHistory.startedAt).inSeconds,
+);
+final updateResult = await _backupHistoryRepository
+    .updateHistoryAndLogIfRunning(
+      history: failedHistory,
+      logStep: LogStepConstants.someStep,
+      logLevel: LogLevel.error,
+      logMessage: msg,
+    );
+updateResult.fold(
+  (_) {},
+  (e) => LoggerService.warning('Erro ao atualizar histórico: $e'),
+);
+await _safeNotifyComplete(failedHistory);
+return rd.Failure(_asFailure(failure));
+```
+
+### 5.4. `Result.create` ignorado
+
+```dart
+// ❌ Falha de I/O em log fica invisível
+await _backupLogRepository.create(log);
+```
+
+```dart
+// ✅ Sempre fold ou propague
+final result = await _backupLogRepository.create(log);
+result.fold(
+  (_) {},
+  (e) => LoggerService.warning('Erro ao gravar log: $e'),
+);
+```
+
+### 5.5. Throttling frágil com módulo `% N`
+
+Este padrão tem **2 variantes** que aparecem em loops diferentes — ambas
+geram bugs em escala (pulam logs OU explodem em milhares de linhas
+duplicadas).
+
+#### Variante A: throttle temporal — pula logs
+
+```dart
+// ❌ Depende de tick exato cair no segundo múltiplo de N
+// (com checkInterval=2s, pula 10s e nunca dispara)
+if (elapsed.inSeconds % 10 == 0 && elapsed.inSeconds > 0) {
+  log('progresso');
+}
+```
+
+```dart
+// ✅ Use timestamp de último log
+var lastLog = startTime;
+const interval = Duration(seconds: 10);
+while (...) {
+  final now = DateTime.now();
+  if (now.difference(lastLog) >= interval) {
+    lastLog = now;
+    log('progresso');
+  }
+  await Future.delayed(checkInterval);
+}
+```
+
+#### Variante B: throttle por percentual — explode em milestones
+
+```dart
+// ❌ Em loops grandes (file transfer com 780k chunks), `percent.floor()`
+//    fica em 10 por ~7.800 iterações consecutivas — gera 7.800 linhas
+//    de log idênticas em cada milestone de 10%.
+final percent = (current / total * 100).floor();
+if (percent % 10 == 0) {
+  log('$percent%');
+}
+```
+
+```dart
+// ✅ Rastreie o último percentual logado e dispare só em incrementos
+var lastLoggedPercent = -1;
+for (final chunk in chunks) {
+  final percent = (current / total * 100).floor();
+  final isNewMilestone = percent >= lastLoggedPercent + 10;
+  if (isNewMilestone) {
+    log('$percent%');
+    lastLoggedPercent = percent;
+  }
+}
+```
+
+### 5.6. `failure.toString()` exibido ao usuário
+
+`Failure` instances têm um `toString()` que retorna `"Failure(message: ...,
+code: ...)"` — útil para debug, mas péssimo para o usuário final.
+
+```dart
+// ❌ Usuário vê "Failure(message: Backup falhou, code: BACKUP_FAILED)"
+await sendError(failure.toString());
+
+// ❌ Mesmo problema com fallback nullable
+error: failure?.toString() ?? 'fallback';
+```
+
+```dart
+// ✅ Extraia explicitamente .message com fallback
+String _failureMessage(Object? failure, {String fallback = 'Erro'}) {
+  if (failure == null) return fallback;
+  if (failure is Failure) {
+    return failure.message.isEmpty ? fallback : failure.message;
+  }
+  final str = failure.toString();
+  return str.isEmpty ? fallback : str;
+}
+
+// ✅ Em providers: use o helper estático do mixin
+final msg = AsyncStateMixin.extractFailureMessage(failure);
+```
+
+### 5.7. Send error padronizado em handlers de socket/protocolo
+
+Em handlers que respondem múltiplos tipos de erro com mesma estrutura:
+
+```dart
+// ❌ Repete a estrutura completa do envio em cada caminho de erro
+await sendToClient(
+  clientId,
+  createScheduleErrorMessage(requestId: requestId, error: 'msg 1'),
+);
+// ... mais 13 cópias com pequenas variações ...
+```
+
+### 5.8. `switch` com cases quase-idênticos → tabela estática
+
+Quando um `switch` tem N cases que diferem **só em dados** (constantes ou
+valores) e não em **comportamento**, prefira uma tabela estática.
+
+```dart
+// ❌ Switch com 3 cases idênticos exceto por feature/message
+switch (destination.type) {
+  case DestinationType.googleDrive:
+    if (!await _isFeatureAllowed('google_drive')) {
+      return rd.Failure(
+        ValidationFailure(message: 'Google Drive requer permissão...'),
+      );
+    }
+  case DestinationType.dropbox:
+    if (!await _isFeatureAllowed('dropbox')) {
+      return rd.Failure(
+        ValidationFailure(message: 'Dropbox requer permissão...'),
+      );
+    }
+  case DestinationType.nextcloud:
+    if (!await _isFeatureAllowed('nextcloud')) {
+      return rd.Failure(
+        ValidationFailure(message: 'Nextcloud requer permissão...'),
+      );
+    }
+  case DestinationType.local:
+  case DestinationType.ftp:
+    break;
+}
+```
+
+```dart
+// ✅ Tabela estática: O(1) lookup, adicionar caso novo = 1 entrada
+static const Map<DestinationType, _FeatureCheck> _checks = {
+  DestinationType.googleDrive: _FeatureCheck(
+    feature: 'google_drive',
+    message: 'Google Drive requer permissão...',
+  ),
+  DestinationType.dropbox: _FeatureCheck(
+    feature: 'dropbox',
+    message: 'Dropbox requer permissão...',
+  ),
+  DestinationType.nextcloud: _FeatureCheck(
+    feature: 'nextcloud',
+    message: 'Nextcloud requer permissão...',
+  ),
+  // local e ftp não requerem feature → omitidos do mapa
+};
+
+final check = _checks[destination.type];
+if (check == null) return const rd.Success(unit);  // sem requirement
+if (!await _isFeatureAllowed(check.feature)) {
+  return rd.Failure(ValidationFailure(message: check.message));
+}
+return const rd.Success(unit);
+```
+
+**Por quê**:
+- Adicionar um destino novo agora é uma entrada (1-3 linhas) em vez de
+  um `case` (5-10 linhas).
+- Open/Closed Principle: a função de validação não muda quando o
+  conjunto de checagens cresce.
+- O conjunto de "destinos sem requirement" fica explícito (omitidos do
+  mapa) em vez de ser implícito num `default` ou case vazio.
+
+**Quando NÃO usar**: se cada case tem **comportamento real diferente**
+(não só dados), o `switch` continua sendo a expressão correta — neste
+caso a clareza vale o boilerplate.
+
+```dart
+// ✅ Helper local centraliza o envio (e prepara o terreno para
+//    instrumentação futura: contar erros, adicionar correlation id,
+//    sanitizar mensagens, etc.)
+Future<void> _sendError(
+  String clientId,
+  int requestId,
+  String error,
+  SendToClient sendToClient,
+) {
+  return sendToClient(
+    clientId,
+    createScheduleErrorMessage(requestId: requestId, error: error),
+  );
+}
+```
+
+---
+
+## 6. Convenções de nomenclatura para novos helpers DRY
+
+Ao identificar um padrão duplicado em N+1 lugares, considere criar um
+helper. Convenções:
+
+- **Localização**:
+  - Helpers de domínio neutro (formatação, validação simples) → `lib/core/utils/`
+  - Helpers específicos de repositórios → `lib/infrastructure/repositories/`
+  - Helpers específicos de providers → `lib/application/providers/`
+- **Nomenclatura**:
+  - Classes utilitárias com construtor privado (`ByteFormat._()`,
+    `RepositoryGuard._()`)
+  - Mixins terminam em `Mixin` (`AsyncStateMixin`)
+  - Helpers específicos de uma classe começam com `_` e ficam dentro da
+    própria classe (`_safeNotifyComplete`, `_storePasswordOrThrow`)
+- **Documentação inline**:
+  - Doc-comment explicando **o problema que resolve** (não só "como usar")
+  - Exemplo de "antes" (anti-pattern) e "depois" (uso correto)
+  - Trade-offs conhecidos, se houver
+
+---
+
+## 7. Checklist final de revisão de código
+
+Ao revisar PR / commit que mexe em providers, repositórios ou serviços
+orquestradores, verifique:
+
+- [ ] Repositório novo usa `RepositoryGuard.run`/`runVoid` ?
+- [ ] Provider novo (com loading/error semânticos) usa `AsyncStateMixin` ?
+- [ ] Logs/exibições de tamanho usam `ByteFormat.format` (não
+      `_formatBytes` local) ?
+- [ ] Verificação de write permission usa `DirectoryPermissionCheck`
+      (não probe-file manual) ?
+- [ ] Nenhum `failure as Failure` cast direto sem `is` antes ?
+- [ ] Nenhum `result.fold((x) async {...})` sem `await` no caller ?
+- [ ] Nenhum `failure.toString()` exibido ao usuário (extrair
+      `.message` via `_failureMessage` ou
+      `AsyncStateMixin.extractFailureMessage`) ?
+- [ ] Throttling de logs em loops grandes usa timestamp/percent
+      tracking, não `% N == 0` ?
+- [ ] Caminhos de erro intermediário em backup atualizam `BackupHistory`
+      para `error` antes de retornar `Failure` ?
+- [ ] Listas em providers são reassignadas imutavelmente
+      (`_list = [..._list, x]`) em vez de `_list.add(x)` ?
+- [ ] Chamadas best-effort a notifiers externos estão wrappadas em
+      `_safeXxxCall` helper ?
+- [ ] Handlers de socket/protocolo usam `_sendError` helper local em vez
+      de duplicar `sendToClient(clientId, createXxxErrorMessage(...))` ?
+- [ ] `switch` com cases que diferem só em dados (constantes, mensagens)
+      foi substituído por tabela estática `Map<Enum, ConfigStruct>` ?
+
+---
+
+## Referências cruzadas
+
+- `coding_style.mdc` — formatação Dart, naming, logging básico
+- `solid_principles.mdc` — SRP/OCP guidance que motivou várias das
+  refatorações (e.g., extração de `BackupStrategy` por SGBD)
+- `clean_architecture.mdc` — limites de camada respeitados em todos os
+  helpers (helpers de `infrastructure/` não importam `presentation/`,
+  etc.)

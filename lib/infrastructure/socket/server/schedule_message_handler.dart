@@ -1,3 +1,4 @@
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -173,25 +174,25 @@ class ScheduleMessageHandler {
     SendToClient sendToClient,
   ) async {
     final result = await _scheduleRepository.getAll();
-    result.fold(
-      (schedules) async {
-        await sendToClient(
-          clientId,
-          createScheduleListMessage(
-            requestId: requestId,
-            schedules: schedules,
-          ),
-        );
-      },
-      (failure) async {
-        await sendToClient(
-          clientId,
-          createScheduleErrorMessage(
-            requestId: requestId,
-            error: failure.toString(),
-          ),
-        );
-      },
+    // Bug histórico: este `result.fold(asyncCb, asyncCb)` não aguardava
+    // os callbacks — a mensagem podia ainda estar viajando quando o
+    // handler retornava, e exceptions do `sendToClient` ficavam invisíveis.
+    final schedules = result.getOrNull();
+    if (schedules != null) {
+      await sendToClient(
+        clientId,
+        createScheduleListMessage(
+          requestId: requestId,
+          schedules: schedules,
+        ),
+      );
+      return;
+    }
+    await _sendError(
+      clientId,
+      requestId,
+      _failureMessage(result.exceptionOrNull()),
+      sendToClient,
     );
   }
 
@@ -204,34 +205,27 @@ class ScheduleMessageHandler {
     try {
       final schedule = getScheduleFromUpdatePayload(message);
       final result = await _updateSchedule(schedule);
-      result.fold(
-        (updated) async {
-          await sendToClient(
-            clientId,
-            createScheduleUpdatedMessage(
-              requestId: requestId,
-              schedule: updated,
-            ),
-          );
-        },
-        (failure) async {
-          await sendToClient(
-            clientId,
-            createScheduleErrorMessage(
-              requestId: requestId,
-              error: failure.toString(),
-            ),
-          );
-        },
+      // Antes: `result.fold((upd) async {...}, (f) async {...})` sem await
+      // — bug que poderia perder erros de envio. Agora extrai e usa await.
+      final updated = result.getOrNull();
+      if (updated != null) {
+        await sendToClient(
+          clientId,
+          createScheduleUpdatedMessage(
+            requestId: requestId,
+            schedule: updated,
+          ),
+        );
+        return;
+      }
+      await _sendError(
+        clientId,
+        requestId,
+        _failureMessage(result.exceptionOrNull()),
+        sendToClient,
       );
     } on Object catch (e) {
-      await sendToClient(
-        clientId,
-        createScheduleErrorMessage(
-          requestId: requestId,
-          error: e.toString(),
-        ),
-      );
+      await _sendError(clientId, requestId, e.toString(), sendToClient);
     }
   }
 
@@ -243,13 +237,7 @@ class ScheduleMessageHandler {
   ) async {
     final scheduleId = getScheduleIdFromExecutePayload(message);
     if (scheduleId.isEmpty) {
-      await sendToClient(
-        clientId,
-        createScheduleErrorMessage(
-          requestId: requestId,
-          error: 'scheduleId vazio',
-        ),
-      );
+      await _sendError(clientId, requestId, 'scheduleId vazio', sendToClient);
       return;
     }
 
@@ -260,14 +248,12 @@ class ScheduleMessageHandler {
         requestId: requestId.toString(),
         scheduleId: scheduleId,
       );
-      await sendToClient(
+      await _sendError(
         clientId,
-        createScheduleErrorMessage(
-          requestId: requestId,
-          error:
-              'Já existe um backup em execução no servidor. '
-              'Aguarde conclusão para iniciar novo.',
-        ),
+        requestId,
+        'Já existe um backup em execução no servidor. '
+        'Aguarde conclusão para iniciar novo.',
+        sendToClient,
       );
       return;
     }
@@ -283,25 +269,25 @@ class ScheduleMessageHandler {
     try {
       final scheduleResult = await _scheduleRepository.getById(scheduleId);
       if (scheduleResult.isError()) {
-        final failure = scheduleResult.exceptionOrNull();
-        await sendToClient(
+        await _sendError(
           clientId,
-          createScheduleErrorMessage(
-            requestId: requestId,
-            error: failure?.toString() ?? 'Agendamento não encontrado',
+          requestId,
+          _failureMessage(
+            scheduleResult.exceptionOrNull(),
+            fallback: 'Agendamento não encontrado',
           ),
+          sendToClient,
         );
         return;
       }
 
       final schedule = scheduleResult.getOrNull();
       if (schedule == null) {
-        await sendToClient(
+        await _sendError(
           clientId,
-          createScheduleErrorMessage(
-            requestId: requestId,
-            error: 'Agendamento não encontrado',
-          ),
+          requestId,
+          'Agendamento não encontrado',
+          sendToClient,
         );
         return;
       }
@@ -310,12 +296,11 @@ class ScheduleMessageHandler {
         schedule.destinationIds,
       );
       if (destinationsResult.isError()) {
-        await sendToClient(
+        await _sendError(
           clientId,
-          createScheduleErrorMessage(
-            requestId: requestId,
-            error: 'Não foi possível carregar destinos para validação',
-          ),
+          requestId,
+          'Não foi possível carregar destinos para validação',
+          sendToClient,
         );
         return;
       }
@@ -326,15 +311,14 @@ class ScheduleMessageHandler {
             destinations,
           );
       if (policyResult.isError()) {
-        final failure = policyResult.exceptionOrNull();
-        final errorMessage =
-            failure?.toString() ?? 'Licença não permite execução';
-        await sendToClient(
+        await _sendError(
           clientId,
-          createScheduleErrorMessage(
-            requestId: requestId,
-            error: errorMessage,
+          requestId,
+          _failureMessage(
+            policyResult.exceptionOrNull(),
+            fallback: 'Licença não permite execução',
           ),
+          sendToClient,
         );
         return;
       }
@@ -346,14 +330,12 @@ class ScheduleMessageHandler {
           requestId: requestId.toString(),
           scheduleId: scheduleId,
         );
-        await sendToClient(
+        await _sendError(
           clientId,
-          createScheduleErrorMessage(
-            requestId: requestId,
-            error:
-                'Já existe um backup em execução no servidor. '
-                'Aguarde conclusão para iniciar novo.',
-          ),
+          requestId,
+          'Já existe um backup em execução no servidor. '
+          'Aguarde conclusão para iniciar novo.',
+          sendToClient,
         );
         return;
       }
@@ -378,58 +360,52 @@ class ScheduleMessageHandler {
 
       final result = await _executeBackup(scheduleId);
 
-      if (_currentClientId != null) {
-        await result.fold(
-          (_) async {
-            LoggerService.infoWithContext(
-              'Backup completed successfully',
-              clientId: clientId,
-              requestId: requestId.toString(),
-              scheduleId: scheduleId,
-            );
-            final updatedScheduleResult = await _scheduleRepository.getById(
-              scheduleId,
-            );
-            updatedScheduleResult.fold(
-              (updatedSchedule) async {
-                await sendToClient(
-                  clientId,
-                  createScheduleUpdatedMessage(
-                    requestId: requestId,
-                    schedule: updatedSchedule,
-                  ),
-                );
-              },
-              (failure) async {
-                await sendToClient(
-                  clientId,
-                  createScheduleErrorMessage(
-                    requestId: requestId,
-                    error: failure.toString(),
-                  ),
-                );
-              },
-            );
-          },
-          (failure) async {
-            final errorMessage = failure.toString();
-            LoggerService.warningWithContext(
-              'Backup failed',
-              clientId: clientId,
-              requestId: requestId.toString(),
-              scheduleId: scheduleId,
-              error: failure,
-            );
-            await sendToClient(
-              clientId,
-              createScheduleErrorMessage(
-                requestId: requestId,
-                error: errorMessage,
-              ),
-            );
-            _progressNotifier.failBackup(errorMessage);
-            _clearCurrentBackup();
-          },
+      if (_currentClientId == null) return;
+
+      // Antes: `await result.fold(asyncSuccess, asyncFailure)` com fold
+      // aninhado dentro do success. O fold externo tinha `await`, mas o
+      // fold aninhado em `updatedScheduleResult.fold(asyncCb, asyncCb)`
+      // NÃO — bug clássico: o `sendToClient` async ficava pendurado e
+      // qualquer falha de envio era invisível.
+      if (result.isError()) {
+        final failure = result.exceptionOrNull();
+        final errorMessage = _failureMessage(failure);
+        LoggerService.warningWithContext(
+          'Backup failed',
+          clientId: clientId,
+          requestId: requestId.toString(),
+          scheduleId: scheduleId,
+          error: failure,
+        );
+        await _sendError(clientId, requestId, errorMessage, sendToClient);
+        _progressNotifier.failBackup(errorMessage);
+        _clearCurrentBackup();
+        return;
+      }
+
+      LoggerService.infoWithContext(
+        'Backup completed successfully',
+        clientId: clientId,
+        requestId: requestId.toString(),
+        scheduleId: scheduleId,
+      );
+      final updatedScheduleResult =
+          await _scheduleRepository.getById(scheduleId);
+      final updatedSchedule = updatedScheduleResult.getOrNull();
+      if (updatedSchedule != null) {
+        await sendToClient(
+          clientId,
+          createScheduleUpdatedMessage(
+            requestId: requestId,
+            schedule: updatedSchedule,
+          ),
+        );
+      } else {
+        await _sendError(
+          clientId,
+          requestId,
+          _failureMessage(updatedScheduleResult.exceptionOrNull()),
+          sendToClient,
         );
       }
     } on Object catch (e, st) {
@@ -464,24 +440,22 @@ class ScheduleMessageHandler {
   ) async {
     final scheduleId = getScheduleIdFromCancelRequest(message);
     if (scheduleId == null || scheduleId.isEmpty) {
-      await sendToClient(
+      await _sendError(
         clientId,
-        createScheduleErrorMessage(
-          requestId: requestId,
-          error: 'scheduleId vazio ou inválido',
-        ),
+        requestId,
+        'scheduleId vazio ou inválido',
+        sendToClient,
       );
       return;
     }
 
     // Só pode cancelar o backup do cliente atual
     if (scheduleId != _currentScheduleId) {
-      await sendToClient(
+      await _sendError(
         clientId,
-        createScheduleErrorMessage(
-          requestId: requestId,
-          error: 'Não há backup em execução para este schedule',
-        ),
+        requestId,
+        'Não há backup em execução para este schedule',
+        sendToClient,
       );
       return;
     }
@@ -495,13 +469,14 @@ class ScheduleMessageHandler {
 
     final cancelResult = await _schedulerService.cancelExecution(scheduleId);
     if (cancelResult.isError()) {
-      final failure = cancelResult.exceptionOrNull();
-      await sendToClient(
+      await _sendError(
         clientId,
-        createScheduleErrorMessage(
-          requestId: requestId,
-          error: failure?.toString() ?? 'Falha ao cancelar backup',
+        requestId,
+        _failureMessage(
+          cancelResult.exceptionOrNull(),
+          fallback: 'Falha ao cancelar backup',
         ),
+        sendToClient,
       );
       return;
     }
@@ -515,5 +490,34 @@ class ScheduleMessageHandler {
         scheduleId: scheduleId,
       ),
     );
+  }
+
+  /// Helper para envio de erro padronizado. Antes era 14 cópias de
+  /// `await sendToClient(clientId, createScheduleErrorMessage(...))` com
+  /// pequenas variações. Centralizar evita divergência e facilita
+  /// adicionar instrumentação (ex.: contar erros enviados).
+  Future<void> _sendError(
+    String clientId,
+    int requestId,
+    String error,
+    SendToClient sendToClient,
+  ) {
+    return sendToClient(
+      clientId,
+      createScheduleErrorMessage(requestId: requestId, error: error),
+    );
+  }
+
+  /// Extrai mensagem amigável de uma falha que veio do `Result.exceptionOrNull()`.
+  /// Antes era `failure?.toString() ?? 'fallback'`, que para `Failure`
+  /// gerava strings tipo `Failure(message: ..., code: null)` exibidas ao
+  /// cliente — feio e expõe internals.
+  String _failureMessage(Object? failure, {String fallback = 'Erro'}) {
+    if (failure == null) return fallback;
+    if (failure is Failure) {
+      return failure.message.isEmpty ? fallback : failure.message;
+    }
+    final str = failure.toString();
+    return str.isEmpty ? fallback : str;
   }
 }

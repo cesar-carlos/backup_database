@@ -81,6 +81,7 @@ This project uses specific packages following clean architecture principles:
 ## Architecture Rules
 
 - Follow `clean_architecture.mdc` for layer boundaries and dependency direction.
+- **Follow `architectural_patterns.mdc`** for consolidated DRY helpers (`RepositoryGuard`, `AsyncStateMixin`, `ByteFormat`) and anti-patterns identified in audit waves. Failing to use these helpers when adding new code reintroduces ~700+ lines of boilerplate that was already eliminated.
 
 ## Desktop-Specific Considerations
 

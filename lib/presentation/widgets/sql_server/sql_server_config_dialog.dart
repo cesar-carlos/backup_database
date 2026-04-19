@@ -786,9 +786,13 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             );
           },
           (failure) {
-            final f = failure as Failure;
-            final errorMessage = f.message.isNotEmpty
-                ? f.message
+            // Cast `failure as Failure` removido em favor de verificação
+            // explícita; protege contra exceções que não implementam
+            // `Failure` (causava crash silencioso no diálogo).
+            final rawMessage =
+                failure is Failure ? failure.message : failure.toString();
+            final errorMessage = rawMessage.isNotEmpty
+                ? rawMessage
                 : _t(
                     'Erro desconhecido ao testar conexão',
                     'Unknown error testing connection',

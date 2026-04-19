@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
@@ -13,6 +14,7 @@ import 'package:backup_database/infrastructure/external/process/process_service.
     as ps;
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
+import 'package:result_dart/result_dart.dart' show unit;
 
 class SqlServerBackupService implements ISqlServerBackupService {
   SqlServerBackupService(this._processService);
@@ -45,11 +47,21 @@ class SqlServerBackupService implements ISqlServerBackupService {
     return {'SQLCMDPASSWORD': config.password};
   }
 
+  /// Escapa o conteúdo de um identificador delimitado por colchetes
+  /// (`[<identifier>]`) duplicando colchetes de fechamento.
   String _escapeSqlIdentifier(String value) => value.replaceAll(']', ']]');
 
-  Future<rd.Result<BackupExecutionResult>?> _checkRecoveryModel(
-    SqlServerConfig config,
-  ) async {
+  /// Escapa o conteúdo de um literal string T-SQL (`N'...'`) duplicando
+  /// aspas simples. Sem este escape, um nome de banco contendo `'` quebra
+  /// o SQL gerado e potencialmente vira vetor de injection.
+  String _escapeSqlString(String value) => value.replaceAll("'", "''");
+
+  /// Verifica o recovery model do banco antes de um backup de log.
+  /// Retorna [rd.Success] quando o modo permite o backup (`FULL` ou
+  /// `BULK_LOGGED`) ou quando a checagem foi inconclusiva (best-effort).
+  /// Retorna [rd.Failure] apenas quando o modo é `SIMPLE`, caso em que o
+  /// backup de log deve ser abortado explicitamente.
+  Future<rd.Result<void>> _checkRecoveryModel(SqlServerConfig config) async {
     const query =
         'SELECT recovery_model_desc FROM sys.databases WHERE name = DB_NAME()';
     final args = [..._baseSqlcmdArgs(config), '-Q', query, '-h', '-1', '-W'];
@@ -62,38 +74,43 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
     return result.fold(
       (processResult) {
-        if (!processResult.isSuccess) return null;
-        final model = processResult.stdout
-            .trim()
-            .toUpperCase()
-            .split(RegExp(r'\s+'))
-            .first;
-        if (model == 'SIMPLE') {
+        if (!processResult.isSuccess) return const rd.Success(unit);
+        final model = processResult.stdout.trim().toUpperCase();
+        if (model.contains('SIMPLE')) {
           return const rd.Failure(
             ValidationFailure(
               message:
-                  'Backup de log de transações não permitido: banco em modo SIMPLE. '
-                  'Altere para FULL ou BULK_LOGGED.',
+                  'Backup de log de transações não permitido: banco em modo '
+                  'SIMPLE. Altere para FULL ou BULK_LOGGED.',
             ),
           );
         }
-        return null;
+        return const rd.Success(unit);
       },
-      (_) => null,
+      (_) => const rd.Success(unit),
     );
   }
 
+  /// Detecta a presença de mensagens de erro reais de SQL Server / sqlcmd
+  /// na saída combinada. O matching é mais restrito do que um simples
+  /// `contains('error')` para evitar falsos positivos com `RAISERROR(...)`
+  /// informativos que mencionam apenas a palavra "msg".
+  ///
+  /// Nota: `sqlcmd -b` já retorna exit code != 0 em erros reais, portanto
+  /// esta função serve como sinal redundante para detectar regressões raras
+  /// (ex.: erros de severidade alta com exit code 0 em algumas builds).
   bool _hasSqlcmdErrorOutput(String combinedOutputLower) {
-    // More precise than "contains('error')" to avoid false positives like "0 errors".
-    // Typical SQL Server error format: "Msg 3013, Level 16, State ..."
+    // Erros do servidor SQL costumam vir como
+    // "Msg 3013, Level 16, State 1, Server <name>, Line N".
+    // Exigimos os três marcadores juntos para reduzir falso positivo.
     final msgPattern = RegExp(r'\bmsg\s+\d+\b');
-    final levelPattern = RegExp(r'\blevel\s+\d+\b');
+    final levelPattern = RegExp(r'\blevel\s+1[6-9]|\blevel\s+2[0-5]\b');
     if (msgPattern.hasMatch(combinedOutputLower) &&
         levelPattern.hasMatch(combinedOutputLower)) {
       return true;
     }
 
-    // sqlcmd client-side errors usually start with "Sqlcmd:".
+    // Erros cliente-side do sqlcmd começam com "Sqlcmd: Error:".
     if (combinedOutputLower.contains('sqlcmd: error')) return true;
 
     return false;
@@ -113,7 +130,13 @@ class SqlServerBackupService implements ISqlServerBackupService {
     SqlServerBackupOptions? sqlServerBackupOptions,
     Duration? backupTimeout,
     Duration? verifyTimeout,
+    String? cancelTag,
   }) async {
+    // Tag canônica vinda do orchestrator (geralmente `backup-<historyId>`).
+    // Quando não fornecida, mantém o comportamento legado baseado em
+    // `scheduleId` para preservar compatibilidade com chamadas antigas.
+    final effectiveCancelTag = cancelTag ?? 'backup-$scheduleId';
+    final verifyCancelTag = cancelTag ?? 'verify-$scheduleId';
     try {
       LoggerService.info(
         'Iniciando backup SQL Server: ${config.databaseValue} (Tipo: ${getBackupTypeDisplayName(backupType)})',
@@ -126,23 +149,64 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
       if (backupType == BackupType.log) {
         final preCheckResult = await _checkRecoveryModel(config);
-        if (preCheckResult != null) {
-          return preCheckResult;
+        if (preCheckResult.isError()) {
+          final failure = preCheckResult.exceptionOrNull()!;
+          return rd.Failure(
+            failure is Failure
+                ? failure
+                : BackupFailure(message: failure.toString()),
+          );
         }
       }
 
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final extension = backupType == BackupType.log ? '.trn' : '.bak';
       final typeSlug = getBackupTypeName(backupType);
-      final fileName =
+      final baseName =
           customFileName ??
           '${config.databaseValue}_${typeSlug}_$timestamp$extension';
-      final backupPath = p.join(outputDirectory, fileName);
 
-      final normalizedPath = backupPath.replaceAll(r'\', '/');
+      // Striping real: quando `stripingCount > 1`, geramos N arquivos
+      // `<base>.partXofN.bak` que o SQL Server escreve em paralelo (cada
+      // `TO DISK` adicional vira uma stripe). Anteriormente o valor era
+      // só cosmético (gravado em `BackupFlags`), mas o T-SQL gerado tinha
+      // apenas um `TO DISK` — agora o striping de fato acontece.
+      final requestedStripes = (sqlServerBackupOptions?.stripingCount ?? 1)
+          .clamp(1, 4);
+      final stripeCount = backupType == BackupType.log ? 1 : requestedStripes;
+      final List<String> backupPaths;
+      if (stripeCount == 1) {
+        backupPaths = [p.join(outputDirectory, baseName)];
+      } else {
+        final dot = baseName.lastIndexOf('.');
+        final stem = dot > 0 ? baseName.substring(0, dot) : baseName;
+        final ext = dot > 0 ? baseName.substring(dot) : '';
+        backupPaths = List.generate(
+          stripeCount,
+          (i) =>
+              p.join(outputDirectory, '$stem.part${i + 1}of$stripeCount$ext'),
+        );
+      }
+      // Caminho "principal" usado para nomes de arquivo de erro / log;
+      // historicamente o serviço retornava um único path. Mantemos o
+      // primeiro stripe como representativo e expomos o tamanho total
+      // somando todos os arquivos.
+      final backupPath = backupPaths.first;
 
-      final escapedBackupPath = normalizedPath.replaceAll("'", "''");
       final escapedDbName = _escapeSqlIdentifier(config.databaseValue);
+      // O nome do banco também aparece dentro de literais N'...' (cláusula
+      // NAME). Aplicamos o escape de string T-SQL para evitar SQL malformado
+      // ou injection caso o nome contenha aspas simples.
+      final escapedDbForLiteral = _escapeSqlString(config.databaseValue);
+
+      // Constrói a lista de cláusulas `TO DISK = N'...'` separadas por
+      // vírgula (T-SQL aceita até 64 stripes; o options já limita a 4).
+      final toDiskClause = backupPaths
+          .map(
+            (path) =>
+                "TO DISK = N'${_escapeSqlString(path.replaceAll(r'\', '/'))}'",
+          )
+          .join(', ');
 
       final opts = sqlServerBackupOptions;
       final checksumClause = enableChecksum ? 'CHECKSUM, ' : '';
@@ -157,27 +221,27 @@ class SqlServerBackupService implements ISqlServerBackupService {
         case BackupType.fullSingle:
           query =
               'BACKUP DATABASE [$escapedDbName] '
-              "TO DISK = N'$escapedBackupPath' "
+              '$toDiskClause '
               'WITH $checksumClause$stopOnErrorClause$optionsClause'
               'NOFORMAT, INIT, '
-              "NAME = N'${config.databaseValue}-Full Database Backup', "
+              "NAME = N'$escapedDbForLiteral-Full Database Backup', "
               'SKIP, NOREWIND, NOUNLOAD, STATS = $statsValue';
         case BackupType.differential:
           query =
               'BACKUP DATABASE [$escapedDbName] '
-              "TO DISK = N'$escapedBackupPath' "
+              '$toDiskClause '
               'WITH DIFFERENTIAL, $checksumClause$stopOnErrorClause$optionsClause'
               'NOFORMAT, INIT, '
-              "NAME = N'${config.databaseValue}-Differential Database Backup', "
+              "NAME = N'$escapedDbForLiteral-Differential Database Backup', "
               'SKIP, NOREWIND, NOUNLOAD, STATS = $statsValue';
         case BackupType.log:
           final copyOnlyClause = truncateLog ? '' : 'COPY_ONLY, ';
           query =
               'BACKUP LOG [$escapedDbName] '
-              "TO DISK = N'$escapedBackupPath' "
+              '$toDiskClause '
               'WITH $copyOnlyClause$checksumClause$stopOnErrorClause$optionsClause'
               'NOFORMAT, INIT, '
-              "NAME = N'${config.databaseValue}-Transaction Log Backup', "
+              "NAME = N'$escapedDbForLiteral-Transaction Log Backup', "
               'SKIP, NOREWIND, NOUNLOAD, STATS = $statsValue';
         case BackupType.convertedDifferential:
         case BackupType.convertedFullSingle:
@@ -199,6 +263,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
         arguments: arguments,
         environment: _sqlcmdEnvironment(config),
         timeout: backupTimeout ?? const Duration(hours: 2),
+        tag: effectiveCancelTag,
       );
 
       stopwatch.stop();
@@ -217,6 +282,12 @@ class SqlServerBackupService implements ISqlServerBackupService {
               'STDERR: $stderr',
             ),
           );
+          // Remove arquivo parcial que possa ter sido criado antes do erro
+          // para evitar que cleanups por retenção promovam um `.bak`
+          // corrompido como "último backup válido".
+          for (final path in backupPaths) {
+            await _safeDeletePartialBackup(path);
+          }
           return rd.Failure(
             BackupFailure(
               message:
@@ -236,6 +307,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
               'STDERR: $stderr',
             ),
           );
+          for (final path in backupPaths) {
+            await _safeDeletePartialBackup(path);
+          }
           return rd.Failure(
             BackupFailure(
               message:
@@ -245,17 +319,20 @@ class SqlServerBackupService implements ISqlServerBackupService {
           );
         }
 
-        final backupFile = File(backupPath);
-        final ready = await _waitForStableBackupFile(backupFile);
-        if (!ready) {
-          return rd.Failure(
-            BackupFailure(
-              message: 'Arquivo de backup não foi criado em: $backupPath',
-            ),
-          );
+        // Aguarda estabilização de TODOS os stripes e soma seus tamanhos.
+        var fileSize = 0;
+        for (final path in backupPaths) {
+          final file = File(path);
+          final ready = await _waitForStableBackupFile(file);
+          if (!ready) {
+            return rd.Failure(
+              BackupFailure(
+                message: 'Arquivo de backup não foi criado em: $path',
+              ),
+            );
+          }
+          fileSize += await file.length();
         }
-
-        final fileSize = await backupFile.length();
 
         if (fileSize == 0) {
           return const rd.Failure(
@@ -266,17 +343,37 @@ class SqlServerBackupService implements ISqlServerBackupService {
         }
 
         LoggerService.info(
-          'Backup SQL Server concluído: $backupPath (${_formatBytes(fileSize)})',
+          'Backup SQL Server concluído (${backupPaths.length} stripe(s)): '
+          '$backupPath (${ByteFormat.format(fileSize)})',
         );
 
         // Verificar integridade do backup se solicitado
         final verifyStopwatch = Stopwatch();
         if (verifyAfterBackup) {
+          if (!enableChecksum) {
+            // RESTORE VERIFYONLY sem CHECKSUM apenas valida o cabeçalho do
+            // arquivo; não detecta corrupção real das páginas. Logamos um
+            // warning para evitar a falsa sensação de integridade.
+            LoggerService.warning(
+              'verifyAfterBackup=true sem enableChecksum=true: a verificação '
+              'irá apenas validar o header do .bak, sem checagem de '
+              'corrupção real. Habilite enableChecksum para verificação '
+              'completa.',
+            );
+          }
           LoggerService.info('Verificando integridade do backup...');
           verifyStopwatch.start();
-          final verifyQuery =
-              "RESTORE VERIFYONLY FROM DISK = N'$escapedBackupPath' "
-              "${enableChecksum ? 'WITH CHECKSUM' : ''}";
+          // Para backups com striping, RESTORE VERIFYONLY exige TODOS os
+          // stripes na mesma ordem em que foram gerados.
+          final fromDiskClause = backupPaths
+              .map(
+                (path) =>
+                    "FROM DISK = N'${_escapeSqlString(path.replaceAll(r'\', '/'))}'",
+              )
+              .join(', ');
+          final verifyQuery = enableChecksum
+              ? 'RESTORE VERIFYONLY $fromDiskClause WITH CHECKSUM'
+              : 'RESTORE VERIFYONLY $fromDiskClause';
 
           final verifyArguments = [
             ..._baseSqlcmdArgs(config),
@@ -289,6 +386,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
             arguments: verifyArguments,
             environment: _sqlcmdEnvironment(config),
             timeout: verifyTimeout ?? const Duration(minutes: 30),
+            tag: verifyCancelTag,
           );
           verifyStopwatch.stop();
 
@@ -340,7 +438,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           backupDuration: backupDuration,
           verifyDuration: verifyDuration,
           backupSizeBytes: fileSize,
-          backupSpeedMbPerSec: _calculateSpeedMbPerSec(
+          backupSpeedMbPerSec: ByteFormat.speedMbPerSec(
             fileSize,
             backupDuration.inSeconds,
           ),
@@ -505,6 +603,58 @@ class SqlServerBackupService implements ISqlServerBackupService {
     }
   }
 
+  @override
+  Future<rd.Result<int>> getDatabaseSizeBytes({
+    required SqlServerConfig config,
+    Duration? timeout,
+  }) async {
+    // size em sys.master_files está em páginas de 8KB.
+    const query =
+        'SELECT CAST(SUM(CAST(size AS BIGINT)) * 8192 AS BIGINT) AS bytes '
+        'FROM sys.master_files WHERE database_id = DB_ID()';
+    final args = [..._baseSqlcmdArgs(config), '-Q', query, '-h', '-1', '-W'];
+
+    final result = await _processService.run(
+      executable: 'sqlcmd',
+      arguments: args,
+      environment: _sqlcmdEnvironment(config),
+      timeout: timeout ?? const Duration(seconds: 15),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (!processResult.isSuccess) {
+          return rd.Failure(
+            BackupFailure(
+              message:
+                  'Não foi possível obter tamanho do banco SQL Server: '
+                  '${processResult.stderr}',
+            ),
+          );
+        }
+        final raw = processResult.stdout
+            .split(RegExp(r'[\r\n]+'))
+            .map((l) => l.trim())
+            .firstWhere(
+              (l) => l.isNotEmpty && int.tryParse(l) != null,
+              orElse: () => '',
+            );
+        final size = int.tryParse(raw);
+        if (size == null) {
+          return rd.Failure(
+            BackupFailure(
+              message:
+                  'Resposta inválida ao consultar tamanho do banco SQL Server: '
+                  '${processResult.stdout}',
+            ),
+          );
+        }
+        return rd.Success(size);
+      },
+      rd.Failure.new,
+    );
+  }
+
   static const Duration _sqlBackupFileInitialDelay = Duration(
     milliseconds: 200,
   );
@@ -515,6 +665,25 @@ class SqlServerBackupService implements ISqlServerBackupService {
     milliseconds: 200,
   );
   static const Duration _sqlBackupFileMaxWait = Duration(seconds: 12);
+
+  /// Tenta apagar arquivo de backup parcial criado em caso de falha do
+  /// `sqlcmd`. Best-effort: ignora qualquer erro do filesystem para não
+  /// mascarar a causa original do erro.
+  Future<void> _safeDeletePartialBackup(String backupPath) async {
+    try {
+      final file = File(backupPath);
+      if (await file.exists()) {
+        await file.delete();
+        LoggerService.info(
+          'Arquivo parcial de backup removido após falha: $backupPath',
+        );
+      }
+    } on Object catch (e) {
+      LoggerService.debug(
+        'Falha ao remover arquivo parcial $backupPath: $e',
+      );
+    }
+  }
 
   Future<bool> _waitForStableBackupFile(File backupFile) async {
     await Future<void>.delayed(_sqlBackupFileInitialDelay);
@@ -537,20 +706,4 @@ class SqlServerBackupService implements ISqlServerBackupService {
     return backupFile.existsSync() && backupFile.lengthSync() > 0;
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
-
-  double _calculateSpeedMbPerSec(int sizeInBytes, int durationSeconds) {
-    if (durationSeconds <= 0) return 0;
-    final sizeInMb = sizeInBytes / 1024 / 1024;
-    return sizeInMb / durationSeconds;
-  }
 }

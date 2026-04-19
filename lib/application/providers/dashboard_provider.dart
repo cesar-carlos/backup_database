@@ -1,4 +1,4 @@
-import 'package:backup_database/core/core.dart';
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
@@ -7,7 +7,7 @@ import 'package:backup_database/domain/services/i_metrics_analysis_service.dart'
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
 
-class DashboardProvider extends ChangeNotifier {
+class DashboardProvider extends ChangeNotifier with AsyncStateMixin {
   DashboardProvider(
     this._backupHistoryRepository,
     this._scheduleRepository, {
@@ -31,8 +31,6 @@ class DashboardProvider extends ChangeNotifier {
   List<Schedule> _activeSchedulesList = [];
   Map<String, dynamic>? _serverMetrics;
   BackupMetricsReport? _metricsReport;
-  bool _isLoading = false;
-  String? _error;
 
   int get totalBackups => _totalBackups;
   int get backupsToday => _backupsToday;
@@ -42,34 +40,24 @@ class DashboardProvider extends ChangeNotifier {
   List<Schedule> get activeSchedulesList => _activeSchedulesList;
   Map<String, dynamic>? get serverMetrics => _serverMetrics;
   BackupMetricsReport? get metricsReport => _metricsReport;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
 
   Future<void> loadDashboardData() async {
-    _isLoading = true;
-    _error = null;
     _serverMetrics = null;
     _metricsReport = null;
-    notifyListeners();
-
-    try {
-      await Future.wait([
-        _loadTotalBackups(),
-        _loadBackupsToday(),
-        _loadFailedToday(),
-        _loadActiveSchedules(),
-        _loadRecentBackups(),
-        _loadMetricsReport(),
-      ]);
-      if (_connectionManager?.isConnected ?? false) {
-        await _loadServerMetrics();
-      }
-    } on Object catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    await runAsync<void>(
+      action: () async {
+        await Future.wait([
+          _loadTotalBackups(),
+          _loadTodayBackups(),
+          _loadActiveSchedules(),
+          _loadRecentBackups(),
+          _loadMetricsReport(),
+        ]);
+        if (_connectionManager?.isConnected ?? false) {
+          await _loadServerMetrics();
+        }
+      },
+    );
   }
 
   Future<void> _loadMetricsReport() async {
@@ -105,17 +93,15 @@ class DashboardProvider extends ChangeNotifier {
   Future<void> _loadTotalBackups() async {
     final result = await _backupHistoryRepository.getAll();
     result.fold(
-      (backups) {
-        _totalBackups = backups.length;
-      },
-      (failure) {
-        final f = failure as Failure;
-        _error = f.message;
-      },
+      (backups) => _totalBackups = backups.length,
+      (failure) => throw failure,
     );
   }
 
-  Future<void> _loadBackupsToday() async {
+  /// Otimização: faz uma única query getByDateRange e calcula ambos
+  /// `_backupsToday` e `_failedToday` em memória. Antes, esses contadores
+  /// eram populados por duas queries idênticas, dobrando o I/O.
+  Future<void> _loadTodayBackups() async {
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
@@ -127,33 +113,11 @@ class DashboardProvider extends ChangeNotifier {
     result.fold(
       (backups) {
         _backupsToday = backups.length;
-      },
-      (failure) {
-        final f = failure as Failure;
-        _error ??= f.message;
-      },
-    );
-  }
-
-  Future<void> _loadFailedToday() async {
-    final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
-
-    final result = await _backupHistoryRepository.getByDateRange(
-      startOfDay,
-      endOfDay,
-    );
-    result.fold(
-      (backups) {
         _failedToday = backups
             .where((b) => b.status == BackupStatus.error)
             .length;
       },
-      (failure) {
-        final f = failure as Failure;
-        _error ??= f.message;
-      },
+      (failure) => throw failure,
     );
   }
 
@@ -164,23 +128,15 @@ class DashboardProvider extends ChangeNotifier {
         _activeSchedules = schedules.length;
         _activeSchedulesList = schedules;
       },
-      (failure) {
-        final f = failure as Failure;
-        _error ??= f.message;
-      },
+      (failure) => throw failure,
     );
   }
 
   Future<void> _loadRecentBackups() async {
     final result = await _backupHistoryRepository.getAll(limit: 10);
     result.fold(
-      (backups) {
-        _recentBackups = backups;
-      },
-      (failure) {
-        final f = failure as Failure;
-        _error ??= f.message;
-      },
+      (backups) => _recentBackups = backups,
+      (failure) => throw failure,
     );
   }
 

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/disk_space_info.dart';
 import 'package:backup_database/domain/services/i_storage_checker.dart';
@@ -120,8 +121,8 @@ class StorageChecker implements IStorageChecker {
           : 0.0;
 
       LoggerService.info(
-        'Espaço em disco $drive: ${_formatBytes(freeBytes)} livres de '
-        '${_formatBytes(totalBytes)}',
+        'Espaço em disco $drive: ${ByteFormat.format(freeBytes)} livres de '
+        '${ByteFormat.format(totalBytes)}',
       );
 
       return rd.Success(
@@ -181,12 +182,4 @@ class StorageChecker implements IStorageChecker {
     return bytes;
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
 }

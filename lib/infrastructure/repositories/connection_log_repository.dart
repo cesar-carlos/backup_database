@@ -1,7 +1,7 @@
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/connection_log.dart';
 import 'package:backup_database/domain/repositories/i_connection_log_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class ConnectionLogRepository implements IConnectionLogRepository {
@@ -10,27 +10,25 @@ class ConnectionLogRepository implements IConnectionLogRepository {
   final AppDatabase _database;
 
   @override
-  Future<rd.Result<List<ConnectionLog>>> getAll() async {
-    try {
-      final list = await _database.connectionLogDao.getAll();
-      return rd.Success(list.map(_toEntity).toList());
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar log de conexões: $e'),
-      );
-    }
+  Future<rd.Result<List<ConnectionLog>>> getAll() {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar log de conexões',
+      action: () async {
+        final list = await _database.connectionLogDao.getAll();
+        return list.map(_toEntity).toList();
+      },
+    );
   }
 
   @override
-  Future<rd.Result<List<ConnectionLog>>> getRecentLogs(int limit) async {
-    try {
-      final list = await _database.connectionLogDao.getRecentLogs(limit);
-      return rd.Success(list.map(_toEntity).toList());
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar log de conexões: $e'),
-      );
-    }
+  Future<rd.Result<List<ConnectionLog>>> getRecentLogs(int limit) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar log de conexões',
+      action: () async {
+        final list = await _database.connectionLogDao.getRecentLogs(limit);
+        return list.map(_toEntity).toList();
+      },
+    );
   }
 
   @override
@@ -47,21 +45,17 @@ class ConnectionLogRepository implements IConnectionLogRepository {
     String? serverId,
     String? errorMessage,
     String? clientId,
-  }) async {
-    try {
-      await _database.connectionLogDao.insertConnectionAttempt(
+  }) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao registrar log de conexão',
+      action: () => _database.connectionLogDao.insertConnectionAttempt(
         clientHost: clientHost,
         success: success,
         serverId: serverId,
         errorMessage: errorMessage,
         clientId: clientId,
-      );
-      return const rd.Success(rd.unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao registrar log de conexão: $e'),
-      );
-    }
+      ),
+    );
   }
 
   ConnectionLog _toEntity(ConnectionLogsTableData data) {

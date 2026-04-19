@@ -22,6 +22,8 @@ class BackupProgress {
     this.startedAt,
     this.elapsed,
     this.backupPath,
+    this.historyId,
+    this.cancelRequested = false,
   });
   final BackupStep step;
   final String message;
@@ -31,6 +33,13 @@ class BackupProgress {
   final Duration? elapsed;
   final String? backupPath;
 
+  /// Identificador do BackupHistory em curso (quando disponível).
+  final String? historyId;
+
+  /// Sinalizado pela UI quando o usuário aciona "Cancelar". Usado para
+  /// renderizar feedback "Cancelando..." enquanto o processo termina.
+  final bool cancelRequested;
+
   BackupProgress copyWith({
     BackupStep? step,
     String? message,
@@ -39,6 +48,8 @@ class BackupProgress {
     DateTime? startedAt,
     Duration? elapsed,
     String? backupPath,
+    String? historyId,
+    bool? cancelRequested,
   }) {
     return BackupProgress(
       step: step ?? this.step,
@@ -48,6 +59,8 @@ class BackupProgress {
       startedAt: startedAt ?? this.startedAt,
       elapsed: elapsed ?? this.elapsed,
       backupPath: backupPath ?? this.backupPath,
+      historyId: historyId ?? this.historyId,
+      cancelRequested: cancelRequested ?? this.cancelRequested,
     );
   }
 }
@@ -74,7 +87,32 @@ class BackupProgressProvider extends ChangeNotifier
       progress: p.progress,
       backupPath: p.backupPath,
       error: p.error,
+      historyId: p.historyId,
     );
+  }
+
+  @override
+  void setCurrentHistoryId(String historyId) {
+    if (!_isRunning) return;
+    _currentProgress =
+        _currentProgress?.copyWith(historyId: historyId) ??
+        BackupProgress(
+          step: BackupStep.initializing,
+          message: 'Backup iniciado',
+          startedAt: DateTime.now(),
+          historyId: historyId,
+        );
+    notifyListeners();
+  }
+
+  /// Marca a flag de cancelamento solicitada para que a UI renderize
+  /// "Cancelando..." enquanto o processo termina. Operação puramente
+  /// visual — o cancelamento real é feito pelo
+  /// `IBackupCancellationService` que mata o processo do SGBD.
+  void markCancelRequested() {
+    if (!_isRunning || _currentProgress == null) return;
+    _currentProgress = _currentProgress!.copyWith(cancelRequested: true);
+    notifyListeners();
   }
 
   static String _stepToString(BackupStep step) {

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_service.dart';
 import 'package:flutter/foundation.dart';
@@ -26,109 +26,89 @@ class DropboxOAuthConfig {
   };
 }
 
-class DropboxAuthProvider extends ChangeNotifier {
+class DropboxAuthProvider extends ChangeNotifier with AsyncStateMixin {
   DropboxAuthProvider(this._authService);
   final DropboxAuthService _authService;
 
   static const _oauthConfigKey = 'dropbox_oauth_config';
 
-  bool _isLoading = false;
   bool _isInitialized = false;
   bool _isConfigured = false;
-  String? _error;
   String? _currentEmail;
   DropboxOAuthConfig? _oauthConfig;
+  Future<void>? _initializeFuture;
 
-  bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
   bool get isConfigured => _isConfigured;
   bool get isSignedIn => _authService.isSignedIn;
-  String? get error => _error;
   String? get currentEmail => _currentEmail ?? _authService.currentUserEmail;
   DropboxOAuthConfig? get oauthConfig => _oauthConfig;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
+    final inFlight = _initializeFuture;
+    if (inFlight != null) return inFlight;
+    return _initializeFuture = _doInitialize().whenComplete(() {
+      _initializeFuture = null;
+    });
+  }
 
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> _doInitialize() async {
+    await runAsync<void>(
+      genericErrorMessage: 'Erro ao inicializar',
+      action: () async {
+        await _loadOAuthConfig();
 
-    try {
-      await _loadOAuthConfig();
+        if (_oauthConfig != null) {
+          await _authService.initialize(
+            clientId: _oauthConfig!.clientId,
+            clientSecret: _oauthConfig!.clientSecret,
+          );
+          _isConfigured = true;
 
-      if (_oauthConfig != null) {
-        await _authService.initialize(
-          clientId: _oauthConfig!.clientId,
-          clientSecret: _oauthConfig!.clientSecret,
-        );
-        _isConfigured = true;
+          final silentResult = await _authService.signInSilently();
+          silentResult.fold(
+            (authResult) => _currentEmail = authResult.email,
+            (_) {},
+          );
+        }
 
-        final silentResult = await _authService.signInSilently();
-        silentResult.fold(
-          (authResult) {
-            _currentEmail = authResult.email;
-          },
-          (_) {},
-        );
-      }
-
-      _isInitialized = true;
-      _isLoading = false;
-    } on Object catch (e, s) {
-      LoggerService.error('Erro ao inicializar DropboxAuthProvider', e, s);
-      _error = 'Erro ao inicializar: $e';
-      _isLoading = false;
-    }
-
-    notifyListeners();
+        _isInitialized = true;
+      },
+    );
   }
 
   Future<bool> configureOAuth({
     required String clientId,
     String? clientSecret,
   }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao configurar OAuth',
+      action: () async {
+        _oauthConfig = DropboxOAuthConfig(
+          clientId: clientId,
+          clientSecret: clientSecret,
+        );
 
-    try {
-      _oauthConfig = DropboxOAuthConfig(
-        clientId: clientId,
-        clientSecret: clientSecret,
-      );
+        await _saveOAuthConfig();
 
-      await _saveOAuthConfig();
+        await _authService.initialize(
+          clientId: clientId,
+          clientSecret: clientSecret,
+        );
 
-      await _authService.initialize(
-        clientId: clientId,
-        clientSecret: clientSecret,
-      );
-
-      _isConfigured = true;
-      _isLoading = false;
-      notifyListeners();
-
-      return true;
-    } on Object catch (e, s) {
-      LoggerService.error('Erro ao configurar OAuth Dropbox', e, s);
-      _error = 'Erro ao configurar OAuth: $e';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
+        _isConfigured = true;
+        return true;
+      },
+    );
+    return ok ?? false;
   }
 
   Future<bool> signIn() async {
     if (!_isConfigured) {
-      _error = 'Configure as credenciais OAuth primeiro.';
-      notifyListeners();
+      setErrorManual('Configure as credenciais OAuth primeiro.');
       return false;
     }
-
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
 
     try {
       await windowManager.setPreventClose(true);
@@ -137,24 +117,19 @@ class DropboxAuthProvider extends ChangeNotifier {
     }
 
     try {
-      final result = await _authService.signIn();
-
-      return result.fold(
-        (authResult) {
-          _currentEmail = authResult.email;
-          _isLoading = false;
-          notifyListeners();
-          return true;
-        },
-        (exception) {
-          _error = exception is Failure
-              ? exception.message
-              : exception.toString();
-          _isLoading = false;
-          notifyListeners();
-          return false;
+      final ok = await runAsync<bool>(
+        action: () async {
+          final result = await _authService.signIn();
+          return result.fold(
+            (authResult) {
+              _currentEmail = authResult.email;
+              return true;
+            },
+            (exception) => throw exception,
+          );
         },
       );
+      return ok ?? false;
     } finally {
       try {
         await windowManager.setPreventClose(false);
@@ -165,41 +140,31 @@ class DropboxAuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    _isLoading = true;
-    notifyListeners();
-
-    await _authService.signOut();
-
-    _currentEmail = null;
-    _isLoading = false;
-    notifyListeners();
+    await runAsync<void>(
+      genericErrorMessage: 'Erro ao fazer logout',
+      action: () async {
+        await _authService.signOut();
+        _currentEmail = null;
+      },
+    );
   }
 
   Future<bool> removeOAuthConfig() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao remover configuração',
+      action: () async {
+        await _authService.signOut();
 
-    try {
-      await _authService.signOut();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_oauthConfigKey);
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_oauthConfigKey);
-
-      _oauthConfig = null;
-      _isConfigured = false;
-      _currentEmail = null;
-      _isLoading = false;
-      notifyListeners();
-
-      return true;
-    } on Object catch (e, s) {
-      LoggerService.error('Erro ao remover configuração OAuth Dropbox', e, s);
-      _error = 'Erro ao remover configuração: $e';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
+        _oauthConfig = null;
+        _isConfigured = false;
+        _currentEmail = null;
+        return true;
+      },
+    );
+    return ok ?? false;
   }
 
   DropboxAuthResult? getAuthResult() {
@@ -221,26 +186,22 @@ class DropboxAuthProvider extends ChangeNotifier {
       final decryptedConfig = EncryptionService.decrypt(encryptedConfig);
       final json = jsonDecode(decryptedConfig) as Map<String, dynamic>;
       _oauthConfig = DropboxOAuthConfig.fromJson(json);
-    } on Object catch (e) {
-      LoggerService.debug('Erro ao carregar config OAuth Dropbox: $e');
+    } on Object catch (e, s) {
+      // Não propagamos como exception para não quebrar a inicialização —
+      // apenas marcamos o erro e seguimos sem credenciais.
+      setErrorManual(
+        'Configuração OAuth corrompida ou inválida. Reconfigure as credenciais.',
+      );
+      LoggerService.error('Erro ao carregar config OAuth Dropbox', e, s);
     }
   }
 
   Future<void> _saveOAuthConfig() async {
     if (_oauthConfig == null) return;
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = jsonEncode(_oauthConfig!.toJson());
-      final encryptedConfig = EncryptionService.encrypt(json);
-      await prefs.setString(_oauthConfigKey, encryptedConfig);
-    } on Object catch (e) {
-      rethrow;
-    }
-  }
-
-  void clearError() {
-    _error = null;
-    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    final json = jsonEncode(_oauthConfig!.toJson());
+    final encryptedConfig = EncryptionService.encrypt(json);
+    await prefs.setString(_oauthConfigKey, encryptedConfig);
   }
 }

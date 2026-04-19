@@ -27,7 +27,8 @@ alwaysApply: true
 ### Project-specific (`backup_database`)
 
 - **`project_specifics.mdc`**: decisions specific to this repo (Clean Architecture + DDD, dependencies, desktop specifics)
+- **`architectural_patterns.mdc`**: consolidated DRY helpers and anti-patterns from audit waves (`RepositoryGuard`, `AsyncStateMixin`, `ByteFormat`, `_safeNotifierCall`, common bug recurrences). **Read this BEFORE adding new repositories, providers, or orchestration services** to avoid reintroducing eliminated boilerplate.
 
 ## Copying to other projects
 
-See `README.md` in this folder. Keep generic rules, and replace `project_specifics.mdc`.
+See `README.md` in this folder. Keep generic rules, and replace `project_specifics.mdc` + `architectural_patterns.mdc` (the latter is project-specific to the helpers in `lib/core/`, `lib/application/providers/`, and `lib/infrastructure/repositories/`).

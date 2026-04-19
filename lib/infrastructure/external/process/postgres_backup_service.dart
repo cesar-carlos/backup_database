@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
@@ -20,6 +22,8 @@ class PostgresBackupService implements IPostgresBackupService {
   static const String _logCompressionEnv = 'BACKUP_DATABASE_PG_LOG_COMPRESSION';
   static const String _logTimeoutSecondsEnv =
       'BACKUP_DATABASE_PG_LOG_TIMEOUT_SECONDS';
+  static const Duration _defaultBackupTimeout = Duration(hours: 2);
+  static const Duration _defaultVerifyTimeout = Duration(minutes: 30);
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
@@ -31,6 +35,7 @@ class PostgresBackupService implements IPostgresBackupService {
     String? pgBasebackupPath,
     Duration? backupTimeout,
     Duration? verifyTimeout,
+    String? cancelTag,
   }) async {
     LoggerService.info(
       'Iniciando backup PostgreSQL: ${config.databaseValue} (Tipo: ${backupType.displayName})',
@@ -74,6 +79,8 @@ class PostgresBackupService implements IPostgresBackupService {
       backupPath: backupPath,
       outputDirectory: outputDirectory,
       pgBasebackupPath: pgBasebackupPath,
+      backupTimeout: backupTimeout ?? _defaultBackupTimeout,
+      cancelTag: cancelTag,
     );
 
     stopwatch.stop();
@@ -82,6 +89,10 @@ class PostgresBackupService implements IPostgresBackupService {
       (commandResult) async {
         final processResult = commandResult.processResult;
         final effectiveBackupPath = commandResult.backupPath;
+        // Tipo de backup realmente executado (pode diferir do solicitado
+        // quando há fallback automático, ex.: incremental → full).
+        final effectiveBackupType =
+            commandResult.executedBackupType ?? backupType;
         final stdout = processResult.stdout;
         final stderr = processResult.stderr;
         final outputLower = (stdout + stderr).toLowerCase();
@@ -99,13 +110,13 @@ class PostgresBackupService implements IPostgresBackupService {
         if (commandResult.measuredSizeBytes != null) {
           sizeResult = rd.Success(commandResult.measuredSizeBytes!);
         } else {
-          sizeResult = backupType == BackupType.fullSingle
+          sizeResult = effectiveBackupType == BackupType.fullSingle
               ? await _calculateFileSize(effectiveBackupPath)
               : await _calculateBackupSize(effectiveBackupPath);
         }
         return sizeResult.fold((totalSize) async {
           if (totalSize == 0) {
-            if (backupType == BackupType.log) {
+            if (effectiveBackupType == BackupType.log) {
               LoggerService.info(
                 'Backup WAL concluido sem novos segmentos para captura.',
               );
@@ -114,7 +125,7 @@ class PostgresBackupService implements IPostgresBackupService {
                 backupDuration: duration,
                 verifyDuration: Duration.zero,
                 totalSize: 0,
-                backupType: backupType,
+                backupType: effectiveBackupType,
                 verifyAfterBackup: false,
               );
               return rd.Success(
@@ -124,6 +135,7 @@ class PostgresBackupService implements IPostgresBackupService {
                   duration: duration,
                   databaseName: config.databaseValue,
                   metrics: metrics,
+                  executedBackupType: commandResult.executedBackupType,
                 ),
               );
             }
@@ -137,17 +149,26 @@ class PostgresBackupService implements IPostgresBackupService {
           }
 
           LoggerService.info(
-            'Backup PostgreSQL concluído: $effectiveBackupPath (${_formatBytes(totalSize)})',
+            'Backup PostgreSQL concluído: $effectiveBackupPath '
+            '(${ByteFormat.format(totalSize)})',
           );
 
           final backupDuration = stopwatch.elapsed;
           var verifyDuration = Duration.zero;
 
-          if (verifyAfterBackup && backupType != BackupType.log) {
+          if (verifyAfterBackup && effectiveBackupType != BackupType.log) {
             final verifyStopwatch = Stopwatch()..start();
-            final verifyResult = backupType == BackupType.fullSingle
-                ? await _verifyFullSingleBackup(effectiveBackupPath)
-                : await _verifyBackup(effectiveBackupPath);
+            final effectiveVerifyTimeout =
+                verifyTimeout ?? _defaultVerifyTimeout;
+            final verifyResult = effectiveBackupType == BackupType.fullSingle
+                ? await _verifyFullSingleBackup(
+                    effectiveBackupPath,
+                    timeout: effectiveVerifyTimeout,
+                  )
+                : await _verifyBackup(
+                    effectiveBackupPath,
+                    timeout: effectiveVerifyTimeout,
+                  );
             verifyStopwatch.stop();
             verifyDuration = verifyStopwatch.elapsed;
 
@@ -173,7 +194,7 @@ class PostgresBackupService implements IPostgresBackupService {
             backupDuration: backupDuration,
             verifyDuration: verifyDuration,
             totalSize: totalSize,
-            backupType: backupType,
+            backupType: effectiveBackupType,
             verifyAfterBackup: verifyAfterBackup,
           );
 
@@ -184,6 +205,7 @@ class PostgresBackupService implements IPostgresBackupService {
               duration: totalDuration,
               databaseName: config.databaseValue,
               metrics: metrics,
+              executedBackupType: commandResult.executedBackupType,
             ),
           );
         }, rd.Failure.new);
@@ -208,7 +230,9 @@ class PostgresBackupService implements IPostgresBackupService {
     required BackupType backupType,
     required String backupPath,
     required String outputDirectory,
+    required Duration backupTimeout,
     String? pgBasebackupPath,
+    String? cancelTag,
   }) async {
     switch (backupType) {
       case BackupType.full:
@@ -216,6 +240,8 @@ class PostgresBackupService implements IPostgresBackupService {
           config: config,
           backupPath: backupPath,
           pgBasebackupPath: pgBasebackupPath,
+          timeout: backupTimeout,
+          cancelTag: cancelTag,
         );
         return _withBackupPath(fullResult, backupPath);
 
@@ -223,6 +249,8 @@ class PostgresBackupService implements IPostgresBackupService {
         final fullSingleResult = await _executeFullSingleBackup(
           config: config,
           backupPath: backupPath,
+          timeout: backupTimeout,
+          cancelTag: cancelTag,
         );
         return _withBackupPath(fullSingleResult, backupPath);
 
@@ -239,6 +267,8 @@ class PostgresBackupService implements IPostgresBackupService {
               backupPath: backupPath,
               previousBackupPath: previousBackupPath,
               pgBasebackupPath: pgBasebackupPath,
+              timeout: backupTimeout,
+              cancelTag: cancelTag,
             );
             return _withBackupPath(incrementalResult, backupPath);
           },
@@ -258,8 +288,23 @@ class PostgresBackupService implements IPostgresBackupService {
               config: config,
               backupPath: fallbackBackupPath,
               pgBasebackupPath: pgBasebackupPath,
+              timeout: backupTimeout,
+              cancelTag: cancelTag,
             );
-            return _withBackupPath(fallbackResult, fallbackBackupPath);
+            // Indica explicitamente para o orchestrator que o tipo executado
+            // foi FULL (e não differential como pedido). Evita registrar um
+            // histórico inconsistente onde `backupType=differential` aponta
+            // para um diretório FULL no disco.
+            return fallbackResult.fold(
+              (processResult) => rd.Success(
+                _BackupCommandResult(
+                  processResult: processResult,
+                  backupPath: fallbackBackupPath,
+                  executedBackupType: BackupType.full,
+                ),
+              ),
+              rd.Failure.new,
+            );
           },
         );
 
@@ -267,6 +312,8 @@ class PostgresBackupService implements IPostgresBackupService {
         return _executeLogBackup(
           config: config,
           backupPath: backupPath,
+          timeout: backupTimeout,
+          cancelTag: cancelTag,
         );
 
       case BackupType.convertedDifferential:
@@ -285,7 +332,9 @@ class PostgresBackupService implements IPostgresBackupService {
   Future<rd.Result<ps.ProcessResult>> _executeFullBackup({
     required PostgresConfig config,
     required String backupPath,
+    required Duration timeout,
     String? pgBasebackupPath,
+    String? cancelTag,
   }) async {
     final executable = pgBasebackupPath ?? 'pg_basebackup';
 
@@ -299,6 +348,9 @@ class PostgresBackupService implements IPostgresBackupService {
       '-D',
       backupPath,
       '-P',
+      // Acelera a fase de checkpoint do servidor para iniciar o stream
+      // mais rápido (evita esperar checkpoint natural).
+      '--checkpoint=fast',
       '--manifest-checksums=sha256',
       '--wal-method=stream',
     ];
@@ -309,13 +361,16 @@ class PostgresBackupService implements IPostgresBackupService {
       executable: executable,
       arguments: arguments,
       environment: environment,
-      timeout: const Duration(hours: 2),
+      timeout: timeout,
+      tag: cancelTag,
     );
   }
 
   Future<rd.Result<ps.ProcessResult>> _executeFullSingleBackup({
     required PostgresConfig config,
     required String backupPath,
+    required Duration timeout,
+    String? cancelTag,
   }) async {
     const executable = 'pg_dump';
 
@@ -343,7 +398,8 @@ class PostgresBackupService implements IPostgresBackupService {
       executable: executable,
       arguments: arguments,
       environment: environment,
-      timeout: const Duration(hours: 2),
+      timeout: timeout,
+      tag: cancelTag,
     );
   }
 
@@ -351,7 +407,9 @@ class PostgresBackupService implements IPostgresBackupService {
     required PostgresConfig config,
     required String backupPath,
     required String previousBackupPath,
+    required Duration timeout,
     String? pgBasebackupPath,
+    String? cancelTag,
   }) async {
     final executable = pgBasebackupPath ?? 'pg_basebackup';
 
@@ -380,6 +438,7 @@ class PostgresBackupService implements IPostgresBackupService {
       '-D',
       backupPath,
       '-P',
+      '--checkpoint=fast',
       '--manifest-checksums=sha256',
       '--wal-method=stream',
     ];
@@ -390,13 +449,16 @@ class PostgresBackupService implements IPostgresBackupService {
       executable: executable,
       arguments: arguments,
       environment: environment,
-      timeout: const Duration(hours: 2),
+      timeout: timeout,
+      tag: cancelTag,
     );
   }
 
   Future<rd.Result<_BackupCommandResult>> _executeLogBackup({
     required PostgresConfig config,
     required String backupPath,
+    required Duration timeout,
+    String? cancelTag,
   }) async {
     const executable = 'pg_receivewal';
     final useSlot = _isWalSlotEnabled();
@@ -444,14 +506,18 @@ class PostgresBackupService implements IPostgresBackupService {
 
     final environment = <String, String>{'PGPASSWORD': config.password};
     final compressionMode = _resolveWalCompressionMode();
-    final timeout = _resolveLogBackupTimeout();
+    // Para backup WAL preferimos o timeout específico vindo do schedule
+    // (`timeout` parâmetro). A variável de ambiente continua sendo um
+    // fallback histórico para deploys onde não há schedule configurado.
+    final effectiveTimeout = _resolveLogBackupTimeout(fallback: timeout);
 
     final processResult = await _runPgReceiveWalWithCompressionFallback(
       executable: executable,
       baseArguments: baseArguments,
       compressionMode: compressionMode,
       environment: environment,
-      timeout: timeout,
+      timeout: effectiveTimeout,
+      cancelTag: cancelTag,
     );
 
     if (processResult.isError()) {
@@ -792,11 +858,11 @@ class PostgresBackupService implements IPostgresBackupService {
     return normalized;
   }
 
-  Duration _resolveLogBackupTimeout() {
+  Duration _resolveLogBackupTimeout({required Duration fallback}) {
     final raw = Platform.environment[_logTimeoutSecondsEnv];
     final parsedSeconds = int.tryParse(raw ?? '');
     if (parsedSeconds == null || parsedSeconds <= 0) {
-      return const Duration(hours: 1);
+      return fallback;
     }
 
     return Duration(seconds: parsedSeconds);
@@ -808,6 +874,7 @@ class PostgresBackupService implements IPostgresBackupService {
     required String? compressionMode,
     required Map<String, String> environment,
     required Duration timeout,
+    String? cancelTag,
   }) async {
     final initialArguments = <String>[
       ...baseArguments,
@@ -819,6 +886,7 @@ class PostgresBackupService implements IPostgresBackupService {
       arguments: initialArguments,
       environment: environment,
       timeout: timeout,
+      tag: cancelTag,
     );
 
     if (compressionMode == null || firstAttempt.isError()) {
@@ -844,6 +912,7 @@ class PostgresBackupService implements IPostgresBackupService {
       arguments: baseArguments,
       environment: environment,
       timeout: timeout,
+      tag: cancelTag,
     );
   }
 
@@ -1172,13 +1241,16 @@ class PostgresBackupService implements IPostgresBackupService {
     }
   }
 
-  Future<rd.Result<void>> _verifyBackup(String backupPath) async {
+  Future<rd.Result<void>> _verifyBackup(
+    String backupPath, {
+    required Duration timeout,
+  }) async {
     final verifyArgs = ['-D', backupPath];
 
     final verifyResult = await _processService.run(
       executable: 'pg_verifybackup',
       arguments: verifyArgs,
-      timeout: const Duration(minutes: 30),
+      timeout: timeout,
     );
 
     return verifyResult.fold((processResult) {
@@ -1196,13 +1268,16 @@ class PostgresBackupService implements IPostgresBackupService {
     }, rd.Failure.new);
   }
 
-  Future<rd.Result<void>> _verifyFullSingleBackup(String backupPath) async {
+  Future<rd.Result<void>> _verifyFullSingleBackup(
+    String backupPath, {
+    required Duration timeout,
+  }) async {
     final verifyArgs = ['-l', backupPath];
 
     final verifyResult = await _processService.run(
       executable: 'pg_restore',
       arguments: verifyArgs,
-      timeout: const Duration(minutes: 30),
+      timeout: timeout,
     );
 
     return verifyResult.fold((processResult) {
@@ -1273,27 +1348,8 @@ class PostgresBackupService implements IPostgresBackupService {
         : 'pg_basebackup';
   }
 
-  bool _isToolNotFoundError(String errorLower, String toolName) {
-    final normalized = errorLower.toLowerCase();
-    final tool = toolName.toLowerCase();
-
-    final hasToolReference =
-        normalized.contains("'$tool'") || normalized.contains(tool);
-    final hasNotFoundMarker =
-        normalized.contains('command not found') ||
-        normalized.contains('not recognized') ||
-        normalized.contains('nao e reconhecido') ||
-        normalized.contains('nao reconhecido') ||
-        normalized.contains('nao encontrado') ||
-        normalized.contains('nao foi encontrado') ||
-        normalized.contains('cmdlet') ||
-        normalized.contains('operable program') ||
-        normalized.contains('script file') ||
-        normalized.contains('programa operavel') ||
-        normalized.contains('arquivo de script');
-
-    return hasNotFoundMarker && hasToolReference;
-  }
+  bool _isToolNotFoundError(String errorLower, String toolName) =>
+      ToolPathHelp.isToolNotFoundError(errorLower, toolName);
 
   BackupFailure _createExecutableNotFoundFailure(BackupType backupType) {
     return _createToolNotFoundFailure(_toolNameForBackupType(backupType));
@@ -1301,21 +1357,8 @@ class PostgresBackupService implements IPostgresBackupService {
 
   BackupFailure _createToolNotFoundFailure(String toolName) {
     return BackupFailure(
-      message:
-          '$toolName nao encontrado no PATH do sistema.\n\n'
-          'INSTRUCOES PARA ADICIONAR AO PATH:\n\n'
-          '1. Localize a pasta bin do PostgreSQL instalado\n'
-          '   (geralmente: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
-          '2. Adicione ao PATH do Windows:\n'
-          '   - Pressione Win + X e selecione "Sistema"\n'
-          '   - Clique em "Configuracoes avancadas do sistema"\n'
-          '   - Na aba "Avancado", clique em "Variaveis de Ambiente"\n'
-          '   - Em "Variaveis do sistema", encontre "Path" e clique em "Editar"\n'
-          '   - Clique em "Novo" e adicione o caminho completo da pasta bin\n'
-          '   - Clique em "OK" em todas as janelas\n\n'
-          '3. Reinicie o aplicativo de backup\n\n'
-          r'Consulte: docs\path_setup.md para mais detalhes.',
-      originalError: Exception('$toolName nao encontrado'),
+      message: ToolPathHelp.buildMessage(toolName),
+      originalError: Exception('$toolName não encontrado'),
     );
   }
 
@@ -1474,6 +1517,63 @@ class PostgresBackupService implements IPostgresBackupService {
     }, rd.Failure.new);
   }
 
+  @override
+  Future<rd.Result<int>> getDatabaseSizeBytes({
+    required PostgresConfig config,
+    Duration? timeout,
+  }) async {
+    final arguments = <String>[
+      '-h',
+      config.host,
+      '-p',
+      config.portValue.toString(),
+      '-U',
+      config.username,
+      '-d',
+      config.databaseValue,
+      '-t',
+      '-A',
+      '-c',
+      "SELECT pg_database_size('${config.databaseValue.replaceAll("'", "''")}')",
+    ];
+    final environment = <String, String>{'PGPASSWORD': config.password};
+
+    final result = await _processService.run(
+      executable: 'psql',
+      arguments: arguments,
+      environment: environment,
+      timeout: timeout ?? const Duration(seconds: 30),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (!processResult.isSuccess) {
+          return rd.Failure(
+            BackupFailure(
+              message:
+                  'Não foi possível obter tamanho do banco PostgreSQL: '
+                  '${processResult.stderr.isNotEmpty ? processResult.stderr : processResult.stdout}',
+            ),
+          );
+        }
+        final raw = processResult.stdout
+            .split(RegExp(r'[\r\n]+'))
+            .map((l) => l.trim())
+            .firstWhere((l) => l.isNotEmpty, orElse: () => '');
+        final size = int.tryParse(raw);
+        if (size == null) {
+          return rd.Failure(
+            BackupFailure(
+              message: 'Resposta inválida ao consultar tamanho do banco: $raw',
+            ),
+          );
+        }
+        return rd.Success(size);
+      },
+      rd.Failure.new,
+    );
+  }
+
   BackupMetrics _buildPostgresMetrics({
     required Duration backupDuration,
     required Duration verifyDuration,
@@ -1487,7 +1587,7 @@ class PostgresBackupService implements IPostgresBackupService {
       backupDuration: backupDuration,
       verifyDuration: verifyDuration,
       backupSizeBytes: totalSize,
-      backupSpeedMbPerSec: _calculateSpeedMbPerSec(
+      backupSpeedMbPerSec: ByteFormat.speedMbPerSec(
         totalSize,
         backupDuration.inSeconds,
       ),
@@ -1501,21 +1601,6 @@ class PostgresBackupService implements IPostgresBackupService {
       ),
     );
   }
-
-  double _calculateSpeedMbPerSec(int sizeInBytes, int durationSeconds) {
-    if (durationSeconds <= 0) return 0;
-    final sizeInMb = sizeInBytes / 1024 / 1024;
-    return sizeInMb / durationSeconds;
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
 }
 
 class _BackupCommandResult {
@@ -1523,11 +1608,18 @@ class _BackupCommandResult {
     required this.processResult,
     required this.backupPath,
     this.measuredSizeBytes,
+    this.executedBackupType,
   });
 
   final ps.ProcessResult processResult;
   final String backupPath;
   final int? measuredSizeBytes;
+
+  /// Quando preenchido, indica que o tipo realmente executado é diferente
+  /// do tipo solicitado (ex.: incremental que caiu para FULL por falta de
+  /// backup base). O orchestrator usa esse campo para evitar gravar um
+  /// histórico inconsistente.
+  final BackupType? executedBackupType;
 }
 
 class _WalCaptureDelta {

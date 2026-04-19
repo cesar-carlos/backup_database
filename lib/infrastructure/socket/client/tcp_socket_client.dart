@@ -42,6 +42,10 @@ class TcpSocketClient implements SocketClientService {
   StreamSubscription<Message>? _heartbeatSubscription;
   bool _waitingAuth = false;
 
+  /// Serializa as escritas no socket para evitar interleaving de bytes
+  /// quando heartbeat e mensagens normais tentam emitir concorrentemente.
+  Future<void> _sendQueue = Future.value();
+
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   String? _reconnectHost;
@@ -197,12 +201,36 @@ class TcpSocketClient implements SocketClientService {
 
   void _onData(List<int> data) {
     _buffer.addAll(data);
+
+    // Proteção contra servidor malicioso / dados corrompidos crescendo
+    // o buffer indefinidamente sem produzir mensagem válida.
+    if (_buffer.length > SocketConfig.maxBufferOverhead) {
+      LoggerService.warning(
+        'TcpSocketClient: buffer excedeu ${SocketConfig.maxBufferOverhead} '
+        'bytes sem mensagem válida — desconectando.',
+      );
+      _handleDisconnect(scheduleReconnect: true);
+      return;
+    }
+
     _tryParseMessages();
   }
 
   void _tryParseMessages() {
     while (_buffer.length >= _headerSize) {
       final length = _readUint32Be(_buffer, 5);
+
+      // Validação de range: protege contra servidor enviando length
+      // absurdo (ex.: 4 GB) que faria o cliente alocar tudo.
+      if (length < 0 || length > SocketConfig.maxMessagePayloadBytes) {
+        LoggerService.warning(
+          'TcpSocketClient: length declarado inválido ($length bytes; '
+          'máximo ${SocketConfig.maxMessagePayloadBytes}). Desconectando.',
+        );
+        _handleDisconnect(scheduleReconnect: true);
+        return;
+      }
+
       final totalNeeded = _headerSize + length + _checksumSize;
       if (_buffer.length < totalNeeded) break;
 
@@ -260,7 +288,7 @@ class TcpSocketClient implements SocketClientService {
   }
 
   @override
-  Future<void> send(Message message) async {
+  Future<void> send(Message message) {
     final canSend =
         _socket != null &&
         (_status == ConnectionStatus.connected ||
@@ -268,18 +296,21 @@ class TcpSocketClient implements SocketClientService {
     if (!canSend) {
       throw StateError('TcpSocketClient not connected');
     }
-    try {
-      final data = _protocol.serializeMessage(message);
-
-      // Log sent message
-      _socketLogger?.logSent(message);
-
-      _socket!.add(data);
-      await _socket!.flush();
-    } on Object catch (e) {
-      LoggerService.warning('TcpSocketClient send error: $e');
-      rethrow;
-    }
+    // Encadeia as escritas em fila implícita para evitar interleaving
+    // quando heartbeat + comando do usuário disputam o socket.
+    final next = _sendQueue.then((_) async {
+      try {
+        final data = _protocol.serializeMessage(message);
+        _socketLogger?.logSent(message);
+        _socket!.add(data);
+        await _socket!.flush();
+      } on Object catch (e) {
+        LoggerService.warning('TcpSocketClient send error: $e');
+        rethrow;
+      }
+    });
+    _sendQueue = next.catchError((Object _) {});
+    return next;
   }
 
   void _scheduleReconnect() {

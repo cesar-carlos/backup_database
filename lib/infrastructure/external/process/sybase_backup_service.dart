@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
@@ -19,10 +20,18 @@ class SybaseBackupService implements ISybaseBackupService {
   SybaseBackupService(
     this._processService, {
     SybaseConnectionStrategyCache? strategyCache,
-  }) : _strategyCache = strategyCache ?? SybaseConnectionStrategyCache();
+    bool useCredentialsFile = true,
+  }) : _strategyCache = strategyCache ?? SybaseConnectionStrategyCache(),
+       _useCredentialsFile = useCredentialsFile;
 
   final ps.ProcessService _processService;
   final SybaseConnectionStrategyCache _strategyCache;
+
+  /// Quando `true` (default em produção) os utilitários SA são executados
+  /// via arquivo temporário de argumentos (`@<file>`) para evitar expor a
+  /// senha em `tasklist /v`. Pode ser desabilitado em testes que precisam
+  /// inspecionar diretamente os argumentos passados ao `ProcessService`.
+  final bool _useCredentialsFile;
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
@@ -37,9 +46,14 @@ class SybaseBackupService implements ISybaseBackupService {
     Duration? backupTimeout,
     Duration? verifyTimeout,
     SybaseBackupOptions? sybaseBackupOptions,
+    String? cancelTag,
   }) async {
     final options = sybaseBackupOptions ?? SybaseBackupOptions.safeDefaults;
-    final effectiveLogMode = _resolveLogBackupMode(options, truncateLog);
+    final effectiveLogMode = options.effectiveLogMode(truncateLog: truncateLog);
+    // Tag canônica vinda do orchestrator (geralmente `backup-<historyId>`).
+    // Quando ausente, mantemos o comportamento legado baseado em `config.id`.
+    final effectiveCancelTag = cancelTag ?? 'backup-${config.id}';
+    final verifyCancelTag = cancelTag ?? 'verify-${config.id}';
     try {
       LoggerService.info(
         'Iniciando backup Sybase: ${config.serverName} (Tipo: ${backupType.displayName})',
@@ -65,15 +79,14 @@ class SybaseBackupService implements ISybaseBackupService {
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final typeSlug = effectiveType.name;
 
-      String backupPath;
-      if (effectiveType == BackupType.full) {
-        backupPath = p.join(outputDirectory, config.databaseNameValue);
-      } else {
-        final folderName =
-            customFileName ??
-            '${config.databaseNameValue}_${typeSlug}_$timestamp';
-        backupPath = p.join(outputDirectory, folderName);
-      }
+      // Agora todos os tipos (inclusive FULL) recebem timestamp único no
+      // diretório de destino. Anteriormente backups full reusavam o mesmo
+      // diretório (`<dbName>`), o que sobrescrevia o backup anterior antes
+      // do upload para destinations e quebrava a cadeia de retenção.
+      final folderName =
+          customFileName ??
+          '${config.databaseNameValue}_${typeSlug}_$timestamp';
+      final backupPath = p.join(outputDirectory, folderName);
 
       final executable = dbbackupPath ?? 'dbbackup';
 
@@ -130,6 +143,10 @@ class SybaseBackupService implements ISybaseBackupService {
         },
       ];
 
+      // Se a estratégia que funcionou da última vez foi dbbackup, tentamos
+      // ela primeiro. As ferramentas SA recebem argumentos via arquivo
+      // (`@<file>`) com permissão restrita, mantendo a senha fora do
+      // tasklist/cmdline do processo filho.
       if (cached != null &&
           cached.method == SybaseConnectionMethod.dbbackup &&
           cached.strategyIndex < connectionStrategies.length) {
@@ -137,25 +154,19 @@ class SybaseBackupService implements ISybaseBackupService {
         LoggerService.debug(
           'Tentando estratégia cacheada dbbackup ${cached.strategyIndex + 1}',
         );
+        final args = _buildDbbackupArgs(
+          options: options,
+          effectiveType: effectiveType,
+          effectiveLogMode: effectiveLogMode,
+          connectionString: strategy['conn']!,
+          backupPath: backupPath,
+        );
 
-        final arguments = <String>[];
-        if (options.serverSide) {
-          arguments.add('-s');
-        }
-        if (options.blockSize != null) {
-          arguments.addAll(['-b', options.blockSize.toString()]);
-        }
-        if (effectiveType == BackupType.log) {
-          arguments.addAll(
-            _buildDbbackupLogArgs(effectiveLogMode),
-          );
-        }
-        arguments.addAll(['-c', strategy['conn']!, '-y', backupPath]);
-
-        result = await _processService.run(
+        result = await _runSybaseToolWithCredentials(
           executable: executable,
-          arguments: arguments,
+          arguments: args,
           timeout: backupTimeout ?? const Duration(hours: 2),
+          tag: effectiveCancelTag,
         );
 
         result.fold(
@@ -191,10 +202,11 @@ class SybaseBackupService implements ISybaseBackupService {
           options,
         );
         if (backupSql != null) {
-          result = await _processService.run(
+          result = await _runSybaseToolWithCredentials(
             executable: 'dbisql',
             arguments: ['-c', connStr, '-nogui', backupSql],
             timeout: backupTimeout ?? const Duration(hours: 2),
+            tag: effectiveCancelTag,
           );
 
           result.fold(
@@ -243,10 +255,11 @@ class SybaseBackupService implements ISybaseBackupService {
 
           final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
 
-          result = await _processService.run(
+          result = await _runSybaseToolWithCredentials(
             executable: 'dbisql',
             arguments: dbisqlArgs,
             timeout: backupTimeout ?? const Duration(hours: 2),
+            tag: effectiveCancelTag,
           );
 
           result.fold(
@@ -281,24 +294,19 @@ class SybaseBackupService implements ISybaseBackupService {
           final strategy = connectionStrategies[i];
           LoggerService.debug('Tentando dbbackup: ${strategy['name']}');
 
-          final arguments = <String>[];
+          final args = _buildDbbackupArgs(
+            options: options,
+            effectiveType: effectiveType,
+            effectiveLogMode: effectiveLogMode,
+            connectionString: strategy['conn']!,
+            backupPath: backupPath,
+          );
 
-          if (options.serverSide) {
-            arguments.add('-s');
-          }
-          if (options.blockSize != null) {
-            arguments.addAll(['-b', options.blockSize.toString()]);
-          }
-          if (effectiveType == BackupType.log) {
-            arguments.addAll(_buildDbbackupLogArgs(effectiveLogMode));
-          }
-
-          arguments.addAll(['-c', strategy['conn']!, '-y', backupPath]);
-
-          result = await _processService.run(
+          result = await _runSybaseToolWithCredentials(
             executable: executable,
-            arguments: arguments,
+            arguments: args,
             timeout: backupTimeout ?? const Duration(hours: 2),
+            tag: effectiveCancelTag,
           );
 
           var success = false;
@@ -431,10 +439,19 @@ class SybaseBackupService implements ISybaseBackupService {
         }
 
         if (effectiveType == BackupType.log && await backupDir.exists()) {
-          final resolvedLogFile = await _tryFindLogFile(backupDir);
-          if (resolvedLogFile != null) {
-            actualBackupPath = resolvedLogFile.path;
-            totalSize = await resolvedLogFile.length();
+          final resolvedLogFiles = await _findLogFiles(backupDir);
+          if (resolvedLogFiles.isNotEmpty) {
+            // Quando há vários arquivos de log no diretório, expomos o mais
+            // recente como `actualBackupPath` (compatibilidade) mas somamos
+            // todos os tamanhos para refletir o total real do backup.
+            actualBackupPath = resolvedLogFiles.first.path;
+            var sum = 0;
+            for (final file in resolvedLogFiles) {
+              sum += await file.length();
+            }
+            if (sum > 0) {
+              totalSize = sum;
+            }
           }
         }
 
@@ -473,7 +490,7 @@ class SybaseBackupService implements ISybaseBackupService {
         }
 
         LoggerService.info(
-          'Backup Sybase concluído: $actualBackupPath (${_formatBytes(totalSize)})',
+          'Backup Sybase concluído: $actualBackupPath (${ByteFormat.format(totalSize)})',
         );
 
         final verifyStopwatch = Stopwatch();
@@ -496,10 +513,11 @@ class SybaseBackupService implements ISybaseBackupService {
                   'Tentando dbvalid no arquivo: ${backupDbFile.path}',
                 );
 
-                final verifyResult = await _processService.run(
+                final verifyResult = await _runSybaseToolWithCredentials(
                   executable: 'dbvalid',
                   arguments: ['-c', connStr],
                   timeout: verifyTimeout ?? const Duration(minutes: 30),
+                  tag: verifyCancelTag,
                 );
 
                 verifyResult.fold(
@@ -529,10 +547,11 @@ class SybaseBackupService implements ISybaseBackupService {
                   LoggerService.debug(
                     'Tentando fallback dbverify no arquivo: ${backupDbFile.path}',
                   );
-                  final dbverifyResult = await _processService.run(
+                  final dbverifyResult = await _runSybaseToolWithCredentials(
                     executable: 'dbverify',
                     arguments: ['-c', connStr],
                     timeout: verifyTimeout ?? const Duration(minutes: 30),
+                    tag: verifyCancelTag,
                   );
                   dbverifyResult.fold(
                     (processResult) {
@@ -619,7 +638,7 @@ class SybaseBackupService implements ISybaseBackupService {
           backupDuration: backupDuration,
           verifyDuration: verifyDuration,
           backupSizeBytes: totalSize,
-          backupSpeedMbPerSec: _calculateSpeedMbPerSec(
+          backupSpeedMbPerSec: ByteFormat.speedMbPerSec(
             totalSize,
             backupDuration.inSeconds,
           ),
@@ -652,6 +671,103 @@ class SybaseBackupService implements ISybaseBackupService {
           originalError: e,
         ),
       );
+    }
+  }
+
+  /// Monta a lista de argumentos do `dbbackup` para uma dada estratégia.
+  /// Centralizado para eliminar duplicação entre cache hit e fallback loop.
+  List<String> _buildDbbackupArgs({
+    required SybaseBackupOptions options,
+    required BackupType effectiveType,
+    required SybaseLogBackupMode effectiveLogMode,
+    required String connectionString,
+    required String backupPath,
+  }) {
+    final args = <String>[];
+    if (options.serverSide) args.add('-s');
+    if (options.blockSize != null) {
+      args.addAll(['-b', options.blockSize.toString()]);
+    }
+    if (effectiveType == BackupType.log) {
+      args.addAll(_buildDbbackupLogArgs(effectiveLogMode));
+    }
+    args.addAll(['-c', connectionString, '-y', backupPath]);
+    return args;
+  }
+
+  /// Executa um utilitário Sybase (dbisql/dbbackup) escrevendo a lista de
+  /// argumentos em um arquivo temporário e invocando `<exe> @<arquivo>`.
+  ///
+  /// Vantagens em relação a passar a senha como argumento direto:
+  ///  - A connection string (com `PWD=...`) não aparece em ferramentas
+  ///    como `tasklist /v`/`wmic process` (Windows) ou `ps -ef` (Linux).
+  ///  - O arquivo é criado no diretório temporário do usuário e removido
+  ///    no `finally`, mesmo em caso de falha/timeout.
+  ///
+  /// Se a escrita do arquivo falhar (caso muito raro), faz fallback para a
+  /// execução direta com aviso em log para preservar a operação do backup.
+  Future<rd.Result<ps.ProcessResult>> _runSybaseToolWithCredentials({
+    required String executable,
+    required List<String> arguments,
+    required Duration timeout,
+    String? tag,
+  }) async {
+    if (!_useCredentialsFile) {
+      // Modo de testes/legacy: executa diretamente preservando o array
+      // de argumentos para que mocks possam inspecionar a chamada.
+      return _processService.run(
+        executable: executable,
+        arguments: arguments,
+        timeout: timeout,
+        tag: tag,
+      );
+    }
+    File? credentialsFile;
+    try {
+      final tempDir = await Directory.systemTemp.createTemp('sybase_backup_');
+      credentialsFile = File(p.join(tempDir.path, 'args.txt'));
+      // Cada argumento em uma linha; valores com espaços já vêm sem aspas
+      // (a Sybase Tools faz parsing de uma linha por argumento neste modo).
+      final buffer = StringBuffer();
+      arguments.forEach(buffer.writeln);
+      await credentialsFile.writeAsString(buffer.toString(), flush: true);
+
+      final result = await _processService.run(
+        executable: executable,
+        arguments: ['@${credentialsFile.path}'],
+        timeout: timeout,
+        tag: tag,
+      );
+      return result;
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'Falha ao usar arquivo de credenciais para $executable; '
+        'fazendo fallback para execução direta. Erro: $e',
+        e,
+        stackTrace,
+      );
+      return _processService.run(
+        executable: executable,
+        arguments: arguments,
+        timeout: timeout,
+        tag: tag,
+      );
+    } finally {
+      if (credentialsFile != null) {
+        try {
+          if (await credentialsFile.exists()) {
+            await credentialsFile.delete();
+          }
+          final parent = credentialsFile.parent;
+          if (await parent.exists()) {
+            await parent.delete(recursive: true);
+          }
+        } on Object catch (e) {
+          LoggerService.debug(
+            'Não foi possível remover arquivo temporário de credenciais: $e',
+          );
+        }
+      }
     }
   }
 
@@ -754,16 +870,6 @@ class SybaseBackupService implements ISybaseBackupService {
         'Verifique os logs para detalhes.';
   }
 
-  static SybaseLogBackupMode _resolveLogBackupMode(
-    SybaseBackupOptions options,
-    bool truncateLog,
-  ) {
-    if (options.logBackupMode != null) return options.logBackupMode!;
-    return truncateLog
-        ? SybaseLogBackupMode.truncate
-        : SybaseLogBackupMode.only;
-  }
-
   static List<String> _buildDbbackupLogArgs(SybaseLogBackupMode mode) {
     switch (mode) {
       case SybaseLogBackupMode.truncate:
@@ -817,7 +923,11 @@ class SybaseBackupService implements ISybaseBackupService {
     return sum;
   }
 
-  Future<File?> _tryFindLogFile(Directory backupDir) async {
+  /// Retorna a lista de arquivos de log encontrados no diretório de backup,
+  /// ordenados pelo mais recente primeiro. Quando não há candidatos `.trn`
+  /// ou `.log`, retorna todos os arquivos do diretório (também ordenados),
+  /// preservando o comportamento anterior de fallback.
+  Future<List<File>> _findLogFiles(Directory backupDir) async {
     try {
       final entities = await backupDir.list().toList();
       final files = entities.whereType<File>().toList()
@@ -825,17 +935,17 @@ class SybaseBackupService implements ISybaseBackupService {
           (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
         );
 
-      if (files.isEmpty) return null;
+      if (files.isEmpty) return const [];
 
       final logCandidates = files.where((f) {
         final ext = p.extension(f.path).toLowerCase();
         return ext == '.trn' || ext == '.log';
       }).toList();
 
-      if (logCandidates.isNotEmpty) return logCandidates.first;
-      return files.first;
+      if (logCandidates.isNotEmpty) return logCandidates;
+      return files;
     } on Object catch (_) {
-      return null;
+      return const [];
     }
   }
 
@@ -904,7 +1014,7 @@ class SybaseBackupService implements ISybaseBackupService {
 
           final arguments = ['-c', connStr, '-q', 'SELECT 1', '-nogui'];
 
-          final result = await _processService.run(
+          final result = await _runSybaseToolWithCredentials(
             executable: 'dbisql',
             arguments: arguments,
             timeout: const Duration(seconds: 10),
@@ -988,20 +1098,58 @@ class SybaseBackupService implements ISybaseBackupService {
     }
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
+  @override
+  Future<rd.Result<int>> getDatabaseSizeBytes({
+    required SybaseConfig config,
+    Duration? timeout,
+  }) async {
+    final databaseName = config.databaseNameValue;
+    final connStr =
+        'ENG=${config.serverName};DBN=$databaseName;'
+        'UID=${config.username};PWD=${config.password}';
+    // db_property('FileSize') retorna o tamanho do arquivo principal em
+    // páginas; multiplicamos por PageSize para chegar em bytes.
+    const sql =
+        "SELECT CAST(db_property('FileSize') AS BIGINT) * "
+        "CAST(db_property('PageSize') AS BIGINT)";
 
-  double _calculateSpeedMbPerSec(int sizeInBytes, int durationSeconds) {
-    if (durationSeconds <= 0) return 0;
-    final sizeInMb = sizeInBytes / 1024 / 1024;
-    return sizeInMb / durationSeconds;
+    final result = await _runSybaseToolWithCredentials(
+      executable: 'dbisql',
+      arguments: ['-c', connStr, '-nogui', '-q', sql],
+      timeout: timeout ?? const Duration(seconds: 15),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (!processResult.isSuccess) {
+          return rd.Failure(
+            BackupFailure(
+              message:
+                  'Não foi possível obter tamanho do banco Sybase: '
+                  '${processResult.stderr}',
+            ),
+          );
+        }
+        final raw = processResult.stdout
+            .split(RegExp(r'[\r\n]+'))
+            .map((l) => l.trim())
+            .firstWhere(
+              (l) => l.isNotEmpty && int.tryParse(l) != null,
+              orElse: () => '',
+            );
+        final size = int.tryParse(raw);
+        if (size == null) {
+          return rd.Failure(
+            BackupFailure(
+              message:
+                  'Resposta inválida ao consultar tamanho do banco Sybase: '
+                  '${processResult.stdout}',
+            ),
+          );
+        }
+        return rd.Success(size);
+      },
+      rd.Failure.new,
+    );
   }
 }

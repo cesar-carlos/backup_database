@@ -61,6 +61,7 @@ class LocalDestinationConfig {
     this.createSubfoldersByDate = true,
     this.retentionDays = 30,
     this.protectedBackupIdShortPrefixes = const {},
+    this.enableHashValidation = true,
   });
 
   factory LocalDestinationConfig.fromJson(Map<String, dynamic> json) {
@@ -68,6 +69,7 @@ class LocalDestinationConfig {
       path: json['path'] as String,
       createSubfoldersByDate: json['createSubfoldersByDate'] as bool? ?? true,
       retentionDays: json['retentionDays'] as int? ?? 30,
+      enableHashValidation: json['enableHashValidation'] as bool? ?? true,
     );
   }
   final String path;
@@ -75,10 +77,19 @@ class LocalDestinationConfig {
   final int retentionDays;
   final Set<String> protectedBackupIdShortPrefixes;
 
+  /// Quando `true` (default), valida o backup copiado computando SHA-256
+  /// do source e do destination e comparando. Garante integridade total
+  /// mas custa 1× I/O extra (leitura do destination). Para backups muito
+  /// grandes em destinos confiáveis (mesmo volume, sem rede), pode ser
+  /// desabilitado para ganhar performance — a checagem de tamanho ainda
+  /// pega 99% dos casos de cópia parcial.
+  final bool enableHashValidation;
+
   Map<String, dynamic> toJson() => {
     'path': path,
     'createSubfoldersByDate': createSubfoldersByDate,
     'retentionDays': retentionDays,
+    'enableHashValidation': enableHashValidation,
   };
 }
 

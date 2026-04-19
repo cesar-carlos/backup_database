@@ -18,7 +18,17 @@ abstract class ISybaseBackupService {
     Duration? backupTimeout,
     Duration? verifyTimeout,
     SybaseBackupOptions? sybaseBackupOptions,
+    String? cancelTag,
   });
 
   Future<Result<bool>> testConnection(SybaseConfig config);
+
+  /// Tamanho aproximado em bytes do banco SQL Anywhere em [config]
+  /// (soma de `db_property('FileSize')` para o database file). Best-effort:
+  /// se o servidor não permitir consulta, retorna falha e o orchestrator
+  /// trata como "desconhecido".
+  Future<Result<int>> getDatabaseSizeBytes({
+    required SybaseConfig config,
+    Duration? timeout,
+  });
 }

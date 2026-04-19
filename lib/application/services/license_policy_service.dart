@@ -34,96 +34,72 @@ class LicensePolicyService implements ILicensePolicyService {
   Future<rd.Result<void>> validateScheduleCapabilities(
     Schedule schedule,
   ) async {
-    final differentialTypes = [
+    // Monta a lista de checagens necessárias (apenas as features que se
+    // aplicam ao schedule). Em seguida, executa TODAS em paralelo via
+    // `Future.wait` — antes eram seriais (até 6 awaits), o que doía
+    // mais quando a licença não estava cacheada.
+    final differentialTypes = {
       BackupType.differential,
       BackupType.convertedDifferential,
-    ];
-    final logTypes = [
+    };
+    final logTypes = {
       BackupType.log,
       BackupType.convertedLog,
+    };
+
+    final checks = <_FeatureCheck>[
+      if (differentialTypes.contains(schedule.backupType))
+        const _FeatureCheck(
+          feature: LicenseFeatures.differentialBackup,
+          message:
+              'Backup diferencial requer licença com permissão '
+              'differential_backup',
+        ),
+      if (logTypes.contains(schedule.backupType))
+        const _FeatureCheck(
+          feature: LicenseFeatures.logBackup,
+          message: 'Backup de log requer licença com permissão log_backup',
+        ),
+      if (schedule.scheduleType == 'interval')
+        const _FeatureCheck(
+          feature: LicenseFeatures.intervalSchedule,
+          message:
+              'Agendamento por intervalo requer licença com permissão '
+              'interval_schedule',
+        ),
+      if (schedule.enableChecksum)
+        const _FeatureCheck(
+          feature: LicenseFeatures.checksum,
+          message: 'Checksum requer licença com permissão checksum',
+        ),
+      if (schedule.verifyAfterBackup)
+        const _FeatureCheck(
+          feature: LicenseFeatures.verifyIntegrity,
+          message:
+              'Verificação de integridade requer licença com permissão '
+              'verify_integrity',
+        ),
+      if (schedule.postBackupScript?.trim().isNotEmpty ?? false)
+        const _FeatureCheck(
+          feature: LicenseFeatures.postBackupScript,
+          message:
+              'Script pós-backup requer licença com permissão '
+              'post_backup_script',
+        ),
     ];
 
-    if (differentialTypes.contains(schedule.backupType)) {
-      final allowed = await _isFeatureAllowed(
-        LicenseFeatures.differentialBackup,
-      );
-      if (!allowed) {
-        _recordLicenseDenied();
-        return const rd.Failure(
-          ValidationFailure(
-            message:
-                'Backup diferencial requer licença com permissão differential_backup',
-            code: FailureCodes.licenseDenied,
-          ),
-        );
-      }
-    }
+    if (checks.isEmpty) return const rd.Success(unit);
 
-    if (logTypes.contains(schedule.backupType)) {
-      final allowed = await _isFeatureAllowed(LicenseFeatures.logBackup);
-      if (!allowed) {
-        _recordLicenseDenied();
-        return const rd.Failure(
-          ValidationFailure(
-            message: 'Backup de log requer licença com permissão log_backup',
-            code: FailureCodes.licenseDenied,
-          ),
-        );
-      }
-    }
+    final results = await Future.wait(
+      checks.map((c) async => (check: c, allowed: await _isFeatureAllowed(c.feature))),
+    );
 
-    if (schedule.scheduleType == 'interval') {
-      final allowed = await _isFeatureAllowed(LicenseFeatures.intervalSchedule);
-      if (!allowed) {
+    for (final r in results) {
+      if (!r.allowed) {
         _recordLicenseDenied();
-        return const rd.Failure(
+        return rd.Failure(
           ValidationFailure(
-            message:
-                'Agendamento por intervalo requer licença com permissão interval_schedule',
-            code: FailureCodes.licenseDenied,
-          ),
-        );
-      }
-    }
-
-    if (schedule.enableChecksum) {
-      final allowed = await _isFeatureAllowed(LicenseFeatures.checksum);
-      if (!allowed) {
-        _recordLicenseDenied();
-        return const rd.Failure(
-          ValidationFailure(
-            message: 'Checksum requer licença com permissão checksum',
-            code: FailureCodes.licenseDenied,
-          ),
-        );
-      }
-    }
-
-    if (schedule.verifyAfterBackup) {
-      final allowed = await _isFeatureAllowed(LicenseFeatures.verifyIntegrity);
-      if (!allowed) {
-        _recordLicenseDenied();
-        return const rd.Failure(
-          ValidationFailure(
-            message:
-                'Verificação de integridade requer licença com permissão verify_integrity',
-            code: FailureCodes.licenseDenied,
-          ),
-        );
-      }
-    }
-
-    final hasPostScript =
-        schedule.postBackupScript != null &&
-        schedule.postBackupScript!.trim().isNotEmpty;
-    if (hasPostScript) {
-      final allowed = await _isFeatureAllowed(LicenseFeatures.postBackupScript);
-      if (!allowed) {
-        _recordLicenseDenied();
-        return const rd.Failure(
-          ValidationFailure(
-            message:
-                'Script pós-backup requer licença com permissão post_backup_script',
+            message: r.check.message,
             code: FailureCodes.licenseDenied,
           ),
         );
@@ -133,50 +109,47 @@ class LicensePolicyService implements ILicensePolicyService {
     return const rd.Success(unit);
   }
 
+  /// Mapa estático de destino → (feature, mensagem). Antes era uma cadeia
+  /// `switch` com 3 cases quase idênticos, cada um inflando ~10 linhas
+  /// com o mesmo pattern. Centralizar reduz risco de divergência (e.g.,
+  /// adicionar um destino novo só requer uma entrada aqui).
+  static const Map<DestinationType, _DestinationFeatureCheck>
+  _destinationFeatureChecks = {
+    DestinationType.googleDrive: _DestinationFeatureCheck(
+      feature: LicenseFeatures.googleDrive,
+      message: 'Google Drive requer licença com permissão google_drive',
+    ),
+    DestinationType.dropbox: _DestinationFeatureCheck(
+      feature: LicenseFeatures.dropbox,
+      message: 'Dropbox requer licença com permissão dropbox',
+    ),
+    DestinationType.nextcloud: _DestinationFeatureCheck(
+      feature: LicenseFeatures.nextcloud,
+      message: 'Nextcloud requer licença com permissão nextcloud',
+    ),
+    // local e ftp não requerem feature de licença — retornam Success.
+  };
+
   @override
   Future<rd.Result<void>> validateDestinationCapabilities(
     BackupDestination destination,
   ) async {
-    switch (destination.type) {
-      case DestinationType.googleDrive:
-        final allowed = await _isFeatureAllowed(LicenseFeatures.googleDrive);
-        if (!allowed) {
-          _recordLicenseDenied();
-          return const rd.Failure(
-            ValidationFailure(
-              message: 'Google Drive requer licença com permissão google_drive',
-              code: FailureCodes.licenseDenied,
-            ),
-          );
-        }
-      case DestinationType.dropbox:
-        final allowed = await _isFeatureAllowed(LicenseFeatures.dropbox);
-        if (!allowed) {
-          _recordLicenseDenied();
-          return const rd.Failure(
-            ValidationFailure(
-              message: 'Dropbox requer licença com permissão dropbox',
-              code: FailureCodes.licenseDenied,
-            ),
-          );
-        }
-      case DestinationType.nextcloud:
-        final allowed = await _isFeatureAllowed(LicenseFeatures.nextcloud);
-        if (!allowed) {
-          _recordLicenseDenied();
-          return const rd.Failure(
-            ValidationFailure(
-              message: 'Nextcloud requer licença com permissão nextcloud',
-              code: FailureCodes.licenseDenied,
-            ),
-          );
-        }
-      case DestinationType.local:
-      case DestinationType.ftp:
-        break;
+    final check = _destinationFeatureChecks[destination.type];
+    if (check == null) {
+      // Tipos sem feature requirement (local, ftp): autorizado.
+      return const rd.Success(unit);
     }
 
-    return const rd.Success(unit);
+    final allowed = await _isFeatureAllowed(check.feature);
+    if (allowed) return const rd.Success(unit);
+
+    _recordLicenseDenied();
+    return rd.Failure(
+      ValidationFailure(
+        message: check.message,
+        code: FailureCodes.licenseDenied,
+      ),
+    );
   }
 
   @override
@@ -184,16 +157,16 @@ class LicensePolicyService implements ILicensePolicyService {
     Schedule schedule,
     List<BackupDestination> destinations,
   ) async {
-    final scheduleResult = await validateScheduleCapabilities(schedule);
-    if (scheduleResult.isError()) {
-      return scheduleResult;
-    }
+    // Schedule e destinations são validados independentemente; rodam em
+    // paralelo para minimizar latência total. Antes eram seriais (até
+    // N+1 awaits encadeados, onde N = destinations).
+    final allChecks = await Future.wait([
+      validateScheduleCapabilities(schedule),
+      ...destinations.map(validateDestinationCapabilities),
+    ]);
 
-    for (final dest in destinations) {
-      final destResult = await validateDestinationCapabilities(dest);
-      if (destResult.isError()) {
-        return destResult;
-      }
+    for (final result in allChecks) {
+      if (result.isError()) return result;
     }
 
     return const rd.Success(unit);
@@ -225,4 +198,23 @@ class LicensePolicyService implements ILicensePolicyService {
     }
     return allowed;
   }
+}
+
+/// Par feature ↔ mensagem usado por [LicensePolicyService] para
+/// declarar checagens em batch antes de executar todas em paralelo.
+class _FeatureCheck {
+  const _FeatureCheck({required this.feature, required this.message});
+  final String feature;
+  final String message;
+}
+
+/// Variante para checagens por tipo de destino (lookup em mapa estático,
+/// 1 feature por destino).
+class _DestinationFeatureCheck {
+  const _DestinationFeatureCheck({
+    required this.feature,
+    required this.message,
+  });
+  final String feature;
+  final String message;
 }

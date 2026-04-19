@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/logging/log_context.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
@@ -112,7 +113,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
               LoggerService.info(
                 'Upload local concluído com sucesso: '
                 '${result.destinationPath} '
-                '(${_formatBytes(result.fileSize)} em '
+                '(${ByteFormat.format(result.fileSize)} em '
                 '${result.duration.inSeconds}s)',
               );
               return const rd.Success(());
@@ -145,7 +146,7 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
             (result) {
               LoggerService.info(
                 'Upload FTP concluído com sucesso: ${result.remotePath} '
-                '(${_formatBytes(result.fileSize)} em '
+                '(${ByteFormat.format(result.fileSize)} em '
                 '${result.duration.inSeconds}s)',
               );
               return const rd.Success(());
@@ -214,14 +215,4 @@ class SendFileToDestinationService implements ISendFileToDestinationService {
     }
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
 }

@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
@@ -11,7 +11,7 @@ import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_ba
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
 import 'package:flutter/foundation.dart';
 
-class SchedulerProvider extends ChangeNotifier {
+class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
   SchedulerProvider({
     required IScheduleRepository repository,
     required ISchedulerService schedulerService,
@@ -36,15 +36,9 @@ class SchedulerProvider extends ChangeNotifier {
   final BackupProgressProvider? _progressProvider;
 
   List<Schedule> _schedules = [];
-  bool _isLoading = false;
-  String? _error;
-  String? _lastErrorCode;
   bool _isSchedulerRunning = true;
 
   List<Schedule> get schedules => _schedules;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
-  String? get lastErrorCode => _lastErrorCode;
   bool get isSchedulerRunning => _isSchedulerRunning;
 
   List<Schedule> get activeSchedules =>
@@ -54,125 +48,72 @@ class SchedulerProvider extends ChangeNotifier {
       _schedules.where((s) => !s.enabled).toList();
 
   Future<void> loadSchedules() async {
-    _isLoading = true;
-    _error = null;
-    _lastErrorCode = null;
-    notifyListeners();
-
-    try {
-      final result = await _repository.getAll();
-      result.fold(
-        (schedules) {
-          _schedules = schedules;
-          _error = null;
-          _lastErrorCode = null;
-        },
-        (failure) {
-          final f = failure as Failure;
-          _error = f.message;
-          _lastErrorCode = f.code;
-        },
-      );
-    } on Object catch (e) {
-      _error = 'Erro ao carregar agendamentos: $e';
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    await runAsync<void>(
+      genericErrorMessage: 'Erro ao carregar agendamentos',
+      action: () async {
+        final result = await _repository.getAll();
+        result.fold(
+          (schedules) => _schedules = schedules,
+          (failure) => throw failure,
+        );
+      },
+    );
   }
 
   Future<bool> createSchedule(Schedule schedule) async {
-    _isLoading = true;
-    _error = null;
-    _lastErrorCode = null;
-    notifyListeners();
-
-    try {
-      final result = await _createSchedule(schedule);
-      return await result.fold(
-        (newSchedule) async {
-          await loadSchedules();
-          return true;
-        },
-        (failure) async {
-          final f = failure as Failure;
-          _error = f.message;
-          _lastErrorCode = f.code;
-          _isLoading = false;
-          notifyListeners();
-          return false;
-        },
-      );
-    } on Object catch (e) {
-      _error = 'Erro ao criar agendamento: $e';
-      _isLoading = false;
-      notifyListeners();
-      return false;
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao criar agendamento',
+      action: () async {
+        final result = await _createSchedule(schedule);
+        result.fold(
+          (_) {},
+          (failure) => throw failure,
+        );
+        return true;
+      },
+    );
+    if (ok ?? false) {
+      await loadSchedules();
+      return true;
     }
+    return false;
   }
 
   Future<bool> updateSchedule(Schedule schedule) async {
-    _isLoading = true;
-    _error = null;
-    _lastErrorCode = null;
-    notifyListeners();
-
-    try {
-      final result = await _updateSchedule(schedule);
-      return await result.fold(
-        (updatedSchedule) async {
-          await loadSchedules();
-          return true;
-        },
-        (failure) async {
-          final f = failure as Failure;
-          _error = f.message;
-          _lastErrorCode = f.code;
-          _isLoading = false;
-          notifyListeners();
-          return false;
-        },
-      );
-    } on Object catch (e) {
-      _error = 'Erro ao atualizar agendamento: $e';
-      _isLoading = false;
-      notifyListeners();
-      return false;
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao atualizar agendamento',
+      action: () async {
+        final result = await _updateSchedule(schedule);
+        result.fold(
+          (_) {},
+          (failure) => throw failure,
+        );
+        return true;
+      },
+    );
+    if (ok ?? false) {
+      await loadSchedules();
+      return true;
     }
+    return false;
   }
 
   Future<bool> deleteSchedule(String id) async {
-    _isLoading = true;
-    _error = null;
-    _lastErrorCode = null;
-    notifyListeners();
-
-    try {
-      final result = await _deleteSchedule(id);
-      return result.fold(
-        (_) {
-          _schedules.removeWhere((s) => s.id == id);
-          _error = null;
-          _lastErrorCode = null;
-          _isLoading = false;
-          notifyListeners();
-          return true;
-        },
-        (failure) {
-          final f = failure as Failure;
-          _error = f.message;
-          _lastErrorCode = f.code;
-          _isLoading = false;
-          notifyListeners();
-          return false;
-        },
-      );
-    } on Object catch (e) {
-      _error = 'Erro ao deletar agendamento: $e';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao deletar agendamento',
+      action: () async {
+        final result = await _deleteSchedule(id);
+        result.fold(
+          (_) {},
+          (failure) => throw failure,
+        );
+        // P9: reassign em vez de mutação in-place para sinalizar mudança
+        // a listeners que comparam com `identical()`.
+        _schedules = _schedules.where((s) => s.id != id).toList();
+        return true;
+      },
+    );
+    return ok ?? false;
   }
 
   Future<bool> duplicateSchedule(Schedule source) async {
@@ -198,70 +139,54 @@ class SchedulerProvider extends ChangeNotifier {
   }
 
   Future<bool> executeNow(String scheduleId) async {
-    _isLoading = true;
-    _error = null;
-    _lastErrorCode = null;
-    notifyListeners();
-
     final schedule = getScheduleById(scheduleId);
     final scheduleName = schedule?.name ?? 'Backup';
     final progressProvider = _progressProvider;
 
-    try {
-      if (progressProvider != null) {
-        progressProvider.startBackup(scheduleName);
-        progressProvider.updateProgressWithStep(
-          step: BackupStep.executingBackup,
-          message: 'Executando backup do banco de dados...',
-          progress: 0.2,
-        );
-      }
-
-      final result = await _executeBackup(scheduleId);
-
-      return result.fold(
-        (_) {
-          if (progressProvider != null) {
-            progressProvider.updateProgressWithStep(
-              step: BackupStep.completed,
-              message: 'Backup concluído com sucesso!',
-              progress: 1,
-            );
-            progressProvider.completeBackup(
-              message: 'Backup concluído com sucesso!',
-            );
-          }
-          _error = null;
-          _lastErrorCode = null;
-          _isLoading = false;
-          notifyListeners();
-          return true;
-        },
-        (failure) {
-          final f = failure as Failure;
-          if (progressProvider != null) {
-            progressProvider.failBackup(f.message);
-          }
-          _error = f.message;
-          _lastErrorCode = f.code;
-          _isLoading = false;
-          notifyListeners();
-          return false;
-        },
+    if (progressProvider != null) {
+      progressProvider.startBackup(scheduleName);
+      progressProvider.updateProgressWithStep(
+        step: BackupStep.executingBackup,
+        message: 'Executando backup do banco de dados...',
+        progress: 0.2,
       );
-    } on Object catch (e) {
-      if (progressProvider != null) {
-        progressProvider.failBackup(e.toString());
-      }
-      _error = 'Erro ao executar backup: $e';
-      _isLoading = false;
-      notifyListeners();
-      return false;
     }
+
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao executar backup',
+      action: () async {
+        final result = await _executeBackup(scheduleId);
+        return result.fold(
+          (_) {
+            if (progressProvider != null) {
+              progressProvider.updateProgressWithStep(
+                step: BackupStep.completed,
+                message: 'Backup concluído com sucesso!',
+                progress: 1,
+              );
+              progressProvider.completeBackup(
+                message: 'Backup concluído com sucesso!',
+              );
+            }
+            return true;
+          },
+          (failure) => throw failure,
+        );
+      },
+    );
+
+    if (!(ok ?? false) && progressProvider != null) {
+      progressProvider.failBackup(error ?? 'Erro desconhecido');
+    }
+    return ok ?? false;
   }
 
   Future<bool> toggleSchedule(String id, bool enabled) async {
-    final schedule = _schedules.firstWhere((s) => s.id == id);
+    final schedule = getScheduleById(id);
+    if (schedule == null) {
+      setErrorManual('Agendamento não encontrado.');
+      return false;
+    }
     return updateSchedule(schedule.copyWith(enabled: enabled));
   }
 
@@ -278,11 +203,10 @@ class SchedulerProvider extends ChangeNotifier {
   }
 
   Schedule? getScheduleById(String id) {
-    try {
-      return _schedules.firstWhere((s) => s.id == id);
-    } on Object catch (e) {
-      return null;
+    for (final s in _schedules) {
+      if (s.id == id) return s;
     }
+    return null;
   }
 
   Future<List<Schedule>?> getSchedulesByDatabaseConfig(

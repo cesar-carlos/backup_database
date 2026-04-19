@@ -25,9 +25,16 @@ class LicenseValidationService implements ILicenseValidationService {
       final deviceKeyResult = await _deviceKeyService.getDeviceKey();
       return await deviceKeyResult.fold(
         (deviceKey) async {
-          final licenseResult = await _licenseRepository.getByDeviceKey(
-            deviceKey,
-          );
+          // L8 fix: paraleliza a busca da licença e a checagem de
+          // revogação. Antes eram sequenciais; cada uma pode envolver
+          // I/O (DB local + leitura/parse da revocation list).
+          final results = await Future.wait<Object>([
+            _licenseRepository.getByDeviceKey(deviceKey),
+            _checkRevokedSafely(deviceKey),
+          ]);
+          final licenseResult = results[0] as rd.Result<License>;
+          final revoked = results[1] as bool;
+
           return licenseResult.fold(
             (license) async {
               if (license.isExpired) {
@@ -36,8 +43,6 @@ class LicenseValidationService implements ILicenseValidationService {
                   core.ValidationFailure(message: 'Licença expirada'),
                 );
               }
-              final revoked =
-                  await _revocationChecker?.isRevoked(deviceKey) ?? false;
               if (revoked) {
                 LoggerService.warning('Licença encontrada mas revogada');
                 return const rd.Failure(
@@ -66,6 +71,34 @@ class LicenseValidationService implements ILicenseValidationService {
     }
   }
 
+  /// Encapsula a chamada ao revocation checker tornando o fail-open
+  /// observável. Antes, `_revocationChecker?.isRevoked(...) ?? false`
+  /// silenciosamente assumia "não revogada" quando o checker era null
+  /// ou lançava — atacante podia desligar o checker (ex.: corromper a
+  /// fonte de revogação) sem rastro nos logs.
+  Future<bool> _checkRevokedSafely(String deviceKey) async {
+    final checker = _revocationChecker;
+    if (checker == null) {
+      LoggerService.warning(
+        'IRevocationChecker não configurado — assumindo licença não '
+        'revogada (fail-open). Configure '
+        'BACKUP_DATABASE_LICENSE_REVOCATION_LIST(_PATH) em produção.',
+      );
+      return false;
+    }
+    try {
+      return await checker.isRevoked(deviceKey);
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Falha ao consultar revocation checker — assumindo licença não '
+        'revogada (fail-open). Investigue a causa.',
+        e,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
   @override
   Future<rd.Result<bool>> isFeatureAllowed(String feature) async {
     try {
@@ -76,6 +109,14 @@ class LicenseValidationService implements ILicenseValidationService {
           return rd.Success(hasFeature);
         },
         (failure) {
+          // Distingue causas para diagnóstico: feature negada porque a
+          // licença está expirada/revogada/ausente vs erro técnico
+          // (DB indisponível). Antes ambos viravam `Success(false)` e
+          // o usuário não tinha como saber a diferença na UI.
+          LoggerService.debug(
+            'isFeatureAllowed("$feature") = false: '
+            '${failure is core.Failure ? failure.message : failure}',
+          );
           return const rd.Success(false);
         },
       );
@@ -113,8 +154,7 @@ class LicenseValidationService implements ILicenseValidationService {
             return const rd.Success(false);
           }
 
-          final revoked =
-              await _revocationChecker?.isRevoked(deviceKey) ?? false;
+          final revoked = await _checkRevokedSafely(deviceKey);
           if (revoked) {
             LoggerService.warning('Licença revogada');
             return const rd.Success(false);

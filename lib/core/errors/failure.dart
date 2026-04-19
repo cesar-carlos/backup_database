@@ -6,7 +6,7 @@ abstract class Failure implements Exception {
   });
   final String message;
   final String? code;
-  final dynamic originalError;
+  final Object? originalError;
 
   @override
   String toString() => 'Failure(message: $message, code: $code)';

@@ -1,15 +1,13 @@
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/services/log_service.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:flutter/foundation.dart';
 
-class LogProvider extends ChangeNotifier {
+class LogProvider extends ChangeNotifier with AsyncStateMixin {
   LogProvider(this._logService);
   final LogService _logService;
 
   List<BackupLog> _logs = [];
-  bool _isLoading = false;
-  String? _error;
 
   LogLevel? _filterLevel;
   LogCategory? _filterCategory;
@@ -22,8 +20,6 @@ class LogProvider extends ChangeNotifier {
   bool _hasMore = true;
 
   List<BackupLog> get logs => _logs;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
   LogLevel? get filterLevel => _filterLevel;
   LogCategory? get filterCategory => _filterCategory;
   DateTime? get filterStartDate => _filterStartDate;
@@ -34,49 +30,40 @@ class LogProvider extends ChangeNotifier {
   int get pageSize => _pageSize;
 
   Future<void> loadLogs({bool append = false}) async {
-    if (_isLoading) return;
+    // Evita recarregamento concorrente da mesma página.
+    if (isLoading) return;
 
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    await runAsync<void>(
+      genericErrorMessage: 'Erro ao carregar logs',
+      action: () async {
+        final result = await _logService.getLogs(
+          limit: _pageSize,
+          offset: append ? _logs.length : 0,
+          level: _filterLevel,
+          category: _filterCategory,
+          startDate: _filterStartDate,
+          endDate: _filterEndDate,
+          searchQuery: _searchQuery.isNotEmpty ? _searchQuery : null,
+        );
 
-    try {
-      final result = await _logService.getLogs(
-        limit: _pageSize,
-        offset: append ? _logs.length : 0,
-        level: _filterLevel,
-        category: _filterCategory,
-        startDate: _filterStartDate,
-        endDate: _filterEndDate,
-        searchQuery: _searchQuery.isNotEmpty ? _searchQuery : null,
-      );
-
-      result.fold(
-        (newLogs) {
-          if (append) {
-            _logs.addAll(newLogs);
-          } else {
-            _logs = newLogs;
-            _currentPage = 0;
-          }
-          _hasMore = newLogs.length == _pageSize;
-          _error = null;
-        },
-        (failure) {
-          final f = failure as Failure;
-          _error = f.message;
-        },
-      );
-    } on Object catch (e) {
-      _error = 'Erro ao carregar logs: $e';
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+        result.fold(
+          (newLogs) {
+            if (append) {
+              _logs = [..._logs, ...newLogs];
+            } else {
+              _logs = newLogs;
+              _currentPage = 0;
+            }
+            _hasMore = newLogs.length == _pageSize;
+          },
+          (failure) => throw failure,
+        );
+      },
+    );
   }
 
   Future<void> loadMore() async {
-    if (!_hasMore || _isLoading) return;
+    if (!_hasMore || isLoading) return;
     _currentPage++;
     await loadLogs(append: true);
   }
@@ -120,44 +107,37 @@ class LogProvider extends ChangeNotifier {
   Future<String?> exportLogs({
     required String outputPath,
     required ExportFormat format,
-  }) async {
-    try {
-      final result = await _logService.exportLogs(
-        outputPath: outputPath,
-        format: format,
-        startDate: _filterStartDate,
-        endDate: _filterEndDate,
-      );
-
-      return result.fold((filePath) => filePath, (failure) {
-        final f = failure as Failure;
-        _error = f.message;
-        notifyListeners();
-        return null;
-      });
-    } on Object catch (e) {
-      _error = 'Erro ao exportar logs: $e';
-      notifyListeners();
-      return null;
-    }
+  }) {
+    return runAsync<String>(
+      genericErrorMessage: 'Erro ao exportar logs',
+      action: () async {
+        final result = await _logService.exportLogs(
+          outputPath: outputPath,
+          format: format,
+          startDate: _filterStartDate,
+          endDate: _filterEndDate,
+        );
+        return result.fold(
+          (filePath) => filePath,
+          (failure) => throw failure,
+        );
+      },
+    );
   }
 
   Future<void> cleanOldLogs() async {
-    try {
-      final result = await _logService.cleanOldLogs();
-      result.fold(
-        (count) {
-          refresh();
-        },
-        (failure) {
-          final f = failure as Failure;
-          _error = f.message;
-          notifyListeners();
-        },
-      );
-    } on Object catch (e) {
-      _error = 'Erro ao limpar logs: $e';
-      notifyListeners();
+    final result = await runAsync<int>(
+      genericErrorMessage: 'Erro ao limpar logs',
+      action: () async {
+        final res = await _logService.cleanOldLogs();
+        return res.fold(
+          (count) => count,
+          (failure) => throw failure,
+        );
+      },
+    );
+    if (result != null) {
+      await refresh();
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
@@ -187,7 +188,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
         'Banco: $databaseName\n'
         'Tipo: $backupType\n'
         'Caminho: $backupPath\n'
-        'Tamanho: ${_formatBytes(fileSizeBytes)}\n'
+        'Tamanho: ${ByteFormat.format(fileSizeBytes)}\n'
         'Duração: ${duration.inSeconds}s';
 
     await writeEvent(
@@ -432,16 +433,6 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
     );
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
 
   /// Verifica se o serviço está disponível.
   bool get isAvailable => _isAvailable;

@@ -1,6 +1,21 @@
 import 'package:uuid/uuid.dart';
 
-enum LogLevel { debug, info, warning, error }
+enum LogLevel {
+  debug,
+  info,
+  warning,
+  error;
+
+  /// Converte uma string para o [LogLevel] correspondente. Faz match
+  /// case-insensitive e cai em [LogLevel.info] para valores desconhecidos.
+  static LogLevel fromString(String value) {
+    final normalized = value.trim().toLowerCase();
+    for (final level in LogLevel.values) {
+      if (level.name == normalized) return level;
+    }
+    return LogLevel.info;
+  }
+}
 
 enum LogCategory { execution, system, audit }
 

@@ -178,22 +178,31 @@ class FileTransferMessageHandler {
           'totalChunks=$totalChunks',
         );
 
+        // Antes existiam dois `Future.delayed(5ms)` por chunk como
+        // backpressure manual. Para um arquivo de 50 GB com chunks de
+        // 64 KB isso adicionava ~4000s só esperando. Agora confiamos em
+        // `await sendToClient` (que respeita o `_sendQueue` do socket
+        // e o `flush`), que naturalmente aplica back-pressure quando o
+        // peer não consegue acompanhar.
         var sentIndex = effectiveStartChunk;
+        // Throttle do log de progresso: emitir info por chunk produzia
+        // centenas de milhares de linhas em transferências grandes.
+        var lastProgressLog = DateTime.now();
+        var lastLoggedPercent = -1;
+        const progressLogInterval = Duration(seconds: 2);
+
         await _chunker.forEachChunk(
           pathToChunk,
           firstChunkIndex: effectiveStartChunk,
           emit: (chunk) async {
-            LoggerService.info(
+            LoggerService.debug(
               '[FileTransferHandler] Enviando chunk ${chunk.chunkIndex + 1}/'
-              '${chunk.totalChunks}: ${chunk.data.length} bytes, '
-              'checksum=${chunk.checksum}',
+              '${chunk.totalChunks}: ${chunk.data.length} bytes',
             );
             await sendToClient(
               clientId,
               createFileChunkMessage(requestId: requestId, chunk: chunk),
             );
-
-            await Future<void>.delayed(const Duration(milliseconds: 5));
 
             sentIndex = chunk.chunkIndex + 1;
             await sendToClient(
@@ -205,7 +214,25 @@ class FileTransferMessageHandler {
               ),
             );
 
-            await Future<void>.delayed(const Duration(milliseconds: 5));
+            // Log de progresso em info a cada 2s OU a cada milestone de 10%
+            // (10, 20, 30...). Antes era `percent % 10 == 0`, que para
+            // arquivos grandes (50 GB ÷ 64 KB chunks ≈ 780k chunks) fazia
+            // 7.8k linhas consecutivas em cada milestone — em vez de 1.
+            // Agora rastreamos `lastLoggedPercent` para garantir que cada
+            // milestone seja logado uma única vez.
+            final now = DateTime.now();
+            final percent = (sentIndex / chunk.totalChunks * 100).floor();
+            final isNewMilestone = percent >= lastLoggedPercent + 10;
+            final isTimeBased =
+                now.difference(lastProgressLog) >= progressLogInterval;
+            if (isNewMilestone || isTimeBased) {
+              LoggerService.info(
+                '[FileTransferHandler] $sentIndex/${chunk.totalChunks} '
+                'chunks ($percent%)',
+              );
+              lastProgressLog = now;
+              if (isNewMilestone) lastLoggedPercent = percent;
+            }
           },
         );
 

@@ -5,6 +5,7 @@ import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/repositories/i_email_config_repository.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -17,98 +18,66 @@ class EmailConfigRepository implements IEmailConfigRepository {
   static const String _smtpOAuthTokenKeyPrefix = 'email_smtp_oauth_token_';
 
   @override
-  Future<rd.Result<List<EmailConfig>>> getAll() async {
-    try {
-      final configs = await _database.emailConfigDao.getAll();
-      final entities = await Future.wait(
-        configs.map(_toEntity),
-      );
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao buscar lista de configuracoes de e-mail: $e',
-        ),
-      );
-    }
+  Future<rd.Result<List<EmailConfig>>> getAll() {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar lista de configuracoes de e-mail',
+      action: () async {
+        final configs = await _database.emailConfigDao.getAll();
+        return Future.wait(configs.map(_toEntity));
+      },
+    );
   }
 
   @override
-  Future<rd.Result<EmailConfig>> getById(String id) async {
-    try {
-      final config = await _database.emailConfigDao.getById(id);
-      if (config == null) {
-        return const rd.Failure(
-          NotFoundFailure(message: 'Configuracao de e-mail nao encontrada'),
+  Future<rd.Result<EmailConfig>> getById(String id) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar configuracao de e-mail',
+      action: () async {
+        final config = await _database.emailConfigDao.getById(id);
+        if (config == null) {
+          throw const NotFoundFailure(
+            message: 'Configuracao de e-mail nao encontrada',
+          );
+        }
+        return _toEntity(config);
+      },
+    );
+  }
+
+  @override
+  Future<rd.Result<EmailConfig>> create(EmailConfig config) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao criar configuracao de e-mail',
+      action: () async {
+        await _syncCredentialSecretsOrThrow(config: config);
+        await _database.emailConfigDao.insertConfig(_toCompanion(config));
+        return config;
+      },
+    );
+  }
+
+  @override
+  Future<rd.Result<EmailConfig>> update(EmailConfig config) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao atualizar configuracao de e-mail',
+      action: () async {
+        final existing = await _database.emailConfigDao.getById(config.id);
+        await _syncCredentialSecretsOrThrow(
+          config: config,
+          existing: existing,
         );
-      }
-      return rd.Success(await _toEntity(config));
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar configuracao de e-mail: $e'),
-      );
-    }
-  }
 
-  @override
-  Future<rd.Result<EmailConfig>> create(EmailConfig config) async {
-    try {
-      final secureSyncResult = await _syncCredentialSecrets(config: config);
-      if (secureSyncResult.isError()) {
-        return rd.Failure(secureSyncResult.exceptionOrNull()!);
-      }
-
-      await _database.emailConfigDao.insertConfig(_toCompanion(config));
-      return rd.Success(config);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao criar configuracao de e-mail',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao criar configuracao de e-mail: $e',
-        ),
-      );
-    }
-  }
-
-  @override
-  Future<rd.Result<EmailConfig>> update(EmailConfig config) async {
-    try {
-      final existing = await _database.emailConfigDao.getById(config.id);
-      final secureSyncResult = await _syncCredentialSecrets(
-        config: config,
-        existing: existing,
-      );
-      if (secureSyncResult.isError()) {
-        return rd.Failure(secureSyncResult.exceptionOrNull()!);
-      }
-
-      final updated = await _database.emailConfigDao.updateConfig(
-        _toCompanion(config),
-      );
-
-      if (!updated) {
-        return const rd.Failure(
-          NotFoundFailure(message: 'Configuracao de e-mail nao encontrada'),
+        final updated = await _database.emailConfigDao.updateConfig(
+          _toCompanion(config),
         );
-      }
-
-      return rd.Success(config);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao atualizar configuracao de e-mail',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao atualizar configuracao de e-mail: $e',
-        ),
-      );
-    }
+        if (!updated) {
+          throw const NotFoundFailure(
+            message: 'Configuracao de e-mail nao encontrada',
+          );
+        }
+        return config;
+      },
+    );
   }
 
   @override
@@ -126,154 +95,153 @@ class EmailConfigRepository implements IEmailConfigRepository {
       );
     }
 
-    try {
-      final existing = await _database.emailConfigDao.getById(config.id);
+    return RepositoryGuard.run(
+      errorMessage:
+          'Erro ao salvar configuracao de e-mail com destinatario principal',
+      action: () async {
+        final existing = await _database.emailConfigDao.getById(config.id);
 
-      await _database.transaction(() async {
-        final secureSyncResult = await _syncCredentialSecrets(
-          config: config,
-          existing: existing,
-        );
-        if (secureSyncResult.isError()) {
-          throw secureSyncResult.exceptionOrNull()!;
-        }
-
-        final existingRow = await _database.emailConfigDao.getById(config.id);
-        if (existingRow == null) {
-          await _database.emailConfigDao.insertConfig(_toCompanion(config));
-        } else {
-          final updated = await _database.emailConfigDao.updateConfig(
-            _toCompanion(config),
+        await _database.transaction(() async {
+          await _syncCredentialSecretsOrThrow(
+            config: config,
+            existing: existing,
           );
-          if (!updated) {
-            throw const NotFoundFailure(
-              message: 'Configuracao de e-mail nao encontrada',
+
+          // Re-checa dentro da transação porque entre `getById` (linha
+          // acima) e o início da transação a row pode ter sido removida
+          // por outro fluxo concorrente. O custo extra é o de uma query
+          // simples, e a alternativa (TOCTOU silencioso) é pior.
+          final existingRow = await _database.emailConfigDao.getById(
+            config.id,
+          );
+          if (existingRow == null) {
+            await _database.emailConfigDao.insertConfig(_toCompanion(config));
+          } else {
+            final updated = await _database.emailConfigDao.updateConfig(
+              _toCompanion(config),
             );
+            if (!updated) {
+              throw const NotFoundFailure(
+                message: 'Configuracao de e-mail nao encontrada',
+              );
+            }
           }
+
+          await _database.emailNotificationTargetDao.deleteByConfigId(
+            config.id,
+          );
+
+          final now = DateTime.now();
+          final targetId = '${config.id}:$recipient';
+          await _database.emailNotificationTargetDao.insertTarget(
+            EmailNotificationTargetsTableCompanion(
+              id: Value(targetId),
+              emailConfigId: Value(config.id),
+              recipientEmail: Value(recipient),
+              notifyOnSuccess: Value(config.notifyOnSuccess),
+              notifyOnError: Value(config.notifyOnError),
+              notifyOnWarning: Value(config.notifyOnWarning),
+              enabled: Value(config.enabled),
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+        });
+
+        return config;
+      },
+    );
+  }
+
+  @override
+  Future<rd.Result<void>> deleteById(String id) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao deletar configuracao de e-mail',
+      action: () async {
+        final existing = await _database.emailConfigDao.getById(id);
+        final passwordKey = existing == null
+            ? _buildSmtpPasswordKey(id)
+            : _resolvePasswordKey(existing);
+        final oauthTokenKey = existing == null
+            ? null
+            : _resolveOAuthTokenKey(existing, fallbackConfigId: id);
+        await _secureCredentialService.deletePassword(key: passwordKey);
+        if (oauthTokenKey != null && oauthTokenKey.isNotEmpty) {
+          await _secureCredentialService.deleteToken(key: oauthTokenKey);
         }
-
-        await _database.emailNotificationTargetDao.deleteByConfigId(config.id);
-
-        final now = DateTime.now();
-        final targetId = '${config.id}:$recipient';
-        await _database.emailNotificationTargetDao.insertTarget(
-          EmailNotificationTargetsTableCompanion(
-            id: Value(targetId),
-            emailConfigId: Value(config.id),
-            recipientEmail: Value(recipient),
-            notifyOnSuccess: Value(config.notifyOnSuccess),
-            notifyOnError: Value(config.notifyOnError),
-            notifyOnWarning: Value(config.notifyOnWarning),
-            enabled: Value(config.enabled),
-            createdAt: Value(now),
-            updatedAt: Value(now),
-          ),
-        );
-      });
-
-      return rd.Success(config);
-    } on NotFoundFailure catch (e) {
-      return rd.Failure(e);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao salvar configuracao de e-mail com destinatario principal',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(
-          message:
-              'Erro ao salvar configuracao de e-mail com destinatario principal: $e',
-        ),
-      );
-    }
+        await _database.emailConfigDao.deleteById(id);
+      },
+    );
   }
 
   @override
-  Future<rd.Result<void>> deleteById(String id) async {
-    try {
-      final existing = await _database.emailConfigDao.getById(id);
-      final passwordKey = existing == null
-          ? _buildSmtpPasswordKey(id)
-          : _resolvePasswordKey(existing);
-      final oauthTokenKey = existing == null
-          ? null
-          : _resolveOAuthTokenKey(
-              existing,
-              fallbackConfigId: id,
-            );
-      await _secureCredentialService.deletePassword(key: passwordKey);
-      if (oauthTokenKey != null && oauthTokenKey.isNotEmpty) {
-        await _secureCredentialService.deleteToken(key: oauthTokenKey);
-      }
-      await _database.emailConfigDao.deleteById(id);
-      return const rd.Success(unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao deletar configuracao de e-mail: $e'),
-      );
-    }
-  }
-
-  @override
-  Future<rd.Result<EmailConfig>> get() async {
-    try {
-      final configs = await _database.emailConfigDao.getAll();
-      if (configs.isEmpty) {
-        return const rd.Failure(
-          NotFoundFailure(message: 'Configuracao de e-mail nao encontrada'),
-        );
-      }
-      return rd.Success(await _toEntity(configs.first));
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar configuracao de e-mail: $e'),
-      );
-    }
+  Future<rd.Result<EmailConfig>> get() {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar configuracao de e-mail',
+      action: () async {
+        final configs = await _database.emailConfigDao.getAll();
+        if (configs.isEmpty) {
+          throw const NotFoundFailure(
+            message: 'Configuracao de e-mail nao encontrada',
+          );
+        }
+        return _toEntity(configs.first);
+      },
+    );
   }
 
   @override
   Future<rd.Result<EmailConfig>> save(EmailConfig config) async {
-    try {
-      final existing = await _database.emailConfigDao.getById(config.id);
-      if (existing == null) {
-        return create(config);
-      }
-      return update(config);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao salvar configuracao de e-mail',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao salvar configuracao de e-mail: $e'),
-      );
-    }
+    // O try/catch original wrappava `create()` e `update()` mas estes já
+    // retornam `Result` (não throwam). O catch só protegia o `getById`
+    // inicial. Agora delegamos a checagem ao `RepositoryGuard.run` somente
+    // no `getById`; create/update já cuidam dos próprios erros.
+    final lookupResult = await RepositoryGuard.run<EmailConfigsTableData>(
+      errorMessage: 'Erro ao salvar configuracao de e-mail',
+      action: () async {
+        final existing = await _database.emailConfigDao.getById(config.id);
+        if (existing == null) {
+          throw _MissingExistingRowSentinel();
+        }
+        return existing;
+      },
+    );
+
+    return lookupResult.fold(
+      (_) => update(config),
+      (failure) {
+        // O sentinel sinaliza "não existe ainda → criar". Qualquer outra
+        // falha é um erro real de I/O e deve ser propagado.
+        final original =
+            failure is DatabaseFailure ? failure.originalError : null;
+        if (original is _MissingExistingRowSentinel) {
+          return create(config);
+        }
+        return Future.value(rd.Failure(failure));
+      },
+    );
   }
 
   @override
-  Future<rd.Result<void>> delete() async {
-    try {
-      final rows = await _database.emailConfigDao.getAll();
-      for (final row in rows) {
-        final passwordKey = _resolvePasswordKey(row);
-        await _secureCredentialService.deletePassword(key: passwordKey);
-        final oauthTokenKey = _resolveOAuthTokenKey(
-          row,
-          fallbackConfigId: row.id,
-        );
-        if (oauthTokenKey != null && oauthTokenKey.isNotEmpty) {
-          await _secureCredentialService.deleteToken(key: oauthTokenKey);
+  Future<rd.Result<void>> delete() {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao deletar configuracoes de e-mail',
+      action: () async {
+        final rows = await _database.emailConfigDao.getAll();
+        for (final row in rows) {
+          final passwordKey = _resolvePasswordKey(row);
+          await _secureCredentialService.deletePassword(key: passwordKey);
+          final oauthTokenKey = _resolveOAuthTokenKey(
+            row,
+            fallbackConfigId: row.id,
+          );
+          if (oauthTokenKey != null && oauthTokenKey.isNotEmpty) {
+            await _secureCredentialService.deleteToken(key: oauthTokenKey);
+          }
         }
-      }
-      await _database.emailConfigDao.deleteAll();
-      return const rd.Success(unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao deletar configuracoes de e-mail: $e'),
-      );
-    }
+        await _database.emailConfigDao.deleteAll();
+      },
+    );
   }
 
   Future<EmailConfig> _toEntity(EmailConfigsTableData data) async {
@@ -446,6 +414,23 @@ class EmailConfigRepository implements IEmailConfigRepository {
     return trimmed;
   }
 
+  /// Wrapper que joga (em vez de retornar) a falha do `_syncCredentialSecrets`,
+  /// permitindo que o `RepositoryGuard.run` ou a `_database.transaction()`
+  /// pegue e propague. Sem isso, cada caller tinha um `if (result.isError())
+  /// return rd.Failure(result.exceptionOrNull()!);` repetido.
+  Future<void> _syncCredentialSecretsOrThrow({
+    required EmailConfig config,
+    EmailConfigsTableData? existing,
+  }) async {
+    final result = await _syncCredentialSecrets(
+      config: config,
+      existing: existing,
+    );
+    if (result.isError()) {
+      throw result.exceptionOrNull()!;
+    }
+  }
+
   Future<rd.Result<void>> _syncCredentialSecrets({
     required EmailConfig config,
     EmailConfigsTableData? existing,
@@ -507,4 +492,14 @@ class EmailConfigRepository implements IEmailConfigRepository {
 
     return const rd.Success(unit);
   }
+
+}
+
+/// Sentinel para o `save()`: sinaliza que `getById` retornou `null` (não
+/// existe ainda), e que o caller deve rotear para `create()` em vez de
+/// `update()`. Evita ter que retornar um valor "magic null" ou um Result
+/// composto.
+class _MissingExistingRowSentinel implements Exception {
+  @override
+  String toString() => 'EmailConfig row does not exist; route to create';
 }

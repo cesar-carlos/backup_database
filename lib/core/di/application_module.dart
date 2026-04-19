@@ -63,6 +63,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       validateSybaseLogBackupPreflight:
           getIt<ValidateSybaseLogBackupPreflight>(),
       storageChecker: getIt<IStorageChecker>(),
+      cancellationService: getIt<IBackupCancellationService>(),
     ),
   );
 
@@ -81,6 +82,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       licensePolicyService: getIt<ILicensePolicyService>(),
       transferStagingService: getIt<ITransferStagingService>(),
       metricsCollector: getIt<IMetricsCollector>(),
+      cancellationService: getIt<IBackupCancellationService>(),
     ),
   );
 

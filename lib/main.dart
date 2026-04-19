@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
@@ -78,12 +79,14 @@ Future<void> _runApp() async {
   );
   WidgetsFlutterBinding.ensureInitialized();
 
-  await _loadEnvironment();
+  await EnvironmentLoader.loadIfNeeded(logPrefix: '[main]');
   setAppMode(getAppMode(rawArgs));
   LoggerService.info('Modo do aplicativo: ${currentAppMode.name}');
 
+  // `setupServiceLocator` agora também invoca `registerFeatureAvailability`
+  // internamente (movido para dentro de DI). Antes ficava como chamada
+  // solta aqui, fora da camada de DI.
   await service_locator.setupServiceLocator();
-  await registerFeatureAvailability(service_locator.getIt);
   _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
   LoggerService.info(
     '[main] singleInstanceLockFallbackUi=${SingleInstanceConfig.lockFallbackMode.name}',
@@ -126,25 +129,23 @@ Future<void> _runApp() async {
 
     await _initializeAppServices(launchConfig);
 
-    runApp(const BackupDatabaseApp());
-    _logBootstrapPhase(bootstrapWatch, 'run_app_called');
-
+    // Inicia o scheduler e o socket server ANTES do `runApp` para evitar
+    // race entre cliques iniciais do usuário ("Executar agora") e o
+    // scheduler ainda não inicializado. `runApp` é a última coisa porque
+    // bloqueia o evento loop do Flutter.
     await _startScheduler();
     await _startSocketServer();
     _logBootstrapPhase(bootstrapWatch, 'scheduler_and_socket_ready');
+
+    runApp(const BackupDatabaseApp());
+    _logBootstrapPhase(bootstrapWatch, 'run_app_called');
+    LoggerService.info(
+      '[main] bootstrap_timing total_ms=${bootstrapWatch.elapsedMilliseconds}',
+    );
   } on Object catch (e, stackTrace) {
     LoggerService.error('Erro fatal na inicializacao', e, stackTrace);
     await AppCleanup.cleanup();
     exit(1);
-  }
-}
-
-Future<void> _loadEnvironment() async {
-  try {
-    await dotenv.load();
-    LoggerService.info('Variaveis de ambiente carregadas');
-  } on Object catch (e) {
-    LoggerService.warning('Nao foi possivel carregar .env: $e');
   }
 }
 
@@ -175,71 +176,17 @@ void _checkOsCompatibility() {
 Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
   final features = service_locator.getIt<FeatureAvailabilityService>();
   final windowManager = WindowManagerService();
-  if (features.isWindowManagementEnabled) {
-    try {
-      await windowManager.initialize(
-        title: getWindowTitleForMode(currentAppMode),
-        startMinimized: launchConfig.startMinimized,
-      );
-    } on Object catch (e) {
-      LoggerService.warning(
-        'Erro ao inicializar window manager (continuando sem UI): $e',
-      );
-    }
-  } else {
-    LoggerService.warning(
-      'Window manager omitido (compatibilidade): '
-      '${features.windowManagementDisabledReason?.diagnosticLabel ?? "unknown"}',
-    );
-  }
 
-  if (SingleInstanceConfig.isEnabled) {
-    try {
-      final singleInstanceService = service_locator
-          .getIt<ISingleInstanceService>();
-      await singleInstanceService.startIpcServer(
-        onShowWindow: () async {
-          LoggerService.info(
-            'Recebido comando SHOW_WINDOW via IPC de outra instancia',
-          );
-          if (!features.isWindowManagementEnabled) {
-            return;
-          }
-          try {
-            await WindowManagerService().show();
-            LoggerService.info('Janela trazida para frente apos comando IPC');
-          } on Object catch (e, stackTrace) {
-            LoggerService.error(
-              'Erro ao mostrar janela via IPC',
-              e,
-              stackTrace,
-            );
-          }
-        },
-      );
-      LoggerService.info('IPC Server inicializado e pronto');
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao inicializar IPC Server: $e');
-    }
-  } else {
-    LoggerService.info(
-      'IPC Server não iniciado: single instance desabilitado via configuração',
-    );
-  }
+  // Window manager precisa ser o primeiro porque tray/IPC podem depender
+  // dele indiretamente (ex.: tray menu mostra a janela). Os dois passos
+  // seguintes (IPC server e tray) são independentes entre si — rodam em
+  // paralelo.
+  await _initializeWindowManager(windowManager, features, launchConfig);
 
-  final trayManager = TrayManagerService();
-  if (features.isTrayEnabled) {
-    try {
-      await trayManager.initialize(onMenuAction: TrayMenuHandler.handleAction);
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao inicializar tray manager: $e');
-    }
-  } else {
-    LoggerService.warning(
-      'Tray icon omitido (compatibilidade): '
-      '${features.trayDisabledReason?.diagnosticLabel ?? "unknown"}',
-    );
-  }
+  await Future.wait([
+    _initializeIpcServer(features),
+    _initializeTrayManager(features),
+  ]);
 
   windowManager.setCallbacks(
     onClose: () async {
@@ -247,6 +194,83 @@ Future<void> _initializeAppServices(LaunchConfig launchConfig) async {
       exit(0);
     },
   );
+}
+
+Future<void> _initializeWindowManager(
+  WindowManagerService windowManager,
+  FeatureAvailabilityService features,
+  LaunchConfig launchConfig,
+) async {
+  if (!features.isWindowManagementEnabled) {
+    LoggerService.warning(
+      'Window manager omitido (compatibilidade): '
+      '${features.windowManagementDisabledReason?.diagnosticLabel ?? "unknown"}',
+    );
+    return;
+  }
+  try {
+    await windowManager.initialize(
+      title: getWindowTitleForMode(currentAppMode),
+      startMinimized: launchConfig.startMinimized,
+    );
+  } on Object catch (e) {
+    LoggerService.warning(
+      'Erro ao inicializar window manager (continuando sem UI): $e',
+    );
+  }
+}
+
+Future<void> _initializeIpcServer(FeatureAvailabilityService features) async {
+  if (!SingleInstanceConfig.isEnabled) {
+    LoggerService.info(
+      'IPC Server não iniciado: single instance desabilitado via configuração',
+    );
+    return;
+  }
+  try {
+    final singleInstanceService = service_locator
+        .getIt<ISingleInstanceService>();
+    await singleInstanceService.startIpcServer(
+      onShowWindow: () async {
+        LoggerService.info(
+          'Recebido comando SHOW_WINDOW via IPC de outra instancia',
+        );
+        if (!features.isWindowManagementEnabled) {
+          return;
+        }
+        try {
+          await WindowManagerService().show();
+          LoggerService.info('Janela trazida para frente apos comando IPC');
+        } on Object catch (e, stackTrace) {
+          LoggerService.error(
+            'Erro ao mostrar janela via IPC',
+            e,
+            stackTrace,
+          );
+        }
+      },
+    );
+    LoggerService.info('IPC Server inicializado e pronto');
+  } on Object catch (e) {
+    LoggerService.warning('Erro ao inicializar IPC Server: $e');
+  }
+}
+
+Future<void> _initializeTrayManager(FeatureAvailabilityService features) async {
+  if (!features.isTrayEnabled) {
+    LoggerService.warning(
+      'Tray icon omitido (compatibilidade): '
+      '${features.trayDisabledReason?.diagnosticLabel ?? "unknown"}',
+    );
+    return;
+  }
+  try {
+    await TrayManagerService().initialize(
+      onMenuAction: TrayMenuHandler.handleAction,
+    );
+  } on Object catch (e) {
+    LoggerService.warning('Erro ao inicializar tray manager: $e');
+  }
 }
 
 Future<void> _startScheduler() async {
@@ -313,20 +337,35 @@ Future<void> _startSocketServer() async {
 }
 
 void _handleError(Object error, StackTrace stack) {
+  // Workaround conhecido para bug do Flutter Desktop em Windows quando
+  // teclas modificadoras são liberadas fora do foco da janela. Se este
+  // workaround precisar sair, basta procurar por esta linha no log.
   if (error.toString().contains('physicalKey is already pressed')) {
+    LoggerService.debug(
+      'Ignorando erro conhecido do Flutter (physicalKey already pressed): '
+      '$error',
+    );
     return;
   }
   LoggerService.error('Erro nao tratado na UI', error, stack);
 }
 
 UiSchedulerFallbackMode _getUiSchedulerFallbackModeFromEnv() {
-  final normalized = dotenv.env['UI_SCHEDULER_FALLBACK_MODE']
-      ?.trim()
-      .toLowerCase();
+  final raw = dotenv.env['UI_SCHEDULER_FALLBACK_MODE'];
+  final normalized = raw?.trim().toLowerCase();
 
-  if (normalized == 'fail_safe') {
-    return UiSchedulerFallbackMode.failSafe;
+  if (normalized == null || normalized.isEmpty) {
+    return UiSchedulerFallbackMode.failOpen;
   }
 
+  if (normalized == 'fail_safe') return UiSchedulerFallbackMode.failSafe;
+  if (normalized == 'fail_open') return UiSchedulerFallbackMode.failOpen;
+
+  // Valores não reconhecidos antes caíam silenciosamente em failOpen,
+  // o que mascarava typos como "failsafe" / "safe". Agora avisamos.
+  LoggerService.warning(
+    '[main] UI_SCHEDULER_FALLBACK_MODE="$raw" não reconhecido. '
+    'Valores aceitos: "fail_safe" ou "fail_open". Usando fail_open.',
+  );
   return UiSchedulerFallbackMode.failOpen;
 }

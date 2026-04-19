@@ -13,11 +13,22 @@ abstract class IPostgresBackupService {
     String? pgBasebackupPath,
     Duration? backupTimeout,
     Duration? verifyTimeout,
+    String? cancelTag,
   });
 
   Future<Result<bool>> testConnection(PostgresConfig config);
 
   Future<Result<List<String>>> listDatabases({
+    required PostgresConfig config,
+    Duration? timeout,
+  });
+
+  /// Tamanho aproximado em bytes do banco indicado em [config]. Usado pelo
+  /// orchestrator para validar espaço livre suficiente no destino antes de
+  /// iniciar o backup. Retorna falha se a consulta não puder ser feita; o
+  /// orchestrator deve tratar como "tamanho desconhecido" e cair no
+  /// mínimo configurável.
+  Future<Result<int>> getDatabaseSizeBytes({
     required PostgresConfig config,
     Duration? timeout,
   });

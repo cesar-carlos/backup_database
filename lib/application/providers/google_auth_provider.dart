@@ -1,7 +1,7 @@
 import 'dart:convert';
 
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/external/google/google_auth_service.dart';
 import 'package:flutter/foundation.dart';
@@ -29,116 +29,100 @@ class GoogleOAuthConfig {
   };
 }
 
-class GoogleAuthProvider extends ChangeNotifier {
+class GoogleAuthProvider extends ChangeNotifier with AsyncStateMixin {
   GoogleAuthProvider(this._authService);
   final GoogleAuthService _authService;
 
   static const _oauthConfigKey = 'google_oauth_config';
 
-  bool _isLoading = false;
   bool _isInitialized = false;
   bool _isConfigured = false;
-  String? _error;
   String? _currentEmail;
   GoogleOAuthConfig? _oauthConfig;
+  Future<void>? _initializeFuture;
 
-  bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
   bool get isConfigured => _isConfigured;
   bool get isSignedIn => _authService.isSignedIn;
-  String? get error => _error;
   String? get currentEmail => _currentEmail ?? _authService.currentUserEmail;
   GoogleOAuthConfig? get oauthConfig => _oauthConfig;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
+    // Reentrância segura: chamadas concorrentes durante boot recebem o
+    // mesmo Future em curso, evitando dupla inicialização.
+    final inFlight = _initializeFuture;
+    if (inFlight != null) return inFlight;
+    return _initializeFuture = _doInitialize().whenComplete(() {
+      _initializeFuture = null;
+    });
+  }
 
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> _doInitialize() async {
+    await runAsync<void>(
+      genericErrorMessage: 'Erro ao inicializar',
+      action: () async {
+        await _loadOAuthConfig();
 
-    try {
-      await _loadOAuthConfig();
+        if (_oauthConfig != null) {
+          await _authService.initialize(
+            clientId: _oauthConfig!.clientId,
+            clientSecret: _oauthConfig!.clientSecret,
+          );
+          _isConfigured = true;
 
-      if (_oauthConfig != null) {
-        await _authService.initialize(
-          clientId: _oauthConfig!.clientId,
-          clientSecret: _oauthConfig!.clientSecret,
-        );
-        _isConfigured = true;
+          final silentResult = await _authService.signInSilently();
+          silentResult.fold(
+            (authResult) {
+              _currentEmail = authResult.email;
+              LoggerService.info('Sessão Google restaurada: $_currentEmail');
+            },
+            (_) {
+              LoggerService.debug('Nenhuma sessão Google ativa');
+            },
+          );
+        }
 
-        final silentResult = await _authService.signInSilently();
-        silentResult.fold(
-          (authResult) {
-            _currentEmail = authResult.email;
-            LoggerService.info('Sessão Google restaurada: $_currentEmail');
-          },
-          (_) {
-            LoggerService.debug('Nenhuma sessão Google ativa');
-          },
-        );
-      }
-
-      _isInitialized = true;
-      _isLoading = false;
-    } on Object catch (e) {
-      _error = 'Erro ao inicializar: $e';
-      _isLoading = false;
-      LoggerService.error('Erro ao inicializar GoogleAuthProvider', e);
-    }
-
-    notifyListeners();
+        _isInitialized = true;
+      },
+    );
   }
 
   Future<bool> configureOAuth({
     required String clientId,
     String? clientSecret,
   }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao configurar OAuth',
+      action: () async {
+        _oauthConfig = GoogleOAuthConfig(
+          clientId: clientId,
+          clientSecret: clientSecret,
+        );
 
-    try {
-      _oauthConfig = GoogleOAuthConfig(
-        clientId: clientId,
-        clientSecret: clientSecret,
-      );
+        await _saveOAuthConfig();
 
-      await _saveOAuthConfig();
+        await _authService.initialize(
+          clientId: clientId,
+          clientSecret: clientSecret,
+        );
 
-      await _authService.initialize(
-        clientId: clientId,
-        clientSecret: clientSecret,
-      );
-
-      _isConfigured = true;
-      _isLoading = false;
-      notifyListeners();
-
-      LoggerService.info('Configuração OAuth Google salva');
-      return true;
-    } on Object catch (e) {
-      _error = 'Erro ao configurar OAuth: $e';
-      _isLoading = false;
-      notifyListeners();
-      LoggerService.error('Erro ao configurar OAuth', e);
-      return false;
-    }
+        _isConfigured = true;
+        LoggerService.info('Configuração OAuth Google salva');
+        return true;
+      },
+    );
+    return ok ?? false;
   }
 
   Future<bool> signIn() async {
     if (!_isConfigured) {
-      _error = 'Configure as credenciais OAuth primeiro.';
-      notifyListeners();
+      setErrorManual('Configure as credenciais OAuth primeiro.');
       return false;
     }
 
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    // Proteger contra fechamento durante a autenticação OAuth
-    // O webview pode causar eventos de fechamento inesperados
+    // Proteger contra fechamento durante a autenticação OAuth.
+    // O webview pode causar eventos de fechamento inesperados.
     try {
       await windowManager.setPreventClose(true);
       LoggerService.debug('Proteção contra fechamento ativada para OAuth');
@@ -147,25 +131,20 @@ class GoogleAuthProvider extends ChangeNotifier {
     }
 
     try {
-      final result = await _authService.signIn();
-
-      return result.fold(
-        (authResult) {
-          _currentEmail = authResult.email;
-          _isLoading = false;
-          notifyListeners();
-          LoggerService.info('Login Google realizado: $_currentEmail');
-          return true;
-        },
-        (exception) {
-          _error = exception is Failure
-              ? exception.message
-              : exception.toString();
-          _isLoading = false;
-          notifyListeners();
-          return false;
+      final ok = await runAsync<bool>(
+        action: () async {
+          final result = await _authService.signIn();
+          return result.fold(
+            (authResult) {
+              _currentEmail = authResult.email;
+              LoggerService.info('Login Google realizado: $_currentEmail');
+              return true;
+            },
+            (exception) => throw exception,
+          );
         },
       );
+      return ok ?? false;
     } finally {
       try {
         await windowManager.setPreventClose(false);
@@ -179,43 +158,33 @@ class GoogleAuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    _isLoading = true;
-    notifyListeners();
-
-    await _authService.signOut();
-
-    _currentEmail = null;
-    _isLoading = false;
-    notifyListeners();
-
-    LoggerService.info('Logout Google realizado');
+    await runAsync<void>(
+      genericErrorMessage: 'Erro ao fazer logout',
+      action: () async {
+        await _authService.signOut();
+        _currentEmail = null;
+        LoggerService.info('Logout Google realizado');
+      },
+    );
   }
 
   Future<bool> removeOAuthConfig() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    final ok = await runAsync<bool>(
+      genericErrorMessage: 'Erro ao remover configuração',
+      action: () async {
+        await _authService.signOut();
 
-    try {
-      await _authService.signOut();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_oauthConfigKey);
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_oauthConfigKey);
-
-      _oauthConfig = null;
-      _isConfigured = false;
-      _currentEmail = null;
-      _isLoading = false;
-      notifyListeners();
-
-      LoggerService.info('Configuração OAuth Google removida');
-      return true;
-    } on Object catch (e) {
-      _error = 'Erro ao remover configuração: $e';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
+        _oauthConfig = null;
+        _isConfigured = false;
+        _currentEmail = null;
+        LoggerService.info('Configuração OAuth Google removida');
+        return true;
+      },
+    );
+    return ok ?? false;
   }
 
   GoogleAuthResult? getAuthResult() {
@@ -239,8 +208,13 @@ class GoogleAuthProvider extends ChangeNotifier {
       _oauthConfig = GoogleOAuthConfig.fromJson(json);
 
       LoggerService.debug('Configuração OAuth carregada');
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao carregar configuração OAuth: $e');
+    } on Object catch (e, s) {
+      // Sem fail silencioso: registra erro e expõe para a UI para que o
+      // operador saiba que precisa reconfigurar credenciais OAuth.
+      setErrorManual(
+        'Configuração OAuth corrompida ou inválida. Reconfigure as credenciais.',
+      );
+      LoggerService.error('Erro ao carregar configuração OAuth Google', e, s);
     }
   }
 
@@ -256,10 +230,5 @@ class GoogleAuthProvider extends ChangeNotifier {
       LoggerService.error('Erro ao salvar configuração OAuth', e);
       rethrow;
     }
-  }
-
-  void clearError() {
-    _error = null;
-    notifyListeners();
   }
 }

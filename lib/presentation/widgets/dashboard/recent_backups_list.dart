@@ -60,6 +60,16 @@ class RecentBackupsList extends StatelessWidget {
                   ),
                 ],
               ),
+              if (_buildRequestedVsExecutedText(context, backup)
+                  case final divergence?) ...[
+                const SizedBox(height: 4),
+                Text(
+                  divergence,
+                  style: FluentTheme.of(
+                    context,
+                  ).typography.caption?.copyWith(color: AppColors.backupWarning),
+                ),
+              ],
               if (_hasSybaseDetails(backup)) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -139,25 +149,35 @@ class RecentBackupsList extends StatelessWidget {
   bool _hasSybaseDetails(BackupHistory backup) =>
       backup.databaseType.toLowerCase() == 'sybase' && backup.metrics != null;
 
-  String _buildSybaseDetailsText(BuildContext context, BackupHistory backup) {
-    final parts = <String>[];
+  /// Quando o tipo de backup executado difere do solicitado (ex.: PG
+  /// incremental → full por falta de base, ou Sybase log convertido),
+  /// retorna texto curto descrevendo a divergência. Funciona para
+  /// qualquer SGBD pois `requestedBackupType` em `sybaseOptions` agora é
+  /// preenchido genericamente pelo orchestrator.
+  String? _buildRequestedVsExecutedText(
+    BuildContext context,
+    BackupHistory backup,
+  ) {
     final requestedType =
         backup.metrics?.sybaseOptions?['requestedBackupType'] as String?;
-    if (requestedType != null &&
-        requestedType != backup.backupType &&
-        requestedType.isNotEmpty) {
-      final requestedDisplay = backupTypeFromString(requestedType).displayName;
-      final effectiveDisplay = backupTypeFromString(
-        backup.backupType,
-      ).displayName;
-      parts.add(
-        _t(
-          context,
-          'Solicitado: $requestedDisplay → Efetivo: $effectiveDisplay',
-          'Requested: $requestedDisplay → Effective: $effectiveDisplay',
-        ),
-      );
+    if (requestedType == null ||
+        requestedType.isEmpty ||
+        requestedType == backup.backupType) {
+      return null;
     }
+    final requestedDisplay = backupTypeFromString(requestedType).displayName;
+    final effectiveDisplay = backupTypeFromString(
+      backup.backupType,
+    ).displayName;
+    return _t(
+      context,
+      'Solicitado: $requestedDisplay → Executado: $effectiveDisplay',
+      'Requested: $requestedDisplay → Executed: $effectiveDisplay',
+    );
+  }
+
+  String _buildSybaseDetailsText(BuildContext context, BackupHistory backup) {
+    final parts = <String>[];
     final method = backup.metrics?.sybaseOptions?['backupMethod'] as String?;
     if (method != null) {
       parts.add(_t(context, 'Ferramenta: $method', 'Tool: $method'));

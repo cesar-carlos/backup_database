@@ -5,6 +5,11 @@ abstract class IBackupProgressNotifier {
   void removeListener(void Function() callback);
   BackupProgressSnapshot? get currentSnapshot;
   void setCurrentBackupName(String name);
+
+  /// Define o identificador do `BackupHistory` em execução. Usado pela UI
+  /// para invocar cancelamento granular via
+  /// `IBackupCancellationService.cancelByHistoryId`.
+  void setCurrentHistoryId(String historyId);
   void updateProgress({
     required String step,
     required String message,

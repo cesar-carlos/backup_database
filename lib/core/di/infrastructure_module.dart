@@ -32,6 +32,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // ========================================================================
 
   getIt.registerLazySingleton<ProcessService>(ProcessService.new);
+  getIt.registerLazySingleton<IBackupCancellationService>(
+    () => BackupCancellationService(getIt<ProcessService>()),
+  );
   getIt.registerLazySingleton<ToolVerificationService>(
     () => ToolVerificationService(getIt<ProcessService>()),
   );

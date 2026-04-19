@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/connection/connected_client.dart';
@@ -56,6 +57,13 @@ class ClientHandler {
   String clientName = '';
   DateTime _lastHeartbeat = DateTime.now();
   HeartbeatManager? _heartbeatManager;
+  StreamSubscription<List<int>>? _socketSubscription;
+
+  /// Serializa as escritas no socket para evitar interleaving de bytes
+  /// quando heartbeat e mensagens normais (ex.: progress) tentam emitir
+  /// concorrentemente. Sem isso o protocolo binário pode receber bytes
+  /// fora de ordem e o peer falha no parse.
+  Future<void> _sendQueue = Future.value();
 
   Stream<Message> get messageStream => _messageController.stream;
   String get clientId => _clientId;
@@ -85,7 +93,7 @@ class ClientHandler {
       onTimeout: disconnect,
     );
     _heartbeatManager!.start();
-    _socket.listen(
+    _socketSubscription = _socket.listen(
       _onData,
       onError: _onError,
       onDone: _onDone,
@@ -95,12 +103,51 @@ class ClientHandler {
 
   void _onData(List<int> data) {
     _buffer.addAll(data);
+
+    // Proteção contra peer malicioso / dados malformados: se o buffer
+    // crescer absurdamente sem produzir uma mensagem válida, derruba a
+    // conexão para liberar memória do servidor.
+    if (_buffer.length > SocketConfig.maxBufferOverhead) {
+      LoggerService.warning(
+        'ClientHandler $_clientId: buffer excedeu limite de '
+        '${SocketConfig.maxBufferOverhead} bytes sem produzir mensagem '
+        'válida — desconectando.',
+      );
+      disconnect();
+      return;
+    }
+
     _tryParseMessages();
   }
 
   void _tryParseMessages() {
     while (_buffer.length >= _headerSize) {
       final length = _readUint32Be(_buffer, 5);
+
+      // Validação de range no length declarado pelo header. Antes era
+      // confiado cegamente — peer malicioso podia declarar 4 GB e
+      // alocar tudo. Agora rejeitamos qualquer payload acima do limite.
+      if (length < 0 || length > SocketConfig.maxMessagePayloadBytes) {
+        LoggerService.warning(
+          'ClientHandler $_clientId: length declarado inválido ($length '
+          'bytes; máximo ${SocketConfig.maxMessagePayloadBytes}). '
+          'Encerrando conexão.',
+        );
+        unawaited(
+          send(
+            createErrorMessage(
+              requestId: 0,
+              errorMessage:
+                  'Message length out of range: $length (max '
+                  '${SocketConfig.maxMessagePayloadBytes})',
+              errorCode: ErrorCode.parseError,
+            ),
+          ),
+        );
+        disconnect();
+        return;
+      }
+
       final totalNeeded = _headerSize + length + _checksumSize;
       if (_buffer.length < totalNeeded) break;
 
@@ -116,35 +163,53 @@ class ClientHandler {
         if (isAuthRequestMessage(message) && !_authHandled) {
           _authHandled = true;
           if (_authentication != null) {
+            // Pausa o subscription enquanto a validação async roda; sem
+            // isso, mensagens subsequentes do peer chegavam e caíam no
+            // ramo `else` PRÉ-AUTH (eram entregues ao
+            // `_messageController` SEM `isAuthenticated=true`),
+            // permitindo executar comandos antes de validar credencial.
+            _socketSubscription?.pause();
             _authentication.validateAuthRequest(message).then((
               AuthValidationResult validationResult,
             ) async {
-              final valid = validationResult.isValid;
-              isAuthenticated = valid;
-              final serverId = message.payload['serverId'] as String?;
               try {
-                await _connectionLogDao?.insertConnectionAttempt(
-                  clientHost: _remoteAddress,
-                  serverId: serverId,
-                  success: valid,
-                  errorMessage: valid ? null : validationResult.errorMessage,
-                  clientId: _clientId,
+                final valid = validationResult.isValid;
+                isAuthenticated = valid;
+                final serverId = message.payload['serverId'] as String?;
+                try {
+                  await _connectionLogDao?.insertConnectionAttempt(
+                    clientHost: _remoteAddress,
+                    serverId: serverId,
+                    success: valid,
+                    errorMessage: valid ? null : validationResult.errorMessage,
+                    clientId: _clientId,
+                  );
+                } on Object catch (e) {
+                  LoggerService.warning(
+                    'ClientHandler: failed to log auth: $e',
+                  );
+                }
+                await send(
+                  createAuthResponse(
+                    success: valid,
+                    error: validationResult.errorMessage,
+                    errorCode: validationResult.errorCode,
+                  ),
                 );
-              } on Object catch (e) {
-                LoggerService.warning('ClientHandler: failed to log auth: $e');
+                if (!valid) {
+                  disconnect();
+                  return;
+                }
+                _safeAddMessage(message);
+              } finally {
+                // Retoma o stream para processar mensagens pós-auth.
+                if (_socketSubscription?.isPaused ?? false) {
+                  _socketSubscription?.resume();
+                  // Mensagens que já estão no buffer precisam ser
+                  // reprocessadas — `_tryParseMessages` é idempotente.
+                  _tryParseMessages();
+                }
               }
-              await send(
-                createAuthResponse(
-                  success: valid,
-                  error: validationResult.errorMessage,
-                  errorCode: validationResult.errorCode,
-                ),
-              );
-              if (!valid) {
-                disconnect();
-                return;
-              }
-              _messageController.add(message);
             });
             return;
           }
@@ -153,7 +218,7 @@ class ClientHandler {
           _heartbeatManager?.onHeartbeatReceived();
           _lastHeartbeat = DateTime.now();
         }
-        _messageController.add(message);
+        _safeAddMessage(message);
       } on ProtocolException catch (e) {
         LoggerService.warning(
           'ClientHandler parse error for $_remoteAddress: ${e.message}',
@@ -168,6 +233,16 @@ class ClientHandler {
           ),
         );
       }
+    }
+  }
+
+  /// Emite no `_messageController` apenas se ele ainda está aberto.
+  /// Antes, `disconnect()` fechava o controller mas `_tryParseMessages`
+  /// poderia continuar rodando e disparar `StateError: Cannot add to
+  /// closed controller`.
+  void _safeAddMessage(Message message) {
+    if (!_messageController.isClosed) {
+      _messageController.add(message);
     }
   }
 
@@ -191,24 +266,33 @@ class ClientHandler {
     disconnect();
   }
 
-  Future<void> send(Message message) async {
-    try {
-      final data = _protocol.serializeMessage(message);
-
-      // Log sent message
-      _socketLogger?.logSent(message);
-
-      _socket.add(data);
-      await _socket.flush();
-    } on Object catch (e) {
-      LoggerService.warning('ClientHandler send error: $e');
-      rethrow;
-    }
+  Future<void> send(Message message) {
+    // Encadeia as escritas em uma fila implícita (`_sendQueue`) — cada
+    // novo `send` aguarda o anterior antes de tocar no socket. Mantém
+    // o protocolo binário consistente quando heartbeat e progress
+    // tentam emitir simultaneamente.
+    final next = _sendQueue.then((_) async {
+      try {
+        final data = _protocol.serializeMessage(message);
+        _socketLogger?.logSent(message);
+        _socket.add(data);
+        await _socket.flush();
+      } on Object catch (e) {
+        LoggerService.warning('ClientHandler send error: $e');
+        rethrow;
+      }
+    });
+    // Mantém a cadeia mesmo se `next` falhar (catchError silencia para
+    // não estourar erro futuro não-aguardado em outras chamadas).
+    _sendQueue = next.catchError((Object _) {});
+    return next;
   }
 
   void disconnect() {
     _heartbeatManager?.stop();
     _heartbeatManager = null;
+    _socketSubscription?.cancel();
+    _socketSubscription = null;
     if (!_messageController.isClosed) {
       _messageController.close();
     }

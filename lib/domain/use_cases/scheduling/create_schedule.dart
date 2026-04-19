@@ -62,12 +62,15 @@ class CreateSchedule {
 
     final result = await _repository.create(scheduleWithNextRun);
 
-    result.fold(
-      (createdSchedule) async {
-        await _schedulerService.refreshSchedule(createdSchedule.id);
-      },
-      (failure) => null,
-    );
+    // Bug histórico: usar `result.fold((_) async { await refreshSchedule(); })`
+    // não aguardava o callback async — `return result;` rodava imediatamente
+    // e o caller recebia Success enquanto o scheduler ainda não havia sido
+    // notificado. Em scheduler reactivo, isso significava que o próximo
+    // tick podia rodar com a versão antiga do schedule.
+    final createdSchedule = result.getOrNull();
+    if (createdSchedule != null) {
+      await _schedulerService.refreshSchedule(createdSchedule.id);
+    }
 
     return result;
   }

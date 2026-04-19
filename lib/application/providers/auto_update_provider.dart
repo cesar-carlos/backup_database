@@ -1,22 +1,19 @@
-﻿import 'package:backup_database/application/services/auto_update_service.dart';
-import 'package:backup_database/core/errors/failure.dart';
+﻿import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/foundation.dart';
 
-class AutoUpdateProvider extends ChangeNotifier {
+class AutoUpdateProvider extends ChangeNotifier with AsyncStateMixin {
   AutoUpdateProvider({required AutoUpdateService autoUpdateService})
     : _autoUpdateService = autoUpdateService;
   final AutoUpdateService _autoUpdateService;
 
-  final bool _isLoading = false;
-  bool _isChecking = false;
-  String? _error;
   bool _updateAvailable = false;
   DateTime? _lastCheckDate;
 
-  bool get isLoading => _isLoading;
-  bool get isChecking => _isChecking;
-  String? get error => _error;
+  /// Mantido como alias para compatibilidade com a UI atual: a verificação
+  /// de atualizações usa o mesmo `isLoading` do mixin.
+  bool get isChecking => isLoading;
   bool get updateAvailable => _updateAvailable;
   DateTime? get lastCheckDate => _lastCheckDate;
   bool get isInitialized => _autoUpdateService.isInitialized;
@@ -24,33 +21,20 @@ class AutoUpdateProvider extends ChangeNotifier {
 
   Future<void> checkForUpdates() async {
     if (!_autoUpdateService.isInitialized) {
-      _error = 'Serviço de atualização não inicializado';
-      notifyListeners();
+      setErrorManual('Serviço de atualização não inicializado');
       return;
     }
 
-    _isChecking = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      await _autoUpdateService.checkForUpdatesManually();
-      _lastCheckDate = DateTime.now();
-      _isChecking = false;
-      notifyListeners();
-      LoggerService.info('Verificação de atualizações concluída');
-    } on Object catch (e) {
-      final failure = e is Failure ? e : NetworkFailure(message: e.toString());
-      _error = failure.message;
-      _isChecking = false;
-      notifyListeners();
-      LoggerService.error('Erro ao verificar atualizações', e);
+    await runAsync<void>(
+      action: () async {
+        await _autoUpdateService.checkForUpdatesManually();
+        _lastCheckDate = DateTime.now();
+        LoggerService.info('Verificação de atualizações concluída');
+      },
+    );
+    if (error != null) {
+      LoggerService.error('Erro ao verificar atualizações: $error');
     }
-  }
-
-  void clearError() {
-    _error = null;
-    notifyListeners();
   }
 
   void setUpdateAvailable(bool available) {

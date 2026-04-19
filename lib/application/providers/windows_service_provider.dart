@@ -1,5 +1,4 @@
-import 'package:backup_database/core/errors/failure.dart';
-import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:flutter/foundation.dart';
@@ -14,32 +13,28 @@ enum WindowsServiceOperation {
   restart,
 }
 
-class WindowsServiceProvider extends ChangeNotifier {
+class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   WindowsServiceProvider(this._service, this._eventLog);
   final IWindowsServiceService _service;
   final IWindowsServiceEventLogger _eventLog;
 
   WindowsServiceStatus? _status;
-  bool _isLoading = false;
   WindowsServiceOperation _operation = WindowsServiceOperation.none;
-  String? _error;
 
   WindowsServiceStatus? _statusCache;
   DateTime? _statusCacheTimestamp;
   static const _statusCacheTtl = Duration(seconds: 2);
 
   WindowsServiceStatus? get status => _status;
-  bool get isLoading => _isLoading;
   bool get isStarting =>
       _operation == WindowsServiceOperation.start ||
       _operation == WindowsServiceOperation.restart;
   WindowsServiceOperation get operation => _operation;
-  String? get error => _error;
   bool get isInstalled => _status?.isInstalled ?? false;
   bool get isRunning => _status?.isRunning ?? false;
 
   Future<void> checkStatus({bool forceRefresh = false}) async {
-    if (_isLoading) return;
+    if (isLoading) return;
 
     final cacheValid =
         !forceRefresh &&
@@ -49,36 +44,26 @@ class WindowsServiceProvider extends ChangeNotifier {
 
     if (cacheValid) {
       _status = _statusCache;
-      _error = null;
+      clearError();
       notifyListeners();
       return;
     }
 
-    _isLoading = true;
-    _operation = WindowsServiceOperation.check;
-    _error = null;
-    notifyListeners();
-
-    final result = await _service.getStatus();
-
-    result.fold(
-      (status) {
-        _status = status;
-        _statusCache = status;
-        _statusCacheTimestamp = DateTime.now();
-        _error = null;
-      },
-      (failure) {
-        _error = failure is Failure ? failure.message : failure.toString();
-        _statusCache = null;
-        _statusCacheTimestamp = null;
-        LoggerService.error('Erro ao verificar status do serviço', failure);
-      },
-    );
-
-    _isLoading = false;
-    _operation = WindowsServiceOperation.none;
-    notifyListeners();
+    await _runOperation(WindowsServiceOperation.check, () async {
+      final result = await _service.getStatus();
+      result.fold(
+        (status) {
+          _status = status;
+          _statusCache = status;
+          _statusCacheTimestamp = DateTime.now();
+        },
+        (failure) {
+          _statusCache = null;
+          _statusCacheTimestamp = null;
+          throw failure;
+        },
+      );
+    });
   }
 
   void _invalidateStatusCache() {
@@ -87,113 +72,80 @@ class WindowsServiceProvider extends ChangeNotifier {
   }
 
   Future<bool> installService({String? user, String? password}) async {
-    if (_isLoading) return false;
-    _isLoading = true;
-    _operation = WindowsServiceOperation.install;
-    _error = null;
-    notifyListeners();
-
+    if (isLoading) return false;
     await _eventLog.logInstallStarted();
 
-    final result = await _service.installService(
-      serviceUser: user,
-      servicePassword: password,
-    );
-
-    final success = result.fold(
-      (_) {
-        _error = null;
-        return true;
-      },
-      (failure) {
-        _error = failure is Failure ? failure.message : failure.toString();
-        LoggerService.error('Erro ao instalar serviço', failure);
-        return false;
+    final success = await _runOperation<bool>(
+      WindowsServiceOperation.install,
+      () async {
+        final result = await _service.installService(
+          serviceUser: user,
+          servicePassword: password,
+        );
+        return result.fold(
+          (_) => true,
+          (failure) => throw failure,
+        );
       },
     );
 
-    if (success) {
+    final ok = success ?? false;
+    if (ok) {
       await _eventLog.logInstallSucceeded();
-    } else {
-      await _eventLog.logInstallFailed(error: _error ?? 'Erro desconhecido');
-    }
-
-    _isLoading = false;
-    _operation = WindowsServiceOperation.none;
-    if (success) {
       _invalidateStatusCache();
       await checkStatus(forceRefresh: true);
+    } else {
+      await _eventLog.logInstallFailed(error: error ?? 'Erro desconhecido');
     }
-    notifyListeners();
-    return success;
+    return ok;
   }
 
   Future<bool> uninstallService() async {
-    if (_isLoading) return false;
-    _isLoading = true;
-    _operation = WindowsServiceOperation.uninstall;
-    _error = null;
-    notifyListeners();
-
+    if (isLoading) return false;
     await _eventLog.logUninstallStarted();
 
-    final result = await _service.uninstallService();
-
-    final success = result.fold(
-      (_) {
-        _error = null;
-        return true;
-      },
-      (failure) {
-        _error = failure is Failure ? failure.message : failure.toString();
-        LoggerService.error('Erro ao remover serviço', failure);
-        return false;
+    final success = await _runOperation<bool>(
+      WindowsServiceOperation.uninstall,
+      () async {
+        final result = await _service.uninstallService();
+        return result.fold(
+          (_) => true,
+          (failure) => throw failure,
+        );
       },
     );
 
-    if (success) {
+    final ok = success ?? false;
+    if (ok) {
       await _eventLog.logUninstallSucceeded();
-    } else {
-      await _eventLog.logUninstallFailed(error: _error ?? 'Erro desconhecido');
-    }
-
-    _isLoading = false;
-    _operation = WindowsServiceOperation.none;
-    if (success) {
       _invalidateStatusCache();
       await checkStatus(forceRefresh: true);
+    } else {
+      await _eventLog.logUninstallFailed(error: error ?? 'Erro desconhecido');
     }
-    notifyListeners();
-    return success;
+    return ok;
   }
 
   Future<bool> startService() async {
-    if (_isLoading) return false;
-    _isLoading = true;
-    _operation = WindowsServiceOperation.start;
-    _error = null;
-    notifyListeners();
-
+    if (isLoading) return false;
     await _eventLog.logStartStarted();
 
-    final result = await _service.startService();
-
-    final success = result.fold(
-      (_) {
-        _error = null;
-        return true;
-      },
-      (failure) {
-        _error = failure is Failure ? failure.message : failure.toString();
-        LoggerService.error('Erro ao iniciar serviço', failure);
-        return false;
+    final success = await _runOperation<bool>(
+      WindowsServiceOperation.start,
+      () async {
+        final result = await _service.startService();
+        return result.fold(
+          (_) => true,
+          (failure) => throw failure,
+        );
       },
     );
 
-    if (success) {
+    final ok = success ?? false;
+    if (ok) {
       await _eventLog.logStartSucceeded();
     } else {
-      final err = _error ?? '';
+      final err = error ?? '';
       if (_isTimeoutMessage(err)) {
         await _eventLog.logStartTimeout(
           timeout: const Duration(seconds: 60),
@@ -203,12 +155,10 @@ class WindowsServiceProvider extends ChangeNotifier {
       }
     }
 
-    _isLoading = false;
-    _operation = WindowsServiceOperation.none;
     _invalidateStatusCache();
     await _refreshStatusSilently();
     notifyListeners();
-    return success;
+    return ok;
   }
 
   static bool _isTimeoutMessage(String msg) =>
@@ -216,32 +166,25 @@ class WindowsServiceProvider extends ChangeNotifier {
       msg.toLowerCase().contains('tempo esgotado');
 
   Future<bool> stopService() async {
-    if (_isLoading) return false;
-    _isLoading = true;
-    _operation = WindowsServiceOperation.stop;
-    _error = null;
-    notifyListeners();
-
+    if (isLoading) return false;
     await _eventLog.logStopStarted();
 
-    final result = await _service.stopService();
-
-    final success = result.fold(
-      (_) {
-        _error = null;
-        return true;
-      },
-      (failure) {
-        _error = failure is Failure ? failure.message : failure.toString();
-        LoggerService.error('Erro ao parar serviço', failure);
-        return false;
+    final success = await _runOperation<bool>(
+      WindowsServiceOperation.stop,
+      () async {
+        final result = await _service.stopService();
+        return result.fold(
+          (_) => true,
+          (failure) => throw failure,
+        );
       },
     );
 
-    if (success) {
+    final ok = success ?? false;
+    if (ok) {
       await _eventLog.logStopSucceeded();
     } else {
-      final err = _error ?? '';
+      final err = error ?? '';
       if (_isTimeoutMessage(err)) {
         await _eventLog.logStopTimeout(
           timeout: const Duration(seconds: 60),
@@ -251,43 +194,34 @@ class WindowsServiceProvider extends ChangeNotifier {
       }
     }
 
-    _isLoading = false;
-    _operation = WindowsServiceOperation.none;
     _invalidateStatusCache();
     await _refreshStatusSilently();
     notifyListeners();
-    return success;
+    return ok;
   }
 
   Future<bool> restartService() async {
-    if (_isLoading) return false;
-    _isLoading = true;
-    _operation = WindowsServiceOperation.restart;
-    _error = null;
-    notifyListeners();
-
+    if (isLoading) return false;
     await _eventLog.logStopStarted();
     await _eventLog.logStartStarted();
 
-    final result = await _service.restartService();
-
-    final success = result.fold(
-      (_) {
-        _error = null;
-        return true;
-      },
-      (failure) {
-        _error = failure is Failure ? failure.message : failure.toString();
-        LoggerService.error('Erro ao reiniciar serviço', failure);
-        return false;
+    final success = await _runOperation<bool>(
+      WindowsServiceOperation.restart,
+      () async {
+        final result = await _service.restartService();
+        return result.fold(
+          (_) => true,
+          (failure) => throw failure,
+        );
       },
     );
 
-    if (success) {
+    final ok = success ?? false;
+    if (ok) {
       await _eventLog.logStopSucceeded();
       await _eventLog.logStartSucceeded();
     } else {
-      final err = _error ?? '';
+      final err = error ?? '';
       if (_isTimeoutMessage(err)) {
         await _eventLog.logStartTimeout(
           timeout: const Duration(seconds: 60),
@@ -297,12 +231,27 @@ class WindowsServiceProvider extends ChangeNotifier {
       }
     }
 
-    _isLoading = false;
-    _operation = WindowsServiceOperation.none;
     _invalidateStatusCache();
     await _refreshStatusSilently();
     notifyListeners();
-    return success;
+    return ok;
+  }
+
+  /// Wrapper específico que adicionalmente seta `_operation` para que a
+  /// UI possa diferenciar (start/stop/restart/install/uninstall/check).
+  /// Delega a gestão de `isLoading` + `error` ao [runAsync] do mixin.
+  Future<T?> _runOperation<T>(
+    WindowsServiceOperation op,
+    Future<T> Function() action,
+  ) async {
+    _operation = op;
+    notifyListeners();
+    try {
+      return await runAsync<T>(action: action);
+    } finally {
+      _operation = WindowsServiceOperation.none;
+      notifyListeners();
+    }
   }
 
   Future<void> _refreshStatusSilently() async {

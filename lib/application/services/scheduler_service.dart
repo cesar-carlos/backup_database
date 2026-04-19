@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
 import 'package:backup_database/core/constants/backup_constants.dart';
@@ -8,6 +9,7 @@ import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/logging/log_context.dart';
+import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
@@ -16,6 +18,7 @@ import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/schedule.dart'
     show DatabaseType, Schedule;
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/domain/services/i_backup_cancellation_service.dart';
 import 'package:backup_database/domain/services/i_backup_cleanup_service.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_destination_orchestrator.dart';
@@ -44,6 +47,8 @@ class SchedulerService implements ISchedulerService {
     required ILicensePolicyService licensePolicyService,
     ITransferStagingService? transferStagingService,
     IMetricsCollector? metricsCollector,
+    IBackupCancellationService? cancellationService,
+    Duration uploadTimeout = const Duration(hours: 4),
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
        _backupHistoryRepository = backupHistoryRepository,
@@ -56,7 +61,9 @@ class SchedulerService implements ISchedulerService {
        _progressNotifier = progressNotifier,
        _licensePolicyService = licensePolicyService,
        _transferStagingService = transferStagingService,
-       _metricsCollector = metricsCollector;
+       _metricsCollector = metricsCollector,
+       _cancellationService = cancellationService,
+       _uploadTimeout = uploadTimeout;
 
   final IScheduleRepository _scheduleRepository;
   final IBackupDestinationRepository _destinationRepository;
@@ -66,16 +73,38 @@ class SchedulerService implements ISchedulerService {
   final IBackupCleanupService _cleanupService;
   final INotificationService _notificationService;
   final IScheduleCalculator _scheduleCalculator;
+  // Mantido como dependência opcional do construtor para compatibilidade
+  // com testes/wiring existente, embora o uso interno tenha sido movido
+  // para `BackupOrchestratorService._estimateRequiredSpaceBytes`.
+  // ignore: unused_field
   final IStorageChecker _storageChecker;
   final IBackupProgressNotifier _progressNotifier;
   final ILicensePolicyService _licensePolicyService;
   final ITransferStagingService? _transferStagingService;
   final IMetricsCollector? _metricsCollector;
 
+  /// Opcional para preservar compatibilidade com testes que constroem o
+  /// scheduler sem o serviço de cancelamento. Em produção é injetado via
+  /// DI e usado para matar processos do SGBD imediatamente quando o
+  /// usuário pede para cancelar (antes a flag só interrompia no próximo
+  /// checkpoint).
+  final IBackupCancellationService? _cancellationService;
+
+  /// Timeout aplicado a todo o ciclo de upload para evitar que destinos
+  /// travados (FTP lento, Drive offline) bloqueiem o backup
+  /// indefinidamente. Configurável via construtor.
+  final Duration _uploadTimeout;
+
   Timer? _checkTimer;
   bool _isRunning = false;
   final Set<String> _executingSchedules = {};
   final Set<String> _cancelRequestedSchedules = {};
+
+  /// Mapeia `scheduleId` em execução para o `historyId` correspondente.
+  /// Usado por `cancelExecution` para invocar
+  /// `IBackupCancellationService.cancelByHistoryId` e matar o processo do
+  /// SGBD imediatamente em vez de esperar o próximo checkpoint.
+  final Map<String, String> _runningHistoryIds = {};
 
   @override
   bool get isExecutingBackup => _executingSchedules.isNotEmpty;
@@ -90,12 +119,24 @@ class SchedulerService implements ISchedulerService {
     await _updateAllNextRuns();
     await _reconcileStaleRunningBackups();
 
-    _checkTimer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) => _checkSchedules(),
-    );
+    // Jitter inicial (0-30s) antes do primeiro tick para evitar que
+    // todos os servidores em um cluster batam o banco no mesmo segundo.
+    // Sem o jitter, vários SchedulerService.start() simultâneos (ex.: ao
+    // reiniciar uma frota de máquinas) consultariam `getEnabledDueForExecution`
+    // todos no segundo zero, causando picos de I/O previsíveis.
+    final jitterSeconds = Random().nextInt(30);
+    Timer(Duration(seconds: jitterSeconds), () {
+      if (!_isRunning) return;
+      _checkSchedules();
+      _checkTimer = Timer.periodic(
+        const Duration(minutes: 1),
+        (_) => _checkSchedules(),
+      );
+    });
 
-    LoggerService.info('Serviço de agendamento iniciado');
+    LoggerService.info(
+      'Serviço de agendamento iniciado (jitter inicial: ${jitterSeconds}s)',
+    );
   }
 
   @override
@@ -109,28 +150,41 @@ class SchedulerService implements ISchedulerService {
   Future<void> _updateAllNextRuns() async {
     final result = await _scheduleRepository.getEnabled();
 
-    result.fold(
-      (schedules) async {
-        for (final schedule in schedules) {
-          final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
-          if (nextRunAt != null) {
-            LoggerService.info(
-              'Atualizando schedule ${schedule.name}: '
-              'nextRunAt atual = ${schedule.nextRunAt}, '
-              'novo nextRunAt = $nextRunAt',
-            );
-            await _scheduleRepository.update(
-              schedule.copyWith(nextRunAt: nextRunAt),
-            );
-          }
-        }
-        LoggerService.info('${schedules.length} schedules atualizados');
-      },
-      (exception) {
-        final failure = exception as Failure;
-        LoggerService.error('Erro ao atualizar schedules: ${failure.message}');
-      },
-    );
+    // Bug histórico: usar `result.fold((schedules) async { ... })` aqui não
+    // aguardava o callback assíncrono — `start()` retornava enquanto os
+    // updates aconteciam em background. Usamos `getOrNull/exceptionOrNull`
+    // para ficar com `await` de fato no fluxo principal.
+    if (result.isError()) {
+      final exception = result.exceptionOrNull();
+      LoggerService.error(
+        'Erro ao atualizar schedules: ${_failureMessage(exception)}',
+      );
+      return;
+    }
+
+    final schedules = result.getOrThrow();
+    for (final schedule in schedules) {
+      final nextRunAt = _scheduleCalculator.getNextRunTime(schedule);
+      if (nextRunAt == null) continue;
+      LoggerService.info(
+        'Atualizando schedule ${schedule.name}: '
+        'nextRunAt atual = ${schedule.nextRunAt}, '
+        'novo nextRunAt = $nextRunAt',
+      );
+      await _scheduleRepository.update(
+        schedule.copyWith(nextRunAt: nextRunAt),
+      );
+    }
+    LoggerService.info('${schedules.length} schedules atualizados');
+  }
+
+  /// Helper centralizado para extrair mensagem amigável de um failure
+  /// retornado por `result_dart`. Antes era reimplementado inline com
+  /// `failure as Failure` (cast direto, crashava com tipos inesperados).
+  String _failureMessage(Object? failure) {
+    if (failure == null) return 'Erro desconhecido';
+    if (failure is Failure) return failure.message;
+    return failure.toString();
   }
 
   Future<void> _checkSchedules() async {
@@ -143,6 +197,11 @@ class SchedulerService implements ISchedulerService {
     result.fold(
       (schedules) {
         if (schedules.isEmpty) return;
+        // Política: executa SOMENTE o primeiro vencido por tick. O lock
+        // global em `_executeScheduledBackup` garante que não há dois
+        // backups simultâneos. Os agendamentos restantes serão pegos no
+        // próximo tick (1 minuto). Isso evita pico de I/O quando vários
+        // schedules vencem ao mesmo tempo.
         final schedule = schedules.first;
         unawaited(_runDueScheduleFromTimer(schedule));
       },
@@ -209,13 +268,22 @@ class SchedulerService implements ISchedulerService {
       '(nextRunAt: ${schedule.nextRunAt}, now: ${DateTime.now()})',
     );
 
-    late String tempBackupPath;
-    var shouldDeleteTempFile = false;
+    String? tempBackupPath;
     final runId = '${schedule.id}_${const Uuid().v4()}';
 
     try {
       _licensePolicyService.setRunContext(runId);
       LogContext.setContext(runId: runId, scheduleId: schedule.id);
+
+      // Garante que o BackupProgressProvider está em estado "running" para
+      // que `setCurrentHistoryId` (chamado pelo orchestrator) consiga
+      // publicar o historyId. Sem isso, o botão Cancelar do
+      // BackupProgressDialog ficaria permanentemente desabilitado quando
+      // o backup foi iniciado pela UI local. Retorno `false` é benigno —
+      // significa que outro caller (ex.: socket handler) já reservou o
+      // slot, o que é o comportamento desejado.
+      _progressNotifier.tryStartBackup(schedule.name);
+      _progressNotifier.setCurrentBackupName(schedule.name);
 
       final canceledAtStart = await _failIfCancellationRequested(
         schedule: schedule,
@@ -267,13 +335,14 @@ class SchedulerService implements ISchedulerService {
         return rd.Failure(ValidationFailure(message: errorMessage));
       }
 
-      final spaceCheckResult = await _checkFreeSpace(backupDir, schedule);
-      if (spaceCheckResult.isError()) {
-        return spaceCheckResult;
-      }
+      // A validação de espaço livre vive agora dentro do
+      // BackupOrchestratorService._estimateRequiredSpaceBytes (usa
+      // tamanho real do banco × safetyFactor). Antes existia uma
+      // checagem duplicada aqui com mínimo fixo de 500 MB que dava
+      // false-positive em bancos grandes (passava no scheduler e
+      // falhava no orchestrator).
 
       final outputDirectory = backupDir.path;
-      shouldDeleteTempFile = true;
       LoggerService.info(
         'Usando pasta temporária de backup: $outputDirectory',
       );
@@ -290,11 +359,8 @@ class SchedulerService implements ISchedulerService {
           .validateExecutionCapabilities(schedule, destinations);
       if (policyResult.isError()) {
         final failure = policyResult.exceptionOrNull()!;
-        final message = failure is Failure
-            ? failure.message
-            : failure.toString();
         LoggerService.error(
-          'Execução bloqueada por licença: $message',
+          'Execução bloqueada por licença: ${_failureMessage(failure)}',
           failure,
         );
         return rd.Failure(failure);
@@ -306,20 +372,17 @@ class SchedulerService implements ISchedulerService {
       );
 
       if (backupResult.isError()) {
-        try {
-          final error = backupResult.exceptionOrNull()!;
-          final errorMessage = error is Failure
-              ? error.message
-              : error.toString();
-          _progressNotifier.failBackup(errorMessage);
-        } on Object catch (e, s) {
-          LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
-        }
-        return rd.Failure(backupResult.exceptionOrNull()!);
+        final error = backupResult.exceptionOrNull()!;
+        _safeFailBackup(_failureMessage(error));
+        return rd.Failure(error);
       }
 
       final backupHistory = backupResult.getOrNull()!;
       tempBackupPath = backupHistory.backupPath;
+      // Registra o mapeamento scheduleId → historyId para que
+      // `cancelExecution` consiga matar o processo do SGBD imediatamente
+      // via `IBackupCancellationService.cancelByHistoryId`.
+      _runningHistoryIds[schedule.id] = backupHistory.id;
 
       final canceledAfterBackup = await _failIfCancellationRequested(
         schedule: schedule,
@@ -329,17 +392,11 @@ class SchedulerService implements ISchedulerService {
         return canceledAfterBackup;
       }
 
-      if (!await _pathExistsAsBackupArtifact(backupHistory.backupPath)) {
-        final errorMessage =
-            'Caminho do backup não encontrado (arquivo ou pasta): '
-            '${backupHistory.backupPath}';
-        LoggerService.error(errorMessage);
-        return _failScheduledBackupAfterArtifactError(
-          backupHistory: backupHistory,
-          errorMessage: errorMessage,
-          logStep: LogStepConstants.backupFileNotFound,
-          failure: BackupFailure(message: errorMessage),
-        );
+      final missingArtifactResultBefore = await _failIfArtifactMissing(
+        backupHistory,
+      );
+      if (missingArtifactResultBefore != null) {
+        return missingArtifactResultBefore;
       }
 
       final hasDestinations = destinations.isNotEmpty;
@@ -364,15 +421,11 @@ class SchedulerService implements ISchedulerService {
       }
 
       if (hasDestinations) {
-        try {
-          _progressNotifier.updateProgress(
-            step: 'Enviando para destino',
-            message: 'Enviando para destinos...',
-            progress: 0.85,
-          );
-        } on Object catch (e, s) {
-          LoggerService.warning('Erro ao atualizar progresso', e, s);
-        }
+        _safeUpdateProgress(
+          step: 'Enviando para destino',
+          message: 'Enviando para destinos...',
+          progress: 0.85,
+        );
       }
 
       final uploadErrors = <String>[];
@@ -386,33 +439,53 @@ class SchedulerService implements ISchedulerService {
         return canceledBeforeUpload;
       }
 
-      if (!await _pathExistsAsBackupArtifact(backupHistory.backupPath)) {
-        final errorMessage =
-            'Caminho do backup não encontrado (arquivo ou pasta): '
-            '${backupHistory.backupPath}';
-        LoggerService.error(errorMessage);
-        return _failScheduledBackupAfterArtifactError(
-          backupHistory: backupHistory,
-          errorMessage: errorMessage,
-          logStep: LogStepConstants.backupFileNotFound,
-          failure: BackupFailure(message: errorMessage),
-        );
+      final missingArtifactResultBeforeUpload = await _failIfArtifactMissing(
+        backupHistory,
+      );
+      if (missingArtifactResultBeforeUpload != null) {
+        return missingArtifactResultBeforeUpload;
       }
 
       final uploadStopwatch = Stopwatch()..start();
       final backupIdForPath = schedule.databaseType == DatabaseType.sybase
           ? backupHistory.id
           : null;
-      final sendResults = await _destinationOrchestrator
-          .uploadToAllDestinations(
-            sourceFilePath: backupHistory.backupPath,
-            destinations: destinations,
-            isCancelled: () => _cancelRequestedSchedules.contains(schedule.id),
-            backupId: backupIdForPath,
-            onProgress: _createThrottledUploadProgressCallback(
-              destinations.length,
+      // Aplica timeout global ao ciclo de upload para evitar que destinos
+      // travados (FTP lento, Drive offline) mantenham o backup pendurado
+      // indefinidamente. Em timeout, simulamos failures para todas as
+      // destinations não confirmadas e seguimos o fluxo de erro.
+      List<rd.Result<void>> sendResults;
+      try {
+        sendResults = await _destinationOrchestrator
+            .uploadToAllDestinations(
+              sourceFilePath: backupHistory.backupPath,
+              destinations: destinations,
+              isCancelled: () =>
+                  _cancelRequestedSchedules.contains(schedule.id),
+              backupId: backupIdForPath,
+              onProgress: _createThrottledUploadProgressCallback(
+                destinations.length,
+              ),
+            )
+            .timeout(_uploadTimeout);
+      } on TimeoutException {
+        LoggerService.error(
+          'Upload para destinos excedeu o timeout de '
+          '${_uploadTimeout.inMinutes} minutos para ${schedule.name}',
+        );
+        sendResults = List.generate(
+          destinations.length,
+          (_) => rd.Failure(
+            BackupFailure(
+              message:
+                  'Upload excedeu timeout de ${_uploadTimeout.inMinutes} '
+                  'minutos. Verifique conectividade ou aumente '
+                  'uploadTimeout no scheduler.',
+              code: FailureCodes.uploadFailed,
             ),
-          );
+          ),
+        );
+      }
       uploadStopwatch.stop();
       final uploadDuration = uploadStopwatch.elapsed;
       _metricsCollector?.recordHistogram(
@@ -420,15 +493,11 @@ class SchedulerService implements ISchedulerService {
         uploadDuration.inMilliseconds.toDouble(),
       );
 
-      try {
-        _progressNotifier.updateProgress(
-          step: 'Enviando para destino',
-          message: 'Upload para destinos concluído.',
-          progress: 0.95,
-        );
-      } on Object catch (e, s) {
-        LoggerService.warning('Erro ao atualizar progresso', e, s);
-      }
+      _safeUpdateProgress(
+        step: 'Enviando para destino',
+        message: 'Upload para destinos concluído.',
+        progress: 0.95,
+      );
 
       for (var index = 0; index < sendResults.length; index++) {
         final destination = destinations[index];
@@ -437,11 +506,9 @@ class SchedulerService implements ISchedulerService {
           _metricsCollector?.incrementCounter(
             ObservabilityMetrics.destinationUploadFailureTotal,
           );
-          final failureMessage = failure is Failure
-              ? failure.message
-              : failure.toString();
           final errorMessage =
-              'Falha ao enviar para ${destination.name}: $failureMessage';
+              'Falha ao enviar para ${destination.name}: '
+              '${_failureMessage(failure)}';
           uploadErrors.add(errorMessage);
           LoggerService.error(errorMessage, failure);
           hasCriticalUploadError = true;
@@ -505,12 +572,7 @@ class SchedulerService implements ISchedulerService {
           failure,
         );
 
-        try {
-          _progressNotifier.failBackup(errorMessage);
-        } on Object catch (e, s) {
-          LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
-        }
-
+        _safeFailBackup(errorMessage);
         return rd.Failure(failure);
       }
 
@@ -559,37 +621,12 @@ class SchedulerService implements ISchedulerService {
         );
       }
 
-      if (shouldDeleteTempFile) {
-        try {
-          final entityType = FileSystemEntity.typeSync(tempBackupPath);
-
-          switch (entityType) {
-            case FileSystemEntityType.file:
-              final tempFile = File(tempBackupPath);
-              if (tempFile.existsSync()) {
-                await tempFile.delete();
-                LoggerService.info(
-                  'Arquivo temporário deletado: $tempBackupPath',
-                );
-              }
-            case FileSystemEntityType.directory:
-              final tempDir = Directory(tempBackupPath);
-              if (tempDir.existsSync()) {
-                await tempDir.delete(recursive: true);
-                LoggerService.info(
-                  'Diretório temporário deletado: $tempBackupPath',
-                );
-              }
-            default:
-              LoggerService.debug(
-                'Arquivo temporário não encontrado para exclusão: '
-                '$tempBackupPath',
-              );
-          }
-        } on Object catch (e) {
-          LoggerService.warning('Erro ao deletar arquivo temporário: $e');
-        }
-      }
+      // Apaga o arquivo/diretório temporário SOMENTE quando o backup
+      // terminou com sucesso (chegamos aqui sem ter retornado por
+      // upload-error). Antes, o cleanup acontecia incondicionalmente,
+      // o que resultava em perda de dados quando o upload falhava: o
+      // único exemplar do backup era apagado da pasta local.
+      await _deleteTempBackupArtifact(tempBackupPath);
 
       final now = DateTime.now();
       final scheduleWithLastRun = schedule.copyWith(lastRunAt: now);
@@ -648,18 +685,20 @@ class SchedulerService implements ISchedulerService {
         // Usar stagingRelativePath se disponível, senão usa backupPath original
         final pathToSend = stagingRelativePath ?? backupHistory.backupPath;
 
-        // Log para diagnosticar problema de backupPath vazio
-        LoggerService.info('===== COMPLETANDO BACKUP =====');
-        LoggerService.info('stagingRelativePath: $stagingRelativePath');
-        LoggerService.info(
+        // Estes logs eram nível `info` antes, poluindo a saída de
+        // produção com diagnóstico de uma issue específica de
+        // backupPath vazio. Reduzimos para `debug` mantendo o conteúdo.
+        LoggerService.debug('===== COMPLETANDO BACKUP =====');
+        LoggerService.debug('stagingRelativePath: $stagingRelativePath');
+        LoggerService.debug(
           'backupHistory.backupPath: ${backupHistory.backupPath}',
         );
-        LoggerService.info('pathToSend: $pathToSend');
-        LoggerService.info('pathToSend está vazio? ${pathToSend.isEmpty}');
+        LoggerService.debug('pathToSend: $pathToSend');
 
         if (stagingRelativePath == null) {
           LoggerService.warning(
-            'stagingRelativePath é null, usando backupPath original: $pathToSend',
+            'stagingRelativePath é null, usando backupPath original: '
+            '$pathToSend',
           );
         }
 
@@ -668,7 +707,7 @@ class SchedulerService implements ISchedulerService {
           backupPath: pathToSend,
         );
 
-        LoggerService.info(
+        LoggerService.debug(
           'completeBackup chamado com backupPath: "$pathToSend"',
         );
       } on Object catch (e, s) {
@@ -697,9 +736,16 @@ class SchedulerService implements ISchedulerService {
 
   Future<rd.Result<void>> _runScheduleWithLock(Schedule schedule) async {
     if (_executingSchedules.isNotEmpty) {
-      return const rd.Failure(
+      // Mensagem agora inclui qual schedule está bloqueando, facilitando
+      // o diagnóstico — antes era genérica "já existe um backup em
+      // execução".
+      final running = _executingSchedules.join(', ');
+      return rd.Failure(
         ValidationFailure(
-          message: 'Já existe um backup em execução no servidor.',
+          message:
+              'Já existe um backup em execução no servidor '
+              '(schedule(s): $running). Aguarde a conclusão para iniciar '
+              'um novo.',
           code: FailureCodes.scheduleAlreadyRunning,
         ),
       );
@@ -711,6 +757,37 @@ class SchedulerService implements ISchedulerService {
     } finally {
       _executingSchedules.remove(schedule.id);
       _cancelRequestedSchedules.remove(schedule.id);
+      _runningHistoryIds.remove(schedule.id);
+    }
+  }
+
+  /// Apaga o arquivo ou diretório temporário do backup. Operação
+  /// best-effort: erros são logados mas não interrompem o fluxo. Antes
+  /// vivia inline no `_executeScheduledBackup`; extrair facilita reuso
+  /// caso outros caminhos precisem fazer cleanup.
+  Future<void> _deleteTempBackupArtifact(String path) async {
+    try {
+      final entityType = FileSystemEntity.typeSync(path);
+      switch (entityType) {
+        case FileSystemEntityType.file:
+          final tempFile = File(path);
+          if (tempFile.existsSync()) {
+            await tempFile.delete();
+            LoggerService.info('Arquivo temporário deletado: $path');
+          }
+        case FileSystemEntityType.directory:
+          final tempDir = Directory(path);
+          if (tempDir.existsSync()) {
+            await tempDir.delete(recursive: true);
+            LoggerService.info('Diretório temporário deletado: $path');
+          }
+        default:
+          LoggerService.debug(
+            'Arquivo temporário não encontrado para exclusão: $path',
+          );
+      }
+    } on Object catch (e) {
+      LoggerService.warning('Erro ao deletar arquivo temporário: $e');
     }
   }
 
@@ -750,11 +827,7 @@ class SchedulerService implements ISchedulerService {
       );
     }
 
-    try {
-      _progressNotifier.failBackup(message);
-    } on Object catch (e, s) {
-      LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
-    }
+    _safeFailBackup(message);
 
     return const rd.Failure(
       ValidationFailure(
@@ -807,6 +880,27 @@ class SchedulerService implements ISchedulerService {
     }
 
     _cancelRequestedSchedules.add(scheduleId);
+
+    // Mata o processo do SGBD imediatamente em vez de esperar o próximo
+    // checkpoint do `_failIfCancellationRequested`. Sem isso, um backup
+    // travado em `pg_basebackup` ou `dbbackup` continuaria rodando até
+    // terminar sozinho, ignorando o pedido de cancelamento.
+    final historyId = _runningHistoryIds[scheduleId];
+    final cancellationService = _cancellationService;
+    if (historyId != null && cancellationService != null) {
+      LoggerService.info(
+        'Cancelando processo do backup historyId=$historyId '
+        '(scheduleId=$scheduleId) via IBackupCancellationService',
+      );
+      cancellationService.cancelByHistoryId(historyId);
+    } else {
+      LoggerService.info(
+        'Cancelamento marcado para scheduleId=$scheduleId. Processo '
+        'do SGBD será interrompido no próximo checkpoint '
+        '(historyId ou IBackupCancellationService indisponível).',
+      );
+    }
+
     return const rd.Success(rd.unit);
   }
 
@@ -828,59 +922,37 @@ class SchedulerService implements ISchedulerService {
   @override
   bool get isRunning => _isRunning;
 
-  Future<bool> _checkWritePermission(Directory directory) async {
+  /// Reporta falha ao progress notifier de forma resiliente. Centraliza o
+  /// padrão `try { _progressNotifier.failBackup(msg); } catch ...` que
+  /// antes era repetido em 4+ pontos do `_executeScheduledBackup`.
+  void _safeFailBackup(String message) {
     try {
-      final testFileName =
-          '.backup_permission_test_${DateTime.now().millisecondsSinceEpoch}';
-      final testFile = File(
-        '${directory.path}${Platform.pathSeparator}$testFileName',
-      );
-
-      await testFile.writeAsString('test');
-
-      if (await testFile.exists()) {
-        await testFile.delete();
-        return true;
-      }
-
-      return false;
-    } on Object catch (e) {
-      LoggerService.warning(
-        'Erro ao verificar permissão de escrita na pasta ${directory.path}: $e',
-      );
-      return false;
+      _progressNotifier.failBackup(message);
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
     }
   }
 
-  Future<rd.Result<void>> _checkFreeSpace(
-    Directory directory,
-    Schedule schedule,
-  ) async {
-    final result = await _storageChecker.checkSpace(directory.path);
-
-    return result.fold(
-      (spaceInfo) {
-        if (!spaceInfo.hasEnoughSpace(
-          BackupConstants.minFreeSpaceForBackupBytes,
-        )) {
-          final errorMessage =
-              'Espaço livre insuficiente na pasta de backup. '
-              'Disponível: ${_formatBytes(spaceInfo.freeBytes)}, '
-              'Mínimo necessário: '
-              '${_formatBytes(BackupConstants.minFreeSpaceForBackupBytes)}';
-          LoggerService.error(errorMessage);
-          return rd.Failure(ValidationFailure(message: errorMessage));
-        }
-
-        LoggerService.info(
-          'Verificação de espaço livre concluída: '
-          '${_formatBytes(spaceInfo.freeBytes)} livres',
-        );
-        return const rd.Success(rd.unit);
-      },
-      rd.Failure.new,
-    );
+  /// Atualiza o progresso de forma resiliente (alguns updates são triviais
+  /// e não devem interromper o backup se o notifier estiver com problema).
+  void _safeUpdateProgress({
+    required String step,
+    required String message,
+    double? progress,
+  }) {
+    try {
+      _progressNotifier.updateProgress(
+        step: step,
+        message: message,
+        progress: progress,
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao atualizar progresso', e, s);
+    }
   }
+
+  Future<bool> _checkWritePermission(Directory directory) =>
+      DirectoryPermissionCheck.hasWritePermission(directory);
 
   BackupMetrics? _mergeUploadAndCleanupMetrics(
     BackupMetrics? base,
@@ -894,16 +966,32 @@ class SchedulerService implements ISchedulerService {
     );
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-  }
-
   Future<bool> _pathExistsAsBackupArtifact(String path) async {
     final type = await FileSystemEntity.type(path);
     return type == FileSystemEntityType.file ||
         type == FileSystemEntityType.directory;
+  }
+
+  /// Verifica se o artefato do backup ainda existe em disco. Retorna `null`
+  /// quando OK; um `Result<void>` de falha quando ausente. Antes este
+  /// padrão era duplicado em dois pontos do `_executeScheduledBackup`
+  /// com mesma mensagem e mesmo `_failScheduledBackupAfterArtifactError`.
+  Future<rd.Result<void>?> _failIfArtifactMissing(
+    BackupHistory backupHistory,
+  ) async {
+    if (await _pathExistsAsBackupArtifact(backupHistory.backupPath)) {
+      return null;
+    }
+    final errorMessage =
+        'Caminho do backup não encontrado (arquivo ou pasta): '
+        '${backupHistory.backupPath}';
+    LoggerService.error(errorMessage);
+    return _failScheduledBackupAfterArtifactError(
+      backupHistory: backupHistory,
+      errorMessage: errorMessage,
+      logStep: LogStepConstants.backupFileNotFound,
+      failure: BackupFailure(message: errorMessage),
+    );
   }
 
   Future<rd.Result<void>> _failScheduledBackupAfterArtifactError({
@@ -931,12 +1019,7 @@ class SchedulerService implements ISchedulerService {
       (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
     );
 
-    try {
-      _progressNotifier.failBackup(errorMessage);
-    } on Object catch (e, s) {
-      LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
-    }
-
+    _safeFailBackup(errorMessage);
     return rd.Failure(failure);
   }
 
@@ -1018,6 +1101,8 @@ class SchedulerService implements ISchedulerService {
 
     final startTime = DateTime.now();
     const checkInterval = Duration(seconds: 2);
+    const progressLogInterval = Duration(seconds: 10);
+    var lastProgressLog = startTime;
 
     while (_executingSchedules.isNotEmpty) {
       final elapsed = DateTime.now().difference(startTime);
@@ -1031,8 +1116,13 @@ class SchedulerService implements ISchedulerService {
         return false;
       }
 
-      // Loga progresso a cada 10 segundos
-      if (elapsed.inSeconds % 10 == 0 && elapsed.inSeconds > 0) {
+      // Bug histórico: usar `elapsed.inSeconds % 10 == 0` dependia de
+      // que a checagem caísse exatamente no segundo 10/20/30, o que com
+      // `checkInterval=2s` podia ser pulado (10 → próximo tick em 12s).
+      // Agora rastreamos timestamp do último log e comparamos diferença.
+      final now = DateTime.now();
+      if (now.difference(lastProgressLog) >= progressLogInterval) {
+        lastProgressLog = now;
         LoggerService.info(
           '⏳ Aguardando... ${_executingSchedules.length} restante '
           '(${elapsed.inSeconds}s / ${timeout.inSeconds}s)',

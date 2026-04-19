@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
@@ -10,7 +11,7 @@ import 'package:backup_database/infrastructure/socket/client/socket_client_servi
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
-class ServerConnectionProvider extends ChangeNotifier {
+class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   ServerConnectionProvider(
     this._repository,
     this._connectionManager,
@@ -26,8 +27,6 @@ class ServerConnectionProvider extends ChangeNotifier {
   StreamSubscription<ConnectionStatus>? _statusSubscription;
 
   List<ServerConnection> _connections = [];
-  bool _isLoading = false;
-  String? _error;
   bool _isConnecting = false;
   bool _isTestingConnection = false;
   bool _hasTriedAutoConnectAtStartup = false;
@@ -46,8 +45,6 @@ class ServerConnectionProvider extends ChangeNotifier {
   }
 
   List<ServerConnection> get connections => _connections;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
   bool get isConnecting => _isConnecting;
   bool get isTestingConnection => _isTestingConnection;
   bool get isConnected => _connectionManager.isConnected;
@@ -56,31 +53,24 @@ class ServerConnectionProvider extends ChangeNotifier {
   int? get activePort => _connectionManager.activePort;
 
   Future<void> loadConnections() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    final result = await _repository.getAll();
-
-    result.fold(
-      (list) {
-        _connections = list;
-        _isLoading = false;
-        if (currentAppMode == AppMode.client &&
-            !_hasTriedAutoConnectAtStartup &&
-            list.isNotEmpty &&
-            !_connectionManager.isConnected) {
-          _hasTriedAutoConnectAtStartup = true;
-          unawaited(tryConnectToSavedServersInBackground());
-        }
-      },
-      (failure) {
-        _error = failure.toString();
-        _isLoading = false;
+    await runAsync<void>(
+      action: () async {
+        final result = await _repository.getAll();
+        result.fold(
+          (list) {
+            _connections = list;
+            if (currentAppMode == AppMode.client &&
+                !_hasTriedAutoConnectAtStartup &&
+                list.isNotEmpty &&
+                !_connectionManager.isConnected) {
+              _hasTriedAutoConnectAtStartup = true;
+              unawaited(tryConnectToSavedServersInBackground());
+            }
+          },
+          (failure) => throw failure,
+        );
       },
     );
-
-    notifyListeners();
   }
 
   /// Tenta conectar em sequência a todos os servidores configurados em background.
@@ -109,6 +99,20 @@ class ServerConnectionProvider extends ChangeNotifier {
           notifyListeners();
           return;
         }
+        // Connect retornou sem throw mas também sem estabelecer a conexão
+        // (ex.: handshake rejeitado). Antes esse caso passava silencioso e
+        // não gerava entrada no histórico; agora registramos a tentativa.
+        final silentError =
+            _connectionManager.lastErrorMessage ?? 'Conexão não estabelecida';
+        await _logConnectionAttempt(
+          clientHost: connection.name,
+          serverId: connection.serverId,
+          success: false,
+          errorMessage: silentError,
+        );
+        LoggerService.debug(
+          'Conexão silenciosa a ${connection.name} em background falhou: $silentError',
+        );
       } on Object catch (e) {
         final errorMessage = e is StateError ? e.message : e.toString();
         await _logConnectionAttempt(
@@ -148,39 +152,32 @@ class ServerConnectionProvider extends ChangeNotifier {
     required int port,
     required String password,
   }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    final ok = await runAsync<bool>(
+      action: () async {
+        final now = DateTime.now();
+        final connection = ServerConnection(
+          id: const Uuid().v4(),
+          name: name,
+          serverId: serverId,
+          host: host,
+          port: port,
+          password: password,
+          isOnline: false,
+          createdAt: now,
+          updatedAt: now,
+        );
 
-    final now = DateTime.now();
-    final connection = ServerConnection(
-      id: const Uuid().v4(),
-      name: name,
-      serverId: serverId,
-      host: host,
-      port: port,
-      password: password,
-      isOnline: false,
-      createdAt: now,
-      updatedAt: now,
-    );
-
-    final result = await _repository.save(connection);
-
-    return result.fold(
-      (saved) {
-        _connections.add(saved);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      },
-      (failure) {
-        _error = failure.toString();
-        _isLoading = false;
-        notifyListeners();
-        return false;
+        final result = await _repository.save(connection);
+        return result.fold(
+          (saved) {
+            _connections = [..._connections, saved];
+            return true;
+          },
+          (failure) => throw failure,
+        );
       },
     );
+    return ok ?? false;
   }
 
   Future<bool> updateConnection(
@@ -191,61 +188,47 @@ class ServerConnectionProvider extends ChangeNotifier {
     int? port,
     String? password,
   }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    final ok = await runAsync<bool>(
+      action: () async {
+        final updated = connection.copyWith(
+          name: name ?? connection.name,
+          serverId: serverId ?? connection.serverId,
+          host: host ?? connection.host,
+          port: port ?? connection.port,
+          password: password ?? connection.password,
+          updatedAt: DateTime.now(),
+        );
 
-    final updated = connection.copyWith(
-      name: name ?? connection.name,
-      serverId: serverId ?? connection.serverId,
-      host: host ?? connection.host,
-      port: port ?? connection.port,
-      password: password ?? connection.password,
-      updatedAt: DateTime.now(),
-    );
-
-    final result = await _repository.update(updated);
-
-    return result.fold(
-      (saved) {
-        final index = _connections.indexWhere((c) => c.id == saved.id);
-        if (index != -1) {
-          _connections[index] = saved;
-        }
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      },
-      (failure) {
-        _error = failure.toString();
-        _isLoading = false;
-        notifyListeners();
-        return false;
+        final result = await _repository.update(updated);
+        return result.fold(
+          (saved) {
+            _connections = [
+              for (final c in _connections)
+                if (c.id == saved.id) saved else c,
+            ];
+            return true;
+          },
+          (failure) => throw failure,
+        );
       },
     );
+    return ok ?? false;
   }
 
   Future<bool> deleteConnection(String id) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    final result = await _repository.delete(id);
-
-    return result.fold(
-      (_) {
-        _connections.removeWhere((c) => c.id == id);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      },
-      (failure) {
-        _error = failure.toString();
-        _isLoading = false;
-        notifyListeners();
-        return false;
+    final ok = await runAsync<bool>(
+      action: () async {
+        final result = await _repository.delete(id);
+        return result.fold(
+          (_) {
+            _connections = _connections.where((c) => c.id != id).toList();
+            return true;
+          },
+          (failure) => throw failure,
+        );
       },
     );
+    return ok ?? false;
   }
 
   Future<void> connectTo(
@@ -253,7 +236,6 @@ class ServerConnectionProvider extends ChangeNotifier {
     bool enableAutoReconnect = false,
   }) async {
     _isConnecting = true;
-    _error = null;
     notifyListeners();
 
     LoggerService.info('Tentando conectar à conexão: $connectionId');
@@ -262,29 +244,31 @@ class ServerConnectionProvider extends ChangeNotifier {
     final connection = index >= 0 ? _connections[index] : null;
 
     try {
-      await _connectionManager.connectToSavedConnection(
-        connectionId,
-        enableAutoReconnect: enableAutoReconnect,
+      await runAsync<void>(
+        action: () async {
+          await _connectionManager.connectToSavedConnection(
+            connectionId,
+            enableAutoReconnect: enableAutoReconnect,
+          );
+          if (_connectionManager.isConnected && connection != null) {
+            await _logConnectionAttempt(
+              clientHost: connection.name,
+              serverId: connection.serverId,
+              success: true,
+            );
+          }
+          LoggerService.info('Conexão estabelecida com sucesso');
+        },
       );
-      if (_connectionManager.isConnected && connection != null) {
-        await _logConnectionAttempt(
-          clientHost: connection.name,
-          serverId: connection.serverId,
-          success: true,
-        );
-      }
-      LoggerService.info('Conexão estabelecida com sucesso');
-    } on Object catch (e) {
-      _error = e is StateError ? e.message : e.toString();
-      if (connection != null) {
+      if (error != null && connection != null) {
         await _logConnectionAttempt(
           clientHost: connection.name,
           serverId: connection.serverId,
           success: false,
-          errorMessage: _error,
+          errorMessage: error,
         );
+        LoggerService.error('Erro ao conectar: $error');
       }
-      LoggerService.error('Erro ao conectar: $_error', e);
     } finally {
       _isConnecting = false;
       notifyListeners();
@@ -298,27 +282,33 @@ class ServerConnectionProvider extends ChangeNotifier {
 
   Future<bool> testConnection(ServerConnection connection) async {
     _isTestingConnection = true;
-    _error = null;
     notifyListeners();
 
     try {
-      await _connectionManager.connect(
-        host: connection.host,
-        port: connection.port,
-        serverId: connection.serverId,
-        password: connection.password,
+      final ok = await runAsync<bool>(
+        action: () async {
+          await _connectionManager.connect(
+            host: connection.host,
+            port: connection.port,
+            serverId: connection.serverId,
+            password: connection.password,
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          final connected = _connectionManager.isConnected;
+          await _connectionManager.disconnect();
+          if (!connected) {
+            throw Exception(
+              _connectionManager.lastErrorMessage ??
+                  'Falha ao conectar no servidor',
+            );
+          }
+          return true;
+        },
       );
-      await Future<void>.delayed(const Duration(milliseconds: 800));
-      final ok = _connectionManager.isConnected;
-      await _connectionManager.disconnect();
-      return ok;
-    } on Object catch (e) {
-      _error = e is StateError
-          ? e.message
-          : _connectionManager.lastErrorMessage ??
-                'Falha ao conectar no servidor';
-      await _connectionManager.disconnect();
-      return false;
+      if (!(ok ?? false)) {
+        await _connectionManager.disconnect();
+      }
+      return ok ?? false;
     } finally {
       _isTestingConnection = false;
       notifyListeners();

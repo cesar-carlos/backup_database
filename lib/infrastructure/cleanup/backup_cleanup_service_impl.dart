@@ -235,33 +235,13 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       uploadTimeoutMinutes: config.uploadTimeoutMinutes,
       protectedBackupIdShortPrefixes: protectedShortIds,
     );
-    final cleanResult = await _ftpDestinationService.cleanOldBackups(
-      config: configWithProtected,
+    await _runRemoteCleanup(
+      label: 'FTP',
+      destination: destination,
+      backupHistoryId: backupHistoryId,
+      clean: () =>
+          _ftpDestinationService.cleanOldBackups(config: configWithProtected),
     );
-    cleanResult.fold((_) {}, (exception) async {
-      LoggerService.error(
-        'Erro ao limpar backups FTP em ${destination.name}',
-        exception,
-      );
-      final failureMessage = exception is Failure
-          ? exception.message
-          : exception.toString();
-
-      await _log(
-        backupHistoryId,
-        'error',
-        'Erro ao limpar backups antigos no FTP ${destination.name}: '
-            '$failureMessage',
-        step: LogStepConstants.cleanupError(destination.id),
-      );
-
-      await _notificationService.sendWarning(
-        databaseName: destination.name,
-        message:
-            'Erro ao limpar backups antigos no FTP '
-            '${destination.name}: $failureMessage',
-      );
-    });
   }
 
   Future<void> _cleanGoogleDrive(
@@ -278,33 +258,13 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       retentionDays: configJson['retentionDays'] as int? ?? 30,
       protectedBackupIdShortPrefixes: protectedShortIds,
     );
-    final cleanResult = await _googleDriveDestinationService.cleanOldBackups(
-      config: config,
+    await _runRemoteCleanup(
+      label: 'Google Drive',
+      destination: destination,
+      backupHistoryId: backupHistoryId,
+      clean: () =>
+          _googleDriveDestinationService.cleanOldBackups(config: config),
     );
-    cleanResult.fold((_) {}, (exception) async {
-      LoggerService.error(
-        'Erro ao limpar backups Google Drive em ${destination.name}',
-        exception,
-      );
-      final failureMessage = exception is Failure
-          ? exception.message
-          : exception.toString();
-
-      await _log(
-        backupHistoryId,
-        'error',
-        'Erro ao limpar backups antigos no Google Drive '
-            '${destination.name}: $failureMessage',
-        step: LogStepConstants.cleanupError(destination.id),
-      );
-
-      await _notificationService.sendWarning(
-        databaseName: destination.name,
-        message:
-            'Erro ao limpar backups antigos no Google Drive '
-            '${destination.name}: $failureMessage',
-      );
-    });
   }
 
   Future<void> _cleanDropbox(
@@ -319,33 +279,12 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       retentionDays: configJson['retentionDays'] as int? ?? 30,
       protectedBackupIdShortPrefixes: protectedShortIds,
     );
-    final cleanResult = await _dropboxDestinationService.cleanOldBackups(
-      config: config,
+    await _runRemoteCleanup(
+      label: 'Dropbox',
+      destination: destination,
+      backupHistoryId: backupHistoryId,
+      clean: () => _dropboxDestinationService.cleanOldBackups(config: config),
     );
-    cleanResult.fold((_) {}, (exception) async {
-      LoggerService.error(
-        'Erro ao limpar backups Dropbox em ${destination.name}',
-        exception,
-      );
-      final failureMessage = exception is Failure
-          ? exception.message
-          : exception.toString();
-
-      await _log(
-        backupHistoryId,
-        'error',
-        'Erro ao limpar backups antigos no Dropbox '
-            '${destination.name}: $failureMessage',
-        step: LogStepConstants.cleanupError(destination.id),
-      );
-
-      await _notificationService.sendWarning(
-        databaseName: destination.name,
-        message:
-            'Erro ao limpar backups antigos no Dropbox '
-            '${destination.name}: $failureMessage',
-      );
-    });
   }
 
   Future<void> _cleanNextcloud(
@@ -366,12 +305,34 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       retentionDays: baseConfig.retentionDays,
       protectedBackupIdShortPrefixes: protectedShortIds,
     );
-    final cleanResult = await _nextcloudDestinationService.cleanOldBackups(
-      config: config,
+    await _runRemoteCleanup(
+      label: 'Nextcloud',
+      destination: destination,
+      backupHistoryId: backupHistoryId,
+      clean: () =>
+          _nextcloudDestinationService.cleanOldBackups(config: config),
     );
-    cleanResult.fold((_) {}, (exception) async {
+  }
+
+  /// Executa a função `clean` para uma destination remota e centraliza:
+  ///  - log estruturado em caso de falha;
+  ///  - registro de erro idempotente no histórico do backup;
+  ///  - envio de notificação de warning.
+  ///
+  /// Substitui as quatro implementações praticamente idênticas que existiam
+  /// para FTP, Google Drive, Dropbox e Nextcloud, eliminando ~120 linhas
+  /// duplicadas e o risco de evoluir o tratamento de erro em apenas um
+  /// destino.
+  Future<void> _runRemoteCleanup({
+    required String label,
+    required BackupDestination destination,
+    required String backupHistoryId,
+    required Future<rd.Result<dynamic>> Function() clean,
+  }) async {
+    final result = await clean();
+    await result.fold((_) async {}, (exception) async {
       LoggerService.error(
-        'Erro ao limpar backups Nextcloud em ${destination.name}',
+        'Erro ao limpar backups $label em ${destination.name}',
         exception,
       );
       final failureMessage = exception is Failure
@@ -381,7 +342,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       await _log(
         backupHistoryId,
         'error',
-        'Erro ao limpar backups antigos no Nextcloud '
+        'Erro ao limpar backups antigos no $label '
             '${destination.name}: $failureMessage',
         step: LogStepConstants.cleanupError(destination.id),
       );
@@ -389,7 +350,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       await _notificationService.sendWarning(
         databaseName: destination.name,
         message:
-            'Erro ao limpar backups antigos no Nextcloud '
+            'Erro ao limpar backups antigos no $label '
             '${destination.name}: $failureMessage',
       );
     });
@@ -402,7 +363,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     String? step,
   }) async {
     try {
-      final level = _logLevelFromString(levelStr);
+      final level = LogLevel.fromString(levelStr);
       if (step != null) {
         final result = await _backupLogRepository.createIdempotent(
           backupHistoryId: historyId,
@@ -427,19 +388,6 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       await _backupLogRepository.create(log);
     } on Object catch (e) {
       LoggerService.warning('Erro ao gravar log no banco: $e');
-    }
-  }
-
-  LogLevel _logLevelFromString(String levelStr) {
-    switch (levelStr) {
-      case 'info':
-        return LogLevel.info;
-      case 'warning':
-        return LogLevel.warning;
-      case 'error':
-        return LogLevel.error;
-      default:
-        return LogLevel.info;
     }
   }
 }

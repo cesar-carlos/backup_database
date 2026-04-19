@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:backup_database/application/services/service_health_checker.dart';
+import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
@@ -10,7 +12,6 @@ import 'package:backup_database/core/service/service_shutdown_handler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ServiceModeInitializer {
   ServiceModeInitializer._();
@@ -33,138 +34,109 @@ class ServiceModeInitializer {
         '${SingleInstanceConfig.serviceMutexName.split(r'\').last} '
         'coexists_with_ui=independent_mutex',
       );
-      LoggerService.info('>>> [1/8] Iniciando ServiceModeInitializer');
-      await _appendBootstrapLog('step 1/8: ServiceModeInitializer started');
+      const totalSteps = 9;
 
-      try {
-        await dotenv.load();
-        LoggerService.info('>>> [2/8] Variáveis de ambiente carregadas');
-        await _appendBootstrapLog('step 2/8: dotenv loaded');
-      } on Object catch (e) {
-        LoggerService.warning(
-          '>>> [2/8] Arquivo .env não encontrado ou inválido: $e. '
-          'O serviço continuará com configurações padrão. '
-          'Copie .env.example para .env na pasta do aplicativo se necessário.',
-        );
-        await _appendBootstrapLog(
-          'step 2/8: dotenv load failed, continuing',
-          e,
-        );
-      }
-
-      setAppMode(getAppMode(Platform.executableArguments));
-      LoggerService.info(
-        '>>> [3/8] Modo do aplicativo (servico): ${currentAppMode.name}',
-      );
-      await _appendBootstrapLog(
-        'step 3/8: app mode=${currentAppMode.name}, '
-        'args=${Platform.executableArguments}',
+      await _bootstrapStep(
+        step: 1,
+        totalSteps: totalSteps,
+        label: 'Iniciando ServiceModeInitializer',
+        action: () async {},
       );
 
-      LoggerService.info('>>> [4/8] Verificando single instance...');
-      singleInstanceService = SingleInstanceService();
-      final isFirstServiceInstance = await singleInstanceService.checkAndLock(
-        isServiceMode: true,
-      );
-      LoggerService.info(
-        '>>> [4/8] Single instance check realizado para modo serviço',
-      );
-      await _appendBootstrapLog(
-        'step 4/8: single instance result=$isFirstServiceInstance',
+      await _bootstrapStep(
+        step: 2,
+        totalSteps: totalSteps,
+        label: 'Carregando variaveis de ambiente',
+        action: () => EnvironmentLoader.loadIfNeeded(logPrefix: '[service]'),
       );
 
-      if (!isFirstServiceInstance) {
-        LoggerService.warning(
-          '⚠️ Outra instância do SERVIÇO já está em execução. Encerrando.',
-        );
-        await _appendBootstrapLog(
-          'step 4/8: existing service instance found, exiting 0',
-        );
-        exit(0);
-      }
+      await _bootstrapStep(
+        step: 3,
+        totalSteps: totalSteps,
+        label: 'Detectando modo do aplicativo',
+        action: () async {
+          setAppMode(getAppMode(Platform.executableArguments));
+        },
+        successDetails: () =>
+            'app mode=${currentAppMode.name}, '
+            'args=${Platform.executableArguments}',
+      );
 
-      LoggerService.info('>>> [5/8] Configurando dependências...');
-      await _appendBootstrapLog('step 5/8: setupServiceLocator begin');
-      await service_locator.setupServiceLocatorForServiceMode();
-      LoggerService.info('>>> [5/8] Dependências configuradas com sucesso');
-      await _appendBootstrapLog('step 5/8: setupServiceLocator success');
+      await _bootstrapStep(
+        step: 4,
+        totalSteps: totalSteps,
+        label: 'Verificando single instance',
+        action: () async {
+          singleInstanceService = SingleInstanceService();
+          final isFirstServiceInstance = await singleInstanceService!
+              .checkAndLock(isServiceMode: true);
+          if (!isFirstServiceInstance) {
+            LoggerService.warning(
+              '⚠️ Outra instância do SERVIÇO já está em execução. Encerrando.',
+            );
+            await _appendBootstrapLog(
+              'step 4/$totalSteps: existing service instance found, exiting 0',
+            );
+            exit(0);
+          }
+        },
+      );
 
-      LoggerService.info('>>> [6/8] Obtendo serviços do container DI...');
-      schedulerService = service_locator.getIt<ISchedulerService>();
-      healthChecker = service_locator.getIt<ServiceHealthChecker>();
-      eventLog = service_locator.getIt<WindowsEventLogService>();
-      LoggerService.info('>>> [6/8] Serviços obtidos com sucesso');
-      await _appendBootstrapLog('step 6/8: getIt services success');
+      await _bootstrapStep(
+        step: 5,
+        totalSteps: totalSteps,
+        label: 'Configurando dependências (DI)',
+        action: service_locator.setupServiceLocatorForServiceMode,
+      );
 
-      // Inicializa Windows Event Log
-      LoggerService.info('>>> [7/8] Inicializando Event Log...');
-      await _appendBootstrapLog('step 7/8: eventLog.initialize begin');
-      await eventLog.initialize();
-      await eventLog.logServiceStarted();
-      LoggerService.info('>>> [7/8] Event Log inicializado');
-      await _appendBootstrapLog('step 7/8: eventLog initialized');
+      await _bootstrapStep(
+        step: 6,
+        totalSteps: totalSteps,
+        label: 'Obtendo serviços do container DI',
+        action: () async {
+          schedulerService = service_locator.getIt<ISchedulerService>();
+          healthChecker = service_locator.getIt<ServiceHealthChecker>();
+          eventLog = service_locator.getIt<WindowsEventLogService>();
+        },
+      );
 
-      // Inicializa graceful shutdown handler
-      LoggerService.info('>>> [7/8] Configurando shutdown handler...');
-      final shutdownHandler = ServiceShutdownHandler();
-      await shutdownHandler.initialize();
-      LoggerService.info('>>> [7/8] Shutdown handler configurado');
-      await _appendBootstrapLog('step 7/8: shutdown handler initialized');
+      await _bootstrapStep(
+        step: 7,
+        totalSteps: totalSteps,
+        label: 'Inicializando Event Log',
+        action: () async {
+          await eventLog!.initialize();
+          await eventLog!.logServiceStarted();
+        },
+      );
 
-      // Registra callback de shutdown
-      shutdownHandler.registerCallback((timeout) async {
-        LoggerService.info('🛑 Shutdown callback: Parando serviços');
-
-        // Para health checker primeiro
-        healthChecker?.stop();
-
-        // Para de aceitar novos schedules
-        schedulerService?.stop();
-
-        // Aguarda backups em execução terminarem respeitando o timeout do SCM
-        final budgetForBackups = timeout > const Duration(seconds: 5)
-            ? timeout - const Duration(seconds: 5)
-            : timeout;
-
-        final allCompleted =
-            await schedulerService?.waitForRunningBackups(
-              timeout: budgetForBackups,
-            ) ??
-            false;
-
-        if (!allCompleted) {
-          LoggerService.warning(
-            '⚠️ Alguns backups não terminaram a tempo, '
-            'mas o serviço será encerrado',
+      // Inicializa graceful shutdown handler (passo 8)
+      await _bootstrapStep(
+        step: 8,
+        totalSteps: totalSteps,
+        label: 'Configurando shutdown handler',
+        action: () async {
+          final shutdownHandler = ServiceShutdownHandler();
+          await shutdownHandler.initialize();
+          _registerShutdownCallbacks(
+            shutdownHandler: shutdownHandler,
+            shutdownCompleter: shutdownCompleter,
+            schedulerServiceRef: () => schedulerService,
+            healthCheckerRef: () => healthChecker,
+            eventLogRef: () => eventLog,
           );
-          await eventLog?.logShutdownBackupsIncomplete(
-            timeout: budgetForBackups,
-            details: 'Backups em execução foram interrompidos pelo timeout.',
-          );
-        }
+        },
+      );
 
-        // Log no Event Viewer
-        await eventLog?.logServiceStopped();
-
-        LoggerService.info('✅ Shutdown callback: Serviços parados');
-        await _appendBootstrapLog('shutdown callback: completed');
-
-        // Signal the main wait loop that shutdown is done.
-        _tryComplete(shutdownCompleter);
-      });
-
-      LoggerService.info('>>> [8/8] Iniciando scheduler...');
-      await _appendBootstrapLog('step 8/8: scheduler.start begin');
-      await schedulerService.start();
-      LoggerService.info('>>> [8/8] ✅ Serviço de agendamento iniciado');
-      await _appendBootstrapLog('step 8/8: scheduler.start success');
-
-      // Inicia health checker
-      LoggerService.info('>>> [8/8] Iniciando health checker...');
-      await _appendBootstrapLog('step 8/8: healthChecker.start begin');
-      await healthChecker.start();
-      LoggerService.info('>>> [8/8] ✅ Verificador de saúde iniciado');
-      await _appendBootstrapLog('step 8/8: healthChecker.start success');
+      await _bootstrapStep(
+        step: 9,
+        totalSteps: totalSteps,
+        label: 'Iniciando scheduler e health checker',
+        action: () async {
+          await schedulerService!.start();
+          await healthChecker!.start();
+        },
+      );
 
       LoggerService.info(
         '🎉 ✅ Aplicativo rodando como serviço do Windows - INICIALIZAÇÃO COMPLETA',
@@ -177,7 +149,7 @@ class ServiceModeInitializer {
       await shutdownCompleter.future;
 
       await _appendBootstrapLog('initialize: shutdown signal received');
-      await singleInstanceService.releaseLock();
+      await singleInstanceService?.releaseLock();
       await _appendBootstrapLog('initialize: lock released, exiting');
     } on Object catch (e, stackTrace) {
       LoggerService.error(
@@ -208,11 +180,9 @@ class ServiceModeInitializer {
 
       try {
         // Tenta parar o scheduler gracefulmente
-        if (schedulerService != null) {
-          await schedulerService.waitForRunningBackups(
-            timeout: const Duration(seconds: 30),
-          );
-        }
+        await schedulerService?.waitForRunningBackups(
+          timeout: const Duration(seconds: 30),
+        );
       } on Object catch (e, s) {
         LoggerService.warning('Erro ao aguardar backups terminarem', e, s);
       }
@@ -259,9 +229,102 @@ class ServiceModeInitializer {
       }
       buffer.write('\n');
       await file.writeAsString(buffer.toString(), mode: FileMode.append);
-    } on Object {
-      // Intentionally swallow bootstrap logging failures.
+    } on Object catch (e) {
+      // Antes este catch ficava completamente silencioso, escondendo
+      // permission denied / disk full em produção. Agora ao menos
+      // emite no console de developer (não vai para o LoggerService
+      // para evitar loop caso o próprio LoggerService falhe na escrita).
+      developer.log(
+        '[ServiceModeInitializer] bootstrap log write failed: $e',
+        name: 'service_bootstrap',
+        level: 1000,
+      );
     }
+  }
+
+  /// Helper genérico para um passo da inicialização do serviço. Encapsula
+  /// o padrão repetido de:
+  ///  - log "[step/total] <label>"
+  ///  - escrever no bootstrap log file
+  ///  - executar a ação
+  ///  - log de sucesso (ou propagar exceção)
+  ///
+  /// Centralizar elimina ~60 linhas de código repetido e garante
+  /// numeração consistente dos passos.
+  static Future<void> _bootstrapStep({
+    required int step,
+    required int totalSteps,
+    required String label,
+    required Future<void> Function() action,
+    String Function()? successDetails,
+  }) async {
+    final tag = '[$step/$totalSteps]';
+    LoggerService.info('>>> $tag $label...');
+    await _appendBootstrapLog('step $step/$totalSteps: $label begin');
+    try {
+      await action();
+      final details = successDetails?.call();
+      LoggerService.info('>>> $tag ✅ $label');
+      await _appendBootstrapLog(
+        'step $step/$totalSteps: $label success'
+        '${details != null ? ' ($details)' : ''}',
+      );
+    } on Object catch (e, s) {
+      await _appendBootstrapLog(
+        'step $step/$totalSteps: $label failed',
+        e,
+        s,
+      );
+      rethrow;
+    }
+  }
+
+  /// Registra os callbacks de shutdown do `ServiceShutdownHandler`. Extraído
+  /// para fora do método principal para reduzir o tamanho do
+  /// `initialize()` e isolar a lógica do shutdown gracioso.
+  static void _registerShutdownCallbacks({
+    required ServiceShutdownHandler shutdownHandler,
+    required Completer<void> shutdownCompleter,
+    required ISchedulerService? Function() schedulerServiceRef,
+    required ServiceHealthChecker? Function() healthCheckerRef,
+    required WindowsEventLogService? Function() eventLogRef,
+  }) {
+    shutdownHandler.registerCallback((timeout) async {
+      LoggerService.info('🛑 Shutdown callback: Parando serviços');
+      final scheduler = schedulerServiceRef();
+      final health = healthCheckerRef();
+      final eventLog = eventLogRef();
+
+      health?.stop();
+      scheduler?.stop();
+
+      // Reserva 5s do orçamento total para fechar caches/EventLog/etc.
+      final budgetForBackups = timeout > const Duration(seconds: 5)
+          ? timeout - const Duration(seconds: 5)
+          : timeout;
+
+      final allCompleted =
+          await scheduler?.waitForRunningBackups(timeout: budgetForBackups) ??
+          false;
+
+      if (!allCompleted) {
+        LoggerService.warning(
+          '⚠️ Alguns backups não terminaram a tempo, mas o serviço será '
+          'encerrado',
+        );
+        await eventLog?.logShutdownBackupsIncomplete(
+          timeout: budgetForBackups,
+          details: 'Backups em execução foram interrompidos pelo timeout.',
+        );
+      }
+
+      await eventLog?.logServiceStopped();
+
+      LoggerService.info('✅ Shutdown callback: Serviços parados');
+      await _appendBootstrapLog('shutdown callback: completed');
+
+      _tryComplete(shutdownCompleter);
+    });
   }
 
   /// Completes [c] if it is not already completed.

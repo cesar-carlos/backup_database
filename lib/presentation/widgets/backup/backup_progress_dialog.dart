@@ -1,4 +1,6 @@
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/application/services/backup_orchestrator_service.dart';
+import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/upload_progress_labels.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -149,6 +151,32 @@ class BackupProgressDialog extends StatelessWidget {
               ),
             ),
             actions: [
+              // Botão de cancelar disponível enquanto o backup está em
+              // execução e ainda não foi cancelado. Habilitado apenas
+              // quando temos `historyId` (orchestrator publica logo após
+              // criar o registro do BackupHistory).
+              if (progress.step != BackupStep.completed &&
+                  progress.step != BackupStep.error)
+                Button(
+                  onPressed:
+                      (progress.cancelRequested || progress.historyId == null)
+                      ? null
+                      : () {
+                          // Confirmação rápida via diálogo simples
+                          // para evitar cancelamento acidental.
+                          _confirmAndCancel(
+                            context: context,
+                            provider: provider,
+                            historyId: progress.historyId!,
+                            texts: texts,
+                          );
+                        },
+                  child: Text(
+                    progress.cancelRequested
+                        ? texts.cancellingButton
+                        : texts.cancelButton,
+                  ),
+                ),
               if (progress.step == BackupStep.completed ||
                   progress.step == BackupStep.error)
                 Button(
@@ -175,6 +203,41 @@ class BackupProgressDialog extends StatelessWidget {
       return '$minutes${texts.minuteShort} $seconds${texts.secondShort}';
     }
     return '$seconds${texts.secondShort}';
+  }
+
+  static Future<void> _confirmAndCancel({
+    required BuildContext context,
+    required BackupProgressProvider provider,
+    required String historyId,
+    required _BackupProgressTexts texts,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => ContentDialog(
+        title: Text(texts.cancelConfirmTitle),
+        content: Text(texts.cancelConfirmBody),
+        actions: [
+          Button(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(texts.cancelConfirmKeep),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(texts.cancelConfirmDo),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    provider.markCancelRequested();
+    try {
+      // Resolução tardia do orchestrator para evitar dependência circular
+      // entre o widget e a camada de DI no momento do build inicial.
+      getIt<BackupOrchestratorService>().cancelByHistoryId(historyId);
+    } on Object catch (e) {
+      debugPrint('Falha ao solicitar cancelamento de backup: $e');
+    }
   }
 }
 
@@ -227,6 +290,12 @@ class _BackupProgressTexts {
     required this.elapsedLabel,
     required this.overallProgressLabel,
     required this.closeButton,
+    required this.cancelButton,
+    required this.cancellingButton,
+    required this.cancelConfirmTitle,
+    required this.cancelConfirmBody,
+    required this.cancelConfirmKeep,
+    required this.cancelConfirmDo,
     required this.minuteShort,
     required this.secondShort,
   });
@@ -235,6 +304,12 @@ class _BackupProgressTexts {
   final String elapsedLabel;
   final String overallProgressLabel;
   final String closeButton;
+  final String cancelButton;
+  final String cancellingButton;
+  final String cancelConfirmTitle;
+  final String cancelConfirmBody;
+  final String cancelConfirmKeep;
+  final String cancelConfirmDo;
   final String minuteShort;
   final String secondShort;
 
@@ -247,6 +322,14 @@ class _BackupProgressTexts {
         elapsedLabel: 'Tempo decorrido',
         overallProgressLabel: 'Progresso geral',
         closeButton: 'Fechar',
+        cancelButton: 'Cancelar',
+        cancellingButton: 'Cancelando…',
+        cancelConfirmTitle: 'Cancelar backup?',
+        cancelConfirmBody:
+            'O processo será encerrado imediatamente. Arquivos parciais '
+            'podem ser removidos. Tem certeza?',
+        cancelConfirmKeep: 'Continuar backup',
+        cancelConfirmDo: 'Cancelar agora',
         minuteShort: 'm',
         secondShort: 's',
       );
@@ -257,6 +340,14 @@ class _BackupProgressTexts {
       elapsedLabel: 'Elapsed time',
       overallProgressLabel: 'Overall progress',
       closeButton: 'Close',
+      cancelButton: 'Cancel',
+      cancellingButton: 'Cancelling…',
+      cancelConfirmTitle: 'Cancel backup?',
+      cancelConfirmBody:
+          'The process will be terminated immediately. Partial files may '
+          'be removed. Are you sure?',
+      cancelConfirmKeep: 'Keep running',
+      cancelConfirmDo: 'Cancel now',
       minuteShort: 'm',
       secondShort: 's',
     );

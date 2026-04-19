@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
@@ -14,8 +15,56 @@ import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 class LocalDestinationService implements ILocalDestinationService {
+  /// Locks por path de destino para evitar que `cleanOldBackups` apague
+  /// arquivos `.tmp` em uso por um upload concorrente, ou que dois
+  /// uploads para o mesmo destino se atropelem.
+  ///
+  /// Usamos um `Completer<void>` por path: enquanto o lock está mantido,
+  /// outras chamadas aguardam o `future`.
+  static final Map<String, Future<void>> _destinationLocks = {};
+
+  static Future<T> _withDestinationLock<T>(
+    String destinationPath,
+    Future<T> Function() operation,
+  ) async {
+    while (_destinationLocks.containsKey(destinationPath)) {
+      try {
+        await _destinationLocks[destinationPath];
+      } on Object catch (_) {
+        // Erro do owner anterior — não é problema do próximo na fila.
+      }
+    }
+    final completer = Completer<void>();
+    _destinationLocks[destinationPath] = completer.future;
+    try {
+      return await operation();
+    } finally {
+      _destinationLocks.remove(destinationPath);
+      if (!completer.isCompleted) completer.complete();
+    }
+  }
+
   @override
   Future<rd.Result<LocalUploadResult>> upload({
+    required String sourceFilePath,
+    required LocalDestinationConfig config,
+    String? customFileName,
+    UploadProgressCallback? onProgress,
+  }) {
+    // Mantém o upload e o cleanup mutuamente exclusivos por destino
+    // (mesmo `config.path`). Sem o lock, `cleanOldBackups` poderia
+    // tentar apagar um `.tmp` em uso.
+    return _withDestinationLock(config.path, () async {
+      return _uploadInternal(
+        sourceFilePath: sourceFilePath,
+        config: config,
+        customFileName: customFileName,
+        onProgress: onProgress,
+      );
+    });
+  }
+
+  Future<rd.Result<LocalUploadResult>> _uploadInternal({
     required String sourceFilePath,
     required LocalDestinationConfig config,
     String? customFileName,
@@ -179,23 +228,30 @@ class LocalDestinationService implements ILocalDestinationService {
           );
         }
 
-        final sourceSha256 = await FileHashUtils.computeSha256(sourceFile);
-        final destinationSha256 = await FileHashUtils.computeSha256(
-          destinationFile,
-        );
-        if (destinationSha256.toLowerCase() != sourceSha256.toLowerCase()) {
-          return rd.Failure(
-            FileSystemFailure(
-              message:
-                  'Falha de integridade no destino local: hash SHA-256 do '
-                  'arquivo copiado difere do arquivo de origem.',
-              code: FailureCodes.integrityValidationFailed,
-              originalError: Exception(
-                'Local copy SHA-256 mismatch: source=$sourceSha256 '
-                'destination=$destinationSha256',
-              ),
-            ),
+        // Validação SHA-256 é opcional para grandes backups: ler o
+        // arquivo source uma terceira vez (após copy) custa ~ tamanho
+        // do banco em I/O extra. Para a maioria dos cenários (mesmo
+        // volume, sem rede), a checagem de tamanho acima já pega cópias
+        // parciais. Backups críticos podem manter habilitado.
+        if (config.enableHashValidation) {
+          final sourceSha256 = await FileHashUtils.computeSha256(sourceFile);
+          final destinationSha256 = await FileHashUtils.computeSha256(
+            destinationFile,
           );
+          if (destinationSha256.toLowerCase() != sourceSha256.toLowerCase()) {
+            return rd.Failure(
+              FileSystemFailure(
+                message:
+                    'Falha de integridade no destino local: hash SHA-256 do '
+                    'arquivo copiado difere do arquivo de origem.',
+                code: FailureCodes.integrityValidationFailed,
+                originalError: Exception(
+                  'Local copy SHA-256 mismatch: source=$sourceSha256 '
+                  'destination=$destinationSha256',
+                ),
+              ),
+            );
+          }
         }
 
         LoggerService.info(
@@ -469,8 +525,50 @@ class LocalDestinationService implements ILocalDestinationService {
     }
   }
 
+  /// Extensões reconhecidas como "arquivos de backup" (ou seus
+  /// derivados). Apenas arquivos cuja extensão termine com um destes
+  /// sufixos serão considerados pelo `cleanOldBackups`. Antes, o cleanup
+  /// apagava QUALQUER arquivo antigo na pasta — se o usuário tinha
+  /// outros arquivos lá, eram perdidos.
+  static const Set<String> _backupFileExtensions = {
+    '.bak', // SQL Server
+    '.trn', // SQL Server transaction log
+    '.dump', // PostgreSQL pg_dump
+    '.backup', // PostgreSQL backup
+    '.tar', // PostgreSQL pg_basebackup tar
+    '.db', // Sybase SA database file (usado em backups full)
+    '.log', // Sybase transaction log
+    '.sql', // SQL dump genérico
+    '.zip',
+    '.7z',
+    '.gz',
+    '.rar',
+    '.bz2',
+    '.xz',
+    '.zst',
+  };
+
+  /// Identifica se o arquivo parece ser um artefato de backup (por
+  /// extensão). Filtra `.tmp` (uploads em andamento) e qualquer outro
+  /// arquivo que o usuário possa ter na pasta.
+  static bool _looksLikeBackupArtifact(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.tmp')) return false;
+    return _backupFileExtensions.any(lower.endsWith);
+  }
+
   @override
   Future<rd.Result<int>> cleanOldBackups({
+    required LocalDestinationConfig config,
+  }) {
+    // Adquire o mesmo lock usado pelo `upload` para evitar race entre
+    // limpeza por retenção e upload em andamento (apagar `.tmp` em uso).
+    return _withDestinationLock(config.path, () => _cleanOldBackupsInternal(
+      config: config,
+    ));
+  }
+
+  Future<rd.Result<int>> _cleanOldBackupsInternal({
     required LocalDestinationConfig config,
   }) async {
     try {
@@ -487,21 +585,27 @@ class LocalDestinationService implements ILocalDestinationService {
       final protected = config.protectedBackupIdShortPrefixes;
 
       var deletedCount = 0;
+      var skippedNonBackup = 0;
       await for (final entity in directory.list(recursive: true)) {
-        if (entity is File) {
-          if (protected.isNotEmpty &&
-              SybaseBackupPathSuffix.isPathProtected(entity.path, protected)) {
-            LoggerService.debug(
-              'Arquivo protegido (cadeia Sybase): ${entity.path}',
-            );
-            continue;
-          }
-          final stat = await entity.stat();
-          if (stat.modified.isBefore(cutoffDate)) {
-            await entity.delete();
-            deletedCount++;
-            LoggerService.debug('Arquivo deletado: ${entity.path}');
-          }
+        if (entity is! File) continue;
+        // Filtro por extensão: protege arquivos do usuário que estejam
+        // na mesma pasta (configurações, anotações, etc.).
+        if (!_looksLikeBackupArtifact(p.basename(entity.path))) {
+          skippedNonBackup++;
+          continue;
+        }
+        if (protected.isNotEmpty &&
+            SybaseBackupPathSuffix.isPathProtected(entity.path, protected)) {
+          LoggerService.debug(
+            'Arquivo protegido (cadeia Sybase): ${entity.path}',
+          );
+          continue;
+        }
+        final stat = await entity.stat();
+        if (stat.modified.isBefore(cutoffDate)) {
+          await entity.delete();
+          deletedCount++;
+          LoggerService.debug('Arquivo deletado: ${entity.path}');
         }
       }
 
@@ -525,7 +629,10 @@ class LocalDestinationService implements ILocalDestinationService {
         }
       }
 
-      LoggerService.info('$deletedCount arquivo(s) antigo(s) removido(s)');
+      LoggerService.info(
+        '$deletedCount arquivo(s) antigo(s) removido(s) '
+        '($skippedNonBackup arquivo(s) não-backup preservado(s))',
+      );
       return rd.Success(deletedCount);
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao limpar backups antigos', e, stackTrace);
@@ -546,7 +653,7 @@ extension FileCopyWithProgress on File {
     String newPath, {
     UploadProgressCallback? onProgress,
   }) async {
-    LoggerService.info(
+    LoggerService.debug(
       '[CopyDebug] Iniciando copyToWithBugFix: $path -> $newPath',
     );
 
@@ -554,9 +661,11 @@ extension FileCopyWithProgress on File {
     RandomAccessFile? destRaf;
 
     try {
-      LoggerService.info('[CopyDebug] Source aberto. Abrindo destino...');
+      LoggerService.debug(
+      '[CopyDebug] Source aberto. Abrindo destino...');
       destRaf = await File(newPath).open(mode: FileMode.write);
-      LoggerService.info('[CopyDebug] Destino aberto (RAF). Iniciando loop...');
+      LoggerService.debug(
+      '[CopyDebug] Destino aberto (RAF). Iniciando loop...');
 
       final fileSize = await sourceRaf.length();
       var bytesCopied = 0;
@@ -597,23 +706,28 @@ extension FileCopyWithProgress on File {
           onProgress(progress);
         }
       }
-      LoggerService.info('[CopyDebug] Loop finalizado. Efetuando flush...');
+      LoggerService.debug(
+      '[CopyDebug] Loop finalizado. Efetuando flush...');
       await destRaf.flush();
-      LoggerService.info('[CopyDebug] Flush OK.');
+      LoggerService.debug(
+      '[CopyDebug] Flush OK.');
     } on Object catch (e, st) {
       LoggerService.error('[CopyDebug] Erro durante cópia: $e', e, st);
       rethrow;
     } finally {
-      LoggerService.info('[CopyDebug] Fechando arquivos...');
+      LoggerService.debug(
+      '[CopyDebug] Fechando arquivos...');
       try {
         await sourceRaf.close();
-        LoggerService.info('[CopyDebug] Source fechado.');
+        LoggerService.debug(
+      '[CopyDebug] Source fechado.');
       } on Object catch (e) {
         LoggerService.warning('[CopyDebug] Erro ao fechar source: $e');
       }
       try {
         await destRaf?.close();
-        LoggerService.info('[CopyDebug] Destino fechado.');
+        LoggerService.debug(
+      '[CopyDebug] Destino fechado.');
       } on Object catch (e) {
         LoggerService.warning('[CopyDebug] Erro ao fechar destino: $e');
       }

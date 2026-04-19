@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
@@ -160,8 +161,10 @@ class EmailService implements IEmailService {
       }
     }
 
-    return const rd.Failure(
-      ServerFailure(message: 'Falha SMTP apos 3 tentativas'),
+    return rd.Failure(
+      ServerFailure(
+        message: 'Falha SMTP apos $_maxSendAttempts tentativas',
+      ),
     );
   }
 
@@ -242,7 +245,7 @@ Este é um e-mail automático do Sistema de Backup.
     final duration = history.durationSeconds != null
         ? '${history.durationSeconds} segundos'
         : 'N/A';
-    final size = _formatFileSize(history.fileSize);
+    final size = ByteFormat.format(history.fileSize);
 
     return '''
 Backup realizado com sucesso!
@@ -274,17 +277,18 @@ Este é um e-mail automático do Sistema de Backup.
 ''';
   }
 
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
-
   bool _isTransientFailure(Object error) {
-    if (error is SocketException || error is TimeoutException) {
+    // ECONNREFUSED (errno 111 Linux, 10061 Windows) tipicamente
+    // significa "servidor parado", não vale retentar — antes,
+    // qualquer SocketException era considerado transient e gastávamos
+    // 3× o timeout para devolver erro ao usuário.
+    if (error is SocketException) {
+      final code = error.osError?.errorCode;
+      if (code == 111 || code == 10061) return false; // ECONNREFUSED
+      if (code == 113 || code == 10065) return false; // EHOSTUNREACH
+      return true;
+    }
+    if (error is TimeoutException) {
       return true;
     }
     if (error is SmtpClientCommunicationException) {

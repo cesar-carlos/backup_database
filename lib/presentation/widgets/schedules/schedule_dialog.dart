@@ -5,6 +5,7 @@ import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/constants/schedule_dialog_strings.dart';
 import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
@@ -17,6 +18,7 @@ import 'package:backup_database/domain/entities/sybase_backup_options.dart';
 import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:backup_database/infrastructure/external/compression/winrar_service.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -960,6 +962,32 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         const SizedBox(height: 8),
         Text(
           'Porcentagem de progresso para exibir. O SQL Server relata progresso a cada X%.',
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<int>(
+          label: 'Striping (arquivos paralelos)',
+          value: _stripingCount,
+          placeholder: const Text('1 (sem striping)'),
+          items: const [
+            ComboBoxItem<int>(value: 1, child: Text('1 (sem striping)')),
+            ComboBoxItem<int>(value: 2, child: Text('2 arquivos')),
+            ComboBoxItem<int>(value: 3, child: Text('3 arquivos')),
+            ComboBoxItem<int>(value: 4, child: Text('4 arquivos')),
+          ],
+          onChanged: (value) {
+            final newValue = value ?? 1;
+            setState(() {
+              _stripingCount = newValue;
+            });
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Distribui o backup em N arquivos `<base>.partXofN.bak` que o '
+          'SQL Server escreve em paralelo. Pode aumentar throughput em '
+          'discos rápidos. Aplicado apenas a backups Full e Differential '
+          '(Log permanece com 1 arquivo).',
           style: FluentTheme.of(context).typography.caption,
         ),
       ],
@@ -2000,7 +2028,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       }
     }
 
-    final hasPermission = await _checkWritePermission(directory);
+    final hasPermission = await DirectoryPermissionCheck.hasWritePermission(
+      directory,
+    );
     if (!hasPermission) {
       if (mounted) {
         MessageModal.showError(
@@ -2016,45 +2046,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     return true;
   }
 
-  Future<bool> _checkWritePermission(Directory directory) async {
-    try {
-      final testFileName =
-          '.backup_permission_test_${DateTime.now().millisecondsSinceEpoch}';
-      final testFile = File(
-        '${directory.path}${Platform.pathSeparator}$testFileName',
-      );
-
-      await testFile.writeAsString('test');
-
-      if (await testFile.exists()) {
-        await testFile.delete();
-        return true;
-      }
-
-      return false;
-    } on Object catch (e) {
-      LoggerService.warning(
-        'Erro ao verificar permissão de escrita na pasta ${directory.path}: $e',
-      );
-      return false;
-    }
-  }
-
-  Future<bool> _checkWinRarAvailable() async {
-    final possiblePaths = [
-      r'C:\Program Files\WinRAR\WinRAR.exe',
-      r'C:\Program Files (x86)\WinRAR\WinRAR.exe',
-    ];
-
-    for (final path in possiblePaths) {
-      final file = File(path);
-      if (await file.exists()) {
-        return true;
-      }
-    }
-
-    return false;
-  }
+  /// Antes este método tinha probe inline de caminhos do WinRAR — quando
+  /// o setup mudasse (ex.: novo path de instalação), seria necessário
+  /// atualizar 2 lugares. Agora delega ao `WinRarService.isInstalledInSystem`,
+  /// mantendo a lista canônica em uma única fonte.
+  Future<bool> _checkWinRarAvailable() => WinRarService.isInstalledInSystem();
 
   Future<void> _save() async {
     final name = _nameController.text.trim();

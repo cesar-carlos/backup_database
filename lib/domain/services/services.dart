@@ -1,5 +1,6 @@
 export 'backup_execution_result.dart';
 export 'compression_result.dart';
+export 'i_backup_cancellation_service.dart';
 export 'i_backup_cleanup_service.dart';
 export 'i_backup_compression_orchestrator.dart';
 export 'i_backup_progress_notifier.dart';

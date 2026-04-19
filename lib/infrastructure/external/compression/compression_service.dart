@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
+import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/domain/services/compression_result.dart';
@@ -166,7 +168,7 @@ class CompressionService implements ICompressionService {
                 : 0.0;
 
             LoggerService.info(
-              'Compressão WinRAR concluída: ${_formatBytes(originalSize)} → ${_formatBytes(compressedSize)} '
+              'Compressão WinRAR concluída: ${ByteFormat.format(originalSize)} → ${ByteFormat.format(compressedSize)} '
               '(${compressionRatio.toStringAsFixed(1)}% de redução)',
             );
 
@@ -232,7 +234,7 @@ class CompressionService implements ICompressionService {
           : 0.0;
 
       LoggerService.info(
-        'Compressão de diretório concluída: ${_formatBytes(originalSize)} → ${_formatBytes(compressedSize)} '
+        'Compressão de diretório concluída: ${ByteFormat.format(originalSize)} → ${ByteFormat.format(compressedSize)} '
         '(${compressionRatio.toStringAsFixed(1)}% de redução)',
       );
 
@@ -319,7 +321,7 @@ class CompressionService implements ICompressionService {
                 : 0.0;
 
             LoggerService.info(
-              'Compressão WinRAR concluída: ${_formatBytes(originalSize)} → ${_formatBytes(compressedSize)} '
+              'Compressão WinRAR concluída: ${ByteFormat.format(originalSize)} → ${ByteFormat.format(compressedSize)} '
               '(${compressionRatio.toStringAsFixed(1)}% de redução)',
             );
 
@@ -414,25 +416,25 @@ class CompressionService implements ICompressionService {
         }
       }
 
-      try {
-        final testFile = File(p.join(outputDir.path, '.test_write_permission'));
-        await testFile.writeAsString('test');
-        await testFile.delete();
-      } on Object catch (e) {
-        LoggerService.error('Sem permissão de escrita no diretório', e);
+      // Antes este bloco tinha probe-file inline (4ª duplicata do
+      // pattern já consolidado em `DirectoryPermissionCheck`). O helper
+      // também tem proteção contra race entre chamadas simultâneas.
+      final hasWritePermission =
+          await DirectoryPermissionCheck.hasWritePermission(outputDir);
+      if (!hasWritePermission) {
+        LoggerService.error('Sem permissão de escrita no diretório');
         return rd.Failure(
           FileSystemFailure(
             message:
                 'Sem permissão de escrita no diretório: ${outputDir.path}\n'
                 'Execute o aplicativo como Administrador ou escolha outro diretório.',
-            originalError: e,
           ),
         );
       }
 
       try {
         LoggerService.info('Criando arquivo ZIP: $outputFilePath');
-        LoggerService.info('Arquivo original: ${_formatBytes(originalSize)}');
+        LoggerService.info('Arquivo original: ${ByteFormat.format(originalSize)}');
         LoggerService.info(
           'Comprimindo arquivo em background (isso pode levar alguns minutos para arquivos grandes)...',
         );
@@ -526,7 +528,7 @@ class CompressionService implements ICompressionService {
           }
 
           LoggerService.info(
-            'Arquivo ZIP criado com sucesso: ${_formatBytes(createdSize)}',
+            'Arquivo ZIP criado com sucesso: ${ByteFormat.format(createdSize)}',
           );
         } on FileSystemException catch (e) {
           LoggerService.error('Erro ao verificar arquivo ZIP criado', e);
@@ -612,7 +614,7 @@ class CompressionService implements ICompressionService {
           : 0.0;
 
       LoggerService.info(
-        'Compressão concluída: ${_formatBytes(originalSize)} → ${_formatBytes(compressedSize)} '
+        'Compressão concluída: ${ByteFormat.format(originalSize)} → ${ByteFormat.format(compressedSize)} '
         '(${compressionRatio.toStringAsFixed(1)}% de redução)',
       );
 
@@ -845,16 +847,5 @@ class CompressionService implements ICompressionService {
         return;
       }
     }
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 }

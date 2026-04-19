@@ -82,12 +82,13 @@ class UpdateSchedule {
 
     final result = await _repository.update(scheduleWithNextRun);
 
-    result.fold(
-      (updatedSchedule) async {
-        await _schedulerService.refreshSchedule(updatedSchedule.id);
-      },
-      (failure) => null,
-    );
+    // Bug histórico: o `result.fold((_) async { await refreshSchedule(); })`
+    // não aguardava o callback async — caller recebia Success com o
+    // scheduler ainda na versão antiga do schedule.
+    final updatedSchedule = result.getOrNull();
+    if (updatedSchedule != null) {
+      await _schedulerService.refreshSchedule(updatedSchedule.id);
+    }
 
     return result;
   }

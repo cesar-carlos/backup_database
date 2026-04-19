@@ -4,6 +4,7 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/domain/repositories/i_license_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -12,102 +13,102 @@ class LicenseRepository implements ILicenseRepository {
   final AppDatabase _database;
 
   @override
-  Future<rd.Result<License>> getByDeviceKey(String deviceKey) async {
-    try {
-      final license = await _database.licenseDao.getByDeviceKey(deviceKey);
-      if (license == null) {
-        return const rd.Failure(
-          NotFoundFailure(
+  Future<rd.Result<License>> getByDeviceKey(String deviceKey) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar licença',
+      action: () async {
+        final license = await _database.licenseDao.getByDeviceKey(deviceKey);
+        if (license == null) {
+          throw const NotFoundFailure(
             message: 'Licença não encontrada para este dispositivo',
-          ),
-        );
-      }
-      return rd.Success(_toEntity(license));
-    } on Object catch (e) {
-      return rd.Failure(DatabaseFailure(message: 'Erro ao buscar licença: $e'));
-    }
+          );
+        }
+        return _toEntity(license);
+      },
+    );
   }
 
   @override
-  Future<rd.Result<License>> create(License license) async {
-    try {
-      final companion = _toCompanion(license);
-      await _database.licenseDao.insertLicense(companion);
-      return rd.Success(license);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error('Erro ao criar licença', e, stackTrace);
-      return rd.Failure(DatabaseFailure(message: 'Erro ao criar licença: $e'));
-    }
+  Future<rd.Result<License>> create(License license) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao criar licença',
+      action: () async {
+        await _database.licenseDao.insertLicense(_toCompanion(license));
+        return license;
+      },
+    );
   }
 
   @override
   Future<rd.Result<License>> upsertByDeviceKey(License license) async {
-    try {
-      final existing = await _database.licenseDao.getByDeviceKey(
-        license.deviceKey,
-      );
-      if (existing != null) {
-        final updated = license.copyWith(
-          id: existing.id,
-          createdAt: existing.createdAt,
+    final preCheck = await RepositoryGuard.run<License>(
+      errorMessage: 'Erro ao upsert licença',
+      // Sentinela: usamos `_UpsertResult` para sinalizar qual operação
+      // o caller deve disparar (insert vs update) sem precisar de
+      // múltiplos retornos.
+      action: () async {
+        final existing = await _database.licenseDao.getByDeviceKey(
+          license.deviceKey,
         );
-        return update(updated);
-      }
-      return create(license);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao upsert licença por deviceKey',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao upsert licença: $e'),
-      );
-    }
+        if (existing != null) {
+          throw _UpsertNeedsUpdate(
+            license.copyWith(
+              id: existing.id,
+              createdAt: existing.createdAt,
+            ),
+          );
+        }
+        return license;
+      },
+    );
+
+    return preCheck.fold(
+      // Caso "criar": não havia existing.
+      create,
+      (failure) {
+        final original =
+            failure is DatabaseFailure ? failure.originalError : null;
+        if (original is _UpsertNeedsUpdate) {
+          return update(original.licenseToUpdate);
+        }
+        return Future.value(rd.Failure(failure));
+      },
+    );
   }
 
   @override
-  Future<rd.Result<License>> update(License license) async {
-    try {
-      final companion = _toCompanion(license);
-      final updated = await _database.licenseDao.updateLicense(companion);
-      if (!updated) {
-        return const rd.Failure(
-          NotFoundFailure(message: 'Licença não encontrada'),
+  Future<rd.Result<License>> update(License license) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao atualizar licença',
+      action: () async {
+        final updated = await _database.licenseDao.updateLicense(
+          _toCompanion(license),
         );
-      }
-      return rd.Success(license);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error('Erro ao atualizar licença', e, stackTrace);
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao atualizar licença: $e'),
-      );
-    }
+        if (!updated) {
+          throw const NotFoundFailure(message: 'Licença não encontrada');
+        }
+        return license;
+      },
+    );
   }
 
   @override
-  Future<rd.Result<void>> delete(String id) async {
-    try {
-      await _database.licenseDao.deleteLicense(id);
-      return const rd.Success(unit);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao deletar licença: $e'),
-      );
-    }
+  Future<rd.Result<void>> delete(String id) {
+    return RepositoryGuard.runVoid(
+      errorMessage: 'Erro ao deletar licença',
+      action: () => _database.licenseDao.deleteLicense(id),
+    );
   }
 
   @override
-  Future<rd.Result<List<License>>> getAll() async {
-    try {
-      final licenses = await _database.licenseDao.getAll();
-      final entities = licenses.map(_toEntity).toList();
-      return rd.Success(entities);
-    } on Object catch (e) {
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao buscar licenças: $e'),
-      );
-    }
+  Future<rd.Result<List<License>>> getAll() {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar licenças',
+      action: () async {
+        final licenses = await _database.licenseDao.getAll();
+        return licenses.map(_toEntity).toList();
+      },
+    );
   }
 
   License _toEntity(LicensesTableData data) {
@@ -144,4 +145,16 @@ class LicenseRepository implements ILicenseRepository {
       updatedAt: Value(license.updatedAt),
     );
   }
+
+}
+
+/// Sentinel para o `upsertByDeviceKey`: sinaliza que a licença deve ir
+/// para `update()` em vez de `create()`. Carrega a licença já com `id` e
+/// `createdAt` atualizados a partir do registro existente.
+class _UpsertNeedsUpdate implements Exception {
+  const _UpsertNeedsUpdate(this.licenseToUpdate);
+  final License licenseToUpdate;
+
+  @override
+  String toString() => 'License needs update via existing row';
 }

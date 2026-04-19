@@ -19,6 +19,7 @@ abstract class ISqlServerBackupService {
     SqlServerBackupOptions? sqlServerBackupOptions,
     Duration? backupTimeout,
     Duration? verifyTimeout,
+    String? cancelTag,
   });
 
   Future<Result<bool>> testConnection(SqlServerConfig config);
@@ -29,6 +30,13 @@ abstract class ISqlServerBackupService {
   });
 
   Future<Result<List<String>>> listBackupFiles({
+    required SqlServerConfig config,
+    Duration? timeout,
+  });
+
+  /// Tamanho aproximado em bytes do banco em [config] (soma de
+  /// `sys.master_files`). Usado para validar espaço livre antes do backup.
+  Future<Result<int>> getDatabaseSizeBytes({
     required SqlServerConfig config,
     Duration? timeout,
   });
