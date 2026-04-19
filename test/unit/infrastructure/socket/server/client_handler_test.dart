@@ -346,6 +346,88 @@ void main() {
     );
 
     test(
+      'pre-auth operational message: responds with NOT_AUTHENTICATED and stays connected (F0.1)',
+      () async {
+        final pair = await createSocketPair();
+        addTearDown(() {
+          pair.client.destroy();
+          pair.server.destroy();
+        });
+
+        final mockAuth = MockServerAuthentication();
+
+        String? disconnectedId;
+        final handler = ClientHandler(
+          socket: pair.server,
+          protocol: protocol,
+          onDisconnect: (id) => disconnectedId = id,
+          authentication: mockAuth, // exige auth
+        );
+        handler.start();
+        expect(handler.isAuthenticated, isFalse);
+
+        // Captura primeira mensagem de erro do servidor
+        final responseCompleter = Completer<Message>.sync();
+        final buffer = <int>[];
+        void onData(List<int> data) {
+          buffer.addAll(data);
+          if (buffer.length >= 16 + 4) {
+            final length = (buffer[5] << 24) |
+                (buffer[6] << 16) |
+                (buffer[7] << 8) |
+                buffer[8];
+            final total = 16 + length + 4;
+            if (buffer.length >= total) {
+              try {
+                final message = protocol.deserializeMessage(
+                  Uint8List.fromList(buffer.sublist(0, total)),
+                );
+                if (message.header.type == MessageType.error &&
+                    !responseCompleter.isCompleted) {
+                  responseCompleter.complete(message);
+                }
+              } on Object catch (_) {}
+            }
+          }
+        }
+
+        pair.client.listen(onData);
+
+        // Cliente envia listSchedules ANTES de auth — guard deve rejeitar
+        final illegalMsg = Message(
+          header: MessageHeader(
+            type: MessageType.listSchedules,
+            length: 2,
+            requestId: 42,
+          ),
+          payload: const <String, dynamic>{},
+          checksum: 0,
+        );
+        final bytes = protocol.serializeMessage(illegalMsg);
+        pair.client.add(bytes);
+        await pair.client.flush();
+
+        final response = await responseCompleter.future.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () =>
+              throw TimeoutException('No NOT_AUTHENTICATED response received'),
+        );
+
+        expect(response.header.type, MessageType.error);
+        expect(response.header.requestId, 42);
+        expect(getErrorCodeFromMessage(response), ErrorCode.notAuthenticated);
+
+        // Importante: NAO desconecta — cliente pode ainda enviar
+        // authRequest valido na sequencia (o test apenas confere que
+        // handler nao desconectou unilateralmente).
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(disconnectedId, isNull);
+
+        handler.disconnect();
+      },
+    );
+
+    test(
       'oversized payload for type: responds with PAYLOAD_TOO_LARGE and disconnects (M5.4)',
       () async {
         final pair = await createSocketPair();

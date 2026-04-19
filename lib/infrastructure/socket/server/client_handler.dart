@@ -265,6 +265,47 @@ class ClientHandler {
         } else if (isHeartbeatMessage(message)) {
           _heartbeatManager?.onHeartbeatReceived();
           _lastHeartbeat = DateTime.now();
+        } else if (!isAuthenticated) {
+          // F0.1 — guard explicito de defesa em profundidade.
+          //
+          // Cenario: peer envia mensagem operacional (executeSchedule,
+          // listSchedules, etc.) antes de completar o handshake. O
+          // pause/resume do `_authHandled` ja cobre o caso comum (msg
+          // chegou no buffer durante a validacao async), mas peers que
+          // ignoram o protocolo (cliente terceiro buggy, peer hostil)
+          // poderiam enviar mensagem operacional ANTES do `authRequest`.
+          // Aqui rejeitamos com erro padronizado em vez de deixar a
+          // mensagem cair no `_messageController` para ser processada
+          // por handlers downstream sem credencial.
+          //
+          // Tipos liberados pre-auth: `authRequest` (tratado acima),
+          // `heartbeat` (tratado acima), `disconnect` (cliente desistiu
+          // — silencioso), `error` (servidor nao processa erro do peer).
+          // Demais tipos -> rejeitados com `notAuthenticated` (401).
+          if (message.header.type == MessageType.disconnect ||
+              message.header.type == MessageType.error) {
+            // Liberados pre-auth sem efeito colateral
+          } else {
+            LoggerService.warning(
+              'ClientHandler $_clientId: rejecting pre-auth message '
+              '${message.header.type.name} from $_remoteAddress',
+            );
+            unawaited(
+              send(
+                createErrorMessage(
+                  requestId: message.header.requestId,
+                  errorMessage:
+                      'Mensagem ${message.header.type.name} rejeitada: '
+                      'autenticacao nao concluida',
+                  errorCode: ErrorCode.notAuthenticated,
+                ),
+              ),
+            );
+            // Nao desconecta: cliente ainda pode enviar `authRequest`
+            // valido na sequencia. Apenas nao roteamos a mensagem
+            // operacional para downstream handlers.
+            continue;
+          }
         }
         _safeAddMessage(message);
       } on UnsupportedProtocolVersionException catch (e) {

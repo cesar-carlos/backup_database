@@ -151,6 +151,17 @@ void main() {
         _assertGolden(msg, 'schedule_error_legacy');
       });
 
+      test('createScheduleErrorMessage com BACKUP_ALREADY_RUNNING (F0.2)', () {
+        final msg = createScheduleErrorMessage(
+          requestId: 1,
+          error:
+              'Já existe um backup em execução no servidor. '
+              'Aguarde conclusão para iniciar novo.',
+          errorCode: ErrorCode.backupAlreadyRunning,
+        );
+        _assertGolden(msg, 'schedule_error_backup_already_running');
+      });
+
       test('createErrorMessage com errorCode', () {
         final msg = createErrorMessage(
           requestId: 1,

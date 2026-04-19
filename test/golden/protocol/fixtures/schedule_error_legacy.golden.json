@@ -1,6 +1,7 @@
 {
   "type": "error",
   "payload": {
-    "error": "Já existe um backup em execução no servidor."
+    "error": "Já existe um backup em execução no servidor.",
+    "statusCode": 500
   }
 }

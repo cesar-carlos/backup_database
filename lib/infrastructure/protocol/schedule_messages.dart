@@ -1,9 +1,11 @@
 import 'dart:convert';
 
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_serialization.dart';
+import 'package:backup_database/infrastructure/protocol/status_codes.dart';
 
 Message createListSchedulesMessage({int requestId = 0}) {
   const payload = <String, dynamic>{};
@@ -94,11 +96,33 @@ Message createExecuteScheduleMessage({
   );
 }
 
+/// Constroi mensagem de erro de schedule com envelope REST-like.
+///
+/// Quando [errorCode] e fornecido, `statusCode` e derivado
+/// automaticamente da tabela oficial em `StatusCodes.forErrorCode` e
+/// `errorCode` e emitido no payload — fechando F0.2 do plano. Cliente
+/// pode tratar `BACKUP_ALREADY_RUNNING` como `409` retryable apos
+/// backoff, `NOT_AUTHENTICATED` como `401`, etc.
+///
+/// Quando [errorCode] e omitido, mantem comportamento legado (apenas
+/// `error` como string + `statusCode = 500` fail-safe). Migracao
+/// gradual nao quebra clientes que ja consomem a forma antiga.
 Message createScheduleErrorMessage({
   required int requestId,
   required String error,
+  ErrorCode? errorCode,
+  int? statusCodeOverride,
 }) {
-  final payload = <String, dynamic>{'error': error};
+  final statusCode = statusCodeOverride ??
+      (errorCode != null
+          ? StatusCodes.forErrorCode(errorCode)
+          : StatusCodes.internalServerError);
+
+  final payload = <String, dynamic>{
+    'error': error,
+    'statusCode': statusCode,
+    ...?(errorCode != null ? {'errorCode': errorCode.code} : null),
+  };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
   return Message(

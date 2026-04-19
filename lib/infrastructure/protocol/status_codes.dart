@@ -74,6 +74,7 @@ class StatusCodes {
 
     // Auth / autorizacao
     ErrorCode.authenticationFailed: unauthorized,
+    ErrorCode.notAuthenticated: unauthorized,
     ErrorCode.licenseDenied: forbidden,
     ErrorCode.permissionDenied: forbidden,
     ErrorCode.pathNotAllowed: forbidden,
@@ -81,9 +82,12 @@ class StatusCodes {
     // Nao encontrado
     ErrorCode.fileNotFound: notFound,
     ErrorCode.directoryNotFound: notFound,
+    ErrorCode.scheduleNotFound: notFound,
 
-    // Conflito
+    // Conflito de estado
     ErrorCode.fileBusy: conflict,
+    ErrorCode.backupAlreadyRunning: conflict,
+    ErrorCode.noActiveExecution: conflict,
 
     // Servico / pre-requisito
     ErrorCode.unsupportedProtocolVersion: serviceUnavailable,

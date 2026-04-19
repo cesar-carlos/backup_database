@@ -8,6 +8,7 @@ import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
@@ -244,7 +245,13 @@ class ScheduleMessageHandler {
   ) async {
     final scheduleId = getScheduleIdFromExecutePayload(message);
     if (scheduleId.isEmpty) {
-      await _sendError(clientId, requestId, 'scheduleId vazio', sendToClient);
+      await _sendError(
+        clientId,
+        requestId,
+        'scheduleId vazio',
+        sendToClient,
+        errorCode: ErrorCode.invalidRequest,
+      );
       return;
     }
 
@@ -261,6 +268,7 @@ class ScheduleMessageHandler {
         'Já existe um backup em execução no servidor. '
         'Aguarde conclusão para iniciar novo.',
         sendToClient,
+        errorCode: ErrorCode.backupAlreadyRunning,
       );
       return;
     }
@@ -280,6 +288,7 @@ class ScheduleMessageHandler {
         requestId,
         'Já existe um backup em execução para este agendamento.',
         sendToClient,
+        errorCode: ErrorCode.backupAlreadyRunning,
       );
       return;
     }
@@ -304,6 +313,7 @@ class ScheduleMessageHandler {
             fallback: 'Agendamento não encontrado',
           ),
           sendToClient,
+          errorCode: ErrorCode.scheduleNotFound,
         );
         return;
       }
@@ -315,6 +325,7 @@ class ScheduleMessageHandler {
           requestId,
           'Agendamento não encontrado',
           sendToClient,
+          errorCode: ErrorCode.scheduleNotFound,
         );
         return;
       }
@@ -328,6 +339,7 @@ class ScheduleMessageHandler {
           requestId,
           'Não foi possível carregar destinos para validação',
           sendToClient,
+          errorCode: ErrorCode.unknown,
         );
         return;
       }
@@ -346,6 +358,7 @@ class ScheduleMessageHandler {
             fallback: 'Licença não permite execução',
           ),
           sendToClient,
+          errorCode: ErrorCode.licenseDenied,
         );
         return;
       }
@@ -363,6 +376,7 @@ class ScheduleMessageHandler {
           'Já existe um backup em execução no servidor. '
           'Aguarde conclusão para iniciar novo.',
           sendToClient,
+          errorCode: ErrorCode.backupAlreadyRunning,
         );
         return;
       }
@@ -492,6 +506,7 @@ class ScheduleMessageHandler {
         requestId,
         'scheduleId vazio ou inválido',
         sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }
@@ -503,6 +518,7 @@ class ScheduleMessageHandler {
         requestId,
         'Não há backup em execução para este schedule',
         sendToClient,
+        errorCode: ErrorCode.noActiveExecution,
       );
       return;
     }
@@ -524,6 +540,7 @@ class ScheduleMessageHandler {
           fallback: 'Falha ao cancelar backup',
         ),
         sendToClient,
+        errorCode: ErrorCode.unknown,
       );
       return;
     }
@@ -543,15 +560,26 @@ class ScheduleMessageHandler {
   /// `await sendToClient(clientId, createScheduleErrorMessage(...))` com
   /// pequenas variações. Centralizar evita divergência e facilita
   /// adicionar instrumentação (ex.: contar erros enviados).
+  ///
+  /// [errorCode] e opcional para preservar compat — quando fornecido,
+  /// `statusCode` e derivado automaticamente da tabela oficial e o
+  /// payload carrega `errorCode` no envelope (F0.2 do plano). Cliente
+  /// pode aplicar retry/gate baseado em `statusCode`/`errorCode` em vez
+  /// de parsing de string.
   Future<void> _sendError(
     String clientId,
     int requestId,
     String error,
-    SendToClient sendToClient,
-  ) {
+    SendToClient sendToClient, {
+    ErrorCode? errorCode,
+  }) {
     return sendToClient(
       clientId,
-      createScheduleErrorMessage(requestId: requestId, error: error),
+      createScheduleErrorMessage(
+        requestId: requestId,
+        error: error,
+        errorCode: errorCode,
+      ),
     );
   }
 

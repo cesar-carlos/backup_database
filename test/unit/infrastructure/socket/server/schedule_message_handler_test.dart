@@ -9,6 +9,8 @@ import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
+import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
@@ -385,6 +387,160 @@ void main() {
         expect(capturedContext!.requestId, 777);
         expect(capturedContext!.scheduleId, scheduleId);
         expect(capturedContext!.runId, startsWith('${scheduleId}_'));
+      },
+    );
+  });
+
+  group('ScheduleMessageHandler errorCode envelope (F0.2)', () {
+    test(
+      'scheduleId vazio em executeSchedule -> INVALID_REQUEST (400)',
+      () async {
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle(
+          'c1',
+          createExecuteScheduleMessage(requestId: 1, scheduleId: ''),
+          capture,
+        );
+
+        expect(sent, isNotNull);
+        expect(sent!.header.type, MessageType.error);
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.invalidRequest);
+        expect(getStatusCodeFromMessage(sent!), 400);
+      },
+    );
+
+    test(
+      'isExecutingBackup=true -> BACKUP_ALREADY_RUNNING (409)',
+      () async {
+        when(() => schedulerService.isExecutingBackup).thenReturn(true);
+
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle(
+          'c1',
+          createExecuteScheduleMessage(requestId: 1, scheduleId: scheduleId),
+          capture,
+        );
+
+        expect(sent, isNotNull);
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.backupAlreadyRunning);
+        expect(getStatusCodeFromMessage(sent!), 409);
+      },
+    );
+
+    test(
+      'registry com schedule ja ativo -> BACKUP_ALREADY_RUNNING (409)',
+      () async {
+        // Pre-popula registry simulando outro cliente ja em execucao
+        executionRegistry.register(
+          runId: executionRegistry.generateRunId(scheduleId),
+          scheduleId: scheduleId,
+          clientId: 'other-client',
+          requestId: 100,
+          sendToClient: (clientId, msg) async {},
+        );
+        when(() => schedulerService.isExecutingBackup).thenReturn(false);
+
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle(
+          'c1',
+          createExecuteScheduleMessage(requestId: 1, scheduleId: scheduleId),
+          capture,
+        );
+
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.backupAlreadyRunning);
+        expect(getStatusCodeFromMessage(sent!), 409);
+      },
+    );
+
+    test(
+      'schedule nao existe -> SCHEDULE_NOT_FOUND (404)',
+      () async {
+        when(() => scheduleRepository.getById(scheduleId)).thenAnswer(
+          (_) async => const rd.Failure(
+            NotFoundFailure(message: 'Schedule X not found'),
+          ),
+        );
+
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle(
+          'c1',
+          createExecuteScheduleMessage(requestId: 1, scheduleId: scheduleId),
+          capture,
+        );
+
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.scheduleNotFound);
+        expect(getStatusCodeFromMessage(sent!), 404);
+      },
+    );
+
+    test(
+      'license policy fail -> LICENSE_DENIED (403)',
+      () async {
+        when(() => scheduleRepository.getById(scheduleId))
+            .thenAnswer((_) async => rd.Success(schedule));
+        when(() => destinationRepository.getByIds(any()))
+            .thenAnswer((_) async => rd.Success([destination]));
+        when(
+          () => licensePolicyService.validateExecutionCapabilities(any(), any()),
+        ).thenAnswer(
+          (_) async => const rd.Failure(
+            ValidationFailure(message: 'Licenca expirada'),
+          ),
+        );
+
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle(
+          'c1',
+          createExecuteScheduleMessage(requestId: 1, scheduleId: scheduleId),
+          capture,
+        );
+
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.licenseDenied);
+        expect(getStatusCodeFromMessage(sent!), 403);
+      },
+    );
+
+    test(
+      'cancelSchedule sem execucao ativa -> NO_ACTIVE_EXECUTION (409)',
+      () async {
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle(
+          'c1',
+          createCancelScheduleMessage(requestId: 1, scheduleId: 'unknown-id'),
+          capture,
+        );
+
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.noActiveExecution);
+        expect(getStatusCodeFromMessage(sent!), 409);
+      },
+    );
+
+    test(
+      'cancelSchedule com scheduleId vazio -> INVALID_REQUEST (400)',
+      () async {
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle(
+          'c1',
+          createCancelScheduleMessage(requestId: 1, scheduleId: ''),
+          capture,
+        );
+
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.invalidRequest);
+        expect(getStatusCodeFromMessage(sent!), 400);
       },
     );
   });
