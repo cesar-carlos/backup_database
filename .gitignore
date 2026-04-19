@@ -1,4 +1,5 @@
 # Miscellaneous
+.git-release-notes.tmp
 *.class
 *.log
 *.pyc
