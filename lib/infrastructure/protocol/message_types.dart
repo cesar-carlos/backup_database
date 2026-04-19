@@ -74,4 +74,16 @@ enum MessageType {
   pauseSchedule,
   resumeSchedule,
   scheduleMutationResponse,
+  // PR-2: database config CRUD remoto. Permite cliente listar /
+  // criar / atualizar / deletar configuracoes de banco (Sybase /
+  // SQL Server / Postgres) sem precisar embarcar a logica de DAO no
+  // cliente. Payload usa Map<String, dynamic> opaco indexado por
+  // `databaseType` — cada implementacao concreta de DatabaseConfigStore
+  // sabe interpretar.
+  listDatabaseConfigsRequest,
+  listDatabaseConfigsResponse,
+  createDatabaseConfigRequest,
+  updateDatabaseConfigRequest,
+  deleteDatabaseConfigRequest,
+  databaseConfigMutationResponse,
 }

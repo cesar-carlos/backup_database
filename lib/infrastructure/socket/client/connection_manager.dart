@@ -1577,6 +1577,134 @@ class ConnectionManager {
     );
   }
 
+  /// Lista database configs remotas de um tipo (PR-2).
+  Future<rd.Result<DatabaseConfigListResult>> listRemoteDatabaseConfigs(
+    RemoteDatabaseType databaseType,
+  ) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(createListDatabaseConfigsRequest(
+        databaseType: databaseType,
+        requestId: requestId,
+      ));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (message.header.type != MessageType.listDatabaseConfigsResponse) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para listDatabaseConfigs: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readDatabaseConfigListResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('listRemoteDatabaseConfigs timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// Helper unificado para mutacoes de database config remoto.
+  Future<rd.Result<DatabaseConfigMutationResult>> _runDatabaseConfigMutation(
+    Message Function(int requestId) build, {
+    required String operationName,
+  }) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(build(requestId));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (message.header.type != MessageType.databaseConfigMutationResponse) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para $operationName: '
+            '${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readDatabaseConfigMutationResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(TimeoutException('$operationName timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  Future<rd.Result<DatabaseConfigMutationResult>> createRemoteDatabaseConfig({
+    required RemoteDatabaseType databaseType,
+    required Map<String, dynamic> config,
+    String? idempotencyKey,
+  }) {
+    return _runDatabaseConfigMutation(
+      (requestId) => createCreateDatabaseConfigRequest(
+        databaseType: databaseType,
+        config: config,
+        idempotencyKey: idempotencyKey,
+        requestId: requestId,
+      ),
+      operationName: 'createDatabaseConfig',
+    );
+  }
+
+  Future<rd.Result<DatabaseConfigMutationResult>> updateRemoteDatabaseConfig({
+    required RemoteDatabaseType databaseType,
+    required Map<String, dynamic> config,
+    String? idempotencyKey,
+  }) {
+    return _runDatabaseConfigMutation(
+      (requestId) => createUpdateDatabaseConfigRequest(
+        databaseType: databaseType,
+        config: config,
+        idempotencyKey: idempotencyKey,
+        requestId: requestId,
+      ),
+      operationName: 'updateDatabaseConfig',
+    );
+  }
+
+  Future<rd.Result<DatabaseConfigMutationResult>> deleteRemoteDatabaseConfig({
+    required RemoteDatabaseType databaseType,
+    required String configId,
+    String? idempotencyKey,
+  }) {
+    return _runDatabaseConfigMutation(
+      (requestId) => createDeleteDatabaseConfigRequest(
+        databaseType: databaseType,
+        configId: configId,
+        idempotencyKey: idempotencyKey,
+        requestId: requestId,
+      ),
+      operationName: 'deleteDatabaseConfig',
+    );
+  }
+
   Future<rd.Result<Map<String, dynamic>>> getServerMetrics() async {
     if (!isConnected) {
       return rd.Failure(Exception('ConnectionManager not connected'));

@@ -159,6 +159,243 @@ class TestDatabaseConnectionResult {
 
 /// Le um [TestDatabaseConnectionResult] do payload da resposta. Tolera
 /// servidor `v1` (sem alguns campos) preenchendo defaults seguros.
+// ---------------------------------------------------------------------------
+// Database CRUD remoto (PR-2)
+// ---------------------------------------------------------------------------
+
+/// `listDatabaseConfigs`: cliente solicita todas as configs de um
+/// tipo. Resposta inclui lista de Map opacos (cliente interpreta com
+/// base no `databaseType` que pediu).
+Message createListDatabaseConfigsRequest({
+  required RemoteDatabaseType databaseType,
+  int requestId = 0,
+}) {
+  final payload = <String, dynamic>{'databaseType': databaseType.wireName};
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.listDatabaseConfigsRequest,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+Message createListDatabaseConfigsResponse({
+  required int requestId,
+  required RemoteDatabaseType databaseType,
+  required List<Map<String, dynamic>> configs,
+  required DateTime serverTimeUtc,
+}) {
+  final base = <String, dynamic>{
+    'databaseType': databaseType.wireName,
+    'configs': configs,
+    'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
+  };
+  final payload = wrapSuccessResponse(base);
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.listDatabaseConfigsResponse,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+/// Snapshot tipado da resposta de listagem.
+class DatabaseConfigListResult {
+  const DatabaseConfigListResult({
+    required this.databaseType,
+    required this.configs,
+    required this.serverTimeUtc,
+  });
+
+  final RemoteDatabaseType databaseType;
+  final List<Map<String, dynamic>> configs;
+  final DateTime serverTimeUtc;
+
+  bool get isEmpty => configs.isEmpty;
+  int get count => configs.length;
+}
+
+DatabaseConfigListResult readDatabaseConfigListResponse(Message message) {
+  final p = message.payload;
+  final typeRaw = p['databaseType'] is String ? p['databaseType'] as String : '';
+  final type = RemoteDatabaseType.fromWire(typeRaw) ?? RemoteDatabaseType.sybase;
+  final raw = p['configs'];
+  final configs = raw is List
+      ? raw
+          .whereType<Map<String, dynamic>>()
+          .map(Map<String, dynamic>.from)
+          .toList()
+      : <Map<String, dynamic>>[];
+  final serverTimeRaw = p['serverTimeUtc'];
+  final serverTime = serverTimeRaw is String
+      ? (DateTime.tryParse(serverTimeRaw) ??
+          DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+      : DateTime.fromMillisecondsSinceEpoch(0).toUtc();
+  return DatabaseConfigListResult(
+    databaseType: type,
+    configs: configs,
+    serverTimeUtc: serverTime,
+  );
+}
+
+/// `createDatabaseConfig` / `updateDatabaseConfig` /
+/// `deleteDatabaseConfig`: comandos mutaveis. Aceitam idempotencyKey.
+///
+/// `config` e um Map opaco — handler concreto (que conhece o tipo)
+/// converte para a entity correspondente.
+Message createCreateDatabaseConfigRequest({
+  required RemoteDatabaseType databaseType,
+  required Map<String, dynamic> config,
+  String? idempotencyKey,
+  int requestId = 0,
+}) {
+  final payload = <String, dynamic>{
+    'databaseType': databaseType.wireName,
+    'config': config,
+    ...?(idempotencyKey != null && idempotencyKey.isNotEmpty
+        ? {'idempotencyKey': idempotencyKey}
+        : null),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.createDatabaseConfigRequest,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+Message createUpdateDatabaseConfigRequest({
+  required RemoteDatabaseType databaseType,
+  required Map<String, dynamic> config,
+  String? idempotencyKey,
+  int requestId = 0,
+}) {
+  final payload = <String, dynamic>{
+    'databaseType': databaseType.wireName,
+    'config': config,
+    ...?(idempotencyKey != null && idempotencyKey.isNotEmpty
+        ? {'idempotencyKey': idempotencyKey}
+        : null),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.updateDatabaseConfigRequest,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+Message createDeleteDatabaseConfigRequest({
+  required RemoteDatabaseType databaseType,
+  required String configId,
+  String? idempotencyKey,
+  int requestId = 0,
+}) {
+  final payload = <String, dynamic>{
+    'databaseType': databaseType.wireName,
+    'configId': configId,
+    ...?(idempotencyKey != null && idempotencyKey.isNotEmpty
+        ? {'idempotencyKey': idempotencyKey}
+        : null),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.deleteDatabaseConfigRequest,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+/// Resposta unificada de mutacoes de database config.
+Message createDatabaseConfigMutationResponse({
+  required int requestId,
+  required String operation,
+  required RemoteDatabaseType databaseType,
+  required String configId,
+  Map<String, dynamic>? config,
+}) {
+  final base = <String, dynamic>{
+    'operation': operation,
+    'databaseType': databaseType.wireName,
+    'configId': configId,
+    ...?(config != null ? {'config': config} : null),
+  };
+  final payload = wrapSuccessResponse(base);
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.databaseConfigMutationResponse,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
+class DatabaseConfigMutationResult {
+  const DatabaseConfigMutationResult({
+    required this.operation,
+    required this.databaseType,
+    required this.configId,
+    this.config,
+  });
+
+  final String operation;
+  final RemoteDatabaseType databaseType;
+  final String configId;
+  final Map<String, dynamic>? config;
+
+  bool get isCreated => operation == 'created';
+  bool get isUpdated => operation == 'updated';
+  bool get isDeleted => operation == 'deleted';
+}
+
+DatabaseConfigMutationResult readDatabaseConfigMutationResponse(
+  Message message,
+) {
+  final p = message.payload;
+  final operation = p['operation'] is String ? p['operation'] as String : '';
+  final typeRaw = p['databaseType'] is String ? p['databaseType'] as String : '';
+  final type = RemoteDatabaseType.fromWire(typeRaw) ?? RemoteDatabaseType.sybase;
+  final configId = p['configId'] is String ? p['configId'] as String : '';
+  final cfg = p['config'] is Map
+      ? Map<String, dynamic>.from(p['config'] as Map)
+      : null;
+  return DatabaseConfigMutationResult(
+    operation: operation,
+    databaseType: type,
+    configId: configId,
+    config: cfg,
+  );
+}
+
 TestDatabaseConnectionResult readTestDatabaseConnectionResponse(
   Message message,
 ) {

@@ -120,6 +120,17 @@ class PayloadLimits {
     MessageType.pauseSchedule: 4 * 1024,
     MessageType.resumeSchedule: 4 * 1024,
     MessageType.scheduleMutationResponse: 256 * 1024,
+
+    // ---- Database config CRUD (PR-2) ----
+    // Configs grandes (Sybase com replicacao + multiplos files etc.)
+    // sao gerenciaveis em ate ~64KB. List pode retornar dezenas;
+    // 256KB cobre folgado. delete: so id+type.
+    MessageType.listDatabaseConfigsRequest: 1 * 1024,
+    MessageType.listDatabaseConfigsResponse: 256 * 1024,
+    MessageType.createDatabaseConfigRequest: 64 * 1024,
+    MessageType.updateDatabaseConfigRequest: 64 * 1024,
+    MessageType.deleteDatabaseConfigRequest: 4 * 1024,
+    MessageType.databaseConfigMutationResponse: 64 * 1024,
   };
 
   /// Retorna o limite maximo de payload (em bytes) para o tipo de

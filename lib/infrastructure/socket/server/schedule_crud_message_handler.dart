@@ -141,6 +141,12 @@ class ScheduleCrudMessageHandler {
       case MessageType.cancelBackupRequest:
       case MessageType.cancelBackupResponse:
       case MessageType.scheduleMutationResponse:
+      case MessageType.listDatabaseConfigsRequest:
+      case MessageType.listDatabaseConfigsResponse:
+      case MessageType.createDatabaseConfigRequest:
+      case MessageType.updateDatabaseConfigRequest:
+      case MessageType.deleteDatabaseConfigRequest:
+      case MessageType.databaseConfigMutationResponse:
         // Filtrado em `handle` antes de chegar aqui — defesa em
         // profundidade. Tipo nao deveria chegar a este switch.
         throw const _CrudFailure(
