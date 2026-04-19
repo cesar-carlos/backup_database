@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
+import 'package:backup_database/infrastructure/protocol/preflight_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:backup_database/infrastructure/socket/client/file_transfer_resume_metadata_store.dart';
@@ -1144,6 +1145,48 @@ class ConnectionManager {
     } on TimeoutException {
       _pendingRequests.remove(requestId);
       return rd.Failure(TimeoutException('getServerSession timeout'));
+    } on Object catch (e) {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(e is Exception ? e : Exception(e.toString()));
+    }
+  }
+
+  /// Solicita preflight de prerequisitos para execucao remota (F1.8).
+  ///
+  /// Servidor executa todos os checks injetados (compactacao, pasta
+  /// temp, espaco em disco, etc.) e retorna status agregado. Cliente
+  /// deve chamar antes de disparar backup remoto e bloquear quando
+  /// `result.isBlocked == true`.
+  Future<rd.Result<PreflightResult>> validateServerBackupPrerequisites() async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    final requestId = _nextRequestId++;
+    final completer = Completer<Message>();
+    _pendingRequests[requestId] = completer;
+    try {
+      await send(createPreflightRequestMessage(requestId: requestId));
+      final message = await completer.future.timeout(
+        SocketConfig.scheduleRequestTimeout,
+      );
+      _pendingRequests.remove(requestId);
+      if (message.header.type == MessageType.error) {
+        final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
+        return rd.Failure(Exception(error));
+      }
+      if (!isPreflightResponseMessage(message)) {
+        return rd.Failure(
+          Exception(
+            'Resposta inesperada para preflight: ${message.header.type.name}',
+          ),
+        );
+      }
+      return rd.Success(readPreflightFromResponse(message));
+    } on TimeoutException {
+      _pendingRequests.remove(requestId);
+      return rd.Failure(
+        TimeoutException('validateServerBackupPrerequisites timeout'),
+      );
     } on Object catch (e) {
       _pendingRequests.remove(requestId);
       return rd.Failure(e is Exception ? e : Exception(e.toString()));

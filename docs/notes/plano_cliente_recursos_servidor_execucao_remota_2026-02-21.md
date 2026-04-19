@@ -40,6 +40,7 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 - (2026-04-19) M1.10 (`getServerHealth`) entregue: novos `MessageType.healthRequest/Response`; `lib/infrastructure/protocol/health_messages.dart` com factories + `ServerHealthStatus` enum (ok/degraded/unhealthy) + `ServerHealth` snapshot tipado (defensivo: status invalido vira `unhealthy` fail-closed); `HealthMessageHandler` com checks injetaveis (required + optional) + politica de agregacao + tolerancia a checks que lancam excecao; `ConnectionManager.getServerHealth()` retorna `Result<ServerHealth>`; entradas em `PayloadLimits` (1KB/16KB); 3 fixtures golden novas. Cobertura: 8 protocolo + 8 handler + 2 e2e + 3 golden = 21 testes novos. 203 testes na suite, 0 issue. Cliente pode bloquear disparo de backup quando `isUnhealthy` ou alertar operador quando `degraded` — fechando outro gate explicito do PR-1.
 - (2026-04-19) M1.10 (`getSession`/`whoAmI`) entregue: completa o trio do handshake do PR-1 (capabilities + health + session). Novos `MessageType.sessionRequest/Response`; `lib/infrastructure/protocol/session_messages.dart` com factories + `ServerSession` snapshot tipado (clientId, isAuthenticated, host:port, connectedAt, serverTimeUtc, serverId opcional); `ClientHandler` agora persiste `authenticatedServerId` apos auth bem-sucedida (campo publico para lookup); `SessionMessageHandler` com `SessionInfoLookup` injetavel (zero acoplamento com `_handlers`/`_clientManager`); `TcpSocketServer._lookupSessionInfo` consulta handlers vivos e retorna `null` em race condition; `ClientManager.getConnectedAt()` exposto; `ConnectionManager.getServerSession()` retorna `Result<ServerSession>`; entradas em `PayloadLimits` (1KB/8KB); 3 fixtures golden (request, response autenticado, response sem auth). Cobertura: 6 protocolo + 5 handler + 2 e2e + 3 golden = 16 testes novos. 219 testes na suite, 0 issue. Cliente pode confirmar identidade percebida pelo servidor, correlacionar com logs de suporte e detectar mudanca de identidade apos reconexao.
 - (2026-04-19) M4.1 adotada no provider real: `ServerConnectionProvider` agora expoe `serverCapabilities` (passa-through), cacheia `serverHealth`/`serverSession` localmente, e oferece `refreshServerStatus()` que consulta health + session em paralelo com defesa graceful (falha pontual nao remove cache anterior, falhas sao logadas mas nao throws). 4 getters convenientes (`isRunIdSupported`, `isExecutionQueueSupported`, `isArtifactRetentionSupported`, `isChunkAckSupported`) + `isServerHealthy` para gate sincrono na UI. Auto-refresh apos cada `connect()` bem-sucedido. Invalidacao em `disconnect` explicito + invalidacao em status terminal (timeout/RST/auth failure) via `_listenToConnectionStatus`. Idempotencia em chamadas concorrentes de refresh. UI agora pode ler `provider.isRunIdSupported` (etc) sincronamente sem se preocupar com fetch/cache/fallback. Cobertura: 9 testes e2e novos cobrindo passa-through, refresh idempotente, invalidacao em disconnect, getters em legacyDefault. 228 testes na suite, 0 issue. M4.1 oficialmente fechada com adocao concreta.
+- (2026-04-19) F1.8 (`validateServerBackupPrerequisites`) infraestrutura entregue: novos `MessageType.preflightRequest/Response`; `lib/infrastructure/protocol/preflight_messages.dart` com factories + tipos `PreflightStatus` (passed/passedWithWarnings/blocked) + `PreflightSeverity` (blocking/warning/info) + `PreflightCheckResult` com `details` estruturados + `PreflightResult` snapshot tipado com `blockingFailures`/`warnings`/`isOk`/`isBlocked`/`hasWarnings`. `PreflightMessageHandler` com `PreflightCheck` injetaveis + politica de agregacao (blocking->blocked; warning->passedWithWarnings; info nao escala) + tolerancia a checks que lancam excecao (fail-closed). `ConnectionManager.validateServerBackupPrerequisites()` retorna `Result<PreflightResult>`. Limites em `PayloadLimits` (1KB/64KB). 3 fixtures golden (request, response passed, response blocked com details). Wirings em producao podem injetar checks reais (`ToolVerificationService`, `validate_backup_directory`, `StorageChecker`, `validate_sybase_log_backup_preflight`) sem mexer no handler. Cobertura: 8 protocolo + 8 handler + 2 e2e + 3 golden = 21 testes novos. 250 testes na suite, 0 issue. Cliente pode bloquear disparo de backup quando preflight reporta `blocked` ou alertar operador quando `passedWithWarnings`.
 
 ### Lacunas identificadas (bloqueiam P0)
 
@@ -428,7 +429,7 @@ Data de verificacao: 2026-04-19
 - [x] `getServerHealth` (endpoint dedicado) _(entregue em 2026-04-19)_
 - [x] `getSession` / `whoAmI` _(entregue em 2026-04-19)_
 - [x] `capabilitiesRequest` / `capabilitiesResponse` _(entregue em 2026-04-19)_
-- [ ] `validateServerBackupPrerequisites`
+- [x] `validateServerBackupPrerequisites` _(entregue em 2026-04-19; checks reais pendentes PR-1)_
 - [ ] CRUD remoto completo de configuracao de banco (`createDatabaseConfig`, `deleteDatabaseConfig`, etc.)
 - [ ] `testDatabaseConnection` remoto
 - [ ] `getExecutionStatus` formal com `runId`, `state`, `queuedPosition`
@@ -558,12 +559,16 @@ Objetivo: expor na API remota tudo que e necessario para o cliente operar recurs
 - [ ] F1.5 Adaptar `ConnectionManager` e providers de cliente para consumir os novos endpoints sem quebrar fronteiras da arquitetura.
 - [ ] F1.6 Garantir persistencia no servidor de configuracao completa de backup remoto (compressao, checksum, script etc).
 - [ ] F1.7 Testes unitarios + integracao para CRUD de banco, teste de conexao e execucao remota sob comando.
-- [ ] F1.8 Adicionar API de preflight para validar prerequisitos de execucao no servidor, reaproveitando use cases/servicos ja existentes:
-  - [ ] `validateServerBackupPrerequisites`
-  - [ ] checagem de ferramenta de compactacao
-  - [ ] checagem de permissao/escrita na pasta temporaria padrao do servidor
-  - [ ] retorno estruturado de bloqueios e avisos
-  - [ ] reutilizar `ToolVerificationService`, `validate_backup_directory`, `StorageChecker`, `validate_sybase_log_backup_preflight`
+- [~] F1.8 Adicionar API de preflight para validar prerequisitos de execucao no servidor, reaproveitando use cases/servicos ja existentes: _(infraestrutura entregue em 2026-04-19; checks reais ficam para PR-1)_
+  - [x] `validateServerBackupPrerequisites` endpoint implementado: `lib/infrastructure/protocol/preflight_messages.dart` + `PreflightMessageHandler` + `ConnectionManager.validateServerBackupPrerequisites()` + 3 fixtures golden.
+  - [x] Tipos: `PreflightStatus` (passed/passedWithWarnings/blocked) + `PreflightSeverity` (blocking/warning/info) + `PreflightCheckResult` com `details` estruturados + `PreflightResult` snapshot tipado com `blockingFailures` / `warnings` / `isOk`.
+  - [x] Politica de agregacao: blocking falhou -> `blocked`; warning falhou -> `passedWithWarnings`; info falhou nao escala; checks que lancam excecao tratados como blocking failure (fail-closed).
+  - [x] Defesa fail-closed em parsing: status invalido vira `blocked`; severity invalida vira `info` (nao escala arbitrariamente).
+  - [x] Limites de payload em `PayloadLimits` (1KB/64KB).
+  - [ ] checagem de ferramenta de compactacao (`ToolVerificationService` injetado como check) — pendente PR-1.
+  - [ ] checagem de permissao/escrita na pasta temporaria padrao do servidor (`validate_backup_directory` injetado) — pendente PR-1.
+  - [ ] checagem de espaco em disco (`StorageChecker` injetado) — pendente PR-1.
+  - [ ] checagem de prerequisites de Sybase log (`validate_sybase_log_backup_preflight` injetado) — pendente PR-1.
 - [ ] F1.9 Completar comandos remotos de agendamento faltantes sem alterar regra de negocio do scheduler:
   - [ ] `createSchedule`
   - [ ] `deleteSchedule`

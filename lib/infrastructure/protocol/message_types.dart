@@ -36,4 +36,6 @@ enum MessageType {
   healthResponse,
   sessionRequest,
   sessionResponse,
+  preflightRequest,
+  preflightResponse,
 }

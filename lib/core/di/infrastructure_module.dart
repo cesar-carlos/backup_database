@@ -18,6 +18,7 @@ import 'package:backup_database/infrastructure/socket/server/client_manager.dart
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/preflight_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
@@ -274,6 +275,13 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<HealthMessageHandler>(
     HealthMessageHandler.new,
   );
+  // PreflightMessageHandler com mapa de checks vazio por padrao.
+  // Wirings em producao podem injetar checks como `compression_tool`,
+  // `temp_dir_writable`, `disk_space` reusando ToolVerificationService,
+  // validate_backup_directory e StorageChecker (ver F1.8 do plano).
+  getIt.registerLazySingleton<PreflightMessageHandler>(
+    PreflightMessageHandler.new,
+  );
   getIt.registerLazySingleton<TcpSocketServer>(
     () => TcpSocketServer(
       serverCredentialDao: getIt<AppDatabase>().serverCredentialDao,
@@ -285,6 +293,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       metricsHandler: getIt<MetricsMessageHandler>(),
       capabilitiesHandler: getIt<CapabilitiesMessageHandler>(),
       healthHandler: getIt<HealthMessageHandler>(),
+      preflightHandler: getIt<PreflightMessageHandler>(),
     ),
   );
   getIt.registerLazySingleton<SocketServerService>(getIt.get<TcpSocketServer>);

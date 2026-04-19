@@ -1,0 +1,26 @@
+{
+  "type": "preflightResponse",
+  "payload": {
+    "status": "blocked",
+    "checks": [
+      {
+        "name": "compression_tool",
+        "passed": false,
+        "severity": "blocking",
+        "message": "WinRAR nao encontrado no PATH"
+      },
+      {
+        "name": "disk_space",
+        "passed": false,
+        "severity": "warning",
+        "message": "Apenas 2GB livres",
+        "details": {
+          "freeBytes": 2147483648,
+          "requiredBytes": 5368709120
+        }
+      }
+    ],
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z",
+    "message": "Bloqueado: compression_tool, disk_space"
+  }
+}

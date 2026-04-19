@@ -495,4 +495,32 @@ void main() {
       expect(result.isError(), isTrue);
     });
   });
+
+  group('ConnectionManager validateServerBackupPrerequisites (F1.8)', () {
+    test(
+      'retorna passed quando servidor tem mapa de checks vazio (default)',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+        await manager.connect(host: '127.0.0.1', port: port);
+
+        final result = await manager.validateServerBackupPrerequisites();
+        final preflight = result.getOrNull();
+        expect(preflight, isNotNull);
+        // PreflightMessageHandler default vem com mapa de checks vazio
+        // (wirings em producao adicionam checks reais).
+        expect(preflight!.isOk, isTrue);
+        expect(preflight.isBlocked, isFalse);
+        expect(preflight.checks, isEmpty);
+        expect(preflight.serverTimeUtc.isUtc, isTrue);
+      },
+    );
+
+    test('falha quando nao conectado', () async {
+      expect(manager.isConnected, isFalse);
+
+      final result = await manager.validateServerBackupPrerequisites();
+      expect(result.isError(), isTrue);
+    });
+  });
 }

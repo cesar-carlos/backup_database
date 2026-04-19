@@ -18,6 +18,7 @@ import 'package:backup_database/infrastructure/socket/server/client_manager.dart
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/preflight_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
 import 'package:backup_database/infrastructure/socket/server/session_message_handler.dart';
@@ -36,6 +37,7 @@ class TcpSocketServer implements SocketServerService {
     CapabilitiesMessageHandler? capabilitiesHandler,
     HealthMessageHandler? healthHandler,
     SessionMessageHandler? sessionHandler,
+    PreflightMessageHandler? preflightHandler,
     SocketLoggerService? socketLogger,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
@@ -53,6 +55,7 @@ class TcpSocketServer implements SocketServerService {
        _capabilitiesHandler =
            capabilitiesHandler ?? CapabilitiesMessageHandler(),
        _healthHandler = healthHandler ?? HealthMessageHandler(),
+       _preflightHandler = preflightHandler ?? PreflightMessageHandler(),
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
     // SessionMessageHandler precisa consultar handlers vivos para
     // reportar a sessao do cliente. Construido aqui (em vez de no
@@ -71,6 +74,7 @@ class TcpSocketServer implements SocketServerService {
   final CapabilitiesMessageHandler _capabilitiesHandler;
   final HealthMessageHandler _healthHandler;
   late final SessionMessageHandler _sessionHandler;
+  final PreflightMessageHandler _preflightHandler;
   final SocketLoggerService _socketLogger;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
@@ -158,6 +162,10 @@ class TcpSocketServer implements SocketServerService {
         // Session: cliente pode confirmar identidade percebida pelo
         // servidor. Lookup pega snapshot do ClientHandler vivo.
         _sessionHandler.handle(clientId, msg, sendToClient);
+        // Preflight: cliente pode validar prerequisitos profundos
+        // (ferramenta de compactacao, pasta temp, espaco) antes de
+        // disparar backup remoto (F1.8 do plano).
+        _preflightHandler.handle(clientId, msg, sendToClient);
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );

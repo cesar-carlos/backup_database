@@ -45,6 +45,12 @@ class PayloadLimits {
     MessageType.sessionRequest: 1 * 1024,
     MessageType.sessionResponse: 8 * 1024,
 
+    // ---- Preflight (F1.8 / PR-1) ----
+    // Response pode crescer com lista de checks + details estruturados;
+    // 64KB cobre dezenas de checks com detalhes diagnosticos.
+    MessageType.preflightRequest: 1 * 1024,
+    MessageType.preflightResponse: 64 * 1024,
+
     // ---- Schedule commands ----
     // Lista pode ser grande se tiver muitos schedules; update/scheduleUpdated
     // carregam um schedule completo com config JSON.

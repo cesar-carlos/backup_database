@@ -8,6 +8,7 @@ import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
+import 'package:backup_database/infrastructure/protocol/preflight_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -299,6 +300,67 @@ void main() {
         );
         _assertGolden(msg, 'session_response_unauthenticated');
       });
+    });
+
+    group('preflight (F1.8)', () {
+      test('preflightRequest tem payload vazio', () {
+        final msg = createPreflightRequestMessage();
+        _assertGolden(msg, 'preflight_request');
+      });
+
+      test('preflightResponse passed com checks bloqueantes ok', () {
+        final msg = createPreflightResponseMessage(
+          requestId: 1,
+          status: PreflightStatus.passed,
+          checks: const [
+            PreflightCheckResult(
+              name: 'compression_tool',
+              passed: true,
+              severity: PreflightSeverity.blocking,
+              message: 'WinRAR detectado em PATH',
+            ),
+            PreflightCheckResult(
+              name: 'temp_dir_writable',
+              passed: true,
+              severity: PreflightSeverity.blocking,
+              message: 'Pasta temp gravavel',
+            ),
+          ],
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+        );
+        _assertGolden(msg, 'preflight_response_passed');
+      });
+
+      test(
+        'preflightResponse blocked com bloqueante + warning (com details)',
+        () {
+          final msg = createPreflightResponseMessage(
+            requestId: 1,
+            status: PreflightStatus.blocked,
+            checks: const [
+              PreflightCheckResult(
+                name: 'compression_tool',
+                passed: false,
+                severity: PreflightSeverity.blocking,
+                message: 'WinRAR nao encontrado no PATH',
+              ),
+              PreflightCheckResult(
+                name: 'disk_space',
+                passed: false,
+                severity: PreflightSeverity.warning,
+                message: 'Apenas 2GB livres',
+                details: {
+                  'freeBytes': 2147483648,
+                  'requiredBytes': 5368709120,
+                },
+              ),
+            ],
+            serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+            message: 'Bloqueado: compression_tool, disk_space',
+          );
+          _assertGolden(msg, 'preflight_response_blocked');
+        },
+      );
     });
 
     group('capabilities (M1.3 / M4.1)', () {
