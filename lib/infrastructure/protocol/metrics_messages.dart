@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 
 Message createMetricsRequestMessage({int requestId = 0}) {
   const payload = <String, dynamic>{};
@@ -22,7 +23,8 @@ Message createMetricsResponseMessage({
   required int requestId,
   required Map<String, dynamic> payload,
 }) {
-  final payloadJson = jsonEncode(payload);
+  final wrapped = wrapSuccessResponse(payload);
+  final payloadJson = jsonEncode(wrapped);
   final length = utf8.encode(payloadJson).length;
   return Message(
     header: MessageHeader(
@@ -30,7 +32,7 @@ Message createMetricsResponseMessage({
       length: length,
       requestId: requestId,
     ),
-    payload: payload,
+    payload: wrapped,
     checksum: 0,
   );
 }

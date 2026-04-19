@@ -1,6 +1,8 @@
 {
   "type": "capabilitiesResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "protocolVersion": 1,
     "wireVersion": 1,
     "supportsRunId": true,

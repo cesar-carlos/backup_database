@@ -1,6 +1,8 @@
 {
   "type": "executionQueueResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "queue": [],
     "totalQueued": 0,
     "maxQueueSize": 50,

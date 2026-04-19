@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 
 /// Constroi um `sessionRequest` (cliente -> servidor) sem payload.
 ///
@@ -52,7 +53,7 @@ Message createSessionResponseMessage({
   required DateTime serverTimeUtc,
   String? serverId,
 }) {
-  final payload = <String, dynamic>{
+  final payload = wrapSuccessResponse(<String, dynamic>{
     'clientId': clientId,
     'isAuthenticated': isAuthenticated,
     'host': host,
@@ -62,7 +63,7 @@ Message createSessionResponseMessage({
     ...?(serverId != null && serverId.isNotEmpty
         ? {'serverId': serverId}
         : null),
-  };
+  });
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
   return Message(

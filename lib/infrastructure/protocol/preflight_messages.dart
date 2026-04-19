@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 
 /// Severidade de uma checagem de preflight.
 ///
@@ -131,12 +132,12 @@ Message createPreflightResponseMessage({
   required DateTime serverTimeUtc,
   String? message,
 }) {
-  final payload = <String, dynamic>{
+  final payload = wrapSuccessResponse(<String, dynamic>{
     'status': status.name,
     'checks': checks.map((c) => c.toMap()).toList(),
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
     ...?(message != null ? {'message': message} : null),
-  };
+  });
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
   return Message(

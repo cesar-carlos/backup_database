@@ -1,6 +1,8 @@
 {
   "type": "metricsResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "totalBackups": 42,
     "backupsToday": 3,
     "failedToday": 0,

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/protocol_versions.dart';
+import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 
 /// Constroi um `capabilitiesRequest` (cliente -> servidor) sem payload.
 ///
@@ -43,7 +44,7 @@ Message createCapabilitiesResponseMessage({
   required String compression,
   required DateTime serverTimeUtc,
 }) {
-  final payload = <String, dynamic>{
+  final payload = wrapSuccessResponse(<String, dynamic>{
     'protocolVersion': protocolVersion,
     'wireVersion': wireVersion,
     'supportsRunId': supportsRunId,
@@ -54,7 +55,7 @@ Message createCapabilitiesResponseMessage({
     'chunkSize': chunkSize,
     'compression': compression,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
-  };
+  });
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
   return Message(

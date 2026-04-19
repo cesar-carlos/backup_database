@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 
 /// Estado de uma execucao remota consultada por `getExecutionStatus(runId)`.
 ///
@@ -95,7 +96,7 @@ Message createExecutionStatusResponseMessage({
   int? queuedPosition,
   String? message,
 }) {
-  final payload = <String, dynamic>{
+  final payload = wrapSuccessResponse(<String, dynamic>{
     'runId': runId,
     'state': state.name,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
@@ -106,7 +107,7 @@ Message createExecutionStatusResponseMessage({
         : null),
     ...?(queuedPosition != null ? {'queuedPosition': queuedPosition} : null),
     ...?(message != null ? {'message': message} : null),
-  };
+  });
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
   return Message(

@@ -1,6 +1,8 @@
 {
   "type": "executionStatusResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "runId": "unknown-runid",
     "state": "notFound",
     "serverTimeUtc": "2026-04-19T12:00:00.000Z",

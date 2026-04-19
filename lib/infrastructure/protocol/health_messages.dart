@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 
 /// Status agregado de saude reportado pelo servidor.
 ///
@@ -63,13 +64,13 @@ Message createHealthResponseMessage({
   required int uptimeSeconds,
   String? message,
 }) {
-  final payload = <String, dynamic>{
+  final payload = wrapSuccessResponse(<String, dynamic>{
     'status': status.name,
     'checks': checks,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
     'uptimeSeconds': uptimeSeconds,
     ...?(message != null ? {'message': message} : null),
-  };
+  });
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
   return Message(

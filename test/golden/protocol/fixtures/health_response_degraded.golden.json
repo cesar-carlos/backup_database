@@ -1,6 +1,8 @@
 {
   "type": "healthResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "status": "degraded",
     "checks": {
       "socket": true,

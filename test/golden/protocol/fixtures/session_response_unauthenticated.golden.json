@@ -1,6 +1,8 @@
 {
   "type": "sessionResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "clientId": "client-uuid-456",
     "isAuthenticated": false,
     "host": "127.0.0.1",

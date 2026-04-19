@@ -1,6 +1,8 @@
 {
   "type": "metricsResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "backupInProgress": false,
     "totalBackupsToday": 3,
     "uptimeSeconds": 86400

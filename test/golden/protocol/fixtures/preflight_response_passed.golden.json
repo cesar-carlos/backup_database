@@ -1,6 +1,8 @@
 {
   "type": "preflightResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "status": "passed",
     "checks": [
       {

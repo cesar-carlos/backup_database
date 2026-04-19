@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 
 /// Item enfileirado aguardando slot livre para execucao remota.
 ///
@@ -77,12 +78,12 @@ Message createExecutionQueueResponseMessage({
   required int maxQueueSize,
   required DateTime serverTimeUtc,
 }) {
-  final payload = <String, dynamic>{
+  final payload = wrapSuccessResponse(<String, dynamic>{
     'queue': queue.map((q) => q.toMap()).toList(),
     'totalQueued': queue.length,
     'maxQueueSize': maxQueueSize,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
-  };
+  });
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
   return Message(

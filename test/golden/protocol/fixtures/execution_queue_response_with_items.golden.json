@@ -1,6 +1,8 @@
 {
   "type": "executionQueueResponse",
   "payload": {
+    "success": true,
+    "statusCode": 200,
     "queue": [
       {
         "runId": "sched-A_uuid-aaa",
