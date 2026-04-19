@@ -6,6 +6,9 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:backup_database/domain/repositories/i_connection_log_repository.dart';
 import 'package:backup_database/domain/repositories/i_server_connection_repository.dart';
+import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
+import 'package:backup_database/infrastructure/protocol/health_messages.dart';
+import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:flutter/foundation.dart';
@@ -31,9 +34,31 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   bool _isTestingConnection = false;
   bool _hasTriedAutoConnectAtStartup = false;
 
+  /// Cache local de saude/sessao do servidor conectado (M1.10 / M4.1).
+  ///
+  /// `null` enquanto nao ha conexao ou enquanto `refreshServerStatus`
+  /// ainda nao foi chamado. Capabilities ja vive no `ConnectionManager`
+  /// e e exposto via passa-through para evitar duplicacao.
+  ///
+  /// Invalidado em `disconnect` para impedir UI de exibir status stale
+  /// apos cair a conexao ou trocar de servidor.
+  ServerHealth? _serverHealth;
+  ServerSession? _serverSession;
+  bool _isRefreshingStatus = false;
+
   void _listenToConnectionStatus() {
     _statusSubscription?.cancel();
-    _statusSubscription = _connectionManager.statusStream?.listen((_) {
+    _statusSubscription = _connectionManager.statusStream?.listen((status) {
+      // Quando a conexao cai externamente (timeout, RST, erro), invalida
+      // cache de health/session — UI nao deve continuar mostrando dados
+      // de servidor que ja saiu. Capabilities tambem foi limpo no
+      // disconnect interno do ConnectionManager.
+      final isTerminal = status == ConnectionStatus.disconnected ||
+          status == ConnectionStatus.error ||
+          status == ConnectionStatus.authenticationFailed;
+      if (isTerminal) {
+        _resetServerStatusCache();
+      }
       notifyListeners();
     });
   }
@@ -51,6 +76,39 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   ConnectionStatus get connectionStatus => _connectionManager.status;
   String? get activeHost => _connectionManager.activeHost;
   int? get activePort => _connectionManager.activePort;
+
+  /// Capabilities do servidor conectado (passa-through do
+  /// `ConnectionManager` que ja faz cache + invalidacao).
+  /// `null` quando desconectado ou antes do auto-refresh do
+  /// `connect()` completar.
+  ServerCapabilities? get serverCapabilities =>
+      _connectionManager.serverCapabilities;
+
+  /// Saude do servidor conectado, conforme ultimo `refreshServerStatus`.
+  /// Use [isServerHealthy] para gate sincrono em UI/disparo de backup.
+  ServerHealth? get serverHealth => _serverHealth;
+
+  /// Sessao do cliente conforme percebida pelo servidor, conforme
+  /// ultimo `refreshServerStatus`.
+  ServerSession? get serverSession => _serverSession;
+
+  /// `true` enquanto `refreshServerStatus` esta em andamento. UI pode
+  /// usar para mostrar loading no painel de status do servidor.
+  bool get isRefreshingStatus => _isRefreshingStatus;
+
+  /// Atalho que o codigo de UI/backup usa para decidir se opera. Cai
+  /// em `false` quando saude e desconhecida (defesa: melhor bloquear
+  /// e pedir refresh do que disparar backup contra servidor instavel).
+  bool get isServerHealthy => _serverHealth?.isOk ?? false;
+
+  // Atalhos para os getters de feature do ConnectionManager — UI nao
+  // precisa importar capabilities_messages.dart.
+  bool get isRunIdSupported => _connectionManager.isRunIdSupported;
+  bool get isExecutionQueueSupported =>
+      _connectionManager.isExecutionQueueSupported;
+  bool get isArtifactRetentionSupported =>
+      _connectionManager.isArtifactRetentionSupported;
+  bool get isChunkAckSupported => _connectionManager.isChunkAckSupported;
 
   Future<void> loadConnections() async {
     await runAsync<void>(
@@ -96,6 +154,9 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
           LoggerService.info(
             'Conectado ao servidor ${connection.name} (${connection.host}:${connection.port}) em background',
           );
+          // Popula cache de health/session imediatamente apos conexao.
+          // Capabilities ja vem populada pelo auto-refresh do connect().
+          unawaited(refreshServerStatus());
           notifyListeners();
           return;
         }
@@ -256,6 +317,9 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
               serverId: connection.serverId,
               success: true,
             );
+            // Popula health/session imediatamente apos conexao bem-
+            // sucedida. UI pode mostrar status assim que abrir.
+            unawaited(refreshServerStatus());
           }
           LoggerService.info('Conexão estabelecida com sucesso');
         },
@@ -277,7 +341,77 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
 
   Future<void> disconnect() async {
     await _connectionManager.disconnect();
+    _resetServerStatusCache();
     notifyListeners();
+  }
+
+  /// Consulta `getServerHealth` e `getServerSession` em paralelo e
+  /// cacheia os snapshots para uso sincrono pela UI. Falhas de health
+  /// ou session sao logadas mas nao propagam excecao — providers nunca
+  /// devem quebrar UI por causa de status auxiliar.
+  ///
+  /// Notifica listeners no inicio (loading) e no fim (resultado).
+  /// Idempotente: chamadas concorrentes durante refresh em curso
+  /// retornam imediatamente.
+  Future<void> refreshServerStatus() async {
+    if (_isRefreshingStatus) return;
+    if (!_connectionManager.isConnected) {
+      // Sem conexao nao ha o que consultar. Garante cache limpo.
+      _resetServerStatusCache();
+      notifyListeners();
+      return;
+    }
+
+    _isRefreshingStatus = true;
+    notifyListeners();
+
+    try {
+      final results = await Future.wait<Object?>([
+        _connectionManager.getServerHealth().then(
+              (r) => r.fold<ServerHealth?>(
+                (h) => h,
+                (failure) {
+                  LoggerService.info(
+                    '[ServerConnectionProvider] getServerHealth falhou: '
+                    '$failure. Health permanece com cache anterior.',
+                  );
+                  return null;
+                },
+              ),
+            ),
+        _connectionManager.getServerSession().then(
+              (r) => r.fold<ServerSession?>(
+                (s) => s,
+                (failure) {
+                  LoggerService.info(
+                    '[ServerConnectionProvider] getServerSession falhou: '
+                    '$failure. Session permanece com cache anterior.',
+                  );
+                  return null;
+                },
+              ),
+            ),
+      ]);
+
+      final newHealth = results[0] as ServerHealth?;
+      final newSession = results[1] as ServerSession?;
+
+      // Apenas substitui cache quando refresh foi bem-sucedido —
+      // preserva ultimo valor conhecido em caso de falha pontual
+      // (servidor temporariamente indisponivel).
+      if (newHealth != null) _serverHealth = newHealth;
+      if (newSession != null) _serverSession = newSession;
+    } finally {
+      _isRefreshingStatus = false;
+      notifyListeners();
+    }
+  }
+
+  /// Limpa cache local de health/session. Chamado em `disconnect`
+  /// e sempre que detectamos troca de servidor.
+  void _resetServerStatusCache() {
+    _serverHealth = null;
+    _serverSession = null;
   }
 
   Future<bool> testConnection(ServerConnection connection) async {
