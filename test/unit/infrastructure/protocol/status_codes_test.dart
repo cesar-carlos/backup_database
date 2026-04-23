@@ -72,6 +72,13 @@ void main() {
         );
       });
 
+      test('artefato expirado -> 410', () {
+        expect(
+          StatusCodes.forErrorCode(ErrorCode.artifactExpired),
+          StatusCodes.gone,
+        );
+      });
+
       test('conflito de estado -> 409', () {
         expect(
           StatusCodes.forErrorCode(ErrorCode.fileBusy),
@@ -86,6 +93,10 @@ void main() {
         );
         expect(
           StatusCodes.forErrorCode(ErrorCode.diskFull),
+          StatusCodes.serviceUnavailable,
+        );
+        expect(
+          StatusCodes.forErrorCode(ErrorCode.stagingFull),
           StatusCodes.serviceUnavailable,
         );
         expect(

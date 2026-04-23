@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 
 class BackupHistoryTable extends Table {
   TextColumn get id => text()();
+  /// Correlacao com `runId` de execucao remota (PR-3c / `getExecutionStatus`).
+  TextColumn get runId => text().nullable()();
   TextColumn get scheduleId => text().nullable()();
   TextColumn get databaseName => text()();
   TextColumn get databaseType => text()();

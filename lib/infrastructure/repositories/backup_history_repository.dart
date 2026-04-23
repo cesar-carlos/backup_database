@@ -48,6 +48,20 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
   }
 
   @override
+  Future<rd.Result<BackupHistory>> getByRunId(String runId) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar histórico por runId',
+      action: () async {
+        final history = await _database.backupHistoryDao.getByRunId(runId);
+        if (history == null) {
+          throw const NotFoundFailure(message: 'Histórico não encontrado');
+        }
+        return _toEntity(history);
+      },
+    );
+  }
+
+  @override
   Future<rd.Result<BackupHistory>> create(BackupHistory history) {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao criar histórico',
@@ -288,6 +302,7 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
   BackupHistory _toEntity(BackupHistoryTableData data) {
     return BackupHistory(
       id: data.id,
+      runId: data.runId,
       scheduleId: data.scheduleId,
       databaseName: data.databaseName,
       databaseType: data.databaseType,
@@ -322,6 +337,7 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     final metricsJson = history.metrics?.toJson();
     return BackupHistoryTableCompanion(
       id: Value(history.id),
+      runId: Value(history.runId),
       scheduleId: Value(history.scheduleId),
       databaseName: Value(history.databaseName),
       databaseType: Value(history.databaseType),

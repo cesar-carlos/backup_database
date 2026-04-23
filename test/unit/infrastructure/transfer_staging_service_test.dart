@@ -60,4 +60,68 @@ void main() {
       'b',
     );
   });
+
+  test('copyToStaging uses remoteFolderKey when set (staging por runId)', () async {
+    final sourceFile = File(p.join(tempRoot.path, 'x.bak'))..writeAsStringSync('z');
+    const runKey = 'sched-1_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+    final relative = await service.copyToStaging(
+      sourceFile.path,
+      'sched-1',
+      remoteFolderKey: runKey,
+    );
+
+    expect(relative, 'remote/$runKey/x.bak');
+    final staged = File(p.join(transferBase.path, 'remote', runKey, 'x.bak'));
+    expect(await staged.exists(), isTrue);
+    expect(await staged.readAsString(), 'z');
+  });
+
+  test('cleanupStaging removes remoteFolderKey directory when set', () async {
+    final f = File(p.join(transferBase.path, 'remote', 'k99', 'f.txt'));
+    f.createSync(recursive: true);
+    f.writeAsStringSync('x');
+
+    await service.cleanupStaging('ignored', remoteFolderKey: 'k99');
+
+    expect(
+      Directory(p.join(transferBase.path, 'remote', 'k99')).existsSync(),
+      isFalse,
+    );
+  });
+
+  test('cleanupOldBackups remove pasta remota expirada (inteira)', () async {
+    final now = DateTime.utc(2026, 6, 15, 12);
+    final svc = TransferStagingService(
+      transferBasePath: transferBase.path,
+      clock: () => now,
+    );
+    final oldFile = File(p.join(transferBase.path, 'remote', 'run-a', 'x.bak'));
+    oldFile.createSync(recursive: true);
+    oldFile.writeAsStringSync('x');
+    oldFile.setLastModifiedSync(now.subtract(const Duration(hours: 25)));
+
+    await svc.cleanupOldBackups();
+
+    expect(
+      Directory(p.join(transferBase.path, 'remote', 'run-a')).existsSync(),
+      isFalse,
+    );
+  });
+
+  test('cleanupOldBackups mantem pasta dentro do TTL', () async {
+    final now = DateTime.utc(2026, 6, 15, 12);
+    final svc = TransferStagingService(
+      transferBasePath: transferBase.path,
+      clock: () => now,
+    );
+    final f = File(p.join(transferBase.path, 'remote', 'run-b', 'x.bak'));
+    f.createSync(recursive: true);
+    f.writeAsStringSync('x');
+    f.setLastModifiedSync(now.subtract(const Duration(hours: 1)));
+
+    await svc.cleanupOldBackups();
+
+    expect(f.existsSync(), isTrue);
+  });
 }

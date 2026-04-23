@@ -84,6 +84,9 @@ class StatusCodes {
     ErrorCode.directoryNotFound: notFound,
     ErrorCode.scheduleNotFound: notFound,
 
+    // Recurso expirou (retencao/TTL)
+    ErrorCode.artifactExpired: gone,
+
     // Conflito de estado
     ErrorCode.fileBusy: conflict,
     ErrorCode.backupAlreadyRunning: conflict,
@@ -92,6 +95,7 @@ class StatusCodes {
     // Servico / pre-requisito
     ErrorCode.unsupportedProtocolVersion: serviceUnavailable,
     ErrorCode.diskFull: serviceUnavailable,
+    ErrorCode.stagingFull: serviceUnavailable,
     ErrorCode.ioError: serviceUnavailable,
 
     // Conexao

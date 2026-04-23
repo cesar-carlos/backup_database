@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:backup_database/domain/constants/transfer_lease.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
+import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/file_chunker.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -22,7 +25,12 @@ class _FakeLockService implements IFileTransferLockService {
   Future<void> releaseLock(String filePath) async {}
 
   @override
-  Future<bool> tryAcquireLock(String filePath) async => true;
+  Future<bool> tryAcquireLock(
+    String filePath, {
+    String owner = 'unknown',
+    String? runId,
+    Duration leaseTtl = kDefaultTransferLeaseTtl,
+  }) async => true;
 }
 
 void main() {
@@ -136,6 +144,31 @@ void main() {
       expect(chunkMessages.length, 4);
       final firstChunk = getFileChunkFromPayload(chunkMessages.first);
       expect(firstChunk.chunkIndex, 0);
+    });
+
+    test('rejeita arquivo em remote/ com mtime fora do TTL (PR-4)', () async {
+      final remoteDir = Directory(p.join(tempDir.path, 'remote', 'run-1'));
+      await remoteDir.create(recursive: true);
+      final stale = File(p.join(remoteDir.path, 'stale.bak'));
+      await stale.writeAsBytes([1, 2, 3]);
+      final old = DateTime.now().subtract(const Duration(hours: 25));
+      await stale.setLastModified(old);
+
+      final messages = <Message>[];
+      final request = createFileTransferStartRequestMessage(
+        requestId: 9,
+        filePath: p.join('remote', 'run-1', 'stale.bak'),
+      );
+      await handler.handle(
+        'c1',
+        request,
+        (_, m) async => messages.add(m),
+      );
+
+      final err = messages.firstWhere(
+        (m) => m.header.type == MessageType.fileTransferError,
+      );
+      expect(getErrorCodeFromMessage(err), ErrorCode.artifactExpired);
     });
   });
 }

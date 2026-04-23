@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io' show File;
 
 import 'package:backup_database/core/constants/socket_config.dart';
-import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -10,7 +9,6 @@ import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/domain/services/i_send_file_to_destination_service.dart';
-import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/file_transfer_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
@@ -42,8 +40,6 @@ class RemoteFileTransferProvider extends ChangeNotifier {
   final TempDirectoryService _tempDirectoryService;
   final IMachineSettingsRepository _machineSettings;
   final FileTransferDao? _fileTransferDao;
-
-  ITransferStagingService? _stagingServiceCache;
 
   List<RemoteFileEntry> _files = [];
   RemoteFileEntry? _selectedFile;
@@ -79,8 +75,16 @@ class RemoteFileTransferProvider extends ChangeNotifier {
   String? get uploadError => _uploadError;
   bool get isConnected => _connectionManager.isConnected;
 
-  ITransferStagingService get _transferStagingService =>
-      _stagingServiceCache ??= getIt<ITransferStagingService>();
+  /// Primeiro segmento de caminho após `remote/` — pasta no servidor (runId
+  /// em execuções remotas ou `scheduleId` no layout legado).
+  String? _remoteStagingDirectoryKey(String relativePath) {
+    final norm = p.normalize(relativePath).replaceAll(r'\', '/');
+    final segs = norm.split('/').where((s) => s.isNotEmpty).toList();
+    if (segs.length >= 2 && segs[0] == 'remote') {
+      return segs[1];
+    }
+    return null;
+  }
 
   void setSelectedFile(RemoteFileEntry? entry) {
     _selectedFile = entry;
@@ -402,6 +406,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
   Future<bool> transferCompletedBackupToClient(
     String scheduleId,
     String relativePath, {
+    String? runId,
     TransferProgressCallback? onTransferProgress,
   }) async {
     LoggerService.info(
@@ -447,6 +452,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         filePath: relativePath,
         outputPath: outputFilePath,
         scheduleId: scheduleId,
+        runId: runId,
         onProgress: (currentChunk, totalChunks) {
           _transferCurrentChunk = currentChunk;
           _transferTotalChunks = totalChunks;
@@ -504,11 +510,26 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         'Arquivo baixado verificado: $outputFilePath ($downloadedSize bytes)',
       );
 
-      try {
-        await _transferStagingService.cleanupStaging(scheduleId);
-        LoggerService.debug('Staging do servidor limpo');
-      } on Object catch (e) {
-        LoggerService.warning('Erro ao limpar staging (não crítico): $e');
+      final stagingKey = _remoteStagingDirectoryKey(relativePath);
+      if (stagingKey != null) {
+        final remoteCleanup = await _connectionManager.cleanupRemoteStaging(
+          runId: stagingKey,
+        );
+        remoteCleanup.fold(
+          (_) {
+            LoggerService.debug('Limpeza do staging no servidor: $stagingKey');
+          },
+          (failure) {
+            LoggerService.warning(
+              'Falha ao solicitar limpeza do staging remoto (não crítico): $failure',
+            );
+          },
+        );
+      } else {
+        LoggerService.debug(
+          'Caminho relativo sem padrão remote/<chave>/; limpeza remota ignorada: '
+          '$relativePath',
+        );
       }
 
       var uploadHadErrors = false;

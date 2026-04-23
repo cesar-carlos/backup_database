@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_license_policy_service.dart';
@@ -14,17 +14,16 @@ import 'package:backup_database/infrastructure/protocol/execution_messages.dart'
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/queue_events.dart';
+import 'package:backup_database/infrastructure/protocol/status_codes.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class _MockScheduleRepository extends Mock implements IScheduleRepository {}
-
-class _MockDestinationRepository extends Mock
-    implements IBackupDestinationRepository {}
 
 class _MockLicensePolicyService extends Mock implements ILicensePolicyService {}
 
@@ -36,7 +35,6 @@ class _MockProgressNotifier extends Mock implements IBackupProgressNotifier {}
 
 void main() {
   late _MockScheduleRepository scheduleRepository;
-  late _MockDestinationRepository destinationRepository;
   late _MockLicensePolicyService licensePolicyService;
   late _MockSchedulerService schedulerService;
   late _MockExecuteBackup executeBackup;
@@ -71,11 +69,11 @@ void main() {
   setUpAll(() {
     registerFallbackValue(schedule);
     registerFallbackValue(destination);
+    registerFallbackValue(ExecutionOrigin.local);
   });
 
   setUp(() {
     scheduleRepository = _MockScheduleRepository();
-    destinationRepository = _MockDestinationRepository();
     licensePolicyService = _MockLicensePolicyService();
     schedulerService = _MockSchedulerService();
     executeBackup = _MockExecuteBackup();
@@ -83,39 +81,59 @@ void main() {
     executionRegistry = RemoteExecutionRegistry();
     sent = [];
 
+    when(() => progressNotifier.addListener(any())).thenReturn(null);
+    when(() => progressNotifier.removeListener(any())).thenReturn(null);
     when(() => schedulerService.isExecutingBackup).thenReturn(false);
     when(() => progressNotifier.tryStartBackup(any())).thenReturn(true);
     // Default: backup async resolve sucesso (mas testes que querem
     // observar runtime async substituem isso por Completer<...>)
-    when(() => executeBackup(any())).thenAnswer((_) async => const rd.Success(true));
+    when(() => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')))
+        .thenAnswer((_) async => const rd.Success(true));
     when(
       () => scheduleRepository.getById(scheduleId),
     ).thenAnswer((_) async => rd.Success(schedule));
-    when(
-      () => destinationRepository.getByIds(any()),
-    ).thenAnswer((_) async => rd.Success([destination]));
     when(
       () => licensePolicyService.validateExecutionCapabilities(any(), any()),
     ).thenAnswer((_) async => const rd.Success(true));
 
     handler = ExecutionMessageHandler(
       scheduleRepository: scheduleRepository,
-      destinationRepository: destinationRepository,
       licensePolicyService: licensePolicyService,
       schedulerService: schedulerService,
       executeBackup: executeBackup,
       progressNotifier: progressNotifier,
       executionRegistry: executionRegistry,
       clock: () => DateTime.utc(2026, 4, 19, 12),
+      stagingUsageBytesProvider: () async => 0,
     );
   });
 
   group('startBackup nao-bloqueante (M2.2)', () {
+    test('rejeita com STAGING_FULL quando uso de staging no limite (503)', () async {
+      handler = ExecutionMessageHandler(
+        scheduleRepository: scheduleRepository,
+        licensePolicyService: licensePolicyService,
+        schedulerService: schedulerService,
+        executeBackup: executeBackup,
+        progressNotifier: progressNotifier,
+        executionRegistry: executionRegistry,
+        clock: () => DateTime.utc(2026, 4, 19, 12),
+        stagingUsageBytesProvider: () async => StagingUsagePolicy.blockThresholdBytes,
+      );
+      final req = createStartBackupRequest(scheduleId: scheduleId);
+      await handler.handle('c1', req, sendToClient);
+      final msg = sent.single.message;
+      expect(msg.header.type, MessageType.error);
+      expect(getErrorCodeFromMessage(msg), ErrorCode.stagingFull);
+      expect(getStatusCodeFromMessage(msg), StatusCodes.serviceUnavailable);
+    });
+
     test('responde IMEDIATAMENTE com runId + state=running + 202', () async {
       // Bloqueia o backup async para confirmar que o handler nao
       // espera por ele antes de responder.
       final blockBackup = Completer<rd.Result<bool>>();
-      when(() => executeBackup(any())).thenAnswer((_) => blockBackup.future);
+      when(() => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')))
+          .thenAnswer((_) => blockBackup.future);
 
       final req = createStartBackupRequest(scheduleId: scheduleId);
       await handler.handle('c1', req, sendToClient);
@@ -190,7 +208,8 @@ void main() {
       'idempotencyKey: 2a request com mesma chave NAO dispara executeBackup',
       () async {
         final blockBackup = Completer<rd.Result<bool>>();
-        when(() => executeBackup(any())).thenAnswer((_) => blockBackup.future);
+        when(() => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')))
+          .thenAnswer((_) => blockBackup.future);
 
         final req = createStartBackupRequest(
           scheduleId: scheduleId,
@@ -200,7 +219,12 @@ void main() {
         await handler.handle('c1', req, sendToClient);
 
         // 2 respostas iguais, mas executeBackup foi chamado APENAS 1 vez
-        verify(() => executeBackup(any())).called(1);
+        verify(
+          () => executeBackup(
+                any(),
+                executionOrigin: ExecutionOrigin.remoteCommand,
+              ),
+        ).called(1);
         expect(sent, hasLength(2));
         expect(
           sent[0].message.payload['runId'],
@@ -360,7 +384,6 @@ void main() {
         final queue = ExecutionQueueService();
         handler = ExecutionMessageHandler(
           scheduleRepository: scheduleRepository,
-          destinationRepository: destinationRepository,
           licensePolicyService: licensePolicyService,
           schedulerService: schedulerService,
           executeBackup: executeBackup,
@@ -415,7 +438,6 @@ void main() {
         );
         handler = ExecutionMessageHandler(
           scheduleRepository: scheduleRepository,
-          destinationRepository: destinationRepository,
           licensePolicyService: licensePolicyService,
           schedulerService: schedulerService,
           executeBackup: executeBackup,
@@ -450,7 +472,6 @@ void main() {
       );
       handler = ExecutionMessageHandler(
         scheduleRepository: scheduleRepository,
-        destinationRepository: destinationRepository,
         licensePolicyService: licensePolicyService,
         schedulerService: schedulerService,
         executeBackup: executeBackup,
@@ -481,7 +502,6 @@ void main() {
       ))!;
       handler = ExecutionMessageHandler(
         scheduleRepository: scheduleRepository,
-        destinationRepository: destinationRepository,
         licensePolicyService: licensePolicyService,
         schedulerService: schedulerService,
         executeBackup: executeBackup,
@@ -533,7 +553,6 @@ void main() {
       ))!;
       handler = ExecutionMessageHandler(
         scheduleRepository: scheduleRepository,
-        destinationRepository: destinationRepository,
         licensePolicyService: licensePolicyService,
         schedulerService: schedulerService,
         executeBackup: executeBackup,

@@ -7,6 +7,7 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
@@ -15,6 +16,7 @@ import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
+import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
@@ -330,7 +332,11 @@ Future<void> _startSocketServer() async {
       return;
     }
 
+    await service_locator
+        .getIt<IFileTransferLockService>()
+        .cleanupExpiredLocks();
     await socketServer.start();
+    service_locator.getIt<RemoteStagingCleanupScheduler>().start();
     LoggerService.info(
       'Socket server iniciado automaticamente na porta 9527',
     );

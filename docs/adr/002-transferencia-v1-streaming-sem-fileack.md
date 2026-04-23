@@ -148,3 +148,12 @@ Em `v1`, **remover `fileAck` do contrato negociavel** e adotar
   incluir nenhum campo `windowSize` ou `ackInterval`.
 - Quando/se `v2` introduzir ACK real, criar ADR-XXX que supersede este
   e detalhe o protocolo.
+
+## Estado da implementacao (2026-04-23)
+
+- `CapabilitiesMessageHandler` anuncia `supportsChunkAck: false` de forma
+  estavel; nao ha factory ativa de `fileAck` no caminho de envio.
+- `FileTransferMessageHandler` confia no backpressure do `Socket` ao
+  enviar chunks (comportamento descrito em **Consequencias** acima).
+- Nenhuma janela deslizante ou `fileAck` e negociada em
+  `fileTransferStart` no `v1` atual — alinhado a esta ADR.

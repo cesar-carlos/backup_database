@@ -157,8 +157,17 @@ class DiagnosticsMessageHandler {
       () => _provider.getArtifactMetadata(runId),
     );
     if (!outcome.success) {
-      // not-found tambem e resposta valida (cliente saber que
-      // artefato expirou e diferente de erro de servidor).
+      if (outcome.errorCode == ErrorCode.artifactExpired) {
+        await _err(
+          clientId,
+          requestId,
+          outcome.error ?? ErrorCode.artifactExpired.defaultMessage,
+          sendToClient,
+          errorCode: ErrorCode.artifactExpired,
+        );
+        return;
+      }
+      // Nao encontrado: sem artefato no staging (ainda nao pronto ou path legado).
       if (outcome.errorCode == ErrorCode.fileNotFound) {
         await sendToClient(
           clientId,

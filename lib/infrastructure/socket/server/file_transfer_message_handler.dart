@@ -8,6 +8,7 @@ import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/file_chunker.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_staging_artifact_ttl.dart';
 import 'package:path/path.dart' as p;
 
 typedef SendToClient = Future<void> Function(String clientId, Message message);
@@ -17,13 +18,16 @@ class FileTransferMessageHandler {
     required String allowedBasePath,
     required IFileTransferLockService lockService,
     FileChunker? chunker,
+    RemoteStagingArtifactTtl? remoteStagingArtifactTtl,
   }) : _allowedBasePath = p.normalize(p.absolute(allowedBasePath)),
        _lockService = lockService,
-       _chunker = chunker ?? FileChunker();
+       _chunker = chunker ?? FileChunker(),
+       _remoteArtifactTtl = remoteStagingArtifactTtl ?? RemoteStagingArtifactTtl();
 
   final String _allowedBasePath;
   final IFileTransferLockService _lockService;
   final FileChunker _chunker;
+  final RemoteStagingArtifactTtl _remoteArtifactTtl;
 
   Future<void> handle(
     String clientId,
@@ -39,9 +43,14 @@ class FileTransferMessageHandler {
     final requestId = message.header.requestId;
     final filePath = getFilePathFromRequest(message);
     final startChunk = getStartChunkFromRequest(message);
+    final runId = getRunIdFromFileTransferRequest(message);
 
-    // Adquire lock para evitar conflitos de download simultâneo
-    final lockAcquired = await _lockService.tryAcquireLock(filePath);
+    // Adquire lease (PR-4: owner = sessão, runId opcional p/ re-sync)
+    final lockAcquired = await _lockService.tryAcquireLock(
+      filePath,
+      owner: clientId,
+      runId: runId,
+    );
     if (!lockAcquired) {
       await sendToClient(
         clientId,
@@ -92,9 +101,34 @@ class FileTransferMessageHandler {
       late final String transferFileName;
 
       if (entityType == FileSystemEntityType.file) {
+        if (isPathUnderRemoteStaging(_allowedBasePath, resolved) &&
+            await _remoteArtifactTtl.isFileExpiredByRetention(File(resolved))) {
+          await sendToClient(
+            clientId,
+            createFileTransferErrorMessage(
+              requestId: requestId,
+              errorMessage: ErrorCode.artifactExpired.defaultMessage,
+              errorCode: ErrorCode.artifactExpired,
+            ),
+          );
+          return;
+        }
         pathToChunk = resolved;
         transferFileName = p.basename(resolved);
       } else if (entityType == FileSystemEntityType.directory) {
+        if (isPathUnderRemoteStaging(_allowedBasePath, resolved) &&
+            await _remoteArtifactTtl
+                .isDirectoryExpiredByNewestFile(Directory(resolved))) {
+          await sendToClient(
+            clientId,
+            createFileTransferErrorMessage(
+              requestId: requestId,
+              errorMessage: ErrorCode.artifactExpired.defaultMessage,
+              errorCode: ErrorCode.artifactExpired,
+            ),
+          );
+          return;
+        }
         final zipPath = await _zipDirectoryForTransfer(Directory(resolved));
         if (zipPath == null) {
           await sendToClient(

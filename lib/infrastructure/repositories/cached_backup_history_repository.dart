@@ -46,6 +46,11 @@ class CachedBackupHistoryRepository implements IBackupHistoryRepository {
   }
 
   @override
+  Future<rd.Result<BackupHistory>> getByRunId(String runId) {
+    return _repository.getByRunId(runId);
+  }
+
+  @override
   Future<rd.Result<BackupHistory>> create(BackupHistory history) async {
     final result = await _repository.create(history);
     // Invalidate cache on create

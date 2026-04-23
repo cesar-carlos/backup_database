@@ -78,6 +78,22 @@ class ExecutionQueueService {
   bool isScheduleQueued(String scheduleId) =>
       _scheduleIdsInQueue.contains(scheduleId);
 
+  /// Encontra item na fila por [runId] (1-based `queuedPosition`), ou
+  /// `null` se nao estiver enfileirado. Usado em PR-3c por
+  /// `ExecutionStatusMessageHandler`.
+  ({QueuedExecutionItem item, int queuedPosition})? findQueuedByRunId(
+    String runId,
+  ) {
+    var i = 0;
+    for (final it in _queue) {
+      i++;
+      if (it.runId == runId) {
+        return (item: it, queuedPosition: i);
+      }
+    }
+    return null;
+  }
+
   /// Snapshot ordenado da fila (FIFO). Usado por
   /// `ExecutionQueueMessageHandler` para responder `getExecutionQueue`.
   List<QueuedExecution> snapshot() {

@@ -3,6 +3,7 @@ import 'package:backup_database/core/constants/backup_constants.dart';
 import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
@@ -186,6 +187,7 @@ class BackupOrchestratorService {
     );
 
     var history = BackupHistory(
+      runId: LogContext.runId,
       scheduleId: schedule.id,
       databaseName: schedule.name,
       databaseType: schedule.databaseType.name,

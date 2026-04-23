@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
-import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_license_policy_service.dart';
@@ -21,6 +22,7 @@ import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
 /// Handler para `startBackup` nao-bloqueante (M2.2/PR-2) e
 /// `cancelBackup` (PR-2).
@@ -39,7 +41,6 @@ import 'package:backup_database/infrastructure/socket/server/remote_execution_re
 class ExecutionMessageHandler {
   ExecutionMessageHandler({
     required IScheduleRepository scheduleRepository,
-    required IBackupDestinationRepository destinationRepository,
     required ILicensePolicyService licensePolicyService,
     required ISchedulerService schedulerService,
     required ExecuteScheduledBackup executeBackup,
@@ -49,8 +50,8 @@ class ExecutionMessageHandler {
     ExecutionQueueService? queueService,
     this.eventBus,
     DateTime Function()? clock,
+    Future<int> Function()? stagingUsageBytesProvider,
   })  : _scheduleRepository = scheduleRepository,
-        _destinationRepository = destinationRepository,
         _licensePolicyService = licensePolicyService,
         _schedulerService = schedulerService,
         _executeBackup = executeBackup,
@@ -58,10 +59,10 @@ class ExecutionMessageHandler {
         _executionRegistry = executionRegistry,
         _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
         _queueService = queueService ?? ExecutionQueueService(),
-        _clock = clock ?? DateTime.now;
+        _clock = clock ?? DateTime.now,
+        _stagingUsageBytesProvider = stagingUsageBytesProvider;
 
   final IScheduleRepository _scheduleRepository;
-  final IBackupDestinationRepository _destinationRepository;
   final ILicensePolicyService _licensePolicyService;
   final ISchedulerService _schedulerService;
   final ExecuteScheduledBackup _executeBackup;
@@ -76,6 +77,11 @@ class ExecutionMessageHandler {
   // (ver infrastructure_module.dart).
   QueueEventBus? eventBus;
   final DateTime Function() _clock;
+
+  /// Mesmo medidor que alimenta `metrics.stagingUsageBytes` (M5.3).
+  /// Quando definido, o fluxo `startBackup` falha com [ErrorCode.stagingFull]
+  /// se o uso exceder [StagingUsagePolicy.blockThresholdBytes].
+  final Future<int> Function()? _stagingUsageBytesProvider;
 
   /// Acesso ao queue service para wirings externos (ex.:
   /// `ExecutionQueueMessageHandler` que reporta a fila ao cliente).
@@ -173,6 +179,18 @@ class ExecutionMessageHandler {
       scheduleId: scheduleId,
     );
 
+    final measureStaging = _stagingUsageBytesProvider;
+    if (measureStaging != null) {
+      final used = await measureStaging();
+      if (StagingUsagePolicy.shouldBlock(used)) {
+        throw const _StartFailure(
+          'Staging remoto acima do limite; libere espaco ou aguarde a '
+          'limpeza periodica.',
+          ErrorCode.stagingFull,
+        );
+      }
+    }
+
     final isBusy = _schedulerService.isExecutingBackup ||
         _executionRegistry.hasActiveForSchedule(scheduleId);
 
@@ -251,19 +269,10 @@ class ExecutionMessageHandler {
       );
     }
 
-    // Pre-checagens caras (license, destinations) ANTES de reservar
-    // runId/slot — senao um runId fica orfao em caso de license fail.
-    final destinationsResult =
-        await _destinationRepository.getByIds(schedule.destinationIds);
-    if (destinationsResult.isError()) {
-      throw const _StartFailure(
-        'Falha ao carregar destinos para validacao',
-        ErrorCode.unknown,
-      );
-    }
-    final destinations = destinationsResult.getOrNull()!;
+    // ADR-001: origem remota nao exige destinos no host; valida
+    // schedule + licenca.
     final policyResult = await _licensePolicyService
-        .validateExecutionCapabilities(schedule, destinations);
+        .validateExecutionCapabilities(schedule, const <BackupDestination>[]);
     if (policyResult.isError()) {
       throw const _StartFailure(
         'Licenca nao permite execucao deste agendamento',
@@ -295,14 +304,17 @@ class ExecutionMessageHandler {
     // Dispara o backup em background. O Future NAO e awaited aqui —
     // por isso `startBackup` retorna IMEDIATAMENTE. O backup
     // continua rodando; eventos chegam via progressNotifier->stream.
-    unawaited(_runBackupAsync(
-      clientId: clientId,
-      requestId: requestId,
-      scheduleId: scheduleId,
-      runId: runId,
-      scheduleName: schedule.name,
-      sendToClient: sendToClient,
-    ));
+    unawaited(
+      _runBackupAsync(
+        clientId: clientId,
+        requestId: requestId,
+        scheduleId: scheduleId,
+        runId: runId,
+        scheduleName: schedule.name,
+        sendToClient: sendToClient,
+        executionOrigin: ExecutionOrigin.remoteCommand,
+      ),
+    );
 
     return createStartBackupResponse(
       requestId: requestId,
@@ -325,6 +337,7 @@ class ExecutionMessageHandler {
     required String runId,
     required String scheduleName,
     required SendToClient sendToClient,
+    ExecutionOrigin executionOrigin = ExecutionOrigin.local,
   }) async {
     try {
       _progressNotifier.setCurrentBackupName(scheduleName);
@@ -334,7 +347,10 @@ class ExecutionMessageHandler {
         progress: 0,
       );
 
-      final result = await _executeBackup(scheduleId);
+      final result = await _executeBackup(
+        scheduleId,
+        executionOrigin: executionOrigin,
+      );
 
       if (result.isError()) {
         final failure = result.exceptionOrNull();
@@ -494,14 +510,17 @@ class ExecutionMessageHandler {
           Future<void>.value(),
     );
 
-    unawaited(_runBackupAsync(
-      clientId: next.clientId,
-      requestId: next.requestId,
-      scheduleId: next.scheduleId,
-      runId: next.runId,
-      scheduleName: schedule.name,
-      sendToClient: sendToClientResolver,
-    ));
+    unawaited(
+      _runBackupAsync(
+        clientId: next.clientId,
+        requestId: next.requestId,
+        scheduleId: next.scheduleId,
+        runId: next.runId,
+        scheduleName: schedule.name,
+        sendToClient: sendToClientResolver,
+        executionOrigin: ExecutionOrigin.remoteCommand,
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------

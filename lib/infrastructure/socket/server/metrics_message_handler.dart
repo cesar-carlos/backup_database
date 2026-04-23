@@ -8,6 +8,7 @@ import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
     show RemoteExecutionRegistry, SendToClient;
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
 class MetricsMessageHandler {
   MetricsMessageHandler({
@@ -162,7 +163,13 @@ class MetricsMessageHandler {
     // antigo. Erros do measurer ja sao convertidos em 0/parcial pelo
     // proprio helper, entao aqui nao ha try/catch extra necessario.
     if (_stagingUsageBytesProvider != null) {
-      payload['stagingUsageBytes'] = await _stagingUsageBytesProvider();
+      final usage = await _stagingUsageBytesProvider();
+      payload['stagingUsageBytes'] = usage;
+      payload['stagingUsageWarnThresholdBytes'] =
+          StagingUsagePolicy.warnThresholdBytes;
+      payload['stagingUsageBlockThresholdBytes'] =
+          StagingUsagePolicy.blockThresholdBytes;
+      payload['stagingUsageLevel'] = StagingUsagePolicy.levelFor(usage).name;
     }
 
     return payload;

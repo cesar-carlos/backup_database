@@ -63,7 +63,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 30;
+  int get schemaVersion => 31;
 
   @override
   MigrationStrategy get migration {
@@ -957,6 +957,21 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v30 para execution_queue_items_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 31) {
+          try {
+            await m.addColumn(backupHistoryTable, backupHistoryTable.runId);
+            LoggerService.info(
+              'Migração v31: backup_history_table.run_id (PR-3c).',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v31 para run_id em backup_history',
               e,
               stackTrace,
             );

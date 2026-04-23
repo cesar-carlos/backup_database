@@ -1,31 +1,37 @@
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
-import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
+    show RemoteExecutionRegistry, SendToClient;
 
 /// Responde `executionStatusRequest` com o estado atual de uma
 /// execucao remota identificada por `runId`.
 ///
-/// Implementa parte de PR-2 (`getExecutionStatus`) e complementa M2.3
-/// (`runId` no contrato): cliente que recebeu `runId` em
-/// `backupProgress`/`Complete`/`Failed` pode consultar status sob
-/// demanda — util para reidratar UI apos reconexao ou polling
-/// alternativo a stream.
-///
-/// Hoje (PR-1), o registry so observa execucoes em curso (`running`)
-/// — implementacoes futuras (PR-3b com fila persistida, PR-3c com
-/// historico) ampliarao para `queued`/`completed`/`failed`/`cancelled`.
-/// Cliente ja preparado via [ExecutionState.unknown] como fallback.
+/// Ordem de resolucao (PR-3c):
+/// 1. [RemoteExecutionRegistry] — `running` com snapshot.
+/// 2. [ExecutionQueueService.findQueuedByRunId] — `queued`.
+/// 3. [IBackupHistoryRepository.getByRunId] — estados terminais ou
+///    `running` reidratado do SQLite (apos restart, sem registry).
+/// 4. [ExecutionState.notFound].
 class ExecutionStatusMessageHandler {
   ExecutionStatusMessageHandler({
     required RemoteExecutionRegistry executionRegistry,
+    ExecutionQueueService? queueService,
+    IBackupHistoryRepository? backupHistoryRepository,
     DateTime Function()? clock,
-  })  : _executionRegistry = executionRegistry,
-        _clock = clock ?? DateTime.now;
+  }) : _executionRegistry = executionRegistry,
+       _queueService = queueService,
+       _backupHistoryRepository = backupHistoryRepository,
+       _clock = clock ?? DateTime.now;
 
   final RemoteExecutionRegistry _executionRegistry;
+  final ExecutionQueueService? _queueService;
+  final IBackupHistoryRepository? _backupHistoryRepository;
   final DateTime Function() _clock;
 
   Future<void> handle(
@@ -62,37 +68,105 @@ class ExecutionStatusMessageHandler {
     );
 
     final snapshot = _executionRegistry.getSnapshotByRunId(runId);
-    if (snapshot == null) {
-      // Nao existe no registry: ja terminou (foi limpo) ou nunca
-      // existiu. Cliente pode tentar baixar artefato (se aplicavel)
-      // ou tratar como execucao perdida.
+    if (snapshot != null) {
       await sendToClient(
         clientId,
         createExecutionStatusResponseMessage(
           requestId: requestId,
-          runId: runId,
-          state: ExecutionState.notFound,
+          runId: snapshot.runId,
+          state: ExecutionState.running,
           serverTimeUtc: _clock(),
-          message: 'Execucao nao encontrada no registry ativo',
+          scheduleId: snapshot.scheduleId,
+          clientId: snapshot.clientId,
+          startedAt: snapshot.startedAt,
         ),
       );
       return;
     }
 
-    // Execucao ativa no registry => running. Quando fila for
-    // adicionada (PR-3b), `queued` virara um caso separado consultando
-    // a tabela de fila.
+    final q = _queueService?.findQueuedByRunId(runId);
+    if (q != null) {
+      final it = q.item;
+      await sendToClient(
+        clientId,
+        createExecutionStatusResponseMessage(
+          requestId: requestId,
+          runId: runId,
+          state: ExecutionState.queued,
+          serverTimeUtc: _clock(),
+          scheduleId: it.scheduleId,
+          clientId: it.clientId,
+          startedAt: it.queuedAt,
+          queuedPosition: q.queuedPosition,
+        ),
+      );
+      return;
+    }
+
+    final repo = _backupHistoryRepository;
+    if (repo != null) {
+      final res = await repo.getByRunId(runId);
+      if (res.isSuccess()) {
+        final h = res.getOrNull()!;
+        final fromTerminal = _executionStateFromBackupHistory(h);
+        if (fromTerminal != null) {
+          await sendToClient(
+            clientId,
+            createExecutionStatusResponseMessage(
+              requestId: requestId,
+              runId: runId,
+              state: fromTerminal,
+              serverTimeUtc: _clock(),
+              scheduleId: h.scheduleId,
+              message: h.errorMessage,
+            ),
+          );
+          return;
+        }
+        if (h.status == BackupStatus.running) {
+          await sendToClient(
+            clientId,
+            createExecutionStatusResponseMessage(
+              requestId: requestId,
+              runId: runId,
+              state: ExecutionState.running,
+              serverTimeUtc: _clock(),
+              scheduleId: h.scheduleId,
+              startedAt: h.startedAt,
+            ),
+          );
+          return;
+        }
+      }
+    }
+
     await sendToClient(
       clientId,
       createExecutionStatusResponseMessage(
         requestId: requestId,
-        runId: snapshot.runId,
-        state: ExecutionState.running,
+        runId: runId,
+        state: ExecutionState.notFound,
         serverTimeUtc: _clock(),
-        scheduleId: snapshot.scheduleId,
-        clientId: snapshot.clientId,
-        startedAt: snapshot.startedAt,
+        message: 'Execucao nao encontrada (registry, fila nem historico)',
       ),
     );
+  }
+}
+
+/// `null` se o status for [BackupStatus.running] (tratado a parte no handler).
+ExecutionState? _executionStateFromBackupHistory(BackupHistory h) {
+  switch (h.status) {
+    case BackupStatus.success:
+      return ExecutionState.completed;
+    case BackupStatus.error:
+      return ExecutionState.failed;
+    case BackupStatus.warning:
+      final m = h.errorMessage ?? '';
+      if (m.contains('cancelado')) {
+        return ExecutionState.cancelled;
+      }
+      return ExecutionState.completed;
+    case BackupStatus.running:
+      return null;
   }
 }

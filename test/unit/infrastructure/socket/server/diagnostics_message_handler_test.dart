@@ -3,6 +3,7 @@ import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/protocol/status_codes.dart';
 import 'package:backup_database/infrastructure/socket/server/diagnostics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/diagnostics_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -163,6 +164,18 @@ void main() {
       await handler.handle('c1', req, sendToClient);
       expect(sent.single.payload['found'], isFalse);
       expect(sent.single.payload['statusCode'], 404);
+    });
+
+    test('artifactExpired vira error 410 (nao found=false)', () async {
+      provider.metaOutcome = DiagnosticsOutcome.artifactExpired();
+      final req = createGetArtifactMetadataRequest(runId: 'r1');
+      await handler.handle('c1', req, sendToClient);
+      expect(sent.single.header.type, MessageType.error);
+      expect(getErrorCodeFromMessage(sent.single), ErrorCode.artifactExpired);
+      expect(
+        getStatusCodeFromMessage(sent.single),
+        StatusCodes.gone,
+      );
     });
   });
 

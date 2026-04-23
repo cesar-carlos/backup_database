@@ -788,12 +788,14 @@ class ConnectionManager {
     required String filePath,
     required String outputPath,
     String? scheduleId,
+    String? runId,
     void Function(int currentChunk, int totalChunks)? onProgress,
   }) async {
     LoggerService.info('[ConnectionManager] requestFile chamado');
     LoggerService.info('[ConnectionManager] filePath: $filePath');
     LoggerService.info('[ConnectionManager] outputPath: $outputPath');
     LoggerService.info('[ConnectionManager] scheduleId: $scheduleId');
+    LoggerService.info('[ConnectionManager] runId: $runId');
 
     if (!isConnected) {
       LoggerService.error('[ConnectionManager] Não conectado!');
@@ -894,6 +896,7 @@ class ConnectionManager {
           filePath: filePath,
           scheduleId: scheduleId,
           startChunk: startChunk,
+          runId: runId,
         ),
       );
       LoggerService.info(

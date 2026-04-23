@@ -1,9 +1,31 @@
 # Plano: Cliente Consumindo Recursos do Servidor (Backup Remoto Orquestrado)
 
 Data base: 2026-02-21
-Atualizado em: 2026-04-19
-Status: **PR-1 + PR-2 + PR-3 + Wirings DI + fila persistente (2026-04-19)** — Mesmo escopo PR-1/2/3 anterior **+ F2.16 (fila)**: tabela Drift `execution_queue_items_table` (schema v30), `ExecutionQueueDao`, `DriftExecutionQueuePersistence`, `ExecutionQueueService` com operacoes assincronas espelhadas no SQLite, `initialize()` chamado em `main.dart` antes de `SocketServerService.start()` (modo servidor). **Registry de execucao ativa** (`RemoteExecutionRegistry`) continua in-memory apos restart — apenas itens **enfileirados** sobrevivem ao reinicio. **1121 testes na suite**. PR-4/PR-5 (transferencia resiliente, observabilidade completa) ainda nao iniciados.
+Atualizado em: 2026-04-23
+Status: **PR-1 + PR-2 + PR-3 + Wirings DI + fila persistente (2026-04-19)** — Mesmo escopo PR-1/2/3 anterior **+ F2.16 (fila)**. **PR-3c (base 2026-04-23)**: `getExecutionStatus` / `executionStatusRequest` com **registry → `running`**, **fila Drift → `queued`** (+ `queuedPosition`), **historico com `runId` → `completed` / `failed` / `cancelled`**, caindo em **`notFound`** se nada casar; `BackupHistory.runId` (Drift **v31**) preenchido em novas execucoes; linhas anteriores a migracao **sem** `runId` continuam sem resolucao por historico. **1156 testes** (2026-04-23, 11 skipped; +8 em `execution_status` / `execution_queue` PR-3c). **PR-4 (parcial)**: entregas anteriores + **M5.3 thresholds staging** + **lease de transferencia (v1 JSON)**: `owner` = `clientId`, `runId` opcional no `fileTransferStart`, `acquiredAt`/`expiresAt` com TTL default 30 min (`kDefaultTransferLeaseTtl`); re-aquisicao pelo mesmo owner ou pelo mesmo `runId` (re-sincronizacao); legado (só ISO no `.lock`) ainda bloqueia ate expirar; `cleanupExpiredLocks` no bootstrap do socket (`main.dart` antes de `socketServer.start()`). **PR-4 health staging (2026-04-23)**: `getServerHealth` / `healthResponse` inclui `stagingUsageBytes`, `stagingUsageWarnThresholdBytes`, `stagingUsageBlockThresholdBytes`, `stagingUsageLevel` (espelhando metricas); `ServerHealth` ganhou getters e campos opcionais; `warn`/`block` puxam `degraded` + mensagem. **Pendente PR-4 (opcional)**: nada critico; seguir ADR-001/PR-3c/PR-5. **Concluido em 2026-04-23 (rodada anterior)**: `supportsExecutionQueue: true`; modo serviço Windows + ADR-002. **ADR-001/PR-5** ver plano.
 Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
+
+## Continuidade e sincronizacao do plano (2026-04-19 → 2026-04-23)
+
+Objetivo desta leitura: alinhar o **texto** do plano (checklists e matrizes) com o **codigo** ja mergeado, e deixar explicito o **proximo** trabalho (PR-4 em diante).
+
+### O que o codigo ja cobre (nao reimplementar)
+
+- **Handshake / contrato base**: F0 (pre-auth, `ErrorCode` + `statusCode`, `capabilities`/`health`/`session`, envelope `success`/`statusCode` nos handlers de inspecao, golden de protocolo, limites de payload, versoes wire/protocol).
+- **PR-2**: CRUD remoto de DB + `testDatabaseConnection` + `startBackup`/`cancelBackup` nao-bloqueantes com idempotencia + CRUD de schedule (`create`/`delete`/`pause`/`resume`) + `getExecutionStatus` (ver **PR-3c** para fila + historico).
+- **PR-3 + 3a**: `ExecutionQueueService` FIFO, eventos de fila (`backupQueued`/`Dequeued`/`Started`), `cancelQueuedBackup`, `getExecutionQueue` com provider real, diagnostico (`getRunLogs`, `getRunErrorDetails`, `getArtifactMetadata`, `cleanupRemoteStaging`), `ExecutionStateMachine`, wirings reais (serializers, prober, store, diagnostics).
+- **F2.16**: fila **persistida** em SQLite; execucao `running` em memoria (registry) **nao** reidrata apos restart; estados terminais via `getExecutionStatus` vêm do **historico** quando `runId` foi gravado (v31+); backups antigos **sem** `runId` ainda retornam `notFound` apos limpeza do registry.
+
+### Proxima onda de implementacao (ordem sugerida)
+
+1. **PR-4 (P0)**: [x] nucleo (staging, TTL, fila, modo servico, thresholds, lease v1, **health com staging**). Restante: refinamentos/PR-5/ADR-001.
+2. **Modelo hibrido (ADR-001) — restante**: `executionOrigin` **ja** distingue remoto (sem upload no host) de local; falta decidir **policy** de `_checkTimer` (ex. desativar agendado automatico quando implantacao e 100% cliente) e, se necessario, flag por schedule. Ver implementacao 2026-04-23 no `SchedulerService` + handlers socket.
+3. **PR-3c — entrega base (2026-04-23)**: `getExecutionStatus` com `queued` / `completed` / `failed` / `cancelled` a partir de fila + `BackupHistory.runId` — **feito**; re-sync / politica **M8.4** (cliente apos caos) segue [~] conforme cenarios ainda nao formalizados em testes.
+4. **PR-5**: rate limit, audit log, telemetria `socket_request_duration` / `socket_error_total`, testes carga/chaos, idempotency key obrigatoria (F2.14) se produto exigir.
+
+### Nota sobre checklists duplicados neste documento
+
+Varias secoes abaixo repetem tarefas (ex.: "Contrato Minimo", "Matriz de Disponibilidade", "Fase 1") escritas **antes** do merge PR-1/2/3. Foram parcialmente **sincronizadas** em 2026-04-23; em caso de divergencia, prevalecem os bullets de **"Avancos confirmados no codigo"** (topo) + esta secao.
 
 ## Estado de Implementacao (2026-04-19)
 
@@ -21,10 +43,18 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 
 ### Avancos confirmados no codigo desde 2026-03-24 (2026-04-19)
 
+- (2026-04-23) **PR-4 staging por `runId` (fase 1)**: `ITransferStagingService` ganhou `remoteFolderKey` opcional; `TransferStagingService` grava `remote/{runId}/` quando `executionOrigin == remoteCommand` (`SchedulerService._executeScheduledBackup`); `RealDiagnosticsProvider` prioriza `remote/<runId>/` em metadados e limpeza, com fallback `remote/<scheduleId>/` (legado); `RemoteFileTransferProvider` chama `ConnectionManager.cleanupRemoteStaging` com segmento do path, remove cleanup local indevido via `ITransferStagingService`. 2 testes em `transfer_staging_service_test.dart`. Suite 1123 testes OK.
+- (2026-04-23) **PR-4 TTL + `410` (fase 2)**: `ErrorCode.artifactExpired` (`ARTIFACT_EXPIRED`) mapeado a `410` em `StatusCodes`; `RealDiagnosticsProvider` rejeita artefato com mtime fora de 24h (classe `RemoteStagingArtifactTtl`, reutilizada); `getArtifactMetadata` com sucesso inclui `expiresAt`; expirado retorna mensagem de erro (nao `found: false`). `FileTransferMessageHandler` bloqueia `remote/...` expirado. Testes: `status_codes`, `diagnostics_message_handler`, `file_transfer_message_handler`, `remote_staging_artifact_ttl`. Suite 1129 testes OK.
+- (2026-04-23) **PR-4 cleanup em disco (fase 3)**: `cleanupOldBackups` passou a apagar **diretorios** `remote/<id>/` quando o arquivo mais recente do subtree excede o TTL (default 24h, parametro `maxAge`); `TransferStagingService` aceita `clock` para testes; `RemoteStagingCleanupScheduler` chama isso a cada 1h + imediato apos subir o socket no modo servidor (`main.dart`); `AppCleanup` cancela o timer. Dois testes em `transfer_staging_service_test.dart`. Suite 1131 testes OK.
+- (2026-04-23) **PR-4 capabilities — `supportsArtifactRetention: true`**: `CapabilitiesMessageHandler` anuncia retencao formal; golden `capabilities_response_v1` + testes de handler e `ConnectionManager` atualizados. `ServerCapabilities.legacyDefault` permanece `false` para peers sem handshake.
+- (2026-04-23) **PR-4 M5.3 — thresholds staging 5/10 GiB**: `lib/infrastructure/utils/staging_usage_policy.dart`; `MetricsMessageHandler` publica `stagingUsageWarnThresholdBytes`, `stagingUsageBlockThresholdBytes`, `stagingUsageLevel`; `ExecutionMessageHandler` chama o mesmo medidor que metricas e falha com `STAGING_FULL` (503) se uso >= 10 GiB; testes `staging_usage_policy`, `execution_message_handler`, `metrics_message_handler`, `status_codes`. Suite 1136 testes OK.
+- (2026-04-23) **PR-4 health (M1.10) + staging**: `HealthMessageHandler` com `stagingUsageBytesProvider` (mesmo `StagingUsageMeasurer` que metricas/Execution); `createHealthResponseMessage` + `ServerHealth` / `readHealthFromResponse` com campos opcionais; `warn`/`block` forcam `degraded`. Testes `health_messages`, `health_message_handler`.
+- (2026-04-23) **PR-4 capabilities + modo serviço + ADR-002**: `supportsExecutionQueue: true` (golden + e2e connection manager); `ServiceModeInitializer` chama `ExecutionQueueService.initialize()` e `RemoteStagingCleanupScheduler.start()` apos scheduler/health, com `stop` do scheduler de staging no shutdown; ADR-002 ganhou secao _Estado da implementacao (2026-04-23)_.
+- (2026-04-23) **ADR-001 (origem da execucao) parcial**: enum `ExecutionOrigin` (`lib/domain/entities/execution_origin.dart`); `executeNow` / `ExecuteScheduledBackup.call` aceitam `executionOrigin` (default `local`); `_executeScheduledBackup` em `SchedulerService` ignora upload para destinos finais, `notifyBackupComplete` por e-mail do servidor e `cleanOldBackups` nos destinos quando `remoteCommand`; valida artefato arquivo-unico tambem para remoto; handlers `ScheduleMessageHandler` e `ExecutionMessageHandler` passam `remoteCommand` e validam licenca com lista vazia de destinos (sem lookup de IDs no host). DI ajustado (removido `IBackupDestinationRepository` dos dois handlers). Suite 1121 testes OK.
 - `client_handler.dart` agora processa `authRequest` com `_authHandled` flag, pausa o `_socketSubscription` durante a validacao async e so retoma o stream apos o resultado de auth ser enviado. Isso fecha de forma implicita o bypass pre-auth para mensagens enfileiradas no buffer durante o handshake. Falta apenas o guard explicito que rejeita qualquer mensagem operacional (nao-auth) recebida com `isAuthenticated == false` retornando erro padronizado.
-- `SchedulerService._executeScheduledBackup` ja gera `runId` interno via `'${schedule.id}_${const Uuid().v4()}'` e propaga em `LogContext.setContext(runId: runId, scheduleId: schedule.id)` e `_licensePolicyService.setRunContext(runId)`. Esse `runId` ainda e somente de log/observabilidade interna; nao esta exposto no contrato remoto, no staging, no cancelamento ou nos eventos.
+- `SchedulerService._executeScheduledBackup` gera `runId` via `'${schedule.id}_${const Uuid().v4()}'` e propaga em `LogContext` / licença. **2026-04-23**: em `remoteCommand`, o staging do artefato usa `remote/<runId>/` (pasta alinhada ao `runId`); contrato e progresso ja carregam `runId` em socket v2+.
 - `SchedulerService.isExecutingBackup` esta exposto via `ISchedulerService` e usado em `schedule_message_handler.dart` para rejeitar disparos manuais concorrentes. Funciona como uma forma informal de `maxConcurrentBackups = 1`, mas sem `errorCode` dedicado, sem fila e sem `409` padronizado.
-- `FileTransferLockService` ja implementa `cleanupExpiredLocks` baseado em idade do arquivo (30 minutos). Continua sendo um lock simples por hash do path, sem `owner/runId/acquiredAt/expiresAt` formalizados.
+- (2026-04-23) **PR-4 lease de transferencia**: `FileTransferLockService` persiste JSON v1 (`FileTransferLeaseV1`: `owner`, `runId` opcional, `acquiredAt`, `expiresAt`); `fileTransferStart` aceita `runId` opcional; `ConnectionManager.requestFile` repassa `runId`; `RemoteFileTransferProvider.transferCompletedBackupToClient` aceita `runId` opcional; `cleanupExpiredLocks` chamado no bootstrap do servidor antes de aceitar conexoes; testes em `file_transfer_lock_service_test.dart`. Lock legado (apenas ISO) ainda bloqueia ate TTL.
 - `ScheduleMessageHandler` consolidou envio de erros via helper `_sendError(...)` e adotou `await` correto nos `Result.fold` (corrigiu bug de envio assincrono nao-aguardado). Continua usando `createScheduleErrorMessage` sem `errorCode`.
 - (2026-04-19) M2.1 concluida: criado `RemoteExecutionRegistry` (`lib/infrastructure/socket/server/remote_execution_registry.dart`) e `ScheduleMessageHandler` refatorado para usar contexto por `runId` em vez dos 4 campos singleton. Bug TOCTOU entre `isExecutingBackup` e o set dos campos antigos foi fechado por defesa em profundidade do registry. 18 testes (10 novos do registry + 6 novos do handler + 2 originais preservados) + suite socket/ completa (69 testes) passam sem regressao.
 - (2026-04-19) M2.3 concluida: `runId` opcional adicionado a `backupProgress/Complete/Failed` no protocolo (backward-compat com servidor `v1`), populado pelo `ScheduleMessageHandler` a partir do `RemoteExecutionContext` e capturado pelo `ConnectionManager` no `_BackupProgressState`. Cobertura: 11 testes novos de protocolo + 3 testes novos do handler. Suite socket/ + protocol/ (112 testes) passa sem regressao. Pre-requisito para PR-2 (`getExecutionStatus(runId)`) e PR-3c (re-sync por reconexao).
@@ -41,7 +71,7 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 - (2026-04-19) M1.10 (`getSession`/`whoAmI`) entregue: completa o trio do handshake do PR-1 (capabilities + health + session). Novos `MessageType.sessionRequest/Response`; `lib/infrastructure/protocol/session_messages.dart` com factories + `ServerSession` snapshot tipado (clientId, isAuthenticated, host:port, connectedAt, serverTimeUtc, serverId opcional); `ClientHandler` agora persiste `authenticatedServerId` apos auth bem-sucedida (campo publico para lookup); `SessionMessageHandler` com `SessionInfoLookup` injetavel (zero acoplamento com `_handlers`/`_clientManager`); `TcpSocketServer._lookupSessionInfo` consulta handlers vivos e retorna `null` em race condition; `ClientManager.getConnectedAt()` exposto; `ConnectionManager.getServerSession()` retorna `Result<ServerSession>`; entradas em `PayloadLimits` (1KB/8KB); 3 fixtures golden (request, response autenticado, response sem auth). Cobertura: 6 protocolo + 5 handler + 2 e2e + 3 golden = 16 testes novos. 219 testes na suite, 0 issue. Cliente pode confirmar identidade percebida pelo servidor, correlacionar com logs de suporte e detectar mudanca de identidade apos reconexao.
 - (2026-04-19) M4.1 adotada no provider real: `ServerConnectionProvider` agora expoe `serverCapabilities` (passa-through), cacheia `serverHealth`/`serverSession` localmente, e oferece `refreshServerStatus()` que consulta health + session em paralelo com defesa graceful (falha pontual nao remove cache anterior, falhas sao logadas mas nao throws). 4 getters convenientes (`isRunIdSupported`, `isExecutionQueueSupported`, `isArtifactRetentionSupported`, `isChunkAckSupported`) + `isServerHealthy` para gate sincrono na UI. Auto-refresh apos cada `connect()` bem-sucedido. Invalidacao em `disconnect` explicito + invalidacao em status terminal (timeout/RST/auth failure) via `_listenToConnectionStatus`. Idempotencia em chamadas concorrentes de refresh. UI agora pode ler `provider.isRunIdSupported` (etc) sincronamente sem se preocupar com fetch/cache/fallback. Cobertura: 9 testes e2e novos cobrindo passa-through, refresh idempotente, invalidacao em disconnect, getters em legacyDefault. 228 testes na suite, 0 issue. M4.1 oficialmente fechada com adocao concreta.
 - (2026-04-19) F1.8 (`validateServerBackupPrerequisites`) infraestrutura entregue: novos `MessageType.preflightRequest/Response`; `lib/infrastructure/protocol/preflight_messages.dart` com factories + tipos `PreflightStatus` (passed/passedWithWarnings/blocked) + `PreflightSeverity` (blocking/warning/info) + `PreflightCheckResult` com `details` estruturados + `PreflightResult` snapshot tipado com `blockingFailures`/`warnings`/`isOk`/`isBlocked`/`hasWarnings`. `PreflightMessageHandler` com `PreflightCheck` injetaveis + politica de agregacao (blocking->blocked; warning->passedWithWarnings; info nao escala) + tolerancia a checks que lancam excecao (fail-closed). `ConnectionManager.validateServerBackupPrerequisites()` retorna `Result<PreflightResult>`. Limites em `PayloadLimits` (1KB/64KB). 3 fixtures golden (request, response passed, response blocked com details). Wirings em producao podem injetar checks reais (`ToolVerificationService`, `validate_backup_directory`, `StorageChecker`, `validate_sybase_log_backup_preflight`) sem mexer no handler. Cobertura: 8 protocolo + 8 handler + 2 e2e + 3 golden = 21 testes novos. 250 testes na suite, 0 issue. Cliente pode bloquear disparo de backup quando preflight reporta `blocked` ou alertar operador quando `passedWithWarnings`.
-- (2026-04-19) `getExecutionStatus(runId)` entregue (PR-2 base / M2.3 complement): novos `MessageType.executionStatusRequest/Response`; `lib/infrastructure/protocol/execution_status_messages.dart` com factories + `ExecutionState` enum (running/notFound/queued/completed/failed/cancelled/unknown) + `ExecutionStatusResult` snapshot tipado com `isActive`/`isTerminal`/`isNotFound` getters (defesa fail-closed: state invalido vira `unknown`, nao `notFound`). `RemoteExecutionRegistry.getSnapshotByRunId()` novo metodo retorna `RemoteExecutionSnapshot` sem expor `sendToClient` (ISP). `ExecutionStatusMessageHandler` com `runId` validation + responde `running` (snapshot do registry) ou `notFound` (registry sem entrada). `ConnectionManager.getExecutionStatus(runId)` retorna `Result<ExecutionStatusResult>`. Limites em `PayloadLimits` (1KB/4KB). 3 fixtures golden (request, response_running, response_not_found). Hoje cliente recebe `notFound` quando execucao terminou (ScheduleMessageHandler limpa registry no fim); PR-3b/3c expandirao para `queued/completed/failed/cancelled` consultando fila persistida e historico. Cobertura: 9 protocolo + 6 handler + 4 e2e + 3 golden = 22 testes novos. 272 testes na suite, 0 issue. Cliente pode reidratar status apos reconexao ou fazer polling alternativo a stream.
+- (2026-04-19) `getExecutionStatus(runId)` entregue (PR-2 base / M2.3 complement): novos `MessageType.executionStatusRequest/Response`; `lib/infrastructure/protocol/execution_status_messages.dart` com factories + `ExecutionState` enum (running/notFound/queued/completed/failed/cancelled/unknown) + `ExecutionStatusResult` snapshot tipado com `isActive`/`isTerminal`/`isNotFound` getters (defesa fail-closed: state invalido vira `unknown`, nao `notFound`). `RemoteExecutionRegistry.getSnapshotByRunId()` novo metodo retorna `RemoteExecutionSnapshot` sem expor `sendToClient` (ISP). `ExecutionStatusMessageHandler` com `runId` validation + responde `running` (snapshot do registry) ou `notFound` (registry sem entrada). `ConnectionManager.getExecutionStatus(runId)` retorna `Result<ExecutionStatusResult>`. Limites em `PayloadLimits` (1KB/4KB). 3 fixtures golden (request, response_running, response_not_found). **Atualizacao 2026-04-23 (PR-3c)**: handler passa a consultar `ExecutionQueueService` (estado `queued` + `queuedPosition`) e `IBackupHistoryRepository.getByRunId` (estados terminais mapeados do historico quando `runId` esta presente; novas linhas preenchidas no orchestrator; Drift v31). Cobertura original: 9 protocolo + 6 handler + 4 e2e + 3 golden = 22 testes novos. 272 testes na suite, 0 issue. Cliente pode reidratar status apos reconexao ou fazer polling alternativo a stream.
 - (2026-04-19) **Wirings DI concretos entregues — PR-1/2/3 funcionais fim-a-fim**: 4 novos arquivos cabeam todos os providers stub para producao:
   - `lib/infrastructure/socket/server/database_config_serializers.dart`: converters Map<->Entity para os 3 tipos (Sybase, SqlServer, Postgres). Metodos `*FromMap` e `*ToMap` com flag `includePassword=false` por default (defesa de seguranca: senhas nao trafegam em respostas de listagem). Defensive parsing (port aceita string ou int, datas com fallback DateTime.now, campos obrigatorios validados com ArgumentError).
   - `lib/infrastructure/socket/server/real_database_connection_prober.dart`: implementa DatabaseConnectionProber despachando por RemoteDatabaseType para os 3 backup services existentes (que ja tem `testConnection`). Mede latencia via Stopwatch. Mapeia Result<bool> -> outcome com classificacao heuristica de erros (timeout/auth/io/unknown via toString matching). Pattern matching sobre sealed DatabaseConfigRef garante exhaustividade.
@@ -52,11 +82,11 @@ Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 - (2026-04-19) **F2.16 fila persistente (Drift schema v30) entregue**: nova `ExecutionQueueItemsTable` (`run_id`/`schedule_id` unicos, FIFO por `id` autoincrement), `ExecutionQueueDao` (loadOrderedFifo, tryInsert com limite + dedup por schedule, deleteFifoHead, deleteByRunId, deleteAll), `DriftExecutionQueuePersistence` + refatoracao de `ExecutionQueueService`: `tryEnqueue`/`dequeue`/`removeByRunId`/`clear` assincronos com write-through SQLite; `initialize()` reidrata memoria apos restart; `main.dart` chama `initialize()` antes de subir o socket server. Testes: `execution_queue_persistence_test.dart` (reidratacao + trim), suite queue atualizada para async. **Gap consciente**: `RemoteExecutionRegistry` e progresso de backup ativo nao persistem — reinicio durante `running` nao restaura execucao em andamento.
 - (2026-04-19) **PR-3 commit final: endpoints de diagnostico operacional entregues**: 8 novos MessageType (getRunLogs/getRunErrorDetails/getArtifactMetadata/cleanupStaging — request+response). Novo `lib/infrastructure/protocol/diagnostics_messages.dart` com factories + snapshots tipados (RunLogsResult, RunErrorDetailsResult, ArtifactMetadataResult, CleanupStagingResult com helper isExpired) + envelope REST-like (200/404 conforme found). Nova abstracao `DiagnosticsProvider` (interface) com 4 metodos + `NotConfiguredDiagnosticsProvider` default que retorna notFound em tudo (wiring real via DI cabea consultas a BackupLogRepository/TransferStagingService). `DiagnosticsMessageHandler` com handler por tipo + comportamento contextual: getRunLogs notFound vira **error** (cliente deve mostrar mensagem); getRunErrorDetails/getArtifactMetadata notFound viram **response found=false** (estado normal: execucao pode nao ter falhado, artefato pode ter expirado). cleanupStaging usa idempotency (mutavel). ConnectionManager.getRunLogs/getRunErrorDetails/getArtifactMetadata/cleanupRemoteStaging com helper privado `_runDiagnosticsRequest` generico. 17 testes do handler cobrindo todos os 4 endpoints + idempotency + NotConfigured default. 553 testes na suite, 0 issue analyze. **PR-3 essencialmente fechado** — persistencia da fila (F2.16) entregue em 2026-04-19; integracao do `ExecutionStateMachine.enforceTransition` em pontos chave do handler (refactor opcional).
 - (2026-04-19) **PR-3a commit 3: ExecutionStateMachine entregue (F2.13)**: novo `lib/infrastructure/socket/server/execution_state_machine.dart` com tabela explicita de transicoes permitidas (queued -> {running, cancelled}; running -> {completed, failed, cancelled}; estados terminais sem transicoes de saida). Helpers: `canTransition(from, to)` (boolean), `enforceTransition` (lanca `InvalidStateTransitionException` se violada — bug logico, nao excecao operacional), `isTerminal(state)`, `allowedFrom(state)` (retorna Set unmodifiable, util para UIs que mostram "acoes disponiveis"). Estados `notFound` e `unknown` intencionalmente fora da tabela (meta-estados). Documentacao em comentario inclui diagrama ASCII das transicoes oficiais + casos de uso (UI mostrar botao Cancelar so quando `cancelled ∈ allowedFrom`). 29 testes formais cobrindo todas as transicoes permitidas/proibidas + propriedades terminais + casos de uso. 541 testes na suite, 0 issue analyze. **F2.13 [x]**. Em PR-3 commit final, `ExecutionStateMachine.enforceTransition` sera chamado em pontos chave do `ExecutionMessageHandler` para garantir que codigo nao publica transicoes invalidas.
-- (2026-04-19) **PR-3a commit 2: eventos de fila + cancelQueuedBackup entregues**: novo `lib/infrastructure/protocol/queue_events.dart` com factories backupQueued/Dequeued/Started + cancelQueuedBackup request/response. Cada evento de fila carrega eventId (UUID v4) + sequence monotonico (gerado pelo `QueueEventBus`) — cliente usa para deduplicar e reordenar apos reconnect. Snapshot tipado QueueEvent com helpers (isQueued/isDequeued/isStarted), CancelQueuedBackupResult com (isCancelled/isNotFound). Novo `lib/infrastructure/socket/server/queue_event_bus.dart` centraliza geracao de sequence + eventId + broadcast (fail-soft: erro de broadcast nao derruba publisher). ExecutionMessageHandler integrado: publica backupQueued no enqueue (com queuePosition + requestedBy), backupDequeued(reason=dispatched/cancelled) no drain ou cancel, backupStarted antes de iniciar execucao. Novo handler interno _handleCancelQueued: remove item da fila por runId via `removeByRunId`, retorna 200/cancelled em sucesso ou 409/notFound + NO_ACTIVE_EXECUTION quando ausente; idempotency completa via IdempotencyRegistry. ConnectionManager.cancelQueuedRemoteBackup expoe API. 24 testes (16 protocolo + 8 bus + 4 handler integracao). 512 testes na suite, 0 issue analyze. **F2.12 [x]; F2.17 [~] (eventos de fila feitos; backupProgress/Step/Complete/Failed pendentes para PR-3 commit final)**.
+- (2026-04-19) **PR-3a commit 2: eventos de fila + cancelQueuedBackup entregues**: novo `lib/infrastructure/protocol/queue_events.dart` com factories backupQueued/Dequeued/Started + cancelQueuedBackup request/response. Cada evento de fila carrega eventId (UUID v4) + sequence monotonico (gerado pelo `QueueEventBus`) — cliente usa para deduplicar e reordenar apos reconnect. Snapshot tipado QueueEvent com helpers (isQueued/isDequeued/isStarted), CancelQueuedBackupResult com (isCancelled/isNotFound). Novo `lib/infrastructure/socket/server/queue_event_bus.dart` centraliza geracao de sequence + eventId + broadcast (fail-soft: erro de broadcast nao derruba publisher). ExecutionMessageHandler integrado: publica backupQueued no enqueue (com queuePosition + requestedBy), backupDequeued(reason=dispatched/cancelled) no drain ou cancel, backupStarted antes de iniciar execucao. Novo handler interno \_handleCancelQueued: remove item da fila por runId via `removeByRunId`, retorna 200/cancelled em sucesso ou 409/notFound + NO_ACTIVE_EXECUTION quando ausente; idempotency completa via IdempotencyRegistry. ConnectionManager.cancelQueuedRemoteBackup expoe API. 24 testes (16 protocolo + 8 bus + 4 handler integracao). 512 testes na suite, 0 issue analyze. **F2.12 [x]; F2.17 [~] (eventos de fila feitos; backupProgress/Step/Complete/Failed pendentes para PR-3 commit final)**.
 - (2026-04-19) **PR-3a commit 1: ExecutionQueueService FIFO + integracao com startBackup entregues**: `lib/infrastructure/socket/server/execution_queue_service.dart` com fila FIFO (`maxQueueSize=50` default), runId estavel no enqueue, dedup por scheduleId, snapshot com `queuedPosition` 1-based, `removeByRunId` para `cancelQueuedBackup`. `ExecutionMessageHandler.startBackup` aceita `queueIfBusy` — fila quando ocupado + 202, ou 409 quando manual sem fila. Drain via `_drainNextFromQueue`. ConnectionManager.startRemoteBackup com `queueIfBusy`. **F2.9, F2.10, F2.11 [x]**. **Atualizacao F2.16:** fila tambem persistida em SQLite — apos restart, `initialize()` reidrata itens enfileirados (ver bullet F2.16).
-- (2026-04-19) **PR-2 commit 5: Database config CRUD remoto entregue**: 6 novos MessageType (listDatabaseConfigs Request/Response, createDatabaseConfigRequest, updateDatabaseConfigRequest, deleteDatabaseConfigRequest, databaseConfigMutationResponse). Estrategia opaca: payload usa Map<String,dynamic> (config) parametrizado por databaseType — protocolo neutro em relacao a evolucoes das entities tipadas (SybaseConfig/SqlServerConfig/PostgresConfig). Nova abstracao DatabaseConfigStore (interface) + NotConfiguredDatabaseConfigStore default (toda operacao retorna failure UNKNOWN ate DI cabear implementacao real que despacha por tipo aos repositorios concretos). Handler reusa o ja-existente DatabaseConfigMessageHandler — adicionado _handleList + _handleMutation no mesmo arquivo. Idempotency aplicada em todas as mutacoes (create/update/delete) via IdempotencyRegistry. Snapshots tipados DatabaseConfigListResult, DatabaseConfigMutationResult com helpers (isCreated/isUpdated/isDeleted). ConnectionManager helper privado _runDatabaseConfigMutation evita repeticao das 3 wrappers publicas (createRemoteDatabaseConfig, updateRemoteDatabaseConfig, deleteRemoteDatabaseConfig) + listRemoteDatabaseConfigs separada. 13 testes do handler (list/create/update/delete + idempotencia + NotConfigured + snapshots round-trip). 471 testes na suite, 0 issue analyze. **PR-2 100% entregue do ponto de vista de contrato** — wirings concretos do DatabaseConfigStore real (despacho para SybaseConfigRepository / SqlServerConfigRepository / PostgresConfigRepository) ficam para PR de wiring DI separado, sem mudanca de protocolo necessaria.
+- (2026-04-19) **PR-2 commit 5: Database config CRUD remoto entregue**: 6 novos MessageType (listDatabaseConfigs Request/Response, createDatabaseConfigRequest, updateDatabaseConfigRequest, deleteDatabaseConfigRequest, databaseConfigMutationResponse). Estrategia opaca: payload usa Map<String,dynamic> (config) parametrizado por databaseType — protocolo neutro em relacao a evolucoes das entities tipadas (SybaseConfig/SqlServerConfig/PostgresConfig). Nova abstracao DatabaseConfigStore (interface) + NotConfiguredDatabaseConfigStore default (toda operacao retorna failure UNKNOWN ate DI cabear implementacao real que despacha por tipo aos repositorios concretos). Handler reusa o ja-existente DatabaseConfigMessageHandler — adicionado \_handleList + \_handleMutation no mesmo arquivo. Idempotency aplicada em todas as mutacoes (create/update/delete) via IdempotencyRegistry. Snapshots tipados DatabaseConfigListResult, DatabaseConfigMutationResult com helpers (isCreated/isUpdated/isDeleted). ConnectionManager helper privado \_runDatabaseConfigMutation evita repeticao das 3 wrappers publicas (createRemoteDatabaseConfig, updateRemoteDatabaseConfig, deleteRemoteDatabaseConfig) + listRemoteDatabaseConfigs separada. 13 testes do handler (list/create/update/delete + idempotencia + NotConfigured + snapshots round-trip). 471 testes na suite, 0 issue analyze. **PR-2 100% entregue do ponto de vista de contrato** — wirings concretos do DatabaseConfigStore real (despacho para SybaseConfigRepository / SqlServerConfigRepository / PostgresConfigRepository) ficam para PR de wiring DI separado, sem mudanca de protocolo necessaria.
 - (2026-04-19) **PR-2 commit 4: Schedule CRUD remoto entregue**: 5 novos MessageType (createSchedule, deleteSchedule, pauseSchedule, resumeSchedule, scheduleMutationResponse). Factories em `schedule_messages.dart` aceitam idempotencyKey opcional em todos os mutaveis. `lib/infrastructure/socket/server/schedule_crud_message_handler.dart` despacha por tipo + roda via IdempotencyRegistry.runIdempotent (cache de respostas idempotentes; falhas NAO cacheadas). pause/resume implementados como toggle do flag enabled (semantica equivalente a checkbox da UI; PR-3 podera evoluir para estados explicitos active/paused/disabled). Pause em schedule ja desabilitado e idempotente NATURAL (NAO chama repo.update). Resposta unificada `scheduleMutationResponse` carrega operation (created/deleted/paused/resumed) + scheduleId + schedule (snapshot pos-mutacao quando aplicavel) + envelope REST-like (200). ConnectionManager helper privado `_runScheduleMutation` evita repeticao das 4 wrappers publicas (createRemoteSchedule, deleteRemoteSchedule, pauseRemoteSchedule, resumeRemoteSchedule). 14 testes do handler (CRUD completo + idempotencia + fail-NO-cache + idempotente natural). 5 fixtures golden. 458 testes na suite, 0 issue analyze. Decisao registrada: updateSchedule (que ja existia) nao foi migrado para o novo handler — fica em ScheduleMessageHandler para nao quebrar contrato; eventual unificacao no PR-2 commit final ou PR-3.
-- (2026-04-19) **PR-2 commit 3: `startBackup` nao-bloqueante (M2.2) + `cancelBackup` entregues**: 4 novos MessageType (startBackupRequest/Response, cancelBackupRequest/Response); `lib/infrastructure/protocol/execution_messages.dart` com factories + snapshots tipados (StartBackupResult, CancelBackupResult) + envelope REST-like (202 Accepted para aceite assincrono, 200 para sincrono ex cache idempotente, 409 para noActiveExecution). XOR contratual no cancelBackup: cliente passa runId (preferido) OU scheduleId (compat). `lib/infrastructure/socket/server/execution_message_handler.dart` com: (a) startBackup nao-bloqueante: valida (schedule existe, license OK, slot livre), reserva runId, dispara _executeBackup em background (unawaited), responde IMEDIATAMENTE com runId + state=running + 202; eventos backupProgress/Complete/Failed chegam separados via stream com mesmo runId; executeSchedule legacy (bloqueante) continua existindo no ScheduleMessageHandler para compat v1; (b) cancelBackup: resolve scheduleId a partir de runId quando necessario, delega ao SchedulerService.cancelExecution, responde com state=cancelled/notFound/failed; (c) Idempotency integration: ambos handlers usam IdempotencyRegistry.runIdempotent — idempotencyKey opcional permite cliente reenviar com seguranca (mesma chave dentro do TTL retorna mesma resposta cacheada sem disparar nova execucao); falhas de validacao NAO sao cacheadas; (d) Excecao interna _StartFailure para sinalizar erros sem cachea-los; (e) Background task _runBackupAsync captura toda excecao para garantir que falha nao-tratada nao vire uncaught zone error. ConnectionManager.startRemoteBackup() e cancelRemoteBackup() na fronteira do cliente. 32 testes do handler + protocolo cobrindo XOR, idempotencia, falhas validacao, fail-NO-cache, async non-blocking. 5 fixtures golden. 439 testes na suite, 0 issue analyze.
+- (2026-04-19) **PR-2 commit 3: `startBackup` nao-bloqueante (M2.2) + `cancelBackup` entregues**: 4 novos MessageType (startBackupRequest/Response, cancelBackupRequest/Response); `lib/infrastructure/protocol/execution_messages.dart` com factories + snapshots tipados (StartBackupResult, CancelBackupResult) + envelope REST-like (202 Accepted para aceite assincrono, 200 para sincrono ex cache idempotente, 409 para noActiveExecution). XOR contratual no cancelBackup: cliente passa runId (preferido) OU scheduleId (compat). `lib/infrastructure/socket/server/execution_message_handler.dart` com: (a) startBackup nao-bloqueante: valida (schedule existe, license OK, slot livre), reserva runId, dispara \_executeBackup em background (unawaited), responde IMEDIATAMENTE com runId + state=running + 202; eventos backupProgress/Complete/Failed chegam separados via stream com mesmo runId; executeSchedule legacy (bloqueante) continua existindo no ScheduleMessageHandler para compat v1; (b) cancelBackup: resolve scheduleId a partir de runId quando necessario, delega ao SchedulerService.cancelExecution, responde com state=cancelled/notFound/failed; (c) Idempotency integration: ambos handlers usam IdempotencyRegistry.runIdempotent — idempotencyKey opcional permite cliente reenviar com seguranca (mesma chave dentro do TTL retorna mesma resposta cacheada sem disparar nova execucao); falhas de validacao NAO sao cacheadas; (d) Excecao interna \_StartFailure para sinalizar erros sem cachea-los; (e) Background task \_runBackupAsync captura toda excecao para garantir que falha nao-tratada nao vire uncaught zone error. ConnectionManager.startRemoteBackup() e cancelRemoteBackup() na fronteira do cliente. 32 testes do handler + protocolo cobrindo XOR, idempotencia, falhas validacao, fail-NO-cache, async non-blocking. 5 fixtures golden. 439 testes na suite, 0 issue analyze.
 - (2026-04-19) **PR-2 commit 2: `IdempotencyRegistry` foundation entregue**: `lib/infrastructure/protocol/idempotency_registry.dart` com TTL configuravel (default 5 min) + fail-NO-cache em erro (cliente pode tentar de novo apos falha) + race-safe (requests concorrentes com mesma chave aguardam o mesmo Future, garantindo execucao unica do `compute`) + opt-in (chave nula/vazia roda sem deduplicar) + clock injetavel para testes. Helper `getIdempotencyKey(message)` extrai a chave do payload defensivamente. Pronto para integrar em qualquer handler de comando mutavel via `runIdempotent<T>(key, compute)`. Limitacoes documentadas: in-memory v1 (perdido em restart — persistencia em PR-3 via F2.16); cliente e responsavel por escolher chaves estaveis. 13 testes de propriedades (opt-in, mesma chave, chaves distintas, TTL, concorrencia, fail-NO-cache, size com purge, clear, mismatch de tipo, helper). 402 testes na suite, 0 issue.
 - (2026-04-19) **PR-2 commit 1: `testDatabaseConnection` entregue**: novos `MessageType.testDatabaseConnectionRequest/Response`; `lib/infrastructure/protocol/database_config_messages.dart` com factories + `RemoteDatabaseType` enum (sybase/sqlServer/postgres com wire names estaveis) + `TestDatabaseConnectionResult` snapshot tipado + parsing defensivo + envelope REST-like aplicado (success/statusCode mapeado de errorCode quando falha). XOR contratual: cliente passa **OU** `databaseConfigId` (config persistida) **OU** `config` map ad-hoc (caso "criar nova config"), nunca os dois — handler valida e retorna `400 INVALID_REQUEST` se violado. `lib/infrastructure/socket/server/database_connection_prober.dart` define `DatabaseConnectionProber` interface com sealed `DatabaseConfigRef` (ById/Adhoc) + `NotConfiguredProber` default que retorna falha indicando falta de wiring (em PR-2 commit final, DI cabeara prober real que despacha por tipo). `DatabaseConfigMessageHandler` injeta prober + clock + fail-closed (exception do prober vira 500 unknown). `ConnectionManager.testRemoteDatabaseConnection()` na fronteira do cliente com timeout client = timeout server + 5s de folga. 6 fixtures golden (request_by_id, request_adhoc, response_success, response_auth_failed, mais ja existentes). 24 novos testes (13 protocolo + 11 handler). 389 testes na suite, 0 issue analyze.
 - (2026-04-19) F0.4 completa (testes formais de seguranca do handshake) — **PR-1 100% fechado**:
@@ -87,7 +117,7 @@ confirmados" para detalhes). Itens sem marca ainda bloqueiam.
 - ~~Sem `testDatabaseConnection` remoto~~ — entregue em 2026-04-19 (PR-2)
 - ~~Sem `getExecutionStatus` para polling de execucao em curso~~ — entregue em 2026-04-19
 - ~~Sem `validateServerBackupPrerequisites` (preflight de compactacao/pasta temp)~~ — entregue em 2026-04-19 (infraestrutura; checks reais pendentes)
-- [~] Concorrencia remota: `maxConcurrentBackups = 1` + `409 BACKUP_ALREADY_RUNNING` + mutex de progresso — **implementado** (PR-3a); persistencia do *estado* de execucao ativa apos restart ainda pendente (registry in-memory)
+- [~] Concorrencia remota: `maxConcurrentBackups = 1` + `409 BACKUP_ALREADY_RUNNING` + mutex de progresso — **implementado** (PR-3a); persistencia do _estado_ de execucao ativa apos restart ainda pendente (registry in-memory)
 - [~] Fila de execucao: FIFO + `getExecutionQueue` populado via `ExecutionQueueService.snapshot()` + fila **persistida** em SQLite (F2.16, schema v30); TTL/overflow formal (F2.15) ainda parcial
 - ~~Sem endpoint formal para health do servidor (`getServerHealth`)~~ — entregue em 2026-04-19 (infraestrutura; checks reais pendentes)
 - ~~Sem endpoint formal para sessao atual (`getSession` / `whoAmI`)~~ — entregue em 2026-04-19
@@ -125,24 +155,19 @@ confirmados" para detalhes). Itens sem marca ainda bloqueiam.
 
 ## Objetivo
 
-- [ ] Padronizar API socket com comunicacao inspirada em REST (status code + erro estruturado + requestId).
-- [ ] Definir catalogo completo de recursos cliente->servidor com contrato padrao por endpoint.
-- [ ] Permitir que o cliente configure bases de dados no servidor e execute testes de conexao pelo servidor.
-- [ ] Definir explicitamente o modelo de agenda remota:
-  - cliente-driven scheduling
-  - ou servidor com agenda persistida e controle remoto
+- [x] Padronizar API socket com comunicacao inspirada em REST (status code + erro estruturado + `requestId` de transporte + correlacao `runId`/`idempotencyKey` no payload) — F0 entregue 2026-04-19.
+- [~] Definir catalogo completo de recursos cliente->servidor com contrato padrao por endpoint — nucleo remoto fechado em PR-1/2/3; refinamentos em PR-4/5 (rate limit, audit, `getExecutionStatus` estendido).
+- [x] Permitir que o cliente configure bases de dados no servidor e execute testes de conexao pelo servidor — PR-2 + wiring real 2026-04-19.
+- [~] Definir explicitamente o modelo de agenda remota (ADR-001) — **decisao** documentada; **implementacao** `executionOrigin` + alinhamento do timer local ainda pendente.
 - [ ] Garantir que, no fluxo remoto server-first, o destino final seja controlado pelo cliente e nunca pelo servidor.
-- [ ] Garantir que todo fluxo de backup (dump, compactacao, validacao e artefato final) ocorra no servidor.
-- [ ] Garantir que compressao, checksum e demais opcoes sejam aplicadas no servidor conforme configuracao enviada pelo cliente.
-- [ ] Garantir limite de 1 backup em execucao por servidor.
-- [ ] Garantir que disparo manual durante execucao ativa seja rejeitado com erro claro para o cliente.
-- [ ] Garantir que disparo agendado durante execucao ativa entre em fila para execucao posterior.
-- [ ] Entregar ao cliente o arquivo final pronto para continuar o fluxo de distribuicao aos destinos finais.
-- [ ] Eliminar upload duplicado do mesmo backup:
-  - servidor prepara artefato
-  - cliente baixa
-  - cliente distribui
-- [ ] Isolar artefatos remotos, eventos e cleanup por `runId`, nao por `scheduleId`.
+- [x] Garantir que todo fluxo de backup (dump, compactacao, validacao e artefato final) ocorra no servidor — execucao remota continua no servidor.
+- [~] Garantir que compressao, checksum e demais opcoes sejam aplicadas no servidor conforme configuracao enviada pelo cliente — regra de dominio existente; preflight ainda com checks reais opcionais no DI.
+- [x] Garantir limite de 1 backup em execucao por servidor — PR-3a (mutex + fila).
+- [x] Garantir que disparo manual durante execucao ativa seja rejeitado com erro claro para o cliente — `409` + `BACKUP_ALREADY_RUNNING` / fila conforme `queueIfBusy`.
+- [x] Garantir que disparo agendado durante execucao ativa entre em fila para execucao posterior — `ExecutionQueueService` + fila Drift.
+- [x] Entregar ao cliente o arquivo final pronto para continuar o fluxo de distribuicao aos destinos finais (download via transferencia existente).
+- [~] Eliminar upload duplicado do mesmo backup (servidor so prepara, cliente baixa e distribui) — **ainda** ha caminhos que enviam do servidor a destinos finais em certos modos; PR-4/ADR alinhamento.
+- [~] Isolar artefatos remotos, eventos e cleanup por `runId` — **2026-04-23**: fluxo `remoteCommand` + staging + cleanup remoto no path `remote/<runId>/`; execuções **locais** ainda usam `remote/<scheduleId>/`; demais correlacoes (locks, TTL, historico) em PR-4.
 
 ## Contrato de Comunicacao Padrao (REST-like sobre Socket)
 
@@ -223,15 +248,16 @@ Versionamento incremental. Cada PR define um marco de versao. Servidor `vN+1` de
 
 ### Tabela de compat
 
-|  | Servidor v1 | Servidor v2 | Servidor v3 | Servidor v4 | Servidor v5 |
-|---|---|---|---|---|---|
-| **Cliente v1** | OK | OK (env. traduzido) | OK (env. traduzido) | OK (env. traduzido) | OK (env. traduzido) |
-| **Cliente v2** | NAO (envelope incompat) | OK | OK | OK | OK |
-| **Cliente v3** | NAO | OK degradado (sem CRUD/exec api) | OK | OK | OK |
-| **Cliente v4** | NAO | NAO | OK degradado (sem fila) | OK | OK |
-| **Cliente v5** | NAO | NAO | NAO | OK degradado (sem TTL artefato) | OK |
+|                | Servidor v1             | Servidor v2                      | Servidor v3             | Servidor v4                     | Servidor v5         |
+| -------------- | ----------------------- | -------------------------------- | ----------------------- | ------------------------------- | ------------------- |
+| **Cliente v1** | OK                      | OK (env. traduzido)              | OK (env. traduzido)     | OK (env. traduzido)             | OK (env. traduzido) |
+| **Cliente v2** | NAO (envelope incompat) | OK                               | OK                      | OK                              | OK                  |
+| **Cliente v3** | NAO                     | OK degradado (sem CRUD/exec api) | OK                      | OK                              | OK                  |
+| **Cliente v4** | NAO                     | NAO                              | OK degradado (sem fila) | OK                              | OK                  |
+| **Cliente v5** | NAO                     | NAO                              | NAO                     | OK degradado (sem TTL artefato) | OK                  |
 
 Notas:
+
 - "OK degradado" significa que o cliente detecta via `capabilities` que recurso novo nao existe e usa fluxo legado (ex.: cliente v4 em servidor v3 trata cada disparo como rejeicao em vez de enfileirar).
 - "NAO" significa downgrade nao suportado (cliente novo em servidor antigo demais). Cliente deve mostrar erro claro ao usuario, nao tentar conectar.
 - Servidor sempre aceita cliente `vN-1` ou anterior por **2 ciclos de release** (politica oficial). Cliente `v1` so e suportado ate `v3`; em `v4` o servidor passa a exigir minimo `v2`.
@@ -311,70 +337,54 @@ Politica oficial:
 
 ## Politica de Concorrencia e Fila (Obrigatoria)
 
-- [ ] `maxConcurrentBackups = 1` no servidor.
-- [ ] Disparo manual (`executeBackup`) com backup ativo deve retornar `409 BACKUP_ALREADY_RUNNING`.
-- [ ] Disparo agendado com backup ativo deve entrar em fila (`queued`) e retornar `202`.
-- [ ] Fila deve ser FIFO por padrao.
-- [ ] Cada item em fila deve ter `runId`, `scheduleId`, `queuedAt`, `requestedBy`.
-- [ ] Cliente deve receber eventos `backupQueued`, `backupDequeued`, `backupStarted`.
-- [ ] `getExecutionStatus` deve informar `queuedPosition`, `state`, `runId`.
-- [ ] Cancelamento deve suportar:
-  - cancelar execucao ativa
-  - remover item enfileirado
+- [x] `maxConcurrentBackups = 1` no servidor.
+- [x] Disparo manual com backup ativo retorna conflito (`409` / fila) conforme `queueIfBusy`.
+- [x] Disparo com servidor ocupado pode enfileirar e retornar `202` (fila) quando habilitado.
+- [x] Fila FIFO (memoria + Drift).
+- [x] Itens de fila com `runId`, `scheduleId`, `queuedAt`, `requestedBy` (eventos publicam detalhe).
+- [x] Eventos `backupQueued`, `backupDequeued`, `backupStarted` (com `eventId`/`sequence`).
+- [x] `getExecutionStatus` com `queuedPosition`/`state` ricos — **PR-3c** (registry + fila + historico com `runId` v31+; sem `runId` legado ainda cai em `notFound` apos fim)
+- [x] Cancelar execucao ativa e remover item enfileirado (`cancelBackup` + `cancelQueuedBackup`)
 
 ## Regras Operacionais Criticas (Obrigatorias)
 
-- [ ] Definir maquina de estados oficial de execucao e transicoes validas:
-  - `queued -> running -> completed|failed|cancelled`
-  - transicao invalida deve retornar erro padronizado (`409` + `INVALID_STATE_TRANSITION`)
-- [ ] Implementar idempotencia por comando com `idempotencyKey` (inicio/cancelamento/criacao):
-  - deduplicacao no servidor por janela configuravel
-  - mesma chave + mesmo payload retorna mesmo resultado logico
-- [ ] Definir politica formal de fila:
-  - `maxQueueSize`
-  - TTL para item enfileirado
-  - tratamento de overflow (`429` ou `503`, conforme causa)
-  - regra para duplicidade de `scheduleId` ja enfileirado
-- [ ] Persistir fila/estado de execucao para recuperacao apos restart do servidor.
-- [ ] Adicionar resiliencia de eventos:
-  - todo evento deve incluir `eventId`, `sequence`, `runId`, `occurredAt`
-  - cliente deve conseguir re-sincronizar via `getExecutionStatus/getExecutionQueue` apos reconexao
-- [ ] Padronizar correlacao ponta-a-ponta por `runId` (progresso, logs, erros, metadados, download).
-- [ ] Definir politica de retencao de artefato/staging:
-  - TTL do artefato
-  - janela de cleanup
-  - retorno `410` para artefato expirado
-- [ ] Fechar matriz de erro operacional:
-  - `errorCode -> statusCode -> retryable (true/false) -> acao esperada do cliente`
+- [x] Maquina de estados (`ExecutionStateMachine` + testes) — **codigo**; _enforcement_ total em todo handler ainda [~] (refactor opcional no plano 2026-04-19)
+- [x] `IdempotencyRegistry` in-memory (TTL) em comandos chave; [ ] persistencia pos-restart (F2.16 idempotency — futuro) e [ ] chave **obrigatoria** (F2.14)
+- [~] Politica de fila: `maxQueueSize` e dedup parcial; **TTL/overflow/duplicate formal** (F2.15) ainda a fechar
+- [~] Fila persistida; **estado `running`** em memoria ainda nao reidrata apos restart; **historico terminal** reidrata via `getExecutionStatus` quando `runId` existe
+- [x] Eventos de fila com `eventId` + `sequence`; correlacao re-sync M8.4 ainda [~] (cenarios/testes)
+- [~] Correlacao por `runId` — **progresso/fila/ids**; staging/download **PR-4**
+- [~] Retencao/cleanup `410` — diagnostico e cleanup remoto existem; **TTL automatico e thresholds** PR-4
+- [x] `StatusCodes` + `isRetryable` (base F0); matriz operacional "acao do cliente" [~] documentacao/UI
 
 ## Resultado Esperado (Fluxo To-Be)
 
-- [~] Cliente autentica no servidor com licenca valida para controle remoto. _(auth implementado; bypass pre-auth mitigado por pause/resume do socket subscription - falta guard explicito com erro padronizado, ver F0.1)_
-- [ ] Cliente cria/edita/remove configuracoes de banco de dados no servidor.
-- [ ] Cliente executa teste de conexao de banco remotamente, com validacao feita no servidor.
-- [~] Cliente controla agenda de execucao e envia comando de backup para o servidor no momento devido. _(executeSchedule implementado de forma bloqueante; scheduler local do servidor ainda continua ativo via `_checkTimer` e precisa ser alinhado com a decisao arquitetural)_
-- [x] Servidor executa backup (dump + compressao + verificacoes) somente quando recebe comando do cliente.
-- [ ] Servidor salva artefato em pasta temporaria padrao do servidor. _(fluxo local usa pasta configuravel; fluxo remoto sem policy dedicada)_
-- [x] Servidor publica progresso em tempo real para cliente.
-- [x] Servidor disponibiliza arquivo final em staging remoto para download resiliente.
-- [x] Cliente baixa arquivo pronto e continua seu fluxo local de envio para destinos finais.
+- [x] Cliente autentica no servidor com licenca valida para controle remoto. _(F0.1: guard pre-auth com `notAuthenticated/401` — 2026-04-19)_
+- [x] Cliente cria/edita/remove configuracoes de banco de dados no servidor. _(CRUD remoto + wiring — 2026-04-19)_
+- [x] Cliente executa teste de conexao de banco remotamente, com validacao feita no servidor. _(PR-2 + `RealDatabaseConnectionProber` — 2026-04-19)_
+- [~] Cliente controla agenda de execucao e envia comando de backup para o servidor no momento devido. _(CRUD de schedule + `startBackup`/`executeSchedule`; `executeSchedule` legado ainda bloqueante; **timer** `_checkTimer` ainda ativo — alinhar ADR-001)_
+- [~] Servidor executa backup somente por comando do cliente no modo **puro** server-first — ainda nao: timer local dispara agendados independentemente; precisa `executionOrigin` + politica hibrida.
+- [~] Servidor salva artefato em politica de staging alinhada ao remoto. _(pasta configuravel; indexacao ainda muito por `scheduleId` no staging — migrar `runId` em PR-4)_
+- [x] Servidor publica progresso em tempo real para cliente (incl. `runId` quando suportado).
+- [x] Servidor disponibiliza arquivo final em staging remoto para download.
+- [x] Cliente baixa arquivo e continua fluxo local de envio para destinos finais.
 - [ ] Servidor nao envia artefato para destinos finais em execucoes remotas server-first.
-- [ ] Cliente nao precisa validar pasta local de downloads antes de autorizar o servidor a executar; essa validacao deve ocorrer no inicio do download/continuidade local.
+- [ ] Cliente nao depende de pasta local gravavel **antes** de autorizar o servidor; validacao no inicio do download/fluxo local.
 
 ## Premissas de Projeto
 
-- [ ] Fechar decisao arquitetural sobre a fonte de verdade do agendamento remoto antes da Fase 2.
+- [~] Fechar **implementacao** alinhada ao ADR-001 (fonte de verdade hibrida) — ADR publicado; codigo de `executionOrigin` pendente.
 - [x] Cliente nao executa dump de banco; somente orquestra e consome artefato final.
-- [~] Controle de licenca remota deve ser fail-closed. _(licenca validada em auth e em executeSchedule; nao aplicada em CRUD de banco pois endpoints nao existem)_
-- [ ] API remota deve ser versionada e com contrato de erro padronizado.
-- [ ] API remota deve ter envelope com `statusCode` para todas as respostas.
-- [~] No fluxo remoto, cliente nao deve depender de configuracao manual de pasta temporaria para disparar a execucao. _(hoje ainda valida pasta local antes de iniciar o comando remoto)_
-- [ ] No fluxo remoto, o servidor usara pasta temporaria padrao do sistema operacional para staging de execucao/compactacao.
-- [ ] Execucao remota deve validar disponibilidade de ferramenta de compactacao no servidor antes de iniciar backup.
-- [ ] O servidor aceita somente 1 backup em execucao por vez.
-- [ ] Execucoes agendadas concorrentes devem ser enfileiradas.
-- [ ] `requestId` do transporte binario permanece `uint32` em `v1`; `runId` e `idempotencyKey` carregam correlacao de negocio.
-- [ ] Staging remoto, metadados e cleanup devem ser escopados por `runId`.
+- [~] Controle de licenca remota fail-closed. _(auth + execucao; rever escopo em **todos** os endpoints mutaveis se policy exigir)_
+- [x] API remota versionada (`protocolVersion`/`wireVersion` + `capabilities`) e erros com `ErrorCode` + `statusCode` (F0 + ADR-003).
+- [x] Envelope com `statusCode`/`success` para handlers de inspecao e erros; estrategia aditiva top-level (ver F0.5).
+- [~] No fluxo remoto, cliente nao deve depender de pasta de download local para **autorizar** execucao no servidor. _(ainda ha validacoes cedo no fluxo — PR-4/UX)_
+- [~] Staging no servidor: policy explicita e defaults OS — em parte coberto; consolidar com PR-4.
+- [~] Preflight: infraestrutura pronta; **checks reais** no DI ainda a cabear (F1.8+).
+- [x] No maximo 1 backup em execucao por vez (fila + mutex).
+- [x] Concorrencia adicional enfileirada (Drift + memoria).
+- [x] `requestId` no header binario v1; `runId`/`idempotencyKey` no payload.
+- [ ] Staging remoto, metadados e cleanup **por `runId`** (pendente PR-4).
 
 ## Responsabilidade de Execucao (Servidor x Cliente)
 
@@ -391,35 +401,34 @@ Politica oficial:
   - [x] `capabilitiesRequest`, `capabilitiesResponse`
   - [x] `healthRequest`, `healthResponse`
   - [x] `sessionRequest`, `sessionResponse`
-- [ ] Configuracao de banco:
-  - [ ] `createDatabaseConfig`, `updateDatabaseConfig`, `deleteDatabaseConfig`
-  - [ ] `listDatabaseConfigs`, `getDatabaseConfigById`
-  - [ ] `testDatabaseConnection`
+- [x] Configuracao de banco: _(PR-2 + database_config handlers — 2026-04-19)_
+  - [x] `createDatabaseConfig`, `updateDatabaseConfig`, `deleteDatabaseConfig` (mutacoes com idempotencia)
+  - [x] `listDatabaseConfigs` (sem `getDatabaseConfigById` dedicado — uso via list + id; evoluir se necessario)
+  - [x] `testDatabaseConnection`
 - [~] Preflight: _(infraestrutura entregue em 2026-04-19)_
   - [x] `preflightRequest`, `preflightResponse` (`validateServerBackupPrerequisites`)
   - [ ] checks reais cabeados no DI (`ToolVerificationService`, `validate_backup_directory`, `StorageChecker`, `validate_sybase_log_backup_preflight`)
-- [~] Execucao remota sob comando do cliente:
-  - [x] `executeBackup` _(implementado como `executeSchedule`)_
-  - [x] `cancelBackup` _(implementado como `cancelSchedule`)_
-  - [x] `getExecutionStatus` _(entregue em 2026-04-19)_
-  - [~] `getExecutionQueue` _(endpoint entregue em 2026-04-19; provider sempre vazio em PR-1; PR-3b vai popular via fila persistida)_
+- [x] Execucao remota sob comando do cliente:
+  - [x] `startBackup` / `cancelBackup` (PR-2) + `executeSchedule`/`cancelSchedule` (legado)
+  - [x] `getExecutionStatus` _(PR-3c: queued + terminais via fila/historico com `runId` v31+)_
+  - [x] `getExecutionQueue` + fila Drift
+  - [x] `cancelQueuedBackup`
 - [x] Execucao e progresso:
   - [x] `backupProgress`, `backupComplete`, `backupFailed` (com `runId` opcional desde M2.3)
-  - [ ] `backupQueued`, `backupDequeued`, `backupStarted`
-- [x] Artefato final:
-  - [x] `listFiles`, `fileTransferStart`, `fileChunk`, `fileTransferProgress`, `fileTransferComplete`
+  - [x] `backupQueued`, `backupDequeued`, `backupStarted` (PR-3a)
+- [x] Artefato e diagnostico:
+  - [x] `listFiles`, `fileTransferStart`, `fileChunk`, transferencia, etc.
+  - [x] `getRunLogs`, `getRunErrorDetails`, `getArtifactMetadata`, `cleanupStaging` remoto (PR-3)
 - [x] Metricas: _(enriquecida em 2026-04-19)_
   - [x] `metricsRequest`, `metricsResponse` (com `serverTimeUtc`, `activeRunCount`, `activeRunId`, `stagingUsageBytes`)
-- [~] Erros:
-  - [x] `error` com `errorCode`, `errorMessage`, `requestId` - estrutura existe em `createErrorMessage`
-  - [ ] `statusCode` e payload de erro padrao para todos handlers
-  - [ ] `createScheduleErrorMessage` nao inclui `errorCode` - contrato inconsistente
-  - [x] novos `errorCode`: `unsupportedProtocolVersion`, `payloadTooLarge`, `backupAlreadyRunning`, `scheduleNotFound`, `noActiveExecution`, `notAuthenticated` _(entregues em 2026-04-19)_
-  - [x] `createScheduleErrorMessage` com `errorCode` + `statusCode` automatico _(entregue em 2026-04-19)_
+- [x] Erros: _(F0)_
+  - [x] `error` com `errorCode`, `errorMessage`, `statusCode` onde aplicavel
+  - [x] `createScheduleErrorMessage` com `errorCode` + `statusCode` automatico
+  - [x] `ErrorCode` estendido (`unsupportedProtocolVersion`, `payloadTooLarge`, `backupAlreadyRunning`, etc.)
 
 ## Matriz de Disponibilidade Atual (Confirmado no Codigo)
 
-Data de verificacao: 2026-04-19
+Data de verificacao: 2026-04-23 (sincronizado com `flutter test` + leitura de implementacao PR-1/2/3)
 
 ### Recursos ja consumiveis pelo cliente (ponta a ponta)
 
@@ -469,40 +478,31 @@ Data de verificacao: 2026-04-19
 - [x] Consultar status de execucao por `runId`:
   - mensagens: `executionStatusRequest` -> `executionStatusResponse` (entregue em 2026-04-19)
   - cliente: `ConnectionManager.getExecutionStatus(runId)`
-  - observacao: hoje retorna `running` (registry tem entrada) ou `notFound` (registry vazio); states `queued/completed/failed/cancelled` ficam para PR-3b/3c quando fila e historico forem persistidos
+  - observacao: `running` (registry); `queued` + `queuedPosition` (fila Drift); `completed` / `failed` / `cancelled` (historico com `runId`); `notFound` se registry limpo, fila sem match, historico sem linha com `runId`, ou ainda `running` no DB com registry vazio (zombie) conforme regra do handler
 - [x] Consultar fila de execucoes pendentes:
   - mensagens: `executionQueueRequest` -> `executionQueueResponse` (entregue em 2026-04-19)
   - cliente: `ConnectionManager.getExecutionQueue()`
-  - observacao: handler retorna fila vazia por default em PR-1; PR-3b cabeara `QueueProvider` consultando tabela persistida
+  - observacao: **F2.16** — fila reflete SQLite via `ExecutionQueueService`; ordem FIFO.
 
 ### Recursos parcialmente disponiveis (indireto/sem endpoint dedicado)
 
 - [~] Regra de concorrencia de backup:
-  - hoje: servidor bloqueia segunda execucao concorrente em dois pontos (`SchedulerService.isExecutingBackup` set in-memory + `progressNotifier.tryStartBackup`) e retorna erro textual via `createScheduleErrorMessage`
-  - gap: sem `statusCode`/`errorCode` dedicado (`BACKUP_ALREADY_RUNNING`), sem fila persistida e sem persistencia do estado de execucao apos restart
+  - hoje: `maxConcurrentBackups=1` + `409` + fila; fila e itens enfileirados **persistem** (Drift)
+  - gap: **execucao ativa** ainda nao reidrata apos restart; PR-3c cobre `queued` e terminais via historico, nao `running` pos-restart
 - [~] Correlacao por `runId`:
-  - hoje: `runId` gerado pelo `RemoteExecutionRegistry` (M2.1) + propagado em `backupProgress/Complete/Failed` (M2.3) + exposto em `metricsResponse.activeRunId` + consultavel via `getExecutionStatus(runId)`
-  - gap: ainda nao chega no staging (continua por `scheduleId`) nem no cleanup remoto; idempotencia por `runId`/`idempotencyKey` ainda pendente
+  - hoje: progresso, metrics, fila, idempotencia em comandos; **staging** e paths ainda em transicao de `scheduleId` → `runId` (PR-4)
 - [~] Lock de transferencia:
-  - hoje: `FileTransferLockService` ja tem `cleanupExpiredLocks(maxAge=30m)` e expira lock apos a janela
-  - gap: lock continua sendo arquivo `.lock` por hash do path, sem `owner/runId/acquiredAt/expiresAt` e sem cleanup obrigatorio no bootstrap
+  - 2026-04-23: `FileTransferLockService` com lease v1 (owner, runId, acquiredAt, expiresAt) + `runId` no `fileTransferStart`
 
-### Recursos ainda nao disponiveis para consumo do cliente
+### Recursos ainda nao disponiveis / incompletos para o objetivo "v4/v5" completo
 
-- [x] `getServerHealth` (endpoint dedicado) _(entregue em 2026-04-19)_
-- [x] `getSession` / `whoAmI` _(entregue em 2026-04-19)_
-- [x] `capabilitiesRequest` / `capabilitiesResponse` _(entregue em 2026-04-19)_
-- [x] `validateServerBackupPrerequisites` _(entregue em 2026-04-19; checks reais pendentes PR-1)_
-- [ ] CRUD remoto completo de configuracao de banco (`createDatabaseConfig`, `deleteDatabaseConfig`, etc.)
-- [ ] `testDatabaseConnection` remoto
-- [~] `getExecutionStatus` formal com `runId`, `state`, `queuedPosition` _(entregue em 2026-04-19; states queued/completed/failed/cancelled pendem fila persistida em PR-3b/3c)_
-- [~] `getExecutionQueue` _(endpoint entregue em 2026-04-19; provider que consulta fila persistida pende PR-3b)_
-- [ ] `cancelQueuedBackup`
-- [ ] Eventos formais de fila (`backupQueued`, `backupDequeued`, `backupStarted`)
-- [ ] `getArtifactMetadata`
-- [ ] `getRunLogs` / `getRunErrorDetails`
-- [ ] `pauseSchedule` / `resumeSchedule` remoto
-- [ ] Contrato REST-like completo com `statusCode` em todas as respostas
+- [x] `getServerHealth` / `getSession` / `capabilities` / preflight (infra) / CRUD DB / `testDatabaseConnection` / `cancelQueued` / eventos de fila / diagnostico / `statusCode` em envelope F0 — **entregues 2026-04-19** (ver avancos).
+- [~] `getExecutionStatus` — **fila + historico + terminal** entregue (2026-04-23); politica M8.4 (re-sync cliente apos caos) ainda [~]
+- [~] `getExecutionQueue` com overflow/TTL/duplicate policy (F2.15) e metricas
+- [ ] Staging, cleanup, locks e metadados **exclusivamente** por `runId` fim a fim
+- [ ] `executionOrigin` no scheduler (ADR-001) — timer vs comando remoto
+- [ ] Cliente sem cleanup local indevido + sem upload duplicado no modo server-first
+- [ ] Rate limit, audit log, idempotency key obrigatoria (F2.14) — **PR-5** / afinamentos
 
 ## Estrategia de Incorporacao de Implementacoes Existentes (Sem Reescrita)
 
@@ -612,8 +612,8 @@ Objetivo: fechar lacunas de seguranca e contrato antes de expandir API.
 
 DoD Fase 0:
 
-- [ ] Nenhuma mensagem operacional e aceita antes de auth bem-sucedida.
-- [ ] Cliente recebe motivo de erro consistente e acionavel (`statusCode` + `errorCode` + `errorMessage`) em todos os handlers.
+- [x] Nenhuma mensagem operacional e aceita antes de auth bem-sucedida. _(F0.1)_
+- [~] Cliente recebe `statusCode` + `errorCode` + `errorMessage` nos fluxos principais; auditar handlers legados se necessario
 - [x] Cliente consegue descobrir capacidades/versao do servidor antes de operar. _(entregue em 2026-04-19 — `ServerCapabilities` snapshot com `protocolVersion`/`wireVersion`/5 flags `supports*`/`chunkSize`/`compression`/`serverTimeUtc`)_
 
 ---
@@ -641,7 +641,7 @@ Objetivo: expor na API remota tudo que e necessario para o cliente operar recurs
 - [~] F1.3 Adicionar API remota de execucao sob comando do cliente:
   - [x] `executeBackup` _(via `executeSchedule`)_
   - [x] `cancelBackup` _(via `cancelSchedule`)_
-  - [x] `getExecutionStatus` - polling de status de execucao em curso _(entregue em 2026-04-19; states `running`/`notFound` populados; `queued/completed/failed/cancelled` ficam para PR-3b/3c)_
+  - [x] `getExecutionStatus` - polling de status _(PR-2 + **PR-3c 2026-04-23**: fila + historico; ver status topo)_
   - [~] `getExecutionQueue` - consulta de fila ativa _(endpoint entregue em 2026-04-19; provider sempre vazio em PR-1; PR-3b vai popular)_
   - [~] reutilizar `SchedulerService.executeNow/cancelExecution` e estado atual exposto em `metricsResponse` _(metricsResponse enriquecido com `activeRunId`/`activeRunCount`)_
 - [ ] F1.4 Enforcar policy de licenca no servidor para configuracao de banco, teste de conexao e execucao.
@@ -706,17 +706,17 @@ stateDiagram-v2
 
 ### Tabela de transicoes legitimas
 
-| De | Para | Gatilho | Responsavel | Erro se invalido |
-|---|---|---|---|---|
-| `idle` | `queued` | `startBackup` com `isExecutingBackup == true` | servidor | - |
-| `idle` | `running` | `startBackup` com mutex livre | servidor | - |
-| `queued` | `running` | dequeue automatico ao liberar mutex | scheduler | - |
-| `queued` | `cancelled` | `cancelQueuedBackup` por cliente | servidor | - |
-| `queued` | `cancelled` | TTL `queuedItemTtl` expirado | scheduler | - |
-| `running` | `completed` | `_executeScheduledBackup` retorna sucesso | servidor | - |
-| `running` | `failed` | `_executeScheduledBackup` retorna falha | servidor | - |
-| `running` | `cancelled` | `cancelBackup` por cliente | servidor | - |
-| `running` | `failed` | watchdog `runningHeartbeatTimeout` sem update | scheduler | - |
+| De        | Para        | Gatilho                                       | Responsavel | Erro se invalido |
+| --------- | ----------- | --------------------------------------------- | ----------- | ---------------- |
+| `idle`    | `queued`    | `startBackup` com `isExecutingBackup == true` | servidor    | -                |
+| `idle`    | `running`   | `startBackup` com mutex livre                 | servidor    | -                |
+| `queued`  | `running`   | dequeue automatico ao liberar mutex           | scheduler   | -                |
+| `queued`  | `cancelled` | `cancelQueuedBackup` por cliente              | servidor    | -                |
+| `queued`  | `cancelled` | TTL `queuedItemTtl` expirado                  | scheduler   | -                |
+| `running` | `completed` | `_executeScheduledBackup` retorna sucesso     | servidor    | -                |
+| `running` | `failed`    | `_executeScheduledBackup` retorna falha       | servidor    | -                |
+| `running` | `cancelled` | `cancelBackup` por cliente                    | servidor    | -                |
+| `running` | `failed`    | watchdog `runningHeartbeatTimeout` sem update | scheduler   | -                |
 
 ### Transicoes proibidas (retornam `409 INVALID_STATE_TRANSITION`)
 
@@ -990,11 +990,12 @@ Melhorias adicionais confirmadas na revisao do codigo:
   - ou remover `fileAck` da estrategia atual e assumir streaming sem controle de janela
 - [ ] `getServerCapabilities` deve negociar recursos efetivos do servidor.
   - Minimo: `protocolVersion`, `supportsRunId`, `supportsResume`, `supportsArtifactRetention`, `supportsChunkAck`, `chunkSize`, `compression`, `serverTimeUtc`.
-- [ ] O lock de transferencia deve virar lease com identidade.
-  - Incluir `owner/runId/acquiredAt/expiresAt`.
-  - Executar cleanup de lock expirado no bootstrap do servidor.
-- [ ] `metrics/health` devem incluir estado operacional do pipeline remoto.
-  - Minimo: `queueDepth`, `activeRunId`, `artifactExpiresAt`, `stagingUsageBytes`, `serverTimeUtc`.
+- [x] O lock de transferencia deve virar lease com identidade. (**2026-04-23**)
+  - Incluir `owner/runId/acquiredAt/expiresAt`. (**v1 JSON + `kDefaultTransferLeaseTtl`**)
+  - Executar cleanup de lock expirado no bootstrap do servidor. (**`main.dart` / `_startSocketServer`**)
+- [~] `metrics/health` devem incluir estado operacional do pipeline remoto.
+  - [x] `stagingUsageBytes` + `stagingUsageWarn/BlockThresholdBytes` + `stagingUsageLevel` no **health** (2026-04-23; coerente com `metricsResponse`). `warn`/`block` elevam health a `degraded` com mensagem.
+  - Minimo ainda: `queueDepth` / `artifactExpiresAt` no health (hoje `metricsResponse` cobre muito; ver fila/PR-3c).
 - [ ] Historico local de transferencia deve persistir `runId/artifactId` para rastreabilidade ponta a ponta.
 
 ## Quebra de Implementacao por PR (PR-1, PR-2, PR-3, PR-4, PR-5)
@@ -1373,11 +1374,11 @@ Escopo:
 - [ ] Escolher estrategia explicita de fluxo:
   - [ ] implementar `ACK/backpressure` real por janela
   - [ ] ou remover `fileAck` da estrategia de transferencia `v1`
-- [~] Endurecer lock de transferencia:
-  - [ ] trocar lock simples por lease com `owner/runId/acquiredAt/expiresAt` (hoje so existe `.lock` por hash do path)
-  - [~] limpar locks expirados no bootstrap do servidor (`FileTransferLockService.cleanupExpiredLocks(maxAge=30m)` ja existe; falta garantir que e chamado obrigatoriamente no bootstrap)
+- [x] Endurecer lock de transferencia: (**2026-04-23**)
+  - [x] trocar lock simples por lease com `owner/runId/acquiredAt/expiresAt` (`.lock` continua indexado por hash; conteudo v1 JSON)
+  - [x] limpar locks expirados no bootstrap do servidor (`cleanupExpiredLocks` em `_startSocketServer` antes de `socketServer.start()`)
 - [ ] Tornar limpeza remota idempotente e segura apos download concluido.
-- [ ] Retornar `410 ARTIFACT_EXPIRED` quando o artefato sair da retencao.
+- [~] Retornar `410 ARTIFACT_EXPIRED` quando o artefato sair da retencao (por mtime; **2026-04-23**). Limpeza em disco: `cleanupOldBackups` + scheduler 1h (**2026-04-23**). Pendente: testes e2e e alinhar deployment modo serviço se aplicavel.
 - [ ] Garantir que falha de hash nao marque transferencia como concluida.
 
 Arquivos foco:
@@ -1440,7 +1441,7 @@ Roteiro executavel (ordem sugerida):
 4. Validacao de integridade e cleanup remoto
    - [ ] Validar hash no fim do download.
    - [ ] Acionar `cleanupStaging` somente depois de integridade confirmada.
-   - [ ] Rodar cleanup de lease expirado de lock no bootstrap do servidor.
+   - [x] Rodar cleanup de lease expirado de lock no bootstrap do servidor. (**2026-04-23**, `main.dart`)
 5. Validacao final do PR-4
    - [ ] Rodar testes de integracao de transferencia e resume.
 
@@ -1633,9 +1634,9 @@ Sequencia de commits sugerida:
 - [ ] `file_transfer_message_handler.dart`
   - [ ] Retornar `410` + `ARTIFACT_EXPIRED` para artefato fora da retencao
   - [ ] Implementar estrategia de `ACK/backpressure` ou remover `fileAck` do fluxo
-- [~] `lib/infrastructure/file_transfer_lock_service.dart`
-  - [ ] Migrar lock simples para lease com `owner/runId/acquiredAt/expiresAt`
-  - [~] Executar cleanup de locks expirados no bootstrap do servidor (metodo `cleanupExpiredLocks` ja existe; falta wiring obrigatorio no startup do servidor)
+- [x] `lib/infrastructure/file_transfer_lock_service.dart` + `file_transfer_lease.dart` + `domain/constants/transfer_lease.dart` (**2026-04-23**)
+  - [x] Lease com `owner/runId/acquiredAt/expiresAt` (v1 JSON)
+  - [x] `cleanupExpiredLocks` no bootstrap do socket (`main.dart`)
 - [ ] `tcp_socket_server.dart`
   - [ ] Registrar roteamento dos novos handlers mantendo guard de autenticacao
   - [ ] Garantir recuperacao de estado/fila apos restart (bootstrap de runtime)
@@ -1681,7 +1682,7 @@ Sequencia de commits sugerida:
   - [ ] `diagnostics_message_handler_test.dart` (logs/metadata/cleanup)
   - [ ] validar bloqueio de transicao invalida e deduplicacao por `idempotencyKey`
   - [ ] validar registry por `runId` e reconnect do cliente sem perder contexto
-  - [ ] validar lease e cleanup de lock expirado
+  - [x] validar lease e cleanup de lock expirado (`file_transfer_lock_service_test.dart`, 2026-04-23)
 - [ ] Client unit:
   - [ ] `connection_manager_test.dart` (novos endpoints + envelope)
   - [ ] `remote_file_transfer_provider_test.dart` (cleanup remoto)
@@ -1812,9 +1813,9 @@ Cada sub-PR fica revisavel (~500-800 linhas) com criterio de aceite isolado.
   - Persistir `clientId`, `runId`, `idempotencyKey`, `commandType`, `timestamp`, `result`.
   - Hoje so existe `LoggerService.infoWithContext`, sem audit dedicado.
   - Ancora: PR-3b (junto com idempotencia).
-- [~] M5.3 Limite e alerta de `stagingUsageBytes` com acao automatica. _(metrica entregue em 2026-04-19; acao automatica pendente para PR-4)_
-  - Entregue: `lib/infrastructure/utils/staging_usage_measurer.dart` (helper defensivo); `MetricsMessageHandler` agora publica `stagingUsageBytes` no payload (quando provider injetado); DI cabeada para usar o `transferBasePath` real.
-  - Pendente: thresholds (warn/block) + acao automatica de cleanup ou rejeicao de novo backup com `503 STAGING_FULL`. Decidir os thresholds nos Defaults Operacionais (ja documentados: 5GB warn / 10GB block) e implementar em PR-4 junto com a retencao de artefato.
+- [~] M5.3 Limite e alerta de `stagingUsageBytes` com acao automatica. _(metrica 2026-04-19; thresholds + bloqueio `startBackup` 2026-04-23)_
+  - Entregue: `StagingUsageMeasurer` + `StagingUsagePolicy` (5 GiB / 10 GiB); `metricsResponse` com `stagingUsageLevel` + limites; `startBackup` com `stagingFull` / 503 se >= 10 GiB; `ErrorCode.stagingFull` + mapa 503; **`healthResponse` com os mesmos campos de staging (2026-04-23)**.
+  - Pendente opcional: acionar `cleanupOldBackups` agressivo ao entrar em `warn` (hoje so timer 1h).
 - [x] M5.4 Validacao de payload size por tipo de mensagem. _(implementado em 2026-04-19)_
   - Criado `lib/infrastructure/protocol/payload_limits.dart` com mapa imutavel `MessageType -> maxBytes` cobrindo todos os tipos atuais. `PayloadLimits.maxPayloadBytesFor` satura no teto global (`SocketConfig.maxMessagePayloadBytes`) por defesa em profundidade.
   - Adicionado `ErrorCode.payloadTooLarge`.
@@ -1875,39 +1876,40 @@ Cada sub-PR fica revisavel (~500-800 linhas) com criterio de aceite isolado.
 ### Priorizacao detalhada (tabela cruzada PR x melhoria)
 
 Legenda:
+
 - `BLOQ` - bloqueia o PR; nao pode ser mergeado sem isso.
 - `JUNTO` - deve sair no mesmo PR (custo marginal baixo, valor alto).
 - `APOS` - pode entrar em release patch logo apos o PR principal.
 - `-` - nao se aplica a esse PR.
 
-| Melhoria | PR-1 | PR-2 | PR-3a | PR-3b | PR-3c | PR-4 | PR-5 |
-|---|---|---|---|---|---|---|---|
-| **M1.1** modelo hibrido scheduler (ADR) | ADR-001 aceito | implementar | implementar | - | - | - | - |
-| **M1.2** streaming sem `fileAck` (ADR) | ADR-002 aceito | declarar em capabilities | - | - | - | implementar | - |
-| **M1.3** `protocolVersion` formal | ADR-003 + parser + capabilities entregues | bumpar para v2 | manter | manter | manter | manter | manter |
-| **M2.1** eliminar singleton em ScheduleMessageHandler | concluido | OK | OK | OK | OK | - | - |
-| **M2.2** `executeSchedule` nao-bloqueante | - | BLOQ | - | - | - | - | - |
-| **M2.3** `runId` no contrato de progresso | concluido | OK | OK | OK | OK | - | - |
-| **M3.1** sub-PR-3a (runId+staging+cleanup remoto) | - | - | escopo | - | - | - | - |
-| **M3.2** sub-PR-3b (mutex+fila+estado+idempotencia) | - | - | - | escopo | - | - | - |
-| **M3.3** sub-PR-3c (persistencia+diagnostico+recovery) | - | - | - | - | escopo | - | - |
-| **M4.1** capabilities como gate | concluido (auto-refresh + getters) | adotar nos providers | adotar nos providers | adotar nos providers | adotar nos providers | adotar nos providers | - |
-| **M4.2** matriz cliente x servidor | JUNTO | atualizar | atualizar | atualizar | atualizar | atualizar | atualizar |
-| **M5.1** rate limit por cliente | JUNTO | - | - | - | - | - | APOS |
-| **M5.2** audit log de mutaveis | - | JUNTO | - | JUNTO | JUNTO | - | - |
-| **M5.3** alerta/bloqueio de stagingUsageBytes | metrica entregue | - | - | - | - | implementar acao automatica | - |
-| **M5.4** limite de payload por tipo | concluido | manter | manter | manter | manter | manter | manter |
-| **M6.1** suite de regressao automatica | parcial (envelope golden) | expandir (fluxo) | manter | manter | manter | manter | manter |
-| **M6.2** teste de carga / fila profunda | - | - | - | BLOQ | - | - | - |
-| **M6.3** chaos test de rede automatizado | - | - | - | - | JUNTO | BLOQ | - |
-| **M6.4** golden tests do envelope | BLOQ | manter | manter | manter | manter | manter | manter |
-| **M7.1** telemetria minima | parcial (metrics enriquecido) | manter | manter | manter | manter | manter | manter |
-| **M7.2** log estruturado obrigatorio | BLOQ | manter | manter | manter | manter | manter | manter |
-| **M8.1** TTL `idempotencyKey` (1h) | - | - | - | BLOQ | - | - | - |
-| **M8.2** `maxQueueSize` (50) + `429` | - | - | - | BLOQ | - | - | - |
-| **M8.3** TTL artefato (24h) + cleanup background | - | - | - | - | - | BLOQ | - |
-| **M8.4** politica de reconexao apos restart | - | - | - | - | BLOQ | - | - |
-| **M9.1** diagrama maquina de estados | - | BLOQ | - | - | - | - | - |
+| Melhoria                                               | PR-1                                      | PR-2                     | PR-3a                | PR-3b                | PR-3c                | PR-4                        | PR-5      |
+| ------------------------------------------------------ | ----------------------------------------- | ------------------------ | -------------------- | -------------------- | -------------------- | --------------------------- | --------- |
+| **M1.1** modelo hibrido scheduler (ADR)                | ADR-001 aceito                            | implementar              | implementar          | -                    | -                    | -                           | -         |
+| **M1.2** streaming sem `fileAck` (ADR)                 | ADR-002 aceito                            | declarar em capabilities | -                    | -                    | -                    | implementar                 | -         |
+| **M1.3** `protocolVersion` formal                      | ADR-003 + parser + capabilities entregues | bumpar para v2           | manter               | manter               | manter               | manter                      | manter    |
+| **M2.1** eliminar singleton em ScheduleMessageHandler  | concluido                                 | OK                       | OK                   | OK                   | OK                   | -                           | -         |
+| **M2.2** `executeSchedule` nao-bloqueante              | -                                         | BLOQ                     | -                    | -                    | -                    | -                           | -         |
+| **M2.3** `runId` no contrato de progresso              | concluido                                 | OK                       | OK                   | OK                   | OK                   | -                           | -         |
+| **M3.1** sub-PR-3a (runId+staging+cleanup remoto)      | -                                         | -                        | escopo               | -                    | -                    | -                           | -         |
+| **M3.2** sub-PR-3b (mutex+fila+estado+idempotencia)    | -                                         | -                        | -                    | escopo               | -                    | -                           | -         |
+| **M3.3** sub-PR-3c (persistencia+diagnostico+recovery) | -                                         | -                        | -                    | -                    | escopo               | -                           | -         |
+| **M4.1** capabilities como gate                        | concluido (auto-refresh + getters)        | adotar nos providers     | adotar nos providers | adotar nos providers | adotar nos providers | adotar nos providers        | -         |
+| **M4.2** matriz cliente x servidor                     | JUNTO                                     | atualizar                | atualizar            | atualizar            | atualizar            | atualizar                   | atualizar |
+| **M5.1** rate limit por cliente                        | JUNTO                                     | -                        | -                    | -                    | -                    | -                           | APOS      |
+| **M5.2** audit log de mutaveis                         | -                                         | JUNTO                    | -                    | JUNTO                | JUNTO                | -                           | -         |
+| **M5.3** alerta/bloqueio de stagingUsageBytes          | metrica entregue                          | -                        | -                    | -                    | -                    | implementar acao automatica | -         |
+| **M5.4** limite de payload por tipo                    | concluido                                 | manter                   | manter               | manter               | manter               | manter                      | manter    |
+| **M6.1** suite de regressao automatica                 | parcial (envelope golden)                 | expandir (fluxo)         | manter               | manter               | manter               | manter                      | manter    |
+| **M6.2** teste de carga / fila profunda                | -                                         | -                        | -                    | BLOQ                 | -                    | -                           | -         |
+| **M6.3** chaos test de rede automatizado               | -                                         | -                        | -                    | -                    | JUNTO                | BLOQ                        | -         |
+| **M6.4** golden tests do envelope                      | BLOQ                                      | manter                   | manter               | manter               | manter               | manter                      | manter    |
+| **M7.1** telemetria minima                             | parcial (metrics enriquecido)             | manter                   | manter               | manter               | manter               | manter                      | manter    |
+| **M7.2** log estruturado obrigatorio                   | BLOQ                                      | manter                   | manter               | manter               | manter               | manter                      | manter    |
+| **M8.1** TTL `idempotencyKey` (1h)                     | -                                         | -                        | -                    | BLOQ                 | -                    | -                           | -         |
+| **M8.2** `maxQueueSize` (50) + `429`                   | -                                         | -                        | -                    | BLOQ                 | -                    | -                           | -         |
+| **M8.3** TTL artefato (24h) + cleanup background       | -                                         | -                        | -                    | -                    | -                    | BLOQ                        | -         |
+| **M8.4** politica de reconexao apos restart            | -                                         | -                        | -                    | -                    | BLOQ                 | -                           | -         |
+| **M9.1** diagrama maquina de estados                   | -                                         | BLOQ                     | -                    | -                    | -                    | -                           | -         |
 
 ### Sequenciamento sugerido das melhorias
 

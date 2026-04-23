@@ -60,7 +60,7 @@ porque ambos quebrariam casos de uso reais ja em producao.
 ### Positivas
 
 - Zero quebra de implantacoes legadas que dependem do scheduler local
-  + destinos do servidor.
+  - destinos do servidor.
 - Cliente moderno controla 100% do destino final em execucoes
   `remoteCommand`, eliminando o problema de "upload duplicado" descrito
   no plano.
@@ -132,7 +132,7 @@ porque ambos quebrariam casos de uso reais ja em producao.
 - Adicionar `enum ExecutionOrigin { local, remoteCommand }` em
   `lib/domain/entities/` ou `lib/application/services/`.
 - `SchedulerService.executeNow(scheduleId, {ExecutionOrigin origin =
-  ExecutionOrigin.local})`.
+ExecutionOrigin.local})`.
 - `_checkSchedules` chama com `origin: ExecutionOrigin.local`.
 - `ScheduleMessageHandler._handleExecuteSchedule` chama com
   `origin: ExecutionOrigin.remoteCommand`.

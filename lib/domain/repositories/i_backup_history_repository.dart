@@ -5,6 +5,7 @@ import 'package:result_dart/result_dart.dart' as rd;
 abstract class IBackupHistoryRepository {
   Future<rd.Result<List<BackupHistory>>> getAll({int? limit, int? offset});
   Future<rd.Result<BackupHistory>> getById(String id);
+  Future<rd.Result<BackupHistory>> getByRunId(String runId);
   Future<rd.Result<BackupHistory>> create(BackupHistory history);
   Future<rd.Result<BackupHistory>> update(BackupHistory history);
 

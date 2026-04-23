@@ -36,8 +36,8 @@ void main() {
     );
 
     test(
-      'reflete features ja entregues: supportsRunId=true (M2.3), '
-      'supportsResume=true; nega features ainda nao entregues',
+      'reflete features ja entregues: runId, resume, retencao, fila; '
+      'nega chunkAck (ADR-002)',
       () async {
         final handler = CapabilitiesMessageHandler();
         Message? sent;
@@ -52,14 +52,11 @@ void main() {
         );
 
         final caps = readCapabilitiesFromResponse(sent!);
-        // Ja entregues
         expect(caps.supportsRunId, isTrue);
         expect(caps.supportsResume, isTrue);
-        // Decisao explicita ADR-002
+        expect(caps.supportsArtifactRetention, isTrue);
         expect(caps.supportsChunkAck, isFalse);
-        // Pendentes (PR-3b / PR-4)
-        expect(caps.supportsArtifactRetention, isFalse);
-        expect(caps.supportsExecutionQueue, isFalse);
+        expect(caps.supportsExecutionQueue, isTrue);
       },
     );
 

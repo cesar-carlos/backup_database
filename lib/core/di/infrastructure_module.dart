@@ -39,6 +39,7 @@ import 'package:backup_database/infrastructure/socket/server/schedule_crud_messa
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
+import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
 import 'package:backup_database/infrastructure/transfer_staging_service.dart';
 import 'package:backup_database/infrastructure/utils/staging_usage_measurer.dart';
 import 'package:get_it/get_it.dart';
@@ -234,7 +235,6 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<ScheduleMessageHandler>(
     () => ScheduleMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
-      destinationRepository: getIt<IBackupDestinationRepository>(),
       licensePolicyService: getIt<ILicensePolicyService>(),
       schedulerService: getIt<ISchedulerService>(),
       updateSchedule: getIt<UpdateSchedule>(),
@@ -261,6 +261,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<ITransferStagingService>(
     () => TransferStagingService(transferBasePath: transferBasePath),
   );
+  getIt.registerLazySingleton<RemoteStagingCleanupScheduler>(
+    () => RemoteStagingCleanupScheduler(getIt<ITransferStagingService>()),
+  );
 
   getIt.registerLazySingleton<MetricsMessageHandler>(
     () => MetricsMessageHandler(
@@ -285,11 +288,13 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<CapabilitiesMessageHandler>(
     CapabilitiesMessageHandler.new,
   );
-  // HealthMessageHandler com checks minimos. Wirings em producao podem
-  // adicionar checks de banco/staging/license via override no DI ou
-  // instanciacao direta no TcpSocketServer (ver M1.10).
+  // HealthMessageHandler com checks minimos + pressao de staging (PR-4).
+  // Mesmo `StagingUsageMeasurer` que `MetricsMessageHandler` / execucao.
   getIt.registerLazySingleton<HealthMessageHandler>(
-    HealthMessageHandler.new,
+    () => HealthMessageHandler(
+      stagingUsageBytesProvider: () =>
+          StagingUsageMeasurer.measure(transferBasePath),
+    ),
   );
   // PreflightMessageHandler com mapa de checks vazio por padrao.
   // Wirings em producao podem injetar checks como `compression_tool`,
@@ -297,14 +302,6 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // validate_backup_directory e StorageChecker (ver F1.8 do plano).
   getIt.registerLazySingleton<PreflightMessageHandler>(
     PreflightMessageHandler.new,
-  );
-  // ExecutionStatusMessageHandler compartilha o RemoteExecutionRegistry
-  // ja registrado para o ScheduleMessageHandler (M2.1) — fonte unica
-  // de verdade do estado de execucoes em curso.
-  getIt.registerLazySingleton<ExecutionStatusMessageHandler>(
-    () => ExecutionStatusMessageHandler(
-      executionRegistry: getIt<RemoteExecutionRegistry>(),
-    ),
   );
   // ========================================================================
   // PR-2 / PR-3: Wirings concretos para handlers cabeados ao dominio
@@ -326,11 +323,20 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     ),
   );
 
+  // PR-3c: `getExecutionStatus` reaproveita registry, fila e historico
+  // (runId em backup_history apos v31).
+  getIt.registerLazySingleton<ExecutionStatusMessageHandler>(
+    () => ExecutionStatusMessageHandler(
+      executionRegistry: getIt<RemoteExecutionRegistry>(),
+      queueService: getIt<ExecutionQueueService>(),
+      backupHistoryRepository: getIt<IBackupHistoryRepository>(),
+    ),
+  );
+
   // ExecutionMessageHandler com todas as dependencias reais.
   getIt.registerLazySingleton<ExecutionMessageHandler>(
     () => ExecutionMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
-      destinationRepository: getIt<IBackupDestinationRepository>(),
       licensePolicyService: getIt<ILicensePolicyService>(),
       schedulerService: getIt<ISchedulerService>(),
       executeBackup: getIt<ExecuteScheduledBackup>(),
@@ -338,6 +344,8 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       executionRegistry: getIt<RemoteExecutionRegistry>(),
       idempotencyRegistry: getIt<IdempotencyRegistry>(),
       queueService: getIt<ExecutionQueueService>(),
+      stagingUsageBytesProvider: () =>
+          StagingUsageMeasurer.measure(transferBasePath),
       // QueueEventBus injetado mais abaixo apos TcpSocketServer existir
       // (precisa do `sendToClient` para broadcast).
     ),

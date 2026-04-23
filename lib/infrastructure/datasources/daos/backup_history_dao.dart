@@ -20,6 +20,10 @@ class BackupHistoryDao extends DatabaseAccessor<AppDatabase>
     backupHistoryTable,
   )..where((t) => t.id.equals(id))).getSingleOrNull();
 
+  Future<BackupHistoryTableData?> getByRunId(String runId) => (select(
+    backupHistoryTable,
+  )..where((t) => t.runId.equals(runId))).getSingleOrNull();
+
   Future<int> insertHistory(BackupHistoryTableCompanion history) =>
       into(backupHistoryTable).insert(history);
 

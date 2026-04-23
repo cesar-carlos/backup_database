@@ -21,10 +21,11 @@ import 'package:backup_database/infrastructure/socket/server/remote_execution_re
 ///     viaja em `backupProgress/Complete/Failed`).
 ///   - `supportsResume = true` (resume de download por chunk ja
 ///     existe em `requestFile`).
-///   - `supportsArtifactRetention = false` (artefato sem TTL formal,
-///     entrega prevista para PR-4 / M8.3).
+///   - `supportsArtifactRetention = true` (PR-4 / M8.3: TTL 24h,
+///     `410 ARTIFACT_EXPIRED`, limpeza periodica em `remote/`).
 ///   - `supportsChunkAck = false` (decisao explicita ADR-002).
-///   - `supportsExecutionQueue = false` (fila prevista para PR-3b).
+///   - `supportsExecutionQueue = true` (PR-3a/F2.16: FIFO persistida,
+///     `getExecutionQueue`, `cancelQueuedBackup`, eventos de fila).
 /// - `chunkSize` e `compression` refletem `SocketConfig` atual.
 /// - `serverTimeUtc` permite o cliente detectar drift de relogio.
 class CapabilitiesMessageHandler {
@@ -64,9 +65,9 @@ class CapabilitiesMessageHandler {
         wireVersion: kCurrentWireVersion,
         supportsRunId: true,
         supportsResume: true,
-        supportsArtifactRetention: false,
+        supportsArtifactRetention: true,
         supportsChunkAck: false,
-        supportsExecutionQueue: false,
+        supportsExecutionQueue: true,
         chunkSize: _chunkSize,
         compression: _compression,
         serverTimeUtc: _clock(),

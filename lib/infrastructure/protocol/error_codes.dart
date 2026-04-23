@@ -13,6 +13,13 @@ enum ErrorCode {
   timeout('TIMEOUT', 'Operacao expirou'),
   ioError('IO_ERROR', 'Erro de entrada/saida'),
   diskFull('DISK_FULL', 'Disco cheio'),
+
+  /// Staging de transferencia remota acima do limite (PR-4 / M5.3).
+  /// Mapeia para 503.
+  stagingFull(
+    'STAGING_FULL',
+    'Staging remoto acima do limite configurado',
+  ),
   invalidChecksum('INVALID_CHECKSUM', 'Checksum invalido'),
 
   /// Wire version do `MessageHeader` nao reconhecida pelo servidor.
@@ -60,6 +67,12 @@ enum ErrorCode {
   notAuthenticated(
     'NOT_AUTHENTICATED',
     'Mensagem operacional rejeitada antes de autenticacao concluida',
+  ),
+
+  /// Artefato em staging remoto fora da janela de retencao. Mapeia para 410.
+  artifactExpired(
+    'ARTIFACT_EXPIRED',
+    'Artefato de backup removido ou fora do periodo de retencao',
   )
   ;
 

@@ -1,65 +1,140 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/constants/transfer_lease.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
+import 'package:backup_database/infrastructure/file_transfer_lease.dart';
 import 'package:path/path.dart' as p;
 
 class FileTransferLockService implements IFileTransferLockService {
-  FileTransferLockService({required String lockBasePath})
-    : _lockBasePath = p.normalize(p.absolute(lockBasePath));
+  FileTransferLockService({
+    required String lockBasePath,
+    DateTime Function()? clock,
+  }) : _lockBasePath = p.normalize(p.absolute(lockBasePath)),
+       _clock = clock ?? DateTime.now;
 
   final String _lockBasePath;
+  final DateTime Function() _clock;
 
   File _getLockFile(String filePath) {
-    // Usa hash do caminho como nome do arquivo de lock para evitar caracteres inválidos
-    final hash = filePath.hashCode
+    final key = p.normalize(p.absolute(filePath));
+    final hash = key.hashCode
         .toUnsigned(16)
         .toRadixString(16)
         .padLeft(8, '0');
     return File(p.join(_lockBasePath, '$hash.lock'));
   }
 
+  Future<void> _ensureLockDirExists(File lockFile) async {
+    final lockDir = lockFile.parent;
+    if (!await lockDir.exists()) {
+      await lockDir.create(recursive: true);
+    }
+  }
+
   @override
-  Future<bool> tryAcquireLock(String filePath) async {
+  Future<bool> tryAcquireLock(
+    String filePath, {
+    String owner = 'unknown',
+    String? runId,
+    Duration leaseTtl = kDefaultTransferLeaseTtl,
+  }) async {
     final lockFile = _getLockFile(filePath);
+    final now = _clock();
+    final normPath = normalizedFilePathKey(filePath);
 
     try {
-      // Criar diretório de locks se não existir
-      final lockDir = lockFile.parent;
-      if (!await lockDir.exists()) {
-        await lockDir.create(recursive: true);
-      }
+      await _ensureLockDirExists(lockFile);
 
-      // Verifica se já existe lock
       if (await lockFile.exists()) {
-        final stat = await lockFile.stat();
-        final age = DateTime.now().difference(stat.modified);
-        // Lock expirado (mais de 30 minutos) pode ser sobrescrito
-        if (age < const Duration(minutes: 30)) {
-          LoggerService.info(
-            'FileTransferLock: lock already exists for $filePath '
-            '(age: ${age.inMinutes}m)',
-          );
-          return false;
+        final text = (await lockFile.readAsString()).trim();
+        final v1 = FileTransferLeaseV1.tryParse(text);
+        if (v1 != null) {
+          if (now.isBefore(v1.expiresAt)) {
+            if (fileTransferSameLeaseHolder(
+              existing: v1,
+              owner: owner,
+              runId: runId,
+            )) {
+              return _writeV1(
+                lockFile: lockFile,
+                filePath: normPath,
+                owner: owner,
+                runId: runId,
+                now: now,
+                leaseTtl: leaseTtl,
+              );
+            }
+            LoggerService.info(
+              'FileTransferLock: lease ativo (outro ator) para $normPath',
+            );
+            return false;
+          }
+          await lockFile.delete();
+        } else {
+          final legacy = FileTransferLeaseV1.tryParseLegacyContent(text);
+          if (legacy != null) {
+            final exp = legacy.add(leaseTtl);
+            if (now.isBefore(exp)) {
+              // Legado: sem owner/runId — nao permitimos "tomar" de outro
+              // ator; bloquear ate expirar.
+              LoggerService.info(
+                'FileTransferLock: lock legado ainda valido para $normPath',
+              );
+              return false;
+            }
+            await lockFile.delete();
+          } else {
+            // Corrompido ou desconhecido — remove e segue
+            await lockFile.delete();
+          }
         }
-        // Lock expirado, remove e continua
-        await lockFile.delete();
       }
 
-      // Cria arquivo de lock com timestamp atual
-      await lockFile.writeAsString(DateTime.now().toIso8601String());
-      LoggerService.debug(
-        'FileTransferLock: acquired lock for $filePath',
+      return _writeV1(
+        lockFile: lockFile,
+        filePath: normPath,
+        owner: owner,
+        runId: runId,
+        now: now,
+        leaseTtl: leaseTtl,
       );
-      return true;
     } on Object catch (e, st) {
       LoggerService.warning(
-        'FileTransferLock: failed to acquire lock for $filePath',
+        'FileTransferLock: failed to acquire lock for $normPath',
         e,
         st,
       );
       return false;
     }
+  }
+
+  Future<bool> _writeV1({
+    required File lockFile,
+    required String filePath,
+    required String owner,
+    required String? runId,
+    required DateTime now,
+    required Duration leaseTtl,
+  }) async {
+    final acquiredAt = now;
+    final expiresAt = now.add(leaseTtl);
+    final payload = FileTransferLeaseV1(
+      filePath: filePath,
+      owner: owner,
+      acquiredAt: acquiredAt,
+      expiresAt: expiresAt,
+      runId: runId,
+    );
+    await lockFile.writeAsString(
+      jsonEncode(payload.toJson()),
+    );
+    LoggerService.debug(
+      'FileTransferLock: acquired lease for $filePath owner=$owner '
+      'runId=$runId until ${expiresAt.toIso8601String()}',
+    );
+    return true;
   }
 
   @override
@@ -90,11 +165,7 @@ class FileTransferLockService implements IFileTransferLockService {
       if (!await lockFile.exists()) {
         return false;
       }
-
-      // Verifica se o lock não está expirado
-      final stat = await lockFile.stat();
-      final age = DateTime.now().difference(stat.modified);
-      return age < const Duration(minutes: 30);
+      return !(await _isLockExpired(lockFile));
     } on Object catch (e, st) {
       LoggerService.warning(
         'FileTransferLock: failed to check lock for $filePath',
@@ -105,9 +176,27 @@ class FileTransferLockService implements IFileTransferLockService {
     }
   }
 
+  Future<bool> _isLockExpired(
+    File lockFile, {
+    Duration leaseTtl = kDefaultTransferLeaseTtl,
+  }) async {
+    final now = _clock();
+    final text = (await lockFile.readAsString()).trim();
+    final v1 = FileTransferLeaseV1.tryParse(text);
+    if (v1 != null) {
+      return v1.expiresAt.isBefore(now);
+    }
+    final legacy = FileTransferLeaseV1.tryParseLegacyContent(text);
+    if (legacy != null) {
+      return !now.isBefore(legacy.add(leaseTtl));
+    }
+    // Corrompido: tratar como expirado
+    return true;
+  }
+
   @override
   Future<void> cleanupExpiredLocks({
-    Duration maxAge = const Duration(minutes: 30),
+    Duration maxAge = kDefaultTransferLeaseTtl,
   }) async {
     final lockDir = Directory(_lockBasePath);
     if (!await lockDir.exists()) {
@@ -115,14 +204,27 @@ class FileTransferLockService implements IFileTransferLockService {
     }
 
     try {
-      final now = DateTime.now();
+      final now = _clock();
       var cleanedCount = 0;
 
       await for (final entity in lockDir.list()) {
         if (entity is File && p.extension(entity.path) == '.lock') {
-          final stat = await entity.stat();
-          final age = now.difference(stat.modified);
-          if (age > maxAge) {
+          final text = (await entity.readAsString()).trim();
+          var drop = false;
+          final v1 = FileTransferLeaseV1.tryParse(text);
+          if (v1 != null) {
+            drop = v1.expiresAt.isBefore(now);
+          } else {
+            final legacy = FileTransferLeaseV1.tryParseLegacyContent(text);
+            if (legacy != null) {
+              drop = !now.isBefore(legacy.add(maxAge));
+            } else {
+              // Desconhecido: usa mtime como fallback
+              final stat = await entity.stat();
+              drop = now.difference(stat.modified) > maxAge;
+            }
+          }
+          if (drop) {
             await entity.delete();
             cleanedCount++;
           }

@@ -7,6 +7,7 @@ import 'package:backup_database/domain/repositories/i_backup_history_repository.
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/socket/server/diagnostics_provider.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_staging_artifact_ttl.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
@@ -33,14 +34,17 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
     required this.logRepository,
     required this.stagingBasePath,
     String hashAlgorithm = 'sha256',
+    RemoteStagingArtifactTtl? artifactTtl,
   })  : _hashAlgorithm = hashAlgorithm,
-        _stagingBase = p.normalize(p.absolute(stagingBasePath));
+        _stagingBase = p.normalize(p.absolute(stagingBasePath)),
+        _artifactTtl = artifactTtl ?? RemoteStagingArtifactTtl();
 
   final IBackupHistoryRepository historyRepository;
   final IBackupLogRepository logRepository;
   final String stagingBasePath;
   final String _stagingBase;
   final String _hashAlgorithm;
+  final RemoteStagingArtifactTtl _artifactTtl;
 
   /// Extrai `scheduleId` do `runId` no formato `<scheduleId>_<uuid>`.
   /// Retorna `null` para formatos nao reconhecidos. Defensivo: NAO
@@ -153,6 +157,21 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
     String runId,
   ) async {
     try {
+      if (runId.isEmpty) {
+        return DiagnosticsOutcome<ArtifactMetadataData>.notFound();
+      }
+
+      // PR-4: [TransferStagingService] grava `remote/<runId>/...` em
+      // execucoes `remoteCommand` (pasta unica por execucao).
+      final perRunDir = Directory(p.join(_stagingBase, 'remote', runId));
+      if (await perRunDir.exists()) {
+        final newest = await RemoteStagingArtifactTtl.newestFileInTree(perRunDir);
+        if (newest != null) {
+          return await _foundArtifactForFile(newest);
+        }
+      }
+
+      // Legado: `remote/<scheduleId>/` (pasta unica por agendamento)
       final scheduleId = _scheduleIdFromRunId(runId);
       if (scheduleId == null) {
         return DiagnosticsOutcome<ArtifactMetadataData>.notFound();
@@ -162,40 +181,11 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
         return DiagnosticsOutcome<ArtifactMetadataData>.notFound();
       }
 
-      // Pega o arquivo regular mais recente. Em v2 (staging por runId),
-      // sera lookup direto por path conhecido.
-      File? newest;
-      DateTime? newestModified;
-      await for (final entity in scheduleDir.list(followLinks: false)) {
-        if (entity is File) {
-          final modified = await entity.lastModified();
-          if (newestModified == null || modified.isAfter(newestModified)) {
-            newest = entity;
-            newestModified = modified;
-          }
-        }
-      }
+      final newest = await RemoteStagingArtifactTtl.newestFileInTree(scheduleDir);
       if (newest == null) {
         return DiagnosticsOutcome<ArtifactMetadataData>.notFound();
       }
-
-      final size = await newest.length();
-      final hashValue = await _hashFile(newest);
-      // Path retornado e RELATIVO ao staging base (sem expor caminho
-      // absoluto do servidor — pequena defesa de seguranca).
-      final relativePath = p
-          .relative(newest.path, from: _stagingBase)
-          .replaceAll(r'\', '/');
-
-      return DiagnosticsOutcome<ArtifactMetadataData>.found(
-        ArtifactMetadataData(
-          sizeBytes: size,
-          hashAlgorithm: _hashAlgorithm,
-          hashValue: hashValue,
-          stagingPath: relativePath,
-          // TTL ainda nao implementado (PR-4). Por enquanto omitimos.
-        ),
-      );
+      return await _foundArtifactForFile(newest);
     } on Object catch (e, st) {
       LoggerService.warning('RealDiagnosticsProvider.getArtifactMetadata: $e', e, st);
       return DiagnosticsOutcome<ArtifactMetadataData>.failure(
@@ -208,10 +198,28 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
   @override
   Future<DiagnosticsOutcome<CleanupStagingData>> cleanupStaging(String runId) async {
     try {
+      if (runId.isEmpty) {
+        return DiagnosticsOutcome<CleanupStagingData>.found(
+          const CleanupStagingData(cleaned: false, message: 'runId vazio'),
+        );
+      }
+
+      // PR-4: remove `remote/<runId>/` (chave = runId completo, mesmo quando
+      // nao bate o parsing legacy `<schedule>_<uuid>`).
+      final perRunDir = Directory(p.join(_stagingBase, 'remote', runId));
+      if (await perRunDir.exists()) {
+        return _cleanupOneStagingDir(perRunDir);
+      }
+
+      // Legado: `remote/<scheduleId>/` extraido do runId
       final scheduleId = _scheduleIdFromRunId(runId);
       if (scheduleId == null) {
         return DiagnosticsOutcome<CleanupStagingData>.found(
-          const CleanupStagingData(cleaned: false, message: 'runId invalido'),
+          const CleanupStagingData(
+            cleaned: false,
+            bytesFreed: 0,
+            message: 'Diretorio de staging nao encontrado (layout desconhecido)',
+          ),
         );
       }
       final scheduleDir = Directory(p.join(_stagingBase, 'remote', scheduleId));
@@ -226,27 +234,7 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
           ),
         );
       }
-
-      // Calcula tamanho ANTES de deletar para reportar bytesFreed.
-      var totalBytes = 0;
-      await for (final entity in scheduleDir.list(
-        recursive: true,
-        followLinks: false,
-      )) {
-        if (entity is File) {
-          totalBytes += await entity.length();
-        }
-      }
-
-      await scheduleDir.delete(recursive: true);
-
-      return DiagnosticsOutcome<CleanupStagingData>.found(
-        CleanupStagingData(
-          cleaned: true,
-          bytesFreed: totalBytes,
-          message: 'Limpeza concluida ($totalBytes bytes liberados)',
-        ),
-      );
+      return _cleanupOneStagingDir(scheduleDir);
     } on Object catch (e, st) {
       LoggerService.warning('RealDiagnosticsProvider.cleanupStaging: $e', e, st);
       return DiagnosticsOutcome<CleanupStagingData>.failure(
@@ -254,6 +242,51 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
         errorCode: ErrorCode.ioError,
       );
     }
+  }
+
+  Future<DiagnosticsOutcome<ArtifactMetadataData>> _foundArtifactForFile(
+    File newest,
+  ) async {
+    if (await _artifactTtl.isFileExpiredByRetention(newest)) {
+      return DiagnosticsOutcome.artifactExpired();
+    }
+    final mtime = await newest.lastModified();
+    final size = await newest.length();
+    final hashValue = await _hashFile(newest);
+    final relativePath = p
+        .relative(newest.path, from: _stagingBase)
+        .replaceAll(r'\', '/');
+    return DiagnosticsOutcome<ArtifactMetadataData>.found(
+      ArtifactMetadataData(
+        sizeBytes: size,
+        hashAlgorithm: _hashAlgorithm,
+        hashValue: hashValue,
+        stagingPath: relativePath,
+        expiresAt: _artifactTtl.expiresAtForMtime(mtime),
+      ),
+    );
+  }
+
+  Future<DiagnosticsOutcome<CleanupStagingData>> _cleanupOneStagingDir(
+    Directory dir,
+  ) async {
+    var totalBytes = 0;
+    await for (final entity in dir.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is File) {
+        totalBytes += await entity.length();
+      }
+    }
+    await dir.delete(recursive: true);
+    return DiagnosticsOutcome<CleanupStagingData>.found(
+      CleanupStagingData(
+        cleaned: true,
+        bytesFreed: totalBytes,
+        message: 'Limpeza concluida ($totalBytes bytes liberados)',
+      ),
+    );
   }
 
   /// Resolve o `BackupHistory` correspondente ao `runId`. Em v1 faz

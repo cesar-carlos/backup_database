@@ -56,6 +56,7 @@ Message createHealthRequestMessage({int requestId = 0}) {
 ///
 /// Mensagem auxiliar opcional [message] descreve o motivo de
 /// `degraded`/`unhealthy` quando aplicavel.
+/// Campos de staging (PR-4) espelham `metricsResponse` quando informados.
 Message createHealthResponseMessage({
   required int requestId,
   required ServerHealthStatus status,
@@ -63,6 +64,10 @@ Message createHealthResponseMessage({
   required DateTime serverTimeUtc,
   required int uptimeSeconds,
   String? message,
+  int? stagingUsageBytes,
+  int? stagingUsageWarnThresholdBytes,
+  int? stagingUsageBlockThresholdBytes,
+  String? stagingUsageLevel,
 }) {
   final payload = wrapSuccessResponse(<String, dynamic>{
     'status': status.name,
@@ -70,6 +75,18 @@ Message createHealthResponseMessage({
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
     'uptimeSeconds': uptimeSeconds,
     ...?(message != null ? {'message': message} : null),
+    ...?(stagingUsageBytes != null
+        ? {'stagingUsageBytes': stagingUsageBytes}
+        : null),
+    ...?(stagingUsageWarnThresholdBytes != null
+        ? {'stagingUsageWarnThresholdBytes': stagingUsageWarnThresholdBytes}
+        : null),
+    ...?(stagingUsageBlockThresholdBytes != null
+        ? {'stagingUsageBlockThresholdBytes': stagingUsageBlockThresholdBytes}
+        : null),
+    ...?(stagingUsageLevel != null
+        ? {'stagingUsageLevel': stagingUsageLevel}
+        : null),
   });
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -104,6 +121,10 @@ class ServerHealth {
     required this.serverTimeUtc,
     required this.uptimeSeconds,
     this.message,
+    this.stagingUsageBytes,
+    this.stagingUsageWarnThresholdBytes,
+    this.stagingUsageBlockThresholdBytes,
+    this.stagingUsageLevel,
   });
 
   final ServerHealthStatus status;
@@ -112,7 +133,16 @@ class ServerHealth {
   final int uptimeSeconds;
   final String? message;
 
+  /// Uso de staging remoto (bytes), quando o servidor publica.
+  final int? stagingUsageBytes;
+  final int? stagingUsageWarnThresholdBytes;
+  final int? stagingUsageBlockThresholdBytes;
+
+  /// Nivel operacional: `ok` / `warn` / `block` (mesmo sentido de metricas).
+  final String? stagingUsageLevel;
+
   bool get isOk => status == ServerHealthStatus.ok;
+  bool get isDegraded => status == ServerHealthStatus.degraded;
   bool get isUnhealthy => status == ServerHealthStatus.unhealthy;
 }
 
@@ -132,6 +162,12 @@ ServerHealth readHealthFromResponse(Message message) {
     serverTimeUtc: _parseServerTime(payload['serverTimeUtc']),
     uptimeSeconds: (payload['uptimeSeconds'] as num?)?.toInt() ?? 0,
     message: payload['message'] as String?,
+    stagingUsageBytes: (payload['stagingUsageBytes'] as num?)?.toInt(),
+    stagingUsageWarnThresholdBytes:
+        (payload['stagingUsageWarnThresholdBytes'] as num?)?.toInt(),
+    stagingUsageBlockThresholdBytes:
+        (payload['stagingUsageBlockThresholdBytes'] as num?)?.toInt(),
+    stagingUsageLevel: payload['stagingUsageLevel'] as String?,
   );
 }
 

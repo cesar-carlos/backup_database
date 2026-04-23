@@ -1,7 +1,8 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
-import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_license_policy_service.dart';
@@ -14,14 +15,13 @@ import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 
 /// Handles remote schedule commands from the client. When the client sends
-/// executeSchedule, the server runs the same backup flow as a local "Run now"
-/// (ExecuteScheduledBackup → SchedulerService.executeNow → _executeScheduledBackup).
+/// executeSchedule, the server runs the backup com [ExecutionOrigin.remoteCommand]
+/// (ADR-001: sem upload para destinos finais no host; staging para o cliente).
 /// Progress (step, message, progress) is streamed to the client via
 /// IBackupProgressNotifier so the client has the same information as the server UI.
 class ScheduleMessageHandler {
   ScheduleMessageHandler({
     required IScheduleRepository scheduleRepository,
-    required IBackupDestinationRepository destinationRepository,
     required ILicensePolicyService licensePolicyService,
     required ISchedulerService schedulerService,
     required UpdateSchedule updateSchedule,
@@ -29,7 +29,6 @@ class ScheduleMessageHandler {
     required IBackupProgressNotifier progressNotifier,
     RemoteExecutionRegistry? executionRegistry,
   }) : _scheduleRepository = scheduleRepository,
-       _destinationRepository = destinationRepository,
        _licensePolicyService = licensePolicyService,
        _schedulerService = schedulerService,
        _updateSchedule = updateSchedule,
@@ -40,7 +39,6 @@ class ScheduleMessageHandler {
   }
 
   final IScheduleRepository _scheduleRepository;
-  final IBackupDestinationRepository _destinationRepository;
   final ILicensePolicyService _licensePolicyService;
   final ISchedulerService _schedulerService;
   final UpdateSchedule _updateSchedule;
@@ -330,25 +328,9 @@ class ScheduleMessageHandler {
         return;
       }
 
-      final destinationsResult = await _destinationRepository.getByIds(
-        schedule.destinationIds,
-      );
-      if (destinationsResult.isError()) {
-        await _sendError(
-          clientId,
-          requestId,
-          'Não foi possível carregar destinos para validação',
-          sendToClient,
-          errorCode: ErrorCode.unknown,
-        );
-        return;
-      }
-      final destinations = destinationsResult.getOrNull()!;
+      // ADR-001: nao exige destinos no host; so valida schedule + licenca.
       final policyResult = await _licensePolicyService
-          .validateExecutionCapabilities(
-            schedule,
-            destinations,
-          );
+          .validateExecutionCapabilities(schedule, const <BackupDestination>[]);
       if (policyResult.isError()) {
         await _sendError(
           clientId,
@@ -410,7 +392,10 @@ class ScheduleMessageHandler {
         progress: 0.2,
       );
 
-      final result = await _executeBackup(scheduleId);
+      final result = await _executeBackup(
+        scheduleId,
+        executionOrigin: ExecutionOrigin.remoteCommand,
+      );
 
       // Antes: `await result.fold(asyncSuccess, asyncFailure)` com fold
       // aninhado dentro do success. O fold externo tinha `await`, mas o

@@ -12,6 +12,8 @@ import 'package:backup_database/core/service/service_shutdown_handler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
+import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
 
 class ServiceModeInitializer {
   ServiceModeInitializer._();
@@ -131,10 +133,12 @@ class ServiceModeInitializer {
       await _bootstrapStep(
         step: 9,
         totalSteps: totalSteps,
-        label: 'Iniciando scheduler e health checker',
+        label: 'Iniciando scheduler, health, fila persistida e limpeza de staging',
         action: () async {
           await schedulerService!.start();
           await healthChecker!.start();
+          await service_locator.getIt<ExecutionQueueService>().initialize();
+          service_locator.getIt<RemoteStagingCleanupScheduler>().start();
         },
       );
 
@@ -294,6 +298,18 @@ class ServiceModeInitializer {
       final scheduler = schedulerServiceRef();
       final health = healthCheckerRef();
       final eventLog = eventLogRef();
+
+      try {
+        if (service_locator.getIt.isRegistered<RemoteStagingCleanupScheduler>()) {
+          service_locator.getIt<RemoteStagingCleanupScheduler>().stop();
+        }
+      } on Object catch (e, s) {
+        LoggerService.warning(
+          '[ServiceModeInitializer] RemoteStagingCleanupScheduler.stop: $e',
+          e,
+          s,
+        );
+      }
 
       health?.stop();
       scheduler?.stop();

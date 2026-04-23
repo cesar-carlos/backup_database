@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/di/service_locator.dart' as di;
 import 'package:backup_database/core/logging/socket_logger_service.dart';
+import 'package:backup_database/domain/constants/transfer_lease.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
 import 'package:backup_database/infrastructure/protocol/file_chunker.dart';
 import 'package:backup_database/infrastructure/protocol/file_transfer_messages.dart';
@@ -14,7 +15,12 @@ import 'package:path/path.dart' as p;
 
 class MockFileTransferLockService implements IFileTransferLockService {
   @override
-  Future<bool> tryAcquireLock(String filePath) async => true;
+  Future<bool> tryAcquireLock(
+    String filePath, {
+    String owner = 'unknown',
+    String? runId,
+    Duration leaseTtl = kDefaultTransferLeaseTtl,
+  }) async => true;
 
   @override
   Future<void> releaseLock(String filePath) async {}
@@ -24,7 +30,7 @@ class MockFileTransferLockService implements IFileTransferLockService {
 
   @override
   Future<void> cleanupExpiredLocks({
-    Duration maxAge = const Duration(minutes: 30),
+    Duration maxAge = kDefaultTransferLeaseTtl,
   }) async {}
 }
 

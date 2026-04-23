@@ -72,7 +72,7 @@ Formalizar versionamento do protocolo em **dois niveis** complementares:
   `getServerCapabilities`** e degradar para fluxo legado equivalente
   (sem erro ao usuario quando feature desejada nao existe).
 - Mudanca em `MessageHeader` (wire) requer bump de wire version + ADR
-  + nao tem traducao automatica.
+  - nao tem traducao automatica.
 - Mudanca de payload em `MessageType` existente requer **campo
   opcional adicional** (jamais quebra o existente em mesmo wire
   version). Variantes precisam de fixture golden separada (`*_v1` x
@@ -178,21 +178,21 @@ Cliente deve consultar `getServerCapabilities` no handshake e:
 
 - Em PR-1:
   - [x] Adicionar validacao em `BinaryProtocol.deserializeMessage`:
-    rejeitar header com wire version desconhecida (retornar `error`
-    com `errorCode = UNSUPPORTED_PROTOCOL_VERSION`). _(implementado em
-    2026-04-19; ver `binary_protocol.dart`,
-    `UnsupportedProtocolVersionException` + `client_handler.dart` que
-    responde com errorCode dedicado e desconecta apos o flush)._
+        rejeitar header com wire version desconhecida (retornar `error`
+        com `errorCode = UNSUPPORTED_PROTOCOL_VERSION`). _(implementado em
+        2026-04-19; ver `binary_protocol.dart`,
+        `UnsupportedProtocolVersionException` + `client_handler.dart` que
+        responde com errorCode dedicado e desconecta apos o flush)._
   - [x] Documentar em `lib/infrastructure/protocol/protocol_versions.dart`
-    as constantes `kCurrentWireVersion = 1` e `kCurrentProtocolVersion = 1`,
-    com helper `isWireVersionSupported(int)`. _(implementado em 2026-04-19)_
+        as constantes `kCurrentWireVersion = 1` e `kCurrentProtocolVersion = 1`,
+        com helper `isWireVersionSupported(int)`. _(implementado em 2026-04-19)_
   - [x] Implementar `getServerCapabilities` retornando o payload minimo
-    acima. _(implementado em 2026-04-19 — `capabilities_messages.dart`,
-    `CapabilitiesMessageHandler`, `ConnectionManager.getServerCapabilities()`,
-    `ServerCapabilities` snapshot tipado com `legacyDefault` para
-    fallback graceful em servidor antigo)._
+        acima. _(implementado em 2026-04-19 — `capabilities_messages.dart`,
+        `CapabilitiesMessageHandler`, `ConnectionManager.getServerCapabilities()`,
+        `ServerCapabilities` snapshot tipado com `legacyDefault` para
+        fallback graceful em servidor antigo)._
   - [ ] Bumpar `kCurrentProtocolVersion` para `2` quando PR-1 for
-    mergeado.
+        mergeado.
 - Em cada PR subsequente:
   - Bumpar `kCurrentProtocolVersion`.
   - Atualizar fixtures golden de `capabilities`.

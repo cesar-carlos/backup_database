@@ -1,6 +1,7 @@
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -54,12 +55,34 @@ void main() {
       final health = readHealthFromResponse(msg);
       expect(health.status, ServerHealthStatus.ok);
       expect(health.isOk, isTrue);
+      expect(health.isDegraded, isFalse);
       expect(health.isUnhealthy, isFalse);
       expect(health.checks['socket'], isTrue);
       expect(health.checks['database'], isTrue);
       expect(health.serverTimeUtc, DateTime.utc(2026, 4, 19, 10));
       expect(health.uptimeSeconds, 7200);
       expect(health.message, isNull);
+      expect(health.stagingUsageLevel, isNull);
+    });
+
+    test('readHealthFromResponse com staging (PR-4)', () {
+      final msg = createHealthResponseMessage(
+        requestId: 1,
+        status: ServerHealthStatus.degraded,
+        checks: const {'socket': true},
+        serverTimeUtc: DateTime.utc(2026, 4, 19, 10),
+        uptimeSeconds: 0,
+        stagingUsageBytes: 6 * 1024 * 1024 * 1024,
+        stagingUsageWarnThresholdBytes: StagingUsagePolicy.warnThresholdBytes,
+        stagingUsageBlockThresholdBytes: StagingUsagePolicy.blockThresholdBytes,
+        stagingUsageLevel: 'warn',
+      );
+      final health = readHealthFromResponse(msg);
+      expect(health.stagingUsageBytes, 6 * 1024 * 1024 * 1024);
+      expect(health.stagingUsageWarnThresholdBytes, StagingUsagePolicy.warnThresholdBytes);
+      expect(health.stagingUsageBlockThresholdBytes, StagingUsagePolicy.blockThresholdBytes);
+      expect(health.stagingUsageLevel, 'warn');
+      expect(health.isDegraded, isTrue);
     });
 
     test('readHealthFromResponse aplica defaults defensivos', () {

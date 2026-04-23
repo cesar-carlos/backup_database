@@ -1,8 +1,8 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_progress_snapshot.dart';
+import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_license_policy_service.dart';
@@ -22,9 +22,6 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class _MockScheduleRepository extends Mock implements IScheduleRepository {}
 
-class _MockDestinationRepository extends Mock
-    implements IBackupDestinationRepository {}
-
 class _MockLicensePolicyService extends Mock implements ILicensePolicyService {}
 
 class _MockSchedulerService extends Mock implements ISchedulerService {}
@@ -37,7 +34,6 @@ class _MockProgressNotifier extends Mock implements IBackupProgressNotifier {}
 
 void main() {
   late _MockScheduleRepository scheduleRepository;
-  late _MockDestinationRepository destinationRepository;
   late _MockLicensePolicyService licensePolicyService;
   late _MockSchedulerService schedulerService;
   late _MockUpdateSchedule updateSchedule;
@@ -67,25 +63,43 @@ void main() {
   setUpAll(() {
     registerFallbackValue(schedule);
     registerFallbackValue(destination);
+    registerFallbackValue(ExecutionOrigin.local);
   });
 
   setUp(() {
     scheduleRepository = _MockScheduleRepository();
-    destinationRepository = _MockDestinationRepository();
     licensePolicyService = _MockLicensePolicyService();
     schedulerService = _MockSchedulerService();
     updateSchedule = _MockUpdateSchedule();
     executeBackup = _MockExecuteBackup();
     progressNotifier = _MockProgressNotifier();
 
+    // Antes de instanciar o handler o construtor chama
+    // `addListener` — `when` nao pode rodar reentrante; stub cedo.
+    when(() => progressNotifier.addListener(any())).thenReturn(null);
+    when(() => progressNotifier.removeListener(any())).thenReturn(null);
     when(() => schedulerService.isExecutingBackup).thenReturn(false);
     when(() => progressNotifier.tryStartBackup(any())).thenReturn(true);
     when(() => progressNotifier.currentSnapshot).thenReturn(null);
+    when(
+      () => scheduleRepository.getById(scheduleId),
+    ).thenAnswer((_) async => rd.Success(schedule));
+    when(
+      () => licensePolicyService.validateExecutionCapabilities(
+        any(),
+        any(),
+      ),
+    ).thenAnswer((_) async => const rd.Success(rd.unit));
+    when(
+      () => executeBackup(
+        any(),
+        executionOrigin: any(named: 'executionOrigin'),
+      ),
+    ).thenAnswer((_) async => const rd.Success(rd.unit));
 
     executionRegistry = RemoteExecutionRegistry();
     handler = ScheduleMessageHandler(
       scheduleRepository: scheduleRepository,
-      destinationRepository: destinationRepository,
       licensePolicyService: licensePolicyService,
       schedulerService: schedulerService,
       updateSchedule: updateSchedule,
@@ -106,9 +120,6 @@ void main() {
         when(
           () => scheduleRepository.getById(scheduleId),
         ).thenAnswer((_) async => rd.Success(schedule));
-        when(
-          () => destinationRepository.getByIds(any()),
-        ).thenAnswer((_) async => rd.Success([destination]));
         when(
           () => licensePolicyService.validateExecutionCapabilities(
             any(),
@@ -139,7 +150,9 @@ void main() {
           sentMessage!.payload['error'],
           contains('Backup diferencial requer licença'),
         );
-        verifyNever(() => executeBackup(any()));
+        verifyNever(
+          () => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')),
+        );
         verifyNever(() => progressNotifier.tryStartBackup(any()));
       },
     );
@@ -151,16 +164,13 @@ void main() {
           () => scheduleRepository.getById(scheduleId),
         ).thenAnswer((_) async => rd.Success(schedule));
         when(
-          () => destinationRepository.getByIds(any()),
-        ).thenAnswer((_) async => rd.Success([destination]));
-        when(
           () => licensePolicyService.validateExecutionCapabilities(
             any(),
             any(),
           ),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
         when(
-          () => executeBackup(scheduleId),
+          () => executeBackup(scheduleId, executionOrigin: any(named: 'executionOrigin')),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
 
         Message? sentMessage;
@@ -176,7 +186,12 @@ void main() {
         await handler.handle('client-1', message, sendToClient);
 
         expect(sentMessage, isNotNull);
-        verify(() => executeBackup(scheduleId)).called(1);
+        verify(
+          () => executeBackup(
+                scheduleId,
+                executionOrigin: ExecutionOrigin.remoteCommand,
+              ),
+        ).called(1);
       },
     );
   });
@@ -187,12 +202,10 @@ void main() {
       () async {
         when(() => scheduleRepository.getById(scheduleId))
             .thenAnswer((_) async => rd.Success(schedule));
-        when(() => destinationRepository.getByIds(any()))
-            .thenAnswer((_) async => rd.Success([destination]));
         when(
           () => licensePolicyService.validateExecutionCapabilities(any(), any()),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
-        when(() => executeBackup(scheduleId))
+        when(() => executeBackup(scheduleId, executionOrigin: any(named: 'executionOrigin')))
             .thenAnswer((_) async => const rd.Success(rd.unit));
 
         Future<void> noopSend(String clientId, Message msg) async {}
@@ -216,12 +229,11 @@ void main() {
       () async {
         when(() => scheduleRepository.getById(scheduleId))
             .thenAnswer((_) async => rd.Success(schedule));
-        when(() => destinationRepository.getByIds(any()))
-            .thenAnswer((_) async => rd.Success([destination]));
         when(
           () => licensePolicyService.validateExecutionCapabilities(any(), any()),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
-        when(() => executeBackup(scheduleId)).thenAnswer(
+        when(() => executeBackup(scheduleId, executionOrigin: any(named: 'executionOrigin')))
+            .thenAnswer(
           (_) async => const rd.Failure(BackupFailure(message: 'erro')),
         );
 
@@ -344,7 +356,9 @@ void main() {
           sentMessage!.payload['error'],
           contains('Já existe um backup em execução para este agendamento'),
         );
-        verifyNever(() => executeBackup(any()));
+        verifyNever(
+          () => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')),
+        );
         verifyNever(() => progressNotifier.tryStartBackup(any()));
         // client-A continua ativo (nao foi sobrescrito como acontecia
         // com os singletons antigos).
@@ -360,8 +374,6 @@ void main() {
       () async {
         when(() => scheduleRepository.getById(scheduleId))
             .thenAnswer((_) async => rd.Success(schedule));
-        when(() => destinationRepository.getByIds(any()))
-            .thenAnswer((_) async => rd.Success([destination]));
         when(
           () => licensePolicyService.validateExecutionCapabilities(any(), any()),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
@@ -369,7 +381,8 @@ void main() {
         // Captura o estado do registry no momento em que o backup esta
         // rodando — antes da chamada terminar e desregistrar.
         RemoteExecutionContext? capturedContext;
-        when(() => executeBackup(scheduleId)).thenAnswer((_) async {
+        when(() => executeBackup(scheduleId, executionOrigin: any(named: 'executionOrigin')))
+            .thenAnswer((_) async {
           capturedContext = executionRegistry.getActiveByScheduleId(scheduleId);
           return const rd.Success(rd.unit);
         });
@@ -486,8 +499,6 @@ void main() {
       () async {
         when(() => scheduleRepository.getById(scheduleId))
             .thenAnswer((_) async => rd.Success(schedule));
-        when(() => destinationRepository.getByIds(any()))
-            .thenAnswer((_) async => rd.Success([destination]));
         when(
           () => licensePolicyService.validateExecutionCapabilities(any(), any()),
         ).thenAnswer(
@@ -569,7 +580,6 @@ void main() {
         final localRegistry = RemoteExecutionRegistry();
         final localHandler = ScheduleMessageHandler(
           scheduleRepository: scheduleRepository,
-          destinationRepository: destinationRepository,
           licensePolicyService: licensePolicyService,
           schedulerService: schedulerService,
           updateSchedule: updateSchedule,
@@ -632,7 +642,6 @@ void main() {
         final localRegistry = RemoteExecutionRegistry();
         final localHandler = ScheduleMessageHandler(
           scheduleRepository: scheduleRepository,
-          destinationRepository: destinationRepository,
           licensePolicyService: licensePolicyService,
           schedulerService: schedulerService,
           updateSchedule: updateSchedule,
@@ -688,7 +697,6 @@ void main() {
         final localRegistry = RemoteExecutionRegistry();
         final localHandler = ScheduleMessageHandler(
           scheduleRepository: scheduleRepository,
-          destinationRepository: destinationRepository,
           licensePolicyService: licensePolicyService,
           schedulerService: schedulerService,
           updateSchedule: updateSchedule,

@@ -3,24 +3,37 @@ import 'dart:io';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_staging_artifact_ttl.dart';
 import 'package:path/path.dart' as p;
 
 class TransferStagingService implements ITransferStagingService {
-  TransferStagingService({required String transferBasePath})
-    : _transferBasePath = p.normalize(p.absolute(transferBasePath));
+  TransferStagingService({
+    required String transferBasePath,
+    DateTime Function()? clock,
+  })  : _transferBasePath = p.normalize(p.absolute(transferBasePath)),
+        _clock = clock ?? DateTime.now;
 
   final String _transferBasePath;
+  final DateTime Function() _clock;
+
+  String _remoteKey(String scheduleId, String? remoteFolderKey) =>
+      remoteFolderKey ?? scheduleId;
 
   @override
-  Future<String?> copyToStaging(String backupPath, String scheduleId) async {
+  Future<String?> copyToStaging(
+    String backupPath,
+    String scheduleId, {
+    String? remoteFolderKey,
+  }) async {
+    final folderKey = _remoteKey(scheduleId, remoteFolderKey);
     final normalized = p.normalize(p.absolute(backupPath));
     final entityType = await FileSystemEntity.type(normalized);
 
     if (entityType == FileSystemEntityType.file) {
-      return _copyFileToStaging(normalized, scheduleId);
+      return _copyFileToStaging(normalized, folderKey);
     }
     if (entityType == FileSystemEntityType.directory) {
-      return _copyDirectoryToStaging(normalized, scheduleId);
+      return _copyDirectoryToStaging(normalized, folderKey);
     }
 
     LoggerService.warning(
@@ -31,7 +44,7 @@ class TransferStagingService implements ITransferStagingService {
 
   Future<String?> _copyFileToStaging(
     String normalizedFilePath,
-    String scheduleId,
+    String remoteKey,
   ) async {
     final source = File(normalizedFilePath);
     if (!await source.exists()) {
@@ -43,7 +56,7 @@ class TransferStagingService implements ITransferStagingService {
     }
 
     final baseName = p.basename(normalizedFilePath);
-    final relativePath = p.join('remote', scheduleId, baseName);
+    final relativePath = p.join('remote', remoteKey, baseName);
     final destPath = p.join(_transferBasePath, relativePath);
     final destDir = File(destPath).parent;
 
@@ -65,7 +78,7 @@ class TransferStagingService implements ITransferStagingService {
 
   Future<String?> _copyDirectoryToStaging(
     String normalizedDirPath,
-    String scheduleId,
+    String remoteKey,
   ) async {
     final sourceDir = Directory(normalizedDirPath);
     if (!await sourceDir.exists()) {
@@ -77,7 +90,7 @@ class TransferStagingService implements ITransferStagingService {
     }
 
     final baseName = p.basename(normalizedDirPath);
-    final relativePath = p.join('remote', scheduleId, baseName);
+    final relativePath = p.join('remote', remoteKey, baseName);
     final destRoot = Directory(p.join(_transferBasePath, relativePath));
 
     try {
@@ -116,25 +129,29 @@ class TransferStagingService implements ITransferStagingService {
   }
 
   @override
-  Future<void> cleanupStaging(String scheduleId) async {
-    final scheduleDir = Directory(
-      p.join(_transferBasePath, 'remote', scheduleId),
+  Future<void> cleanupStaging(
+    String scheduleId, {
+    String? remoteFolderKey,
+  }) async {
+    final key = _remoteKey(scheduleId, remoteFolderKey);
+    final targetDir = Directory(
+      p.join(_transferBasePath, 'remote', key),
     );
-    if (!await scheduleDir.exists()) {
+    if (!await targetDir.exists()) {
       LoggerService.debug(
-        'TransferStagingService: schedule directory not found for cleanup: $scheduleId',
+        'TransferStagingService: remote staging directory not found for cleanup: $key',
       );
       return;
     }
 
     try {
-      await scheduleDir.delete(recursive: true);
+      await targetDir.delete(recursive: true);
       LoggerService.info(
-        'TransferStagingService: cleaned up staging for schedule: $scheduleId',
+        'TransferStagingService: cleaned up staging for remote key: $key',
       );
     } on Object catch (e, st) {
       LoggerService.warning(
-        'TransferStagingService: cleanup failed for schedule: $scheduleId',
+        'TransferStagingService: cleanup failed for remote key: $key',
         e,
         st,
       );
@@ -143,7 +160,7 @@ class TransferStagingService implements ITransferStagingService {
 
   @override
   Future<void> cleanupOldBackups({
-    Duration maxAge = const Duration(days: 7),
+    Duration maxAge = const Duration(hours: 24),
   }) async {
     final remoteDir = Directory(p.join(_transferBasePath, 'remote'));
     if (!await remoteDir.exists()) {
@@ -154,43 +171,50 @@ class TransferStagingService implements ITransferStagingService {
     }
 
     try {
-      final now = DateTime.now();
-      var deletedCount = 0;
-      var totalSize = 0;
+      final ttl = RemoteStagingArtifactTtl(
+        retention: maxAge,
+        clock: _clock,
+      );
+      var removedDirs = 0;
+      var totalBytes = 0;
 
-      await for (final entity in remoteDir.list(
-        followLinks: false,
-        recursive: true,
-      )) {
-        if (entity is File) {
-          final stat = await entity.stat();
-          final age = now.difference(stat.modified);
-          if (age > maxAge) {
-            final size = stat.size;
-            await entity.delete();
-            deletedCount++;
-            totalSize += size;
-          }
-        } else if (entity is Directory) {
-          // Remove diretórios vazios
+      await for (final entity in remoteDir.list(followLinks: false)) {
+        if (entity is! Directory) {
+          continue;
+        }
+        final child = entity;
+        final newest = await RemoteStagingArtifactTtl.newestFileInTree(child);
+        if (newest == null) {
           try {
-            if (await entity.list().isEmpty) {
-              await entity.delete();
+            if (!await _directoryHasAnyFile(child)) {
+              await child.delete();
+              LoggerService.debug(
+                'TransferStagingService: removed empty remote folder '
+                '${p.basename(child.path)}',
+              );
             }
           } on Object catch (e, st) {
             LoggerService.debug(
-              'TransferStagingService: skip empty dir removal: $e',
+              'TransferStagingService: skip empty dir: $e',
               e,
               st,
             );
           }
+          continue;
         }
+        if (!await ttl.isFileExpiredByRetention(newest)) {
+          continue;
+        }
+        final bytes = await _directoryByteSize(child);
+        await child.delete(recursive: true);
+        removedDirs++;
+        totalBytes += bytes;
       }
 
-      if (deletedCount > 0) {
+      if (removedDirs > 0) {
         LoggerService.info(
-          'TransferStagingService: cleaned up $deletedCount old backup(s) '
-          '(${ByteFormat.format(totalSize)}) older than $maxAge',
+          'TransferStagingService: removed $removedDirs remote staging folder(s) '
+          '(${ByteFormat.format(totalBytes)}) past retention $maxAge',
         );
       }
     } on Object catch (e, st) {
@@ -200,6 +224,25 @@ class TransferStagingService implements ITransferStagingService {
         st,
       );
     }
+  }
+
+  static Future<int> _directoryByteSize(Directory dir) async {
+    var n = 0;
+    await for (final e in dir.list(recursive: true, followLinks: false)) {
+      if (e is File) {
+        n += await e.length();
+      }
+    }
+    return n;
+  }
+
+  static Future<bool> _directoryHasAnyFile(Directory dir) async {
+    await for (final e in dir.list(recursive: true, followLinks: false)) {
+      if (e is File) {
+        return true;
+      }
+    }
+    return false;
   }
 
 }

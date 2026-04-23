@@ -56,11 +56,13 @@ Message createFileTransferStartRequestMessage({
   required String filePath,
   String? scheduleId,
   int? startChunk,
+  String? runId,
 }) {
   final payload = <String, dynamic>{
     'filePath': filePath,
     ...?(scheduleId != null ? {'scheduleId': scheduleId} : null),
     ...?(startChunk != null ? {'startChunk': startChunk} : null),
+    ...?(runId != null ? {'runId': runId} : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -269,6 +271,9 @@ String? getScheduleIdFromRequest(Message message) =>
 
 int getStartChunkFromRequest(Message message) =>
     message.payload['startChunk'] as int? ?? 0;
+
+String? getRunIdFromFileTransferRequest(Message message) =>
+    message.payload['runId'] as String?;
 
 String getFileNameFromMetadata(Message message) =>
     message.payload['fileName'] as String? ?? '';

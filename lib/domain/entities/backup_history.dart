@@ -12,6 +12,7 @@ class BackupHistory {
     required this.status,
     required this.startedAt,
     String? id,
+    this.runId,
     this.scheduleId,
     this.backupType = 'full',
     this.errorMessage,
@@ -20,6 +21,7 @@ class BackupHistory {
     this.metrics,
   }) : id = id ?? const Uuid().v4();
   final String id;
+  final String? runId;
   final String? scheduleId;
   final String databaseName;
   final String databaseType;
@@ -35,6 +37,7 @@ class BackupHistory {
 
   BackupHistory copyWith({
     String? id,
+    String? runId,
     String? scheduleId,
     String? databaseName,
     String? databaseType,
@@ -50,6 +53,7 @@ class BackupHistory {
   }) {
     return BackupHistory(
       id: id ?? this.id,
+      runId: runId ?? this.runId,
       scheduleId: scheduleId ?? this.scheduleId,
       databaseName: databaseName ?? this.databaseName,
       databaseType: databaseType ?? this.databaseType,

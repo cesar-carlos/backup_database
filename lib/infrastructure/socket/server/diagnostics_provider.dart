@@ -28,6 +28,13 @@ class DiagnosticsOutcome<T> {
         errorCode: errorCode,
       );
 
+  /// Artefato em staging fora do periodo de retencao (PR-4) — 410.
+  factory DiagnosticsOutcome.artifactExpired() => DiagnosticsOutcome(
+        success: false,
+        error: ErrorCode.artifactExpired.defaultMessage,
+        errorCode: ErrorCode.artifactExpired,
+      );
+
   final bool success;
   final T? data;
   final String? error;

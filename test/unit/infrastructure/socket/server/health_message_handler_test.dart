@@ -2,6 +2,7 @@ import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/server/health_message_handler.dart';
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -177,6 +178,46 @@ void main() {
         await handler.handle('c1', createHealthRequestMessage(), capture);
         final health = readHealthFromResponse(sent!);
         expect(health.serverTimeUtc, fixed);
+      },
+    );
+
+    test(
+      'stagingUsageBytesProvider: warn degrada e publica staging',
+      () async {
+        final handler = HealthMessageHandler(
+          stagingUsageBytesProvider: () async =>
+              StagingUsagePolicy.warnThresholdBytes + 1,
+        );
+
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle('c1', createHealthRequestMessage(), capture);
+        final health = readHealthFromResponse(sent!);
+        expect(health.status, ServerHealthStatus.degraded);
+        expect(health.stagingUsageLevel, 'warn');
+        expect(health.stagingUsageWarnThresholdBytes, StagingUsagePolicy.warnThresholdBytes);
+        expect(health.stagingUsageBlockThresholdBytes, StagingUsagePolicy.blockThresholdBytes);
+        expect(health.stagingUsageBytes, StagingUsagePolicy.warnThresholdBytes + 1);
+        expect(health.message, contains('staging disk pressure'));
+      },
+    );
+
+    test(
+      'stagingUsageBytesProvider: ok nao forca degraded',
+      () async {
+        final handler = HealthMessageHandler(
+          stagingUsageBytesProvider: () async => 1024 * 1024,
+        );
+
+        Message? sent;
+        Future<void> capture(String c, Message m) async => sent = m;
+
+        await handler.handle('c1', createHealthRequestMessage(), capture);
+        final health = readHealthFromResponse(sent!);
+        expect(health.status, ServerHealthStatus.ok);
+        expect(health.stagingUsageLevel, 'ok');
+        expect(health.message, isNull);
       },
     );
   });

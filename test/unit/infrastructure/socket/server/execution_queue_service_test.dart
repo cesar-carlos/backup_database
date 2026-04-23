@@ -196,5 +196,28 @@ void main() {
       svc.hasActive = true;
       expect(svc.hasActive, isTrue);
     });
+
+    test('findQueuedByRunId retorna item e posicao 1-based', () async {
+      final svc = ExecutionQueueService();
+      final first = await svc.tryEnqueue(
+        scheduleId: 'a',
+        clientId: 'c',
+        requestId: 1,
+        requestedBy: 'c',
+      );
+      final second = await svc.tryEnqueue(
+        scheduleId: 'b',
+        clientId: 'c',
+        requestId: 2,
+        requestedBy: 'c',
+      );
+
+      final f = svc.findQueuedByRunId(first!.runId);
+      final s = svc.findQueuedByRunId(second!.runId);
+      expect(f?.queuedPosition, 1);
+      expect(f?.item.runId, first.runId);
+      expect(s?.queuedPosition, 2);
+      expect(svc.findQueuedByRunId('desconhecido'), isNull);
+    });
   });
 }

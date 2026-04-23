@@ -418,8 +418,8 @@ void main() {
         // CapabilitiesMessageHandler.
         expect(manager.isRunIdSupported, isTrue);
         expect(manager.isChunkAckSupported, isFalse, reason: 'ADR-002');
-        expect(manager.isExecutionQueueSupported, isFalse, reason: 'pendente PR-3b');
-        expect(manager.isArtifactRetentionSupported, isFalse, reason: 'pendente PR-4');
+        expect(manager.isExecutionQueueSupported, isTrue, reason: 'fila remota PR-3a');
+        expect(manager.isArtifactRetentionSupported, isTrue, reason: 'PR-4 TTL/410/cleanup');
       },
     );
 

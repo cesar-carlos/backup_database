@@ -4080,6 +4080,15 @@ class $BackupHistoryTableTable extends BackupHistoryTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _scheduleIdMeta = const VerificationMeta(
     'scheduleId',
   );
@@ -4214,6 +4223,7 @@ class $BackupHistoryTableTable extends BackupHistoryTable
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    runId,
     scheduleId,
     databaseName,
     databaseType,
@@ -4243,6 +4253,12 @@ class $BackupHistoryTableTable extends BackupHistoryTable
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
     }
     if (data.containsKey('schedule_id')) {
       context.handle(
@@ -4353,6 +4369,10 @@ class $BackupHistoryTableTable extends BackupHistoryTable
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      ),
       scheduleId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}schedule_id'],
@@ -4413,6 +4433,9 @@ class $BackupHistoryTableTable extends BackupHistoryTable
 class BackupHistoryTableData extends DataClass
     implements Insertable<BackupHistoryTableData> {
   final String id;
+
+  /// Correlacao com `runId` de execucao remota (PR-3c / `getExecutionStatus`).
+  final String? runId;
   final String? scheduleId;
   final String databaseName;
   final String databaseType;
@@ -4427,6 +4450,7 @@ class BackupHistoryTableData extends DataClass
   final String? metrics;
   const BackupHistoryTableData({
     required this.id,
+    this.runId,
     this.scheduleId,
     required this.databaseName,
     required this.databaseType,
@@ -4444,6 +4468,9 @@ class BackupHistoryTableData extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    if (!nullToAbsent || runId != null) {
+      map['run_id'] = Variable<String>(runId);
+    }
     if (!nullToAbsent || scheduleId != null) {
       map['schedule_id'] = Variable<String>(scheduleId);
     }
@@ -4472,6 +4499,9 @@ class BackupHistoryTableData extends DataClass
   BackupHistoryTableCompanion toCompanion(bool nullToAbsent) {
     return BackupHistoryTableCompanion(
       id: Value(id),
+      runId: runId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runId),
       scheduleId: scheduleId == null && nullToAbsent
           ? const Value.absent()
           : Value(scheduleId),
@@ -4504,6 +4534,7 @@ class BackupHistoryTableData extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return BackupHistoryTableData(
       id: serializer.fromJson<String>(json['id']),
+      runId: serializer.fromJson<String?>(json['runId']),
       scheduleId: serializer.fromJson<String?>(json['scheduleId']),
       databaseName: serializer.fromJson<String>(json['databaseName']),
       databaseType: serializer.fromJson<String>(json['databaseType']),
@@ -4523,6 +4554,7 @@ class BackupHistoryTableData extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'runId': serializer.toJson<String?>(runId),
       'scheduleId': serializer.toJson<String?>(scheduleId),
       'databaseName': serializer.toJson<String>(databaseName),
       'databaseType': serializer.toJson<String>(databaseType),
@@ -4540,6 +4572,7 @@ class BackupHistoryTableData extends DataClass
 
   BackupHistoryTableData copyWith({
     String? id,
+    Value<String?> runId = const Value.absent(),
     Value<String?> scheduleId = const Value.absent(),
     String? databaseName,
     String? databaseType,
@@ -4554,6 +4587,7 @@ class BackupHistoryTableData extends DataClass
     Value<String?> metrics = const Value.absent(),
   }) => BackupHistoryTableData(
     id: id ?? this.id,
+    runId: runId.present ? runId.value : this.runId,
     scheduleId: scheduleId.present ? scheduleId.value : this.scheduleId,
     databaseName: databaseName ?? this.databaseName,
     databaseType: databaseType ?? this.databaseType,
@@ -4572,6 +4606,7 @@ class BackupHistoryTableData extends DataClass
   BackupHistoryTableData copyWithCompanion(BackupHistoryTableCompanion data) {
     return BackupHistoryTableData(
       id: data.id.present ? data.id.value : this.id,
+      runId: data.runId.present ? data.runId.value : this.runId,
       scheduleId: data.scheduleId.present
           ? data.scheduleId.value
           : this.scheduleId,
@@ -4607,6 +4642,7 @@ class BackupHistoryTableData extends DataClass
   String toString() {
     return (StringBuffer('BackupHistoryTableData(')
           ..write('id: $id, ')
+          ..write('runId: $runId, ')
           ..write('scheduleId: $scheduleId, ')
           ..write('databaseName: $databaseName, ')
           ..write('databaseType: $databaseType, ')
@@ -4626,6 +4662,7 @@ class BackupHistoryTableData extends DataClass
   @override
   int get hashCode => Object.hash(
     id,
+    runId,
     scheduleId,
     databaseName,
     databaseType,
@@ -4644,6 +4681,7 @@ class BackupHistoryTableData extends DataClass
       identical(this, other) ||
       (other is BackupHistoryTableData &&
           other.id == this.id &&
+          other.runId == this.runId &&
           other.scheduleId == this.scheduleId &&
           other.databaseName == this.databaseName &&
           other.databaseType == this.databaseType &&
@@ -4661,6 +4699,7 @@ class BackupHistoryTableData extends DataClass
 class BackupHistoryTableCompanion
     extends UpdateCompanion<BackupHistoryTableData> {
   final Value<String> id;
+  final Value<String?> runId;
   final Value<String?> scheduleId;
   final Value<String> databaseName;
   final Value<String> databaseType;
@@ -4676,6 +4715,7 @@ class BackupHistoryTableCompanion
   final Value<int> rowid;
   const BackupHistoryTableCompanion({
     this.id = const Value.absent(),
+    this.runId = const Value.absent(),
     this.scheduleId = const Value.absent(),
     this.databaseName = const Value.absent(),
     this.databaseType = const Value.absent(),
@@ -4692,6 +4732,7 @@ class BackupHistoryTableCompanion
   });
   BackupHistoryTableCompanion.insert({
     required String id,
+    this.runId = const Value.absent(),
     this.scheduleId = const Value.absent(),
     required String databaseName,
     required String databaseType,
@@ -4714,6 +4755,7 @@ class BackupHistoryTableCompanion
        startedAt = Value(startedAt);
   static Insertable<BackupHistoryTableData> custom({
     Expression<String>? id,
+    Expression<String>? runId,
     Expression<String>? scheduleId,
     Expression<String>? databaseName,
     Expression<String>? databaseType,
@@ -4730,6 +4772,7 @@ class BackupHistoryTableCompanion
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (runId != null) 'run_id': runId,
       if (scheduleId != null) 'schedule_id': scheduleId,
       if (databaseName != null) 'database_name': databaseName,
       if (databaseType != null) 'database_type': databaseType,
@@ -4748,6 +4791,7 @@ class BackupHistoryTableCompanion
 
   BackupHistoryTableCompanion copyWith({
     Value<String>? id,
+    Value<String?>? runId,
     Value<String?>? scheduleId,
     Value<String>? databaseName,
     Value<String>? databaseType,
@@ -4764,6 +4808,7 @@ class BackupHistoryTableCompanion
   }) {
     return BackupHistoryTableCompanion(
       id: id ?? this.id,
+      runId: runId ?? this.runId,
       scheduleId: scheduleId ?? this.scheduleId,
       databaseName: databaseName ?? this.databaseName,
       databaseType: databaseType ?? this.databaseType,
@@ -4785,6 +4830,9 @@ class BackupHistoryTableCompanion
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
     }
     if (scheduleId.present) {
       map['schedule_id'] = Variable<String>(scheduleId.value);
@@ -4832,6 +4880,7 @@ class BackupHistoryTableCompanion
   String toString() {
     return (StringBuffer('BackupHistoryTableCompanion(')
           ..write('id: $id, ')
+          ..write('runId: $runId, ')
           ..write('scheduleId: $scheduleId, ')
           ..write('databaseName: $databaseName, ')
           ..write('databaseType: $databaseType, ')
@@ -14468,6 +14517,7 @@ typedef $$ScheduleDestinationsTableTableProcessedTableManager =
 typedef $$BackupHistoryTableTableCreateCompanionBuilder =
     BackupHistoryTableCompanion Function({
       required String id,
+      Value<String?> runId,
       Value<String?> scheduleId,
       required String databaseName,
       required String databaseType,
@@ -14485,6 +14535,7 @@ typedef $$BackupHistoryTableTableCreateCompanionBuilder =
 typedef $$BackupHistoryTableTableUpdateCompanionBuilder =
     BackupHistoryTableCompanion Function({
       Value<String> id,
+      Value<String?> runId,
       Value<String?> scheduleId,
       Value<String> databaseName,
       Value<String> databaseType,
@@ -14511,6 +14562,11 @@ class $$BackupHistoryTableTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runId => $composableBuilder(
+    column: $table.runId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14589,6 +14645,11 @@ class $$BackupHistoryTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get scheduleId => $composableBuilder(
     column: $table.scheduleId,
     builder: (column) => ColumnOrderings(column),
@@ -14661,6 +14722,9 @@ class $$BackupHistoryTableTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get runId =>
+      $composableBuilder(column: $table.runId, builder: (column) => column);
 
   GeneratedColumn<String> get scheduleId => $composableBuilder(
     column: $table.scheduleId,
@@ -14756,6 +14820,7 @@ class $$BackupHistoryTableTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String?> runId = const Value.absent(),
                 Value<String?> scheduleId = const Value.absent(),
                 Value<String> databaseName = const Value.absent(),
                 Value<String> databaseType = const Value.absent(),
@@ -14771,6 +14836,7 @@ class $$BackupHistoryTableTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => BackupHistoryTableCompanion(
                 id: id,
+                runId: runId,
                 scheduleId: scheduleId,
                 databaseName: databaseName,
                 databaseType: databaseType,
@@ -14788,6 +14854,7 @@ class $$BackupHistoryTableTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String?> runId = const Value.absent(),
                 Value<String?> scheduleId = const Value.absent(),
                 required String databaseName,
                 required String databaseType,
@@ -14803,6 +14870,7 @@ class $$BackupHistoryTableTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => BackupHistoryTableCompanion.insert(
                 id: id,
+                runId: runId,
                 scheduleId: scheduleId,
                 databaseName: databaseName,
                 databaseType: databaseType,

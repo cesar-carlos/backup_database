@@ -12,6 +12,7 @@ export 'email_config.dart';
 export 'email_notification_profile.dart';
 export 'email_notification_target.dart';
 export 'email_test_audit.dart';
+export 'execution_origin.dart';
 export 'remote_file_entry.dart';
 export 'schedule.dart';
 export 'server_connection.dart';

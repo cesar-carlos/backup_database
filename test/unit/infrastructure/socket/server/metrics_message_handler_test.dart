@@ -8,6 +8,7 @@ import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -155,6 +156,31 @@ void main() {
 
         final payload = await captureMetricsPayload(handler);
         expect(payload['stagingUsageBytes'], 1234567);
+        expect(
+          payload['stagingUsageWarnThresholdBytes'],
+          StagingUsagePolicy.warnThresholdBytes,
+        );
+        expect(
+          payload['stagingUsageBlockThresholdBytes'],
+          StagingUsagePolicy.blockThresholdBytes,
+        );
+        expect(payload['stagingUsageLevel'], 'ok');
+      },
+    );
+
+    test(
+      'stagingUsageLevel reflecte warn acima de 5 GiB',
+      () async {
+        final handler = MetricsMessageHandler(
+          backupHistoryRepository: historyRepo,
+          scheduleRepository: scheduleRepo,
+          backupRunningState: runningState,
+          stagingUsageBytesProvider: () async =>
+              StagingUsagePolicy.warnThresholdBytes + 1,
+        );
+
+        final payload = await captureMetricsPayload(handler);
+        expect(payload['stagingUsageLevel'], 'warn');
       },
     );
 

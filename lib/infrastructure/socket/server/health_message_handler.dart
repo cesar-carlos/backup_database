@@ -3,6 +3,7 @@ import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
     show SendToClient;
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
 /// Funcao opcional injetavel que executa um check assincrono e retorna
 /// `true` quando o subsistema esta saudavel. Tudo que dispara excepcao
@@ -32,15 +33,21 @@ class HealthMessageHandler {
     Map<String, HealthCheck>? optionalChecks,
     DateTime Function()? clock,
     DateTime? startTime,
+    Future<int> Function()? stagingUsageBytesProvider,
   })  : _requiredChecks = requiredChecks ?? const <String, HealthCheck>{},
         _optionalChecks = optionalChecks ?? const <String, HealthCheck>{},
         _clock = clock ?? DateTime.now,
-        _startTime = startTime ?? DateTime.now();
+        _startTime = startTime ?? DateTime.now(),
+        _stagingUsageBytesProvider = stagingUsageBytesProvider;
 
   final Map<String, HealthCheck> _requiredChecks;
   final Map<String, HealthCheck> _optionalChecks;
   final DateTime Function() _clock;
   final DateTime _startTime;
+
+  /// Quando injetado, publica `stagingUsage*` no health e, se o nivel
+  /// for `warn` ou `block`, contribui para `degraded` (M5.3 / PR-4).
+  final Future<int> Function()? _stagingUsageBytesProvider;
 
   Future<void> handle(
     String clientId,
@@ -67,6 +74,11 @@ class HealthMessageHandler {
           serverTimeUtc: _clock(),
           uptimeSeconds: _uptimeSeconds(),
           message: snapshot.message,
+          stagingUsageBytes: snapshot.stagingUsageBytes,
+          stagingUsageWarnThresholdBytes: snapshot.stagingUsageWarnThresholdBytes,
+          stagingUsageBlockThresholdBytes:
+              snapshot.stagingUsageBlockThresholdBytes,
+          stagingUsageLevel: snapshot.stagingUsageLevel,
         ),
       );
     } on Object catch (e, st) {
@@ -119,19 +131,54 @@ class HealthMessageHandler {
       }
     }
 
+    int? stagingBytes;
+    int? stagingWarn;
+    int? stagingBlock;
+    String? stagingLevelName;
+    var hasStagingPressure = false;
+    final measure = _stagingUsageBytesProvider;
+    if (measure != null) {
+      try {
+        final usage = await measure();
+        stagingBytes = usage;
+        stagingWarn = StagingUsagePolicy.warnThresholdBytes;
+        stagingBlock = StagingUsagePolicy.blockThresholdBytes;
+        final level = StagingUsagePolicy.levelFor(usage);
+        stagingLevelName = level.name;
+        if (level == StagingUsageLevel.warn ||
+            level == StagingUsageLevel.block) {
+          hasStagingPressure = true;
+        }
+      } on Object catch (e, st) {
+        LoggerService.warning(
+          'HealthMessageHandler: staging medido falhou: $e',
+          e,
+          st,
+        );
+      }
+    }
+
     final ServerHealthStatus status;
     if (hasUnhealthyRequired) {
       status = ServerHealthStatus.unhealthy;
-    } else if (hasDegradedOptional) {
+    } else if (hasDegradedOptional || hasStagingPressure) {
       status = ServerHealthStatus.degraded;
     } else {
       status = ServerHealthStatus.ok;
+    }
+
+    if (hasStagingPressure) {
+      messages.add('staging disk pressure ($stagingLevelName)');
     }
 
     return _HealthSnapshot(
       status: status,
       checks: checks,
       message: messages.isEmpty ? null : messages.join('; '),
+      stagingUsageBytes: stagingBytes,
+      stagingUsageWarnThresholdBytes: stagingWarn,
+      stagingUsageBlockThresholdBytes: stagingBlock,
+      stagingUsageLevel: stagingLevelName,
     );
   }
 
@@ -154,9 +201,17 @@ class _HealthSnapshot {
     required this.status,
     required this.checks,
     this.message,
+    this.stagingUsageBytes,
+    this.stagingUsageWarnThresholdBytes,
+    this.stagingUsageBlockThresholdBytes,
+    this.stagingUsageLevel,
   });
 
   final ServerHealthStatus status;
   final Map<String, bool> checks;
   final String? message;
+  final int? stagingUsageBytes;
+  final int? stagingUsageWarnThresholdBytes;
+  final int? stagingUsageBlockThresholdBytes;
+  final String? stagingUsageLevel;
 }
