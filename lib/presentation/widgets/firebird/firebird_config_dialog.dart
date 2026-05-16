@@ -1,8 +1,12 @@
 import 'dart:async';
 
+import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
+import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
 import 'package:backup_database/domain/value_objects/firebird_config_enums.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -49,11 +53,16 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
   FirebirdServiceManagerMode _serviceManagerMode =
       FirebirdServiceManagerMode.auto;
 
+  bool _isTestingConnection = false;
+
+  late final IFirebirdBackupService _backupService;
+
   bool get _isEditing => widget.config != null;
 
   @override
   void initState() {
     super.initState();
+    _backupService = getIt<IFirebirdBackupService>();
     if (widget.config != null) {
       final c = widget.config!;
       _nameController.text = c.name;
@@ -156,7 +165,8 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                       'localhost or IP',
                     ),
                     validator: (String? value) {
-                      if (value == null || value.trim().isEmpty) {
+                      if (!_useEmbedded &&
+                          (value == null || value.trim().isEmpty)) {
                         return appLocaleString(
                           context,
                           'Host é obrigatório',
@@ -191,11 +201,13 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               ),
               hint: r'C:\Dados\minha_base.fdb',
               validator: (String? value) {
-                if (value == null || value.trim().isEmpty) {
+                final pathEmpty = value == null || value.trim().isEmpty;
+                final aliasEmpty = _aliasController.text.trim().isEmpty;
+                if (pathEmpty && aliasEmpty) {
                   return appLocaleString(
                     context,
-                    'Caminho do arquivo é obrigatório',
-                    'Database file path is required',
+                    'Informe o caminho do arquivo ou um alias',
+                    'Enter the database file path or an alias',
                   );
                 }
                 return null;
@@ -361,17 +373,19 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               style: FluentTheme.of(context).typography.caption,
             ),
             const SizedBox(height: 16),
-            InfoBar(
-              title: Text(
-                appLocaleString(context, 'Teste de conexão', 'Connection test'),
+            InfoLabel(
+              label: appLocaleString(
+                context,
+                'Teste de conexão',
+                'Connection test',
               ),
-              content: Text(
+              child: Text(
                 appLocaleString(
                   context,
-                  'O teste de conexão será habilitado quando o motor de '
-                      'backup Firebird (gbak) estiver integrado.',
-                  'Connection testing will be available once the Firebird '
-                      'backup engine (gbak) is integrated.',
+                  'Usa gstat -h com as credenciais informadas (mesma base '
+                      'usada pelo agendamento).',
+                  'Uses gstat -h with the credentials entered (same probe '
+                      'as scheduling).',
                 ),
               ),
             ),
@@ -380,9 +394,188 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
       ),
       dialogActions: [
         const CancelButton(),
+        ActionButton(
+          label: appLocaleString(context, 'Testar conexão', 'Test connection'),
+          icon: FluentIcons.check_mark,
+          onPressed: _testConnection,
+          isLoading: _isTestingConnection,
+        ),
         SaveButton(onPressed: _save, isEditing: _isEditing),
       ],
       onSubmitIntent: _save,
+    );
+  }
+
+  Future<void> _testConnection() async {
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    try {
+      final mSuccess = appLocaleString(
+        context,
+        'Conexão testada com sucesso!',
+        'Connection tested successfully!',
+      );
+      final mUnknownConn = appLocaleString(
+        context,
+        'Erro desconhecido ao testar conexão',
+        'Unknown error testing connection',
+      );
+      final mConnFailed = appLocaleString(
+        context,
+        'Conexão falhou',
+        'Connection failed',
+      );
+      final mErrTitle = appLocaleString(
+        context,
+        'Erro ao testar conexão',
+        'Error testing connection',
+      );
+
+      final outcome =
+          await TestConnectionRunner<FirebirdConfig>(
+            validate: _validateFirebirdTestInputs,
+            buildConfig: _buildFirebirdTestConfig,
+            runTest: (FirebirdConfig config) async {
+              final result = await _backupService.testConnection(config);
+              final ok = result.getOrNull();
+              if (ok != null && ok) {
+                return const TestConnectionSucceeded();
+              }
+              if (ok != null && !ok) {
+                return TestConnectionFailed(mConnFailed);
+              }
+              final failure = result.exceptionOrNull();
+              var msg = testConnectionUserMessage(
+                failure,
+                fallback: mUnknownConn,
+              );
+              final lower = msg.toLowerCase();
+              if (ToolPathHelp.isToolNotFoundError(lower, 'gstat')) {
+                msg = ToolPathHelp.buildMessage('gstat');
+              }
+              return TestConnectionFailed(msg);
+            },
+          ).execute(
+            afterValidation: () {
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _isTestingConnection = true;
+              });
+            },
+          );
+      if (!mounted) {
+        return;
+      }
+      switch (outcome) {
+        case TestConnectionSucceeded():
+          unawaited(MessageModal.showSuccess(context, message: mSuccess));
+        case TestConnectionFailed(:final message):
+          final rawMessage = message.isNotEmpty ? message : mUnknownConn;
+          unawaited(
+            MessageModal.showError(
+              context,
+              title: mErrTitle,
+              message: rawMessage,
+            ),
+          );
+      }
+    } on Object catch (e, stackTrace) {
+      if (!mounted) {
+        return;
+      }
+
+      LoggerService.error('Erro ao testar conexao Firebird', e, stackTrace);
+
+      final errorMessage = e.toString().replaceAll('Exception: ', '');
+
+      unawaited(
+        MessageModal.showError(
+          context,
+          title: appLocaleString(
+            context,
+            'Erro ao testar conexão',
+            'Error testing connection',
+          ),
+          message: errorMessage.isNotEmpty
+              ? errorMessage
+              : appLocaleString(context, 'Erro desconhecido', 'Unknown error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTestingConnection = false;
+        });
+      }
+    }
+  }
+
+  String? _validateFirebirdTestInputs() {
+    final port = int.tryParse(_portController.text.trim());
+    if (port == null || port < 1 || port > 65535) {
+      return appLocaleString(
+        context,
+        'Porta invalida. Deve estar entre 1 e 65535.',
+        'Invalid port. Must be between 1 and 65535.',
+      );
+    }
+    if (_usernameController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
+      return appLocaleString(
+        context,
+        'Preencha usuario e senha para testar',
+        'Fill username and password to test',
+      );
+    }
+    final path = _databaseFileController.text.trim();
+    final alias = _aliasController.text.trim();
+    if (path.isEmpty && alias.isEmpty) {
+      return appLocaleString(
+        context,
+        'Informe o caminho do banco no servidor ou um alias para testar',
+        'Enter the server database path or an alias to test',
+      );
+    }
+    if (!_useEmbedded && _hostController.text.trim().isEmpty) {
+      return appLocaleString(
+        context,
+        'Preencha o host para testar (modo cliente/servidor)',
+        'Fill in the host to test (client/server mode)',
+      );
+    }
+    return null;
+  }
+
+  FirebirdConfig _buildFirebirdTestConfig() {
+    final portParsed = int.tryParse(_portController.text.trim())!;
+    final aliasTrimmed = _aliasController.text.trim();
+    final aliasName = aliasTrimmed.isEmpty ? null : aliasTrimmed;
+    final clientLibTrimmed = _clientLibController.text.trim();
+    final clientLibraryPath = clientLibTrimmed.isEmpty
+        ? null
+        : clientLibTrimmed;
+    return FirebirdConfig(
+      name: 'temp',
+      host: _hostController.text.trim(),
+      databaseFile: _databaseFileController.text.trim(),
+      username: _usernameController.text.trim(),
+      password: _passwordController.text,
+      port: PortNumber(portParsed),
+      aliasName: aliasName,
+      useEmbedded: _useEmbedded,
+      clientLibraryPath: clientLibraryPath,
+      serverVersionHint: _serverVersionHint,
+      serviceManagerMode: _serviceManagerMode,
+      cryptKey: _cryptKeyController.text,
     );
   }
 
@@ -439,6 +632,20 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
             context,
             'Porta invalida. Deve estar entre 1 e 65535.',
             'Invalid port. Must be between 1 and 65535.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!_useEmbedded && _hostController.text.trim().isEmpty) {
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: appLocaleString(
+            context,
+            'Host e obrigatorio no modo cliente/servidor.',
+            'Host is required in client/server mode.',
           ),
         ),
       );
