@@ -424,8 +424,9 @@ class ScheduleMessageHandler {
         requestId: requestId.toString(),
         scheduleId: scheduleId,
       );
-      final updatedScheduleResult =
-          await _scheduleRepository.getById(scheduleId);
+      final updatedScheduleResult = await _scheduleRepository.getById(
+        scheduleId,
+      );
       final updatedSchedule = updatedScheduleResult.getOrNull();
       if (updatedSchedule != null) {
         await sendToClient(

@@ -15,6 +15,8 @@ import 'package:result_dart/result_dart.dart';
 ///    rejeição de differential em Sybase, recovery model do SQL Server);
 ///  - extrair opções específicas do `Schedule` (cast para os subtipos);
 ///  - chamar o serviço de infraestrutura correspondente;
+///  - delegar `getDatabaseSizeBytes` ao serviço do SGBD (estimativa de
+///    espaço no orchestrator);
 ///  - opcionalmente enriquecer `BackupExecutionResult.metrics` com dados
 ///    específicos do SGBD (ex.: `baseFullId` da cadeia Sybase).
 abstract class IDatabaseBackupStrategy {
@@ -31,5 +33,12 @@ abstract class IDatabaseBackupStrategy {
     required String outputDirectory,
     required BackupType backupType,
     required String cancelTag,
+  });
+
+  /// Tamanho aproximado do banco em bytes (consulta no servidor).
+  /// [databaseConfig] é o tipo de config do SGBD desta estratégia.
+  Future<Result<int>> getDatabaseSizeBytes({
+    required Object databaseConfig,
+    Duration? timeout,
   });
 }

@@ -1,41 +1,46 @@
+import 'package:backup_database/domain/entities/database_connection_config.dart';
+import 'package:backup_database/domain/entities/schedule.dart'
+    show DatabaseType;
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:uuid/uuid.dart';
 
-class SybaseConfig {
+class SybaseConfig extends DatabaseConnectionConfig {
   SybaseConfig({
-    required this.name,
+    required super.name,
     required this.serverName,
     required this.databaseName,
-    required this.username,
-    required this.password,
+    required super.username,
+    required super.password,
     String? id,
     this.databaseFile = '',
     PortNumber? port,
-    this.enabled = true,
+    super.enabled = true,
     this.isReplicationEnvironment = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
-       port = port ?? PortNumber(2638),
-       createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
+  }) : super(
+         id: id ?? const Uuid().v4(),
+         port: port ?? PortNumber(2638),
+         createdAt: createdAt ?? DateTime.now(),
+         updatedAt: updatedAt ?? DateTime.now(),
+       );
 
-  final String id;
-  final String name;
   final String serverName;
   final DatabaseName databaseName;
   final String databaseFile;
-  final PortNumber port;
-  final String username;
-  final String password;
-  final bool enabled;
   final bool isReplicationEnvironment;
-  final DateTime createdAt;
-  final DateTime updatedAt;
 
   String get databaseNameValue => databaseName.value;
-  int get portValue => port.value;
+
+  @override
+  DatabaseType get databaseType => DatabaseType.sybase;
+
+  @override
+  String get host => serverName;
+
+  @override
+  DatabaseName get primaryDatabase => databaseName;
 
   SybaseConfig copyWith({
     String? id,

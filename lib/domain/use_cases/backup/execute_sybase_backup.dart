@@ -2,6 +2,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -51,13 +52,16 @@ class ExecuteSybaseBackup {
 
     return _backupService.executeBackup(
       config: config,
-      outputDirectory: outputDirectory,
-      backupType: backupType,
-      customFileName: customFileName,
-      dbbackupPath: dbbackupPath,
-      truncateLog: truncateLog,
-      verifyAfterBackup: verifyAfterBackup,
-      verifyPolicy: verifyPolicy,
+      context: BackupExecutionContext(
+        outputDirectory: outputDirectory,
+        scheduleId: config.id,
+        backupType: backupType,
+        customFileName: customFileName,
+        dbbackupPath: dbbackupPath,
+        truncateLog: truncateLog,
+        verifyAfterBackup: verifyAfterBackup,
+        verifyPolicy: verifyPolicy,
+      ),
     );
   }
 }

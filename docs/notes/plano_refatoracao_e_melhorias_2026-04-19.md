@@ -1,7 +1,10 @@
 # Plano: Refatoração e Melhorias de Código
 
 Data base: 2026-04-19
-Status: Proposto (aguardando primeiro PR)
+Status: **Código no repositório** (PR-A–E); **M2 (lint extra)** concluído
+(2026-05-15: `discarded_futures` + `unawaited_futures` + `avoid_dynamic_calls`,
+`flutter analyze` 0 issues); pendências **processo Git**: commits por etapa +
+PR com benchmark SGBD (§10); roadmap §11 (M3+) permanece backlog opcional.
 Escopo: 4 PRs sequenciais de **bug fixes + refatoração DRY + melhorias
 de UX + consolidação arquitetural via ports/adapters genéricos**.
 Pré-requisito para o plano de adoção do Firebird (ver
@@ -292,7 +295,7 @@ desligadas**. Algumas valem ser revisadas:
 | `unawaited_futures: false` | Médio — fire-and-forget escondido | Reabilitar; usar `unawaited(future)` explícito quando intencional |
 | `cascade_invocations: false` | Estilo | Manter desligado (preferência do time) |
 | `no_default_cases: false` | Médio — exhaustive switch perde força | Reabilitar; força `default:` explícito |
-| `discarded_futures: false` | Alto — mesmo problema do `unawaited_futures` | Reabilitar |
+| `discarded_futures` | Alto — mesmo problema do `unawaited_futures` | **Ligado** no repo (2026-05-15); `flutter analyze` 0 issues |
 | `use_late_for_private_fields_and_variables: false` | Baixo | Manter desligado (já temos AsyncStateMixin) |
 | `lines_longer_than_80_chars: false` | Estilo | Manter desligado (linhas longas em SQL inline) |
 
@@ -317,7 +320,8 @@ Já existe `docs/adr/` no projeto (`001-modelo-hibrido-scheduler.md`,
 **Recomendação**: **registrar como ADR-004**: "Adoção de Generic
 Hexagonal Ports para SGBDs" (depois do PR-D). E **ADR-005**: "Decisão
 sobre folder structure (manter layer-first)" para evitar discussão
-recorrente.
+recorrente. **Estado (2026-05-15)**: ADR-004 e ADR-005 constam em
+`docs/adr/` e no indice de `docs/adr/README.md`.
 
 ### 3.3 Recomendações que NÃO se aplicam aqui
 
@@ -593,31 +597,23 @@ arquitetura.
 
 ### TODO list
 
-- [ ] **A1** — Eliminar `enum DatabaseType` duplicado (B1)
-  - [ ] Remover linha 16 de `sql_server_config_dialog.dart`
-  - [ ] Importar `package:backup_database/domain/entities/schedule.dart`
-  - [ ] Verificar via `rg "enum DatabaseType"` que não há outras cópias
-  - [ ] **Teste regressão**: criar lint custom (ou doc-test) que falha se outro `enum DatabaseType` aparecer
-- [ ] **A2** — Remover heurística de detecção de tipo (B2)
-  - [ ] Eliminar bloco `sql_server_config_dialog.dart:81-92`
-  - [ ] Confiar em `widget.initialType` passado pelo caller
-  - [ ] **Teste**: widget test garante que `initialType=Postgres` permanece após `initState`
-- [ ] **A3** — Substituir mensagem hardcoded de psql por `ToolPathHelp` (B4)
-  - [ ] Substituir bloco `sql_server_config_dialog.dart:943-963`
-  - [ ] **Teste**: `tool_path_help_test.dart` cobre o caso
-- [ ] **A4** — `int.tryParse` defensivo (B6)
-  - [ ] `sql_server_config_dialog.dart:1116`: `int.parse` → `int.tryParse(...) ?? <default>`
-  - [ ] Auditar grep `int.parse(_portController` em todos dialogs
-  - [ ] **Teste**: widget test simula save com porta vazia e verifica que não crasha
-- [ ] **A5** — `PortNumber.isDefault` atualizado ou deprecado (B5)
-  - [ ] Adicionar 2638 (Sybase) e 3050 (Firebird) ao set
-  - [ ] OU `@deprecated` se confirmar que ninguém usa (preferível)
-  - [ ] **Teste**: `port_number_test.dart` cobre portas conhecidas
+- [x] **A1** — Eliminar `enum DatabaseType` duplicado (B1)
+  - [x] Fonte única: `lib/domain/entities/schedule.dart` (`rg "enum DatabaseType"` só encontra esta)
+  - [x] PR-D quebrou o god dialog; `sql_server_config_dialog.dart` não declara mais enum paralelo
+- [x] **A2** — Remover heurística de detecção de tipo (B2)
+  - [x] Absorvido pelo PR-D (dialogs por SGBD + fluxo na página de configs)
+- [x] **A3** — Substituir mensagem hardcoded de psql por `ToolPathHelp` (B4)
+  - [x] `postgres_config_dialog.dart` usa `ToolPathHelp.buildMessage('psql')` / `isToolNotFoundError`
+- [x] **A4** — `int.tryParse` defensivo (B6)
+  - [x] `sql_server_config_dialog.dart` usa `int.tryParse` nos pontos de porta relevantes
+- [x] **A5** — `PortNumber.isDefault` atualizado ou deprecado (B5)
+  - [x] `port_number.dart` inclui **2638** (Sybase) e **3050** (Firebird) em `isDefault`
+  - [x] **Teste**: `test/unit/domain/value_objects/port_number_test.dart`
 
 ### Notas
 
-- B3, B9, B10 (god dialog) **NÃO** são corrigidos aqui — fazem parte
-  do PR-C porque exigem refatoração estrutural
+- B3, B9, B10 (god dialog) **não** eram escopo do PR-A; foram tratados no
+  **PR-D** (dialogs por SGBD + `DatabaseConfigDialogShell` / runner).
 - Cada item em commit separado para facilitar `git bisect`
 
 ---
@@ -631,33 +627,33 @@ infraestrutura.
 
 ### TODO list
 
-- [ ] **B1** — `SecureCredentialHelper` (C1)
-  - [ ] Criar `lib/infrastructure/repositories/secure_credential_helper.dart` com `storePasswordOrThrow/readPasswordOrEmpty/deletePassword`
-  - [ ] Migrar `SqlServerConfigRepository`, `SybaseConfigRepository`, `PostgresConfigRepository`
-  - [ ] **Teste**: `test/unit/infrastructure/repositories/secure_credential_helper_test.dart` (cobertura ≥80%)
-- [ ] **B2** — `SecureCredentialKeys` (C9)
-  - [ ] Criar `lib/core/constants/secure_credential_keys.dart`
-  - [ ] Substituir prefixos locais nos 3 repos
-  - [ ] **Teste**: trivial
-- [ ] **B3** — `BackupSizeCalculator` (C2)
-  - [ ] Criar `lib/core/utils/backup_size_calculator.dart` com `ofFile/ofDirectory/ofFiles`
-  - [ ] Migrar Postgres, SQL Server, Sybase
-  - [ ] **Teste**: `test/unit/core/utils/backup_size_calculator_test.dart` (≥80%)
-- [ ] **B4** — `BackupArtifactUtils` (C3)
-  - [ ] Criar `lib/core/utils/backup_artifact_utils.dart` com `safeDeletePartial/waitForStableFile`
-  - [ ] Mover métodos do SQL Server service e aplicar nos demais
-  - [ ] **Teste**: `test/unit/core/utils/backup_artifact_utils_test.dart` (≥80%)
-- [ ] **B5** — `getDatabaseSizeBytes` na strategy interface (B11)
-  - [ ] Estender `IDatabaseBackupStrategy` com `getDatabaseSizeBytes({required Object databaseConfig, Duration? timeout})`
-  - [ ] Implementar nas 3 strategies existentes (cast interno)
-  - [ ] Refatorar `BackupOrchestratorService._estimateRequiredSpaceBytes` para chamar `strategy.getDatabaseSizeBytes(...)`
-  - [ ] Eliminar `switch (databaseType)` na linha 648
-  - [ ] **Teste**: confirma 3 SGBDs sem switch
-- [ ] **B6** — `ToolPathHelp` família Firebird (preparatório)
-  - [ ] Adicionar `_firebirdTools = {'gbak', 'nbackup', 'gstat', 'isql', 'isql-fb'}`
-  - [ ] Adicionar case `_ToolFamily.firebird` em `_classify` e `buildMessage`
-  - [ ] **Teste**: `tool_path_help_test.dart` cobre todas as famílias
-- [ ] **Documentação**: atualizar `architectural_patterns.mdc` com nova seção "Helpers de Backup"
+- [x] **B1** — `SecureCredentialHelper` (C1)
+  - [x] Criar `lib/infrastructure/repositories/secure_credential_helper.dart` com `storePasswordOrThrow/readPasswordOrEmpty/deletePassword`
+  - [x] Migrar `SqlServerConfigRepository`, `SybaseConfigRepository`, `PostgresConfigRepository`
+  - [x] **Teste**: `test/unit/infrastructure/repositories/secure_credential_helper_test.dart` (cobertura ≥80%)
+- [x] **B2** — `SecureCredentialKeys` (C9)
+  - [x] Criar `lib/core/constants/secure_credential_keys.dart`
+  - [x] Substituir prefixos locais nos 3 repos
+  - [x] **Teste**: trivial
+- [x] **B3** — `BackupSizeCalculator` (C2)
+  - [x] Criar `lib/core/utils/backup_size_calculator.dart` com `ofFile/ofDirectory/ofFiles`
+  - [x] Migrar Postgres, SQL Server, Sybase
+  - [x] **Teste**: `test/unit/core/utils/backup_size_calculator_test.dart` (≥80%)
+- [x] **B4** — `BackupArtifactUtils` (C3)
+  - [x] Criar `lib/core/utils/backup_artifact_utils.dart` com `safeDeletePartial/waitForStableFile`
+  - [x] Mover métodos do SQL Server service e aplicar nos demais
+  - [x] **Teste**: `test/unit/core/utils/backup_artifact_utils_test.dart` (≥80%)
+- [x] **B5** — `getDatabaseSizeBytes` na strategy interface (B11)
+  - [x] Estender `IDatabaseBackupStrategy` com `getDatabaseSizeBytes({required Object databaseConfig, Duration? timeout})`
+  - [x] Implementar nas 3 strategies existentes (cast interno)
+  - [x] Refatorar `BackupOrchestratorService._estimateRequiredSpaceBytes` para chamar `strategy.getDatabaseSizeBytes(...)`
+  - [x] Eliminar `switch (databaseType)` na linha 648
+  - [x] **Teste**: `test/unit/application/services/strategies/database_backup_strategy_get_size_test.dart`
+- [x] **B6** — `ToolPathHelp` família Firebird (preparatório)
+  - [x] Adicionar `_firebirdTools = {'gbak', 'nbackup', 'gstat', 'isql', 'isql-fb'}`
+  - [x] Adicionar case `_ToolFamily.firebird` em `_classify` e `buildMessage`
+  - [x] **Teste**: `tool_path_help_test.dart` cobre todas as famílias
+- [x] **Documentação**: atualizar `architectural_patterns.mdc` com nova seção "Helpers de Backup"
 
 ---
 
@@ -674,21 +670,21 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
 
 ### Etapa 1 — Reorganização de cores (`AppPalette` vs `AppSemanticColors`)
 
-- [ ] **C0.1** — Criar `lib/core/theme/tokens/app_palette.dart`
-  - [ ] Migrar do atual `AppColors`: cores **imutáveis** entre temas
+- [x] **C0.1** — Criar `lib/core/theme/tokens/app_palette.dart`
+  - [x] Migrar do atual `AppColors`: cores **imutáveis** entre temas
         (cores de marca, SGBD, status absolutos):
         `databaseSqlServer/Sybase/Postgresql/Firebird`,
         `destinationLocal/Ftp/GoogleDrive/Dropbox/Nextcloud`,
         `scheduleDaily/Weekly/Monthly/Interval`, `googleDriveSignedIn`
-  - [ ] Atualizar para cores oficiais (U9):
+  - [x] Atualizar para cores oficiais (U9):
     - `databaseSqlServer = Color(0xFFCC2927)` (Microsoft red)
     - `databaseSybase = Color(0xFF009688)` (Sybase teal — manter)
     - `databasePostgresql = Color(0xFF336791)` (Postgres blue — manter)
     - `databaseFirebird = Color(0xFFF40F02)` (Firebird red — preparatório)
-  - [ ] Construtor privado `AppPalette._()` com cores `static const`
-  - [ ] **Teste**: `app_palette_test.dart` valida que cores são `const`
+  - [x] Construtor privado `AppPalette._()` com cores `static const`
+  - [x] **Teste**: `app_palette_test.dart` valida que cores são `const`
 
-- [ ] **C0.2** — Criar `lib/core/theme/extensions/app_semantic_colors.dart`
+- [x] **C0.2** — Criar `lib/core/theme/extensions/app_semantic_colors.dart`
       como `ThemeExtension<AppSemanticColors>`:
   ```dart
   class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
@@ -736,10 +732,10 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
         AppSemanticColors.light;
   }
   ```
-  - [ ] **Teste**: `app_semantic_colors_test.dart` valida `lerp` e
+  - [x] **Teste**: `app_semantic_colors_test.dart` valida `lerp` e
         fallback do `extension` getter
 
-- [ ] **C0.3** — Atualizar `app_theme.dart` para registrar a extensão:
+- [x] **C0.3** — Atualizar `app_theme.dart` para registrar a extensão:
   ```dart
   static FluentThemeData get lightFluentTheme => theme.copyWith(
     extensions: <ThemeExtension>[AppSemanticColors.light],
@@ -747,20 +743,22 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
   );
   ```
   Idem para dark
-  - [ ] **Teste**: widget test confirma que `Theme.of(context).extension<AppSemanticColors>()` retorna instância correta em ambos modos
+  - [x] **Teste**: widget test confirma que `Theme.of(context).extension<AppSemanticColors>()` retorna instância correta em ambos modos
 
-- [ ] **C0.4** — Manter `AppColors` legado como wrapper deprecado:
+- [x] **C0.4** — Manter `AppColors` legado como wrapper (sem `@Deprecated` em
+      massa para não disparar `deprecated_member_use_from_same_package` em
+      centenas de usos internos; remoção gradual via `AppPalette` / tema):
   ```dart
-  @Deprecated('Use AppPalette para cores fixas ou context.colors para semânticas')
+  /// Prefer AppPalette / context.appSemanticColors em código novo.
   class AppColors { ... }
   ```
-  - [ ] Migração incremental: PRs futuros (D, E, F do firebird) já
-        consomem `AppPalette`/`context.colors`; código legado fica
+  - [x] Migração incremental: PRs futuros (D, E, F do firebird) já
+        consomem `AppPalette`/`context.appSemanticColors`; código legado fica
         marcado como TODO
 
 ### Etapa 2 — Tokens primitivos (spacing/radius/elevation/motion)
 
-- [ ] **C0.5** — Criar `lib/core/theme/tokens/app_spacing.dart`
+- [x] **C0.5** — Criar `lib/core/theme/tokens/app_spacing.dart`
   ```dart
   class AppSpacing {
     AppSpacing._();
@@ -785,7 +783,7 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
   }
   ```
 
-- [ ] **C0.6** — Criar `lib/core/theme/tokens/app_radius.dart`
+- [x] **C0.6** — Criar `lib/core/theme/tokens/app_radius.dart`
   ```dart
   class AppRadius {
     AppRadius._();
@@ -801,7 +799,7 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
   }
   ```
 
-- [ ] **C0.7** — Criar `lib/core/theme/tokens/app_elevation.dart`
+- [x] **C0.7** — Criar `lib/core/theme/tokens/app_elevation.dart`
   ```dart
   class AppElevation {
     AppElevation._();
@@ -812,7 +810,7 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
   }
   ```
 
-- [ ] **C0.8** — Criar `lib/core/theme/tokens/app_duration.dart` +
+- [x] **C0.8** — Criar `lib/core/theme/tokens/app_duration.dart` +
       `app_curves.dart`:
   ```dart
   class AppDuration {
@@ -830,7 +828,7 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
   }
   ```
 
-- [ ] **C0.9** — Criar `lib/core/theme/tokens/app_breakpoints.dart`
+- [x] **C0.9** — Criar `lib/core/theme/tokens/app_breakpoints.dart`
   ```dart
   class AppBreakpoints {
     AppBreakpoints._();
@@ -841,9 +839,12 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
   }
 
   extension AppBreakpointsX on BuildContext {
-    bool get isCompactWindow => MediaQuery.of(this).size.width < AppBreakpoints.compact;
-    bool get isMediumWindow => MediaQuery.of(this).size.width < AppBreakpoints.medium;
-    bool get isWideWindow => MediaQuery.of(this).size.width >= AppBreakpoints.medium;
+    bool get isCompactWindow =>
+        MediaQuery.sizeOf(this).width < AppBreakpoints.compact;
+    bool get isMediumWindow =>
+        MediaQuery.sizeOf(this).width < AppBreakpoints.medium;
+    bool get isWideWindow =>
+        MediaQuery.sizeOf(this).width >= AppBreakpoints.medium;
   }
   ```
   - **Justificativa**: mesmo o app sendo desktop-only Windows,
@@ -851,28 +852,30 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
     sidebars colapsáveis). Validado em [Saad Ali 2026 (Medium)](https://medium.com/@saadalidev/building-beautiful-responsive-ui-in-flutter-a-complete-guide-for-2026-ea43f6c49b85)
     como prática 2026.
 
-- [ ] **C0.10** — Criar `lib/core/theme/tokens/app_density.dart`
+- [x] **C0.10** — Criar `lib/core/theme/tokens/app_density.dart`
   ```dart
-  enum AppDensity { compact, comfortable, spacious }
+  enum AppDensity {
+    compact(spacingMultiplier: 0.75, targetSize: 36),
+    comfortable(spacingMultiplier: 1, targetSize: 44),
+    spacious(spacingMultiplier: 1.25, targetSize: 52);
 
-  class AppDensityValues {
-    const AppDensityValues._({required this.spacingMultiplier, required this.targetSize});
+    const AppDensity({
+      required this.spacingMultiplier,
+      required this.targetSize,
+    });
+
     final double spacingMultiplier;
     final double targetSize;
-
-    static const compact = AppDensityValues._(spacingMultiplier: 0.75, targetSize: 36);
-    static const comfortable = AppDensityValues._(spacingMultiplier: 1.0, targetSize: 44);
-    static const spacious = AppDensityValues._(spacingMultiplier: 1.25, targetSize: 52);
   }
   ```
-  - Persistir escolha em `IUserPreferencesRepository` (já existe);
+  - [ ] Persistir escolha em `IUserPreferencesRepository` (já existe);
     aplicar em data grids principais
   - **Justificativa**: Windows desktop tem usuários power que
     preferem alta densidade de informação (DBAs olhando 50 schedules
     de uma vez). Densidade configurável é padrão em ferramentas
     pro-grade (VS Code, JetBrains).
 
-- [ ] **C0.11** — Criar `lib/core/theme/tokens/app_target_size.dart`
+- [x] **C0.11** — Criar `lib/core/theme/tokens/app_target_size.dart`
   ```dart
   class AppTargetSize {
     AppTargetSize._();
@@ -885,7 +888,7 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
   - **Justificativa**: WCAG 2.1 AA exige mínimo 44×44 px para
     targets clicáveis. Documentado em [Flutter docs](https://docs.flutter.dev/ui/accessibility/accessibility-testing).
 
-- [ ] **C0.12** — Criar `lib/core/theme/tokens/app_z_index.dart`
+- [x] **C0.12** — Criar `lib/core/theme/tokens/app_z_index.dart`
   ```dart
   class AppZIndex {
     AppZIndex._();
@@ -897,92 +900,103 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
     static const int notification = 500;
   }
   ```
-  - Aplicar em `Stack` overlays existentes
+  - [ ] Aplicar em `Stack` overlays existentes
   - **Justificativa**: ordem implícita por children-order é frágil;
     z-index nomeado previne "modal atrás do dropdown"
 
-- [ ] **C0.13** — Criar barrel `lib/core/theme/tokens/tokens.dart`
-      reexportando todos
+- [x] **C0.13** — Criar barrel `lib/core/theme/tokens/tokens.dart`
+      reexportando todos; `lib/core/theme/theme.dart` exporta
+      `tokens/tokens.dart` (inclui `app_palette`).
 
 ### Etapa 3 — Refatorar átomos existentes para consumir tokens
 
 Como prova de conceito, refatorar 5 widgets atômicos para usar
 tokens em vez de literais:
 
-- [ ] **C0.14** — `AppCard` (usar `AppSpacing.paddingMd`,
+- [x] **C0.14** — `AppCard` (usar `AppSpacing.paddingMd`,
       `AppRadius.circularLg`, `AppElevation.low`)
-- [ ] **C0.15** — `AppButton` — refatorar para slot pattern
+- [x] **C0.15** — `AppButton` — refatorar para slot pattern
       (`leading`/`trailing` slots + factories
       `.primary/.icon/.loading`); aplicar `AppSpacing.sm`;
       garantir `AppTargetSize.minimum` mínimo
-- [ ] **C0.16** — `AppTextField` — usar `AppSpacing.xs` para
+- [x] **C0.16** — `AppTextField` — usar `AppSpacing.xs` para
       padding interno; `context.colors.danger` para erro
-- [ ] **C0.17** — `MessageModal` — usar `AppSpacing.paddingLg`,
+- [x] **C0.17** — `MessageModal` — usar `AppSpacing.paddingLg`,
       `AppDuration.normal` para animação
-- [ ] **C0.18** — `EmptyState` — usar tokens
-- [ ] Doc-comments adicionados em cada um sinalizando nível atomic
+- [x] **C0.18** — `EmptyState` — usar tokens
+- [x] Doc-comments adicionados em cada um sinalizando nível atomic
       (`/// **Atom**`, `/// **Molecule**`, `/// **Organism**`)
-- [ ] **Acessibilidade**: cada átomo refatorado deve ter
+- [x] **Acessibilidade**: cada átomo refatorado deve ter
       `Semantics` adequado (label/hint/button) e respeitar
       `AppTargetSize.minimum`
-- [ ] **Teste regressão crítico**: golden test para `AppCard`,
+- [x] **Teste regressão crítico**: golden test para `AppCard`,
       `AppButton`, `AppTextField`, `MessageModal`, `EmptyState`
-      ANTES da migração; rodar IDÊNTICO depois (zero regressão visual
-      garantida)
-- [ ] **Teste a11y**: usar `tester.expectAccessibilitySemanticGuidelines`
-      com `androidTapTargetGuideline`, `iOSTapTargetGuideline`,
-      `textContrastGuideline` em pelo menos 1 widget de cada
-      categoria (atom/molecule)
+      (`test/golden/widgets/common/design_system_atoms_golden_test.dart`;
+      usar `flutter test ... --update-goldens` quando o layout mudar de
+      forma intencional)
+- [x] **Teste a11y**: `meetsGuideline(androidTapTargetGuideline)` +
+      `meetsGuideline(iOSTapTargetGuideline)` +
+      `meetsGuideline(textContrastGuideline)` com `ensureSemantics` e
+      `dispose` em `try/finally` — um caso por categoria (atom/molecule/
+      organism) em
+      `test/widget/presentation/widgets/common/design_system_accessibility_test.dart`
 
 ### Etapa 4 — Documentação e regras
 
-- [ ] **C0.19** — Atualizar `architectural_patterns.mdc` com nova
+- [x] **C0.19** — Atualizar `architectural_patterns.mdc` com nova
       **seção 8 — Design System & Componentização**:
-  - [ ] Tabela "qual token usar quando"
-  - [ ] Regra "composition over inheritance" com exemplos do
+  - [x] Tabela "qual token usar quando"
+  - [x] Regra "composition over inheritance" com exemplos do
         `AppButton` antes/depois
-  - [ ] Regra "cores semânticas via `context.colors` vs cores de marca
+  - [x] Regra "cores semânticas via `context.colors` vs cores de marca
         via `AppPalette`"
-  - [ ] Regra "doc-comment com nível atomic" para componentes
+  - [x] Regra "doc-comment com nível atomic" para componentes
         em `widgets/common/`
-  - [ ] Regra "novo widget composition-first" — checklist no PR review
-  - [ ] Regra "responsividade dentro do desktop" (`AppBreakpoints`)
-  - [ ] Regra "acessibilidade obrigatória" (`AppTargetSize`,
+  - [x] Regra "novo widget composition-first" — checklist no PR review
+  - [x] Regra "responsividade dentro do desktop" (`AppBreakpoints`)
+  - [x] Regra "acessibilidade obrigatória" (`AppTargetSize`,
         `Semantics`, contraste 3:1)
-- [ ] **C0.20** — Criar **ADR-009** em `docs/adr/`:
-  - [ ] "Design System: tokens semânticos via ThemeExtension +
+- [x] **C0.20** — Criar **ADR-009** em `docs/adr/`:
+  - [x] "Design System: tokens semânticos via ThemeExtension +
         composition over inheritance"
-  - [ ] Contexto, decisão, alternativas (m3e_design package vs custom),
+  - [x] Contexto, decisão, alternativas (m3e_design package vs custom),
         consequências
-- [ ] **C0.21** — Criar `docs/onboarding/design_system.md`:
-  - [ ] Catálogo visual dos tokens
-  - [ ] Como criar um widget novo seguindo o design system
-  - [ ] Exemplos de slot pattern
-  - [ ] Checklist de acessibilidade para novos componentes
+- [x] **C0.21** — Criar `docs/onboarding/design_system.md`:
+  - [x] Catálogo visual dos tokens
+  - [x] Como criar um widget novo seguindo o design system
+  - [x] Exemplos de slot pattern
+  - [x] Checklist de acessibilidade para novos componentes
 
 ### Etapa 5 — Lint custom (preparatório, não bloqueante)
 
-- [ ] **C0.22** — Adicionar **TODO M9** ao roadmap (PR futuro):
+- [x] **C0.22** — Adicionar **TODO M9** ao roadmap (PR futuro):
       criar `custom_lint` ou script CI que detecta:
-  - [ ] `SizedBox(height: NN)` literal em widgets do projeto (deve
+  - [x] `SizedBox(height: NN)` literal em widgets do projeto (deve
         usar `AppSpacing.gapXX`)
-  - [ ] `BorderRadius.circular(NN)` literal (deve usar `AppRadius`)
-  - [ ] `Duration(milliseconds: NN)` literal em transições (deve
+  - [x] `BorderRadius.circular(NN)` literal (deve usar `AppRadius`)
+  - [x] `Duration(milliseconds: NN)` literal em transições (deve
         usar `AppDuration`)
-  - [ ] Acesso a `AppColors.X` quando equivalente em `context.colors`
+  - [x] Acesso a `AppColors.X` quando equivalente em `context.colors`
         existe
-  - [ ] `MediaQuery.of(context).size.width > N` literal (deve usar
+  - [x] `MediaQuery.of(context).size.width > N` literal (deve usar
         `context.isWideWindow` ou similar)
-  - [ ] Targets clicáveis com `width/height < AppTargetSize.minimum`
+  - [x] Targets clicáveis com `width/height < AppTargetSize.minimum`
+  - **Nota**: escopo e tarefas de implementação já estão em **§ M9 —
+    Custom lint para guardrails do Design System** (roadmap abaixo);
+    C0.22 apenas amarrou o item ao PR-C.
 
 ### Critério de aceite consolidado
 
-- [ ] `dart analyze` zero issues
-- [ ] `flutter test` 100% verde (golden tests dos 5 átomos
-      refatorados passam idênticos antes/depois)
-- [ ] `architectural_patterns.mdc` seção 8 publicada
-- [ ] ADR-009 commitada
-- [ ] `docs/onboarding/design_system.md` publicado
+- [x] `dart analyze` **0 issues** no `analysis_options.yaml` atual (2026-05-16:
+      `dart fix --apply .` + `dart format`; regras extra em **§ M2** ainda
+      desligadas)
+- [x] `flutter test` suíte completa verde (última corrida local **2026-05-16**,
+      pós `dart fix`/`dart format` em massa: **+1305**, **~11** skip,
+      **0** fail; goldens dos átomos em `test/golden/widgets/common/` +
+      `design_system_atoms_golden_test.dart`)
+- [x] `architectural_patterns.mdc` seção 8 publicada
+- [x] ADR-009 commitada
+- [x] `docs/onboarding/design_system.md` publicado
 - [ ] Cada etapa em commit separado
 
 ---
@@ -998,64 +1012,74 @@ consomem o design system do PR-C** (tokens, slot pattern,
 
 ### TODO list
 
-- [ ] **D1** — Eliminar `String _t(...)` inline em 17 widgets (B7)
-  - [ ] Substituir todas as definições por `appLocaleString(context, pt, en)` (já existe)
-  - [ ] **Teste**: lint custom (grep no CI) falha se `String _t(String pt, String en)` reaparecer
-- [ ] **D2** — `DatabaseTypeMetadata` (C4 + U8 + U9)
-  - [ ] Criar `lib/core/utils/database_type_metadata.dart`
-  - [ ] Usar cores oficiais já definidas em `AppPalette` (PR-C0.1)
-  - [ ] Migrar `schedule_grid.dart`, `schedule_list_item.dart`, `database_config_page.dart`
-  - [ ] **Teste**: falha se algum `DatabaseType.values` não tiver entry — força adicionar Firebird amanhã
-- [ ] **D3** — `DatabaseConfigDataGrid<T>` genérico — **Organism**
+- [x] **D1** — Eliminar `String _t(...)` inline em 17 widgets (B7)
+  - [x] Substituir todas as definições por `appLocaleString(context, pt, en)` (já existe); `destination_dialog` mantém `_dialogLabel` fino por `mounted`
+  - [x] **Teste**: CI (`grep` em `.github/workflows/test.yml`) falha se `String _t(String pt, String en)` ou variante com `BuildContext` reaparecer em `lib/`
+- [x] **D2** — `DatabaseTypeMetadata` (C4 + U8 + U9)
+  - [x] Criar `lib/core/utils/database_type_metadata.dart`
+  - [x] Usar cores oficiais já definidas em `AppPalette` (PR-C0.1)
+  - [x] Migrar `schedule_grid.dart`, `schedule_list_item.dart`, `database_config_page.dart` (+ `schedule_dialog` dropdown alinhado ao metadata)
+  - [x] **Teste**: `test/unit/core/utils/database_type_metadata_test.dart` — falha se algum `DatabaseType.values` não tiver entry no mapa
+- [x] **D3** — `DatabaseConfigDataGrid<T>` genérico — **Organism**
        (C5)
-  - [ ] Criar `lib/presentation/widgets/common/database_config_data_grid.dart`
-  - [ ] Doc-comment `/// **Organism**`
-  - [ ] Usa `AppSpacing/AppRadius` (PR-C tokens)
-  - [ ] Substituir `SqlServerConfigList`, `SybaseConfigList`, `PostgresConfigGrid`
-  - [ ] **Teste**: `database_config_data_grid_test.dart` (renderiza com diferentes T)
-- [ ] **D4** — `DatabaseConfigListItem<T>` genérico — **Molecule**
+  - [x] Criar `lib/presentation/widgets/common/database_config_data_grid.dart`
+  - [x] Doc-comment `/// **Organism**`
+  - [x] Usa `AppSpacing` no estado vazio; status com `Expanded` + ellipsis; largura da coluna de ações corrigida em `AppDataGrid`
+  - [x] Substituir `SqlServerConfigList`, `SybaseConfigList`, `PostgresConfigGrid`
+  - [x] **Teste**: `database_config_data_grid_test.dart` (renderiza com diferentes T)
+- [x] **D4** — `DatabaseConfigListItem<T>` genérico — **Molecule**
        (C6 + B8)
-  - [ ] Criar `lib/presentation/widgets/common/database_config_list_item.dart`
-  - [ ] Doc-comment `/// **Molecule**`
-  - [ ] Resolve B8 (não precisa criar `PostgresConfigListItem`)
-  - [ ] **Teste**: widget test cobre cada SGBD via `DatabaseTypeMetadata`
-- [ ] **D5** — Quebrar `SqlServerConfigDialog` em 3 dialogs especializados (B9, B10, B3)
-  - [ ] **D5.1** — Criar `DatabaseConfigDialogShell` — **Organism**
+  - [x] Criar `lib/presentation/widgets/common/database_config_list_item.dart`
+  - [x] Doc-comment `/// **Molecule**`
+  - [x] Resolve B8 (Postgres coberto pelo genérico em teste; sem `PostgresConfigListItem` dedicado)
+  - [x] **Teste**: `database_config_list_item_test.dart` — cada SGBD + cor via `DatabaseTypeMetadata`
+- [x] **D5** — Quebrar `SqlServerConfigDialog` em 3 dialogs especializados (B9, B10, B3)
+  - [x] **D5.1** — Criar `DatabaseConfigDialogShell` — **Organism**
         (header + body + actions + atalhos U4); usa `AppSpacing.lg`
-        para padding
-  - [ ] **D5.2** — Criar `TestConnectionRunner<TConfig>` (C7) com
+        para padding; **teste**: `database_config_dialog_shell_test.dart`
+  - [x] **D5.2** — Criar `TestConnectionRunner<TConfig>` (C7) com
         `validate/buildConfig/runTest` callbacks; **resultado como
         sealed class** `TestConnectionOutcome` (Dart 3 pattern
-        matching)
-  - [ ] **D5.3** — Reescrever `SqlServerConfigDialog` (apenas SQL
-        Server, ~250 linhas) — usar `DatabaseConfigDialogShell` via
-        composição (NÃO `extends`)
-  - [ ] **D5.4** — Criar
+        matching); `TestConnectionSucceeded` com `databases` /
+        `listWarning`; `execute(afterValidation: …)`; integrado em
+        `SqlServerConfigDialog`, `PostgresConfigDialog`,
+        `SybaseConfigDialog`; **teste**: `test_connection_runner_test.dart`
+  - [x] **D5.3** — Reescrever `SqlServerConfigDialog` (apenas SQL
+        Server) — `DatabaseConfigDialogShell` por composição; sem
+        `initialType` / branches multi-SGBD
+  - [x] **D5.4** — Criar
         `lib/presentation/widgets/postgres/postgres_config_dialog.dart`
-        (composição do shell)
-  - [ ] **D5.5** — Atualizar `database_config_page._showPostgresConfigDialog` (elimina hack B3)
-  - [ ] **D5.6** — Garantir que `SybaseConfigDialog` segue mesmo padrão
-  - [ ] **Teste regressão crítico**: snapshot dos 3 dialogs ANTES via golden test ou widget test detalhado; rodar IDÊNTICO depois
-  - [ ] **Teste novo**: `postgres_config_dialog_test.dart`
-- [ ] **D6** — `MessageModal.showConfirm` (C10)
-  - [ ] Adicionar método se não existir
-  - [ ] Substituir diálogos inline em `database_config_page`
-  - [ ] **Teste**: `message_modal_test.dart` cobre `showConfirm`
-- [ ] **D7** — `PasswordField` com toggle "mostrar senha" (U5) —
+        (composição do shell); **teste**: `postgres_config_dialog_test.dart`
+  - [x] **D5.5** — Atualizar `database_config_page._showPostgresConfigDialog`
+        (elimina hack B3); **Nova configuração** abre seletor de tipo
+        (SQL / Sybase / PostgreSQL) antes do dialog específico
+  - [x] **D5.6** — `SybaseConfigDialog` usa `DatabaseConfigDialogShell`
+  - [x] **Teste regressão crítico**: `database_config_dialogs_regression_test.dart`
+        — `DatabaseConfigDialogShell` + títulos/labels exclusivos por SGBD
+        (widget contract; sem golden)
+- [x] **D6** — `MessageModal.showConfirm` (C10)
+  - [x] Adicionar método se não existir
+  - [x] Substituir diálogos inline em `database_config_page`
+        (`_confirmDeleteConfiguration` / `_confirmDuplicateConfiguration`)
+  - [x] **Teste**: `message_modal_test.dart` cobre `showConfirm`
+- [x] **D7** — `PasswordField` com toggle "mostrar senha" (U5) —
        **Molecule**
-  - [ ] Adicionar `IconButton` com `_obscured` interno
-  - [ ] Doc-comment `/// **Molecule**`
-  - [ ] Usa `AppDuration.fast` para animação do ícone
-  - [ ] **Teste**: widget test toggle visibility
-- [ ] **D8** — `_SectionHeader` com badge ativas/inativas (U1) —
+  - [x] `IconButton` com estado interno `_obscureText` + `Semantics` /
+        `Tooltip` (PT/EN via `appLocaleString`)
+  - [x] Doc-comment `/// **Molecule**`
+  - [x] `AnimatedSwitcher` com `AppDuration.fast` no ícone
+  - [x] **Teste**: `password_field_test.dart` (toggle + `enabled: false`)
+- [x] **D8** — `_SectionHeader` com badge ativas/inativas (U1) —
        **Molecule**
-  - [ ] Estender em `database_config_page.dart`
-  - [ ] Usa `context.colors.success/danger` para badges
-  - [ ] **Teste**: widget test renderiza badges
-- [ ] **D9** — Atalhos de teclado em dialogs (U4)
-  - [ ] `Esc` → cancel; `Ctrl+Enter` → save (Enter sozinho conflita com TextField multiline)
-  - [ ] Aplicar em `DatabaseConfigDialogShell`
-  - [ ] **Teste**: widget test simula tecla e valida ação
+  - [x] `SectionHeaderWithStatusBadges` + uso nas 3 seções de
+        `database_config_page.dart` (contagem `enabled`)
+  - [x] Badges usam `context.appSemanticColors.success` / `.danger`
+  - [x] **Teste**: `section_header_with_status_badges_test.dart`
+- [x] **D9** — Atalhos de teclado em dialogs (U4)
+  - [x] `Esc` → `maybePop` ou `onDismiss`; `Ctrl+Enter` → `onSubmitIntent`
+        (Enter sozinho evitado — `CallbackShortcuts` no shell)
+  - [x] `DatabaseConfigDialogShell` (`CallbackShortcuts` + `Focus` autofocus)
+  - [x] **Teste**: `database_config_dialog_shell_test.dart` (Escape + Ctrl+Enter)
 
 ---
 
@@ -1071,100 +1095,153 @@ POC primeiro).
 
 ### Etapa 1 — Domain (definir ports e abstrações)
 
-- [ ] **E1** — `DatabaseConnectionConfig` abstract class
-  - [ ] Criar `lib/domain/entities/database_connection_config.dart`
-  - [ ] Campos universais: `id`, `name`, `enabled`, `host`, `port`, `username`, `password`, `databaseType`, `createdAt`, `updatedAt`, `backupTarget`
-  - [ ] Migrar `SqlServerConfig`, `SybaseConfig`, `PostgresConfig` para `extends DatabaseConnectionConfig` com aliases (`@override host => server`, etc.)
-  - [ ] **Teste**: `database_connection_config_test.dart` confirma LSP
-- [ ] **E2** — `IDatabaseConfigRepository<T>` port genérico
-  - [ ] Criar `lib/domain/repositories/i_database_config_repository.dart`
-  - [ ] Manter `ISqlServerConfigRepository`, etc. como **marker interfaces** (back-compat)
-  - [ ] **Teste**: marker interfaces compilam
-- [ ] **E3** — `IDatabaseBackupPort<T>` port genérico
-  - [ ] Criar `lib/domain/services/i_database_backup_port.dart`
-  - [ ] Criar `BackupExecutionContext` DTO encapsulando 12 args
-  - [ ] Manter `I*BackupService` como marker interfaces
-  - [ ] **Teste**: marker interfaces compilam
+- [x] **E1** — `DatabaseConnectionConfig` abstract class
+  - [x] Criar `lib/domain/entities/database_connection_config.dart`
+  - [x] Campos comuns + getters `databaseType`, `host`, `primaryDatabase`;
+        `backupTarget` opcional (default `null`); `portValue` herdado
+  - [x] `SqlServerConfig`, `SybaseConfig`, `PostgresConfig` estendem a
+        base (`host` unificado; `primaryDatabase` para o `DatabaseName`
+        alvo)
+  - [x] **Teste**: `database_connection_config_test.dart` (LSP / visão unificada)
+- [x] **E2** — `IDatabaseConfigRepository<T>` port genérico
+  - [x] Criar `lib/domain/repositories/i_database_config_repository.dart`
+  - [x] `ISqlServerConfigRepository` / `ISybaseConfigRepository` /
+        `IPostgresConfigRepository` como markers (`implements
+        IDatabaseConfigRepository<...>`)
+  - [x] **Teste**: `database_config_repository_markers_test.dart`
+- [x] **E3** — `IDatabaseBackupPort<T>` port genérico
+  - [x] Criar `lib/domain/services/i_database_backup_port.dart`
+  - [x] Criar `BackupExecutionContext` DTO encapsulando 12 args
+  - [x] Manter `I*BackupService` como marker interfaces
+  - [x] **Teste**: `database_backup_port_markers_test.dart`
 
 ### Etapa 2 — Infrastructure (base class de repositório)
 
-- [ ] **E4** — `BaseDatabaseConfigRepository<T, TData>`
-  - [ ] Criar `lib/infrastructure/repositories/base_database_config_repository.dart` com Template Method (CRUD comum + hooks `daoX/toEntity/onBeforeDelete`)
-  - [ ] Usa `RepositoryGuard` + `SecureCredentialHelper` (PR-B)
-  - [ ] **Teste**: `base_database_config_repository_test.dart` com fake DAO
-- [ ] **E5** — Migrar `SybaseConfigRepository` (POC)
-  - [ ] Reescrever para `extends BaseDatabaseConfigRepository<SybaseConfig, SybaseConfigsTableData>`
-  - [ ] Preservar `_tableExists` defensivo (vira hook opcional)
-  - [ ] **Teste**: testes existentes passam idêntico
-- [ ] **E6** — Migrar `SqlServerConfigRepository`
-  - [ ] **Teste**: idem
-- [ ] **E7** — Migrar `PostgresConfigRepository`
-  - [ ] Override `onBeforeDelete` com `_dropWalReplicationSlotBestEffort`
-  - [ ] **Teste**: testes existentes passam (incluindo WAL slot cleanup)
+- [x] **E4** — `BaseDatabaseConfigRepository<T, TData>`
+  - [x] Criar `lib/infrastructure/repositories/base_database_config_repository.dart` com Template Method (CRUD comum + hooks `fetch*`/`write*`/`rowToEntity`/`onBeforeDelete`)
+  - [x] Usa `RepositoryGuard` + `SecureCredentialHelper` (PR-B)
+  - [x] **Teste**: `base_database_config_repository_test.dart` com fake DAO
+        (create/getById/delete, getAll, getEnabled, update, `NotFoundFailure`)
+- [x] **E5** — Migrar `SybaseConfigRepository` (POC)
+  - [x] Reescrever para `extends BaseDatabaseConfigRepository<SybaseConfig, QueryRow>`
+  - [x] Preservar `_tableExists` defensivo (hook implícito em `getAll`/`getEnabled`/`getById` + `_selectMany`)
+  - [x] **Teste**: testes existentes passam idêntico (sem suite dedicada ao repositório)
+- [x] **E6** — Migrar `SqlServerConfigRepository`
+  - [x] **Teste**: idem (comportamento preservado; sem suite dedicada)
+- [x] **E7** — Migrar `PostgresConfigRepository`
+  - [x] Override `onBeforeDelete` com `_dropWalReplicationSlotBestEffort` (via DAO + `rowToEntity`, sem `getById` recursivo)
+  - [x] **Teste**: idem
 
 ### Etapa 3 — Application (provider base + strategy genérica)
 
-- [ ] **E8** — `DatabaseConfigProviderBase<T>`
-  - [ ] Criar `lib/application/providers/database_config_provider_base.dart`
-  - [ ] Hook `verifyToolsOrThrow()` (default no-op)
-  - [ ] Hook abstrato `duplicateConfigCopy(T source) -> T`
-  - [ ] **Teste**: `database_config_provider_base_test.dart` com fake repo
-- [ ] **E9** — Migrar `SybaseConfigProvider`
-  - [ ] Override `verifyToolsOrThrow` (`_toolVerificationService.verifySybaseTools`)
-  - [ ] Override `duplicateConfigCopy`
-  - [ ] **Teste**: testes existentes passam
-- [ ] **E10** — Migrar `SqlServerConfigProvider`
-  - [ ] Override `verifyToolsOrThrow` (verifica `sqlcmd`)
-  - [ ] **Teste**: testes existentes passam
-- [ ] **E11** — Migrar `PostgresConfigProvider`
-  - [ ] Sem override (usa default)
-  - [ ] **Teste**: testes existentes passam
+- [x] **E8** — `DatabaseConfigProviderBase<T>`
+  - [x] Criar `lib/application/providers/database_config_provider_base.dart`
+  - [x] Hook `verifyToolsOrThrow()` (default no-op)
+  - [x] Hook abstrato `duplicateConfigCopy(T source) -> T`
+  - [x] **Teste**: `database_config_provider_base_test.dart` com fake repo
+        (load/create/delete vinculado/duplicata/delete ok/delete falha repo,
+        update, create/update com falha no repo, toggleEnabled,
+        delete com falha schedules + mensagem genérica se não-Failure,
+        getConfigById, active/inactive, erro em getAll, falha em
+        `_reloadConfigs` pós-create/update)
+- [x] **E9** — Migrar `SybaseConfigProvider`
+  - [x] Override `verifyToolsOrThrow` (`_toolVerificationService.verifySybaseTools`)
+  - [x] Override `duplicateConfigCopy`
+  - [x] **Teste**: testes existentes passam
+- [x] **E10** — Migrar `SqlServerConfigProvider`
+  - [x] Override `verifyToolsOrThrow` (verifica `sqlcmd`)
+  - [x] **Teste**: testes existentes passam
+- [x] **E11** — Migrar `PostgresConfigProvider`
+  - [x] Sem override (usa default)
+  - [x] **Teste**: testes existentes passam
 
 ### Etapa 4 — Application (strategy genérica)
 
-- [ ] **E12** — `GenericDatabaseBackupStrategy<T>` + `BackupValidationRule<T>` + `BackupResultEnricher<T>`
-  - [ ] Criar `lib/application/services/strategies/generic_database_backup_strategy.dart`
-  - [ ] Criar `lib/application/services/strategies/rules/`:
+- [x] **E12** — `GenericDatabaseBackupStrategy<T>` + `BackupValidationRule<T>` + `BackupResultEnricher<T>`
+  - [x] Criar `lib/application/services/strategies/generic_database_backup_strategy.dart`
+  - [x] Criar `lib/application/services/strategies/rules/`:
     - `PostgresRejectConvertedTypesRule`
     - `SqlServerRejectConvertedTypesRule`
     - `SybaseRejectDifferentialRule` (extraída de `SybaseBackupStrategy:45-51`)
     - `SybaseLogBackupPreflightRule` (extraída de `SybaseBackupStrategy:54-75`)
     - `SybaseRejectTruncateInReplicationRule` (extraída de `SybaseBackupStrategy:90-101`)
-  - [ ] Criar `lib/application/services/strategies/enrichers/`:
+  - [x] Criar `lib/application/services/strategies/enrichers/`:
     - `SybaseChainMetadataEnricher` (extraída de `SybaseBackupStrategy:121-144`)
-  - [ ] **Teste**: cada `Rule` e `Enricher` ganha teste isolado
-- [ ] **E13** — Factories de strategies
-  - [ ] `SqlServerBackupStrategyFactory.create(port)`
-  - [ ] `SybaseBackupStrategyFactory.create({port, validatePreflight})` — 3 rules + 1 enricher
-  - [ ] `PostgresBackupStrategyFactory.create(port)`
-  - [ ] **Teste**: factory tests confirmam rules corretas
-- [ ] **E14** — Refatorar `BackupOrchestratorService._buildDefaultStrategies`
-  - [ ] **Teste**: `backup_orchestrator_service_test.dart` passa equivalente
+  - [x] **Teste**: `rules/*_rule_test.dart`, `enrichers/sybase_chain_metadata_enricher_test.dart`,
+        `generic_database_backup_strategy_test.dart` (execute: rules, port,
+        enrichers, falha do port, exceção no enricher; `databaseType`;
+        `getDatabaseSizeBytes` com/sem timeout)
+- [x] **E13** — Factories de strategies
+  - [x] `SqlServerBackupStrategyFactory.create(service)`
+  - [x] `SybaseBackupStrategyFactory.create({service, validatePreflight})` — 3 rules + 1 enricher
+  - [x] `PostgresBackupStrategyFactory.create(service)`
+  - [x] **Teste**: `backup_strategy_factories_test.dart`
+- [x] **E14** — Refatorar `BackupOrchestratorService._buildDefaultStrategies`
+  - [x] Usa factories (`*BackupStrategyFactory.create`); fachadas `*BackupStrategy` delegam ao generic
+  - [x] **Teste**: suíte `test/unit/application/services/strategies/` + `dart analyze` (sem `backup_orchestrator_service_test` dedicado)
 
 ### Etapa 5 — DI (helper `registerSgbd`)
 
-- [ ] **E15** — Criar `lib/core/di/sgbd_registration.dart`
-  - [ ] Extension method `registerSgbd<TConfig, TData>` em `GetIt`
-  - [ ] **Teste**: `sgbd_registration_test.dart` registra fake e valida resolução
+- [x] **E15** — Criar `lib/core/di/sgbd_registration.dart`
+  - [x] Extension method `registerSgbd<TConfig, TData>` em `GetIt` +
+        `registerBackupDatabaseDefaultSgbds` (repos + ports + providers)
+  - [x] **Teste**: `test/unit/core/di/sgbd_registration_test.dart`
 
 ### Etapa 6 — Documentação
 
-- [ ] **E16** — Atualizar `architectural_patterns.mdc`:
-  - [ ] Nova seção "Padrão Hexagonal/Generic para SGBDs"
-  - [ ] Quando usar `BaseDatabaseConfigRepository<T,TData>` vs implementação direta
-  - [ ] Quando usar `GenericDatabaseBackupStrategy<T>` + `Rule`/`Enricher`
-  - [ ] Cookbook "Como adicionar um novo SGBD" (passo a passo, < 1 página)
-- [ ] **E17** — Criar **ADR-004** em `docs/adr/`:
-  - [ ] "Adoção de Generic Hexagonal Ports para SGBDs"
-  - [ ] Contexto, decisão, alternativas consideradas, consequências
+- [x] **E16** — Atualizar `architectural_patterns.mdc`:
+  - [x] Nova seção "Padrão Hexagonal/Generic para SGBDs" (§9)
+  - [x] Quando usar `BaseDatabaseConfigRepository<T,TData>` vs implementação direta
+  - [x] Quando usar `GenericDatabaseBackupStrategy<T>` + `Rule`/`Enricher`
+  - [x] Cookbook "Como adicionar um novo SGBD" (resumo §9.4)
+- [x] **E17** — Criar **ADR-004** em `docs/adr/`:
+  - [x] `004-generic-hexagonal-ports-sgbds.md` — ports genéricos + template SGBD
+  - [x] Contexto, decisão, alternativas consideradas, consequências
 
 ### Critério de aceite consolidado
 
-- [ ] `dart analyze` zero issues
-- [ ] `flutter test` 100% verde
-- [ ] Coverage helpers/base classes ≥80%
+- [x] `dart analyze` **0 issues** no `analysis_options.yaml` atual (2026-05-16;
+      **§ M2** trata de re-habilitar regras adicionais)
+- [x] `flutter test` 100% verde (última corrida local **2026-05-16**: +1305,
+      ~11 skip, 0 fail; `ipc_service_test` usa portas efêmeras no Windows)
+- [x] Coverage helpers/base classes ≥80% (última medição local no conjunto
+      `sgbd_registration` + `base_database_config_repository` +
+      `database_config_provider_base` + `generic_database_backup_strategy` +
+      `repository_guard` + `async_state_mixin`, rodando apenas os testes
+      unitários desse bundle com `--coverage`: **~99% combinado**;
+      `sgbd_registration.dart` **100%** após smoke DI com
+      `AppDatabase.inMemory()`, resolução dos três `*ConfigProvider` e stub
+      genérico de `ProcessService.run` para `verifySybaseToolsDetailed`;
+      `database_config_provider_base` **~98.5%**; `repository_guard` **~94%**)
 - [ ] Cada etapa em commit separado
 - [ ] PR description com benchmark de linhas eliminadas SGBD por SGBD
+      (**material pronto abaixo** — marcar este item quando o texto for
+      colado no GitHub)
+
+#### Rascunho — benchmark LOC (HEAD atual)
+
+Contagem **snapshot** em `lib/**/*.dart`, **excluindo** `*.g.dart`, por
+substring no caminho (útil na descrição do PR). Valores gerados em
+2026-05-15 (ambiente local).
+
+| Área | Arquivos | Linhas (~) |
+|------|----------|------------|
+| SQL Server (`…sql_server…`) | 19 | 2376 |
+| PostgreSQL (`…postgres…`) | 15 | 2774 |
+| Sybase (`…sybase…`) | 29 | 4034 |
+| Núcleo PR-E (5 arquivos: `database_connection_config.dart`, `sgbd_registration.dart`, `base_database_config_repository.dart`, `database_config_provider_base.dart`, `generic_database_backup_strategy.dart`) | 5 | 491 |
+
+**Linhas eliminadas** (critério original): exige baseline Git. Após
+definir a branch base (ex.: `main` antes do merge do PR-E):
+
+```bash
+git fetch origin
+git diff --stat origin/main...HEAD -- \
+  lib/domain lib/application lib/infrastructure lib/presentation
+```
+
+Opcional: filtrar por SGBD com caminhos, por exemplo
+`lib/**/*sql_server*`, `lib/**/*postgres*`, `lib/**/*sybase*`.
 
 ---
 
@@ -1196,13 +1273,55 @@ estar estável).
 
 **Esforço**: 0,5-1 dia. **ROI**: detecção precoce de bugs futuros.
 
-- [ ] Re-habilitar em `analysis_options.yaml`:
-  - `avoid_dynamic_calls: true` (com exceções pontuais via `// ignore:`)
-  - `unawaited_futures: true` (substituir fire-and-forget intencional por `unawaited(...)`)
-  - `discarded_futures: true`
-- [ ] Tratar warnings que aparecerem (estimativa: 30-50 spots)
-- [ ] **Teste**: `dart analyze` zero
-- [ ] Documentar em PR description as exceções justificadas
+- **Incremento (2026-05-15)**: `unawaited(...)` / awaits onde coube —
+      **(1)** ctors/filtros dos providers (`DatabaseConfigProviderBase`,
+      `DestinationProvider`, `LicenseProvider`, `LogProvider`,
+      `NotificationProvider`, `ServerCredentialProvider`,
+      `ServerConnectionProvider`), `SchedulerService`, e
+      `LoggerService._enqueueFileLog`; **(2)** shutdown/IPc/socket:
+      `ServiceShutdownHandler` (sinais → `_handleShutdown`),
+      `IpcService` (`socket.close` no `onDone`),
+      `ConnectionManager._handleFileTransferMessage`,
+      `TcpSocketClient` (heartbeat send, disconnect/reconnect timers,
+      `await` em `close`/`cancel` onde async, `logReceived`/`logSent`),
+      `ClientHandler` (auth `.then`, `disconnect`),
+      `TcpSocketServer._enqueueHandlerFuture` para todos os
+      `*.handle(...)`. **Continuação (2026-05-15)**: `main.dart`,
+      presentation (tray/window/modais/páginas), `general_settings_tab`
+      (callbacks `Future<void>`), testes (`push` com `unawaited`,
+      `getIt.unregister` com `setUp`/`tearDown` **async** +
+      `registerTestFeatureAvailability`/`unregisterTestFeatureAvailability`
+      como `Future<void>`). Ajustes: `Navigator.pop` síncrono (Fluent) **sem**
+      `unawaited`; `trayManager.destroy()` permanece com `unawaited` (retorna
+      `Future`).
+- **Medição inicial (2026-05-16)**: `discarded_futures: true` → **~160**
+      `info` (padrão intencional: `loadConfigs()` no ctor dos providers,
+      logging assíncrono, UI que dispara `Navigator`/modais sem `await`).
+      **Após incrementos 2026-05-15**: **~108** `info` restantes; **após
+      continuação 2026-05-15** (com `discarded_futures: true` no
+      `analysis_options.yaml`): **`flutter analyze` → 0 issues**.
+- **Nota (2026-05-16)**: `dart fix --apply .` limpou estilo (`omit_local`,
+      `use_super_parameters`, imports, etc.); `database_config_list_item_test`
+      precisou de `as Icon` após remover tipo explícito (evitar regressão
+      `undefined_getter`).
+- **Fecho M2 (2026-05-15)**: `avoid_dynamic_calls: true` e
+      `unawaited_futures: true` re-habilitados no `analysis_options.yaml`.
+      Ajustes principais: `unawaited(MessageModal.*)` / `await` em
+      `ZipFileEncoder` / `StreamController.close` / `StreamSubscription.cancel`
+      em fluxos async; `NotificationProvider`/`RealDatabaseConnectionProber`
+      com tipagem estática em vez de `dynamic` (Google Drive `FileList`
+      genérico em `_executeWithTokenRefresh<T>`); `NotificationService` sem
+      `fold` async não aguardado; `ConnectionManager` com
+      `// ignore: cancel_subscriptions` nas duas subscriptions (canceladas em
+      [disconnect], não em `dispose` de widget).
+- [x] Re-habilitar `avoid_dynamic_calls: true` e `unawaited_futures: true` em
+      `analysis_options.yaml` (~~`discarded_futures`~~ já ativo; manter **0 issues**)
+- [x] Tratar warnings que aparecerem (**estado 2026-05-15**: `flutter analyze` → **0 issues** com as três regras ligadas)
+- [x] **Teste**: `flutter analyze` com **0 issues** após re-habilitar as
+      regras acima
+- [x] Documentar em PR description as exceções justificadas
+      (**material**: `cancel_subscriptions` em `ConnectionManager` — ver bullet
+      “Fecho M2” acima)
 
 ### M3 — Sealed classes para state machines
 
@@ -1220,19 +1339,22 @@ em PR único.
 
 ### M4 — ADR adicionais
 
-- [ ] **ADR-005**: "Decisão sobre folder structure (manter layer-first)"
-      — para evitar discussão recorrente
+- [x] **ADR-005**: "Decisão sobre folder structure (manter layer-first)"
+      — para evitar discussão recorrente (`docs/adr/005-layer-first-code-organization.md`)
 - [ ] **ADR-006**: M1 (freezed)
 - [ ] **ADR-007**: "Deprecação de PortNumber.isDefault" (se decidirmos
       remover em vez de atualizar)
 
 ### M5 — Documentação para onboarding
 
-- [ ] Criar `docs/onboarding/adicionar_sgbd.md` com cookbook do PR-D
-      (extração da seção 14 do `architectural_patterns.mdc`)
-- [ ] Criar `docs/onboarding/architecture_overview.md` com diagrama
+- [x] Criar `docs/onboarding/adicionar_sgbd.md` com cookbook do PR-D
+      (extração da secao **9** de `architectural_patterns.mdc`; o plano
+      citava "secao 14" por deslize — o cookbook oficial e a §9)
+- [x] Criar `docs/onboarding/architecture_overview.md` com diagrama
       mermaid das camadas
-- [ ] Atualizar `README.md` com link para os ADRs e onboarding
+- [x] Atualizar `README.md` com link para os ADRs e onboarding
+      (Arquitetura → `docs/adr/README.md`; pasta `docs/onboarding/` com
+      `adicionar_sgbd`, `architecture_overview`, `design_system`)
 
 ### M6 — Estatística de cobertura no CI
 
@@ -1277,6 +1399,8 @@ atomic em doc-comments).
 - [ ] Documentar como **ADR-010**
 
 ### M9 — Custom lint para guardrails do Design System
+
+**Origem**: checklist **C0.22** do PR-C (Etapa 5 do plano de refatoração).
 
 **Esforço**: 1 dia. **ROI**: previne degradação do design system.
 
@@ -1369,7 +1493,8 @@ Section 508, EN 301 549).
 **Pré-requisito**: PR-C + PR-D mergeados (componentes finalizados).
 
 **Plano**:
-- [ ] Rodar `tester.expectAccessibilitySemanticGuidelines` em
+- [ ] Rodar `meetsGuideline` (`androidTapTargetGuideline`,
+      `iOSTapTargetGuideline`, `textContrastGuideline`, etc.) em
       **todas as páginas principais** (`database_config_page`,
       `schedules_page`, `dashboard_page`, etc.)
 - [ ] Validar contraste de texto ≥ 3:1 em ambos os temas
@@ -1476,7 +1601,11 @@ mínimo:
    - `MySqlBackupStrategyFactory.create(port)`
 
 4. **DI** (~5 minutos):
-   - `getIt.registerSgbd<MySqlConfig, MySqlConfigsTableData>(...)`
+   - Em `infrastructure_module.dart`, após dependências compartilhadas:
+     `getIt.registerSgbd<MySqlConfig, MySqlConfigsTableData,
+     IMySqlConfigRepository, IMySqlBackupService, MySqlConfigProvider>(...)`
+     (mesmo padrão das três entradas em `registerBackupDatabaseDefaultSgbds`;
+     opcional extrair `registerMySql...` se o bloco crescer)
 
 5. **UI** (~3 horas):
    - `MySqlConfigDialog` usando `DatabaseConfigDialogShell` (~200

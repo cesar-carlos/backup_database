@@ -337,6 +337,56 @@ captura essa regressão).
 
 ---
 
+## 3c. Helpers de backup — `BackupArtifactUtils` e `BackupSizeCalculator`
+
+- **`BackupSizeCalculator`** (`lib/core/utils/backup_size_calculator.dart`):
+  medição de bytes de arquivo, árvore de diretório, soma shallow e lista
+  de paths — ver também seção **3** (`ByteFormat`) para exibição.
+- **`BackupArtifactUtils`** (`lib/core/utils/backup_artifact_utils.dart`):
+  `safeDeletePartial` (arquivo ou diretório, best-effort após falha) e
+  `waitForStableFile` (poll até tamanho estável). Use nos serviços de
+  backup em vez de duplicar loops/`delete` inline.
+
+### ❌ Anti-pattern
+
+```dart
+// ❌ NUNCA reimplemente delete parcial + wait de estabilização localmente
+Future<void> _safeDeletePartialBackup(String p) async { /* ... */ }
+Future<bool> _waitForStableBackupFile(File f) async { /* ... */ }
+```
+
+---
+
+## 3d. Design System — `AppPalette` e `AppSemanticColors`
+
+- **`AppPalette`** (`lib/core/theme/tokens/app_palette.dart`): tokens de cor
+  **imutáveis** (marca, SGBD incl. Firebird preparatório, destinos,
+  agendamentos, estados de backup/log). Não variam com light/dark.
+- **`AppSemanticColors`** (`lib/core/theme/extensions/app_semantic_colors.dart`):
+  `ThemeExtension` com variantes `light` / `dark`, registrada em
+  `AppTheme` (Fluent + Material). Preferir `context.appSemanticColors` para
+  sucesso, aviso, perigo, superfície, contorno, etc.
+- **`AppColors`**: wrapper legado que delega para `AppPalette`; documentado
+  como legado — migrar chamadas gradualmente para `AppPalette` /
+  `context.appSemanticColors`.
+
+### ❌ Anti-pattern
+
+```dart
+// ❌ NUNCA duplique paleta de marca/SGBD fora de AppPalette
+static const Color sqlServerRed = Color(0xFFCC2927);
+
+// ❌ NUNCA use AppColors.* em código novo (legado)
+color: AppColors.databaseSqlServer,
+
+// ✅ Prefira
+color: AppPalette.databaseSqlServer,
+// ou semântica:
+color: context.appSemanticColors.danger,
+```
+
+---
+
 ## 4. Wrappers defensivos para notifiers/eventos externos
 
 Pattern usado em `BackupOrchestratorService` e `SchedulerService`. Quando
@@ -685,6 +735,14 @@ orquestradores, verifique:
 - [ ] Provider novo (com loading/error semânticos) usa `AsyncStateMixin` ?
 - [ ] Logs/exibições de tamanho usam `ByteFormat.format` (não
       `_formatBytes` local) ?
+- [ ] Medições de tamanho de artefatos de backup usam
+      `BackupSizeCalculator` (não duplicar I/O de tamanho) ?
+- [ ] Remoção de parcial / espera de arquivo estável usam
+      `BackupArtifactUtils` (não duplicar `delete`/poll) ?
+- [ ] Cores de identidade (SGBD, destinos, marca) usam `AppPalette` (não
+      `Color(0x…)` solto) ?
+- [ ] Cores semânticas (sucesso/erro/superfície) usam
+      `context.appSemanticColors` / `AppSemanticColors` no tema ?
 - [ ] Verificação de write permission usa `DirectoryPermissionCheck`
       (não probe-file manual) ?
 - [ ] Nenhum `failure as Failure` cast direto sem `is` antes ?
@@ -702,13 +760,178 @@ orquestradores, verifique:
       `_safeXxxCall` helper ?
 - [ ] Handlers de socket/protocolo usam `_sendError` helper local em vez
       de duplicar `sendToClient(clientId, createXxxErrorMessage(...))` ?
-- [ ] `switch` com cases que diferem só em dados (constantes, mensagens)
-      foi substituído por tabela estática `Map<Enum, ConfigStruct>` ?
+- [ ] Novo repositório de **config SGBD** estende
+      `BaseDatabaseConfigRepository` (ou justifica implementação direta
+      com §9.1) ?
+- [ ] Nova **estratégia de backup** reutiliza `GenericDatabaseBackupStrategy`
+      + rules/enrichers (§9.2) em vez de duplicar validação no
+      orchestrator ?
+- [ ] Registro DI de fatia SGBD usa `registerSgbd` / padrão do §9.3 ?
+
+## 8. Design system e componentização (PR-C)
+
+Localização dos tokens: `lib/core/theme/tokens/` (barrel
+`lib/core/theme/tokens/tokens.dart`, reexportado por
+`lib/core/theme/theme.dart`). Tema semântico:
+`lib/core/theme/extensions/app_semantic_colors.dart` (`context.colors`
+é alias de `context.appSemanticColors`).
+
+### 8.1 Qual token usar quando
+
+| Objetivo | O quê usar |
+| --- | --- |
+| Espaçamento (números, `EdgeInsets`, gaps `SizedBox`) | `AppSpacing` |
+| Raio de borda / `BorderRadius` nomeado | `AppRadius` |
+| Profundidade visual (sombra: blur, offset) | `AppElevation` |
+| Duração de animação / transição de rota | `AppDuration` |
+| Curvas de animação | `AppCurves` |
+| Layout responsivo na janela (desktop redimensionável) | `AppBreakpoints` + extensão `AppBreakpointsX` em `BuildContext` |
+| Densidade informacional (multiplicador / alvo) | `AppDensity` (enum com campos) |
+| Tamanho mínimo de alvo clicável | `AppTargetSize` |
+| Ordem explícita em `Stack` / overlay | `AppZIndex` |
+| Cor de marca / identidade (fixa entre temas) | `AppPalette` |
+| Cor semântica (sucesso, erro, superfície, tema claro/escuro) | `context.colors` (ou `context.appSemanticColors`) |
+
+### 8.2 Composition over inheritance (`AppButton`)
+
+Evite explosão de flags (`isPrimary`, `isLoading`, `icon != null`) com
+`build()` ramificado. Prefira **slots** (`leading`, `trailing`) +
+**factory constructors** para casos canônicos.
+
+```dart
+// ❌ EVITAR — combinações implícitas via flags
+Button(child: icon != null ? Row(children: [Icon(icon), Text(label)]) : Text(label));
+
+// ✅ PREFERIR — slots + factories (`AppButton` em `widgets/common/`)
+AppButton.icon(icon: FluentIcons.add, label: 'Novo', onPressed: _onAdd);
+AppButton(leading: badge, label: 'Salvar', onPressed: _save);
+```
+
+### 8.3 `context.colors` vs `AppPalette`
+
+- **`context.colors`** (ThemeExtension `AppSemanticColors`): sucesso,
+  aviso, perigo, info, superfície, texto sobre superfície, divisores —
+  **sempre** para estados e feedback que devem acompanhar light/dark.
+- **`AppPalette`**: cores de **marca** e identidade estável (SGBD,
+  destinos, agendamento) quando o contrato visual é intencionalmente
+  o mesmo em ambos os temas.
+
+### 8.4 Doc-comment de nível Atomic Design
+
+Componentes em `lib/presentation/widgets/common/` devem declarar o
+nível no primeiro parágrafo do doc-comment, quando fizer sentido:
+
+- `/// **Atom**` — indivisível (ex.: `AppButton`, `AppCard`,
+  `AppTextField`, `EmptyState`).
+- `/// **Molecule**` — compõe átomos (ex.: campo com ações).
+- `/// **Organism**` — bloco de UI completo (ex.: `MessageModal`,
+  grids com toolbar).
+
+### 8.5 Novo widget: checklist composition-first (revisão de PR)
+
+- [ ] Dá para expressar como **filhos** / parâmetros `Widget?` em vez
+      de subclass?
+- [ ] Evita duplicar literais que já existem em `AppSpacing` /
+      `AppRadius` / `AppDuration`?
+- [ ] Cores de estado usam `context.colors`; identidade usa `AppPalette`
+      apenas quando aplicável?
+- [ ] Desktop: considerou `AppBreakpoints` / `LayoutBuilder` para
+      janela estreita?
+- [ ] Alvos clicáveis respeitam `AppTargetSize.minimum` onde couber?
+- [ ] Ações importantes têm `Semantics` (ou equivalente no controle
+      Fluent) quando o widget é só ícone ou ambíguo?
+
+### 8.6 Responsividade no desktop
+
+Mesmo em app **Windows-only**, janelas redimensionáveis exigem
+quebras de layout. Use `context.isCompactWindow` /
+`context.isMediumWindow` / `context.isWideWindow` (definições em
+`AppBreakpoints`) em vez de comparar larguras literais espalhadas.
+
+### 8.7 Acessibilidade mínima
+
+- **Alvo**: `AppButton` usa altura mínima `AppTargetSize.comfortable`
+  (48 logical pixels) para alinhar ao `androidTapTargetGuideline`; WCAG
+  AA continua atendido (48 ≥ 44). Outros controles custom: preferir
+  `AppTargetSize.minimum` / `comfortable` conforme o caso.
+- **Semântica**: `Semantics` em superfícies interativas custom
+  (cartão clicável, botão só ícone, empty state com ação).
+- **Contraste**: seguir WCAG (AA: 4.5:1 texto normal; 3:1 texto grande)
+  ao escolher combinações novas; validar em ambos os brilhos do tema.
+
+---
+
+## 9. Padrão Hexagonal / Generic para SGBDs (PR‑E)
+
+Stack alinhada a **ports** (`IDatabaseConfigRepository<T>`,
+`IDatabaseBackupPort<T>`), **template** de repositório, **estratégia
+genérica** de backup e **DI** centralizado. Decisão registrada em
+**ADR‑004** (`docs/adr/004-generic-hexagonal-ports-sgbds.md`).
+
+### 9.1 `BaseDatabaseConfigRepository<TConfig, TData>` vs implementação direta
+
+- **Prefira** `BaseDatabaseConfigRepository` quando o fluxo drift →
+  entidade for o mesmo CRUD com hooks (`fetch*`/`write*`/`rowToEntity`,
+  `onBeforeDelete`, etc.) e `RepositoryGuard` (ver §1).
+- **Implementação direta** só quando o desvio for grande o bastante
+  para não pagar o template (ex.: migrações defensivas muito
+  específicas). Ainda assim: `RepositoryGuard`, `Failure` semântico,
+  `SecureCredentialHelper` — não reintroduzir try/catch de repositório.
+
+### 9.2 `GenericDatabaseBackupStrategy<T>` + `BackupValidationRule` /
+`BackupResultEnricher`
+
+- **Prefira** validações pré‑`executeBackup` como
+  `BackupValidationRule<T>` (composable, testáveis) e pós‑sucesso como
+  `BackupResultEnricher<T>` (ex.: metadados Sybase na cadeia de logs).
+- **Fachada** `XxxBackupStrategy implements IDatabaseBackupStrategy` pode
+  delegar para `GenericDatabaseBackupStrategy` montada por
+  `XxxBackupStrategyFactory` (`rules`, `enrichers`, `buildContext`).
+- **Defesa em profundidade**: se o port (`*BackupService`) puder ser
+  chamado fora da estratégia (use case, script), mantenha guardas na
+  infra onde já existirem; a estratégia cobre o caminho orquestrado.
+
+### 9.3 DI — `registerSgbd` / `registerBackupDatabaseDefaultSgbds`
+
+- `lib/core/di/sgbd_registration.dart`: extension em `GetIt` com
+  `registerSgbd<TConfig, TData, TRepo, TPort, TProvider extends Object>` —
+  registra **lazy singleton** do repositório, **lazy singleton** do
+  port de backup e **factory** do provider de UI.
+- `registerBackupDatabaseDefaultSgbds` agrupa SQL Server, Sybase e
+  PostgreSQL. Novo SGBD: uma chamada `registerSgbd<...>` (ou inclusão
+  nesse agregador) **depois** de `AppDatabase`, `ProcessService`,
+  credenciais e demais dependências do builder estarem no `GetIt`.
+
+### 9.4 Cookbook — novo SGBD (≤ 1 página)
+
+1. **Domain**: `XxxConfig extends DatabaseConnectionConfig`;
+   `IXxxConfigRepository extends IDatabaseConfigRepository<XxxConfig>`;
+   `IXxxBackupService extends IDatabaseBackupPort<XxxConfig>`;
+   `DatabaseType` + metadados de UI se necessário.
+2. **Infrastructure**: tabela Drift + DAO + `schemaVersion`;
+   `XxxConfigRepository extends BaseDatabaseConfigRepository<...>` (ou
+   repo direto com §1); `XxxBackupService` implementando o port.
+3. **Application**:
+   `XxxConfigProvider extends DatabaseConfigProviderBase<XxxConfig>`;
+   `XxxBackupStrategyFactory` + `rules/` + `enrichers/` conforme o caso.
+4. **DI**: `getIt.registerSgbd<XxxConfig, XxxTableData, ...>(...)` em
+   `setupInfrastructureModule` (ou helper equivalente).
+5. **Presentation**: página/dialog de config + integração em schedules;
+   reutilizar `DatabaseConfigDialogShell` / tokens (PR‑C).
 
 ---
 
 ## Referências cruzadas
 
+- `docs/adr/004-generic-hexagonal-ports-sgbds.md` — ports genéricos e
+  template SGBD (PR‑E)
+- `docs/adr/009-design-system-themeextension-composition.md` — decisão
+  ADR do design system (tokens + ThemeExtension + composition)
+- `docs/onboarding/design_system.md` — onboarding curto para novos
+  widgets
+- `docs/onboarding/adicionar_sgbd.md` — cookbook para novo SGBD (PR-E)
+- `docs/onboarding/architecture_overview.md` — diagrama de camadas e
+  regras de import
 - `coding_style.mdc` — formatação Dart, naming, logging básico
 - `solid_principles.mdc` — SRP/OCP guidance que motivou várias das
   refatorações (e.g., extração de `BackupStrategy` por SGBD)

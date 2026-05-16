@@ -20,9 +20,9 @@ class DiagnosticsMessageHandler {
     DiagnosticsProvider? provider,
     IdempotencyRegistry? idempotencyRegistry,
     DateTime Function()? clock,
-  })  : _provider = provider ?? const NotConfiguredDiagnosticsProvider(),
-        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
-        _clock = clock ?? DateTime.now;
+  }) : _provider = provider ?? const NotConfiguredDiagnosticsProvider(),
+       _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
+       _clock = clock ?? DateTime.now;
 
   final DiagnosticsProvider _provider;
   final IdempotencyRegistry _idempotencyRegistry;
@@ -265,7 +265,11 @@ class DiagnosticsMessageHandler {
     try {
       return await compute();
     } on Object catch (e, st) {
-      LoggerService.warning('DiagnosticsMessageHandler: provider threw: $e', e, st);
+      LoggerService.warning(
+        'DiagnosticsMessageHandler: provider threw: $e',
+        e,
+        st,
+      );
       return DiagnosticsOutcome<T>.failure(
         error: 'Erro interno: $e',
         errorCode: ErrorCode.unknown,

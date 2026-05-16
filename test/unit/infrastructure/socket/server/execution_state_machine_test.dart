@@ -195,7 +195,10 @@ void main() {
 
     test('notFound nem unknown NAO sao tratados como terminais', () {
       // Sao meta-estados — cliente decide o que fazer.
-      expect(ExecutionStateMachine.isTerminal(ExecutionState.notFound), isFalse);
+      expect(
+        ExecutionStateMachine.isTerminal(ExecutionState.notFound),
+        isFalse,
+      );
       expect(ExecutionStateMachine.isTerminal(ExecutionState.unknown), isFalse);
     });
   });

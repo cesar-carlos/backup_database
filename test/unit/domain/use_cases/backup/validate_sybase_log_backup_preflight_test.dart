@@ -255,7 +255,10 @@ void main() {
         result.fold(
           (r) {
             expect(r.canProceed, isTrue);
-            expect(r.warning, contains('cadeia de logs pode estar comprometida'));
+            expect(
+              r.warning,
+              contains('cadeia de logs pode estar comprometida'),
+            );
           },
           (_) => fail('Expected success'),
         );

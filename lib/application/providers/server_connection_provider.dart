@@ -20,7 +20,7 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
     this._connectionManager,
     this._connectionLogRepository,
   ) {
-    loadConnections();
+    unawaited(loadConnections());
     _listenToConnectionStatus();
   }
 
@@ -47,13 +47,17 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   bool _isRefreshingStatus = false;
 
   void _listenToConnectionStatus() {
-    _statusSubscription?.cancel();
+    final previous = _statusSubscription;
+    if (previous != null) {
+      unawaited(previous.cancel());
+    }
     _statusSubscription = _connectionManager.statusStream?.listen((status) {
       // Quando a conexao cai externamente (timeout, RST, erro), invalida
       // cache de health/session — UI nao deve continuar mostrando dados
       // de servidor que ja saiu. Capabilities tambem foi limpo no
       // disconnect interno do ConnectionManager.
-      final isTerminal = status == ConnectionStatus.disconnected ||
+      final isTerminal =
+          status == ConnectionStatus.disconnected ||
           status == ConnectionStatus.error ||
           status == ConnectionStatus.authenticationFailed;
       if (isTerminal) {
@@ -65,7 +69,10 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
 
   @override
   void dispose() {
-    _statusSubscription?.cancel();
+    if (_statusSubscription != null) {
+      unawaited(_statusSubscription!.cancel());
+      _statusSubscription = null;
+    }
     super.dispose();
   }
 
@@ -109,6 +116,7 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   bool get isArtifactRetentionSupported =>
       _connectionManager.isArtifactRetentionSupported;
   bool get isChunkAckSupported => _connectionManager.isChunkAckSupported;
+  bool get isFirebirdSupported => _connectionManager.isFirebirdSupported;
 
   Future<void> loadConnections() async {
     await runAsync<void>(
@@ -368,29 +376,29 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
     try {
       final results = await Future.wait<Object?>([
         _connectionManager.getServerHealth().then(
-              (r) => r.fold<ServerHealth?>(
-                (h) => h,
-                (failure) {
-                  LoggerService.info(
-                    '[ServerConnectionProvider] getServerHealth falhou: '
-                    '$failure. Health permanece com cache anterior.',
-                  );
-                  return null;
-                },
-              ),
-            ),
+          (r) => r.fold<ServerHealth?>(
+            (h) => h,
+            (failure) {
+              LoggerService.info(
+                '[ServerConnectionProvider] getServerHealth falhou: '
+                '$failure. Health permanece com cache anterior.',
+              );
+              return null;
+            },
+          ),
+        ),
         _connectionManager.getServerSession().then(
-              (r) => r.fold<ServerSession?>(
-                (s) => s,
-                (failure) {
-                  LoggerService.info(
-                    '[ServerConnectionProvider] getServerSession falhou: '
-                    '$failure. Session permanece com cache anterior.',
-                  );
-                  return null;
-                },
-              ),
-            ),
+          (r) => r.fold<ServerSession?>(
+            (s) => s,
+            (failure) {
+              LoggerService.info(
+                '[ServerConnectionProvider] getServerSession falhou: '
+                '$failure. Session permanece com cache anterior.',
+              );
+              return null;
+            },
+          ),
+        ),
       ]);
 
       final newHealth = results[0] as ServerHealth?;

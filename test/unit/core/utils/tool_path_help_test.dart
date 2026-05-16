@@ -56,6 +56,11 @@ void main() {
       expect(msg, contains('SQL Anywhere'));
     });
 
+    test('dbisql is not classified as Firebird via isql substring', () {
+      final msg = ToolPathHelp.buildMessage('dbisql');
+      expect(msg, isNot(contains('Firebird')));
+    });
+
     test('classifies dbbackup', () {
       final msg = ToolPathHelp.buildMessage('dbbackup');
       expect(msg, startsWith('dbbackup não encontrado'));
@@ -64,6 +69,34 @@ void main() {
     test('classifies dbverify', () {
       final msg = ToolPathHelp.buildMessage('dbverify.exe');
       expect(msg, contains('SQL Anywhere'));
+    });
+  });
+
+  group('ToolPathHelp.buildMessage — Firebird family', () {
+    test('classifies gbak', () {
+      final msg = ToolPathHelp.buildMessage('gbak');
+      expect(msg, startsWith('gbak não encontrado'));
+      expect(msg, contains('Firebird'));
+    });
+
+    test('classifies nbackup', () {
+      final msg = ToolPathHelp.buildMessage('nbackup.exe');
+      expect(msg, contains('Firebird'));
+    });
+
+    test('classifies isql-fb', () {
+      final msg = ToolPathHelp.buildMessage('isql-fb');
+      expect(msg, contains('Firebird'));
+    });
+
+    test('classifies standalone isql as Firebird', () {
+      final msg = ToolPathHelp.buildMessage('isql');
+      expect(msg, contains('Firebird'));
+    });
+
+    test('classifies gstat', () {
+      final msg = ToolPathHelp.buildMessage('gstat');
+      expect(msg, contains('Firebird'));
     });
   });
 
@@ -112,16 +145,19 @@ void main() {
       );
     });
 
-    test('returns false when both markers are present but tool name absent', () {
-      const msg = "the term 'foo' is not recognized as the name of a cmdlet";
-      expect(
-        ToolPathHelp.isToolNotFoundError(msg, 'sqlcmd'),
-        isFalse,
-        reason:
-            'must require BOTH a not-found marker AND the tool name to '
-            'avoid false positives on unrelated errors',
-      );
-    });
+    test(
+      'returns false when both markers are present but tool name absent',
+      () {
+        const msg = "the term 'foo' is not recognized as the name of a cmdlet";
+        expect(
+          ToolPathHelp.isToolNotFoundError(msg, 'sqlcmd'),
+          isFalse,
+          reason:
+              'must require BOTH a not-found marker AND the tool name to '
+              'avoid false positives on unrelated errors',
+        );
+      },
+    );
 
     test('returns false when tool name is present but no not-found marker', () {
       const msg = 'sqlcmd: connection refused';

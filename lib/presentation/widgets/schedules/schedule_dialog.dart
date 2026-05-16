@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -9,6 +10,7 @@ import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
@@ -89,6 +91,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   List<SqlServerConfig> _sqlServerConfigs = [];
   List<SybaseConfig> _sybaseConfigs = [];
   List<PostgresConfig> _postgresConfigs = [];
+  List<FirebirdConfig> _firebirdConfigs = [];
   List<BackupDestination> _destinations = [];
   bool _isLoading = true;
 
@@ -99,6 +102,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     BackupType backupType,
   ) {
     if (databaseType != DatabaseType.postgresql &&
+        databaseType != DatabaseType.firebird &&
         backupType == BackupType.fullSingle) {
       return BackupType.full;
     }
@@ -173,7 +177,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
+      unawaited(_loadData());
     });
   }
 
@@ -216,12 +220,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     final sqlServerProvider = context.read<SqlServerConfigProvider>();
     final sybaseProvider = context.read<SybaseConfigProvider>();
     final postgresProvider = context.read<PostgresConfigProvider>();
+    final firebirdProvider = context.read<FirebirdConfigProvider>();
     final destinationProvider = context.read<DestinationProvider>();
 
     await Future.wait([
       sqlServerProvider.loadConfigs(),
       sybaseProvider.loadConfigs(),
       postgresProvider.loadConfigs(),
+      firebirdProvider.loadConfigs(),
       destinationProvider.loadDestinations(),
     ]);
 
@@ -230,14 +236,24 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         _sqlServerConfigs = sqlServerProvider.configs;
         _sybaseConfigs = sybaseProvider.configs;
         _postgresConfigs = postgresProvider.configs;
+        _firebirdConfigs = firebirdProvider.configs;
         _destinations = destinationProvider.destinations;
 
         if (_selectedDatabaseConfigId != null) {
-          final exists = _databaseType == DatabaseType.sqlServer
-              ? _sqlServerConfigs.any((c) => c.id == _selectedDatabaseConfigId)
-              : _databaseType == DatabaseType.sybase
-              ? _sybaseConfigs.any((c) => c.id == _selectedDatabaseConfigId)
-              : _postgresConfigs.any((c) => c.id == _selectedDatabaseConfigId);
+          final exists = switch (_databaseType) {
+            DatabaseType.sqlServer => _sqlServerConfigs.any(
+              (c) => c.id == _selectedDatabaseConfigId,
+            ),
+            DatabaseType.sybase => _sybaseConfigs.any(
+              (c) => c.id == _selectedDatabaseConfigId,
+            ),
+            DatabaseType.postgresql => _postgresConfigs.any(
+              (c) => c.id == _selectedDatabaseConfigId,
+            ),
+            DatabaseType.firebird => _firebirdConfigs.any(
+              (c) => c.id == _selectedDatabaseConfigId,
+            ),
+          };
 
           if (!exists) {
             _selectedDatabaseConfigId = null;
@@ -372,7 +388,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             items: DatabaseType.values.map((type) {
               return ComboBoxItem<DatabaseType>(
                 value: type,
-                child: Text(_getDatabaseTypeName(type)),
+                child: Text(DatabaseTypeMetadata.of(type).titleLabel),
               );
             }).toList(),
             onChanged: isEditing
@@ -425,7 +441,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                   BackupType.log,
                   if (isSybaseConvertedDifferential) BackupType.differential,
                 ];
-              } else if (_databaseType == DatabaseType.postgresql) {
+              } else if (_databaseType == DatabaseType.postgresql ||
+                  _databaseType == DatabaseType.firebird) {
                 allTypes = [
                   BackupType.full,
                   BackupType.fullSingle,
@@ -534,11 +551,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     final isLogBlocked = value == BackupType.log && !hasLog;
 
                     if (isDifferentialBlocked || isLogBlocked) {
-                      MessageModal.showWarning(
-                        context,
-                        message:
-                            'Este tipo de backup requer uma licença válida. '
-                            'Acesse Configurações > Licenciamento para mais informações.',
+                      unawaited(
+                        MessageModal.showWarning(
+                          context,
+                          message:
+                              'Este tipo de backup requer uma licença válida. '
+                              'Acesse Configurações > Licenciamento para mais informações.',
+                        ),
                       );
                       return;
                     }
@@ -630,11 +649,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                             false);
 
                     if (value == ScheduleType.interval && !hasInterval) {
-                      MessageModal.showWarning(
-                        context,
-                        message:
-                            'Agendamento por intervalo requer uma licença válida. '
-                            'Acesse Configurações > Licenciamento para mais informações.',
+                      unawaited(
+                        MessageModal.showWarning(
+                          context,
+                          message:
+                              'Agendamento por intervalo requer uma licença válida. '
+                              'Acesse Configurações > Licenciamento para mais informações.',
+                        ),
                       );
                       return;
                     }
@@ -1170,6 +1191,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                   : _databaseType == DatabaseType.postgresql
                                   ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
                                         'Garante que o backup está íntegro e pode ser restaurado.'
+                                  : _databaseType == DatabaseType.firebird
+                                  ? 'Verificação pós-backup para Firebird será definida com a implementação do gbak.'
                                   : 'Verifica a integridade do backup após criação usando dbvalid '
                                         '(fallback dbverify). Garante que o backup está íntegro.')
                             : 'Este recurso requer uma licença válida. '
@@ -1373,6 +1396,77 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   }
 
   Widget _buildDatabaseConfigDropdown() {
+    if (_databaseType == DatabaseType.firebird) {
+      return Consumer<FirebirdConfigProvider>(
+        builder: (context, provider, child) {
+          final firebirdItems = provider.configs.map((config) {
+            return ComboBoxItem<String>(
+              value: config.id,
+              child: Text(
+                '${config.name} (${config.host}:${config.port}/'
+                '${config.databaseFile})',
+              ),
+            );
+          }).toList();
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _firebirdConfigs.length != provider.configs.length) {
+              setState(() {
+                _firebirdConfigs = provider.configs;
+              });
+            }
+          });
+
+          String? validValue;
+          if (_selectedDatabaseConfigId != null) {
+            final exists = firebirdItems.any(
+              (item) => item.value == _selectedDatabaseConfigId,
+            );
+            validValue = exists ? _selectedDatabaseConfigId : null;
+            if (!exists) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _selectedDatabaseConfigId = null;
+                  });
+                }
+              });
+            }
+          } else {
+            validValue = null;
+          }
+
+          return AppDropdown<String>(
+            label: 'Configuração de Banco',
+            value: validValue,
+            placeholder: Text(
+              firebirdItems.isEmpty
+                  ? 'Nenhuma configuração disponível'
+                  : 'Selecione uma configuração',
+            ),
+            items: firebirdItems.isEmpty
+                ? [
+                    ComboBoxItem<String>(
+                      child: Text(
+                        'Nenhuma configuração disponível',
+                        style: FluentTheme.of(context).typography.caption
+                            ?.copyWith(fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  ]
+                : firebirdItems,
+            onChanged: firebirdItems.isEmpty
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedDatabaseConfigId = value;
+                    });
+                  },
+          );
+        },
+      );
+    }
+
     if (_databaseType == DatabaseType.sqlServer) {
       return Consumer<SqlServerConfigProvider>(
         builder: (context, provider, child) {
@@ -1837,11 +1931,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     checked: selected,
                     onChanged: (value) {
                       if ((value ?? false) && blocked) {
-                        MessageModal.showWarning(
-                          context,
-                          message:
-                              'Este destino requer uma licença válida. '
-                              'Acesse Configurações > Licenciamento para mais informações.',
+                        unawaited(
+                          MessageModal.showWarning(
+                            context,
+                            message:
+                                'Este destino requer uma licença válida. '
+                                'Acesse Configurações > Licenciamento para mais informações.',
+                          ),
                         );
                         return;
                       }
@@ -1861,17 +1957,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         );
       },
     );
-  }
-
-  String _getDatabaseTypeName(DatabaseType type) {
-    switch (type) {
-      case DatabaseType.sqlServer:
-        return 'SQL Server';
-      case DatabaseType.sybase:
-        return 'Sybase SQL Anywhere';
-      case DatabaseType.postgresql:
-        return 'PostgreSQL';
-    }
   }
 
   String _getScheduleTypeName(ScheduleType type) {
@@ -1982,9 +2067,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   Future<bool> _validateBackupFolder() async {
     final path = _backupFolderController.text.trim();
     if (path.isEmpty) {
-      MessageModal.showWarning(
-        context,
-        message: 'Pasta de backup é obrigatória',
+      unawaited(
+        MessageModal.showWarning(
+          context,
+          message: 'Pasta de backup é obrigatória',
+        ),
       );
       return false;
     }
@@ -2016,9 +2103,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         } on Object catch (e, s) {
           LoggerService.warning('Erro ao criar pasta: ${directory.path}', e, s);
           if (mounted) {
-            MessageModal.showError(
-              context,
-              message: 'Erro ao criar pasta: $e',
+            unawaited(
+              MessageModal.showError(
+                context,
+                message: 'Erro ao criar pasta: $e',
+              ),
             );
           }
           return false;
@@ -2033,11 +2122,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     );
     if (!hasPermission) {
       if (mounted) {
-        MessageModal.showError(
-          context,
-          message:
-              'Sem permissão de escrita na pasta selecionada.\n'
-              'Verifique as permissões do diretório.',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message:
+                'Sem permissão de escrita na pasta selecionada.\n'
+                'Verifique as permissões do diretório.',
+          ),
         );
       }
       return false;
@@ -2060,9 +2151,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         _nameFieldTouched = true;
       });
       _formKey.currentState?.validate();
-      MessageModal.showWarning(
-        context,
-        message: 'Nome do agendamento é obrigatório',
+      unawaited(
+        MessageModal.showWarning(
+          context,
+          message: 'Nome do agendamento é obrigatório',
+        ),
       );
       return;
     }
@@ -2075,17 +2168,21 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
 
     if (_selectedDatabaseConfigId == null) {
-      MessageModal.showWarning(
-        context,
-        message: 'Selecione uma configuração de banco de dados',
+      unawaited(
+        MessageModal.showWarning(
+          context,
+          message: 'Selecione uma configuração de banco de dados',
+        ),
       );
       return;
     }
 
     if (_selectedDestinationIds.isEmpty) {
-      MessageModal.showWarning(
-        context,
-        message: 'Selecione pelo menos um destino',
+      unawaited(
+        MessageModal.showWarning(
+          context,
+          message: 'Selecione pelo menos um destino',
+        ),
       );
       return;
     }
@@ -2093,18 +2190,29 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     await _loadData();
     if (!mounted) return;
 
-    final configExists = _databaseType == DatabaseType.sqlServer
-        ? _sqlServerConfigs.any((c) => c.id == _selectedDatabaseConfigId)
-        : _databaseType == DatabaseType.sybase
-        ? _sybaseConfigs.any((c) => c.id == _selectedDatabaseConfigId)
-        : _postgresConfigs.any((c) => c.id == _selectedDatabaseConfigId);
+    final configExists = switch (_databaseType) {
+      DatabaseType.sqlServer => _sqlServerConfigs.any(
+        (c) => c.id == _selectedDatabaseConfigId,
+      ),
+      DatabaseType.sybase => _sybaseConfigs.any(
+        (c) => c.id == _selectedDatabaseConfigId,
+      ),
+      DatabaseType.postgresql => _postgresConfigs.any(
+        (c) => c.id == _selectedDatabaseConfigId,
+      ),
+      DatabaseType.firebird => _firebirdConfigs.any(
+        (c) => c.id == _selectedDatabaseConfigId,
+      ),
+    };
 
     if (!configExists) {
-      MessageModal.showError(
-        context,
-        message:
-            'A configuração de banco selecionada não existe mais. '
-            'Por favor, selecione outra configuração.',
+      unawaited(
+        MessageModal.showError(
+          context,
+          message:
+              'A configuração de banco selecionada não existe mais. '
+              'Por favor, selecione outra configuração.',
+        ),
       );
       return;
     }
@@ -2113,12 +2221,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       final winRarAvailable = await _checkWinRarAvailable();
       if (!winRarAvailable) {
         if (mounted) {
-          MessageModal.showError(
-            context,
-            message:
-                'Formato RAR requer WinRAR instalado.\n\n'
-                'WinRAR não foi encontrado no sistema.\n'
-                'Por favor, instale o WinRAR ou escolha o formato ZIP.',
+          unawaited(
+            MessageModal.showError(
+              context,
+              message:
+                  'Formato RAR requer WinRAR instalado.\n\n'
+                  'WinRAR não foi encontrado no sistema.\n'
+                  'Por favor, instale o WinRAR ou escolha o formato ZIP.',
+            ),
           );
         }
         return;
@@ -2149,9 +2259,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       );
       final validation = sybaseOptions.validate();
       if (!validation.isValid) {
-        MessageModal.showWarning(
-          context,
-          message: 'Opções Sybase inválidas: ${validation.errorMessage}',
+        unawaited(
+          MessageModal.showWarning(
+            context,
+            message: 'Opções Sybase inválidas: ${validation.errorMessage}',
+          ),
         );
         return;
       }

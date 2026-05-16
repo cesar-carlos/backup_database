@@ -1,4 +1,5 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' hide Typography;
 import 'package:google_fonts/google_fonts.dart';
@@ -10,10 +11,11 @@ class AppTheme {
     final montserratTextTheme = GoogleFonts.montserratTextTheme();
     final theme = FluentThemeData.light();
     return theme.copyWith(
+      extensions: const [AppSemanticColors.light],
       accentColor: AccentColor('normal', const {
-        'normal': AppColors.primary,
-        'dark': AppColors.primaryDark,
-        'light': AppColors.primaryLight,
+        'normal': AppPalette.primary,
+        'dark': AppPalette.primaryDark,
+        'light': AppPalette.primaryLight,
       }),
       typography: Typography.raw(
         caption: montserratTextTheme.bodySmall,
@@ -34,10 +36,11 @@ class AppTheme {
     );
     final theme = FluentThemeData.dark();
     return theme.copyWith(
+      extensions: const [AppSemanticColors.dark],
       accentColor: AccentColor('normal', const {
-        'normal': AppColors.primary,
-        'dark': AppColors.primaryDark,
-        'light': AppColors.primaryLight,
+        'normal': AppPalette.primary,
+        'dark': AppPalette.primaryDark,
+        'light': AppPalette.primaryLight,
       }),
       typography: Typography.raw(
         caption: montserratTextTheme.bodySmall,
@@ -56,8 +59,9 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      extensions: const [AppSemanticColors.light],
       colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primary,
+        seedColor: AppPalette.primary,
       ),
       textTheme: GoogleFonts.montserratTextTheme(),
       appBarTheme: AppBarTheme(
@@ -66,7 +70,7 @@ class AppTheme {
         titleTextStyle: GoogleFonts.montserrat(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: AppColors.primary,
+          color: AppPalette.primary,
         ),
       ),
       cardTheme: CardThemeData(
@@ -103,8 +107,9 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      extensions: const [AppSemanticColors.dark],
       colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primary,
+        seedColor: AppPalette.primary,
         brightness: Brightness.dark,
       ),
       textTheme: GoogleFonts.montserratTextTheme(ThemeData.dark().textTheme),

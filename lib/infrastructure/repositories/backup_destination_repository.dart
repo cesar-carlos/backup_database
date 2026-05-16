@@ -72,8 +72,9 @@ class BackupDestinationRepository implements IBackupDestinationRepository {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao buscar destinos por tipo',
       action: () async {
-        final destinations =
-            await _database.backupDestinationDao.getByType(type.name);
+        final destinations = await _database.backupDestinationDao.getByType(
+          type.name,
+        );
         return destinations.map(_toEntity).toList();
       },
     );

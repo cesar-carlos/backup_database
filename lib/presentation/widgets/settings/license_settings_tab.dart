@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
@@ -127,21 +129,25 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                       );
                                   if (!context.mounted) return;
                                   if (success) {
-                                    MessageModal.showSuccess(
-                                      context,
-                                      message: appLocaleString(
+                                    unawaited(
+                                      MessageModal.showSuccess(
                                         context,
-                                        'Chave do dispositivo copiada para clipboard!',
-                                        'Device key copied to clipboard!',
+                                        message: appLocaleString(
+                                          context,
+                                          'Chave do dispositivo copiada para clipboard!',
+                                          'Device key copied to clipboard!',
+                                        ),
                                       ),
                                     );
                                   } else {
-                                    MessageModal.showError(
-                                      context,
-                                      message: appLocaleString(
+                                    unawaited(
+                                      MessageModal.showError(
                                         context,
-                                        'Erro ao copiar para clipboard',
-                                        'Error copying to clipboard',
+                                        message: appLocaleString(
+                                          context,
+                                          'Erro ao copiar para clipboard',
+                                          'Error copying to clipboard',
+                                        ),
                                       ),
                                     );
                                   }
@@ -178,25 +184,29 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                   );
                               if (!context.mounted) return;
                               if (success) {
-                                MessageModal.showSuccess(
-                                  context,
-                                  message: appLocaleString(
+                                unawaited(
+                                  MessageModal.showSuccess(
                                     context,
-                                    'Licença validada e salva com sucesso!',
-                                    'License validated and saved successfully!',
+                                    message: appLocaleString(
+                                      context,
+                                      'Licença validada e salva com sucesso!',
+                                      'License validated and saved successfully!',
+                                    ),
                                   ),
                                 );
                                 _licenseKeyController.clear();
                               } else {
-                                MessageModal.showError(
-                                  context,
-                                  message:
-                                      licenseProvider.error ??
-                                      appLocaleString(
-                                        context,
-                                        'Erro ao validar licença',
-                                        'Error validating license',
-                                      ),
+                                unawaited(
+                                  MessageModal.showError(
+                                    context,
+                                    message:
+                                        licenseProvider.error ??
+                                        appLocaleString(
+                                          context,
+                                          'Erro ao validar licença',
+                                          'Error validating license',
+                                        ),
+                                  ),
                                 );
                               }
                             },
@@ -740,12 +750,14 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                               setDialogState(() {
                                 errorMessage = null;
                               });
-                              MessageModal.showSuccess(
-                                ctx,
-                                message: appLocaleString(
+                              unawaited(
+                                MessageModal.showSuccess(
                                   ctx,
-                                  'Licença copiada para clipboard!',
-                                  'License copied to clipboard!',
+                                  message: appLocaleString(
+                                    ctx,
+                                    'Licença copiada para clipboard!',
+                                    'License copied to clipboard!',
+                                  ),
                                 ),
                               );
                             } else {

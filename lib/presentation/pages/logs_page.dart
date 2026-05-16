@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/log_provider.dart';
 import 'package:backup_database/application/services/log_service.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
@@ -24,7 +26,7 @@ class _LogsPageState extends State<LogsPage> {
     super.initState();
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LogProvider>().loadLogs();
+      unawaited(context.read<LogProvider>().loadLogs());
     });
   }
 
@@ -40,7 +42,7 @@ class _LogsPageState extends State<LogsPage> {
         _scrollController.position.maxScrollExtent * 0.8) {
       final provider = context.read<LogProvider>();
       if (provider.hasMore && !provider.isLoading) {
-        provider.loadMore();
+        unawaited(provider.loadMore());
       }
     }
   }
@@ -70,7 +72,9 @@ class _LogsPageState extends State<LogsPage> {
       await context.read<LogProvider>().cleanOldLogs();
       if (!mounted) return;
 
-      MessageModal.showSuccess(context, message: 'Logs limpos com sucesso');
+      unawaited(
+        MessageModal.showSuccess(context, message: 'Logs limpos com sucesso'),
+      );
     }
   }
 
@@ -88,9 +92,11 @@ class _LogsPageState extends State<LogsPage> {
     final format = _getFormatFromExtension(result);
     if (format == null) {
       if (mounted) {
-        MessageModal.showWarning(
-          context,
-          message: 'Formato de arquivo não suportado',
+        unawaited(
+          MessageModal.showWarning(
+            context,
+            message: 'Formato de arquivo não suportado',
+          ),
         );
       }
       return;
@@ -103,14 +109,18 @@ class _LogsPageState extends State<LogsPage> {
     );
 
     if (filePath != null && mounted) {
-      MessageModal.showInfo(
-        context,
-        message: 'Logs exportados para: $filePath',
+      unawaited(
+        MessageModal.showInfo(
+          context,
+          message: 'Logs exportados para: $filePath',
+        ),
       );
     } else if (mounted) {
-      MessageModal.showError(
-        context,
-        message: provider.error ?? 'Erro ao exportar logs',
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: provider.error ?? 'Erro ao exportar logs',
+        ),
       );
     }
   }

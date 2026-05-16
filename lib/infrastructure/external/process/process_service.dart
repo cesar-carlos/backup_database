@@ -41,6 +41,8 @@ class ProcessService {
     'SQLCMDPASSWORD',
     'PGPASSWORD',
     'DBPASSWORD',
+    'FIREBIRD_PASSWORD',
+    'ISC_PASSWORD',
   };
 
   static String _redactSensitiveInArg(String arg) {
@@ -53,6 +55,11 @@ class ProcessService {
     return arg;
   }
 
+  static bool _isPasswordCliFlag(String arg) {
+    final lower = arg.toLowerCase();
+    return lower == '-password' || lower == '-pas';
+  }
+
   static String redactCommandForLogging(
     String executable,
     List<String> arguments,
@@ -62,6 +69,10 @@ class ProcessService {
       final arg = arguments[i];
       if (arg == '-P' && i + 1 < arguments.length) {
         redactedArgs.add('-P');
+        redactedArgs.add('***REDACTED***');
+        i++;
+      } else if (_isPasswordCliFlag(arg) && i + 1 < arguments.length) {
+        redactedArgs.add(arg);
         redactedArgs.add('***REDACTED***');
         i++;
       } else {
@@ -226,6 +237,12 @@ class ProcessService {
             executableLower.contains('dbverify') ||
             executableLower.contains('dbvalid');
 
+        final isFirebirdTool =
+            executableLower.contains('gbak') ||
+            executableLower.contains('gstat') ||
+            executableLower.contains('isql') ||
+            executableLower.contains('nbackup');
+
         List<String>? commonPaths;
 
         if (isPostgresTool) {
@@ -286,6 +303,17 @@ class ProcessService {
             r'C:\Program Files\SQL Anywhere 11\Bin64',
             r'C:\Program Files (x86)\SQL Anywhere 11\Bin64',
           ];
+        } else if (isFirebirdTool) {
+          commonPaths = [
+            r'C:\Program Files\Firebird\Firebird_5_0\bin',
+            r'C:\Program Files\Firebird\Firebird_4_0\bin',
+            r'C:\Program Files\Firebird\Firebird_3_0\bin',
+            r'C:\Program Files (x86)\Firebird\Firebird_5_0\bin',
+            r'C:\Program Files (x86)\Firebird\Firebird_4_0\bin',
+            r'C:\Program Files (x86)\Firebird\Firebird_3_0\bin',
+            r'C:\Program Files\Firebird\Firebird_2_5\bin',
+            r'C:\Program Files (x86)\Firebird\Firebird_2_5\bin',
+          ];
         }
 
         if (commonPaths != null) {
@@ -299,6 +327,8 @@ class ProcessService {
                   ? 'PostgreSQL'
                   : isSqlCmdTool
                   ? 'SQL Server'
+                  : isFirebirdTool
+                  ? 'Firebird'
                   : 'Sybase';
               LoggerService.info(
                 'Executável $toolType encontrado em caminho comum: $executablePath',

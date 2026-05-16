@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/server_credential_provider.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/server_credential.dart';
@@ -93,14 +95,18 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
       );
       if (context.mounted) {
         if (success) {
-          MessageModal.showSuccess(
-            context,
-            message: 'Credencial criada com sucesso.',
+          unawaited(
+            MessageModal.showSuccess(
+              context,
+              message: 'Credencial criada com sucesso.',
+            ),
           );
         } else {
-          MessageModal.showError(
-            context,
-            message: provider.error ?? 'Erro ao criar credencial.',
+          unawaited(
+            MessageModal.showError(
+              context,
+              message: provider.error ?? 'Erro ao criar credencial.',
+            ),
           );
         }
       }
@@ -114,14 +120,18 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
       );
       if (context.mounted) {
         if (success) {
-          MessageModal.showSuccess(
-            context,
-            message: 'Credencial atualizada com sucesso.',
+          unawaited(
+            MessageModal.showSuccess(
+              context,
+              message: 'Credencial atualizada com sucesso.',
+            ),
           );
         } else {
-          MessageModal.showError(
-            context,
-            message: provider.error ?? 'Erro ao atualizar credencial.',
+          unawaited(
+            MessageModal.showError(
+              context,
+              message: provider.error ?? 'Erro ao atualizar credencial.',
+            ),
           );
         }
       }
@@ -157,14 +167,18 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
 
     if (context.mounted) {
       if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Credencial excluída com sucesso.',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: 'Credencial excluída com sucesso.',
+          ),
         );
       } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao excluir credencial.',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao excluir credencial.',
+          ),
         );
       }
     }
@@ -194,7 +208,9 @@ class _CredentialsTab extends StatelessWidget {
               CommandBarButton(
                 icon: const Icon(FluentIcons.refresh),
                 onPressed: () {
-                  context.read<ServerCredentialProvider>().loadCredentials();
+                  unawaited(
+                    context.read<ServerCredentialProvider>().loadCredentials(),
+                  );
                 },
               ),
               CommandBarButton(
@@ -231,7 +247,8 @@ class _CredentialsTab extends StatelessWidget {
                           ),
                           const SizedBox(height: 16),
                           Button(
-                            onPressed: () => provider.loadCredentials(),
+                            onPressed: () =>
+                                unawaited(provider.loadCredentials()),
                             child: const Text('Tentar Novamente'),
                           ),
                         ],
@@ -254,9 +271,11 @@ class _CredentialsTab extends StatelessWidget {
                   onEdit: onEditCredential,
                   onDelete: (id) => onConfirmDelete(context, id),
                   onToggleActive: (credential, active) {
-                    provider.updateCredential(
-                      credential,
-                      isActive: active,
+                    unawaited(
+                      provider.updateCredential(
+                        credential,
+                        isActive: active,
+                      ),
                     );
                   },
                 );

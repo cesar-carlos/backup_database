@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/auto_update_provider.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/config/app_mode.dart';
@@ -36,8 +38,8 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
   void initState() {
     super.initState();
     _clipboardService = getIt<ClipboardService>();
-    _loadPackageInfo();
-    _loadTempPath();
+    unawaited(_loadPackageInfo());
+    unawaited(_loadTempPath());
   }
 
   Future<void> _copyCompatibilityDiagnostics(String summary) async {
@@ -47,22 +49,26 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
       return;
     }
     if (copied) {
-      MessageModal.showSuccess(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showSuccess(
           context,
-          'Diagnóstico de compatibilidade copiado para a área de transferência.',
-          'Compatibility diagnostics copied to clipboard.',
+          message: appLocaleString(
+            context,
+            'Diagnóstico de compatibilidade copiado para a área de transferência.',
+            'Compatibility diagnostics copied to clipboard.',
+          ),
         ),
       );
       return;
     }
-    MessageModal.showError(
-      context,
-      message: appLocaleString(
+    unawaited(
+      MessageModal.showError(
         context,
-        'Não foi possível copiar o diagnóstico de compatibilidade.',
-        'Could not copy compatibility diagnostics.',
+        message: appLocaleString(
+          context,
+          'Não foi possível copiar o diagnóstico de compatibilidade.',
+          'Could not copy compatibility diagnostics.',
+        ),
       ),
     );
   }
@@ -147,13 +153,15 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
       if (mounted) {
         setState(() => _isLoadingTempPath = false);
         if (!success) {
-          MessageModal.showError(
-            context,
-            message: appLocaleString(
+          unawaited(
+            MessageModal.showError(
               context,
-              'Não foi possível definir a pasta temporária. Verifique se tem '
-                  'permissão de escrita.',
-              'Could not set temporary folder. Check write permissions.',
+              message: appLocaleString(
+                context,
+                'Não foi possível definir a pasta temporária. Verifique se tem '
+                    'permissão de escrita.',
+                'Could not set temporary folder. Check write permissions.',
+              ),
             ),
           );
           return;
@@ -162,12 +170,14 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
         if (!mounted) {
           return;
         }
-        MessageModal.showSuccess(
-          context,
-          message: appLocaleString(
+        unawaited(
+          MessageModal.showSuccess(
             context,
-            'Pasta temporária alterada com sucesso!',
-            'Temporary folder changed successfully!',
+            message: appLocaleString(
+              context,
+              'Pasta temporária alterada com sucesso!',
+              'Temporary folder changed successfully!',
+            ),
           ),
         );
       }
@@ -429,18 +439,18 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                             children: [
                               IconButton(
                                 icon: const Icon(FluentIcons.folder_open),
-                                onPressed: _changeTempPath,
+                                onPressed: () => unawaited(_changeTempPath()),
                               ),
                               IconButton(
                                 icon: const Icon(FluentIcons.refresh),
-                                onPressed: _loadTempPath,
+                                onPressed: () => unawaited(_loadTempPath()),
                               ),
                             ],
                           ),
                   ),
                   const SizedBox(height: 8),
                   FilledButton(
-                    onPressed: _changeTempPath,
+                    onPressed: () => unawaited(_changeTempPath()),
                     child: Text(
                       appLocaleString(
                         context,
@@ -451,7 +461,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   ),
                   const SizedBox(height: 8),
                   Button(
-                    onPressed: _resetTempPath,
+                    onPressed: () => unawaited(_resetTempPath()),
                     child: Text(
                       appLocaleString(
                         context,
@@ -486,8 +496,10 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 ),
                 const SizedBox(height: 8),
                 Button(
-                  onPressed: () => _copyCompatibilityDiagnostics(
-                    features.diagnosticSummary(),
+                  onPressed: () => unawaited(
+                    _copyCompatibilityDiagnostics(
+                      features.diagnosticSummary(),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,

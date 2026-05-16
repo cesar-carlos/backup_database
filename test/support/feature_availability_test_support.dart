@@ -24,17 +24,17 @@ const FeatureAvailabilitySnapshot kTestFeatureAvailabilityAllEnabled =
       embeddedWebviewOAuthEnabled: true,
     );
 
-void registerTestFeatureAvailability() {
+Future<void> registerTestFeatureAvailability() async {
   if (getIt.isRegistered<FeatureAvailabilityService>()) {
-    getIt.unregister<FeatureAvailabilityService>();
+    await getIt.unregister<FeatureAvailabilityService>();
   }
   getIt.registerSingleton<FeatureAvailabilityService>(
     FeatureAvailabilityService(kTestFeatureAvailabilityAllEnabled),
   );
 }
 
-void unregisterTestFeatureAvailability() {
+Future<void> unregisterTestFeatureAvailability() async {
   if (getIt.isRegistered<FeatureAvailabilityService>()) {
-    getIt.unregister<FeatureAvailabilityService>();
+    await getIt.unregister<FeatureAvailabilityService>();
   }
 }

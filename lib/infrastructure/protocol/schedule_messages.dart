@@ -258,7 +258,9 @@ ScheduleMutationResult readScheduleMutationResponse(Message message) {
   Schedule? schedule;
   if (p['schedule'] is Map) {
     try {
-      schedule = scheduleFromMap(Map<String, dynamic>.from(p['schedule'] as Map));
+      schedule = scheduleFromMap(
+        Map<String, dynamic>.from(p['schedule'] as Map),
+      );
     } on Object {
       schedule = null;
     }
@@ -318,7 +320,8 @@ Message createScheduleErrorMessage({
   ErrorCode? errorCode,
   int? statusCodeOverride,
 }) {
-  final statusCode = statusCodeOverride ??
+  final statusCode =
+      statusCodeOverride ??
       (errorCode != null
           ? StatusCodes.forErrorCode(errorCode)
           : StatusCodes.internalServerError);

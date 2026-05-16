@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/constants/integrity_ui_strings.dart';
 import 'package:backup_database/core/di/service_locator.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
@@ -23,7 +25,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SchedulerProvider>().loadSchedules();
+      unawaited(context.read<SchedulerProvider>().loadSchedules());
     });
   }
 
@@ -40,7 +42,9 @@ class _SchedulesPageState extends State<SchedulesPage> {
             CommandBarButton(
               icon: const Icon(FluentIcons.refresh),
               onPressed: () {
-                context.read<SchedulerProvider>().loadSchedules();
+                unawaited(
+                  context.read<SchedulerProvider>().loadSchedules(),
+                );
               },
             ),
             CommandBarButton(
@@ -94,10 +98,10 @@ class _SchedulesPageState extends State<SchedulesPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
+                              Icon(
                                 FluentIcons.error,
                                 size: 64,
-                                color: AppColors.error,
+                                color: context.appSemanticColors.danger,
                               ),
                               const SizedBox(height: 16),
                               Text(
@@ -169,16 +173,20 @@ class _SchedulesPageState extends State<SchedulesPage> {
           : await provider.updateSchedule(result);
 
       if (success && context.mounted) {
-        MessageModal.showSuccess(
-          context,
-          message: schedule == null
-              ? 'Agendamento criado com sucesso!'
-              : 'Agendamento atualizado com sucesso!',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: schedule == null
+                ? 'Agendamento criado com sucesso!'
+                : 'Agendamento atualizado com sucesso!',
+          ),
         );
       } else if (context.mounted) {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao salvar agendamento',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao salvar agendamento',
+          ),
         );
       }
     }
@@ -209,14 +217,18 @@ class _SchedulesPageState extends State<SchedulesPage> {
       final success = await provider.deleteSchedule(id);
 
       if (success && context.mounted) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Agendamento excluído com sucesso!',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: 'Agendamento excluído com sucesso!',
+          ),
         );
       } else if (context.mounted) {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao excluir agendamento',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao excluir agendamento',
+          ),
         );
       }
     }
@@ -294,14 +306,18 @@ class _SchedulesPageState extends State<SchedulesPage> {
     if (!context.mounted) return;
 
     if (success) {
-      MessageModal.showSuccess(
-        context,
-        message: 'Agendamento duplicado com sucesso!',
+      unawaited(
+        MessageModal.showSuccess(
+          context,
+          message: 'Agendamento duplicado com sucesso!',
+        ),
       );
     } else {
-      MessageModal.showError(
-        context,
-        message: provider.error ?? 'Erro ao duplicar agendamento',
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: provider.error ?? 'Erro ao duplicar agendamento',
+        ),
       );
     }
   }

@@ -116,10 +116,10 @@ void main() {
 
     test('falha do prober vira response com errorCode e statusCode', () async {
       prober.outcome = () => DatabaseProbeOutcome.failure(
-            latencyMs: 10,
-            error: 'cred invalida',
-            errorCode: ErrorCode.authenticationFailed,
-          );
+        latencyMs: 10,
+        error: 'cred invalida',
+        errorCode: ErrorCode.authenticationFailed,
+      );
       final req = createTestDatabaseConnectionRequest(
         databaseType: RemoteDatabaseType.sybase,
         databaseConfigId: 'x',

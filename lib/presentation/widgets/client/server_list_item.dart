@@ -1,3 +1,4 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -30,12 +31,6 @@ class ServerListItem extends StatelessWidget {
 
   bool get _isConnectedToThis =>
       connectionStatus == ConnectionStatus.connected && isActiveConnection;
-
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +72,7 @@ class ServerListItem extends StatelessWidget {
                       if (connection.lastConnectedAt != null) ...[
                         const SizedBox(height: 4),
                         Text(
-                          '${_t(context, 'Última conexão', 'Last connection')}: ${_formatDate(context, connection.lastConnectedAt!)}',
+                          '${appLocaleString(context, 'Última conexão', 'Last connection')}: ${_formatDate(context, connection.lastConnectedAt!)}',
                           style: FluentTheme.of(context).typography.caption,
                         ),
                       ],
@@ -93,7 +88,7 @@ class ServerListItem extends StatelessWidget {
                     children: [
                       if (onTestConnection != null) ...[
                         Tooltip(
-                          message: _t(
+                          message: appLocaleString(
                             context,
                             'Testar conexão',
                             'Test connection',
@@ -110,8 +105,12 @@ class ServerListItem extends StatelessWidget {
                       if (onConnect != null) ...[
                         Tooltip(
                           message: _isConnectedToThis
-                              ? _t(context, 'Desconectar', 'Disconnect')
-                              : _t(context, 'Conectar', 'Connect'),
+                              ? appLocaleString(
+                                  context,
+                                  'Desconectar',
+                                  'Disconnect',
+                                )
+                              : appLocaleString(context, 'Conectar', 'Connect'),
                           child: IconButton(
                             icon: Icon(
                               _isConnectedToThis
@@ -125,7 +124,7 @@ class ServerListItem extends StatelessWidget {
                       ],
                       if (onShowLogs != null) ...[
                         Tooltip(
-                          message: _t(
+                          message: appLocaleString(
                             context,
                             'Log desta conexão',
                             'Connection log',
@@ -141,12 +140,16 @@ class ServerListItem extends StatelessWidget {
                         Button(
                           onPressed: onEdit,
                           child: Text(
-                            _t(context, 'Esta conexão', 'This connection'),
+                            appLocaleString(
+                              context,
+                              'Esta conexão',
+                              'This connection',
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Tooltip(
-                          message: _t(
+                          message: appLocaleString(
                             context,
                             'Editar conexão',
                             'Edit connection',
@@ -201,20 +204,20 @@ class ServerListItem extends StatelessWidget {
   (String, IconData, Color) _getStatusInfo(BuildContext context) {
     if (isConnecting) {
       return (
-        _t(context, 'Conectando...', 'Connecting...'),
+        appLocaleString(context, 'Conectando...', 'Connecting...'),
         FluentIcons.sync,
         FluentTheme.of(context).accentColor,
       );
     }
     if (_isConnectedToThis) {
       return (
-        _t(context, 'Conectado', 'Connected'),
+        appLocaleString(context, 'Conectado', 'Connected'),
         FluentIcons.check_mark,
         FluentTheme.of(context).accentColor,
       );
     }
     return (
-      _t(context, 'Offline', 'Offline'),
+      appLocaleString(context, 'Offline', 'Offline'),
       FluentIcons.circle_stop,
       FluentTheme.of(context).resources.textFillColorSecondary,
     );
@@ -235,6 +238,6 @@ class ServerListItem extends StatelessWidget {
     if (diff.inMinutes > 0) {
       return isPt ? '${diff.inMinutes}min atras' : '${diff.inMinutes}min ago';
     }
-    return _t(context, 'Agora', 'Now');
+    return appLocaleString(context, 'Agora', 'Now');
   }
 }

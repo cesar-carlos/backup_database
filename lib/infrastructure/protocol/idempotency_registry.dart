@@ -43,8 +43,8 @@ class IdempotencyRegistry {
   IdempotencyRegistry({
     Duration ttl = const Duration(minutes: 5),
     DateTime Function()? clock,
-  })  : _ttl = ttl,
-        _clock = clock ?? DateTime.now;
+  }) : _ttl = ttl,
+       _clock = clock ?? DateTime.now;
 
   final Duration _ttl;
   final DateTime Function() _clock;

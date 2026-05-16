@@ -27,7 +27,7 @@ alwaysApply: true
 ### Project-specific (`backup_database`)
 
 - **`project_specifics.mdc`**: decisions specific to this repo (Clean Architecture + DDD, dependencies, desktop specifics)
-- **`architectural_patterns.mdc`**: consolidated DRY helpers and anti-patterns from audit waves (`RepositoryGuard`, `AsyncStateMixin`, `ByteFormat`, `_safeNotifierCall`, common bug recurrences). **Read this BEFORE adding new repositories, providers, or orchestration services** to avoid reintroducing eliminated boilerplate.
+- **`architectural_patterns.mdc`**: consolidated DRY helpers and anti-patterns from audit waves (`RepositoryGuard`, `AsyncStateMixin`, `ByteFormat`, `_safeNotifierCall`, common bug recurrences), plus **§8 Design system** (tokens, `context.colors`, composition) and **§9 Hexagonal / generic SGBDs** (base repo, `GenericDatabaseBackupStrategy`, `registerSgbd`; ADR‑004). **Read this BEFORE adding new repositories, providers, orchestration services, or shared UI** to avoid reintroducing eliminated boilerplate.
 
 ## Copying to other projects
 

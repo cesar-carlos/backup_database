@@ -245,7 +245,6 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
     }
   }
 
-
   String _getGoogleDriveErrorMessage(dynamic e) {
     if (e is Failure && e.code != null) {
       if (e.code == FailureCodes.integrityValidationInconclusive) {
@@ -382,7 +381,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
         Duration(days: config.retentionDays),
       );
 
-      final folders = await _executeWithTokenRefresh(() async {
+      final folders = await _executeWithTokenRefresh<drive.FileList>(() async {
         final clientResult = await _getAuthenticatedClient();
         if (clientResult.isError()) {
           throw clientResult.exceptionOrNull()!;
@@ -401,13 +400,13 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
       });
 
       var deletedCount = 0;
-      for (final folder in folders.files ?? []) {
+      for (final folder in folders.files ?? const <drive.File>[]) {
         try {
-          final folderName = folder.name as String?;
+          final folderName = folder.name;
           if (folderName == null || folderName.isEmpty) continue;
           final folderDate = DateFormat('yyyy-MM-dd').parse(folderName);
           if (folderDate.isBefore(cutoffDate)) {
-            final folderId = folder.id as String?;
+            final folderId = folder.id;
             if (folderId == null) continue;
 
             final hasProtectedFile = await _folderHasProtectedFile(
@@ -431,7 +430,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
               await driveApi.files.delete(folderId);
             });
             deletedCount++;
-            LoggerService.debug('Pasta deletada: ${folder.name}');
+            LoggerService.debug('Pasta deletada: $folderName');
           }
         } on Object catch (e) {
           LoggerService.debug('Erro ao deletar pasta vazia: $e');
@@ -463,7 +462,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
   ) async {
     if (protectedShortIds.isEmpty) return false;
 
-    final result = await _executeWithTokenRefresh(() async {
+    final fileList = await _executeWithTokenRefresh<drive.FileList>(() async {
       final clientResult = await _getAuthenticatedClient();
       if (clientResult.isError()) {
         throw clientResult.exceptionOrNull()!;
@@ -479,8 +478,8 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
       );
     });
 
-    for (final file in result.files ?? []) {
-      final name = file.name as String?;
+    for (final file in fileList.files ?? const <drive.File>[]) {
+      final name = file.name;
       if (name != null &&
           SybaseBackupPathSuffix.isPathProtected(name, protectedShortIds)) {
         return true;

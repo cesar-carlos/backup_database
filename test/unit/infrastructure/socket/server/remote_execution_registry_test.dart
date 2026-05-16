@@ -71,7 +71,10 @@ void main() {
 
       // Estado original preservado (defesa contra registro parcial)
       expect(registry.activeCount, 1);
-      expect(registry.getActiveByScheduleId('schedule-1')!.clientId, 'client-A');
+      expect(
+        registry.getActiveByScheduleId('schedule-1')!.clientId,
+        'client-A',
+      );
       expect(registry.getByRunId(runId2), isNull);
     });
 
@@ -119,8 +122,14 @@ void main() {
       );
 
       expect(registry.activeCount, 2);
-      expect(registry.getActiveByScheduleId('schedule-1')!.clientId, 'client-A');
-      expect(registry.getActiveByScheduleId('schedule-2')!.clientId, 'client-B');
+      expect(
+        registry.getActiveByScheduleId('schedule-1')!.clientId,
+        'client-A',
+      );
+      expect(
+        registry.getActiveByScheduleId('schedule-2')!.clientId,
+        'client-B',
+      );
     });
 
     test('unregister removes both indexes (runId and scheduleId)', () {
@@ -180,35 +189,37 @@ void main() {
       expect(registry.hasAny, isFalse);
     });
 
-    test('all returns snapshot iteration safe against concurrent unregister',
-        () {
-      // Importante: `_onProgressChanged` itera `registry.all`. Se um
-      // contexto for desregistrado durante a iteracao (ex.: dispose),
-      // a iteracao nao pode lancar `ConcurrentModificationError`.
-      final runId1 = registry.generateRunId('s1');
-      final runId2 = registry.generateRunId('s2');
-      registry.register(
-        runId: runId1,
-        scheduleId: 's1',
-        clientId: 'c1',
-        requestId: 1,
-        sendToClient: _noopSend,
-      );
-      registry.register(
-        runId: runId2,
-        scheduleId: 's2',
-        clientId: 'c2',
-        requestId: 2,
-        sendToClient: _noopSend,
-      );
+    test(
+      'all returns snapshot iteration safe against concurrent unregister',
+      () {
+        // Importante: `_onProgressChanged` itera `registry.all`. Se um
+        // contexto for desregistrado durante a iteracao (ex.: dispose),
+        // a iteracao nao pode lancar `ConcurrentModificationError`.
+        final runId1 = registry.generateRunId('s1');
+        final runId2 = registry.generateRunId('s2');
+        registry.register(
+          runId: runId1,
+          scheduleId: 's1',
+          clientId: 'c1',
+          requestId: 1,
+          sendToClient: _noopSend,
+        );
+        registry.register(
+          runId: runId2,
+          scheduleId: 's2',
+          clientId: 'c2',
+          requestId: 2,
+          sendToClient: _noopSend,
+        );
 
-      // Tira snapshot antes de modificar
-      final snapshot = registry.all.toList(growable: false);
-      registry.unregister(runId1);
+        // Tira snapshot antes de modificar
+        final snapshot = registry.all.toList(growable: false);
+        registry.unregister(runId1);
 
-      // Snapshot nao deve ser afetado
-      expect(snapshot.length, 2);
-      expect(registry.activeCount, 1);
-    });
+        // Snapshot nao deve ser afetado
+        expect(snapshot.length, 2);
+        expect(registry.activeCount, 1);
+      },
+    );
   });
 }

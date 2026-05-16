@@ -26,9 +26,9 @@ class ExecutionQueueMessageHandler {
     QueueProvider? queueProvider,
     int maxQueueSize = 50,
     DateTime Function()? clock,
-  })  : _queueProvider = queueProvider ?? _emptyQueue,
-        _maxQueueSize = maxQueueSize,
-        _clock = clock ?? DateTime.now;
+  }) : _queueProvider = queueProvider ?? _emptyQueue,
+       _maxQueueSize = maxQueueSize,
+       _clock = clock ?? DateTime.now;
 
   final QueueProvider _queueProvider;
   final int _maxQueueSize;

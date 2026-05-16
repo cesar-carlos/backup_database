@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/connection_log_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
@@ -23,7 +25,9 @@ class ServerLoginPage extends StatelessWidget {
             CommandBarButton(
               icon: const Icon(FluentIcons.refresh),
               onPressed: () {
-                context.read<ServerConnectionProvider>().loadConnections();
+                unawaited(
+                  context.read<ServerConnectionProvider>().loadConnections(),
+                );
               },
             ),
             CommandBarButton(
@@ -157,14 +161,18 @@ class ServerLoginPage extends StatelessWidget {
       );
       if (context.mounted) {
         if (success) {
-          MessageModal.showSuccess(
-            context,
-            message: 'Conexão salva com sucesso.',
+          unawaited(
+            MessageModal.showSuccess(
+              context,
+              message: 'Conexão salva com sucesso.',
+            ),
           );
         } else {
-          MessageModal.showError(
-            context,
-            message: provider.error ?? 'Erro ao salvar conexão.',
+          unawaited(
+            MessageModal.showError(
+              context,
+              message: provider.error ?? 'Erro ao salvar conexão.',
+            ),
           );
         }
       }
@@ -179,14 +187,18 @@ class ServerLoginPage extends StatelessWidget {
       );
       if (context.mounted) {
         if (success) {
-          MessageModal.showSuccess(
-            context,
-            message: 'Conexão atualizada com sucesso.',
+          unawaited(
+            MessageModal.showSuccess(
+              context,
+              message: 'Conexão atualizada com sucesso.',
+            ),
           );
         } else {
-          MessageModal.showError(
-            context,
-            message: provider.error ?? 'Erro ao atualizar conexão.',
+          unawaited(
+            MessageModal.showError(
+              context,
+              message: provider.error ?? 'Erro ao atualizar conexão.',
+            ),
           );
         }
       }
@@ -197,7 +209,7 @@ class ServerLoginPage extends StatelessWidget {
     BuildContext context,
     ServerConnection connection,
   ) async {
-    context.read<ConnectionLogProvider>().loadLogs();
+    unawaited(context.read<ConnectionLogProvider>().loadLogs());
     if (!context.mounted) return;
     await showDialog<void>(
       context: context,
@@ -257,15 +269,19 @@ class ServerLoginPage extends StatelessWidget {
     final ok = await provider.testConnection(connection);
     if (!context.mounted) return;
     if (ok) {
-      MessageModal.showSuccess(
-        context,
-        message:
-            'Conexão bem-sucedida com ${connection.host}:${connection.port}',
+      unawaited(
+        MessageModal.showSuccess(
+          context,
+          message:
+              'Conexão bem-sucedida com ${connection.host}:${connection.port}',
+        ),
       );
     } else {
-      MessageModal.showError(
-        context,
-        message: provider.error ?? 'Falha ao conectar.',
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: provider.error ?? 'Falha ao conectar.',
+        ),
       );
     }
   }
@@ -298,14 +314,18 @@ class ServerLoginPage extends StatelessWidget {
 
     if (context.mounted) {
       if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Conexão excluída com sucesso.',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: 'Conexão excluída com sucesso.',
+          ),
         );
       } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao excluir conexão.',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao excluir conexão.',
+          ),
         );
       }
     }

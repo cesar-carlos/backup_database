@@ -1,6 +1,9 @@
 import 'dart:async';
 
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/widgets/common/action_button.dart';
+import 'package:backup_database/presentation/widgets/common/cancel_button.dart';
 import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' show ScaffoldMessenger, SnackBar, Text;
@@ -8,6 +11,8 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 enum MessageType { success, info, warning, error }
 
+/// **Organism** — modal message surface with semantic accents and design
+/// tokens.
 class MessageModal extends StatelessWidget {
   const MessageModal({
     required this.title,
@@ -17,6 +22,7 @@ class MessageModal extends StatelessWidget {
     this.type = MessageType.success,
     this.onCopy,
   });
+
   final String title;
   final String message;
   final String? buttonLabel;
@@ -33,7 +39,8 @@ class MessageModal extends StatelessWidget {
   }) {
     return showDialog<void>(
       context: context,
-      builder: (context) => MessageModal(
+      transitionDuration: AppDuration.normal,
+      builder: (BuildContext context) => MessageModal(
         title: title,
         message: message,
         buttonLabel: buttonLabel,
@@ -114,21 +121,65 @@ class MessageModal extends StatelessWidget {
     );
   }
 
+  static Future<bool> showConfirm(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String confirmLabel,
+    IconData? confirmIcon,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      transitionDuration: AppDuration.normal,
+      builder: (BuildContext dialogContext) {
+        return ContentDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            CancelButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+            ),
+            ActionButton(
+              label: confirmLabel,
+              icon: confirmIcon,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
+  Color _colorFor(AppSemanticColors colors) {
+    switch (type) {
+      case MessageType.success:
+        return colors.success;
+      case MessageType.info:
+        return colors.info;
+      case MessageType.warning:
+        return colors.warning;
+      case MessageType.error:
+        return colors.danger;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final texts = WidgetTexts.fromContext(context);
-    final color = _getColor();
+    final colors = context.colors;
+    final color = _colorFor(colors);
     final icon = _getIcon();
     final showErrorType = type == MessageType.error;
 
     final copyButton = (onCopy != null || showErrorType)
         ? Button(
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: message));
+              unawaited(Clipboard.setData(ClipboardData(text: message)));
               onCopy?.call();
-              final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-              if (context.mounted && scaffoldMessenger != null) {
-                scaffoldMessenger.showSnackBar(
+              final messenger = ScaffoldMessenger.maybeOf(context);
+              if (context.mounted && messenger != null) {
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text('Texto copiado'),
                     duration: Duration(seconds: 2),
@@ -136,54 +187,60 @@ class MessageModal extends StatelessWidget {
                 );
               }
             },
-            child: const Text('Copiar'),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(
+                vertical: AppSpacing.md,
+                horizontal: AppSpacing.sm,
+              ),
+              child: Text('Copiar'),
+            ),
           )
         : null;
 
-    return ContentDialog(
-      title: Row(
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: FluentTheme.of(context).typography.title?.copyWith(
-                color: color,
-                fontWeight: FontWeight.bold,
+    return Semantics(
+      namesRoute: true,
+      label: title,
+      child: ContentDialog(
+        title: Row(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(width: AppSpacing.sm, height: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                title,
+                style: FluentTheme.of(context).typography.title?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+            ),
+          ],
+        ),
+        content: Padding(
+          padding: AppSpacing.paddingLg,
+          child: SizedBox(
+            width: 600,
+            child: SelectableText(
+              message,
+              style: FluentTheme.of(context).typography.body,
+            ),
+          ),
+        ),
+        actions: [
+          ...copyButton != null ? [copyButton] : const <Widget>[],
+          Button(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.md,
+                horizontal: AppSpacing.sm,
+              ),
+              child: Text(buttonLabel ?? texts.ok),
             ),
           ),
         ],
       ),
-      content: SizedBox(
-        width: 600,
-        child: SelectableText(
-          message,
-          style: FluentTheme.of(context).typography.body,
-        ),
-      ),
-      actions: [
-        ...copyButton != null ? [copyButton] : const [],
-        Button(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(buttonLabel ?? texts.ok),
-        ),
-      ],
     );
-  }
-
-  Color _getColor() {
-    switch (type) {
-      case MessageType.success:
-        return AppColors.success;
-      case MessageType.info:
-        return AppColors.primary;
-      case MessageType.warning:
-        return AppColors.warning;
-      case MessageType.error:
-        return AppColors.error;
-    }
   }
 
   IconData _getIcon() {

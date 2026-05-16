@@ -433,7 +433,6 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
     );
   }
 
-
   /// Verifica se o serviço está disponível.
   bool get isAvailable => _isAvailable;
 }

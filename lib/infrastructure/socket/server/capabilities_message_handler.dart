@@ -33,13 +33,16 @@ class CapabilitiesMessageHandler {
     DateTime Function()? clock,
     int chunkSize = 65536,
     String compression = 'gzip',
-  })  : _clock = clock ?? DateTime.now,
-        _chunkSize = chunkSize,
-        _compression = compression;
+    bool supportsFirebird = false,
+  }) : _clock = clock ?? DateTime.now,
+       _chunkSize = chunkSize,
+       _compression = compression,
+       _supportsFirebird = supportsFirebird;
 
   final DateTime Function() _clock;
   final int _chunkSize;
   final String _compression;
+  final bool _supportsFirebird;
 
   Future<void> handle(
     String clientId,
@@ -68,6 +71,7 @@ class CapabilitiesMessageHandler {
         supportsArtifactRetention: true,
         supportsChunkAck: false,
         supportsExecutionQueue: true,
+        supportsFirebird: _supportsFirebird,
         chunkSize: _chunkSize,
         compression: _compression,
         serverTimeUtc: _clock(),

@@ -85,7 +85,8 @@ class ExecutionStateMachine {
 
   /// `true` se o estado nao admite mais transicoes (cliente pode
   /// limpar timers de polling, fechar streams etc.).
-  static bool isTerminal(ExecutionState state) => terminalStates.contains(state);
+  static bool isTerminal(ExecutionState state) =>
+      terminalStates.contains(state);
 
   /// Lista de transicoes permitidas a partir de [from]. Util para UIs
   /// que mostram "acoes disponiveis" para um runId (ex.: botao Cancelar

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/services/i_license_cache_invalidator.dart';
 import 'package:backup_database/application/services/license_generation_service.dart';
@@ -20,8 +22,8 @@ class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
        _licenseRepository = licenseRepository,
        _deviceKeyService = deviceKeyService,
        _cacheInvalidator = cacheInvalidator {
-    loadDeviceKey();
-    loadLicense();
+    unawaited(loadDeviceKey());
+    unawaited(loadLicense());
   }
   final ILicenseValidationService _validationService;
   final LicenseGenerationService _generationService;

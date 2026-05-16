@@ -98,7 +98,7 @@ RunLogsResult readRunLogsResponse(Message message) {
     totalLines: p['totalLines'] is int ? p['totalLines'] as int : lines.length,
     serverTimeUtc: p['serverTimeUtc'] is String
         ? (DateTime.tryParse(p['serverTimeUtc'] as String) ??
-            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+              DateTime.fromMillisecondsSinceEpoch(0).toUtc())
         : DateTime.fromMillisecondsSinceEpoch(0).toUtc(),
   );
 }
@@ -185,18 +185,24 @@ class RunErrorDetailsResult {
 
 RunErrorDetailsResult readRunErrorDetailsResponse(Message message) {
   final p = message.payload;
-  final errorCodeRaw = p['errorCode'] is String ? p['errorCode'] as String : null;
+  final errorCodeRaw = p['errorCode'] is String
+      ? p['errorCode'] as String
+      : null;
   return RunErrorDetailsResult(
     runId: p['runId'] is String ? p['runId'] as String : '',
     found: p['found'] is bool && p['found'] as bool,
     serverTimeUtc: p['serverTimeUtc'] is String
         ? (DateTime.tryParse(p['serverTimeUtc'] as String) ??
-            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+              DateTime.fromMillisecondsSinceEpoch(0).toUtc())
         : DateTime.fromMillisecondsSinceEpoch(0).toUtc(),
-    errorMessage: p['errorMessage'] is String ? p['errorMessage'] as String : null,
+    errorMessage: p['errorMessage'] is String
+        ? p['errorMessage'] as String
+        : null,
     errorCode: errorCodeRaw != null ? ErrorCode.fromString(errorCodeRaw) : null,
     stackTrace: p['stackTrace'] is String ? p['stackTrace'] as String : null,
-    context: p['context'] is Map ? Map<String, dynamic>.from(p['context'] as Map) : null,
+    context: p['context'] is Map
+        ? Map<String, dynamic>.from(p['context'] as Map)
+        : null,
   );
 }
 
@@ -294,10 +300,12 @@ ArtifactMetadataResult readArtifactMetadataResponse(Message message) {
     found: p['found'] is bool && p['found'] as bool,
     serverTimeUtc: p['serverTimeUtc'] is String
         ? (DateTime.tryParse(p['serverTimeUtc'] as String) ??
-            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+              DateTime.fromMillisecondsSinceEpoch(0).toUtc())
         : DateTime.fromMillisecondsSinceEpoch(0).toUtc(),
     sizeBytes: p['sizeBytes'] is int ? p['sizeBytes'] as int : null,
-    hashAlgorithm: p['hashAlgorithm'] is String ? p['hashAlgorithm'] as String : null,
+    hashAlgorithm: p['hashAlgorithm'] is String
+        ? p['hashAlgorithm'] as String
+        : null,
     hashValue: p['hashValue'] is String ? p['hashValue'] as String : null,
     stagingPath: p['stagingPath'] is String ? p['stagingPath'] as String : null,
     expiresAt: p['expiresAt'] is String
@@ -390,7 +398,7 @@ CleanupStagingResult readCleanupStagingResponse(Message message) {
     cleaned: p['cleaned'] is bool && p['cleaned'] as bool,
     serverTimeUtc: p['serverTimeUtc'] is String
         ? (DateTime.tryParse(p['serverTimeUtc'] as String) ??
-            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+              DateTime.fromMillisecondsSinceEpoch(0).toUtc())
         : DateTime.fromMillisecondsSinceEpoch(0).toUtc(),
     bytesFreed: p['bytesFreed'] is int ? p['bytesFreed'] as int : null,
     message: p['message'] is String ? p['message'] as String : null,

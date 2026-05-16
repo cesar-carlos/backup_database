@@ -61,21 +61,25 @@ void main() {
     );
   });
 
-  test('copyToStaging uses remoteFolderKey when set (staging por runId)', () async {
-    final sourceFile = File(p.join(tempRoot.path, 'x.bak'))..writeAsStringSync('z');
-    const runKey = 'sched-1_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  test(
+    'copyToStaging uses remoteFolderKey when set (staging por runId)',
+    () async {
+      final sourceFile = File(p.join(tempRoot.path, 'x.bak'))
+        ..writeAsStringSync('z');
+      const runKey = 'sched-1_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-    final relative = await service.copyToStaging(
-      sourceFile.path,
-      'sched-1',
-      remoteFolderKey: runKey,
-    );
+      final relative = await service.copyToStaging(
+        sourceFile.path,
+        'sched-1',
+        remoteFolderKey: runKey,
+      );
 
-    expect(relative, 'remote/$runKey/x.bak');
-    final staged = File(p.join(transferBase.path, 'remote', runKey, 'x.bak'));
-    expect(await staged.exists(), isTrue);
-    expect(await staged.readAsString(), 'z');
-  });
+      expect(relative, 'remote/$runKey/x.bak');
+      final staged = File(p.join(transferBase.path, 'remote', runKey, 'x.bak'));
+      expect(await staged.exists(), isTrue);
+      expect(await staged.readAsString(), 'z');
+    },
+  );
 
   test('cleanupStaging removes remoteFolderKey directory when set', () async {
     final f = File(p.join(transferBase.path, 'remote', 'k99', 'f.txt'));

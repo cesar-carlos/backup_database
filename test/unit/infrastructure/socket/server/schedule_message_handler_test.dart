@@ -151,7 +151,10 @@ void main() {
           contains('Backup diferencial requer licença'),
         );
         verifyNever(
-          () => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')),
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
         );
         verifyNever(() => progressNotifier.tryStartBackup(any()));
       },
@@ -170,7 +173,10 @@ void main() {
           ),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
         when(
-          () => executeBackup(scheduleId, executionOrigin: any(named: 'executionOrigin')),
+          () => executeBackup(
+            scheduleId,
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
 
         Message? sentMessage;
@@ -188,9 +194,9 @@ void main() {
         expect(sentMessage, isNotNull);
         verify(
           () => executeBackup(
-                scheduleId,
-                executionOrigin: ExecutionOrigin.remoteCommand,
-              ),
+            scheduleId,
+            executionOrigin: ExecutionOrigin.remoteCommand,
+          ),
         ).called(1);
       },
     );
@@ -200,13 +206,19 @@ void main() {
     test(
       'execucao bem-sucedida desregistra contexto do registry',
       () async {
-        when(() => scheduleRepository.getById(scheduleId))
-            .thenAnswer((_) async => rd.Success(schedule));
         when(
-          () => licensePolicyService.validateExecutionCapabilities(any(), any()),
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () =>
+              licensePolicyService.validateExecutionCapabilities(any(), any()),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
-        when(() => executeBackup(scheduleId, executionOrigin: any(named: 'executionOrigin')))
-            .thenAnswer((_) async => const rd.Success(rd.unit));
+        when(
+          () => executeBackup(
+            scheduleId,
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        ).thenAnswer((_) async => const rd.Success(rd.unit));
 
         Future<void> noopSend(String clientId, Message msg) async {}
 
@@ -227,13 +239,19 @@ void main() {
     test(
       'execucao com falha no executeBackup tambem desregistra contexto',
       () async {
-        when(() => scheduleRepository.getById(scheduleId))
-            .thenAnswer((_) async => rd.Success(schedule));
         when(
-          () => licensePolicyService.validateExecutionCapabilities(any(), any()),
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () =>
+              licensePolicyService.validateExecutionCapabilities(any(), any()),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
-        when(() => executeBackup(scheduleId, executionOrigin: any(named: 'executionOrigin')))
-            .thenAnswer(
+        when(
+          () => executeBackup(
+            scheduleId,
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        ).thenAnswer(
           (_) async => const rd.Failure(BackupFailure(message: 'erro')),
         );
 
@@ -357,7 +375,10 @@ void main() {
           contains('Já existe um backup em execução para este agendamento'),
         );
         verifyNever(
-          () => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')),
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
         );
         verifyNever(() => progressNotifier.tryStartBackup(any()));
         // client-A continua ativo (nao foi sobrescrito como acontecia
@@ -372,17 +393,23 @@ void main() {
     test(
       'execucao popula o registry com clientId/requestId corretos durante o backup',
       () async {
-        when(() => scheduleRepository.getById(scheduleId))
-            .thenAnswer((_) async => rd.Success(schedule));
         when(
-          () => licensePolicyService.validateExecutionCapabilities(any(), any()),
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () =>
+              licensePolicyService.validateExecutionCapabilities(any(), any()),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
 
         // Captura o estado do registry no momento em que o backup esta
         // rodando — antes da chamada terminar e desregistrar.
         RemoteExecutionContext? capturedContext;
-        when(() => executeBackup(scheduleId, executionOrigin: any(named: 'executionOrigin')))
-            .thenAnswer((_) async {
+        when(
+          () => executeBackup(
+            scheduleId,
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        ).thenAnswer((_) async {
           capturedContext = executionRegistry.getActiveByScheduleId(scheduleId);
           return const rd.Success(rd.unit);
         });
@@ -497,10 +524,12 @@ void main() {
     test(
       'license policy fail -> LICENSE_DENIED (403)',
       () async {
-        when(() => scheduleRepository.getById(scheduleId))
-            .thenAnswer((_) async => rd.Success(schedule));
         when(
-          () => licensePolicyService.validateExecutionCapabilities(any(), any()),
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () =>
+              licensePolicyService.validateExecutionCapabilities(any(), any()),
         ).thenAnswer(
           (_) async => const rd.Failure(
             ValidationFailure(message: 'Licenca expirada'),

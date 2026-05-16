@@ -212,8 +212,9 @@ class EmailConfigRepository implements IEmailConfigRepository {
       (failure) {
         // O sentinel sinaliza "não existe ainda → criar". Qualquer outra
         // falha é um erro real de I/O e deve ser propagado.
-        final original =
-            failure is DatabaseFailure ? failure.originalError : null;
+        final original = failure is DatabaseFailure
+            ? failure.originalError
+            : null;
         if (original is _MissingExistingRowSentinel) {
           return create(config);
         }
@@ -492,7 +493,6 @@ class EmailConfigRepository implements IEmailConfigRepository {
 
     return const rd.Success(unit);
   }
-
 }
 
 /// Sentinel para o `save()`: sinaliza que `getById` retornou `null` (não

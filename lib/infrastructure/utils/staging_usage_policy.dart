@@ -21,7 +21,8 @@ class StagingUsagePolicy {
     return StagingUsageLevel.ok;
   }
 
-  static bool shouldBlock(int bytes) => levelFor(bytes) == StagingUsageLevel.block;
+  static bool shouldBlock(int bytes) =>
+      levelFor(bytes) == StagingUsageLevel.block;
 }
 
 enum StagingUsageLevel {

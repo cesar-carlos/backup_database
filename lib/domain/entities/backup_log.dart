@@ -4,7 +4,8 @@ enum LogLevel {
   debug,
   info,
   warning,
-  error;
+  error
+  ;
 
   /// Converte uma string para o [LogLevel] correspondente. Faz match
   /// case-insensitive e cai em [LogLevel.info] para valores desconhecidos.

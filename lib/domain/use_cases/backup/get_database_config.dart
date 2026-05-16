@@ -1,4 +1,5 @@
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
@@ -14,13 +15,16 @@ class GetDatabaseConfig {
     required ISqlServerConfigRepository sqlServerConfigRepository,
     required ISybaseConfigRepository sybaseConfigRepository,
     required IPostgresConfigRepository postgresConfigRepository,
+    required IFirebirdConfigRepository firebirdConfigRepository,
   }) : _sqlServerConfigRepository = sqlServerConfigRepository,
        _sybaseConfigRepository = sybaseConfigRepository,
-       _postgresConfigRepository = postgresConfigRepository;
+       _postgresConfigRepository = postgresConfigRepository,
+       _firebirdConfigRepository = firebirdConfigRepository;
 
   final ISqlServerConfigRepository _sqlServerConfigRepository;
   final ISybaseConfigRepository _sybaseConfigRepository;
   final IPostgresConfigRepository _postgresConfigRepository;
+  final IFirebirdConfigRepository _firebirdConfigRepository;
 
   /// Retrieves the database configuration for the given [configId] and [type].
   ///
@@ -43,6 +47,11 @@ class GetDatabaseConfig {
       case DatabaseType.postgresql:
         final result = await _postgresConfigRepository.getById(configId);
         return result.map((config) => config as Object);
+
+      case DatabaseType.firebird:
+        final firebirdResult =
+            await _firebirdConfigRepository.getById(configId);
+        return firebirdResult.map((config) => config as Object);
     }
   }
 }

@@ -70,8 +70,7 @@ class RemoteExecutionRegistry {
 
   /// Gera um novo `runId` no mesmo formato usado pelo `SchedulerService`
   /// para manter correlacao end-to-end com logs e telemetria existentes.
-  String generateRunId(String scheduleId) =>
-      '${scheduleId}_${_uuid.v4()}';
+  String generateRunId(String scheduleId) => '${scheduleId}_${_uuid.v4()}';
 
   /// Numero de execucoes ativas. Hoje sempre 0 ou 1; preparado para
   /// fila futura (PR-3b).

@@ -39,7 +39,9 @@ class LocalDestinationService implements ILocalDestinationService {
     try {
       return await operation();
     } finally {
-      _destinationLocks.remove(destinationPath);
+      unawaited(
+        _destinationLocks.remove(destinationPath) ?? Future<void>.value(),
+      );
       if (!completer.isCompleted) completer.complete();
     }
   }
@@ -563,9 +565,12 @@ class LocalDestinationService implements ILocalDestinationService {
   }) {
     // Adquire o mesmo lock usado pelo `upload` para evitar race entre
     // limpeza por retenção e upload em andamento (apagar `.tmp` em uso).
-    return _withDestinationLock(config.path, () => _cleanOldBackupsInternal(
-      config: config,
-    ));
+    return _withDestinationLock(
+      config.path,
+      () => _cleanOldBackupsInternal(
+        config: config,
+      ),
+    );
   }
 
   Future<rd.Result<int>> _cleanOldBackupsInternal({
@@ -661,11 +666,11 @@ extension FileCopyWithProgress on File {
     RandomAccessFile? destRaf;
 
     try {
-      LoggerService.debug(
-      '[CopyDebug] Source aberto. Abrindo destino...');
+      LoggerService.debug('[CopyDebug] Source aberto. Abrindo destino...');
       destRaf = await File(newPath).open(mode: FileMode.write);
       LoggerService.debug(
-      '[CopyDebug] Destino aberto (RAF). Iniciando loop...');
+        '[CopyDebug] Destino aberto (RAF). Iniciando loop...',
+      );
 
       final fileSize = await sourceRaf.length();
       var bytesCopied = 0;
@@ -706,28 +711,23 @@ extension FileCopyWithProgress on File {
           onProgress(progress);
         }
       }
-      LoggerService.debug(
-      '[CopyDebug] Loop finalizado. Efetuando flush...');
+      LoggerService.debug('[CopyDebug] Loop finalizado. Efetuando flush...');
       await destRaf.flush();
-      LoggerService.debug(
-      '[CopyDebug] Flush OK.');
+      LoggerService.debug('[CopyDebug] Flush OK.');
     } on Object catch (e, st) {
       LoggerService.error('[CopyDebug] Erro durante cópia: $e', e, st);
       rethrow;
     } finally {
-      LoggerService.debug(
-      '[CopyDebug] Fechando arquivos...');
+      LoggerService.debug('[CopyDebug] Fechando arquivos...');
       try {
         await sourceRaf.close();
-        LoggerService.debug(
-      '[CopyDebug] Source fechado.');
+        LoggerService.debug('[CopyDebug] Source fechado.');
       } on Object catch (e) {
         LoggerService.warning('[CopyDebug] Erro ao fechar source: $e');
       }
       try {
         await destRaf?.close();
-        LoggerService.debug(
-      '[CopyDebug] Destino fechado.');
+        LoggerService.debug('[CopyDebug] Destino fechado.');
       } on Object catch (e) {
         LoggerService.warning('[CopyDebug] Erro ao fechar destino: $e');
       }

@@ -30,9 +30,12 @@ void main() {
         StagingUsagePolicy.levelFor(StagingUsagePolicy.blockThresholdBytes),
         StagingUsageLevel.block,
       );
-      expect(StagingUsagePolicy.shouldBlock(
-        StagingUsagePolicy.blockThresholdBytes,
-      ), isTrue);
+      expect(
+        StagingUsagePolicy.shouldBlock(
+          StagingUsagePolicy.blockThresholdBytes,
+        ),
+        isTrue,
+      );
     });
   });
 }

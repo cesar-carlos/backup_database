@@ -40,6 +40,7 @@ Message createCapabilitiesResponseMessage({
   required bool supportsArtifactRetention,
   required bool supportsChunkAck,
   required bool supportsExecutionQueue,
+  required bool supportsFirebird,
   required int chunkSize,
   required String compression,
   required DateTime serverTimeUtc,
@@ -52,6 +53,7 @@ Message createCapabilitiesResponseMessage({
     'supportsArtifactRetention': supportsArtifactRetention,
     'supportsChunkAck': supportsChunkAck,
     'supportsExecutionQueue': supportsExecutionQueue,
+    'supportsFirebird': supportsFirebird,
     'chunkSize': chunkSize,
     'compression': compression,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
@@ -91,6 +93,7 @@ class ServerCapabilities {
     required this.supportsArtifactRetention,
     required this.supportsChunkAck,
     required this.supportsExecutionQueue,
+    required this.supportsFirebird,
     required this.chunkSize,
     required this.compression,
     required this.serverTimeUtc,
@@ -108,6 +111,7 @@ class ServerCapabilities {
     supportsArtifactRetention: false,
     supportsChunkAck: false,
     supportsExecutionQueue: false,
+    supportsFirebird: false,
     chunkSize: 65536,
     compression: 'gzip',
     serverTimeUtc: null,
@@ -120,6 +124,7 @@ class ServerCapabilities {
   final bool supportsArtifactRetention;
   final bool supportsChunkAck;
   final bool supportsExecutionQueue;
+  final bool supportsFirebird;
   final int chunkSize;
   final String compression;
 
@@ -146,6 +151,7 @@ ServerCapabilities readCapabilitiesFromResponse(Message message) {
     supportsChunkAck: (payload['supportsChunkAck'] as bool?) ?? false,
     supportsExecutionQueue:
         (payload['supportsExecutionQueue'] as bool?) ?? false,
+    supportsFirebird: (payload['supportsFirebird'] as bool?) ?? false,
     chunkSize: (payload['chunkSize'] as num?)?.toInt() ?? 65536,
     compression: (payload['compression'] as String?) ?? 'gzip',
     serverTimeUtc: _parseServerTime(payload['serverTimeUtc']),

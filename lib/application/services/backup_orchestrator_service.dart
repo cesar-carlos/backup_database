@@ -11,16 +11,14 @@ import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
-import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/domain/entities/sql_server_config.dart';
-import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_backup_cancellation_service.dart';
 import 'package:backup_database/domain/services/i_backup_compression_orchestrator.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_backup_script_orchestrator.dart';
+import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_script_execution_service.dart';
@@ -43,6 +41,7 @@ class BackupOrchestratorService {
     required ISqlServerBackupService sqlServerBackupService,
     required ISybaseBackupService sybaseBackupService,
     required IPostgresBackupService postgresBackupService,
+    required IFirebirdBackupService firebirdBackupService,
     required IBackupCompressionOrchestrator compressionOrchestrator,
     required IBackupScriptOrchestrator scriptOrchestrator,
     required ISqlScriptExecutionService sqlScriptExecutionService,
@@ -61,6 +60,7 @@ class BackupOrchestratorService {
              sqlServerBackupService: sqlServerBackupService,
              sybaseBackupService: sybaseBackupService,
              postgresBackupService: postgresBackupService,
+             firebirdBackupService: firebirdBackupService,
              validateSybaseLogBackupPreflight: validateSybaseLogBackupPreflight,
            ),
        _sqlServerConfigRepository = sqlServerConfigRepository,
@@ -68,9 +68,6 @@ class BackupOrchestratorService {
        _postgresConfigRepository = postgresConfigRepository,
        _backupHistoryRepository = backupHistoryRepository,
        _backupLogRepository = backupLogRepository,
-       _sqlServerBackupService = sqlServerBackupService,
-       _sybaseBackupService = sybaseBackupService,
-       _postgresBackupService = postgresBackupService,
        _compressionOrchestrator = compressionOrchestrator,
        _scriptOrchestrator = scriptOrchestrator,
        _sqlScriptExecutionService = sqlScriptExecutionService,
@@ -85,9 +82,6 @@ class BackupOrchestratorService {
   final IPostgresConfigRepository _postgresConfigRepository;
   final IBackupHistoryRepository _backupHistoryRepository;
   final IBackupLogRepository _backupLogRepository;
-  final ISqlServerBackupService _sqlServerBackupService;
-  final ISybaseBackupService _sybaseBackupService;
-  final IPostgresBackupService _postgresBackupService;
   final IBackupCompressionOrchestrator _compressionOrchestrator;
   final IBackupScriptOrchestrator _scriptOrchestrator;
   final ISqlScriptExecutionService _sqlScriptExecutionService;
@@ -96,8 +90,8 @@ class BackupOrchestratorService {
   final GetDatabaseConfig _getDatabaseConfig;
   final ValidateBackupDirectory _validateBackupDirectory;
   // Mantido como referência opcional para o caso de testes/extensões que
-  // queiram chamar o preflight diretamente; o uso normal vive dentro da
-  // SybaseBackupStrategy. `// ignore: unused_field` é proposital.
+  // queiram chamar o preflight diretamente; o uso normal vive nas rules
+  // `SybaseLogBackupPreflightRule` via `SybaseBackupStrategyFactory`.
   // ignore: unused_field
   final ValidateSybaseLogBackupPreflight _validateSybaseLogBackupPreflight;
   final IStorageChecker _storageChecker;
@@ -116,15 +110,21 @@ class BackupOrchestratorService {
     required ISqlServerBackupService sqlServerBackupService,
     required ISybaseBackupService sybaseBackupService,
     required IPostgresBackupService postgresBackupService,
+    required IFirebirdBackupService firebirdBackupService,
     required ValidateSybaseLogBackupPreflight validateSybaseLogBackupPreflight,
   }) {
     return {
-      DatabaseType.sqlServer: SqlServerBackupStrategy(sqlServerBackupService),
-      DatabaseType.sybase: SybaseBackupStrategy(
+      DatabaseType.sqlServer: SqlServerBackupStrategyFactory.create(
+        sqlServerBackupService,
+      ),
+      DatabaseType.sybase: SybaseBackupStrategyFactory.create(
         service: sybaseBackupService,
         validatePreflight: validateSybaseLogBackupPreflight,
       ),
-      DatabaseType.postgresql: PostgresBackupStrategy(postgresBackupService),
+      DatabaseType.postgresql: PostgresBackupStrategyFactory.create(
+        postgresBackupService,
+      ),
+      DatabaseType.firebird: FirebirdBackupStrategy(firebirdBackupService),
     };
   }
 
@@ -144,6 +144,7 @@ class BackupOrchestratorService {
 
     final backupType =
         (schedule.databaseType != DatabaseType.postgresql &&
+            schedule.databaseType != DatabaseType.firebird &&
             schedule.backupType == BackupType.fullSingle)
         ? BackupType.full
         : schedule.backupType;
@@ -279,10 +280,10 @@ class BackupOrchestratorService {
         return rd.Failure(_asFailure(failure));
       }
       backupExecutionResult = strategyResult.getOrNull()!;
-      // O preflight Sybase agora vive dentro de SybaseBackupStrategy e
-      // enriquece `metrics.sybaseOptions` lá. Mantemos `sybaseLogPreflight`
-      // como `null` aqui para preservar a assinatura do `_buildMetrics`
-      // (que ainda recebe o parâmetro mas só o usa para metadata extra).
+      // O preflight Sybase vive em `SybaseLogBackupPreflightRule` e o
+      // enriquecimento de métricas em `SybaseChainMetadataEnricher`.
+      // Mantemos `sybaseLogPreflight` como `null` aqui para preservar a
+      // assinatura do `_buildMetrics` (parâmetro legado).
       sybaseLogPreflight = null;
 
       backupPath = backupExecutionResult.backupPath;
@@ -381,9 +382,7 @@ class BackupOrchestratorService {
             status: BackupStatus.error,
             errorMessage: 'Falha na compressão: $failureMessage',
             finishedAt: finishedAt,
-            durationSeconds: finishedAt
-                .difference(history.startedAt)
-                .inSeconds,
+            durationSeconds: finishedAt.difference(history.startedAt).inSeconds,
           );
           final updateResult = await _backupHistoryRepository
               .updateHistoryAndLogIfRunning(
@@ -646,24 +645,18 @@ class BackupOrchestratorService {
       );
       if (configResult.isError()) return fallback;
 
-      rd.Result<int> sizeResult;
-      switch (schedule.databaseType) {
-        case DatabaseType.sqlServer:
-          final cfg = configResult.getOrNull()! as SqlServerConfig;
-          sizeResult = await _sqlServerBackupService.getDatabaseSizeBytes(
-            config: cfg,
-          );
-        case DatabaseType.sybase:
-          final cfg = configResult.getOrNull()! as SybaseConfig;
-          sizeResult = await _sybaseBackupService.getDatabaseSizeBytes(
-            config: cfg,
-          );
-        case DatabaseType.postgresql:
-          final cfg = configResult.getOrNull()! as PostgresConfig;
-          sizeResult = await _postgresBackupService.getDatabaseSizeBytes(
-            config: cfg,
-          );
+      final strategy = _strategies[schedule.databaseType];
+      if (strategy == null) {
+        LoggerService.warning(
+          'Sem estratégia de backup para ${schedule.databaseType}; '
+          'não foi possível estimar tamanho do banco.',
+        );
+        return fallback;
       }
+
+      final sizeResult = await strategy.getDatabaseSizeBytes(
+        databaseConfig: configResult.getOrNull()!,
+      );
 
       if (sizeResult.isError()) {
         LoggerService.warning(
@@ -674,8 +667,8 @@ class BackupOrchestratorService {
       }
 
       final sizeBytes = sizeResult.getOrNull()!;
-      final required =
-          (sizeBytes * BackupConstants.backupSpaceSafetyFactor).toInt();
+      final required = (sizeBytes * BackupConstants.backupSpaceSafetyFactor)
+          .toInt();
       // Aplica também o piso mínimo para evitar valores absurdamente
       // baixos quando o banco é muito pequeno.
       return required > fallback ? required : fallback;

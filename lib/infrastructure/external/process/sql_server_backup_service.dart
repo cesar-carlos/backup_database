@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/backup_artifact_utils.dart';
+import 'package:backup_database/core/utils/backup_size_calculator.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
@@ -8,6 +10,7 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
@@ -118,6 +121,27 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
+    required SqlServerConfig config,
+    required BackupExecutionContext context,
+  }) {
+    return _executeBackupCore(
+      config: config,
+      outputDirectory: context.outputDirectory,
+      scheduleId: context.scheduleId,
+      backupType: context.backupType,
+      customFileName: context.customFileName,
+      truncateLog: context.truncateLog,
+      enableChecksum: context.enableChecksum,
+      verifyAfterBackup: context.verifyAfterBackup,
+      verifyPolicy: context.verifyPolicy,
+      sqlServerBackupOptions: context.sqlServerBackupOptions,
+      backupTimeout: context.backupTimeout,
+      verifyTimeout: context.verifyTimeout,
+      cancelTag: context.cancelTag,
+    );
+  }
+
+  Future<rd.Result<BackupExecutionResult>> _executeBackupCore({
     required SqlServerConfig config,
     required String outputDirectory,
     required String scheduleId,
@@ -286,7 +310,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           // para evitar que cleanups por retenção promovam um `.bak`
           // corrompido como "último backup válido".
           for (final path in backupPaths) {
-            await _safeDeletePartialBackup(path);
+            await BackupArtifactUtils.safeDeletePartial(path);
           }
           return rd.Failure(
             BackupFailure(
@@ -308,7 +332,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
             ),
           );
           for (final path in backupPaths) {
-            await _safeDeletePartialBackup(path);
+            await BackupArtifactUtils.safeDeletePartial(path);
           }
           return rd.Failure(
             BackupFailure(
@@ -320,10 +344,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
         }
 
         // Aguarda estabilização de TODOS os stripes e soma seus tamanhos.
-        var fileSize = 0;
+        final stablePaths = <String>[];
         for (final path in backupPaths) {
           final file = File(path);
-          final ready = await _waitForStableBackupFile(file);
+          final ready = await BackupArtifactUtils.waitForStableFile(file);
           if (!ready) {
             return rd.Failure(
               BackupFailure(
@@ -331,8 +355,16 @@ class SqlServerBackupService implements ISqlServerBackupService {
               ),
             );
           }
-          fileSize += await file.length();
+          stablePaths.add(path);
         }
+
+        final sizeRes = await BackupSizeCalculator.bytesOfExistingFiles(
+          stablePaths,
+        );
+        if (!sizeRes.isSuccess()) {
+          return rd.Failure(sizeRes.exceptionOrNull()!);
+        }
+        final fileSize = sizeRes.getOrNull()!;
 
         if (fileSize == 0) {
           return const rd.Failure(
@@ -654,56 +686,4 @@ class SqlServerBackupService implements ISqlServerBackupService {
       rd.Failure.new,
     );
   }
-
-  static const Duration _sqlBackupFileInitialDelay = Duration(
-    milliseconds: 200,
-  );
-  static const Duration _sqlBackupFilePollInterval = Duration(
-    milliseconds: 250,
-  );
-  static const Duration _sqlBackupFileStabilizeDelay = Duration(
-    milliseconds: 200,
-  );
-  static const Duration _sqlBackupFileMaxWait = Duration(seconds: 12);
-
-  /// Tenta apagar arquivo de backup parcial criado em caso de falha do
-  /// `sqlcmd`. Best-effort: ignora qualquer erro do filesystem para não
-  /// mascarar a causa original do erro.
-  Future<void> _safeDeletePartialBackup(String backupPath) async {
-    try {
-      final file = File(backupPath);
-      if (await file.exists()) {
-        await file.delete();
-        LoggerService.info(
-          'Arquivo parcial de backup removido após falha: $backupPath',
-        );
-      }
-    } on Object catch (e) {
-      LoggerService.debug(
-        'Falha ao remover arquivo parcial $backupPath: $e',
-      );
-    }
-  }
-
-  Future<bool> _waitForStableBackupFile(File backupFile) async {
-    await Future<void>.delayed(_sqlBackupFileInitialDelay);
-    final deadline = DateTime.now().add(_sqlBackupFileMaxWait);
-
-    while (DateTime.now().isBefore(deadline)) {
-      if (await backupFile.exists()) {
-        final length = await backupFile.length();
-        if (length > 0) {
-          await Future<void>.delayed(_sqlBackupFileStabilizeDelay);
-          final length2 = await backupFile.length();
-          if (length2 == length) {
-            return true;
-          }
-        }
-      }
-      await Future<void>.delayed(_sqlBackupFilePollInterval);
-    }
-
-    return backupFile.existsSync() && backupFile.lengthSync() > 0;
-  }
-
 }

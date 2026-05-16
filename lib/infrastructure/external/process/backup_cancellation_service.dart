@@ -21,12 +21,10 @@ class BackupCancellationService implements IBackupCancellationService {
   }
 
   @override
-  void cancelBySchedule(String scheduleId) =>
-      cancelByTag('backup-$scheduleId');
+  void cancelBySchedule(String scheduleId) => cancelByTag('backup-$scheduleId');
 
   @override
-  void cancelByHistoryId(String historyId) =>
-      cancelByTag('backup-$historyId');
+  void cancelByHistoryId(String historyId) => cancelByTag('backup-$historyId');
 
   @override
   void cancelAllRunning() {

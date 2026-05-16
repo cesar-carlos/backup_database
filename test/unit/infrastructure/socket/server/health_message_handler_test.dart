@@ -196,9 +196,18 @@ void main() {
         final health = readHealthFromResponse(sent!);
         expect(health.status, ServerHealthStatus.degraded);
         expect(health.stagingUsageLevel, 'warn');
-        expect(health.stagingUsageWarnThresholdBytes, StagingUsagePolicy.warnThresholdBytes);
-        expect(health.stagingUsageBlockThresholdBytes, StagingUsagePolicy.blockThresholdBytes);
-        expect(health.stagingUsageBytes, StagingUsagePolicy.warnThresholdBytes + 1);
+        expect(
+          health.stagingUsageWarnThresholdBytes,
+          StagingUsagePolicy.warnThresholdBytes,
+        );
+        expect(
+          health.stagingUsageBlockThresholdBytes,
+          StagingUsagePolicy.blockThresholdBytes,
+        );
+        expect(
+          health.stagingUsageBytes,
+          StagingUsagePolicy.warnThresholdBytes + 1,
+        );
         expect(health.message, contains('staging disk pressure'));
       },
     );

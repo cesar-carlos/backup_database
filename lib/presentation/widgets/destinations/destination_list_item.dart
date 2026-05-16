@@ -1,3 +1,4 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
@@ -15,12 +16,6 @@ class DestinationListItem extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final ValueChanged<bool>? onToggleEnabled;
-
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +93,7 @@ class DestinationListItem extends StatelessWidget {
   String _getTypeName(BuildContext context, DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return _t(context, 'Local', 'Local');
+        return appLocaleString(context, 'Local', 'Local');
       case DestinationType.ftp:
         return 'FTP';
       case DestinationType.googleDrive:
@@ -138,7 +133,7 @@ class DestinationListItem extends StatelessWidget {
                 r'"folderName"\s*:\s*"([^"]*)"',
               ).firstMatch(config)?.group(1) ??
               '';
-          return '${_t(context, 'Pasta', 'Folder')}: $folderName';
+          return '${appLocaleString(context, 'Pasta', 'Folder')}: $folderName';
         case DestinationType.dropbox:
           final folderPath =
               RegExp(
@@ -151,9 +146,9 @@ class DestinationListItem extends StatelessWidget {
               ).firstMatch(config)?.group(1) ??
               '';
           if (folderPath.isEmpty) {
-            return '${_t(context, 'Pasta', 'Folder')}: /$folderName';
+            return '${appLocaleString(context, 'Pasta', 'Folder')}: /$folderName';
           }
-          return '${_t(context, 'Pasta', 'Folder')}: $folderPath/$folderName';
+          return '${appLocaleString(context, 'Pasta', 'Folder')}: $folderPath/$folderName';
         case DestinationType.nextcloud:
           final serverUrl =
               RegExp(

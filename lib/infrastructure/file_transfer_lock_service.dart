@@ -19,10 +19,7 @@ class FileTransferLockService implements IFileTransferLockService {
 
   File _getLockFile(String filePath) {
     final key = p.normalize(p.absolute(filePath));
-    final hash = key.hashCode
-        .toUnsigned(16)
-        .toRadixString(16)
-        .padLeft(8, '0');
+    final hash = key.hashCode.toUnsigned(16).toRadixString(16).padLeft(8, '0');
     return File(p.join(_lockBasePath, '$hash.lock'));
   }
 

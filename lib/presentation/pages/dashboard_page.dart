@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:backup_database/application/providers/dashboard_provider.dart';
@@ -20,13 +21,16 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  static const String _dashboardStatIconAsset =
+      'assets/image/new/database_128px.png';
+
   String? _selectedConnectionId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DashboardProvider>().loadDashboardData();
+      unawaited(context.read<DashboardProvider>().loadDashboardData());
     });
   }
 
@@ -84,7 +88,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
                               // Refresh dashboard metrics
                               if (!context.mounted) return;
-                              context.read<DashboardProvider>().refresh();
+                              unawaited(
+                                context.read<DashboardProvider>().refresh(),
+                              );
                             },
                           ),
                           if (connProvider.isConnecting)
@@ -146,7 +152,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: StatsCard(
                               title: 'Total de Backups',
                               value: provider.totalBackups.toString(),
-                              iconSvg: 'assets/icons/icon-512-embedded.svg',
+                              iconAsset: _dashboardStatIconAsset,
                               color: AppColors.primary,
                             ),
                           ),
@@ -155,7 +161,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: StatsCard(
                               title: 'Backups Hoje',
                               value: provider.backupsToday.toString(),
-                              icon: FluentIcons.calendar_day,
+                              iconAsset: _dashboardStatIconAsset,
                               color: AppColors.statsBackups,
                             ),
                           ),
@@ -164,7 +170,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: StatsCard(
                               title: 'Falharam Hoje',
                               value: provider.failedToday.toString(),
-                              icon: FluentIcons.error,
+                              iconAsset: _dashboardStatIconAsset,
                               color: AppColors.statsFailed,
                             ),
                           ),
@@ -173,7 +179,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: StatsCard(
                               title: 'Agendamentos Ativos',
                               value: provider.activeSchedules.toString(),
-                              icon: FluentIcons.calendar,
+                              iconAsset: _dashboardStatIconAsset,
                               color: AppColors.statsActive,
                             ),
                           ),
@@ -195,7 +201,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 provider.serverMetrics!,
                                 'totalBackups',
                               ),
-                              icon: FluentIcons.server,
+                              iconAsset: _dashboardStatIconAsset,
                               color: AppColors.primary,
                             ),
                           ),
@@ -207,7 +213,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 provider.serverMetrics!,
                                 'backupsToday',
                               ),
-                              icon: FluentIcons.calendar_day,
+                              iconAsset: _dashboardStatIconAsset,
                               color: AppColors.statsBackups,
                             ),
                           ),
@@ -219,7 +225,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 provider.serverMetrics!,
                                 'failedToday',
                               ),
-                              icon: FluentIcons.error,
+                              iconAsset: _dashboardStatIconAsset,
                               color: AppColors.statsFailed,
                             ),
                           ),
@@ -231,7 +237,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 provider.serverMetrics!,
                                 'activeSchedules',
                               ),
-                              icon: FluentIcons.calendar,
+                              iconAsset: _dashboardStatIconAsset,
                               color: AppColors.statsActive,
                             ),
                           ),
@@ -260,7 +266,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           IconButton(
                             icon: const Icon(FluentIcons.refresh),
                             onPressed: () {
-                              provider.refresh();
+                              unawaited(provider.refresh());
                             },
                           ),
                         ],

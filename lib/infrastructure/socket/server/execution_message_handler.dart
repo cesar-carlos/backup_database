@@ -51,16 +51,16 @@ class ExecutionMessageHandler {
     this.eventBus,
     DateTime Function()? clock,
     Future<int> Function()? stagingUsageBytesProvider,
-  })  : _scheduleRepository = scheduleRepository,
-        _licensePolicyService = licensePolicyService,
-        _schedulerService = schedulerService,
-        _executeBackup = executeBackup,
-        _progressNotifier = progressNotifier,
-        _executionRegistry = executionRegistry,
-        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
-        _queueService = queueService ?? ExecutionQueueService(),
-        _clock = clock ?? DateTime.now,
-        _stagingUsageBytesProvider = stagingUsageBytesProvider;
+  }) : _scheduleRepository = scheduleRepository,
+       _licensePolicyService = licensePolicyService,
+       _schedulerService = schedulerService,
+       _executeBackup = executeBackup,
+       _progressNotifier = progressNotifier,
+       _executionRegistry = executionRegistry,
+       _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
+       _queueService = queueService ?? ExecutionQueueService(),
+       _clock = clock ?? DateTime.now,
+       _stagingUsageBytesProvider = stagingUsageBytesProvider;
 
   final IScheduleRepository _scheduleRepository;
   final ILicensePolicyService _licensePolicyService;
@@ -191,7 +191,8 @@ class ExecutionMessageHandler {
       }
     }
 
-    final isBusy = _schedulerService.isExecutingBackup ||
+    final isBusy =
+        _schedulerService.isExecutingBackup ||
         _executionRegistry.hasActiveForSchedule(scheduleId);
 
     if (isBusy && !queueIfBusy) {
@@ -233,7 +234,8 @@ class ExecutionMessageHandler {
         requestId: requestId.toString(),
         scheduleId: scheduleId,
       );
-      final queuePosition = _queueService.snapshot()
+      final queuePosition = _queueService
+          .snapshot()
           .firstWhere((q) => q.runId == item.runId)
           .queuedPosition;
       // Publica `backupQueued` event (fire-and-forget). Cliente
@@ -533,9 +535,7 @@ class ExecutionMessageHandler {
   ) async {
     final requestId = message.header.requestId;
     final payload = message.payload;
-    final runId = payload['runId'] is String
-        ? payload['runId'] as String
-        : '';
+    final runId = payload['runId'] is String ? payload['runId'] as String : '';
     if (runId.isEmpty) {
       await _sendErrorMsg(
         clientId,
@@ -574,9 +574,10 @@ class ExecutionMessageHandler {
     // Busca scheduleId associado (necessario para evento + response).
     String? scheduleId;
     final snap = _queueService.snapshot();
-    final found = snap
-        .cast<QueuedExecution?>()
-        .firstWhere((q) => q?.runId == runId, orElse: () => null);
+    final found = snap.cast<QueuedExecution?>().firstWhere(
+      (q) => q?.runId == runId,
+      orElse: () => null,
+    );
     if (found != null) scheduleId = found.scheduleId;
 
     final removed = await _queueService.removeByRunId(runId);

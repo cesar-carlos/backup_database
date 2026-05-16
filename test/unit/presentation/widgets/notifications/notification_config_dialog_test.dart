@@ -18,8 +18,12 @@ Finder _findTextPtOrEn(String pt, String en) {
 }
 
 void main() {
-  setUp(registerTestFeatureAvailability);
-  tearDown(unregisterTestFeatureAvailability);
+  setUp(() async {
+    await registerTestFeatureAvailability();
+  });
+  tearDown(() async {
+    await unregisterTestFeatureAvailability();
+  });
 
   Widget buildDialog({
     EmailConfig? initialConfig,

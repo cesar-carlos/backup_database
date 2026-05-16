@@ -133,7 +133,8 @@ class ServiceModeInitializer {
       await _bootstrapStep(
         step: 9,
         totalSteps: totalSteps,
-        label: 'Iniciando scheduler, health, fila persistida e limpeza de staging',
+        label:
+            'Iniciando scheduler, health, fila persistida e limpeza de staging',
         action: () async {
           await schedulerService!.start();
           await healthChecker!.start();
@@ -300,7 +301,8 @@ class ServiceModeInitializer {
       final eventLog = eventLogRef();
 
       try {
-        if (service_locator.getIt.isRegistered<RemoteStagingCleanupScheduler>()) {
+        if (service_locator.getIt
+            .isRegistered<RemoteStagingCleanupScheduler>()) {
           service_locator.getIt<RemoteStagingCleanupScheduler>().stop();
         }
       } on Object catch (e, s) {

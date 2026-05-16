@@ -39,7 +39,11 @@ void main() {
         Message? sent;
         Future<void> capture(String c, Message m) async => sent = m;
 
-        await handler.handle('c1', createExecutionQueueRequestMessage(), capture);
+        await handler.handle(
+          'c1',
+          createExecutionQueueRequestMessage(),
+          capture,
+        );
 
         final result = readExecutionQueueFromResponse(sent!);
         expect(result.maxQueueSize, 10);
@@ -77,7 +81,11 @@ void main() {
         Message? sent;
         Future<void> capture(String c, Message m) async => sent = m;
 
-        await handler.handle('c1', createExecutionQueueRequestMessage(), capture);
+        await handler.handle(
+          'c1',
+          createExecutionQueueRequestMessage(),
+          capture,
+        );
 
         final result = readExecutionQueueFromResponse(sent!);
         expect(result.queue.length, 3);
@@ -100,7 +108,11 @@ void main() {
         Message? sent;
         Future<void> capture(String c, Message m) async => sent = m;
 
-        await handler.handle('c1', createExecutionQueueRequestMessage(), capture);
+        await handler.handle(
+          'c1',
+          createExecutionQueueRequestMessage(),
+          capture,
+        );
 
         expect(sent, isNotNull);
         expect(sent!.header.type, MessageType.executionQueueResponse);

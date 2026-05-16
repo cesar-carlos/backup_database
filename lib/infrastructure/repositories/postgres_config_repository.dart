@@ -1,100 +1,85 @@
 import 'dart:io';
 
+import 'package:backup_database/core/constants/secure_credential_keys.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
-import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/external/process/postgres_wal_slot_utils.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
     as ps;
-import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
+import 'package:backup_database/infrastructure/repositories/base_database_config_repository.dart';
 import 'package:drift/drift.dart';
-import 'package:result_dart/result_dart.dart' as rd;
 
-class PostgresConfigRepository implements IPostgresConfigRepository {
+class PostgresConfigRepository
+    extends
+        BaseDatabaseConfigRepository<PostgresConfig, PostgresConfigsTableData>
+    implements IPostgresConfigRepository {
   PostgresConfigRepository(
-    this._database,
-    this._secureCredentialService,
+    super.database,
+    super.secureCredentialService,
     this._processService,
   );
 
-  final AppDatabase _database;
-  final ISecureCredentialService _secureCredentialService;
   final ps.ProcessService _processService;
 
-  static const String _passwordKeyPrefix = 'postgres_password_';
+  @override
+  String credentialKeyFor(String configId) =>
+      SecureCredentialKeys.postgresPasswordKey(configId);
 
   @override
-  Future<rd.Result<List<PostgresConfig>>> getAll() {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao buscar configurações',
-      action: () async {
-        final configs = await _database.postgresConfigDao.getAll();
-        return [for (final c in configs) await _toEntity(c)];
-      },
-    );
+  Future<List<PostgresConfigsTableData>> fetchAllRows() =>
+      database.postgresConfigDao.getAll();
+
+  @override
+  Future<List<PostgresConfigsTableData>> fetchEnabledRows() =>
+      database.postgresConfigDao.getEnabled();
+
+  @override
+  Future<PostgresConfigsTableData?> fetchRowById(String id) =>
+      database.postgresConfigDao.getById(id);
+
+  @override
+  Future<void> writeInsert(PostgresConfig config) =>
+      database.postgresConfigDao.insertConfig(_toCompanion(config));
+
+  @override
+  Future<void> writeUpdate(PostgresConfig config) =>
+      database.postgresConfigDao.updateConfig(_toCompanion(config));
+
+  @override
+  Future<void> writeDelete(String id) =>
+      database.postgresConfigDao.deleteConfig(id);
+
+  @override
+  Future<void> onBeforeDelete(String id) async {
+    final row = await database.postgresConfigDao.getById(id);
+    if (row == null) {
+      return;
+    }
+    final config = await rowToEntity(row);
+    await _dropWalReplicationSlotBestEffort(config);
   }
 
   @override
-  Future<rd.Result<PostgresConfig>> getById(String id) {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao buscar configuração',
-      action: () async {
-        final config = await _database.postgresConfigDao.getById(id);
-        if (config == null) {
-          throw const NotFoundFailure(message: 'Configuração não encontrada');
-        }
-        return _toEntity(config);
-      },
+  Future<PostgresConfig> rowToEntity(PostgresConfigsTableData data) async {
+    final password = await credentials.readPasswordOrEmpty(
+      credentialKeyFor(data.id),
     );
-  }
 
-  @override
-  Future<rd.Result<PostgresConfig>> create(PostgresConfig config) {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao criar configuração',
-      action: () async {
-        await _storePasswordOrThrow(config.id, config.password);
-        final companion = _toCompanion(config);
-        await _database.postgresConfigDao.insertConfig(companion);
-        return config;
-      },
-    );
-  }
-
-  @override
-  Future<rd.Result<PostgresConfig>> update(PostgresConfig config) {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao atualizar configuração',
-      action: () async {
-        await _storePasswordOrThrow(config.id, config.password);
-        final companion = _toCompanion(config);
-        await _database.postgresConfigDao.updateConfig(companion);
-        return config;
-      },
-    );
-  }
-
-  @override
-  Future<rd.Result<void>> delete(String id) {
-    return RepositoryGuard.runVoid(
-      errorMessage: 'Erro ao deletar configuração',
-      action: () async {
-        // Best-effort: tenta remover o replication slot antes de descartar
-        // a config. Se a config nem existir mais, segue.
-        final existingConfigResult = await getById(id);
-        final existingConfig = existingConfigResult.getOrNull();
-        if (existingConfig != null) {
-          await _dropWalReplicationSlotBestEffort(existingConfig);
-        }
-
-        final passwordKey = '$_passwordKeyPrefix$id';
-        await _secureCredentialService.deletePassword(key: passwordKey);
-        await _database.postgresConfigDao.deleteConfig(id);
-      },
+    return PostgresConfig(
+      id: data.id,
+      name: data.name,
+      host: data.host,
+      port: PortNumber(data.port),
+      database: DatabaseName(data.database),
+      username: data.username,
+      password: password,
+      enabled: data.enabled,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     );
   }
 
@@ -128,7 +113,9 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
       dropSlotSql,
     ];
 
-    final environment = <String, String>{'PGPASSWORD': config.password};
+    final environment = <String, String>{
+      'PGPASSWORD': config.password,
+    };
     final result = await _processService.run(
       executable: 'psql',
       arguments: arguments,
@@ -164,50 +151,6 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
     );
   }
 
-  @override
-  Future<rd.Result<List<PostgresConfig>>> getEnabled() {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao buscar configurações ativas',
-      action: () async {
-        final configs = await _database.postgresConfigDao.getEnabled();
-        return [for (final c in configs) await _toEntity(c)];
-      },
-    );
-  }
-
-  Future<void> _storePasswordOrThrow(String id, String password) async {
-    final passwordKey = '$_passwordKeyPrefix$id';
-    final storeResult = await _secureCredentialService.storePassword(
-      key: passwordKey,
-      password: password,
-    );
-    if (storeResult.isError()) {
-      throw storeResult.exceptionOrNull()!;
-    }
-  }
-
-  Future<PostgresConfig> _toEntity(PostgresConfigsTableData data) async {
-    final passwordKey = '$_passwordKeyPrefix${data.id}';
-    final passwordResult = await _secureCredentialService.getPassword(
-      key: passwordKey,
-    );
-
-    final password = passwordResult.getOrElse((_) => '');
-
-    return PostgresConfig(
-      id: data.id,
-      name: data.name,
-      host: data.host,
-      port: PortNumber(data.port),
-      database: DatabaseName(data.database),
-      username: data.username,
-      password: password,
-      enabled: data.enabled,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
-    );
-  }
-
   PostgresConfigsTableCompanion _toCompanion(PostgresConfig config) {
     return PostgresConfigsTableCompanion(
       id: Value(config.id),
@@ -222,5 +165,4 @@ class PostgresConfigRepository implements IPostgresConfigRepository {
       updatedAt: Value(config.updatedAt),
     );
   }
-
 }

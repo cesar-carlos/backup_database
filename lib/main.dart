@@ -31,7 +31,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() {
-  runZonedGuarded(_runApp, _handleError);
+  runZonedGuarded(() => unawaited(_runApp()), _handleError);
 }
 
 void _logBootstrapPhase(Stopwatch watch, String phase) {

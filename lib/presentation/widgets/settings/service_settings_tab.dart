@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/windows_service_provider.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/constants/app_constants.dart';
@@ -26,7 +28,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     super.initState();
     _clipboardService = getIt<ClipboardService>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<WindowsServiceProvider>().checkStatus();
+      unawaited(context.read<WindowsServiceProvider>().checkStatus());
     });
   }
 
@@ -37,22 +39,26 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       return;
     }
     if (copied) {
-      MessageModal.showSuccess(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showSuccess(
           context,
-          'Diagnóstico de compatibilidade copiado para a área de transferência.',
-          'Compatibility diagnostics copied to clipboard.',
+          message: appLocaleString(
+            context,
+            'Diagnóstico de compatibilidade copiado para a área de transferência.',
+            'Compatibility diagnostics copied to clipboard.',
+          ),
         ),
       );
       return;
     }
-    MessageModal.showError(
-      context,
-      message: appLocaleString(
+    unawaited(
+      MessageModal.showError(
         context,
-        'Não foi possível copiar o diagnóstico de compatibilidade.',
-        'Could not copy compatibility diagnostics.',
+        message: appLocaleString(
+          context,
+          'Não foi possível copiar o diagnóstico de compatibilidade.',
+          'Could not copy compatibility diagnostics.',
+        ),
       ),
     );
   }
@@ -149,8 +155,9 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               ),
               const SizedBox(height: 8),
               Button(
-                onPressed: () =>
-                    _copyCompatibilityDiagnostics(features.diagnosticSummary()),
+                onPressed: () => unawaited(
+                  _copyCompatibilityDiagnostics(features.diagnosticSummary()),
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

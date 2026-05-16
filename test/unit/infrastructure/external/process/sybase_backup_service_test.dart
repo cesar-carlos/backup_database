@@ -4,6 +4,7 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
@@ -112,9 +113,12 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -150,11 +154,14 @@ void main() {
 
         await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
-          backupTimeout: backupTimeout,
-          verifyTimeout: verifyTimeout,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+            backupTimeout: backupTimeout,
+            verifyTimeout: verifyTimeout,
+          ),
         );
 
         final backupCalls = verify(
@@ -219,10 +226,13 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          backupType: BackupType.log,
-          verifyAfterBackup: true,
-          customFileName: 'testdb_log_2026-01-01T12-00-00',
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            backupType: BackupType.log,
+            verifyAfterBackup: true,
+            customFileName: 'testdb_log_2026-01-01T12-00-00',
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -287,9 +297,12 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          backupType: BackupType.differential,
-          customFileName: 'testdb_log_2026-01-01T12-00-01',
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            backupType: BackupType.differential,
+            customFileName: 'testdb_log_2026-01-01T12-00-01',
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -351,10 +364,13 @@ void main() {
 
       final result = await service.executeBackup(
         config: config,
-        outputDirectory: tempDir.path,
-        backupType: BackupType.log,
-        sybaseBackupOptions: const SybaseBackupOptions(
-          logBackupMode: SybaseLogBackupMode.rename,
+        context: BackupExecutionContext(
+          outputDirectory: tempDir.path,
+          scheduleId: 'sy-test',
+          backupType: BackupType.log,
+          sybaseBackupOptions: const SybaseBackupOptions(
+            logBackupMode: SybaseLogBackupMode.rename,
+          ),
         ),
       );
 
@@ -411,8 +427,11 @@ void main() {
 
       final result = await service.executeBackup(
         config: config,
-        outputDirectory: tempDir.path,
-        backupType: BackupType.log,
+        context: BackupExecutionContext(
+          outputDirectory: tempDir.path,
+          scheduleId: 'sy-test',
+          backupType: BackupType.log,
+        ),
       );
 
       expect(result.isSuccess(), isTrue);
@@ -458,10 +477,13 @@ void main() {
 
       final result = await service.executeBackup(
         config: config,
-        outputDirectory: tempDir.path,
-        customFileName: config.databaseNameValue,
-        verifyAfterBackup: true,
-        sybaseBackupOptions: const SybaseBackupOptions(autoTuneWriters: true),
+        context: BackupExecutionContext(
+          outputDirectory: tempDir.path,
+          scheduleId: 'sy-test',
+          customFileName: config.databaseNameValue,
+          verifyAfterBackup: true,
+          sybaseBackupOptions: const SybaseBackupOptions(autoTuneWriters: true),
+        ),
       );
 
       expect(result.isSuccess(), isTrue);
@@ -504,9 +526,12 @@ void main() {
 
       final result = await service.executeBackup(
         config: config,
-        outputDirectory: tempDir.path,
-        customFileName: config.databaseNameValue,
-        verifyAfterBackup: true,
+        context: BackupExecutionContext(
+          outputDirectory: tempDir.path,
+          scheduleId: 'sy-test',
+          customFileName: config.databaseNameValue,
+          verifyAfterBackup: true,
+        ),
       );
 
       expect(result.isSuccess(), isTrue);
@@ -530,9 +555,12 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -599,9 +627,12 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -668,9 +699,12 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -717,9 +751,12 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -782,10 +819,13 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
-          verifyPolicy: VerifyPolicy.strict,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+            verifyPolicy: VerifyPolicy.strict,
+          ),
         );
 
         expect(result.isError(), isTrue);
@@ -843,9 +883,12 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -910,9 +953,12 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          customFileName: config.databaseNameValue,
-          verifyAfterBackup: true,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            customFileName: config.databaseNameValue,
+            verifyAfterBackup: true,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);
@@ -980,8 +1026,11 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          backupType: BackupType.log,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+            backupType: BackupType.log,
+          ),
         );
 
         expect(result.isSuccess(), isTrue);

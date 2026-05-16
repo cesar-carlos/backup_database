@@ -8,12 +8,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   setUp(IpcService.resetPortCacheForTests);
+  tearDown(IpcService.resetPortCacheForTests);
 
   group('IpcService.checkServerRunning', () {
     test(
       'should return true when server responds with valid V1 PONG',
       () async {
-        final server = await _bindToIpcTestPort();
+        final server = await _bindEphemeralIpcMockServer();
 
         server.listen((Socket socket) {
           socket.listen((List<int> data) async {
@@ -42,7 +43,7 @@ void main() {
     );
 
     test('should return false when server responds with plain PONG', () async {
-      final server = await _bindToIpcTestPort();
+      final server = await _bindEphemeralIpcMockServer();
 
       server.listen((Socket socket) {
         socket.listen((List<int> data) async {
@@ -64,7 +65,7 @@ void main() {
     });
 
     test('should return false when V1 PONG has wrong role', () async {
-      final server = await _bindToIpcTestPort();
+      final server = await _bindEphemeralIpcMockServer();
 
       server.listen((Socket socket) {
         socket.listen((List<int> data) async {
@@ -94,7 +95,7 @@ void main() {
     test(
       'should return false when server responds without valid V1 line',
       () async {
-        final server = await _bindToIpcTestPort();
+        final server = await _bindEphemeralIpcMockServer();
 
         server.listen((Socket socket) {
           socket.listen((List<int> _) async {
@@ -116,8 +117,9 @@ void main() {
     test(
       'should return true when server responds on alternative port',
       () async {
-        final port = SingleInstanceConfig.ipcAlternativePorts.last;
-        final server = await _bindToSpecificPort(port);
+        final stack = await _bindSixPortProbeStackLastRespondsV1Pong();
+        final decoys = stack.decoys;
+        final server = stack.target;
 
         server.listen((Socket socket) {
           socket.listen((List<int> data) async {
@@ -141,6 +143,9 @@ void main() {
           expect(isRunning, isTrue);
         } finally {
           await server.close();
+          for (final d in decoys) {
+            await d.close();
+          }
         }
       },
     );
@@ -150,7 +155,7 @@ void main() {
     test(
       'should close client socket after receiving V1 user info response',
       () async {
-        final server = await _bindToIpcTestPort();
+        final server = await _bindEphemeralIpcMockServer();
 
         final clientClosedCompleter = Completer<bool>();
         const expectedUser = 'test_user';
@@ -204,7 +209,7 @@ void main() {
     );
 
     test('should parse legacy USER_INFO prefix', () async {
-      final server = await _bindToIpcTestPort();
+      final server = await _bindEphemeralIpcMockServer();
       const expectedUser = 'legacy_user';
 
       server.listen((Socket socket) {
@@ -231,7 +236,7 @@ void main() {
     });
 
     test('should return null when USER_INFO line is malformed', () async {
-      final server = await _bindToIpcTestPort();
+      final server = await _bindEphemeralIpcMockServer();
 
       server.listen((Socket socket) {
         socket.listen((List<int> data) async {
@@ -259,7 +264,7 @@ void main() {
     });
 
     test('should return null when V1 USER_INFO has wrong role', () async {
-      final server = await _bindToIpcTestPort();
+      final server = await _bindEphemeralIpcMockServer();
 
       server.listen((Socket socket) {
         socket.listen((List<int> data) async {
@@ -289,7 +294,7 @@ void main() {
     test(
       'should return null when V1 USER_INFO has wrong protocol version',
       () async {
-        final server = await _bindToIpcTestPort();
+        final server = await _bindEphemeralIpcMockServer();
 
         server.listen((Socket socket) {
           socket.listen((List<int> data) async {
@@ -320,6 +325,11 @@ void main() {
 
   group('IpcService server (integration)', () {
     test('should accept V1 SHOW_WINDOW and legacy SHOW_WINDOW', () async {
+      final reserved = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final listenEphemeralPort = reserved.port;
+      await reserved.close();
+      IpcService.ipcPortsOverrideForTests = [listenEphemeralPort];
+
       final ipc = IpcService();
       var showCount = 0;
       final started = await ipc.startServer(
@@ -361,30 +371,32 @@ void main() {
   });
 }
 
-Future<ServerSocket> _bindToIpcTestPort() async {
-  final portsToTry = [
-    SingleInstanceConfig.ipcBasePort,
-    ...SingleInstanceConfig.ipcAlternativePorts,
-  ];
-
-  for (final port in portsToTry) {
-    try {
-      return await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
-    } on SocketException {
-      continue;
-    }
-  }
-
-  fail(
-    'Nao foi possivel iniciar servidor de teste nas portas IPC: '
-    '${portsToTry.join(', ')}',
-  );
+Future<ServerSocket> _bindEphemeralIpcMockServer() async {
+  final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+  IpcService.ipcPortsOverrideForTests = [server.port];
+  return server;
 }
 
-Future<ServerSocket> _bindToSpecificPort(int port) async {
-  try {
-    return await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
-  } on SocketException catch (e) {
-    fail('Nao foi possivel iniciar servidor de teste na porta $port: $e');
+Future<({List<ServerSocket> decoys, ServerSocket target})>
+_bindSixPortProbeStackLastRespondsV1Pong() async {
+  final decoys = <ServerSocket>[];
+  for (var i = 0; i < 5; i++) {
+    final s = await ServerSocket.bind(
+      InternetAddress.loopbackIPv4,
+      0,
+    );
+    s.listen((Socket client) {
+      client.listen((_) {});
+    });
+    decoys.add(s);
   }
+  final target = await ServerSocket.bind(
+    InternetAddress.loopbackIPv4,
+    0,
+  );
+  IpcService.ipcPortsOverrideForTests = [
+    ...decoys.map((d) => d.port),
+    target.port,
+  ];
+  return (decoys: decoys, target: target);
 }

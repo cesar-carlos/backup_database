@@ -1,28 +1,22 @@
+import 'package:backup_database/core/constants/secure_credential_keys.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
-import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
-import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/repositories/base_database_config_repository.dart';
 import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
 import 'package:drift/drift.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-class SybaseConfigRepository implements ISybaseConfigRepository {
+class SybaseConfigRepository
+    extends BaseDatabaseConfigRepository<SybaseConfig, QueryRow>
+    implements ISybaseConfigRepository {
   SybaseConfigRepository(
-    this._database,
-    this._secureCredentialService,
+    super.database,
+    super.secureCredentialService,
   );
 
-  final AppDatabase _database;
-  final ISecureCredentialService _secureCredentialService;
-
-  static const String _passwordKeyPrefix = 'sybase_password_';
-
-  /// Template SQL compartilhado pelos `SELECT *` (com ou sem WHERE).
-  /// Antes era duplicado linha-a-linha em `getAll`/`getById`/`getEnabled`,
-  /// triplicando manutenção quando uma coluna era adicionada.
   static const String _selectColumns = '''
         SELECT
           id, name, server_name,
@@ -39,7 +33,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
   Future<rd.Result<List<SybaseConfig>>> getAll() {
     return _selectMany(
       whereClause: null,
-      whereVariables: const [],
+      whereVariables: const <Variable>[],
       errorContext: 'configurações',
       missingTableContext: 'sybase_configs',
     );
@@ -49,7 +43,7 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
   Future<rd.Result<List<SybaseConfig>>> getEnabled() {
     return _selectMany(
       whereClause: 'WHERE enabled = 1',
-      whereVariables: const [],
+      whereVariables: const <Variable>[],
       errorContext: 'configurações ativas',
       missingTableContext: 'sybase_configs',
     );
@@ -73,11 +67,11 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao buscar configuração',
       action: () async {
-        final row = await _database
+        final row = await database
             .customSelect(
               '$_selectColumns WHERE id = ?',
-              readsFrom: {_database.sybaseConfigsTable},
-              variables: [Variable<String>(id)],
+              readsFrom: {database.sybaseConfigsTable},
+              variables: <Variable>[Variable<String>(id)],
             )
             .getSingleOrNull();
 
@@ -93,105 +87,94 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
         LoggerService.debug(
           'Configuração Sybase encontrada: ${row.read<String>('name')}',
         );
-        return _toEntityFromRow(row);
+        return rowToEntity(row);
       },
     );
   }
 
   @override
-  Future<rd.Result<SybaseConfig>> create(SybaseConfig config) {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao criar configuração',
-      action: () async {
-        await _storePasswordOrThrow(config.id, config.password);
+  String credentialKeyFor(String configId) =>
+      SecureCredentialKeys.sybasePasswordKey(configId);
 
-        await _database.customStatement(
-          '''
+  @override
+  Future<List<QueryRow>> fetchAllRows() async => <QueryRow>[];
+
+  @override
+  Future<List<QueryRow>> fetchEnabledRows() async => <QueryRow>[];
+
+  @override
+  Future<QueryRow?> fetchRowById(String id) async => null;
+
+  @override
+  Future<void> writeInsert(SybaseConfig config) {
+    return database.customStatement(
+      '''
           INSERT INTO sybase_configs_table (
             id, name, server_name, database_name, database_file, port,
             username, password, enabled, is_replication_environment,
             created_at, updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ''',
-          [
-            config.id,
-            config.name,
-            config.serverName,
-            config.databaseNameValue,
-            config.databaseFile,
-            config.portValue,
-            config.username,
-            '',
-            if (config.enabled) 1 else 0,
-            if (config.isReplicationEnvironment) 1 else 0,
-            config.createdAt.millisecondsSinceEpoch,
-            config.updatedAt.millisecondsSinceEpoch,
-          ],
-        );
-
-        return config;
-      },
+      <Object?>[
+        config.id,
+        config.name,
+        config.serverName,
+        config.databaseNameValue,
+        config.databaseFile,
+        config.portValue,
+        config.username,
+        '',
+        if (config.enabled) 1 else 0,
+        if (config.isReplicationEnvironment) 1 else 0,
+        config.createdAt.millisecondsSinceEpoch,
+        config.updatedAt.millisecondsSinceEpoch,
+      ],
     );
   }
 
   @override
-  Future<rd.Result<SybaseConfig>> update(SybaseConfig config) {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao atualizar configuração',
-      action: () async {
-        await _storePasswordOrThrow(config.id, config.password);
-
-        await _database.customStatement(
-          '''
+  Future<void> writeUpdate(SybaseConfig config) {
+    return database.customStatement(
+      '''
           UPDATE sybase_configs_table SET
             name = ?, server_name = ?, database_name = ?, database_file = ?,
             port = ?, username = ?, password = ?, enabled = ?,
             is_replication_environment = ?, updated_at = ?
           WHERE id = ?
           ''',
-          [
-            config.name,
-            config.serverName,
-            config.databaseNameValue,
-            config.databaseFile,
-            config.portValue,
-            config.username,
-            '',
-            if (config.enabled) 1 else 0,
-            if (config.isReplicationEnvironment) 1 else 0,
-            DateTime.now().millisecondsSinceEpoch,
-            config.id,
-          ],
-        );
-
-        return config;
-      },
+      <Object?>[
+        config.name,
+        config.serverName,
+        config.databaseNameValue,
+        config.databaseFile,
+        config.portValue,
+        config.username,
+        '',
+        if (config.enabled) 1 else 0,
+        if (config.isReplicationEnvironment) 1 else 0,
+        DateTime.now().millisecondsSinceEpoch,
+        config.id,
+      ],
     );
   }
 
   @override
-  Future<rd.Result<void>> delete(String id) {
-    return RepositoryGuard.runVoid(
-      errorMessage: 'Erro ao deletar configuração',
-      action: () async {
-        LoggerService.info('Deletando configuração Sybase: $id');
+  Future<void> onBeforeDelete(String id) async {
+    LoggerService.info('Deletando configuração Sybase: $id');
+  }
 
-        final passwordKey = '$_passwordKeyPrefix$id';
-        await _secureCredentialService.deletePassword(key: passwordKey);
-
-        await _database.customStatement(
-          'DELETE FROM sybase_configs_table WHERE id = ?',
-          [id],
-        );
-
-        LoggerService.info('Configuração Sybase deletada com sucesso: $id');
-      },
+  @override
+  Future<void> writeDelete(String id) async {
+    await database.customStatement(
+      'DELETE FROM sybase_configs_table WHERE id = ?',
+      <Object?>[id],
     );
+    LoggerService.info('Configuração Sybase deletada com sucesso: $id');
   }
 
   Future<bool> _tableExists() async {
     try {
-      final result = await _database
+      final result = await database
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='sybase_configs_table'",
@@ -206,9 +189,6 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     }
   }
 
-  /// Centraliza a lógica de "selecionar muitos com fallback de tabela
-  /// inexistente". Antes era replicada quase idêntica em `getAll` e
-  /// `getEnabled` (~30 linhas cada).
   Future<rd.Result<List<SybaseConfig>>> _selectMany({
     required String? whereClause,
     required List<Variable> whereVariables,
@@ -226,10 +206,10 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       final query = whereClause == null
           ? _selectColumns
           : '$_selectColumns $whereClause';
-      final rows = await _database
+      final rows = await database
           .customSelect(
             query,
-            readsFrom: {_database.sybaseConfigsTable},
+            readsFrom: {database.sybaseConfigsTable},
             variables: whereVariables,
           )
           .get();
@@ -237,15 +217,12 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       final entities = <SybaseConfig>[];
       for (final row in rows) {
         try {
-          final entity = await _toEntityFromRow(row);
+          final entity = await rowToEntity(row);
           entities.add(entity);
         } on Object catch (e, stackTrace) {
-          // Skip-on-error semantics preservada: uma row corrompida não
-          // deve impedir o resto da lista. Antes era duplicada em
-          // `getAll` e `getEnabled`.
-          final id = row.read<String>('id');
+          final rowId = row.read<String>('id');
           LoggerService.error(
-            'Erro ao converter configuração Sybase ($errorContext): $id',
+            'Erro ao converter configuração Sybase ($errorContext): $rowId',
             e,
             stackTrace,
           );
@@ -255,9 +232,6 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
 
       return rd.Success(entities);
     } on Object catch (e, stackTrace) {
-      // Race condition: a tabela passou no `_tableExists` mas foi removida
-      // antes do SELECT (raro, mas possível em scripts de migração).
-      // Tratamos como lista vazia em vez de erro.
       final errorStr = e.toString().toLowerCase();
       if (errorStr.contains('no such table') ||
           errorStr.contains(missingTableContext)) {
@@ -282,18 +256,8 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     }
   }
 
-  Future<void> _storePasswordOrThrow(String id, String password) async {
-    final passwordKey = '$_passwordKeyPrefix$id';
-    final storeResult = await _secureCredentialService.storePassword(
-      key: passwordKey,
-      password: password,
-    );
-    if (storeResult.isError()) {
-      throw storeResult.exceptionOrNull()!;
-    }
-  }
-
-  Future<SybaseConfig> _toEntityFromRow(QueryRow row) async {
+  @override
+  Future<SybaseConfig> rowToEntity(QueryRow row) async {
     final id = row.read<String>('id');
     final name = row.read<String>('name');
     final serverName = row.read<String>('server_name');
@@ -311,12 +275,9 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
     final createdAt = DateTime.fromMillisecondsSinceEpoch(createdAtInt);
     final updatedAt = DateTime.fromMillisecondsSinceEpoch(updatedAtInt);
 
-    final passwordKey = '$_passwordKeyPrefix$id';
-    final passwordResult = await _secureCredentialService.getPassword(
-      key: passwordKey,
+    final password = await credentials.readPasswordOrEmpty(
+      credentialKeyFor(id),
     );
-
-    final password = passwordResult.getOrElse((_) => '');
 
     final effectiveDatabaseName = databaseName.isNotEmpty
         ? databaseName
@@ -337,5 +298,4 @@ class SybaseConfigRepository implements ISybaseConfigRepository {
       updatedAt: updatedAt,
     );
   }
-
 }

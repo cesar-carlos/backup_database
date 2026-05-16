@@ -75,8 +75,7 @@ class TcpSocketServer implements SocketServerService {
            databaseConfigHandler ?? DatabaseConfigMessageHandler(),
        _executionHandler = executionHandler,
        _scheduleCrudHandler = scheduleCrudHandler,
-       _diagnosticsHandler =
-           diagnosticsHandler ?? DiagnosticsMessageHandler(),
+       _diagnosticsHandler = diagnosticsHandler ?? DiagnosticsMessageHandler(),
        _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
     // PR-3: quando ExecutionMessageHandler estiver cabeado, injeta
     // resolver que despacha mensagens para o ClientHandler vivo
@@ -86,7 +85,8 @@ class TcpSocketServer implements SocketServerService {
     // SessionMessageHandler precisa consultar handlers vivos para
     // reportar a sessao do cliente. Construido aqui (em vez de no
     // initializer list) porque depende de `this` para o lookup.
-    _sessionHandler = sessionHandler ??
+    _sessionHandler =
+        sessionHandler ??
         SessionMessageHandler(sessionLookup: _lookupSessionInfo);
   }
 
@@ -129,6 +129,12 @@ class TcpSocketServer implements SocketServerService {
   final Map<String, DateTime> _connectedAt = {};
   StreamController<Message> _messageController =
       StreamController<Message>.broadcast();
+
+  void _enqueueHandlerFuture(Future<void>? future) {
+    if (future != null) {
+      unawaited(future);
+    }
+  }
 
   @override
   bool get isRunning => _isRunning;
@@ -195,44 +201,70 @@ class TcpSocketServer implements SocketServerService {
     handler.messageStream.listen(
       (Message msg) {
         _messageController.add(msg);
-        _scheduleHandler?.handle(clientId, msg, sendToClient);
-        _fileTransferHandler?.handle(clientId, msg, sendToClient);
-        _metricsHandler?.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _scheduleHandler?.handle(clientId, msg, sendToClient),
+        );
+        _enqueueHandlerFuture(
+          _fileTransferHandler?.handle(clientId, msg, sendToClient),
+        );
+        _enqueueHandlerFuture(
+          _metricsHandler?.handle(clientId, msg, sendToClient),
+        );
         // Capabilities sempre disponivel (sem dependencias externas).
         // Permite ao cliente negociar features apos auth (M4.1).
-        _capabilitiesHandler.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _capabilitiesHandler.handle(clientId, msg, sendToClient),
+        );
         // Health: cliente pode consultar saude do servidor antes de
         // operar. Sempre disponivel (sem deps externas hard) — checks
         // adicionais sao injetados no construtor (M1.10 / PR-1).
-        _healthHandler.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _healthHandler.handle(clientId, msg, sendToClient),
+        );
         // Session: cliente pode confirmar identidade percebida pelo
         // servidor. Lookup pega snapshot do ClientHandler vivo.
-        _sessionHandler.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _sessionHandler.handle(clientId, msg, sendToClient),
+        );
         // Preflight: cliente pode validar prerequisitos profundos
         // (ferramenta de compactacao, pasta temp, espaco) antes de
         // disparar backup remoto (F1.8 do plano).
-        _preflightHandler.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _preflightHandler.handle(clientId, msg, sendToClient),
+        );
         // Execution status: cliente reidrata progresso de runId apos
         // reconexao ou faz polling alternativo (PR-2 base / M2.3
         // complement). Optional — so existe quando registry compartilhado
         // foi cabeado no DI.
-        _executionStatusHandler?.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _executionStatusHandler?.handle(clientId, msg, sendToClient),
+        );
         // Execution queue: cliente lista fila atual (vazia em PR-1;
         // PR-3b vai popular via provider que consulta tabela persistida).
-        _executionQueueHandler.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _executionQueueHandler.handle(clientId, msg, sendToClient),
+        );
         // PR-2: testDatabaseConnection. Despacha por tipo de banco
         // via DatabaseConnectionProber injetado.
-        _databaseConfigHandler.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _databaseConfigHandler.handle(clientId, msg, sendToClient),
+        );
         // PR-2 / M2.2: startBackup nao-bloqueante + cancelBackup.
         // Optional — quando nao cabeado, mensagens de start/cancel
         // caem em timeout no cliente.
-        _executionHandler?.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _executionHandler?.handle(clientId, msg, sendToClient),
+        );
         // PR-2: schedule CRUD (create/delete/pause/resume). Optional
         // — wiring depende de IScheduleRepository.
-        _scheduleCrudHandler?.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _scheduleCrudHandler?.handle(clientId, msg, sendToClient),
+        );
         // PR-3 commit final: diagnostico operacional. NotConfigured
         // por default — DI cabea provider real que consulta logs/staging.
-        _diagnosticsHandler.handle(clientId, msg, sendToClient);
+        _enqueueHandlerFuture(
+          _diagnosticsHandler.handle(clientId, msg, sendToClient),
+        );
       },
       onError: (e) => LoggerService.warning('Handler stream error: $e'),
     );
@@ -270,7 +302,7 @@ class TcpSocketServer implements SocketServerService {
     _serverSocket = null;
     _isRunning = false;
     if (!_messageController.isClosed) {
-      _messageController.close();
+      await _messageController.close();
     }
     LoggerService.info('Socket Server stopped');
   }
@@ -325,8 +357,7 @@ class TcpSocketServer implements SocketServerService {
   /// foi desregistrado (race condition entre `sessionRequest` e
   /// `disconnect`).
   Future<SessionInfo?> _lookupSessionInfo(String clientId) async {
-    final handler =
-        _clientManager?.getHandler(clientId) ?? _handlers[clientId];
+    final handler = _clientManager?.getHandler(clientId) ?? _handlers[clientId];
     if (handler == null) return null;
     final connectedAt = _clientManager != null
         ? _clientManager.getConnectedAt(clientId)

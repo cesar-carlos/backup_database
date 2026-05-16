@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/core/logging/file_logger_service.dart';
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:logger/logger.dart';
@@ -48,29 +50,43 @@ class LoggerService {
       ? '${LogContext.buildStructuredPrefix()}$message'
       : message;
 
+  static void _enqueueFileLog(Future<void>? future) {
+    if (future != null) {
+      unawaited(future);
+    }
+  }
+
   static void debug(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.d(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(_messageWithContext(message), level: LogLevel.debug);
+    _enqueueFileLog(
+      _fileLogger?.log(_messageWithContext(message), level: LogLevel.debug),
+    );
   }
 
   static void info(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.i(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(_messageWithContext(message));
+    _enqueueFileLog(_fileLogger?.log(_messageWithContext(message)));
   }
 
   static void warning(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.w(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(_messageWithContext(message), level: LogLevel.warning);
+    _enqueueFileLog(
+      _fileLogger?.log(_messageWithContext(message), level: LogLevel.warning),
+    );
   }
 
   static void error(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.e(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(_messageWithContext(message), level: LogLevel.error);
+    _enqueueFileLog(
+      _fileLogger?.log(_messageWithContext(message), level: LogLevel.error),
+    );
   }
 
   static void fatal(String message, [dynamic error, StackTrace? stackTrace]) {
     _instance.f(message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(_messageWithContext(message), level: LogLevel.error);
+    _enqueueFileLog(
+      _fileLogger?.log(_messageWithContext(message), level: LogLevel.error),
+    );
   }
 
   static String _contextPrefix({
@@ -104,7 +120,7 @@ class LoggerService {
       scheduleId: scheduleId,
     );
     _instance.i(prefix + message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(prefix + message);
+    _enqueueFileLog(_fileLogger?.log(prefix + message));
   }
 
   static void warningWithContext(
@@ -123,7 +139,9 @@ class LoggerService {
       scheduleId: scheduleId,
     );
     _instance.w(prefix + message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(prefix + message, level: LogLevel.warning);
+    _enqueueFileLog(
+      _fileLogger?.log(prefix + message, level: LogLevel.warning),
+    );
   }
 
   static void errorWithContext(
@@ -142,6 +160,8 @@ class LoggerService {
       scheduleId: scheduleId,
     );
     _instance.e(prefix + message, error: error, stackTrace: stackTrace);
-    _fileLogger?.log(prefix + message, level: LogLevel.error);
+    _enqueueFileLog(
+      _fileLogger?.log(prefix + message, level: LogLevel.error),
+    );
   }
 }

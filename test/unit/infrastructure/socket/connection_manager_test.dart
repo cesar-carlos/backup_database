@@ -247,6 +247,7 @@ void main() {
         expect(caps!.protocolVersion, kCurrentProtocolVersion);
         expect(caps.wireVersion, kCurrentWireVersion);
         expect(caps.supportsRunId, isTrue, reason: 'M2.3 ja entregue');
+        expect(caps.supportsFirebird, isFalse);
 
         // Variante getServerCapabilities() nao toca no cache.
         expect(manager.serverCapabilities, isNull);
@@ -273,7 +274,10 @@ void main() {
 
         // Cache populado e identico ao retorno
         expect(manager.serverCapabilities, isNotNull);
-        expect(manager.serverCapabilities!.protocolVersion, caps!.protocolVersion);
+        expect(
+          manager.serverCapabilities!.protocolVersion,
+          caps!.protocolVersion,
+        );
         expect(manager.serverCapabilities!.supportsRunId, caps.supportsRunId);
         expect(manager.serverCapabilities!.supportsResume, caps.supportsResume);
       },
@@ -333,9 +337,22 @@ void main() {
         // Sucesso garantido (fallback)
         expect(result.isSuccess(), isTrue);
         final caps = result.getOrNull()!;
-        expect(caps.protocolVersion, ServerCapabilities.legacyDefault.protocolVersion);
-        expect(caps.supportsRunId, ServerCapabilities.legacyDefault.supportsRunId);
-        expect(caps.supportsResume, ServerCapabilities.legacyDefault.supportsResume);
+        expect(
+          caps.protocolVersion,
+          ServerCapabilities.legacyDefault.protocolVersion,
+        );
+        expect(
+          caps.supportsRunId,
+          ServerCapabilities.legacyDefault.supportsRunId,
+        );
+        expect(
+          caps.supportsResume,
+          ServerCapabilities.legacyDefault.supportsResume,
+        );
+        expect(
+          caps.supportsFirebird,
+          ServerCapabilities.legacyDefault.supportsFirebird,
+        );
         // Cache populado com legacyDefault
         expect(manager.serverCapabilities, isNotNull);
       },
@@ -404,6 +421,10 @@ void main() {
           manager.isChunkAckSupported,
           ServerCapabilities.legacyDefault.supportsChunkAck,
         );
+        expect(
+          manager.isFirebirdSupported,
+          ServerCapabilities.legacyDefault.supportsFirebird,
+        );
       },
     );
 
@@ -418,8 +439,17 @@ void main() {
         // CapabilitiesMessageHandler.
         expect(manager.isRunIdSupported, isTrue);
         expect(manager.isChunkAckSupported, isFalse, reason: 'ADR-002');
-        expect(manager.isExecutionQueueSupported, isTrue, reason: 'fila remota PR-3a');
-        expect(manager.isArtifactRetentionSupported, isTrue, reason: 'PR-4 TTL/410/cleanup');
+        expect(
+          manager.isExecutionQueueSupported,
+          isTrue,
+          reason: 'fila remota PR-3a',
+        );
+        expect(
+          manager.isArtifactRetentionSupported,
+          isTrue,
+          reason: 'PR-4 TTL/410/cleanup',
+        );
+        expect(manager.isFirebirdSupported, isFalse);
       },
     );
 
@@ -601,22 +631,24 @@ void main() {
   });
 
   group('ConnectionManager getExecutionQueue (PR-3b base)', () {
-    test('retorna fila vazia quando servidor sem provider customizado',
-        () async {
-      final port = getPort();
-      await server.start(port: port);
-      await manager.connect(host: '127.0.0.1', port: port);
+    test(
+      'retorna fila vazia quando servidor sem provider customizado',
+      () async {
+        final port = getPort();
+        await server.start(port: port);
+        await manager.connect(host: '127.0.0.1', port: port);
 
-      final result = await manager.getExecutionQueue();
-      final queue = result.getOrNull();
-      expect(queue, isNotNull);
-      // ExecutionQueueMessageHandler default vem com provider vazio
-      expect(queue!.queue, isEmpty);
-      expect(queue.totalQueued, 0);
-      expect(queue.maxQueueSize, 50, reason: 'M8 default');
-      expect(queue.isEmpty, isTrue);
-      expect(queue.isFull, isFalse);
-    });
+        final result = await manager.getExecutionQueue();
+        final queue = result.getOrNull();
+        expect(queue, isNotNull);
+        // ExecutionQueueMessageHandler default vem com provider vazio
+        expect(queue!.queue, isEmpty);
+        expect(queue.totalQueued, 0);
+        expect(queue.maxQueueSize, 50, reason: 'M8 default');
+        expect(queue.isEmpty, isTrue);
+        expect(queue.isFull, isFalse);
+      },
+    );
 
     test('falha quando nao conectado', () async {
       expect(manager.isConnected, isFalse);

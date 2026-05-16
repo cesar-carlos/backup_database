@@ -41,42 +41,51 @@ void main() {
       },
     );
 
-    test('passes Failure subtype through unchanged (NotFoundFailure)', () async {
-      const semanticFailure = NotFoundFailure(
-        message: 'Registro não encontrado',
-      );
+    test(
+      'passes Failure subtype through unchanged (NotFoundFailure)',
+      () async {
+        const semanticFailure = NotFoundFailure(
+          message: 'Registro não encontrado',
+        );
 
-      final result = await RepositoryGuard.run<String>(
-        errorMessage: 'Erro ao buscar',
-        logErrors: false,
-        action: () async => throw semanticFailure,
-      );
+        final result = await RepositoryGuard.run<String>(
+          errorMessage: 'Erro ao buscar',
+          logErrors: false,
+          action: () async => throw semanticFailure,
+        );
 
-      expect(result.isError(), isTrue);
-      final failure = result.exceptionOrNull();
-      expect(
-        failure,
-        isA<NotFoundFailure>(),
-        reason:
-            'RepositoryGuard must passthrough Failure subtypes to preserve '
-            'semantics; otherwise NotFoundFailure becomes DatabaseFailure',
-      );
-      expect((failure! as NotFoundFailure).message, equals(semanticFailure.message));
-    });
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull();
+        expect(
+          failure,
+          isA<NotFoundFailure>(),
+          reason:
+              'RepositoryGuard must passthrough Failure subtypes to preserve '
+              'semantics; otherwise NotFoundFailure becomes DatabaseFailure',
+        );
+        expect(
+          (failure! as NotFoundFailure).message,
+          equals(semanticFailure.message),
+        );
+      },
+    );
 
-    test('passes Failure subtype through unchanged (ValidationFailure)', () async {
-      const semanticFailure = ValidationFailure(
-        message: 'Transição inválida',
-      );
+    test(
+      'passes Failure subtype through unchanged (ValidationFailure)',
+      () async {
+        const semanticFailure = ValidationFailure(
+          message: 'Transição inválida',
+        );
 
-      final result = await RepositoryGuard.run<String>(
-        errorMessage: 'Erro ao atualizar',
-        logErrors: false,
-        action: () async => throw semanticFailure,
-      );
+        final result = await RepositoryGuard.run<String>(
+          errorMessage: 'Erro ao atualizar',
+          logErrors: false,
+          action: () async => throw semanticFailure,
+        );
 
-      expect(result.exceptionOrNull(), isA<ValidationFailure>());
-    });
+        expect(result.exceptionOrNull(), isA<ValidationFailure>());
+      },
+    );
 
     test(
       'failureBuilder customizes wrap type for non-Failure exceptions',
@@ -112,7 +121,8 @@ void main() {
       expect(
         builderCalled,
         isFalse,
-        reason: 'failureBuilder is for wrapping non-Failure throws only; '
+        reason:
+            'failureBuilder is for wrapping non-Failure throws only; '
             'Failure types passthrough untouched',
       );
       expect(result.exceptionOrNull(), isA<ValidationFailure>());
@@ -167,12 +177,34 @@ void main() {
       final result = await RepositoryGuard.runVoid(
         errorMessage: 'Erro ao deletar',
         logErrors: false,
-        action: () async =>
-            throw const NotFoundFailure(message: 'sumiu'),
+        action: () async => throw const NotFoundFailure(message: 'sumiu'),
       );
 
       expect(result.exceptionOrNull(), isA<NotFoundFailure>());
     });
+
+    test(
+      'failureBuilder customizes wrap type for non-Failure exceptions',
+      () async {
+        final result = await RepositoryGuard.runVoid(
+          errorMessage: 'Erro ao limpar',
+          logErrors: false,
+          failureBuilder: (String msg, Object original) => NetworkFailure(
+            message: msg,
+            originalError: original,
+          ),
+          action: () async => throw const FormatException('bad format'),
+        );
+
+        expect(result.isError(), isTrue);
+        final Object? failure = result.exceptionOrNull();
+        expect(failure, isA<NetworkFailure>());
+        expect(
+          (failure! as NetworkFailure).originalError,
+          isA<FormatException>(),
+        );
+      },
+    );
   });
 
   group('RepositoryGuard end-to-end (caller perspective)', () {

@@ -104,29 +104,31 @@ void main() {
       },
     );
 
-    test('falha em compute NAO e cacheada (cliente pode tentar de novo)',
-        () async {
-      final registry = IdempotencyRegistry();
-      var attempt = 0;
-      Future<int> failingThenSuccess() async {
-        attempt++;
-        if (attempt == 1) throw StateError('boom');
-        return 42;
-      }
+    test(
+      'falha em compute NAO e cacheada (cliente pode tentar de novo)',
+      () async {
+        final registry = IdempotencyRegistry();
+        var attempt = 0;
+        Future<int> failingThenSuccess() async {
+          attempt++;
+          if (attempt == 1) throw StateError('boom');
+          return 42;
+        }
 
-      // 1a chamada: falha
-      await expectLater(
-        registry.runIdempotent<int>(key: 'k', compute: failingThenSuccess),
-        throwsA(isA<StateError>()),
-      );
-      // 2a chamada: sucesso (registry NAO mantem o erro cacheado)
-      final r = await registry.runIdempotent<int>(
-        key: 'k',
-        compute: failingThenSuccess,
-      );
-      expect(r, 42);
-      expect(attempt, 2);
-    });
+        // 1a chamada: falha
+        await expectLater(
+          registry.runIdempotent<int>(key: 'k', compute: failingThenSuccess),
+          throwsA(isA<StateError>()),
+        );
+        // 2a chamada: sucesso (registry NAO mantem o erro cacheado)
+        final r = await registry.runIdempotent<int>(
+          key: 'k',
+          compute: failingThenSuccess,
+        );
+        expect(r, 42);
+        expect(attempt, 2);
+      },
+    );
 
     test('size respeita TTL (purge on-demand)', () async {
       var fakeNow = DateTime.utc(2026, 1, 1, 12);

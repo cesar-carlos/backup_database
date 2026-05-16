@@ -17,6 +17,8 @@ class IpcService implements IIpcService {
   static int? _cachedActivePort;
   static DateTime? _cachedActivePortAt;
 
+  static List<int>? _ipcPortsOverrideForTests;
+
   @override
   Future<bool> startServer({Function()? onShowWindow}) async {
     if (_isRunning) {
@@ -131,7 +133,7 @@ class IpcService implements IIpcService {
         LoggerService.error('Erro na conexao IPC', error);
       },
       onDone: () {
-        socket.close();
+        unawaited(socket.close());
       },
     );
   }
@@ -254,9 +256,18 @@ class IpcService implements IIpcService {
   int get listenPort => _currentPort;
 
   @visibleForTesting
+  static List<int>? get ipcPortsOverrideForTests => _ipcPortsOverrideForTests;
+
+  @visibleForTesting
+  static set ipcPortsOverrideForTests(List<int>? ports) {
+    _ipcPortsOverrideForTests = ports;
+  }
+
+  @visibleForTesting
   static void resetPortCacheForTests() {
     _cachedActivePort = null;
     _cachedActivePortAt = null;
+    _ipcPortsOverrideForTests = null;
   }
 
   static Future<void> _closeClientResources({
@@ -274,10 +285,12 @@ class IpcService implements IIpcService {
   }
 
   static List<int> _getPortsToTry() {
-    final defaultPorts = [
-      SingleInstanceConfig.ipcBasePort,
-      ...SingleInstanceConfig.ipcAlternativePorts,
-    ];
+    final defaultPorts =
+        _ipcPortsOverrideForTests ??
+        [
+          SingleInstanceConfig.ipcBasePort,
+          ...SingleInstanceConfig.ipcAlternativePorts,
+        ];
     final cachedPort = _getCachedActivePortIfFresh();
     if (cachedPort == null) {
       return defaultPorts;

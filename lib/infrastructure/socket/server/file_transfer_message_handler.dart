@@ -22,7 +22,8 @@ class FileTransferMessageHandler {
   }) : _allowedBasePath = p.normalize(p.absolute(allowedBasePath)),
        _lockService = lockService,
        _chunker = chunker ?? FileChunker(),
-       _remoteArtifactTtl = remoteStagingArtifactTtl ?? RemoteStagingArtifactTtl();
+       _remoteArtifactTtl =
+           remoteStagingArtifactTtl ?? RemoteStagingArtifactTtl();
 
   final String _allowedBasePath;
   final IFileTransferLockService _lockService;
@@ -117,8 +118,9 @@ class FileTransferMessageHandler {
         transferFileName = p.basename(resolved);
       } else if (entityType == FileSystemEntityType.directory) {
         if (isPathUnderRemoteStaging(_allowedBasePath, resolved) &&
-            await _remoteArtifactTtl
-                .isDirectoryExpiredByNewestFile(Directory(resolved))) {
+            await _remoteArtifactTtl.isDirectoryExpiredByNewestFile(
+              Directory(resolved),
+            )) {
           await sendToClient(
             clientId,
             createFileTransferErrorMessage(
@@ -340,10 +342,10 @@ class FileTransferMessageHandler {
             entity.path,
             from: normalizedDir,
           );
-          encoder.addFile(entity, relativePath);
+          await encoder.addFile(entity, relativePath);
         }
       }
-      encoder.close();
+      await encoder.close();
       return zipPath;
     } on Object catch (e, st) {
       LoggerService.warning(
@@ -352,7 +354,7 @@ class FileTransferMessageHandler {
         st,
       );
       try {
-        encoder.close();
+        await encoder.close();
       } on Object catch (e, st) {
         LoggerService.debug(
           'FileTransferMessageHandler: zip encoder close: $e',

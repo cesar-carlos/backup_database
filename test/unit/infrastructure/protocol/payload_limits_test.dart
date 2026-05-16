@@ -80,7 +80,10 @@ void main() {
       // saturar no teto global (cinto + suspensorio).
       for (final entry in PayloadLimits.perType.entries) {
         final effective = PayloadLimits.maxPayloadBytesFor(entry.key);
-        expect(effective, lessThanOrEqualTo(SocketConfig.maxMessagePayloadBytes));
+        expect(
+          effective,
+          lessThanOrEqualTo(SocketConfig.maxMessagePayloadBytes),
+        );
       }
     });
 

@@ -30,7 +30,8 @@ enum ExecutionState {
   completed,
   failed,
   cancelled,
-  unknown;
+  unknown
+  ;
 
   static ExecutionState fromString(String value) {
     return values.firstWhere(

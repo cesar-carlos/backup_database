@@ -5,7 +5,7 @@ import 'package:uuid/uuid.dart';
 
 enum ScheduleType { daily, weekly, monthly, interval }
 
-enum DatabaseType { sqlServer, sybase, postgresql }
+enum DatabaseType { sqlServer, sybase, postgresql, firebird }
 
 extension ScheduleTypeExtension on ScheduleType {
   String toValue() {

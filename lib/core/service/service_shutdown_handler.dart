@@ -43,14 +43,14 @@ class ServiceShutdownHandler {
       _signalSubscriptions.add(
         ProcessSignal.sigint.watch().listen((_) {
           LoggerService.info('SIGINT recebido (Ctrl+C)');
-          _handleShutdown(const Duration(seconds: 30));
+          unawaited(_handleShutdown(const Duration(seconds: 30)));
         }),
       );
 
       _signalSubscriptions.add(
         ProcessSignal.sigterm.watch().listen((_) {
           LoggerService.info('SIGTERM recebido');
-          _handleShutdown(const Duration(seconds: 30));
+          unawaited(_handleShutdown(const Duration(seconds: 30)));
         }),
       );
 

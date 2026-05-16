@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/core/security/password_hasher.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -14,7 +16,7 @@ class ServerCredentialProvider extends ChangeNotifier with AsyncStateMixin {
     this._repository,
     this._secureCredentialService,
   ) {
-    loadCredentials();
+    unawaited(loadCredentials());
   }
   final IServerCredentialRepository _repository;
   final ISecureCredentialService _secureCredentialService;

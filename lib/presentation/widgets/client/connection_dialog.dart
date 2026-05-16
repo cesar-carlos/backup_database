@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/server_connection_provider.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:backup_database/presentation/widgets/client/connection_form_result.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -33,12 +36,6 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
   bool _isEditing = false;
   bool _isTesting = false;
 
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -71,42 +68,55 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     final password = _passwordController.text;
 
     if (name.isEmpty) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t('Informe o nome da conexão.', 'Enter connection name.'),
-      );
+        message: appLocaleString(
+          context,
+          'Informe o nome da conexão.',
+          'Enter connection name.',
+        ),
+      ));
       return;
     }
     if (serverId.isEmpty) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t('Informe o Server ID.', 'Enter Server ID.'),
-      );
+        message: appLocaleString(
+          context,
+          'Informe o Server ID.',
+          'Enter Server ID.',
+        ),
+      ));
       return;
     }
     if (host.isEmpty) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t('Informe o host.', 'Enter host.'),
-      );
+        message: appLocaleString(context, 'Informe o host.', 'Enter host.'),
+      ));
       return;
     }
     final port = int.tryParse(portStr);
     if (port == null || port < 1 || port > 65535) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t(
+        message: appLocaleString(
+          context,
           'Informe uma porta valida (1-65535).',
           'Enter a valid port (1-65535).',
         ),
-      );
+      ));
       return;
     }
     if (password.isEmpty) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t('Informe a senha.', 'Enter password.'),
-      );
+        message: appLocaleString(
+          context,
+          'Informe a senha.',
+          'Enter password.',
+        ),
+      ));
       return;
     }
 
@@ -129,35 +139,44 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     final password = _passwordController.text;
 
     if (serverId.isEmpty) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t('Informe o Server ID.', 'Enter Server ID.'),
-      );
+        message: appLocaleString(
+          context,
+          'Informe o Server ID.',
+          'Enter Server ID.',
+        ),
+      ));
       return;
     }
     if (host.isEmpty) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t('Informe o host.', 'Enter host.'),
-      );
+        message: appLocaleString(context, 'Informe o host.', 'Enter host.'),
+      ));
       return;
     }
     final port = int.tryParse(portStr);
     if (port == null || port < 1 || port > 65535) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t(
+        message: appLocaleString(
+          context,
           'Informe uma porta valida (1-65535).',
           'Enter a valid port (1-65535).',
         ),
-      );
+      ));
       return;
     }
     if (password.isEmpty) {
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
-        message: _t('Informe a senha.', 'Enter password.'),
-      );
+        message: appLocaleString(
+          context,
+          'Informe a senha.',
+          'Enter password.',
+        ),
+      ));
       return;
     }
 
@@ -165,7 +184,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     final provider = context.read<ServerConnectionProvider>();
     final tempConnection = ServerConnection(
       id: 'test',
-      name: name.isEmpty ? _t('Teste', 'Test') : name,
+      name: name.isEmpty ? appLocaleString(context, 'Teste', 'Test') : name,
       serverId: serverId,
       host: host,
       port: port,
@@ -179,20 +198,26 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     setState(() => _isTesting = false);
     if (ok) {
       if (!mounted) return;
-      MessageModal.showSuccess(
+      unawaited(MessageModal.showSuccess(
         context,
-        message: _t(
+        message: appLocaleString(
+          context,
           'Conexao bem-sucedida com $host:$port',
           'Successful connection to $host:$port',
         ),
-      );
+      ));
     } else {
       if (!mounted) return;
-      MessageModal.showError(
+      unawaited(MessageModal.showError(
         context,
         message:
-            provider.error ?? _t('Falha ao conectar.', 'Connection failed.'),
-      );
+            provider.error ??
+            appLocaleString(
+              context,
+              'Falha ao conectar.',
+              'Connection failed.',
+            ),
+      ));
     }
   }
 
@@ -201,8 +226,8 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     return ContentDialog(
       title: Text(
         _isEditing
-            ? _t('Editar conexão', 'Edit connection')
-            : _t('Adicionar servidor', 'Add server'),
+            ? appLocaleString(context, 'Editar conexão', 'Edit connection')
+            : appLocaleString(context, 'Adicionar servidor', 'Add server'),
       ),
       content: SingleChildScrollView(
         child: SizedBox(
@@ -212,18 +237,23 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               InfoLabel(
-                label: _t('Nome', 'Name'),
+                label: appLocaleString(context, 'Nome', 'Name'),
                 child: TextBox(
                   controller: _nameController,
-                  placeholder: _t('Nome da conexão', 'Connection name'),
+                  placeholder: appLocaleString(
+                    context,
+                    'Nome da conexão',
+                    'Connection name',
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
               InfoLabel(
-                label: _t('Host', 'Host'),
+                label: appLocaleString(context, 'Host', 'Host'),
                 child: TextBox(
                   controller: _hostController,
-                  placeholder: _t(
+                  placeholder: appLocaleString(
+                    context,
                     '127.0.0.1 ou endereco do servidor',
                     '127.0.0.1 or server address',
                   ),
@@ -231,19 +261,20 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
               ),
               const SizedBox(height: 16),
               InfoLabel(
-                label: _t('Porta', 'Port'),
+                label: appLocaleString(context, 'Porta', 'Port'),
                 child: TextBox(
                   controller: _portController,
-                  placeholder: _t('9527', '9527'),
+                  placeholder: appLocaleString(context, '9527', '9527'),
                   keyboardType: TextInputType.number,
                 ),
               ),
               const SizedBox(height: 16),
               InfoLabel(
-                label: _t('ID do servidor', 'Server ID'),
+                label: appLocaleString(context, 'ID do servidor', 'Server ID'),
                 child: TextBox(
                   controller: _serverIdController,
-                  placeholder: _t(
+                  placeholder: appLocaleString(
+                    context,
                     'Identificador do servidor',
                     'Server identifier',
                   ),
@@ -252,7 +283,11 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
               const SizedBox(height: 16),
               PasswordField(
                 controller: _passwordController,
-                hint: _t('Senha de acesso', 'Access password'),
+                hint: appLocaleString(
+                  context,
+                  'Senha de acesso',
+                  'Access password',
+                ),
               ),
             ],
           ),
@@ -261,10 +296,11 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
       actions: [
         Button(
           onPressed: _isTesting ? null : () => Navigator.of(context).pop(),
-          child: Text(_t('Cancelar', 'Cancel')),
+          child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
         ),
         Tooltip(
-          message: _t(
+          message: appLocaleString(
+            context,
             'Testar comunicacao com o servidor antes de salvar',
             'Test server communication before saving',
           ),
@@ -276,12 +312,18 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                     height: 16,
                     child: ProgressRing(strokeWidth: 2),
                   )
-                : Text(_t('Testar conexão', 'Test connection')),
+                : Text(
+                    appLocaleString(
+                      context,
+                      'Testar conexão',
+                      'Test connection',
+                    ),
+                  ),
           ),
         ),
         FilledButton(
           onPressed: _isTesting ? null : _submit,
-          child: Text(_t('Salvar', 'Save')),
+          child: Text(appLocaleString(context, 'Salvar', 'Save')),
         ),
       ],
     );

@@ -1,7 +1,9 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
+/// **Atom** — labeled text field with semantic error color.
 class AppTextField extends StatelessWidget {
   const AppTextField({
     required this.label,
@@ -19,6 +21,7 @@ class AppTextField extends StatelessWidget {
     this.enabled = true,
     this.inputFormatters,
   });
+
   final String label;
   final String? hint;
   final TextEditingController? controller;
@@ -27,7 +30,7 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final bool obscureText;
   final TextInputType? keyboardType;
-  final int? maxLines;
+  final int maxLines;
   final Widget? suffixIcon;
   final Widget? prefixIcon;
   final bool enabled;
@@ -39,12 +42,15 @@ class AppTextField extends StatelessWidget {
     if (prefixIcon is Icon) {
       final icon = prefixIcon! as Icon;
       return Padding(
-        padding: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.only(left: AppSpacing.xs),
         child: Icon(icon.icon, size: 18, color: icon.color),
       );
     }
 
-    return Padding(padding: const EdgeInsets.only(left: 8), child: prefixIcon);
+    return Padding(
+      padding: const EdgeInsets.only(left: AppSpacing.xs),
+      child: prefixIcon,
+    );
   }
 
   @override
@@ -68,24 +74,34 @@ class AppTextField extends StatelessWidget {
     );
 
     if (errorText != null) {
-      return InfoLabel(
+      return Semantics(
+        textField: true,
         label: label,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            textBox,
-            const SizedBox(height: 4),
-            Text(
-              errorText,
-              style: FluentTheme.of(
-                context,
-              ).typography.caption?.copyWith(color: AppColors.error),
-            ),
-          ],
+        hint: hint,
+        child: InfoLabel(
+          label: label,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              textBox,
+              const SizedBox(height: AppSpacing.xs, width: AppSpacing.xs),
+              Text(
+                errorText,
+                style: FluentTheme.of(
+                  context,
+                ).typography.caption?.copyWith(color: context.colors.danger),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return InfoLabel(label: label, child: textBox);
+    return Semantics(
+      textField: true,
+      label: label,
+      hint: hint,
+      child: InfoLabel(label: label, child: textBox),
+    );
   }
 }

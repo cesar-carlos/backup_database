@@ -5,6 +5,7 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
@@ -193,12 +194,14 @@ void main() {
 
       final result = await service.executeBackup(
         config: sqlAuthConfig,
-        outputDirectory: tempDir.path,
-        scheduleId: 's-1',
-        verifyAfterBackup: true,
-        verifyPolicy: VerifyPolicy.strict,
-        backupTimeout: const Duration(minutes: 7),
-        verifyTimeout: const Duration(minutes: 3),
+        context: BackupExecutionContext(
+          outputDirectory: tempDir.path,
+          scheduleId: 's-1',
+          verifyAfterBackup: true,
+          verifyPolicy: VerifyPolicy.strict,
+          backupTimeout: const Duration(minutes: 7),
+          verifyTimeout: const Duration(minutes: 3),
+        ),
       );
 
       expect(result.isError(), isTrue);
@@ -263,9 +266,11 @@ void main() {
 
         final result = await service.executeBackup(
           config: sqlAuthConfig,
-          outputDirectory: tempDir.path,
-          scheduleId: 's-1',
-          backupType: BackupType.log,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 's-1',
+            backupType: BackupType.log,
+          ),
         );
 
         expect(result.isError(), isTrue);
@@ -325,15 +330,17 @@ void main() {
 
       final result = await service.executeBackup(
         config: cfg,
-        outputDirectory: tempDir.path,
-        scheduleId: 's-1',
-        enableChecksum: true,
-        sqlServerBackupOptions: const SqlServerBackupOptions(
-          compression: true,
-          maxTransferSize: 4194304,
-          bufferCount: 50,
-          blockSize: 65536,
-          statsPercent: 5,
+        context: BackupExecutionContext(
+          outputDirectory: tempDir.path,
+          scheduleId: 's-1',
+          enableChecksum: true,
+          sqlServerBackupOptions: const SqlServerBackupOptions(
+            compression: true,
+            maxTransferSize: 4194304,
+            bufferCount: 50,
+            blockSize: 65536,
+            statsPercent: 5,
+          ),
         ),
       );
 

@@ -18,14 +18,14 @@ linter:
     avoid_positional_boolean_parameters: false
     avoid_slow_async_io: false
     cascade_invocations: false
-    discarded_futures: false
+    discarded_futures: true
     sort_pub_dependencies: false
-    unawaited_futures: false
+    unawaited_futures: true
     avoid_equals_and_hash_code_on_mutable_classes: false
     matching_super_parameters: false
     no_default_cases: false
     one_member_abstracts: false
-    avoid_dynamic_calls: false
+    avoid_dynamic_calls: true
     use_late_for_private_fields_and_variables: false
     use_string_buffers: false
     sort_constructors_first: false

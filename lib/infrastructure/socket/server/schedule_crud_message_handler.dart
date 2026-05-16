@@ -23,8 +23,8 @@ class ScheduleCrudMessageHandler {
   ScheduleCrudMessageHandler({
     required IScheduleRepository scheduleRepository,
     IdempotencyRegistry? idempotencyRegistry,
-  })  : _scheduleRepository = scheduleRepository,
-        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry();
+  }) : _scheduleRepository = scheduleRepository,
+       _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry();
 
   final IScheduleRepository _scheduleRepository;
   final IdempotencyRegistry _idempotencyRegistry;

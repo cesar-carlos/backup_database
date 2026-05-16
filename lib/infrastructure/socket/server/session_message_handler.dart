@@ -43,8 +43,8 @@ class SessionMessageHandler {
   SessionMessageHandler({
     required SessionInfoLookup sessionLookup,
     DateTime Function()? clock,
-  })  : _sessionLookup = sessionLookup,
-        _clock = clock ?? DateTime.now;
+  }) : _sessionLookup = sessionLookup,
+       _clock = clock ?? DateTime.now;
 
   final SessionInfoLookup _sessionLookup;
   final DateTime Function() _clock;

@@ -1,7 +1,9 @@
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
+import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
@@ -9,6 +11,7 @@ import 'package:backup_database/infrastructure/protocol/database_config_messages
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/socket/server/database_config_serializers.dart';
 import 'package:backup_database/infrastructure/socket/server/database_connection_prober.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 /// Implementacao concreta de [DatabaseConnectionProber] que despacha
 /// por tipo de banco para o backup service correspondente.
@@ -33,18 +36,22 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
     required this.sybaseService,
     required this.sqlServerService,
     required this.postgresService,
+    required this.firebirdService,
     required this.sybaseRepository,
     required this.sqlServerRepository,
     required this.postgresRepository,
+    required this.firebirdRepository,
     Stopwatch Function()? stopwatchFactory,
   }) : _stopwatchFactory = stopwatchFactory ?? Stopwatch.new;
 
   final ISybaseBackupService sybaseService;
   final ISqlServerBackupService sqlServerService;
   final IPostgresBackupService postgresService;
+  final IFirebirdBackupService firebirdService;
   final ISybaseConfigRepository sybaseRepository;
   final ISqlServerConfigRepository sqlServerRepository;
   final IPostgresConfigRepository postgresRepository;
+  final IFirebirdConfigRepository firebirdRepository;
   final Stopwatch Function() _stopwatchFactory;
 
   @override
@@ -62,6 +69,8 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
           return await _probeSqlServer(configRef, stopwatch);
         case RemoteDatabaseType.postgres:
           return await _probePostgres(configRef, stopwatch);
+        case RemoteDatabaseType.firebird:
+          return await _probeFirebird(configRef, stopwatch);
       }
     } on Object catch (e, st) {
       // Defesa final: qualquer excecao nao prevista vira failure
@@ -195,50 +204,71 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
     }
   }
 
+  Future<DatabaseProbeOutcome> _probeFirebird(
+    DatabaseConfigRef ref,
+    Stopwatch sw,
+  ) async {
+    switch (ref) {
+      case DatabaseConfigById(id: final id):
+        final cfgResult = await firebirdRepository.getById(id);
+        final cfg = cfgResult.getOrNull();
+        if (cfgResult.isError() || cfg == null) {
+          sw.stop();
+          return DatabaseProbeOutcome.failure(
+            latencyMs: sw.elapsedMilliseconds,
+            error: 'Config Firebird nao encontrada: $id',
+            errorCode: ErrorCode.fileNotFound,
+          );
+        }
+        final result = await firebirdService.testConnection(cfg);
+        sw.stop();
+        return _mapBoolResult(result, sw);
+      case DatabaseConfigAdhoc(config: final map):
+        try {
+          final cfg = DatabaseConfigSerializers.firebirdFromMap(map);
+          final result = await firebirdService.testConnection(cfg);
+          sw.stop();
+          return _mapBoolResult(result, sw);
+        }
+        // ignore: avoid_catching_errors -- ArgumentError do serializer (map ad-hoc remoto).
+        on ArgumentError catch (e) {
+          sw.stop();
+          return DatabaseProbeOutcome.failure(
+            latencyMs: sw.elapsedMilliseconds,
+            error: 'Config ad-hoc invalida: $e',
+            errorCode: ErrorCode.invalidRequest,
+          );
+        }
+    }
+  }
+
   /// Mapeia o `Result<bool>` retornado por `testConnection` para um
   /// outcome do prober. `true` = success; `false` = falha de auth (o
   /// service ja interpretou o codigo do banco e retornou bool); falha
   /// do Result = erro de transporte/timeout.
   DatabaseProbeOutcome _mapBoolResult(
-    dynamic result,
+    rd.Result<bool> result,
     Stopwatch sw,
   ) {
-    // result e Result<bool, dynamic> — usamos pattern matching estatico
-    // via toString fallback porque o tipo e generico.
-    try {
-      final dynamic r = result;
-      final isError = r.isError() as bool;
-      if (isError) {
-        final exception = r.exceptionOrNull() as Object?;
-        return DatabaseProbeOutcome.failure(
-          latencyMs: sw.elapsedMilliseconds,
-          error: exception?.toString() ?? 'Erro desconhecido na sondagem',
-          errorCode: _classifyError(exception),
-        );
-      }
-      final connected = r.getOrNull() as bool?;
-      if (connected ?? false) {
-        return DatabaseProbeOutcome.success(
-          latencyMs: sw.elapsedMilliseconds,
-        );
-      }
+    if (result.isError()) {
+      final Object? exception = result.exceptionOrNull();
       return DatabaseProbeOutcome.failure(
         latencyMs: sw.elapsedMilliseconds,
-        error: 'Conexao recusada (autenticacao ou indisponibilidade)',
-        errorCode: ErrorCode.authenticationFailed,
-      );
-    } on Object catch (e, st) {
-      LoggerService.warning(
-        'RealDatabaseConnectionProber: erro ao interpretar Result: $e',
-        e,
-        st,
-      );
-      return DatabaseProbeOutcome.failure(
-        latencyMs: sw.elapsedMilliseconds,
-        error: 'Erro inesperado: $e',
-        errorCode: ErrorCode.unknown,
+        error: exception?.toString() ?? 'Erro desconhecido na sondagem',
+        errorCode: _classifyError(exception),
       );
     }
+    final connected = result.getOrNull();
+    if (connected ?? false) {
+      return DatabaseProbeOutcome.success(
+        latencyMs: sw.elapsedMilliseconds,
+      );
+    }
+    return DatabaseProbeOutcome.failure(
+      latencyMs: sw.elapsedMilliseconds,
+      error: 'Conexao recusada (autenticacao ou indisponibilidade)',
+      errorCode: ErrorCode.authenticationFailed,
+    );
   }
 
   /// Classifica a exception em ErrorCode de protocolo. Heuristica

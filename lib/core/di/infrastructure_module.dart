@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/di/sgbd_registration.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
@@ -60,6 +61,10 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<ToolVerificationService>(
     () => ToolVerificationService(getIt<ProcessService>()),
   );
+  getIt.registerLazySingleton<SybaseConnectionStrategyCache>(
+    SybaseConnectionStrategyCache.new,
+  );
+  registerBackupDatabaseDefaultSgbds(getIt);
   getIt.registerLazySingleton<IWindowsServiceService>(
     () => WindowsServiceService(
       getIt<ProcessService>(),
@@ -71,24 +76,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   );
 
   // ========================================================================
-  // BACKUP SERVICES
+  // BACKUP SERVICES (SGBD ports registered via registerBackupDatabaseDefaultSgbds)
   // ========================================================================
 
-  getIt.registerLazySingleton<ISqlServerBackupService>(
-    () => SqlServerBackupService(getIt<ProcessService>()),
-  );
-  getIt.registerLazySingleton<SybaseConnectionStrategyCache>(
-    SybaseConnectionStrategyCache.new,
-  );
-  getIt.registerLazySingleton<ISybaseBackupService>(
-    () => SybaseBackupService(
-      getIt<ProcessService>(),
-      strategyCache: getIt<SybaseConnectionStrategyCache>(),
-    ),
-  );
-  getIt.registerLazySingleton<IPostgresBackupService>(
-    () => PostgresBackupService(getIt<ProcessService>()),
-  );
   getIt.registerLazySingleton<ICompressionService>(
     () => CompressionService(getIt<ProcessService>()),
   );
@@ -367,9 +357,11 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       sybaseService: getIt<ISybaseBackupService>(),
       sqlServerService: getIt<ISqlServerBackupService>(),
       postgresService: getIt<IPostgresBackupService>(),
+      firebirdService: getIt<IFirebirdBackupService>(),
       sybaseRepository: getIt<ISybaseConfigRepository>(),
       sqlServerRepository: getIt<ISqlServerConfigRepository>(),
       postgresRepository: getIt<IPostgresConfigRepository>(),
+      firebirdRepository: getIt<IFirebirdConfigRepository>(),
     ),
   );
 
@@ -381,6 +373,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       sybaseRepository: getIt<ISybaseConfigRepository>(),
       sqlServerRepository: getIt<ISqlServerConfigRepository>(),
       postgresRepository: getIt<IPostgresConfigRepository>(),
+      firebirdRepository: getIt<IFirebirdConfigRepository>(),
     ),
   );
 

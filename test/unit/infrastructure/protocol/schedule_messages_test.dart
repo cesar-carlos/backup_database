@@ -6,19 +6,21 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('Backup messages with optional runId (M2.3)', () {
     group('createBackupProgressMessage', () {
-      test('omite runId quando nao fornecido (comportamento v1 preservado)',
-          () {
-        final msg = createBackupProgressMessage(
-          requestId: 1,
-          scheduleId: 'schedule-1',
-          step: 'Iniciando',
-          message: 'Iniciando backup',
-        );
+      test(
+        'omite runId quando nao fornecido (comportamento v1 preservado)',
+        () {
+          final msg = createBackupProgressMessage(
+            requestId: 1,
+            scheduleId: 'schedule-1',
+            step: 'Iniciando',
+            message: 'Iniciando backup',
+          );
 
-        expect(msg.header.type, MessageType.backupProgress);
-        expect(msg.payload.containsKey('runId'), isFalse);
-        expect(getRunIdFromBackupMessage(msg), isNull);
-      });
+          expect(msg.header.type, MessageType.backupProgress);
+          expect(msg.payload.containsKey('runId'), isFalse);
+          expect(getRunIdFromBackupMessage(msg), isNull);
+        },
+      );
 
       test('inclui runId quando fornecido (comportamento v2)', () {
         const runId = 'schedule-1_uuid-abc';

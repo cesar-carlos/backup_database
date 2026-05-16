@@ -29,7 +29,9 @@ class _StubProvider implements DiagnosticsProvider {
   }
 
   @override
-  Future<DiagnosticsOutcome<RunErrorData>> getRunErrorDetails(String runId) async {
+  Future<DiagnosticsOutcome<RunErrorData>> getRunErrorDetails(
+    String runId,
+  ) async {
     errorCalls++;
     return errorOutcome ?? DiagnosticsOutcome.notFound();
   }
@@ -43,7 +45,9 @@ class _StubProvider implements DiagnosticsProvider {
   }
 
   @override
-  Future<DiagnosticsOutcome<CleanupStagingData>> cleanupStaging(String runId) async {
+  Future<DiagnosticsOutcome<CleanupStagingData>> cleanupStaging(
+    String runId,
+  ) async {
     cleanupCalls++;
     return cleanupOutcome ?? DiagnosticsOutcome.notFound();
   }

@@ -126,16 +126,17 @@ class SignedRevocationListService implements IRevocationChecker {
         // jamais carregamos uma lista boa antes (estado inicial).
         // A operação fica com o último snapshot bom até a próxima
         // tentativa (cache TTL menor para acelerar recuperação).
-        final shortenedTtl =
-            _cacheTtl < const Duration(minutes: 1)
-                ? _cacheTtl
-                : const Duration(minutes: 1);
+        final shortenedTtl = _cacheTtl < const Duration(minutes: 1)
+            ? _cacheTtl
+            : const Duration(minutes: 1);
         _cacheExpiresAt = now.add(shortenedTtl);
         // Antes interpolava `$failure` direto na string — para `Failure`
         // gerava `Failure(message: ..., code: null)` no log. Extraímos
         // `.message` quando é Failure (caso comum aqui — o
         // `_parseAndVerify` sempre retorna `ValidationFailure`).
-        final detail = failure is Failure ? failure.message : failure.toString();
+        final detail = failure is Failure
+            ? failure.message
+            : failure.toString();
         if (_cachedRevokedKeys == null) {
           // Nunca tivemos um snapshot bom — fail-CLOSED não é viável
           // sem quebrar o fluxo, então logamos de forma conspícua.

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/external/process/postgres_backup_service.dart';
@@ -86,8 +87,11 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          backupType: BackupType.differential,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'test-schedule',
+            backupType: BackupType.differential,
+          ),
         );
 
         result.fold(
@@ -153,8 +157,11 @@ void main() {
 
       final result = await service.executeBackup(
         config: config,
-        outputDirectory: tempDir.path,
-        backupType: BackupType.log,
+        context: BackupExecutionContext(
+          outputDirectory: tempDir.path,
+          scheduleId: 'test-schedule',
+          backupType: BackupType.log,
+        ),
       );
 
       if (result.isError()) {
@@ -269,8 +276,11 @@ void main() {
 
         final result = await service.executeBackup(
           config: config,
-          outputDirectory: tempDir.path,
-          backupType: BackupType.log,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'test-schedule',
+            backupType: BackupType.log,
+          ),
         );
 
         result.fold(

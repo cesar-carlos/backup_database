@@ -87,8 +87,10 @@ void main() {
     when(() => progressNotifier.tryStartBackup(any())).thenReturn(true);
     // Default: backup async resolve sucesso (mas testes que querem
     // observar runtime async substituem isso por Completer<...>)
-    when(() => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')))
-        .thenAnswer((_) async => const rd.Success(true));
+    when(
+      () =>
+          executeBackup(any(), executionOrigin: any(named: 'executionOrigin')),
+    ).thenAnswer((_) async => const rd.Success(true));
     when(
       () => scheduleRepository.getById(scheduleId),
     ).thenAnswer((_) async => rd.Success(schedule));
@@ -109,31 +111,39 @@ void main() {
   });
 
   group('startBackup nao-bloqueante (M2.2)', () {
-    test('rejeita com STAGING_FULL quando uso de staging no limite (503)', () async {
-      handler = ExecutionMessageHandler(
-        scheduleRepository: scheduleRepository,
-        licensePolicyService: licensePolicyService,
-        schedulerService: schedulerService,
-        executeBackup: executeBackup,
-        progressNotifier: progressNotifier,
-        executionRegistry: executionRegistry,
-        clock: () => DateTime.utc(2026, 4, 19, 12),
-        stagingUsageBytesProvider: () async => StagingUsagePolicy.blockThresholdBytes,
-      );
-      final req = createStartBackupRequest(scheduleId: scheduleId);
-      await handler.handle('c1', req, sendToClient);
-      final msg = sent.single.message;
-      expect(msg.header.type, MessageType.error);
-      expect(getErrorCodeFromMessage(msg), ErrorCode.stagingFull);
-      expect(getStatusCodeFromMessage(msg), StatusCodes.serviceUnavailable);
-    });
+    test(
+      'rejeita com STAGING_FULL quando uso de staging no limite (503)',
+      () async {
+        handler = ExecutionMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          clock: () => DateTime.utc(2026, 4, 19, 12),
+          stagingUsageBytesProvider: () async =>
+              StagingUsagePolicy.blockThresholdBytes,
+        );
+        final req = createStartBackupRequest(scheduleId: scheduleId);
+        await handler.handle('c1', req, sendToClient);
+        final msg = sent.single.message;
+        expect(msg.header.type, MessageType.error);
+        expect(getErrorCodeFromMessage(msg), ErrorCode.stagingFull);
+        expect(getStatusCodeFromMessage(msg), StatusCodes.serviceUnavailable);
+      },
+    );
 
     test('responde IMEDIATAMENTE com runId + state=running + 202', () async {
       // Bloqueia o backup async para confirmar que o handler nao
       // espera por ele antes de responder.
       final blockBackup = Completer<rd.Result<bool>>();
-      when(() => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')))
-          .thenAnswer((_) => blockBackup.future);
+      when(
+        () => executeBackup(
+          any(),
+          executionOrigin: any(named: 'executionOrigin'),
+        ),
+      ).thenAnswer((_) => blockBackup.future);
 
       final req = createStartBackupRequest(scheduleId: scheduleId);
       await handler.handle('c1', req, sendToClient);
@@ -208,8 +218,12 @@ void main() {
       'idempotencyKey: 2a request com mesma chave NAO dispara executeBackup',
       () async {
         final blockBackup = Completer<rd.Result<bool>>();
-        when(() => executeBackup(any(), executionOrigin: any(named: 'executionOrigin')))
-          .thenAnswer((_) => blockBackup.future);
+        when(
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        ).thenAnswer((_) => blockBackup.future);
 
         final req = createStartBackupRequest(
           scheduleId: scheduleId,
@@ -221,9 +235,9 @@ void main() {
         // 2 respostas iguais, mas executeBackup foi chamado APENAS 1 vez
         verify(
           () => executeBackup(
-                any(),
-                executionOrigin: ExecutionOrigin.remoteCommand,
-              ),
+            any(),
+            executionOrigin: ExecutionOrigin.remoteCommand,
+          ),
         ).called(1);
         expect(sent, hasLength(2));
         expect(
@@ -543,13 +557,19 @@ void main() {
         checksum: 0,
       );
       await handler.handle('c1', bad, sendToClient);
-      expect(getErrorCodeFromMessage(sent.single.message), ErrorCode.invalidRequest);
+      expect(
+        getErrorCodeFromMessage(sent.single.message),
+        ErrorCode.invalidRequest,
+      );
     });
 
     test('idempotencyKey: 2a chamada reusa cache', () async {
       final queue = ExecutionQueueService();
       final item = (await queue.tryEnqueue(
-        scheduleId: 's', clientId: 'c1', requestId: 1, requestedBy: 'c1',
+        scheduleId: 's',
+        clientId: 'c1',
+        requestId: 1,
+        requestedBy: 'c1',
       ))!;
       handler = ExecutionMessageHandler(
         scheduleRepository: scheduleRepository,
@@ -569,14 +589,20 @@ void main() {
       await handler.handle('c1', req, sendToClient);
       // Re-enqueue para validar que 2a chamada NAO chama removeByRunId
       await queue.tryEnqueue(
-        scheduleId: 's', clientId: 'c1', requestId: 1, requestedBy: 'c1',
+        scheduleId: 's',
+        clientId: 'c1',
+        requestId: 1,
+        requestedBy: 'c1',
       );
       await handler.handle('c1', req, sendToClient);
 
       // Mesma resposta cacheada — fila NAO mudou no segundo
       expect(queue.queueSize, 1);
       expect(sent, hasLength(2));
-      expect(sent[0].message.payload['runId'], sent[1].message.payload['runId']);
+      expect(
+        sent[0].message.payload['runId'],
+        sent[1].message.payload['runId'],
+      );
     });
   });
 

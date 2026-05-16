@@ -12,14 +12,14 @@ import '../../../support/feature_availability_test_support.dart';
 
 void main() {
   group('SystemSettingsProvider', () {
-    setUp(() {
+    setUp(() async {
       if (Platform.isWindows) {
-        registerTestFeatureAvailability();
+        await registerTestFeatureAvailability();
       }
     });
-    tearDown(() {
+    tearDown(() async {
       if (Platform.isWindows) {
-        unregisterTestFeatureAvailability();
+        await unregisterTestFeatureAvailability();
       }
     });
 

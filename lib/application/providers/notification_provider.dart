@@ -4,12 +4,14 @@ import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
+import 'package:backup_database/domain/entities/smtp_oauth_state.dart';
 import 'package:backup_database/domain/repositories/i_email_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_email_notification_target_repository.dart';
 import 'package:backup_database/domain/repositories/i_email_test_audit_repository.dart';
 import 'package:backup_database/domain/services/i_oauth_smtp_service.dart';
 import 'package:backup_database/domain/use_cases/notifications/test_email_configuration.dart';
 import 'package:flutter/foundation.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 enum NotificationHistoryPeriod {
   last24Hours,
@@ -119,8 +121,7 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
               return;
             }
 
-            final hasSelected =
-                _configs.any((c) => c.id == _selectedConfigId);
+            final hasSelected = _configs.any((c) => c.id == _selectedConfigId);
             if (!hasSelected) {
               _selectedConfigId = _configs.first.id;
             }
@@ -378,7 +379,7 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
   /// Helper para `connectOAuth` / `reconnectOAuth`. Ambos retornam o mesmo
   /// shape e fazem o mesmo `copyWith` no sucesso — DRY puro.
   Future<EmailConfig?> _runOAuthOperation(
-    Future<dynamic> Function() operation, {
+    Future<rd.Result<SmtpOAuthState>> Function() operation, {
     required EmailConfig config,
     required SmtpOAuthProvider provider,
   }) async {
@@ -386,26 +387,24 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
     notifyListeners();
 
     final result = await operation();
-    return (result as dynamic).fold(
-      (state) {
+    return result.fold(
+      (SmtpOAuthState state) {
         clearError();
         return config.copyWith(
           authMode: provider == SmtpOAuthProvider.google
               ? SmtpAuthMode.oauthGoogle
               : SmtpAuthMode.oauthMicrosoft,
           oauthProvider: provider,
-          oauthAccountEmail: state.accountEmail as String?,
-          oauthTokenKey: state.tokenKey as String?,
-          oauthConnectedAt: state.connectedAt as DateTime?,
+          oauthAccountEmail: state.accountEmail,
+          oauthTokenKey: state.tokenKey,
+          oauthConnectedAt: state.connectedAt,
         );
       },
       (failure) {
-        setErrorManual(
-          AsyncStateMixin.extractFailureMessage(failure as Object),
-        );
+        setErrorManual(AsyncStateMixin.extractFailureMessage(failure));
         return null;
       },
-    ) as EmailConfig?;
+    );
   }
 
   Future<EmailConfig> disconnectOAuth(EmailConfig config) async {
@@ -436,7 +435,7 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
   void toggleEnabled(bool enabled) {
     final config = selectedConfig;
     if (config != null) {
-      toggleConfigEnabled(config.id, enabled);
+      unawaited(toggleConfigEnabled(config.id, enabled));
     }
   }
 
@@ -564,7 +563,7 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
         if (_isDisposed) {
           return;
         }
-        _loadTestHistory();
+        unawaited(_loadTestHistory());
       },
     );
   }

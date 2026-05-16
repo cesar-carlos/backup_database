@@ -1,12 +1,15 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/backup_artifact_utils.dart';
+import 'package:backup_database/core/utils/backup_size_calculator.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/infrastructure/external/process/postgres_wal_slot_utils.dart';
@@ -27,6 +30,23 @@ class PostgresBackupService implements IPostgresBackupService {
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
+    required PostgresConfig config,
+    required BackupExecutionContext context,
+  }) {
+    return _executeBackupCore(
+      config: config,
+      outputDirectory: context.outputDirectory,
+      backupType: context.backupType,
+      customFileName: context.customFileName,
+      verifyAfterBackup: context.verifyAfterBackup,
+      pgBasebackupPath: context.pgBasebackupPath,
+      backupTimeout: context.backupTimeout,
+      verifyTimeout: context.verifyTimeout,
+      cancelTag: context.cancelTag,
+    );
+  }
+
+  Future<rd.Result<BackupExecutionResult>> _executeBackupCore({
     required PostgresConfig config,
     required String outputDirectory,
     BackupType backupType = BackupType.full,
@@ -98,6 +118,7 @@ class PostgresBackupService implements IPostgresBackupService {
         final outputLower = (stdout + stderr).toLowerCase();
 
         if (!processResult.isSuccess) {
+          await BackupArtifactUtils.safeDeletePartial(effectiveBackupPath);
           return _handleBackupError(
             stdout: stdout,
             stderr: stderr,
@@ -109,10 +130,17 @@ class PostgresBackupService implements IPostgresBackupService {
         final rd.Result<int> sizeResult;
         if (commandResult.measuredSizeBytes != null) {
           sizeResult = rd.Success(commandResult.measuredSizeBytes!);
+        } else if (effectiveBackupType == BackupType.fullSingle) {
+          await BackupArtifactUtils.waitForStableFile(
+            File(effectiveBackupPath),
+          );
+          sizeResult = await BackupSizeCalculator.bytesOfFile(
+            effectiveBackupPath,
+          );
         } else {
-          sizeResult = effectiveBackupType == BackupType.fullSingle
-              ? await _calculateFileSize(effectiveBackupPath)
-              : await _calculateBackupSize(effectiveBackupPath);
+          sizeResult = await BackupSizeCalculator.bytesOfDirectoryTree(
+            effectiveBackupPath,
+          );
         }
         return sizeResult.fold((totalSize) async {
           if (totalSize == 0) {
@@ -140,6 +168,7 @@ class PostgresBackupService implements IPostgresBackupService {
               );
             }
 
+            await BackupArtifactUtils.safeDeletePartial(effectiveBackupPath);
             return rd.Failure(
               BackupFailure(
                 message: 'Backup foi criado mas está vazio',
@@ -211,6 +240,7 @@ class PostgresBackupService implements IPostgresBackupService {
         }, rd.Failure.new);
       },
       (failure) async {
+        await BackupArtifactUtils.safeDeletePartial(backupPath);
         final errorMessage = failure is Failure
             ? failure.message
             : failure.toString();
@@ -291,6 +321,9 @@ class PostgresBackupService implements IPostgresBackupService {
               timeout: backupTimeout,
               cancelTag: cancelTag,
             );
+            if (fallbackResult.isError()) {
+              await BackupArtifactUtils.safeDeletePartial(fallbackBackupPath);
+            }
             // Indica explicitamente para o orchestrator que o tipo executado
             // foi FULL (e não differential como pedido). Evita registrar um
             // histórico inconsistente onde `backupType=differential` aponta
@@ -1183,62 +1216,6 @@ class PostgresBackupService implements IPostgresBackupService {
       return false;
     }
     return true;
-  }
-
-  Future<rd.Result<int>> _calculateBackupSize(String backupPath) async {
-    try {
-      final backupDir = Directory(backupPath);
-      if (!await backupDir.exists()) {
-        return rd.Failure(
-          BackupFailure(
-            message: 'Diretório de backup não existe: $backupPath',
-            originalError: Exception('Diretório não encontrado'),
-          ),
-        );
-      }
-
-      var totalSize = 0;
-      await for (final entity in backupDir.list(recursive: true)) {
-        if (entity is File) {
-          totalSize += await entity.length();
-        }
-      }
-
-      return rd.Success(totalSize);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error('Erro ao calcular tamanho do backup', e, stackTrace);
-      return rd.Failure(
-        BackupFailure(
-          message: 'Erro ao calcular tamanho do backup: $e',
-          originalError: e,
-        ),
-      );
-    }
-  }
-
-  Future<rd.Result<int>> _calculateFileSize(String backupPath) async {
-    try {
-      final backupFile = File(backupPath);
-      if (!await backupFile.exists()) {
-        return rd.Failure(
-          BackupFailure(
-            message: 'Arquivo de backup não existe: $backupPath',
-            originalError: Exception('Arquivo não encontrado'),
-          ),
-        );
-      }
-
-      final fileSize = await backupFile.length();
-      return rd.Success(fileSize);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error('Erro ao calcular tamanho do arquivo', e, stackTrace);
-      return rd.Failure(
-        BackupFailure(
-          message: 'Erro ao calcular tamanho do arquivo: $e',
-          originalError: e,
-        ),
-      );
-    }
   }
 
   Future<rd.Result<void>> _verifyBackup(

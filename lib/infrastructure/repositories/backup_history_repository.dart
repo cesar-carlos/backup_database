@@ -123,8 +123,9 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao atualizar histórico (updateIfRunning)',
       action: () async {
-        final updated = await _database.backupHistoryDao
-            .updateHistoryIfRunning(_toCompanion(history));
+        final updated = await _database.backupHistoryDao.updateHistoryIfRunning(
+          _toCompanion(history),
+        );
         if (updated == 0) {
           // Quando o registro já saiu de `running`, lê o estado real para
           // devolver ao caller — preserva o comportamento original.
@@ -161,11 +162,11 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
         var updatedRows = 0;
         await _database.transaction(() async {
           final companion = _toCompanion(history);
-          updatedRows = await _database.backupHistoryDao
-              .updateHistoryIfRunning(companion);
+          updatedRows = await _database.backupHistoryDao.updateHistoryIfRunning(
+            companion,
+          );
           if (updatedRows == 0) return;
-          final logCompanion =
-              _backupLogRepository.buildIdempotentLogCompanion(
+          final logCompanion = _backupLogRepository.buildIdempotentLogCompanion(
             backupHistoryId: history.id,
             step: logStep,
             level: logLevel,
@@ -200,8 +201,9 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao buscar histórico por agendamento',
       action: () async {
-        final histories =
-            await _database.backupHistoryDao.getBySchedule(scheduleId);
+        final histories = await _database.backupHistoryDao.getBySchedule(
+          scheduleId,
+        );
         return histories.map(_toEntity).toList();
       },
     );
@@ -212,8 +214,9 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao buscar histórico por status',
       action: () async {
-        final histories =
-            await _database.backupHistoryDao.getByStatus(status.name);
+        final histories = await _database.backupHistoryDao.getByStatus(
+          status.name,
+        );
         return histories.map(_toEntity).toList();
       },
     );
@@ -227,8 +230,10 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao buscar histórico por período',
       action: () async {
-        final histories =
-            await _database.backupHistoryDao.getByDateRange(start, end);
+        final histories = await _database.backupHistoryDao.getByDateRange(
+          start,
+          end,
+        );
         return histories.map(_toEntity).toList();
       },
     );
@@ -239,8 +244,9 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao buscar último histórico',
       action: () async {
-        final history =
-            await _database.backupHistoryDao.getLastBySchedule(scheduleId);
+        final history = await _database.backupHistoryDao.getLastBySchedule(
+          scheduleId,
+        );
         if (history == null) {
           throw const NotFoundFailure(
             message: 'Nenhum histórico encontrado para este agendamento',
@@ -265,8 +271,9 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       errorMessage: 'Erro ao reconciliar históricos running antigos',
       action: () async {
         final cutoff = DateTime.now().subtract(maxAge);
-        final rows =
-            await _database.backupHistoryDao.getRunningStartedBefore(cutoff);
+        final rows = await _database.backupHistoryDao.getRunningStartedBefore(
+          cutoff,
+        );
         if (rows.isEmpty) return 0;
 
         const message =
@@ -285,12 +292,14 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
               status: BackupStatus.error,
               errorMessage: message,
               finishedAt: finishedAt,
-              durationSeconds:
-                  finishedAt.difference(entity.startedAt).inSeconds,
+              durationSeconds: finishedAt
+                  .difference(entity.startedAt)
+                  .inSeconds,
             );
             final companion = _toCompanion(reconciled);
-            final ok =
-                await _database.backupHistoryDao.updateHistory(companion);
+            final ok = await _database.backupHistoryDao.updateHistory(
+              companion,
+            );
             if (ok) updated++;
           }
         });
@@ -352,5 +361,4 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       metrics: Value(metricsJson != null ? jsonEncode(metricsJson) : null),
     );
   }
-
 }

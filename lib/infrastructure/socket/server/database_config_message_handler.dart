@@ -27,10 +27,10 @@ class DatabaseConfigMessageHandler {
     DatabaseConfigStore? store,
     IdempotencyRegistry? idempotencyRegistry,
     DateTime Function()? clock,
-  })  : _prober = prober ?? const NotConfiguredProber(),
-        _store = store ?? const NotConfiguredDatabaseConfigStore(),
-        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
-        _clock = clock ?? DateTime.now;
+  }) : _prober = prober ?? const NotConfiguredProber(),
+       _store = store ?? const NotConfiguredDatabaseConfigStore(),
+       _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
+       _clock = clock ?? DateTime.now;
 
   final DatabaseConnectionProber _prober;
   final DatabaseConfigStore _store;
@@ -84,7 +84,8 @@ class DatabaseConfigMessageHandler {
       return;
     }
 
-    final hasId = payload['databaseConfigId'] is String &&
+    final hasId =
+        payload['databaseConfigId'] is String &&
         (payload['databaseConfigId'] as String).isNotEmpty;
     final hasConfig = payload['config'] is Map;
     if (hasId == hasConfig) {
@@ -391,7 +392,9 @@ class DatabaseConfigMessageHandler {
     RemoteDatabaseType type,
     Map<String, dynamic> payload,
   ) async {
-    final id = payload['configId'] is String ? payload['configId'] as String : '';
+    final id = payload['configId'] is String
+        ? payload['configId'] as String
+        : '';
     if (id.isEmpty) {
       throw const _DbConfigFailure(
         'configId vazio',

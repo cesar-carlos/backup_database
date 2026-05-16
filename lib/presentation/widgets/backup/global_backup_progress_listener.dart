@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/core/routes/app_router.dart';
 import 'package:backup_database/presentation/widgets/backup/backup_progress_dialog.dart';
@@ -55,14 +57,16 @@ class _GlobalBackupProgressListenerState
 
     final dialogContext = appNavigatorKey.currentContext ?? context;
 
-    BackupProgressDialog.show(dialogContext).then((_) {
-      if (mounted) {
-        _provider.reset();
-        setState(() {
-          _isDialogVisible = false;
-        });
-      }
-    });
+    unawaited(
+      BackupProgressDialog.show(dialogContext).then((_) {
+        if (mounted) {
+          _provider.reset();
+          setState(() {
+            _isDialogVisible = false;
+          });
+        }
+      }),
+    );
   }
 
   @override

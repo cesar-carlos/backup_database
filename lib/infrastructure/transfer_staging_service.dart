@@ -10,8 +10,8 @@ class TransferStagingService implements ITransferStagingService {
   TransferStagingService({
     required String transferBasePath,
     DateTime Function()? clock,
-  })  : _transferBasePath = p.normalize(p.absolute(transferBasePath)),
-        _clock = clock ?? DateTime.now;
+  }) : _transferBasePath = p.normalize(p.absolute(transferBasePath)),
+       _clock = clock ?? DateTime.now;
 
   final String _transferBasePath;
   final DateTime Function() _clock;
@@ -244,5 +244,4 @@ class TransferStagingService implements ITransferStagingService {
     }
     return false;
   }
-
 }

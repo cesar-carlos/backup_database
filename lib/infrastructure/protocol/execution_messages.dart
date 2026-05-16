@@ -79,8 +79,8 @@ Message createStartBackupResponse({
   // Aceite assincrono -> 202. Outros estados podem indicar resposta
   // sincrona (ex.: cliente reusou idempotencyKey de execucao ja
   // concluida -> state pode vir `completed` direto com 200).
-  final statusCode = state == ExecutionState.running ||
-          state == ExecutionState.queued
+  final statusCode =
+      state == ExecutionState.running || state == ExecutionState.queued
       ? StatusCodes.accepted
       : StatusCodes.ok;
 
@@ -134,9 +134,11 @@ StartBackupResult readStartBackupResponse(Message message) {
   final serverTimeRaw = p['serverTimeUtc'];
   final serverTime = serverTimeRaw is String
       ? (DateTime.tryParse(serverTimeRaw) ??
-          DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
       : DateTime.fromMillisecondsSinceEpoch(0).toUtc();
-  final queuePosition = p['queuePosition'] is int ? p['queuePosition'] as int : null;
+  final queuePosition = p['queuePosition'] is int
+      ? p['queuePosition'] as int
+      : null;
   final messageText = p['message'] is String ? p['message'] as String : null;
 
   return StartBackupResult(
@@ -256,13 +258,19 @@ CancelBackupResult readCancelBackupResponse(Message message) {
   final serverTimeRaw = p['serverTimeUtc'];
   final serverTime = serverTimeRaw is String
       ? (DateTime.tryParse(serverTimeRaw) ??
-          DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
       : DateTime.fromMillisecondsSinceEpoch(0).toUtc();
   final runId = p['runId'] is String ? p['runId'] as String : null;
-  final scheduleId = p['scheduleId'] is String ? p['scheduleId'] as String : null;
+  final scheduleId = p['scheduleId'] is String
+      ? p['scheduleId'] as String
+      : null;
   final messageText = p['message'] is String ? p['message'] as String : null;
-  final errorCodeRaw = p['errorCode'] is String ? p['errorCode'] as String : null;
-  final errorCode = errorCodeRaw != null ? ErrorCode.fromString(errorCodeRaw) : null;
+  final errorCodeRaw = p['errorCode'] is String
+      ? p['errorCode'] as String
+      : null;
+  final errorCode = errorCodeRaw != null
+      ? ErrorCode.fromString(errorCodeRaw)
+      : null;
 
   return CancelBackupResult(
     state: state,

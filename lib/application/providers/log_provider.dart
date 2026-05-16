@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/services/log_service.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
@@ -76,23 +78,23 @@ class LogProvider extends ChangeNotifier with AsyncStateMixin {
 
   void setFilterLevel(LogLevel? level) {
     _filterLevel = level;
-    refresh();
+    unawaited(refresh());
   }
 
   void setFilterCategory(LogCategory? category) {
     _filterCategory = category;
-    refresh();
+    unawaited(refresh());
   }
 
   void setFilterDateRange(DateTime? startDate, DateTime? endDate) {
     _filterStartDate = startDate;
     _filterEndDate = endDate;
-    refresh();
+    unawaited(refresh());
   }
 
   void setSearchQuery(String query) {
     _searchQuery = query;
-    refresh();
+    unawaited(refresh());
   }
 
   void clearFilters() {
@@ -101,7 +103,7 @@ class LogProvider extends ChangeNotifier with AsyncStateMixin {
     _filterStartDate = null;
     _filterEndDate = null;
     _searchQuery = '';
-    refresh();
+    unawaited(refresh());
   }
 
   Future<String?> exportLogs({

@@ -9,13 +9,13 @@ void main() {
       'should return windowsStartup when args contain launch-origin windows-startup',
       () {
         final ctx = LaunchBootstrapContextResolver.resolve(
-              rawArgs: <String>[
-                '--foo',
-                SingleInstanceConfig.windowsStartupLaunchOriginArgument,
-              ],
-              rawEnvironment: const <String, String>{},
-              isServiceModeOverride: false,
-            );
+          rawArgs: <String>[
+            '--foo',
+            SingleInstanceConfig.windowsStartupLaunchOriginArgument,
+          ],
+          rawEnvironment: const <String, String>{},
+          isServiceModeOverride: false,
+        );
 
         expect(ctx.launchOrigin, LaunchOrigin.windowsStartup);
         expect(ctx.isServiceMode, isFalse);
@@ -28,10 +28,10 @@ void main() {
       'should return windowsStartup when args contain legacy --startup-launch',
       () {
         final ctx = LaunchBootstrapContextResolver.resolve(
-              rawArgs: <String>[SingleInstanceConfig.startupLaunchArgument],
-              rawEnvironment: const <String, String>{},
-              isServiceModeOverride: false,
-            );
+          rawArgs: <String>[SingleInstanceConfig.startupLaunchArgument],
+          rawEnvironment: const <String, String>{},
+          isServiceModeOverride: false,
+        );
 
         expect(ctx.launchOrigin, LaunchOrigin.windowsStartup);
         expect(ctx.usesLegacyWindowsStartupAlias, isTrue);
@@ -53,12 +53,12 @@ void main() {
       'should return serviceControlManager when service mode is detected',
       () {
         final ctx = LaunchBootstrapContextResolver.resolve(
-              rawArgs: <String>[
-                SingleInstanceConfig.windowsStartupLaunchOriginArgument,
-              ],
-              rawEnvironment: const <String, String>{},
-              isServiceModeOverride: true,
-            );
+          rawArgs: <String>[
+            SingleInstanceConfig.windowsStartupLaunchOriginArgument,
+          ],
+          rawEnvironment: const <String, String>{},
+          isServiceModeOverride: true,
+        );
 
         expect(ctx.launchOrigin, LaunchOrigin.serviceControlManager);
         expect(ctx.isServiceMode, isTrue);
@@ -83,10 +83,10 @@ void main() {
       'should return scheduledExecution when args contain --schedule-id=',
       () {
         final ctx = LaunchBootstrapContextResolver.resolve(
-              rawArgs: const <String>['--schedule-id=job-1'],
-              rawEnvironment: const <String, String>{},
-              isServiceModeOverride: false,
-            );
+          rawArgs: const <String>['--schedule-id=job-1'],
+          rawEnvironment: const <String, String>{},
+          isServiceModeOverride: false,
+        );
 
         expect(ctx.launchOrigin, LaunchOrigin.scheduledExecution);
       },
@@ -96,13 +96,13 @@ void main() {
       'should prefer explicit launch-origin over scheduled id when both present',
       () {
         final ctx = LaunchBootstrapContextResolver.resolve(
-              rawArgs: <String>[
-                '--schedule-id=job-1',
-                SingleInstanceConfig.windowsStartupLaunchOriginArgument,
-              ],
-              rawEnvironment: const <String, String>{},
-              isServiceModeOverride: false,
-            );
+          rawArgs: <String>[
+            '--schedule-id=job-1',
+            SingleInstanceConfig.windowsStartupLaunchOriginArgument,
+          ],
+          rawEnvironment: const <String, String>{},
+          isServiceModeOverride: false,
+        );
 
         expect(ctx.launchOrigin, LaunchOrigin.windowsStartup);
       },

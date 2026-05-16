@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/domain/entities/backup_history.dart';
+import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -32,12 +32,15 @@ void main() {
     runningState = _MockBackupRunningState();
     registry = RemoteExecutionRegistry();
 
-    when(() => historyRepo.getAll(limit: any(named: 'limit')))
-        .thenAnswer((_) async => const rd.Success(<BackupHistory>[]));
-    when(() => historyRepo.getByDateRange(any(), any()))
-        .thenAnswer((_) async => const rd.Success(<BackupHistory>[]));
-    when(() => scheduleRepo.getEnabled())
-        .thenAnswer((_) async => const rd.Success(<Schedule>[]));
+    when(
+      () => historyRepo.getAll(limit: any(named: 'limit')),
+    ).thenAnswer((_) async => const rd.Success(<BackupHistory>[]));
+    when(
+      () => historyRepo.getByDateRange(any(), any()),
+    ).thenAnswer((_) async => const rd.Success(<BackupHistory>[]));
+    when(
+      () => scheduleRepo.getEnabled(),
+    ).thenAnswer((_) async => const rd.Success(<Schedule>[]));
     when(() => runningState.isRunning).thenReturn(false);
     when(() => runningState.currentBackupName).thenReturn(null);
   });

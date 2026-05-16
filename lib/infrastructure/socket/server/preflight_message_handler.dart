@@ -36,8 +36,8 @@ class PreflightMessageHandler {
   PreflightMessageHandler({
     Map<String, PreflightCheck>? checks,
     DateTime Function()? clock,
-  })  : _checks = checks ?? const <String, PreflightCheck>{},
-        _clock = clock ?? DateTime.now;
+  }) : _checks = checks ?? const <String, PreflightCheck>{},
+       _clock = clock ?? DateTime.now;
 
   final Map<String, PreflightCheck> _checks;
   final DateTime Function() _clock;
@@ -107,7 +107,10 @@ class PreflightMessageHandler {
     return results;
   }
 
-  Future<PreflightCheckResult> _runOne(String name, PreflightCheck check) async {
+  Future<PreflightCheckResult> _runOne(
+    String name,
+    PreflightCheck check,
+  ) async {
     try {
       return await check();
     } on Object catch (e, st) {

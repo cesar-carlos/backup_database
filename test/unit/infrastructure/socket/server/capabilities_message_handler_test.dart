@@ -57,8 +57,26 @@ void main() {
         expect(caps.supportsArtifactRetention, isTrue);
         expect(caps.supportsChunkAck, isFalse);
         expect(caps.supportsExecutionQueue, isTrue);
+        expect(caps.supportsFirebird, isFalse);
       },
     );
+
+    test('supportsFirebird true quando habilitado no handler', () async {
+      final handler = CapabilitiesMessageHandler(supportsFirebird: true);
+      Message? sent;
+      Future<void> capture(String clientId, Message msg) async {
+        sent = msg;
+      }
+
+      await handler.handle(
+        'client-Y',
+        createCapabilitiesRequestMessage(requestId: 2),
+        capture,
+      );
+
+      final caps = readCapabilitiesFromResponse(sent!);
+      expect(caps.supportsFirebird, isTrue);
+    });
 
     test('ignora mensagens que nao sao capabilitiesRequest', () async {
       final handler = CapabilitiesMessageHandler();

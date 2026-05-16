@@ -1,7 +1,9 @@
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/firebird_config_enums.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 
 /// Serializadores opacos Map<->Entity para o protocolo de CRUD remoto
@@ -37,7 +39,8 @@ class DatabaseConfigSerializers {
       username: _requireString(map, 'username'),
       password: map['password'] is String ? map['password'] as String : '',
       enabled: map['enabled'] is! bool || (map['enabled'] as bool),
-      isReplicationEnvironment: map['isReplicationEnvironment'] is bool &&
+      isReplicationEnvironment:
+          map['isReplicationEnvironment'] is bool &&
           (map['isReplicationEnvironment'] as bool),
       createdAt: _dateOrNow(map, 'createdAt'),
       updatedAt: _dateOrNow(map, 'updatedAt'),
@@ -138,6 +141,66 @@ class DatabaseConfigSerializers {
       'database': cfg.databaseValue,
       'username': cfg.username,
       if (includePassword) 'password': cfg.password,
+      'port': cfg.portValue,
+      'enabled': cfg.enabled,
+      'createdAt': cfg.createdAt.toUtc().toIso8601String(),
+      'updatedAt': cfg.updatedAt.toUtc().toIso8601String(),
+    };
+  }
+
+  // ---------------------------------------------------------------
+  // Firebird
+  // ---------------------------------------------------------------
+
+  static FirebirdConfig firebirdFromMap(Map<String, dynamic> map) {
+    return FirebirdConfig(
+      id: map['id'] is String ? map['id'] as String : null,
+      name: _requireString(map, 'name'),
+      host: _requireString(map, 'host'),
+      databaseFile: _requireString(map, 'databaseFile'),
+      username: _requireString(map, 'username'),
+      password: map['password'] is String ? map['password'] as String : '',
+      port: PortNumber(_intOr(map, 'port', 3050)),
+      aliasName: map['aliasName'] is String ? map['aliasName'] as String : null,
+      useEmbedded: map['useEmbedded'] is bool && (map['useEmbedded'] as bool),
+      clientLibraryPath: map['clientLibraryPath'] is String
+          ? map['clientLibraryPath'] as String
+          : null,
+      serverVersionHint: FirebirdServerVersionHint.parse(
+        map['serverVersionHint'] is String
+            ? map['serverVersionHint'] as String
+            : 'auto',
+      ),
+      serviceManagerMode: FirebirdServiceManagerMode.parse(
+        map['serviceManagerMode'] is String
+            ? map['serviceManagerMode'] as String
+            : 'auto',
+      ),
+      cryptKey: map['cryptKey'] is String ? map['cryptKey'] as String : '',
+      enabled: map['enabled'] is! bool || (map['enabled'] as bool),
+      createdAt: _dateOrNow(map, 'createdAt'),
+      updatedAt: _dateOrNow(map, 'updatedAt'),
+    );
+  }
+
+  static Map<String, dynamic> firebirdToMap(
+    FirebirdConfig cfg, {
+    bool includePassword = false,
+    bool includeCryptKey = false,
+  }) {
+    return <String, dynamic>{
+      'id': cfg.id,
+      'name': cfg.name,
+      'host': cfg.host,
+      'databaseFile': cfg.databaseFile,
+      'aliasName': cfg.aliasName,
+      'useEmbedded': cfg.useEmbedded,
+      'clientLibraryPath': cfg.clientLibraryPath,
+      'serverVersionHint': cfg.serverVersionHint.wireValue,
+      'serviceManagerMode': cfg.serviceManagerMode.wireValue,
+      'username': cfg.username,
+      if (includePassword) 'password': cfg.password,
+      if (includeCryptKey) 'cryptKey': cfg.cryptKey,
       'port': cfg.portValue,
       'enabled': cfg.enabled,
       'createdAt': cfg.createdAt.toUtc().toIso8601String(),

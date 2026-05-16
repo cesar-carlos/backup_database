@@ -1,122 +1,54 @@
-import 'package:backup_database/core/core.dart';
+import 'package:backup_database/core/constants/secure_credential_keys.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
-import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
-import 'package:backup_database/infrastructure/repositories/repository_guard.dart';
+import 'package:backup_database/infrastructure/repositories/base_database_config_repository.dart';
 import 'package:drift/drift.dart';
-import 'package:result_dart/result_dart.dart' as rd;
 
-class SqlServerConfigRepository implements ISqlServerConfigRepository {
+class SqlServerConfigRepository
+    extends
+        BaseDatabaseConfigRepository<SqlServerConfig, SqlServerConfigsTableData>
+    implements ISqlServerConfigRepository {
   SqlServerConfigRepository(
-    this._database,
-    this._secureCredentialService,
+    super.database,
+    super.secureCredentialService,
   );
 
-  final AppDatabase _database;
-  final ISecureCredentialService _secureCredentialService;
-
-  static const String _passwordKeyPrefix = 'sql_server_password_';
+  @override
+  String credentialKeyFor(String configId) =>
+      SecureCredentialKeys.sqlServerPasswordKey(configId);
 
   @override
-  Future<rd.Result<List<SqlServerConfig>>> getAll() {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao buscar configurações',
-      action: () async {
-        final configs = await _database.sqlServerConfigDao.getAll();
-        return [for (final c in configs) await _toEntity(c)];
-      },
-    );
-  }
+  Future<List<SqlServerConfigsTableData>> fetchAllRows() =>
+      database.sqlServerConfigDao.getAll();
 
   @override
-  Future<rd.Result<SqlServerConfig>> getById(String id) {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao buscar configuração',
-      action: () async {
-        final config = await _database.sqlServerConfigDao.getById(id);
-        if (config == null) {
-          // `NotFoundFailure` é um `Failure`, então o `RepositoryGuard.run`
-          // o propaga sem reembrulhar (passthrough no `on Failure catch`).
-          throw const NotFoundFailure(message: 'Configuração não encontrada');
-        }
-        return _toEntity(config);
-      },
-    );
-  }
+  Future<List<SqlServerConfigsTableData>> fetchEnabledRows() =>
+      database.sqlServerConfigDao.getEnabled();
 
   @override
-  Future<rd.Result<SqlServerConfig>> create(SqlServerConfig config) {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao criar configuração',
-      action: () async {
-        await _storePasswordOrThrow(config.id, config.password);
-        final companion = _toCompanion(config);
-        await _database.sqlServerConfigDao.insertConfig(companion);
-        return config;
-      },
-    );
-  }
+  Future<SqlServerConfigsTableData?> fetchRowById(String id) =>
+      database.sqlServerConfigDao.getById(id);
 
   @override
-  Future<rd.Result<SqlServerConfig>> update(SqlServerConfig config) {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao atualizar configuração',
-      action: () async {
-        await _storePasswordOrThrow(config.id, config.password);
-        final companion = _toCompanion(config);
-        await _database.sqlServerConfigDao.updateConfig(companion);
-        return config;
-      },
-    );
-  }
+  Future<void> writeInsert(SqlServerConfig config) =>
+      database.sqlServerConfigDao.insertConfig(_toCompanion(config));
 
   @override
-  Future<rd.Result<void>> delete(String id) {
-    return RepositoryGuard.runVoid(
-      errorMessage: 'Erro ao deletar configuração',
-      action: () async {
-        final passwordKey = '$_passwordKeyPrefix$id';
-        await _secureCredentialService.deletePassword(key: passwordKey);
-        await _database.sqlServerConfigDao.deleteConfig(id);
-      },
-    );
-  }
+  Future<void> writeUpdate(SqlServerConfig config) =>
+      database.sqlServerConfigDao.updateConfig(_toCompanion(config));
 
   @override
-  Future<rd.Result<List<SqlServerConfig>>> getEnabled() {
-    return RepositoryGuard.run(
-      errorMessage: 'Erro ao buscar configurações ativas',
-      action: () async {
-        final configs = await _database.sqlServerConfigDao.getEnabled();
-        return [for (final c in configs) await _toEntity(c)];
-      },
-    );
-  }
+  Future<void> writeDelete(String id) =>
+      database.sqlServerConfigDao.deleteConfig(id);
 
-  /// Centraliza o "store password" — antes era reimplementado em `create`
-  /// e `update`. Lança em caso de falha para que o `RepositoryGuard`
-  /// converta no `Failure` com a mensagem apropriada.
-  Future<void> _storePasswordOrThrow(String id, String password) async {
-    final passwordKey = '$_passwordKeyPrefix$id';
-    final storeResult = await _secureCredentialService.storePassword(
-      key: passwordKey,
-      password: password,
+  @override
+  Future<SqlServerConfig> rowToEntity(SqlServerConfigsTableData data) async {
+    final password = await credentials.readPasswordOrEmpty(
+      credentialKeyFor(data.id),
     );
-    if (storeResult.isError()) {
-      throw storeResult.exceptionOrNull()!;
-    }
-  }
-
-  Future<SqlServerConfig> _toEntity(SqlServerConfigsTableData data) async {
-    final passwordKey = '$_passwordKeyPrefix${data.id}';
-    final passwordResult = await _secureCredentialService.getPassword(
-      key: passwordKey,
-    );
-
-    final password = passwordResult.getOrElse((_) => '');
 
     return SqlServerConfig(
       id: data.id,
@@ -148,5 +80,4 @@ class SqlServerConfigRepository implements ISqlServerConfigRepository {
       updatedAt: Value(config.updatedAt),
     );
   }
-
 }

@@ -18,31 +18,32 @@ class ExecutionQueueDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<List<QueuedExecutionItem>> loadOrderedFifo() async {
-    final rows = await (select(executionQueueItemsTable)
-          ..orderBy([(t) => OrderingTerm.asc(t.id)]))
-        .get();
+    final rows = await (select(
+      executionQueueItemsTable,
+    )..orderBy([(t) => OrderingTerm.asc(t.id)])).get();
     return rows.map(_rowToItem).toList();
   }
 
   /// Remove a linha mais antiga (menor `id`). Retorna o item ou null se vazia.
   Future<QueuedExecutionItem?> deleteFifoHead() {
     return transaction(() async {
-      final row = await (select(executionQueueItemsTable)
-            ..orderBy([(t) => OrderingTerm.asc(t.id)])
-            ..limit(1))
-          .getSingleOrNull();
+      final row =
+          await (select(executionQueueItemsTable)
+                ..orderBy([(t) => OrderingTerm.asc(t.id)])
+                ..limit(1))
+              .getSingleOrNull();
       if (row == null) return null;
-      await (delete(executionQueueItemsTable)
-            ..where((t) => t.id.equals(row.id)))
-          .go();
+      await (delete(
+        executionQueueItemsTable,
+      )..where((t) => t.id.equals(row.id))).go();
       return _rowToItem(row);
     });
   }
 
   Future<int> deleteByRunId(String runId) {
-    return (delete(executionQueueItemsTable)
-          ..where((t) => t.runId.equals(runId)))
-        .go();
+    return (delete(
+      executionQueueItemsTable,
+    )..where((t) => t.runId.equals(runId))).go();
   }
 
   Future<void> deleteAll() {
@@ -57,9 +58,9 @@ class ExecutionQueueDao extends DatabaseAccessor<AppDatabase>
       final n = await countRows();
       if (n >= maxQueueSize) return false;
 
-      final dup = await (select(executionQueueItemsTable)
-            ..where((t) => t.scheduleId.equals(item.scheduleId)))
-          .getSingleOrNull();
+      final dup = await (select(
+        executionQueueItemsTable,
+      )..where((t) => t.scheduleId.equals(item.scheduleId))).getSingleOrNull();
       if (dup != null) return false;
 
       await into(executionQueueItemsTable).insert(

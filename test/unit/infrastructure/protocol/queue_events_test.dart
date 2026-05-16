@@ -115,32 +115,57 @@ void main() {
 
     test('cliente pode reordenar por sequence', () {
       // Eventos chegam fora de ordem (reconnect)
-      final e3 = readQueueEvent(createBackupStartedEvent(
-        runId: 'r', scheduleId: 's', sequence: 3, eventId: 'a',
-        serverTimeUtc: DateTime.utc(2026),
-      ))!;
-      final e1 = readQueueEvent(createBackupQueuedEvent(
-        runId: 'r', scheduleId: 's', sequence: 1, eventId: 'b',
-        serverTimeUtc: DateTime.utc(2026),
-      ))!;
-      final e2 = readQueueEvent(createBackupDequeuedEvent(
-        runId: 'r', scheduleId: 's', sequence: 2, eventId: 'c',
-        serverTimeUtc: DateTime.utc(2026),
-      ))!;
+      final e3 = readQueueEvent(
+        createBackupStartedEvent(
+          runId: 'r',
+          scheduleId: 's',
+          sequence: 3,
+          eventId: 'a',
+          serverTimeUtc: DateTime.utc(2026),
+        ),
+      )!;
+      final e1 = readQueueEvent(
+        createBackupQueuedEvent(
+          runId: 'r',
+          scheduleId: 's',
+          sequence: 1,
+          eventId: 'b',
+          serverTimeUtc: DateTime.utc(2026),
+        ),
+      )!;
+      final e2 = readQueueEvent(
+        createBackupDequeuedEvent(
+          runId: 'r',
+          scheduleId: 's',
+          sequence: 2,
+          eventId: 'c',
+          serverTimeUtc: DateTime.utc(2026),
+        ),
+      )!;
       final received = [e3, e1, e2];
       received.sort((a, b) => a.sequence.compareTo(b.sequence));
       expect(received.map((e) => e.sequence).toList(), [1, 2, 3]);
     });
 
     test('cliente pode deduplicar por eventId', () {
-      final e1 = readQueueEvent(createBackupQueuedEvent(
-        runId: 'r', scheduleId: 's', sequence: 1, eventId: 'evt-1',
-        serverTimeUtc: DateTime.utc(2026),
-      ))!;
-      final e1Repeat = readQueueEvent(createBackupQueuedEvent(
-        runId: 'r', scheduleId: 's', sequence: 1, eventId: 'evt-1',
-        serverTimeUtc: DateTime.utc(2026),
-      ))!;
+      final e1 = readQueueEvent(
+        createBackupQueuedEvent(
+          runId: 'r',
+          scheduleId: 's',
+          sequence: 1,
+          eventId: 'evt-1',
+          serverTimeUtc: DateTime.utc(2026),
+        ),
+      )!;
+      final e1Repeat = readQueueEvent(
+        createBackupQueuedEvent(
+          runId: 'r',
+          scheduleId: 's',
+          sequence: 1,
+          eventId: 'evt-1',
+          serverTimeUtc: DateTime.utc(2026),
+        ),
+      )!;
       final seen = <String>{};
       final unique = [e1, e1Repeat].where((e) => seen.add(e.eventId)).toList();
       expect(unique, hasLength(1));

@@ -53,10 +53,7 @@ Completer<Message> _expectFromServer(
     buffer.addAll(data);
     while (buffer.length >= 16 + 4) {
       final length =
-          (buffer[5] << 24) |
-          (buffer[6] << 16) |
-          (buffer[7] << 8) |
-          buffer[8];
+          (buffer[5] << 24) | (buffer[6] << 16) | (buffer[7] << 8) | buffer[8];
       final total = 16 + length + 4;
       if (buffer.length < total) return;
       try {
@@ -375,7 +372,10 @@ void main() {
         );
 
         expect(response.payload['success'], isFalse);
-        expect(response.payload['errorCode'], ErrorCode.authenticationFailed.code);
+        expect(
+          response.payload['errorCode'],
+          ErrorCode.authenticationFailed.code,
+        );
         expect(response.payload['error'], 'credencial invalida');
 
         await Future<void>.delayed(const Duration(milliseconds: 150));

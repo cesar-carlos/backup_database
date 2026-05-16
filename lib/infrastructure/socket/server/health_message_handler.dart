@@ -34,11 +34,11 @@ class HealthMessageHandler {
     DateTime Function()? clock,
     DateTime? startTime,
     Future<int> Function()? stagingUsageBytesProvider,
-  })  : _requiredChecks = requiredChecks ?? const <String, HealthCheck>{},
-        _optionalChecks = optionalChecks ?? const <String, HealthCheck>{},
-        _clock = clock ?? DateTime.now,
-        _startTime = startTime ?? DateTime.now(),
-        _stagingUsageBytesProvider = stagingUsageBytesProvider;
+  }) : _requiredChecks = requiredChecks ?? const <String, HealthCheck>{},
+       _optionalChecks = optionalChecks ?? const <String, HealthCheck>{},
+       _clock = clock ?? DateTime.now,
+       _startTime = startTime ?? DateTime.now(),
+       _stagingUsageBytesProvider = stagingUsageBytesProvider;
 
   final Map<String, HealthCheck> _requiredChecks;
   final Map<String, HealthCheck> _optionalChecks;
@@ -75,7 +75,8 @@ class HealthMessageHandler {
           uptimeSeconds: _uptimeSeconds(),
           message: snapshot.message,
           stagingUsageBytes: snapshot.stagingUsageBytes,
-          stagingUsageWarnThresholdBytes: snapshot.stagingUsageWarnThresholdBytes,
+          stagingUsageWarnThresholdBytes:
+              snapshot.stagingUsageWarnThresholdBytes,
           stagingUsageBlockThresholdBytes:
               snapshot.stagingUsageBlockThresholdBytes,
           stagingUsageLevel: snapshot.stagingUsageLevel,

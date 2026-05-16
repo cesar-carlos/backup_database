@@ -14,7 +14,8 @@ import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 enum PreflightSeverity {
   blocking,
   warning,
-  info;
+  info
+  ;
 
   static PreflightSeverity fromString(String value) {
     return values.firstWhere(
@@ -35,7 +36,8 @@ enum PreflightSeverity {
 enum PreflightStatus {
   passed,
   passedWithWarnings,
-  blocked;
+  blocked
+  ;
 
   static PreflightStatus fromString(String value) {
     return values.firstWhere(
@@ -47,7 +49,8 @@ enum PreflightStatus {
   /// Atalho que cliente pode usar como gate sincrono. Falha-fechado:
   /// status desconhecido vira `false`.
   bool get isOk =>
-      this == PreflightStatus.passed || this == PreflightStatus.passedWithWarnings;
+      this == PreflightStatus.passed ||
+      this == PreflightStatus.passedWithWarnings;
 }
 
 /// Resultado tipado de uma checagem individual.

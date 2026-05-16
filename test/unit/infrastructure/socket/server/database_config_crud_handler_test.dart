@@ -106,9 +106,9 @@ void main() {
 
     test('falha do store vira error', () async {
       store.outcome = (op) => DatabaseConfigOutcome.failure(
-            error: 'db down',
-            errorCode: ErrorCode.ioError,
-          );
+        error: 'db down',
+        errorCode: ErrorCode.ioError,
+      );
       final req = createListDatabaseConfigsRequest(
         databaseType: RemoteDatabaseType.sybase,
       );

@@ -176,7 +176,7 @@ class TcpSocketClient implements SocketClientService {
   void _startHeartbeat() {
     _heartbeatManager = HeartbeatManager(
       sendHeartbeat: (m) {
-        send(m).catchError((_) {});
+        unawaited(send(m).catchError((_) {}));
       },
       onTimeout: () {
         // Verificar se pode desconectar (ex: não desconectar durante transferências ativas)
@@ -185,7 +185,7 @@ class TcpSocketClient implements SocketClientService {
           LoggerService.warning(
             '[TcpSocketClient] Heartbeat timeout - desconectando...',
           );
-          _handleDisconnect(scheduleReconnect: true);
+          unawaited(_handleDisconnect(scheduleReconnect: true));
         } else {
           LoggerService.info(
             '[TcpSocketClient] Heartbeat timeout IGNORADO - transferência ativa em andamento',
@@ -209,7 +209,7 @@ class TcpSocketClient implements SocketClientService {
         'TcpSocketClient: buffer excedeu ${SocketConfig.maxBufferOverhead} '
         'bytes sem mensagem válida — desconectando.',
       );
-      _handleDisconnect(scheduleReconnect: true);
+      unawaited(_handleDisconnect(scheduleReconnect: true));
       return;
     }
 
@@ -227,7 +227,7 @@ class TcpSocketClient implements SocketClientService {
           'TcpSocketClient: length declarado inválido ($length bytes; '
           'máximo ${SocketConfig.maxMessagePayloadBytes}). Desconectando.',
         );
-        _handleDisconnect(scheduleReconnect: true);
+        unawaited(_handleDisconnect(scheduleReconnect: true));
         return;
       }
 
@@ -241,7 +241,9 @@ class TcpSocketClient implements SocketClientService {
         final message = _protocol.deserializeMessage(messageBytes);
 
         // Log received message
-        _socketLogger?.logReceived(message);
+        unawaited(
+          _socketLogger?.logReceived(message) ?? Future<void>.value(),
+        );
 
         if (_waitingAuth && isAuthResponseMessage(message)) {
           _waitingAuth = false;
@@ -252,7 +254,11 @@ class TcpSocketClient implements SocketClientService {
             LoggerService.error('Autenticação FALHOU: $error');
             _setStatus(ConnectionStatus.authenticationFailed);
             _messageController.add(message);
-            Future.microtask(() => _handleDisconnect(scheduleReconnect: false));
+            unawaited(
+              Future.microtask(() {
+                unawaited(_handleDisconnect(scheduleReconnect: false));
+              }),
+            );
             return;
           }
           LoggerService.info('✅ Autenticação bem-sucedida!');
@@ -284,7 +290,7 @@ class TcpSocketClient implements SocketClientService {
   void _onDone() {
     _setStatus(ConnectionStatus.disconnected);
     LoggerService.info('TcpSocketClient disconnected');
-    _handleDisconnect(scheduleReconnect: true);
+    unawaited(_handleDisconnect(scheduleReconnect: true));
   }
 
   @override
@@ -301,7 +307,10 @@ class TcpSocketClient implements SocketClientService {
     final next = _sendQueue.then((_) async {
       try {
         final data = _protocol.serializeMessage(message);
-        _socketLogger?.logSent(message);
+        final socketLogger = _socketLogger;
+        if (socketLogger != null) {
+          await socketLogger.logSent(message);
+        }
         _socket!.add(data);
         await _socket!.flush();
       } on Object catch (e) {
@@ -326,10 +335,10 @@ class TcpSocketClient implements SocketClientService {
       _reconnectHost = null;
       _reconnectPort = null;
       if (!_messageController.isClosed) {
-        _messageController.close();
+        unawaited(_messageController.close());
       }
       if (!_statusController.isClosed) {
-        _statusController.close();
+        unawaited(_statusController.close());
       }
       return;
     }
@@ -340,7 +349,10 @@ class TcpSocketClient implements SocketClientService {
       'TcpSocketClient scheduling reconnect in ${delay.inSeconds}s',
     );
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(delay, _attemptReconnect);
+    _reconnectTimer = Timer(
+      delay,
+      () => unawaited(_attemptReconnect()),
+    );
   }
 
   Future<void> _attemptReconnect() async {
@@ -353,10 +365,10 @@ class TcpSocketClient implements SocketClientService {
       _reconnectHost = null;
       _reconnectPort = null;
       if (!_messageController.isClosed) {
-        _messageController.close();
+        await _messageController.close();
       }
       if (!_statusController.isClosed) {
-        _statusController.close();
+        await _statusController.close();
       }
       return;
     }
@@ -385,7 +397,7 @@ class TcpSocketClient implements SocketClientService {
     _heartbeatSubscription = null;
     _heartbeatManager?.stop();
     _heartbeatManager = null;
-    _subscription?.cancel();
+    await _subscription?.cancel();
     _subscription = null;
     _socket?.destroy();
     _socket = null;
@@ -397,10 +409,10 @@ class TcpSocketClient implements SocketClientService {
       _reconnectHost = null;
       _reconnectPort = null;
       if (!_messageController.isClosed) {
-        _messageController.close();
+        await _messageController.close();
       }
       if (!_statusController.isClosed) {
-        _statusController.close();
+        await _statusController.close();
       }
     }
     LoggerService.info('TcpSocketClient disconnected');
@@ -424,7 +436,7 @@ class TcpSocketClient implements SocketClientService {
     _socket = null;
     _setStatus(ConnectionStatus.disconnected);
     if (!_messageController.isClosed) {
-      _messageController.close();
+      await _messageController.close();
     }
     LoggerService.info('TcpSocketClient disconnected');
   }

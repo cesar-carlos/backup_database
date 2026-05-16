@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/di/service_locator.dart'
@@ -26,7 +28,7 @@ class BackupDatabaseApp extends StatelessWidget {
               userPreferencesRepository: service_locator
                   .getIt<IUserPreferencesRepository>(),
             );
-            provider.initialize();
+            unawaited(provider.initialize());
             return provider;
           },
         ),
@@ -41,7 +43,7 @@ class BackupDatabaseApp extends StatelessWidget {
                   .getIt<IWindowsMachineStartupService>(),
               windowManager: WindowManagerService(),
             );
-            provider.initialize();
+            unawaited(provider.initialize());
             return provider;
           },
         ),
@@ -62,6 +64,9 @@ class BackupDatabaseApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => service_locator.getIt<PostgresConfigProvider>(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => service_locator.getIt<FirebirdConfigProvider>(),
         ),
         ChangeNotifierProvider(
           create: (_) => service_locator.getIt<DestinationProvider>(),

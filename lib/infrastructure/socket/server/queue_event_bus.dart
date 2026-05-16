@@ -22,10 +22,10 @@ class QueueEventBus {
     Uuid? uuid,
     DateTime Function()? clock,
     int initialSequence = 0,
-  })  : _broadcast = broadcast,
-        _uuid = uuid ?? const Uuid(),
-        _clock = clock ?? DateTime.now,
-        _sequence = initialSequence;
+  }) : _broadcast = broadcast,
+       _uuid = uuid ?? const Uuid(),
+       _clock = clock ?? DateTime.now,
+       _sequence = initialSequence;
 
   final Future<void> Function(String clientId, Message) _broadcast;
   final Uuid _uuid;
@@ -113,6 +113,6 @@ class QueueEventBus {
 /// Wiring helper: cria um broadcast que despacha pelo
 /// [SendToClient] cabeado no servidor.
 Future<void> Function(String clientId, Message message)
-    queueEventBroadcastFromSendToClient(SendToClient send) {
+queueEventBroadcastFromSendToClient(SendToClient send) {
   return send;
 }

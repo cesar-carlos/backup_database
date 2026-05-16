@@ -233,7 +233,8 @@ void main() {
         expect(
           provider.isLoading,
           isTrue,
-          reason: 'Counter pattern: isLoading must stay true until ALL '
+          reason:
+              'Counter pattern: isLoading must stay true until ALL '
               'operations complete, not just the first',
         );
 
@@ -307,7 +308,8 @@ void main() {
       expect(
         provider.isLoading,
         isFalse,
-        reason: 'setErrorManual is for sync validation; should not '
+        reason:
+            'setErrorManual is for sync validation; should not '
             'increment the operation counter',
       );
     });
@@ -357,6 +359,11 @@ void main() {
         isNull,
       );
       expect(AsyncStateMixin.extractFailureCode(null), isNull);
+    });
+
+    test('extractFailureCode returns null when Failure omits code', () {
+      const failure = ValidationFailure(message: 'sem code');
+      expect(AsyncStateMixin.extractFailureCode(failure), isNull);
     });
   });
 }

@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/utils/database_type_metadata.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
 import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
@@ -30,6 +31,9 @@ class ScheduleListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final texts = WidgetTexts.fromContext(context);
     final effectivelyDisabled = isOperating || !schedule.enabled;
+    final databaseMeta = DatabaseTypeMetadata.of(
+      schedule.databaseType,
+    );
 
     return ConfigListItem(
       name: schedule.name,
@@ -91,15 +95,13 @@ class ScheduleListItem extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _getDatabaseTypeColor(
-                    schedule.databaseType,
-                  ).withValues(alpha: 0.1),
+                  color: databaseMeta.accentColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  _getDatabaseTypeName(schedule.databaseType),
+                  databaseMeta.chipLabel,
                   style: FluentTheme.of(context).typography.caption?.copyWith(
-                    color: _getDatabaseTypeColor(schedule.databaseType),
+                    color: databaseMeta.accentColor,
                   ),
                 ),
               ),
@@ -133,28 +135,6 @@ class ScheduleListItem extends StatelessWidget {
         return AppColors.scheduleMonthly;
       case ScheduleType.interval:
         return AppColors.scheduleInterval;
-    }
-  }
-
-  String _getDatabaseTypeName(DatabaseType type) {
-    switch (type) {
-      case DatabaseType.sqlServer:
-        return 'SQL Server';
-      case DatabaseType.sybase:
-        return 'Sybase';
-      case DatabaseType.postgresql:
-        return 'PostgreSQL';
-    }
-  }
-
-  Color _getDatabaseTypeColor(DatabaseType type) {
-    switch (type) {
-      case DatabaseType.sqlServer:
-        return AppColors.databaseSqlServer;
-      case DatabaseType.sybase:
-        return AppColors.databaseSybase;
-      case DatabaseType.postgresql:
-        return AppColors.databasePostgresql;
     }
   }
 }

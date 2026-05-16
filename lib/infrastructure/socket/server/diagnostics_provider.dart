@@ -13,27 +13,26 @@ class DiagnosticsOutcome<T> {
       DiagnosticsOutcome(success: true, data: data);
 
   factory DiagnosticsOutcome.notFound() => const DiagnosticsOutcome(
-        success: false,
-        errorCode: ErrorCode.fileNotFound,
-        error: 'Recurso nao encontrado',
-      );
+    success: false,
+    errorCode: ErrorCode.fileNotFound,
+    error: 'Recurso nao encontrado',
+  );
 
   factory DiagnosticsOutcome.failure({
     required String error,
     required ErrorCode errorCode,
-  }) =>
-      DiagnosticsOutcome(
-        success: false,
-        error: error,
-        errorCode: errorCode,
-      );
+  }) => DiagnosticsOutcome(
+    success: false,
+    error: error,
+    errorCode: errorCode,
+  );
 
   /// Artefato em staging fora do periodo de retencao (PR-4) — 410.
   factory DiagnosticsOutcome.artifactExpired() => DiagnosticsOutcome(
-        success: false,
-        error: ErrorCode.artifactExpired.defaultMessage,
-        errorCode: ErrorCode.artifactExpired,
-      );
+    success: false,
+    error: ErrorCode.artifactExpired.defaultMessage,
+    errorCode: ErrorCode.artifactExpired,
+  );
 
   final bool success;
   final T? data;
@@ -120,22 +119,20 @@ class NotConfiguredDiagnosticsProvider implements DiagnosticsProvider {
   Future<DiagnosticsOutcome<RunLogsData>> getRunLogs(
     String runId, {
     int? maxLines,
-  }) async =>
-      DiagnosticsOutcome<RunLogsData>.notFound();
+  }) async => DiagnosticsOutcome<RunLogsData>.notFound();
 
   @override
-  Future<DiagnosticsOutcome<RunErrorData>> getRunErrorDetails(String runId) async =>
-      DiagnosticsOutcome<RunErrorData>.notFound();
+  Future<DiagnosticsOutcome<RunErrorData>> getRunErrorDetails(
+    String runId,
+  ) async => DiagnosticsOutcome<RunErrorData>.notFound();
 
   @override
   Future<DiagnosticsOutcome<ArtifactMetadataData>> getArtifactMetadata(
     String runId,
-  ) async =>
-      DiagnosticsOutcome<ArtifactMetadataData>.notFound();
+  ) async => DiagnosticsOutcome<ArtifactMetadataData>.notFound();
 
   @override
   Future<DiagnosticsOutcome<CleanupStagingData>> cleanupStaging(
     String runId,
-  ) async =>
-      DiagnosticsOutcome<CleanupStagingData>.notFound();
+  ) async => DiagnosticsOutcome<CleanupStagingData>.notFound();
 }

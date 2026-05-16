@@ -39,7 +39,8 @@ class LaunchBootstrapContextResolver {
     required Map<String, String> rawEnvironment,
     bool? isServiceModeOverride,
   }) {
-    final isServiceMode = isServiceModeOverride ??
+    final isServiceMode =
+        isServiceModeOverride ??
         ServiceModeDetector.isServiceMode(executableArguments: rawArgs);
 
     final launchOrigin = isServiceMode
@@ -52,8 +53,9 @@ class LaunchBootstrapContextResolver {
 
     final processRole = isServiceMode ? ProcessRole.service : ProcessRole.ui;
 
-    final usesLegacyWindowsStartupAlias =
-        rawArgs.contains(SingleInstanceConfig.startupLaunchArgument);
+    final usesLegacyWindowsStartupAlias = rawArgs.contains(
+      SingleInstanceConfig.startupLaunchArgument,
+    );
 
     return LaunchBootstrapContext(
       launchOrigin: launchOrigin,

@@ -1,6 +1,8 @@
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
@@ -13,13 +15,18 @@ import 'package:mocktail/mocktail.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class _MockSybaseRepo extends Mock implements ISybaseConfigRepository {}
+
 class _MockSqlServerRepo extends Mock implements ISqlServerConfigRepository {}
+
 class _MockPostgresRepo extends Mock implements IPostgresConfigRepository {}
+
+class _MockFirebirdRepo extends Mock implements IFirebirdConfigRepository {}
 
 void main() {
   late _MockSybaseRepo sybaseRepo;
   late _MockSqlServerRepo sqlRepo;
   late _MockPostgresRepo pgRepo;
+  late _MockFirebirdRepo fbRepo;
   late RealDatabaseConfigStore store;
 
   final sybaseCfg = SybaseConfig(
@@ -46,28 +53,40 @@ void main() {
     username: 'u',
     password: 'p',
   );
+  final fbCfg = FirebirdConfig(
+    id: 'fb-1',
+    name: 'n',
+    host: 'h',
+    databaseFile: r'C:\data\db.fdb',
+    username: 'u',
+    password: 'p',
+  );
 
   setUpAll(() {
     registerFallbackValue(sybaseCfg);
     registerFallbackValue(sqlCfg);
     registerFallbackValue(pgCfg);
+    registerFallbackValue(fbCfg);
   });
 
   setUp(() {
     sybaseRepo = _MockSybaseRepo();
     sqlRepo = _MockSqlServerRepo();
     pgRepo = _MockPostgresRepo();
+    fbRepo = _MockFirebirdRepo();
     store = RealDatabaseConfigStore(
       sybaseRepository: sybaseRepo,
       sqlServerRepository: sqlRepo,
       postgresRepository: pgRepo,
+      firebirdRepository: fbRepo,
     );
   });
 
   group('list', () {
     test('Sybase: serializa entities sem incluir password', () async {
-      when(() => sybaseRepo.getAll())
-          .thenAnswer((_) async => rd.Success([sybaseCfg]));
+      when(
+        () => sybaseRepo.getAll(),
+      ).thenAnswer((_) async => rd.Success([sybaseCfg]));
       final outcome = await store.list(RemoteDatabaseType.sybase);
       expect(outcome.success, isTrue);
       expect(outcome.configs, hasLength(1));
@@ -76,8 +95,9 @@ void main() {
     });
 
     test('SqlServer: dispatches para repo correto', () async {
-      when(() => sqlRepo.getAll())
-          .thenAnswer((_) async => rd.Success([sqlCfg]));
+      when(
+        () => sqlRepo.getAll(),
+      ).thenAnswer((_) async => rd.Success([sqlCfg]));
       final outcome = await store.list(RemoteDatabaseType.sqlServer);
       expect(outcome.success, isTrue);
       expect(outcome.configs, hasLength(1));
@@ -86,16 +106,23 @@ void main() {
     });
 
     test('Postgres: dispatches para repo correto', () async {
-      when(() => pgRepo.getAll())
-          .thenAnswer((_) async => rd.Success([pgCfg]));
+      when(() => pgRepo.getAll()).thenAnswer((_) async => rd.Success([pgCfg]));
       final outcome = await store.list(RemoteDatabaseType.postgres);
       expect(outcome.success, isTrue);
       verify(() => pgRepo.getAll()).called(1);
     });
 
+    test('Firebird: dispatches para repo correto', () async {
+      when(() => fbRepo.getAll()).thenAnswer((_) async => rd.Success([fbCfg]));
+      final outcome = await store.list(RemoteDatabaseType.firebird);
+      expect(outcome.success, isTrue);
+      verify(() => fbRepo.getAll()).called(1);
+    });
+
     test('falha do repo vira outcome.failure', () async {
-      when(() => sybaseRepo.getAll())
-          .thenAnswer((_) async => rd.Failure(Exception('db error')));
+      when(
+        () => sybaseRepo.getAll(),
+      ).thenAnswer((_) async => rd.Failure(Exception('db error')));
       final outcome = await store.list(RemoteDatabaseType.sybase);
       expect(outcome.success, isFalse);
       expect(outcome.errorCode, ErrorCode.unknown);
@@ -111,24 +138,28 @@ void main() {
   });
 
   group('create', () {
-    test('Sybase: deserializa map -> entity, persiste, retorna config', () async {
-      when(() => sybaseRepo.create(any()))
-          .thenAnswer((_) async => rd.Success(sybaseCfg));
-      final outcome = await store.create(
-        RemoteDatabaseType.sybase,
-        const {
-          'name': 'n',
-          'serverName': 's',
-          'databaseName': 'd',
-          'username': 'u',
-          'password': 'p',
-        },
-      );
-      expect(outcome.success, isTrue);
-      expect(outcome.config, isNotNull);
-      expect(outcome.config!['username'], 'u');
-      verify(() => sybaseRepo.create(any())).called(1);
-    });
+    test(
+      'Sybase: deserializa map -> entity, persiste, retorna config',
+      () async {
+        when(
+          () => sybaseRepo.create(any()),
+        ).thenAnswer((_) async => rd.Success(sybaseCfg));
+        final outcome = await store.create(
+          RemoteDatabaseType.sybase,
+          const {
+            'name': 'n',
+            'serverName': 's',
+            'databaseName': 'd',
+            'username': 'u',
+            'password': 'p',
+          },
+        );
+        expect(outcome.success, isTrue);
+        expect(outcome.config, isNotNull);
+        expect(outcome.config!['username'], 'u');
+        verify(() => sybaseRepo.create(any())).called(1);
+      },
+    );
 
     test('payload sem campos obrigatorios -> invalidRequest', () async {
       final outcome = await store.create(
@@ -143,8 +174,9 @@ void main() {
 
   group('update', () {
     test('Sybase: dispatches update', () async {
-      when(() => sybaseRepo.update(any()))
-          .thenAnswer((_) async => rd.Success(sybaseCfg));
+      when(
+        () => sybaseRepo.update(any()),
+      ).thenAnswer((_) async => rd.Success(sybaseCfg));
       final outcome = await store.update(
         RemoteDatabaseType.sybase,
         const {
@@ -162,16 +194,18 @@ void main() {
 
   group('delete', () {
     test('Sybase: dispatches delete pelo id', () async {
-      when(() => sybaseRepo.delete('sb-1'))
-          .thenAnswer((_) async => const rd.Success('ok'));
+      when(
+        () => sybaseRepo.delete('sb-1'),
+      ).thenAnswer((_) async => const rd.Success('ok'));
       final outcome = await store.delete(RemoteDatabaseType.sybase, 'sb-1');
       expect(outcome.success, isTrue);
       verify(() => sybaseRepo.delete('sb-1')).called(1);
     });
 
     test('falha do repo vira outcome.failure', () async {
-      when(() => sybaseRepo.delete('sb-1'))
-          .thenAnswer((_) async => rd.Failure(Exception('FK constraint')));
+      when(
+        () => sybaseRepo.delete('sb-1'),
+      ).thenAnswer((_) async => rd.Failure(Exception('FK constraint')));
       final outcome = await store.delete(RemoteDatabaseType.sybase, 'sb-1');
       expect(outcome.success, isFalse);
       expect(outcome.errorCode, ErrorCode.unknown);

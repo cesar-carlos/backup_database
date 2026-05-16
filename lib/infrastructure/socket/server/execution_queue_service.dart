@@ -33,10 +33,10 @@ class ExecutionQueueService {
     Uuid? uuid,
     DateTime Function()? clock,
     ExecutionQueuePersistence? persistence,
-  })  : _maxQueueSize = maxQueueSize,
-        _uuid = uuid ?? const Uuid(),
-        _clock = clock ?? DateTime.now,
-        _persistence = persistence;
+  }) : _maxQueueSize = maxQueueSize,
+       _uuid = uuid ?? const Uuid(),
+       _clock = clock ?? DateTime.now,
+       _persistence = persistence;
 
   final int _maxQueueSize;
   final Uuid _uuid;
@@ -97,17 +97,22 @@ class ExecutionQueueService {
   /// Snapshot ordenado da fila (FIFO). Usado por
   /// `ExecutionQueueMessageHandler` para responder `getExecutionQueue`.
   List<QueuedExecution> snapshot() {
-    return _queue.toList(growable: false).asMap().entries.map((entry) {
-      final i = entry.key;
-      final it = entry.value;
-      return QueuedExecution(
-        runId: it.runId,
-        scheduleId: it.scheduleId,
-        queuedAt: it.queuedAt,
-        queuedPosition: i + 1, // 1-based para cliente
-        requestedBy: it.requestedBy,
-      );
-    }).toList(growable: false);
+    return _queue
+        .toList(growable: false)
+        .asMap()
+        .entries
+        .map((entry) {
+          final i = entry.key;
+          final it = entry.value;
+          return QueuedExecution(
+            runId: it.runId,
+            scheduleId: it.scheduleId,
+            queuedAt: it.queuedAt,
+            queuedPosition: i + 1, // 1-based para cliente
+            requestedBy: it.requestedBy,
+          );
+        })
+        .toList(growable: false);
   }
 
   /// Tenta enfileirar uma execucao. Retorna o item criado (com

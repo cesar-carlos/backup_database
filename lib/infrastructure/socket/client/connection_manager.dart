@@ -55,12 +55,14 @@ class ConnectionManager {
   int? _activePort;
   int _nextRequestId = 0;
   final Map<int, Completer<Message>> _pendingRequests = {};
+  // ignore: cancel_subscriptions -- cancelado em [disconnect].
   StreamSubscription<Message>? _messageSubscription;
 
   /// Subscription do `statusStream` do client. Antes não havia listener
   /// — quando a conexão caía abruptamente (timeout, RST), os completers
   /// em `_pendingRequests` ficavam pendurados para sempre, vazando
   /// memória e deixando UIs esperando indefinidamente.
+  // ignore: cancel_subscriptions -- cancelado em [disconnect].
   StreamSubscription<ConnectionStatus>? _statusSubscription;
 
   final Map<int, _FileTransferState> _activeTransfers = {};
@@ -137,6 +139,8 @@ class ConnectionManager {
   /// transferencia de arquivos. Em `v1` e sempre falso por decisao
   /// explicita de ADR-002.
   bool get isChunkAckSupported => _effectiveCapabilities.supportsChunkAck;
+
+  bool get isFirebirdSupported => _effectiveCapabilities.supportsFirebird;
 
   Future<void> connect({
     required String host,
@@ -305,7 +309,9 @@ class ConnectionManager {
     final requestId = message.header.requestId;
     final transferState = _activeTransfers[requestId];
     if (transferState != null) {
-      _handleFileTransferMessage(requestId, message, transferState);
+      unawaited(
+        _handleFileTransferMessage(requestId, message, transferState),
+      );
       return;
     }
     final backupState = _activeBackups[requestId];
@@ -412,7 +418,7 @@ class ConnectionManager {
         '[ConnectionManager] Transferência completa recebida, finalizando arquivo...',
       );
       _activeTransfers.remove(requestId);
-      _completeFileTransfer(state);
+      unawaited(_completeFileTransfer(state));
       return;
     }
     if (isFileTransferErrorMessage(message)) {
@@ -420,7 +426,7 @@ class ConnectionManager {
       LoggerService.error(
         '[ConnectionManager] Erro de transferência recebido: $error',
       );
-      _cleanupTransfer(requestId);
+      await _cleanupTransfer(requestId);
       state.completer.complete(
         rd.Failure(Exception(error)),
       );
@@ -609,10 +615,12 @@ class ConnectionManager {
   }
 
   Future<void> disconnect() async {
-    _messageSubscription?.cancel();
+    final messageSub = _messageSubscription;
     _messageSubscription = null;
-    _statusSubscription?.cancel();
+    await messageSub?.cancel();
+    final statusSub = _statusSubscription;
     _statusSubscription = null;
+    await statusSub?.cancel();
 
     // Fechar todos os fileSinks antes de limpar
     for (final entry in _activeTransfers.entries) {
@@ -1356,8 +1364,7 @@ class ConnectionManager {
         final error = getErrorFromPayload(message) ?? 'Erro desconhecido';
         return rd.Failure(Exception(error));
       }
-      if (message.header.type !=
-          MessageType.testDatabaseConnectionResponse) {
+      if (message.header.type != MessageType.testDatabaseConnectionResponse) {
         return rd.Failure(
           Exception(
             'Resposta inesperada para testDatabaseConnection: '
@@ -1446,7 +1453,9 @@ class ConnectionManager {
     final hasSch = scheduleId != null && scheduleId.isNotEmpty;
     if (hasRun == hasSch) {
       return rd.Failure(
-        Exception('cancelRemoteBackup: informe APENAS um (runId XOR scheduleId)'),
+        Exception(
+          'cancelRemoteBackup: informe APENAS um (runId XOR scheduleId)',
+        ),
       );
     }
     final requestId = _nextRequestId++;
@@ -1595,10 +1604,12 @@ class ConnectionManager {
     final completer = Completer<Message>();
     _pendingRequests[requestId] = completer;
     try {
-      await send(createListDatabaseConfigsRequest(
-        databaseType: databaseType,
-        requestId: requestId,
-      ));
+      await send(
+        createListDatabaseConfigsRequest(
+          databaseType: databaseType,
+          requestId: requestId,
+        ),
+      );
       final message = await completer.future.timeout(
         SocketConfig.scheduleRequestTimeout,
       );
@@ -1725,17 +1736,21 @@ class ConnectionManager {
       return rd.Failure(Exception('ConnectionManager not connected'));
     }
     if (runId.isEmpty) {
-      return rd.Failure(Exception('cancelQueuedRemoteBackup: runId obrigatorio'));
+      return rd.Failure(
+        Exception('cancelQueuedRemoteBackup: runId obrigatorio'),
+      );
     }
     final requestId = _nextRequestId++;
     final completer = Completer<Message>();
     _pendingRequests[requestId] = completer;
     try {
-      await send(createCancelQueuedBackupRequest(
-        runId: runId,
-        idempotencyKey: idempotencyKey,
-        requestId: requestId,
-      ));
+      await send(
+        createCancelQueuedBackupRequest(
+          runId: runId,
+          idempotencyKey: idempotencyKey,
+          requestId: requestId,
+        ),
+      );
       final message = await completer.future.timeout(
         SocketConfig.scheduleRequestTimeout,
       );

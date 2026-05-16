@@ -1,5 +1,8 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
-import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
+import 'package:backup_database/presentation/widgets/common/database_config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class SqlServerConfigListItem extends StatelessWidget {
@@ -17,33 +20,36 @@ class SqlServerConfigListItem extends StatelessWidget {
   final VoidCallback? onDelete;
   final ValueChanged<bool>? onToggleEnabled;
 
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return ConfigListItem(
+    return DatabaseConfigListItem<SqlServerConfig>(
+      config: config,
       name: config.name,
-      icon: FluentIcons.database,
       enabled: config.enabled,
-      onToggleEnabled: onToggleEnabled,
+      databaseType: DatabaseType.sqlServer,
+      subtitle: _subtitle,
       onEdit: onEdit,
       onDuplicate: onDuplicate,
       onDelete: onDelete,
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 4),
-          Text('${config.server}:${config.port}'),
-          const SizedBox(height: 2),
-          Text('${_t(context, 'Banco', 'Database')}: ${config.database}'),
-          const SizedBox(height: 2),
-          Text('${_t(context, 'Usuario', 'User')}: ${config.username}'),
-        ],
-      ),
+      onToggleEnabled: onToggleEnabled,
+    );
+  }
+
+  Widget _subtitle(BuildContext context, SqlServerConfig c) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.xs),
+        Text('${c.server}:${c.port}'),
+        const SizedBox(height: databaseConfigListSubtitleTightGap),
+        Text(
+          '${appLocaleString(context, 'Banco', 'Database')}: ${c.databaseValue}',
+        ),
+        const SizedBox(height: databaseConfigListSubtitleTightGap),
+        Text(
+          '${appLocaleString(context, 'Usuario', 'User')}: ${c.username}',
+        ),
+      ],
     );
   }
 }

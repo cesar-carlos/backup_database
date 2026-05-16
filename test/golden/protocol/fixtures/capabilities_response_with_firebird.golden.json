@@ -1,0 +1,18 @@
+{
+  "type": "capabilitiesResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 200,
+    "protocolVersion": 1,
+    "wireVersion": 1,
+    "supportsRunId": true,
+    "supportsResume": true,
+    "supportsArtifactRetention": true,
+    "supportsChunkAck": false,
+    "supportsExecutionQueue": true,
+    "supportsFirebird": true,
+    "chunkSize": 65536,
+    "compression": "gzip",
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z"
+  }
+}

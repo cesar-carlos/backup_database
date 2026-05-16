@@ -15,7 +15,8 @@ import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 enum ServerHealthStatus {
   ok,
   degraded,
-  unhealthy;
+  unhealthy
+  ;
 
   static ServerHealthStatus fromString(String value) {
     return values.firstWhere(

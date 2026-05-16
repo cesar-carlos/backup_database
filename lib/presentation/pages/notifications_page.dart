@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/application/providers/notification_provider.dart';
 import 'package:backup_database/core/constants/license_features.dart';
@@ -566,9 +568,12 @@ class _NotificationsContentSection extends StatelessWidget {
           onCreate: onCreateConfig,
           onEdit: onEditConfig,
           onDelete: onDeleteConfig,
-          onSelect: (config) => provider.selectConfig(config.id),
+          onSelect: (config) =>
+              unawaited(provider.selectConfig(config.id)),
           onToggleEnabled: (config, enabled) {
-            provider.toggleConfigEnabled(config.id, enabled);
+            unawaited(
+              provider.toggleConfigEnabled(config.id, enabled),
+            );
           },
         ),
         const SizedBox(height: 16),

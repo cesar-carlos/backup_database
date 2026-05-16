@@ -1,3 +1,4 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -20,12 +21,6 @@ class DestinationGrid extends StatelessWidget {
   final void Function(BackupDestination destination, bool enabled)
   onToggleEnabled;
 
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppCard(
@@ -33,7 +28,7 @@ class DestinationGrid extends StatelessWidget {
         minWidth: 900,
         columns: [
           AppDataGridColumn<BackupDestination>(
-            label: _t(context, 'Destino', 'Destination'),
+            label: appLocaleString(context, 'Destino', 'Destination'),
             width: const FlexColumnWidth(2),
             cellBuilder: (context, row) => Row(
               children: [
@@ -54,7 +49,7 @@ class DestinationGrid extends StatelessWidget {
             ),
           ),
           AppDataGridColumn<BackupDestination>(
-            label: _t(context, 'Tipo', 'Type'),
+            label: appLocaleString(context, 'Tipo', 'Type'),
             width: const FlexColumnWidth(0.95),
             cellBuilder: (context, row) => _TypeChip(
               label: _getTypeName(context, row.type),
@@ -62,7 +57,7 @@ class DestinationGrid extends StatelessWidget {
             ),
           ),
           AppDataGridColumn<BackupDestination>(
-            label: _t(context, 'Configuração', 'Configuration'),
+            label: appLocaleString(context, 'Configuração', 'Configuration'),
             width: const FlexColumnWidth(3),
             cellBuilder: (context, row) => Tooltip(
               message: _getConfigSummary(context, row),
@@ -74,7 +69,7 @@ class DestinationGrid extends StatelessWidget {
             ),
           ),
           AppDataGridColumn<BackupDestination>(
-            label: _t(context, 'Status', 'Status'),
+            label: appLocaleString(context, 'Status', 'Status'),
             width: const FlexColumnWidth(1.2),
             cellBuilder: (context, row) => Row(
               mainAxisSize: MainAxisSize.min,
@@ -86,8 +81,8 @@ class DestinationGrid extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   row.enabled
-                      ? _t(context, 'Ativo', 'Active')
-                      : _t(context, 'Inativo', 'Inactive'),
+                      ? appLocaleString(context, 'Ativo', 'Active')
+                      : appLocaleString(context, 'Inativo', 'Inactive'),
                 ),
               ],
             ),
@@ -96,18 +91,18 @@ class DestinationGrid extends StatelessWidget {
         actions: [
           AppDataGridAction<BackupDestination>(
             icon: FluentIcons.edit,
-            tooltip: _t(context, 'Editar', 'Edit'),
+            tooltip: appLocaleString(context, 'Editar', 'Edit'),
             onPressed: onEdit,
           ),
           AppDataGridAction<BackupDestination>(
             icon: FluentIcons.copy,
-            tooltip: _t(context, 'Duplicar', 'Duplicate'),
+            tooltip: appLocaleString(context, 'Duplicar', 'Duplicate'),
             onPressed: onDuplicate,
           ),
           AppDataGridAction<BackupDestination>(
             icon: FluentIcons.delete,
             iconColor: AppColors.error,
-            tooltip: _t(context, 'Excluir', 'Delete'),
+            tooltip: appLocaleString(context, 'Excluir', 'Delete'),
             onPressed: (row) => onDelete(row.id),
           ),
         ],
@@ -149,7 +144,7 @@ class DestinationGrid extends StatelessWidget {
   String _getTypeName(BuildContext context, DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return _t(context, 'Local', 'Local');
+        return appLocaleString(context, 'Local', 'Local');
       case DestinationType.ftp:
         return 'FTP';
       case DestinationType.googleDrive:
@@ -189,7 +184,7 @@ class DestinationGrid extends StatelessWidget {
                 r'"folderName"\s*:\s*"([^"]*)"',
               ).firstMatch(config)?.group(1) ??
               '';
-          return '${_t(context, 'Pasta', 'Folder')}: $folderName';
+          return '${appLocaleString(context, 'Pasta', 'Folder')}: $folderName';
         case DestinationType.dropbox:
           final folderPath =
               RegExp(
@@ -202,9 +197,9 @@ class DestinationGrid extends StatelessWidget {
               ).firstMatch(config)?.group(1) ??
               '';
           if (folderPath.isEmpty) {
-            return '${_t(context, 'Pasta', 'Folder')}: /$folderName';
+            return '${appLocaleString(context, 'Pasta', 'Folder')}: /$folderName';
           }
-          return '${_t(context, 'Pasta', 'Folder')}: $folderPath/$folderName';
+          return '${appLocaleString(context, 'Pasta', 'Folder')}: $folderPath/$folderName';
         case DestinationType.nextcloud:
           final serverUrl =
               RegExp(

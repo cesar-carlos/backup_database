@@ -38,10 +38,10 @@ Future<void> compressFileInIsolate(Map<String, String> params) async {
 
   try {
     encoder.create(outputFilePath);
-    encoder.addFile(inputFile);
+    await encoder.addFile(inputFile);
 
     try {
-      encoder.close();
+      await encoder.close();
     } on FileSystemException {
       try {
         final partialZip = File(outputFilePath);
@@ -60,7 +60,7 @@ Future<void> compressFileInIsolate(Map<String, String> params) async {
     }
   } on Object catch (e) {
     try {
-      encoder.close();
+      await encoder.close();
     } on Object catch (closeErr, s) {
       LoggerService.warning('Erro ao fechar encoder em fallback', closeErr, s);
     }
@@ -207,15 +207,15 @@ class CompressionService implements ICompressionService {
             final fileSize = await entity.length();
             originalSize += fileSize;
             final relativePath = p.relative(entity.path, from: directoryPath);
-            encoder.addFile(entity, relativePath);
+            await encoder.addFile(entity, relativePath);
             LoggerService.debug('Adicionado ao ZIP: $relativePath');
           }
         }
 
-        encoder.close();
+        await encoder.close();
       } on Object catch (e) {
         try {
-          encoder.close();
+          await encoder.close();
         } on Object catch (closeErr, s) {
           LoggerService.warning(
             'Erro ao fechar encoder em fallback',
@@ -434,7 +434,9 @@ class CompressionService implements ICompressionService {
 
       try {
         LoggerService.info('Criando arquivo ZIP: $outputFilePath');
-        LoggerService.info('Arquivo original: ${ByteFormat.format(originalSize)}');
+        LoggerService.info(
+          'Arquivo original: ${ByteFormat.format(originalSize)}',
+        );
         LoggerService.info(
           'Comprimindo arquivo em background (isso pode levar alguns minutos para arquivos grandes)...',
         );

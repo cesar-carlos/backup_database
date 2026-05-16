@@ -80,6 +80,59 @@ void main() {
       expect(result, isNot(contains('pgSecret')));
     });
 
+    test('redactCommandForLogging redige -password <valor> (Firebird gbak)', () {
+      final result = ProcessService.redactCommandForLogging(
+        'gbak',
+        [
+          '-b',
+          '-user',
+          'SYSDBA',
+          '-password',
+          'masterkey',
+          r'C:\data\db.fdb',
+          r'C:\backup\db.fbk',
+        ],
+      );
+
+      expect(result, contains('***REDACTED***'));
+      expect(result, isNot(contains('masterkey')));
+      expect(result, contains('-password'));
+    });
+
+    test('redactCommandForLogging redige -pas <valor> (Firebird)', () {
+      final result = ProcessService.redactCommandForLogging(
+        'isql',
+        ['-pas', 'fbSecret', '-q', 'quit'],
+      );
+
+      expect(result, contains('***REDACTED***'));
+      expect(result, isNot(contains('fbSecret')));
+    });
+
+    test('redactCommandForLogging redige -PASSWORD case insensitive', () {
+      final result = ProcessService.redactCommandForLogging(
+        'gbak',
+        ['-PASSWORD', 'CaseTest', '-b', 'x.fdb', 'y.fbk'],
+      );
+
+      expect(result, contains('***REDACTED***'));
+      expect(result, isNot(contains('CaseTest')));
+    });
+
+    test('redactEnvForLogging redige FIREBIRD_PASSWORD e ISC_PASSWORD', () {
+      final env = {
+        'FIREBIRD_PASSWORD': 'fbEnv',
+        'ISC_PASSWORD': 'iscEnv',
+        'PATH': r'C:\bin',
+      };
+      final result = ProcessService.redactEnvForLogging(env);
+
+      expect(result, contains('FIREBIRD_PASSWORD=***REDACTED***'));
+      expect(result, contains('ISC_PASSWORD=***REDACTED***'));
+      expect(result, isNot(contains('fbEnv')));
+      expect(result, isNot(contains('iscEnv')));
+    });
+
     test('redactEnvForLogging retorna vazio para env null ou vazio', () {
       expect(ProcessService.redactEnvForLogging(null), isEmpty);
       expect(ProcessService.redactEnvForLogging({}), isEmpty);

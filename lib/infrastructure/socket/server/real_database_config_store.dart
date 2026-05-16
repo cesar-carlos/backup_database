@@ -1,4 +1,5 @@
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
@@ -8,8 +9,8 @@ import 'package:backup_database/infrastructure/socket/server/database_config_ser
 import 'package:backup_database/infrastructure/socket/server/database_config_store.dart';
 
 /// Implementacao concreta de [DatabaseConfigStore] que despacha por
-/// `databaseType` para os 3 repositories existentes (Sybase, SqlServer,
-/// Postgres). Reusa `DatabaseConfigSerializers` para Map<->Entity.
+/// `databaseType` para os repositorios de config (Sybase, SqlServer,
+/// Postgres, Firebird). Reusa `DatabaseConfigSerializers` para Map<->Entity.
 ///
 /// Comportamento de erro:
 /// - `Result.isError()` -> outcome.failure com errorCode classificado
@@ -25,11 +26,13 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
     required this.sybaseRepository,
     required this.sqlServerRepository,
     required this.postgresRepository,
+    required this.firebirdRepository,
   });
 
   final ISybaseConfigRepository sybaseRepository;
   final ISqlServerConfigRepository sqlServerRepository;
   final IPostgresConfigRepository postgresRepository;
+  final IFirebirdConfigRepository firebirdRepository;
 
   @override
   Future<DatabaseConfigOutcome> list(RemoteDatabaseType type) async {
@@ -66,6 +69,17 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
           return DatabaseConfigOutcome.success(
             configs: cfgs
                 .map(DatabaseConfigSerializers.postgresToMap)
+                .toList(growable: false),
+          );
+        case RemoteDatabaseType.firebird:
+          final r = await firebirdRepository.getAll();
+          if (r.isError()) {
+            return _failureFromException(r.exceptionOrNull());
+          }
+          final cfgs = r.getOrNull() ?? const [];
+          return DatabaseConfigOutcome.success(
+            configs: cfgs
+                .map(DatabaseConfigSerializers.firebirdToMap)
                 .toList(growable: false),
           );
       }
@@ -131,10 +145,23 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
           return DatabaseConfigOutcome.success(
             config: DatabaseConfigSerializers.postgresToMap(created),
           );
+        case RemoteDatabaseType.firebird:
+          final cfg = DatabaseConfigSerializers.firebirdFromMap(config);
+          final r = await firebirdRepository.create(cfg);
+          if (r.isError()) return _failureFromException(r.exceptionOrNull());
+          final created = r.getOrNull();
+          if (created == null) {
+            return DatabaseConfigOutcome.failure(
+              error: 'Repository retornou null sem erro',
+              errorCode: ErrorCode.unknown,
+            );
+          }
+          return DatabaseConfigOutcome.success(
+            config: DatabaseConfigSerializers.firebirdToMap(created),
+          );
       }
-    }
-    // ignore: avoid_catching_errors -- ArgumentError do serializer (payload remoto).
-    on ArgumentError catch (e) {
+      // ignore: avoid_catching_errors -- ArgumentError do serializer (payload remoto).
+    } on ArgumentError catch (e) {
       return DatabaseConfigOutcome.failure(
         error: 'Payload de config invalido: $e',
         errorCode: ErrorCode.invalidRequest,
@@ -201,10 +228,23 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
           return DatabaseConfigOutcome.success(
             config: DatabaseConfigSerializers.postgresToMap(updated),
           );
+        case RemoteDatabaseType.firebird:
+          final cfg = DatabaseConfigSerializers.firebirdFromMap(config);
+          final r = await firebirdRepository.update(cfg);
+          if (r.isError()) return _failureFromException(r.exceptionOrNull());
+          final updated = r.getOrNull();
+          if (updated == null) {
+            return DatabaseConfigOutcome.failure(
+              error: 'Repository retornou null sem erro',
+              errorCode: ErrorCode.unknown,
+            );
+          }
+          return DatabaseConfigOutcome.success(
+            config: DatabaseConfigSerializers.firebirdToMap(updated),
+          );
       }
-    }
-    // ignore: avoid_catching_errors -- ArgumentError do serializer (payload remoto).
-    on ArgumentError catch (e) {
+      // ignore: avoid_catching_errors -- ArgumentError do serializer (payload remoto).
+    } on ArgumentError catch (e) {
       return DatabaseConfigOutcome.failure(
         error: 'Payload de config invalido: $e',
         errorCode: ErrorCode.invalidRequest,
@@ -241,6 +281,10 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
           final r = await postgresRepository.delete(configId);
           if (r.isError()) return _failureFromException(r.exceptionOrNull());
           return DatabaseConfigOutcome.success();
+        case RemoteDatabaseType.firebird:
+          final r = await firebirdRepository.delete(configId);
+          if (r.isError()) return _failureFromException(r.exceptionOrNull());
+          return DatabaseConfigOutcome.success();
       }
     } on Object catch (e, st) {
       LoggerService.warning(
@@ -267,7 +311,8 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
     }
     final msg = exception.toString();
     final lower = msg.toLowerCase();
-    final notFound = lower.contains('not found') ||
+    final notFound =
+        lower.contains('not found') ||
         lower.contains('nao encontrad') ||
         lower.contains('inexistente');
     return DatabaseConfigOutcome.failure(

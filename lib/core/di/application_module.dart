@@ -53,6 +53,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       sqlServerBackupService: getIt<ISqlServerBackupService>(),
       sybaseBackupService: getIt<ISybaseBackupService>(),
       postgresBackupService: getIt<IPostgresBackupService>(),
+      firebirdBackupService: getIt<IFirebirdBackupService>(),
       compressionOrchestrator: getIt<IBackupCompressionOrchestrator>(),
       scriptOrchestrator: getIt<IBackupScriptOrchestrator>(),
       sqlScriptExecutionService: getIt<ISqlScriptExecutionService>(),

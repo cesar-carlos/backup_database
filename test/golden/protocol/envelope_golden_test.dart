@@ -635,11 +635,30 @@ void main() {
           supportsArtifactRetention: true,
           supportsChunkAck: false,
           supportsExecutionQueue: true,
+          supportsFirebird: false,
           chunkSize: 65536,
           compression: 'gzip',
           serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
         );
         _assertGolden(msg, 'capabilities_response_v1');
+      });
+
+      test('capabilitiesResponse com supportsFirebird true', () {
+        final msg = createCapabilitiesResponseMessage(
+          requestId: 1,
+          protocolVersion: 1,
+          wireVersion: 1,
+          supportsRunId: true,
+          supportsResume: true,
+          supportsArtifactRetention: true,
+          supportsChunkAck: false,
+          supportsExecutionQueue: true,
+          supportsFirebird: true,
+          chunkSize: 65536,
+          compression: 'gzip',
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+        );
+        _assertGolden(msg, 'capabilities_response_with_firebird');
       });
     });
   });

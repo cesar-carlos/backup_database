@@ -181,5 +181,4 @@ class StorageChecker implements IStorageChecker {
     LoggerService.debug('Converted $numValue $unit to $bytes bytes');
     return bytes;
   }
-
 }

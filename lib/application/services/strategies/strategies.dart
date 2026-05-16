@@ -1,4 +1,14 @@
+export 'backup_pipeline_context.dart';
+export 'backup_result_enricher.dart';
+export 'backup_validation_rule.dart';
+export 'firebird_backup_strategy.dart';
+export 'firebird_backup_strategy_factory.dart';
+export 'firebird_backup_strategy_stub.dart';
+export 'generic_database_backup_strategy.dart';
 export 'i_database_backup_strategy.dart';
 export 'postgres_backup_strategy.dart';
+export 'postgres_backup_strategy_factory.dart';
 export 'sql_server_backup_strategy.dart';
+export 'sql_server_backup_strategy_factory.dart';
 export 'sybase_backup_strategy.dart';
+export 'sybase_backup_strategy_factory.dart';

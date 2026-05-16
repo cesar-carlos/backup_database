@@ -1,3 +1,4 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/domain/entities/server_credential.dart';
 import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -15,12 +16,6 @@ class ServerCredentialListItem extends StatelessWidget {
   final VoidCallback? onDelete;
   final ValueChanged<bool>? onToggleActive;
 
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   Widget build(BuildContext context) {
     return ConfigListItem(
@@ -35,7 +30,7 @@ class ServerCredentialListItem extends StatelessWidget {
         children: [
           const SizedBox(height: 4),
           Text(
-            '${_t(context, 'ID do servidor', 'Server ID')}: ${credential.serverId}',
+            '${appLocaleString(context, 'ID do servidor', 'Server ID')}: ${credential.serverId}',
             style: FluentTheme.of(context).typography.body,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

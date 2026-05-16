@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
@@ -9,7 +11,7 @@ import 'package:backup_database/application/providers/sql_server_config_provider
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:backup_database/presentation/providers/theme_provider.dart';
 import 'package:backup_database/presentation/widgets/navigation/navigation_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -155,26 +157,30 @@ class _MainLayoutState extends State<MainLayout> {
 
     switch (location) {
       case RouteNames.dashboard:
-        context.read<DashboardProvider>().refresh();
+        unawaited(context.read<DashboardProvider>().refresh());
       case RouteNames.sqlServerConfig:
       case RouteNames.sybaseConfig:
-        context.read<SqlServerConfigProvider>().loadConfigs();
+        unawaited(context.read<SqlServerConfigProvider>().loadConfigs());
       case RouteNames.destinations:
-        context.read<DestinationProvider>().loadDestinations();
+        unawaited(context.read<DestinationProvider>().loadDestinations());
       case RouteNames.schedules:
-        context.read<SchedulerProvider>().loadSchedules();
+        unawaited(context.read<SchedulerProvider>().loadSchedules());
       case RouteNames.logs:
-        context.read<LogProvider>().refresh();
+        unawaited(context.read<LogProvider>().refresh());
       case RouteNames.notifications:
       case RouteNames.settings:
         break;
       case RouteNames.serverSettings:
-        context.read<ServerCredentialProvider>().loadCredentials();
+        unawaited(
+          context.read<ServerCredentialProvider>().loadCredentials(),
+        );
       case RouteNames.serverLogin:
-        context.read<ServerConnectionProvider>().loadConnections();
+        unawaited(context.read<ServerConnectionProvider>().loadConnections());
       case RouteNames.remoteSchedules:
         if (context.read<ServerConnectionProvider>().isConnected) {
-          context.read<RemoteSchedulesProvider>().loadSchedules();
+          unawaited(
+            context.read<RemoteSchedulesProvider>().loadSchedules(),
+          );
         }
       case RouteNames.connectionLogs:
         // loadLogs() é chamado no initState do widget
@@ -221,7 +227,7 @@ class _MainLayoutState extends State<MainLayout> {
               leading: Icon(
                 item.icon,
                 color: isSelected
-                    ? AppColors.primary
+                    ? AppPalette.primary
                     : FluentTheme.of(context).resources.textFillColorSecondary,
               ),
               title: Text(item.label),

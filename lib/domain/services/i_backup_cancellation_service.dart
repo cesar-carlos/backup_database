@@ -15,13 +15,11 @@ abstract class IBackupCancellationService {
 
   /// Conveniência: cancela um backup pelo identificador do schedule.
   /// Cobre o caso comum em que a UI conhece apenas o `scheduleId`.
-  void cancelBySchedule(String scheduleId) =>
-      cancelByTag('backup-$scheduleId');
+  void cancelBySchedule(String scheduleId) => cancelByTag('backup-$scheduleId');
 
   /// Conveniência: cancela pelo `BackupHistory.id` quando a UI conhece o
   /// histórico em curso.
-  void cancelByHistoryId(String historyId) =>
-      cancelByTag('backup-$historyId');
+  void cancelByHistoryId(String historyId) => cancelByTag('backup-$historyId');
 
   /// Cancela TODOS os processos de backup em execução. Usado durante o
   /// shutdown da aplicação para evitar processos zumbis (`pg_basebackup`,

@@ -32,15 +32,13 @@ class PayloadLimits {
     MessageType.heartbeat: 1 * 1024, // 1 KB
     MessageType.disconnect: 1 * 1024,
     MessageType.error: 64 * 1024, // 64 KB (pode ter detalhes)
-
     // ---- Capabilities (M1.3 / M4.1) ----
     MessageType.capabilitiesRequest: 1 * 1024,
     MessageType.capabilitiesResponse: 16 * 1024, // 16 KB
-
     // ---- Health (M1.10 / PR-1) ----
     MessageType.healthRequest: 1 * 1024,
-    MessageType.healthResponse: 16 * 1024, // suporta lista de checks com mensagens
-
+    MessageType.healthResponse:
+        16 * 1024, // suporta lista de checks com mensagens
     // ---- Session (M1.10 / PR-1) ----
     MessageType.sessionRequest: 1 * 1024,
     MessageType.sessionResponse: 8 * 1024,
@@ -91,7 +89,6 @@ class PayloadLimits {
     MessageType.fileTransferComplete: 4 * 1024,
     MessageType.fileTransferError: 16 * 1024,
     MessageType.fileAck: 4 * 1024, // reservado v1; ver ADR-002
-
     // ---- Metricas ----
     MessageType.metricsRequest: 1 * 1024,
     MessageType.metricsResponse: 256 * 1024,

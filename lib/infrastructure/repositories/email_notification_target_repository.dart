@@ -132,5 +132,4 @@ class EmailNotificationTargetRepository
       updatedAt: Value(target.updatedAt),
     );
   }
-
 }

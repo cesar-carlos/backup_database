@@ -469,7 +469,6 @@ class FtpDestinationService implements IFtpService {
     return true;
   }
 
-
   Future<String?> _computeSha256Streaming(File file) async {
     try {
       final digest = await sha256.bind(file.openRead()).first;

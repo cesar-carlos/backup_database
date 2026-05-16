@@ -16,6 +16,10 @@ void main() {
         RemoteDatabaseType.fromWire('postgres'),
         RemoteDatabaseType.postgres,
       );
+      expect(
+        RemoteDatabaseType.fromWire('firebird'),
+        RemoteDatabaseType.firebird,
+      );
     });
 
     test('fromWire retorna null para desconhecido/null/vazio', () {

@@ -2003,6 +2003,933 @@ class PostgresConfigsTableCompanion
   }
 }
 
+class $FirebirdConfigsTableTable extends FirebirdConfigsTable
+    with TableInfo<$FirebirdConfigsTableTable, FirebirdConfigsTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FirebirdConfigsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hostMeta = const VerificationMeta('host');
+  @override
+  late final GeneratedColumn<String> host = GeneratedColumn<String>(
+    'host',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _portMeta = const VerificationMeta('port');
+  @override
+  late final GeneratedColumn<int> port = GeneratedColumn<int>(
+    'port',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(3050),
+  );
+  static const VerificationMeta _databaseFileMeta = const VerificationMeta(
+    'databaseFile',
+  );
+  @override
+  late final GeneratedColumn<String> databaseFile = GeneratedColumn<String>(
+    'database_file',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _aliasNameMeta = const VerificationMeta(
+    'aliasName',
+  );
+  @override
+  late final GeneratedColumn<String> aliasName = GeneratedColumn<String>(
+    'alias_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _useEmbeddedMeta = const VerificationMeta(
+    'useEmbedded',
+  );
+  @override
+  late final GeneratedColumn<bool> useEmbedded = GeneratedColumn<bool>(
+    'use_embedded',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("use_embedded" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _clientLibraryPathMeta = const VerificationMeta(
+    'clientLibraryPath',
+  );
+  @override
+  late final GeneratedColumn<String> clientLibraryPath =
+      GeneratedColumn<String>(
+        'client_library_path',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _serverVersionHintMeta = const VerificationMeta(
+    'serverVersionHint',
+  );
+  @override
+  late final GeneratedColumn<String> serverVersionHint =
+      GeneratedColumn<String>(
+        'server_version_hint',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('auto'),
+      );
+  static const VerificationMeta _serviceManagerModeMeta =
+      const VerificationMeta('serviceManagerMode');
+  @override
+  late final GeneratedColumn<String> serviceManagerMode =
+      GeneratedColumn<String>(
+        'service_manager_mode',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('auto'),
+      );
+  static const VerificationMeta _usernameMeta = const VerificationMeta(
+    'username',
+  );
+  @override
+  late final GeneratedColumn<String> username = GeneratedColumn<String>(
+    'username',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _passwordMeta = const VerificationMeta(
+    'password',
+  );
+  @override
+  late final GeneratedColumn<String> password = GeneratedColumn<String>(
+    'password',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cryptKeyMeta = const VerificationMeta(
+    'cryptKey',
+  );
+  @override
+  late final GeneratedColumn<String> cryptKey = GeneratedColumn<String>(
+    'crypt_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    host,
+    port,
+    databaseFile,
+    aliasName,
+    useEmbedded,
+    clientLibraryPath,
+    serverVersionHint,
+    serviceManagerMode,
+    username,
+    password,
+    cryptKey,
+    enabled,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'firebird_configs_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FirebirdConfigsTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('host')) {
+      context.handle(
+        _hostMeta,
+        host.isAcceptableOrUnknown(data['host']!, _hostMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hostMeta);
+    }
+    if (data.containsKey('port')) {
+      context.handle(
+        _portMeta,
+        port.isAcceptableOrUnknown(data['port']!, _portMeta),
+      );
+    }
+    if (data.containsKey('database_file')) {
+      context.handle(
+        _databaseFileMeta,
+        databaseFile.isAcceptableOrUnknown(
+          data['database_file']!,
+          _databaseFileMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_databaseFileMeta);
+    }
+    if (data.containsKey('alias_name')) {
+      context.handle(
+        _aliasNameMeta,
+        aliasName.isAcceptableOrUnknown(data['alias_name']!, _aliasNameMeta),
+      );
+    }
+    if (data.containsKey('use_embedded')) {
+      context.handle(
+        _useEmbeddedMeta,
+        useEmbedded.isAcceptableOrUnknown(
+          data['use_embedded']!,
+          _useEmbeddedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('client_library_path')) {
+      context.handle(
+        _clientLibraryPathMeta,
+        clientLibraryPath.isAcceptableOrUnknown(
+          data['client_library_path']!,
+          _clientLibraryPathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('server_version_hint')) {
+      context.handle(
+        _serverVersionHintMeta,
+        serverVersionHint.isAcceptableOrUnknown(
+          data['server_version_hint']!,
+          _serverVersionHintMeta,
+        ),
+      );
+    }
+    if (data.containsKey('service_manager_mode')) {
+      context.handle(
+        _serviceManagerModeMeta,
+        serviceManagerMode.isAcceptableOrUnknown(
+          data['service_manager_mode']!,
+          _serviceManagerModeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('username')) {
+      context.handle(
+        _usernameMeta,
+        username.isAcceptableOrUnknown(data['username']!, _usernameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_usernameMeta);
+    }
+    if (data.containsKey('password')) {
+      context.handle(
+        _passwordMeta,
+        password.isAcceptableOrUnknown(data['password']!, _passwordMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_passwordMeta);
+    }
+    if (data.containsKey('crypt_key')) {
+      context.handle(
+        _cryptKeyMeta,
+        cryptKey.isAcceptableOrUnknown(data['crypt_key']!, _cryptKeyMeta),
+      );
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FirebirdConfigsTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FirebirdConfigsTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      host: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}host'],
+      )!,
+      port: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}port'],
+      )!,
+      databaseFile: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}database_file'],
+      )!,
+      aliasName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}alias_name'],
+      ),
+      useEmbedded: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}use_embedded'],
+      )!,
+      clientLibraryPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_library_path'],
+      ),
+      serverVersionHint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}server_version_hint'],
+      )!,
+      serviceManagerMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}service_manager_mode'],
+      )!,
+      username: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}username'],
+      )!,
+      password: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}password'],
+      )!,
+      cryptKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}crypt_key'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FirebirdConfigsTableTable createAlias(String alias) {
+    return $FirebirdConfigsTableTable(attachedDatabase, alias);
+  }
+}
+
+class FirebirdConfigsTableData extends DataClass
+    implements Insertable<FirebirdConfigsTableData> {
+  final String id;
+  final String name;
+  final String host;
+  final int port;
+  final String databaseFile;
+  final String? aliasName;
+  final bool useEmbedded;
+  final String? clientLibraryPath;
+  final String serverVersionHint;
+  final String serviceManagerMode;
+  final String username;
+  final String password;
+  final String cryptKey;
+  final bool enabled;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const FirebirdConfigsTableData({
+    required this.id,
+    required this.name,
+    required this.host,
+    required this.port,
+    required this.databaseFile,
+    this.aliasName,
+    required this.useEmbedded,
+    this.clientLibraryPath,
+    required this.serverVersionHint,
+    required this.serviceManagerMode,
+    required this.username,
+    required this.password,
+    required this.cryptKey,
+    required this.enabled,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['host'] = Variable<String>(host);
+    map['port'] = Variable<int>(port);
+    map['database_file'] = Variable<String>(databaseFile);
+    if (!nullToAbsent || aliasName != null) {
+      map['alias_name'] = Variable<String>(aliasName);
+    }
+    map['use_embedded'] = Variable<bool>(useEmbedded);
+    if (!nullToAbsent || clientLibraryPath != null) {
+      map['client_library_path'] = Variable<String>(clientLibraryPath);
+    }
+    map['server_version_hint'] = Variable<String>(serverVersionHint);
+    map['service_manager_mode'] = Variable<String>(serviceManagerMode);
+    map['username'] = Variable<String>(username);
+    map['password'] = Variable<String>(password);
+    map['crypt_key'] = Variable<String>(cryptKey);
+    map['enabled'] = Variable<bool>(enabled);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  FirebirdConfigsTableCompanion toCompanion(bool nullToAbsent) {
+    return FirebirdConfigsTableCompanion(
+      id: Value(id),
+      name: Value(name),
+      host: Value(host),
+      port: Value(port),
+      databaseFile: Value(databaseFile),
+      aliasName: aliasName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(aliasName),
+      useEmbedded: Value(useEmbedded),
+      clientLibraryPath: clientLibraryPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientLibraryPath),
+      serverVersionHint: Value(serverVersionHint),
+      serviceManagerMode: Value(serviceManagerMode),
+      username: Value(username),
+      password: Value(password),
+      cryptKey: Value(cryptKey),
+      enabled: Value(enabled),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory FirebirdConfigsTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FirebirdConfigsTableData(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      host: serializer.fromJson<String>(json['host']),
+      port: serializer.fromJson<int>(json['port']),
+      databaseFile: serializer.fromJson<String>(json['databaseFile']),
+      aliasName: serializer.fromJson<String?>(json['aliasName']),
+      useEmbedded: serializer.fromJson<bool>(json['useEmbedded']),
+      clientLibraryPath: serializer.fromJson<String?>(
+        json['clientLibraryPath'],
+      ),
+      serverVersionHint: serializer.fromJson<String>(json['serverVersionHint']),
+      serviceManagerMode: serializer.fromJson<String>(
+        json['serviceManagerMode'],
+      ),
+      username: serializer.fromJson<String>(json['username']),
+      password: serializer.fromJson<String>(json['password']),
+      cryptKey: serializer.fromJson<String>(json['cryptKey']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'host': serializer.toJson<String>(host),
+      'port': serializer.toJson<int>(port),
+      'databaseFile': serializer.toJson<String>(databaseFile),
+      'aliasName': serializer.toJson<String?>(aliasName),
+      'useEmbedded': serializer.toJson<bool>(useEmbedded),
+      'clientLibraryPath': serializer.toJson<String?>(clientLibraryPath),
+      'serverVersionHint': serializer.toJson<String>(serverVersionHint),
+      'serviceManagerMode': serializer.toJson<String>(serviceManagerMode),
+      'username': serializer.toJson<String>(username),
+      'password': serializer.toJson<String>(password),
+      'cryptKey': serializer.toJson<String>(cryptKey),
+      'enabled': serializer.toJson<bool>(enabled),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  FirebirdConfigsTableData copyWith({
+    String? id,
+    String? name,
+    String? host,
+    int? port,
+    String? databaseFile,
+    Value<String?> aliasName = const Value.absent(),
+    bool? useEmbedded,
+    Value<String?> clientLibraryPath = const Value.absent(),
+    String? serverVersionHint,
+    String? serviceManagerMode,
+    String? username,
+    String? password,
+    String? cryptKey,
+    bool? enabled,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => FirebirdConfigsTableData(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    host: host ?? this.host,
+    port: port ?? this.port,
+    databaseFile: databaseFile ?? this.databaseFile,
+    aliasName: aliasName.present ? aliasName.value : this.aliasName,
+    useEmbedded: useEmbedded ?? this.useEmbedded,
+    clientLibraryPath: clientLibraryPath.present
+        ? clientLibraryPath.value
+        : this.clientLibraryPath,
+    serverVersionHint: serverVersionHint ?? this.serverVersionHint,
+    serviceManagerMode: serviceManagerMode ?? this.serviceManagerMode,
+    username: username ?? this.username,
+    password: password ?? this.password,
+    cryptKey: cryptKey ?? this.cryptKey,
+    enabled: enabled ?? this.enabled,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  FirebirdConfigsTableData copyWithCompanion(
+    FirebirdConfigsTableCompanion data,
+  ) {
+    return FirebirdConfigsTableData(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      host: data.host.present ? data.host.value : this.host,
+      port: data.port.present ? data.port.value : this.port,
+      databaseFile: data.databaseFile.present
+          ? data.databaseFile.value
+          : this.databaseFile,
+      aliasName: data.aliasName.present ? data.aliasName.value : this.aliasName,
+      useEmbedded: data.useEmbedded.present
+          ? data.useEmbedded.value
+          : this.useEmbedded,
+      clientLibraryPath: data.clientLibraryPath.present
+          ? data.clientLibraryPath.value
+          : this.clientLibraryPath,
+      serverVersionHint: data.serverVersionHint.present
+          ? data.serverVersionHint.value
+          : this.serverVersionHint,
+      serviceManagerMode: data.serviceManagerMode.present
+          ? data.serviceManagerMode.value
+          : this.serviceManagerMode,
+      username: data.username.present ? data.username.value : this.username,
+      password: data.password.present ? data.password.value : this.password,
+      cryptKey: data.cryptKey.present ? data.cryptKey.value : this.cryptKey,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FirebirdConfigsTableData(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('host: $host, ')
+          ..write('port: $port, ')
+          ..write('databaseFile: $databaseFile, ')
+          ..write('aliasName: $aliasName, ')
+          ..write('useEmbedded: $useEmbedded, ')
+          ..write('clientLibraryPath: $clientLibraryPath, ')
+          ..write('serverVersionHint: $serverVersionHint, ')
+          ..write('serviceManagerMode: $serviceManagerMode, ')
+          ..write('username: $username, ')
+          ..write('password: $password, ')
+          ..write('cryptKey: $cryptKey, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    host,
+    port,
+    databaseFile,
+    aliasName,
+    useEmbedded,
+    clientLibraryPath,
+    serverVersionHint,
+    serviceManagerMode,
+    username,
+    password,
+    cryptKey,
+    enabled,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FirebirdConfigsTableData &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.host == this.host &&
+          other.port == this.port &&
+          other.databaseFile == this.databaseFile &&
+          other.aliasName == this.aliasName &&
+          other.useEmbedded == this.useEmbedded &&
+          other.clientLibraryPath == this.clientLibraryPath &&
+          other.serverVersionHint == this.serverVersionHint &&
+          other.serviceManagerMode == this.serviceManagerMode &&
+          other.username == this.username &&
+          other.password == this.password &&
+          other.cryptKey == this.cryptKey &&
+          other.enabled == this.enabled &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class FirebirdConfigsTableCompanion
+    extends UpdateCompanion<FirebirdConfigsTableData> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> host;
+  final Value<int> port;
+  final Value<String> databaseFile;
+  final Value<String?> aliasName;
+  final Value<bool> useEmbedded;
+  final Value<String?> clientLibraryPath;
+  final Value<String> serverVersionHint;
+  final Value<String> serviceManagerMode;
+  final Value<String> username;
+  final Value<String> password;
+  final Value<String> cryptKey;
+  final Value<bool> enabled;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const FirebirdConfigsTableCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.host = const Value.absent(),
+    this.port = const Value.absent(),
+    this.databaseFile = const Value.absent(),
+    this.aliasName = const Value.absent(),
+    this.useEmbedded = const Value.absent(),
+    this.clientLibraryPath = const Value.absent(),
+    this.serverVersionHint = const Value.absent(),
+    this.serviceManagerMode = const Value.absent(),
+    this.username = const Value.absent(),
+    this.password = const Value.absent(),
+    this.cryptKey = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FirebirdConfigsTableCompanion.insert({
+    required String id,
+    required String name,
+    required String host,
+    this.port = const Value.absent(),
+    required String databaseFile,
+    this.aliasName = const Value.absent(),
+    this.useEmbedded = const Value.absent(),
+    this.clientLibraryPath = const Value.absent(),
+    this.serverVersionHint = const Value.absent(),
+    this.serviceManagerMode = const Value.absent(),
+    required String username,
+    required String password,
+    this.cryptKey = const Value.absent(),
+    this.enabled = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       host = Value(host),
+       databaseFile = Value(databaseFile),
+       username = Value(username),
+       password = Value(password),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<FirebirdConfigsTableData> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? host,
+    Expression<int>? port,
+    Expression<String>? databaseFile,
+    Expression<String>? aliasName,
+    Expression<bool>? useEmbedded,
+    Expression<String>? clientLibraryPath,
+    Expression<String>? serverVersionHint,
+    Expression<String>? serviceManagerMode,
+    Expression<String>? username,
+    Expression<String>? password,
+    Expression<String>? cryptKey,
+    Expression<bool>? enabled,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (host != null) 'host': host,
+      if (port != null) 'port': port,
+      if (databaseFile != null) 'database_file': databaseFile,
+      if (aliasName != null) 'alias_name': aliasName,
+      if (useEmbedded != null) 'use_embedded': useEmbedded,
+      if (clientLibraryPath != null) 'client_library_path': clientLibraryPath,
+      if (serverVersionHint != null) 'server_version_hint': serverVersionHint,
+      if (serviceManagerMode != null)
+        'service_manager_mode': serviceManagerMode,
+      if (username != null) 'username': username,
+      if (password != null) 'password': password,
+      if (cryptKey != null) 'crypt_key': cryptKey,
+      if (enabled != null) 'enabled': enabled,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FirebirdConfigsTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? host,
+    Value<int>? port,
+    Value<String>? databaseFile,
+    Value<String?>? aliasName,
+    Value<bool>? useEmbedded,
+    Value<String?>? clientLibraryPath,
+    Value<String>? serverVersionHint,
+    Value<String>? serviceManagerMode,
+    Value<String>? username,
+    Value<String>? password,
+    Value<String>? cryptKey,
+    Value<bool>? enabled,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return FirebirdConfigsTableCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      host: host ?? this.host,
+      port: port ?? this.port,
+      databaseFile: databaseFile ?? this.databaseFile,
+      aliasName: aliasName ?? this.aliasName,
+      useEmbedded: useEmbedded ?? this.useEmbedded,
+      clientLibraryPath: clientLibraryPath ?? this.clientLibraryPath,
+      serverVersionHint: serverVersionHint ?? this.serverVersionHint,
+      serviceManagerMode: serviceManagerMode ?? this.serviceManagerMode,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      cryptKey: cryptKey ?? this.cryptKey,
+      enabled: enabled ?? this.enabled,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (host.present) {
+      map['host'] = Variable<String>(host.value);
+    }
+    if (port.present) {
+      map['port'] = Variable<int>(port.value);
+    }
+    if (databaseFile.present) {
+      map['database_file'] = Variable<String>(databaseFile.value);
+    }
+    if (aliasName.present) {
+      map['alias_name'] = Variable<String>(aliasName.value);
+    }
+    if (useEmbedded.present) {
+      map['use_embedded'] = Variable<bool>(useEmbedded.value);
+    }
+    if (clientLibraryPath.present) {
+      map['client_library_path'] = Variable<String>(clientLibraryPath.value);
+    }
+    if (serverVersionHint.present) {
+      map['server_version_hint'] = Variable<String>(serverVersionHint.value);
+    }
+    if (serviceManagerMode.present) {
+      map['service_manager_mode'] = Variable<String>(serviceManagerMode.value);
+    }
+    if (username.present) {
+      map['username'] = Variable<String>(username.value);
+    }
+    if (password.present) {
+      map['password'] = Variable<String>(password.value);
+    }
+    if (cryptKey.present) {
+      map['crypt_key'] = Variable<String>(cryptKey.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FirebirdConfigsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('host: $host, ')
+          ..write('port: $port, ')
+          ..write('databaseFile: $databaseFile, ')
+          ..write('aliasName: $aliasName, ')
+          ..write('useEmbedded: $useEmbedded, ')
+          ..write('clientLibraryPath: $clientLibraryPath, ')
+          ..write('serverVersionHint: $serverVersionHint, ')
+          ..write('serviceManagerMode: $serviceManagerMode, ')
+          ..write('username: $username, ')
+          ..write('password: $password, ')
+          ..write('cryptKey: $cryptKey, ')
+          ..write('enabled: $enabled, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $BackupDestinationsTableTable extends BackupDestinationsTable
     with TableInfo<$BackupDestinationsTableTable, BackupDestinationsTableData> {
   @override
@@ -11901,6 +12828,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $SybaseConfigsTableTable(this);
   late final $PostgresConfigsTableTable postgresConfigsTable =
       $PostgresConfigsTableTable(this);
+  late final $FirebirdConfigsTableTable firebirdConfigsTable =
+      $FirebirdConfigsTableTable(this);
   late final $BackupDestinationsTableTable backupDestinationsTable =
       $BackupDestinationsTableTable(this);
   late final $SchedulesTableTable schedulesTable = $SchedulesTableTable(this);
@@ -11937,6 +12866,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this as AppDatabase,
   );
   late final PostgresConfigDao postgresConfigDao = PostgresConfigDao(
+    this as AppDatabase,
+  );
+  late final FirebirdConfigDao firebirdConfigDao = FirebirdConfigDao(
     this as AppDatabase,
   );
   late final BackupDestinationDao backupDestinationDao = BackupDestinationDao(
@@ -11984,6 +12916,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     sqlServerConfigsTable,
     sybaseConfigsTable,
     postgresConfigsTable,
+    firebirdConfigsTable,
     backupDestinationsTable,
     schedulesTable,
     scheduleDestinationsTable,
@@ -13024,6 +13957,441 @@ typedef $$PostgresConfigsTableTableProcessedTableManager =
         >,
       ),
       PostgresConfigsTableData,
+      PrefetchHooks Function()
+    >;
+typedef $$FirebirdConfigsTableTableCreateCompanionBuilder =
+    FirebirdConfigsTableCompanion Function({
+      required String id,
+      required String name,
+      required String host,
+      Value<int> port,
+      required String databaseFile,
+      Value<String?> aliasName,
+      Value<bool> useEmbedded,
+      Value<String?> clientLibraryPath,
+      Value<String> serverVersionHint,
+      Value<String> serviceManagerMode,
+      required String username,
+      required String password,
+      Value<String> cryptKey,
+      Value<bool> enabled,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$FirebirdConfigsTableTableUpdateCompanionBuilder =
+    FirebirdConfigsTableCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> host,
+      Value<int> port,
+      Value<String> databaseFile,
+      Value<String?> aliasName,
+      Value<bool> useEmbedded,
+      Value<String?> clientLibraryPath,
+      Value<String> serverVersionHint,
+      Value<String> serviceManagerMode,
+      Value<String> username,
+      Value<String> password,
+      Value<String> cryptKey,
+      Value<bool> enabled,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$FirebirdConfigsTableTableFilterComposer
+    extends Composer<_$AppDatabase, $FirebirdConfigsTableTable> {
+  $$FirebirdConfigsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get port => $composableBuilder(
+    column: $table.port,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get databaseFile => $composableBuilder(
+    column: $table.databaseFile,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get aliasName => $composableBuilder(
+    column: $table.aliasName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get useEmbedded => $composableBuilder(
+    column: $table.useEmbedded,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientLibraryPath => $composableBuilder(
+    column: $table.clientLibraryPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serverVersionHint => $composableBuilder(
+    column: $table.serverVersionHint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serviceManagerMode => $composableBuilder(
+    column: $table.serviceManagerMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get username => $composableBuilder(
+    column: $table.username,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get password => $composableBuilder(
+    column: $table.password,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cryptKey => $composableBuilder(
+    column: $table.cryptKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FirebirdConfigsTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $FirebirdConfigsTableTable> {
+  $$FirebirdConfigsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get port => $composableBuilder(
+    column: $table.port,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get databaseFile => $composableBuilder(
+    column: $table.databaseFile,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get aliasName => $composableBuilder(
+    column: $table.aliasName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get useEmbedded => $composableBuilder(
+    column: $table.useEmbedded,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientLibraryPath => $composableBuilder(
+    column: $table.clientLibraryPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serverVersionHint => $composableBuilder(
+    column: $table.serverVersionHint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serviceManagerMode => $composableBuilder(
+    column: $table.serviceManagerMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get username => $composableBuilder(
+    column: $table.username,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get password => $composableBuilder(
+    column: $table.password,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cryptKey => $composableBuilder(
+    column: $table.cryptKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FirebirdConfigsTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FirebirdConfigsTableTable> {
+  $$FirebirdConfigsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get host =>
+      $composableBuilder(column: $table.host, builder: (column) => column);
+
+  GeneratedColumn<int> get port =>
+      $composableBuilder(column: $table.port, builder: (column) => column);
+
+  GeneratedColumn<String> get databaseFile => $composableBuilder(
+    column: $table.databaseFile,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get aliasName =>
+      $composableBuilder(column: $table.aliasName, builder: (column) => column);
+
+  GeneratedColumn<bool> get useEmbedded => $composableBuilder(
+    column: $table.useEmbedded,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clientLibraryPath => $composableBuilder(
+    column: $table.clientLibraryPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get serverVersionHint => $composableBuilder(
+    column: $table.serverVersionHint,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get serviceManagerMode => $composableBuilder(
+    column: $table.serviceManagerMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get username =>
+      $composableBuilder(column: $table.username, builder: (column) => column);
+
+  GeneratedColumn<String> get password =>
+      $composableBuilder(column: $table.password, builder: (column) => column);
+
+  GeneratedColumn<String> get cryptKey =>
+      $composableBuilder(column: $table.cryptKey, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$FirebirdConfigsTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FirebirdConfigsTableTable,
+          FirebirdConfigsTableData,
+          $$FirebirdConfigsTableTableFilterComposer,
+          $$FirebirdConfigsTableTableOrderingComposer,
+          $$FirebirdConfigsTableTableAnnotationComposer,
+          $$FirebirdConfigsTableTableCreateCompanionBuilder,
+          $$FirebirdConfigsTableTableUpdateCompanionBuilder,
+          (
+            FirebirdConfigsTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $FirebirdConfigsTableTable,
+              FirebirdConfigsTableData
+            >,
+          ),
+          FirebirdConfigsTableData,
+          PrefetchHooks Function()
+        > {
+  $$FirebirdConfigsTableTableTableManager(
+    _$AppDatabase db,
+    $FirebirdConfigsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FirebirdConfigsTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FirebirdConfigsTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$FirebirdConfigsTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> host = const Value.absent(),
+                Value<int> port = const Value.absent(),
+                Value<String> databaseFile = const Value.absent(),
+                Value<String?> aliasName = const Value.absent(),
+                Value<bool> useEmbedded = const Value.absent(),
+                Value<String?> clientLibraryPath = const Value.absent(),
+                Value<String> serverVersionHint = const Value.absent(),
+                Value<String> serviceManagerMode = const Value.absent(),
+                Value<String> username = const Value.absent(),
+                Value<String> password = const Value.absent(),
+                Value<String> cryptKey = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FirebirdConfigsTableCompanion(
+                id: id,
+                name: name,
+                host: host,
+                port: port,
+                databaseFile: databaseFile,
+                aliasName: aliasName,
+                useEmbedded: useEmbedded,
+                clientLibraryPath: clientLibraryPath,
+                serverVersionHint: serverVersionHint,
+                serviceManagerMode: serviceManagerMode,
+                username: username,
+                password: password,
+                cryptKey: cryptKey,
+                enabled: enabled,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String host,
+                Value<int> port = const Value.absent(),
+                required String databaseFile,
+                Value<String?> aliasName = const Value.absent(),
+                Value<bool> useEmbedded = const Value.absent(),
+                Value<String?> clientLibraryPath = const Value.absent(),
+                Value<String> serverVersionHint = const Value.absent(),
+                Value<String> serviceManagerMode = const Value.absent(),
+                required String username,
+                required String password,
+                Value<String> cryptKey = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => FirebirdConfigsTableCompanion.insert(
+                id: id,
+                name: name,
+                host: host,
+                port: port,
+                databaseFile: databaseFile,
+                aliasName: aliasName,
+                useEmbedded: useEmbedded,
+                clientLibraryPath: clientLibraryPath,
+                serverVersionHint: serverVersionHint,
+                serviceManagerMode: serviceManagerMode,
+                username: username,
+                password: password,
+                cryptKey: cryptKey,
+                enabled: enabled,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FirebirdConfigsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FirebirdConfigsTableTable,
+      FirebirdConfigsTableData,
+      $$FirebirdConfigsTableTableFilterComposer,
+      $$FirebirdConfigsTableTableOrderingComposer,
+      $$FirebirdConfigsTableTableAnnotationComposer,
+      $$FirebirdConfigsTableTableCreateCompanionBuilder,
+      $$FirebirdConfigsTableTableUpdateCompanionBuilder,
+      (
+        FirebirdConfigsTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $FirebirdConfigsTableTable,
+          FirebirdConfigsTableData
+        >,
+      ),
+      FirebirdConfigsTableData,
       PrefetchHooks Function()
     >;
 typedef $$BackupDestinationsTableTableCreateCompanionBuilder =
@@ -18677,6 +20045,8 @@ class $AppDatabaseManager {
       $$SybaseConfigsTableTableTableManager(_db, _db.sybaseConfigsTable);
   $$PostgresConfigsTableTableTableManager get postgresConfigsTable =>
       $$PostgresConfigsTableTableTableManager(_db, _db.postgresConfigsTable);
+  $$FirebirdConfigsTableTableTableManager get firebirdConfigsTable =>
+      $$FirebirdConfigsTableTableTableManager(_db, _db.firebirdConfigsTable);
   $$BackupDestinationsTableTableTableManager get backupDestinationsTable =>
       $$BackupDestinationsTableTableTableManager(
         _db,

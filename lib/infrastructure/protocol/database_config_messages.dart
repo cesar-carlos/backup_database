@@ -11,7 +11,9 @@ import 'package:backup_database/infrastructure/protocol/status_codes.dart';
 enum RemoteDatabaseType {
   sybase('sybase'),
   sqlServer('sqlServer'),
-  postgres('postgres');
+  postgres('postgres'),
+  firebird('firebird')
+  ;
 
   final String wireName;
   const RemoteDatabaseType(this.wireName);
@@ -60,7 +62,9 @@ Message createTestDatabaseConnectionRequest({
 
   final payload = <String, dynamic>{
     'databaseType': databaseType.wireName,
-    ...?(databaseConfigId != null ? {'databaseConfigId': databaseConfigId} : null),
+    ...?(databaseConfigId != null
+        ? {'databaseConfigId': databaseConfigId}
+        : null),
     ...?(config != null ? {'config': config} : null),
     ...?(timeoutMs != null ? {'timeoutMs': timeoutMs} : null),
   };
@@ -109,16 +113,14 @@ Message createTestDatabaseConnectionResponse({
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
     ...?(error != null ? {'error': error} : null),
     ...?(errorCode != null ? {'errorCode': errorCode.code} : null),
-    ...?(details != null && details.isNotEmpty
-        ? {'details': details}
-        : null),
+    ...?(details != null && details.isNotEmpty ? {'details': details} : null),
   };
 
   final statusCode = connected
       ? StatusCodes.ok
       : (errorCode != null
-          ? StatusCodes.forErrorCode(errorCode)
-          : StatusCodes.serviceUnavailable);
+            ? StatusCodes.forErrorCode(errorCode)
+            : StatusCodes.serviceUnavailable);
 
   final payload = wrapSuccessResponse(base, statusCode: statusCode);
   final payloadJson = jsonEncode(payload);
@@ -227,19 +229,22 @@ class DatabaseConfigListResult {
 
 DatabaseConfigListResult readDatabaseConfigListResponse(Message message) {
   final p = message.payload;
-  final typeRaw = p['databaseType'] is String ? p['databaseType'] as String : '';
-  final type = RemoteDatabaseType.fromWire(typeRaw) ?? RemoteDatabaseType.sybase;
+  final typeRaw = p['databaseType'] is String
+      ? p['databaseType'] as String
+      : '';
+  final type =
+      RemoteDatabaseType.fromWire(typeRaw) ?? RemoteDatabaseType.sybase;
   final raw = p['configs'];
   final configs = raw is List
       ? raw
-          .whereType<Map<String, dynamic>>()
-          .map(Map<String, dynamic>.from)
-          .toList()
+            .whereType<Map<String, dynamic>>()
+            .map(Map<String, dynamic>.from)
+            .toList()
       : <Map<String, dynamic>>[];
   final serverTimeRaw = p['serverTimeUtc'];
   final serverTime = serverTimeRaw is String
       ? (DateTime.tryParse(serverTimeRaw) ??
-          DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
       : DateTime.fromMillisecondsSinceEpoch(0).toUtc();
   return DatabaseConfigListResult(
     databaseType: type,
@@ -382,8 +387,11 @@ DatabaseConfigMutationResult readDatabaseConfigMutationResponse(
 ) {
   final p = message.payload;
   final operation = p['operation'] is String ? p['operation'] as String : '';
-  final typeRaw = p['databaseType'] is String ? p['databaseType'] as String : '';
-  final type = RemoteDatabaseType.fromWire(typeRaw) ?? RemoteDatabaseType.sybase;
+  final typeRaw = p['databaseType'] is String
+      ? p['databaseType'] as String
+      : '';
+  final type =
+      RemoteDatabaseType.fromWire(typeRaw) ?? RemoteDatabaseType.sybase;
   final configId = p['configId'] is String ? p['configId'] as String : '';
   final cfg = p['config'] is Map
       ? Map<String, dynamic>.from(p['config'] as Map)
@@ -404,12 +412,19 @@ TestDatabaseConnectionResult readTestDatabaseConnectionResponse(
   final latencyMs = p['latencyMs'] is int ? p['latencyMs'] as int : 0;
   final serverTimeRaw = p['serverTimeUtc'];
   final serverTime = serverTimeRaw is String
-      ? (DateTime.tryParse(serverTimeRaw) ?? DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+      ? (DateTime.tryParse(serverTimeRaw) ??
+            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
       : DateTime.fromMillisecondsSinceEpoch(0).toUtc();
   final error = p['error'] is String ? p['error'] as String : null;
-  final errorCodeRaw = p['errorCode'] is String ? p['errorCode'] as String : null;
-  final errorCode = errorCodeRaw != null ? ErrorCode.fromString(errorCodeRaw) : null;
-  final details = p['details'] is Map ? Map<String, dynamic>.from(p['details'] as Map) : null;
+  final errorCodeRaw = p['errorCode'] is String
+      ? p['errorCode'] as String
+      : null;
+  final errorCode = errorCodeRaw != null
+      ? ErrorCode.fromString(errorCodeRaw)
+      : null;
+  final details = p['details'] is Map
+      ? Map<String, dynamic>.from(p['details'] as Map)
+      : null;
 
   return TestDatabaseConnectionResult(
     connected: connected,

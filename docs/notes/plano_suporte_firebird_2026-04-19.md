@@ -578,7 +578,7 @@ zero regressão nos 3 SGBDs anteriores.
 - [ ] Adicionar `MessageModal.showInputConfirm({title, label,
       initialValue, ...})` ou similar
 - [ ] Substituir uso atual em
-      `database_config_page._showDuplicateConfirmDialog`
+      `database_config_page._confirmDuplicateConfiguration`
 - [ ] **Teste**: widget test simula edição de nome antes de
       confirmar
 
@@ -682,9 +682,10 @@ moderno em servidor moderno opera Firebird remoto.
 
 #### G5 — Golden tests
 
-- [ ] Criar `test/golden/protocol/capabilities_response_with_firebird.golden.json`
+- [x] Criar `test/golden/protocol/capabilities_response_with_firebird.golden.json`
 - [ ] Criar `test/golden/protocol/schedule_message_firebird.golden.json`
-- [ ] Atualizar fixture existente `capabilities_response_v1.golden.json`
+      (requer `DatabaseType.firebird` / wire schedule — PR-E/F)
+- [x] Atualizar fixture existente `capabilities_response_v1.golden.json`
       para refletir novo campo `supportsFirebird=false` no envelope
       legacy default
 
@@ -743,8 +744,8 @@ moderno em servidor moderno opera Firebird remoto.
       no README como pré-requisitos do servidor
 - [ ] `ToolPathHelp` reconhece família Firebird (já feito no PR-B6
       do plano de refatoração)
-- [ ] `ProcessService` redact estendido para `-PAS`/`-PASSWORD` e
-      `FIREBIRD_PASSWORD`
+- [x] `ProcessService` redact estendido para `-password`/`-pas` e
+      `FIREBIRD_PASSWORD` / `ISC_PASSWORD` (env)
 - [ ] Logs de execução incluem `tool=gbak\|nbackup` +
       `firebirdVersion=v25\|v30\|v40` em `BackupMetrics.flags`
 - [ ] Smoke manual ponta-a-ponta executado nas três versões:

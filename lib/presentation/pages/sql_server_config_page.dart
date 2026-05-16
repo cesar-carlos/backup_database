@@ -1,8 +1,8 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
-import 'package:backup_database/application/providers/sybase_config_provider.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
-import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/sql_server/sql_server.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -27,7 +27,9 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
             CommandBarButton(
               icon: const Icon(FluentIcons.refresh),
               onPressed: () {
-                context.read<SqlServerConfigProvider>().loadConfigs();
+                unawaited(
+                  context.read<SqlServerConfigProvider>().loadConfigs(),
+                );
               },
             ),
             CommandBarButton(
@@ -106,41 +108,41 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
   }
 
   Future<void> _showConfigDialog(SqlServerConfig? config) async {
-    final result = await SqlServerConfigDialog.show(context, config: config);
+    final result = await SqlServerConfigDialog.show(
+      context,
+      config: config,
+    );
 
-    if (result != null && mounted) {
-      var success = false;
-      String? errorMessage;
+    if (result == null || !mounted) {
+      return;
+    }
 
-      if (result is SybaseConfig) {
-        final sybaseProvider = context.read<SybaseConfigProvider>();
-        success = config == null
-            ? await sybaseProvider.createConfig(result)
-            : await sybaseProvider.updateConfig(result);
-        errorMessage = sybaseProvider.error;
-      } else if (result is SqlServerConfig) {
-        final sqlServerProvider = context.read<SqlServerConfigProvider>();
-        success = config == null
-            ? await sqlServerProvider.createConfig(result)
-            : await sqlServerProvider.updateConfig(result);
-        errorMessage = sqlServerProvider.error;
-      }
+    final sqlServerProvider = context.read<SqlServerConfigProvider>();
+    final success = config == null
+        ? await sqlServerProvider.createConfig(result)
+        : await sqlServerProvider.updateConfig(result);
+    final errorMessage = sqlServerProvider.error;
 
-      if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
-      if (success) {
+    if (success) {
+      unawaited(
         MessageModal.showSuccess(
           context,
           message: config == null
               ? 'Configuração criada com sucesso!'
               : 'Configuração atualizada com sucesso!',
-        );
-      } else {
+        ),
+      );
+    } else {
+      unawaited(
         MessageModal.showError(
           context,
           message: errorMessage ?? 'Erro ao salvar configuração',
-        );
-      }
+        ),
+      );
     }
   }
 
@@ -176,14 +178,18 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Configuração excluída com sucesso!',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: 'Configuração excluída com sucesso!',
+          ),
         );
       } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao excluir configuração',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao excluir configuração',
+          ),
         );
       }
     }
@@ -196,14 +202,18 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
     if (!mounted) return;
 
     if (success) {
-      MessageModal.showSuccess(
-        context,
-        message: 'Configuração duplicada com sucesso!',
+      unawaited(
+        MessageModal.showSuccess(
+          context,
+          message: 'Configuração duplicada com sucesso!',
+        ),
       );
     } else {
-      MessageModal.showError(
-        context,
-        message: provider.error ?? 'Erro ao duplicar configuração',
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: provider.error ?? 'Erro ao duplicar configuração',
+        ),
       );
     }
   }

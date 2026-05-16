@@ -35,9 +35,9 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
     required this.stagingBasePath,
     String hashAlgorithm = 'sha256',
     RemoteStagingArtifactTtl? artifactTtl,
-  })  : _hashAlgorithm = hashAlgorithm,
-        _stagingBase = p.normalize(p.absolute(stagingBasePath)),
-        _artifactTtl = artifactTtl ?? RemoteStagingArtifactTtl();
+  }) : _hashAlgorithm = hashAlgorithm,
+       _stagingBase = p.normalize(p.absolute(stagingBasePath)),
+       _artifactTtl = artifactTtl ?? RemoteStagingArtifactTtl();
 
   final IBackupHistoryRepository historyRepository;
   final IBackupLogRepository logRepository;
@@ -81,14 +81,17 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
       final logs = logsResult.getOrNull() ?? const [];
       final lines = logs
           .map(
-            (l) => '[${l.createdAt.toUtc().toIso8601String()}] '
+            (l) =>
+                '[${l.createdAt.toUtc().toIso8601String()}] '
                 '[${l.level.name.toUpperCase()}] '
                 '[${l.category.name}] ${l.message}'
                 '${l.details != null ? " | ${l.details}" : ""}',
           )
           .toList(growable: false);
       final truncated = maxLines != null && lines.length > maxLines;
-      final clipped = truncated ? lines.sublist(lines.length - maxLines) : lines;
+      final clipped = truncated
+          ? lines.sublist(lines.length - maxLines)
+          : lines;
       return DiagnosticsOutcome<RunLogsData>.found(
         RunLogsData(lines: clipped, truncated: truncated),
       );
@@ -102,7 +105,9 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
   }
 
   @override
-  Future<DiagnosticsOutcome<RunErrorData>> getRunErrorDetails(String runId) async {
+  Future<DiagnosticsOutcome<RunErrorData>> getRunErrorDetails(
+    String runId,
+  ) async {
     try {
       final history = await _findHistory(runId);
       if (history == null) {
@@ -144,7 +149,11 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
         ),
       );
     } on Object catch (e, st) {
-      LoggerService.warning('RealDiagnosticsProvider.getRunErrorDetails: $e', e, st);
+      LoggerService.warning(
+        'RealDiagnosticsProvider.getRunErrorDetails: $e',
+        e,
+        st,
+      );
       return DiagnosticsOutcome<RunErrorData>.failure(
         error: 'Erro inesperado: $e',
         errorCode: ErrorCode.unknown,
@@ -165,7 +174,9 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
       // execucoes `remoteCommand` (pasta unica por execucao).
       final perRunDir = Directory(p.join(_stagingBase, 'remote', runId));
       if (await perRunDir.exists()) {
-        final newest = await RemoteStagingArtifactTtl.newestFileInTree(perRunDir);
+        final newest = await RemoteStagingArtifactTtl.newestFileInTree(
+          perRunDir,
+        );
         if (newest != null) {
           return await _foundArtifactForFile(newest);
         }
@@ -181,13 +192,19 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
         return DiagnosticsOutcome<ArtifactMetadataData>.notFound();
       }
 
-      final newest = await RemoteStagingArtifactTtl.newestFileInTree(scheduleDir);
+      final newest = await RemoteStagingArtifactTtl.newestFileInTree(
+        scheduleDir,
+      );
       if (newest == null) {
         return DiagnosticsOutcome<ArtifactMetadataData>.notFound();
       }
       return await _foundArtifactForFile(newest);
     } on Object catch (e, st) {
-      LoggerService.warning('RealDiagnosticsProvider.getArtifactMetadata: $e', e, st);
+      LoggerService.warning(
+        'RealDiagnosticsProvider.getArtifactMetadata: $e',
+        e,
+        st,
+      );
       return DiagnosticsOutcome<ArtifactMetadataData>.failure(
         error: 'Erro inesperado: $e',
         errorCode: ErrorCode.unknown,
@@ -196,7 +213,9 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
   }
 
   @override
-  Future<DiagnosticsOutcome<CleanupStagingData>> cleanupStaging(String runId) async {
+  Future<DiagnosticsOutcome<CleanupStagingData>> cleanupStaging(
+    String runId,
+  ) async {
     try {
       if (runId.isEmpty) {
         return DiagnosticsOutcome<CleanupStagingData>.found(
@@ -218,7 +237,8 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
           const CleanupStagingData(
             cleaned: false,
             bytesFreed: 0,
-            message: 'Diretorio de staging nao encontrado (layout desconhecido)',
+            message:
+                'Diretorio de staging nao encontrado (layout desconhecido)',
           ),
         );
       }
@@ -236,7 +256,11 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
       }
       return _cleanupOneStagingDir(scheduleDir);
     } on Object catch (e, st) {
-      LoggerService.warning('RealDiagnosticsProvider.cleanupStaging: $e', e, st);
+      LoggerService.warning(
+        'RealDiagnosticsProvider.cleanupStaging: $e',
+        e,
+        st,
+      );
       return DiagnosticsOutcome<CleanupStagingData>.failure(
         error: 'Erro inesperado: $e',
         errorCode: ErrorCode.ioError,

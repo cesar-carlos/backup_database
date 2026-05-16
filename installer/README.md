@@ -40,7 +40,7 @@ Certifique-se de que os seguintes arquivos existem:
 - `build\windows\x64\runner\Release\*` - Todos os arquivos necessários
 - `LICENSE` - Arquivo de licença
 - `.env.example` - Arquivo de exemplo de variáveis de ambiente
-- `assets\icons\icon-512-maskable.png` - Ícone do aplicativo
+- `assets\image\new\database_512px.png` - Fonte do ícone do aplicativo (launcher)
 - `docs\install\installation_guide.md` - Guia de instalação
 - `docs\requirements.md` - Requisitos do sistema
 - `docs\path_setup.md` - Guia de configuração do PATH

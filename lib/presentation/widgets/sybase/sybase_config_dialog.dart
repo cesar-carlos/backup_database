@@ -1,5 +1,7 @@
+import 'dart:async';
+
 import 'package:backup_database/core/constants/app_constants.dart';
-import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
@@ -53,12 +55,6 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
   bool get isEditing => widget.config != null;
 
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -93,81 +89,95 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       return;
     }
 
-    if (!mounted) return;
-
-    setState(() {
-      _isTestingConnection = true;
-    });
+    if (!mounted) {
+      return;
+    }
 
     try {
-      final port = int.tryParse(_portController.text.trim()) ?? 2638;
-
-      if (port < 1 || port > 65535) {
-        throw Exception(
-          _t(
-            'Porta invalida. Deve estar entre 1 e 65535.',
-            'Invalid port. Must be between 1 and 65535.',
-          ),
-        );
-      }
-
-      final testConfig = SybaseConfig(
-        name: _nameController.text.trim(),
-        serverName: _serverNameController.text.trim(),
-        databaseName: DatabaseName(_databaseNameController.text.trim()),
-        port: PortNumber(port),
-        username: _usernameController.text.trim(),
-        password: _passwordController.text,
-        isReplicationEnvironment: _isReplicationEnvironment,
+      final mSuccess = appLocaleString(
+        context,
+        'Conexão testada com sucesso!',
+        'Connection tested successfully!',
+      );
+      final mUnknownConn = appLocaleString(
+        context,
+        'Erro desconhecido ao testar conexão',
+        'Unknown error testing connection',
+      );
+      final mErrTitle = appLocaleString(
+        context,
+        'Erro ao testar conexão',
+        'Error testing connection',
       );
 
-      final result = await _backupService.testConnection(testConfig);
-
-      if (!mounted) return;
-
-      result.fold(
-        (_) {
-          MessageModal.showSuccess(
-            context,
-            message: _t(
-              'Conexão testada com sucesso!',
-              'Connection tested successfully!',
+      final outcome =
+          await TestConnectionRunner<SybaseConfig>(
+            validate: _validateSybaseTestPort,
+            buildConfig: _buildSybaseTestConfig,
+            runTest: (SybaseConfig config) async {
+              final result = await _backupService.testConnection(config);
+              final ok = result.getOrNull();
+              if (ok != null && ok) {
+                return const TestConnectionSucceeded();
+              }
+              if (ok != null && !ok) {
+                return TestConnectionFailed(mUnknownConn);
+              }
+              final failure = result.exceptionOrNull();
+              return TestConnectionFailed(
+                testConnectionUserMessage(
+                  failure,
+                  fallback: mUnknownConn,
+                ),
+              );
+            },
+          ).execute(
+            afterValidation: () {
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _isTestingConnection = true;
+              });
+            },
+          );
+      if (!mounted) {
+        return;
+      }
+      switch (outcome) {
+        case TestConnectionSucceeded():
+          unawaited(MessageModal.showSuccess(context, message: mSuccess));
+        case TestConnectionFailed(:final message):
+          final rawMessage = message.isNotEmpty ? message : mUnknownConn;
+          unawaited(
+            MessageModal.showError(
+              context,
+              title: mErrTitle,
+              message: rawMessage,
             ),
           );
-        },
-        (failure) {
-          // Cast `failure as Failure` removido em favor de verificação
-          // explícita; protege contra exceções que não implementam `Failure`
-          // (causa rara mas que crashava o diálogo silenciosamente).
-          final rawMessage =
-              failure is Failure ? failure.message : failure.toString();
-          final errorMessage = rawMessage.isNotEmpty
-              ? rawMessage
-              : _t(
-                  'Erro desconhecido ao testar conexão',
-                  'Unknown error testing connection',
-                );
-
-          MessageModal.showError(
-            context,
-            title: _t('Erro ao testar conexão', 'Error testing connection'),
-            message: errorMessage,
-          );
-        },
-      );
+      }
     } on Object catch (e, stackTrace) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       LoggerService.error('Erro ao testar conexão Sybase', e, stackTrace);
 
       final errorMessage = e.toString().replaceAll('Exception: ', '');
 
-      MessageModal.showError(
-        context,
-        title: _t('Erro ao testar conexão', 'Error testing connection'),
-        message: errorMessage.isNotEmpty
-            ? errorMessage
-            : _t('Erro desconhecido', 'Unknown error'),
+      unawaited(
+        MessageModal.showError(
+          context,
+          title: appLocaleString(
+            context,
+            'Erro ao testar conexão',
+            'Error testing connection',
+          ),
+          message: errorMessage.isNotEmpty
+              ? errorMessage
+              : appLocaleString(context, 'Erro desconhecido', 'Unknown error'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -176,6 +186,35 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
         });
       }
     }
+  }
+
+  String? _validateSybaseTestPort() {
+    final port =
+        int.tryParse(_portController.text.trim()) ??
+        AppConstants.defaultSybasePort;
+    if (port < 1 || port > 65535) {
+      return appLocaleString(
+        context,
+        'Porta invalida. Deve estar entre 1 e 65535.',
+        'Invalid port. Must be between 1 and 65535.',
+      );
+    }
+    return null;
+  }
+
+  SybaseConfig _buildSybaseTestConfig() {
+    final port =
+        int.tryParse(_portController.text.trim()) ??
+        AppConstants.defaultSybasePort;
+    return SybaseConfig(
+      name: _nameController.text.trim(),
+      serverName: _serverNameController.text.trim(),
+      databaseName: DatabaseName(_databaseNameController.text.trim()),
+      port: PortNumber(port),
+      username: _usernameController.text.trim(),
+      password: _passwordController.text,
+      isReplicationEnvironment: _isReplicationEnvironment,
+    );
   }
 
   void _save() {
@@ -204,7 +243,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return ContentDialog(
+    return DatabaseConfigDialogShell(
       constraints: const BoxConstraints(
         minWidth: 600,
         maxWidth: 600,
@@ -217,248 +256,277 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
           Expanded(
             child: Text(
               isEditing
-                  ? _t(
+                  ? appLocaleString(
+                      context,
                       'Editar configuração Sybase',
                       'Edit Sybase configuration',
                     )
-                  : _t('Nova configuração Sybase', 'New Sybase configuration'),
+                  : appLocaleString(
+                      context,
+                      'Nova configuração Sybase',
+                      'New Sybase configuration',
+                    ),
               style: FluentTheme.of(context).typography.title,
             ),
           ),
         ],
       ),
-      content: Container(
-        constraints: const BoxConstraints(),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppTextField(
+              controller: _nameController,
+              label: appLocaleString(
+                context,
+                'Nome da configuração',
+                'Configuration name',
+              ),
+              hint: appLocaleString(
+                context,
+                'Ex: Produção Sybase',
+                'Ex: Production Sybase',
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return appLocaleString(
+                    context,
+                    'Nome é obrigatório',
+                    'Name is required',
+                  );
+                }
+                return null;
+              },
+              prefixIcon: const Icon(FluentIcons.tag),
+            ),
+            const SizedBox(height: 16),
+            Row(
               children: [
-                AppTextField(
-                  controller: _nameController,
-                  label: _t('Nome da configuração', 'Configuration name'),
-                  hint: _t('Ex: Produção Sybase', 'Ex: Production Sybase'),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return _t('Nome é obrigatório', 'Name is required');
-                    }
-                    return null;
-                  },
-                  prefixIcon: const Icon(FluentIcons.tag),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: AppTextField(
-                        controller: _serverNameController,
-                        label: _t(
-                          'Nome do servidor (Engine Name)',
-                          'Server name (Engine Name)',
-                        ),
-                        hint: _t(
-                          'Ex: VL (nome do servico Sybase)',
-                          'Ex: VL (Sybase service name)',
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return _t(
-                              'Engine Name é obrigatório',
-                              'Engine Name is required',
-                            );
-                          }
-                          return null;
-                        },
-                        prefixIcon: const Icon(FluentIcons.server),
-                      ),
+                Expanded(
+                  flex: 3,
+                  child: AppTextField(
+                    controller: _serverNameController,
+                    label: appLocaleString(
+                      context,
+                      'Nome do servidor (Engine Name)',
+                      'Server name (Engine Name)',
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: NumericField(
-                        controller: _portController,
-                        label: _t('Porta', 'Port'),
-                        hint: AppConstants.defaultSybasePort.toString(),
-                        prefixIcon: FluentIcons.number_field,
-                        minValue: 1,
-                        maxValue: 65535,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return _t(
-                              'Porta e obrigatoria',
-                              'Port is required',
-                            );
-                          }
-                          final port = int.tryParse(value);
-                          if (port == null || port < 1 || port > 65535) {
-                            return _t(
-                              'Porta deve estar entre 1 e 65535',
-                              'Port must be between 1 and 65535',
-                            );
-                          }
-                          return null;
-                        },
-                      ),
+                    hint: appLocaleString(
+                      context,
+                      'Ex: VL (nome do servico Sybase)',
+                      'Ex: VL (Sybase service name)',
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                AppTextField(
-                  controller: _databaseNameController,
-                  label: _t(
-                    'Nome do banco de dados (DBN)',
-                    'Database name (DBN)',
-                  ),
-                  hint: _t(
-                    'Ex: VL (geralmente igual ao Engine Name)',
-                    'Ex: VL (usually same as Engine Name)',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return _t(
-                        'Nome do banco de dados é obrigatório',
-                        'Database name is required',
-                      );
-                    }
-                    return null;
-                  },
-                  prefixIcon: const Icon(FluentIcons.database),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        FluentIcons.info,
-                        size: 18,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _t(
-                            'O Engine Name e DBN geralmente sao iguais ao nome do servico Sybase (ex: VL)',
-                            'Engine Name and DBN are usually equal to Sybase service name (ex: VL)',
-                          ),
-                          style: FluentTheme.of(context).typography.caption,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                AppTextField(
-                  controller: _usernameController,
-                  label: _t('Usuario', 'Username'),
-                  hint: _t('DBA ou usuario do Sybase', 'DBA or Sybase user'),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return _t(
-                        'Usuário é obrigatório',
-                        'Username is required',
-                      );
-                    }
-                    return null;
-                  },
-                  prefixIcon: const Icon(FluentIcons.contact),
-                ),
-                const SizedBox(height: 16),
-                PasswordField(controller: _passwordController),
-                const SizedBox(height: 16),
-                InfoLabel(
-                  label: _t('Habilitado', 'Enabled'),
-                  child: ToggleSwitch(
-                    checked: _isEnabled,
-                    onChanged: (value) {
-                      setState(() {
-                        _isEnabled = value;
-                      });
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return appLocaleString(
+                          context,
+                          'Engine Name é obrigatório',
+                          'Engine Name is required',
+                        );
+                      }
+                      return null;
                     },
+                    prefixIcon: const Icon(FluentIcons.server),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  _t(
-                    'Permitir uso desta configuração em agendamentos',
-                    'Allow this configuration in schedules',
-                  ),
-                  style: FluentTheme.of(context).typography.caption,
-                ),
-                const SizedBox(height: 16),
-                InfoLabel(
-                  label: _t(
-                    'Ambiente de replicação (SQL Remote, MobiLink)',
-                    'Replication environment (SQL Remote, MobiLink)',
-                  ),
-                  child: ToggleSwitch(
-                    checked: _isReplicationEnvironment,
-                    onChanged: (value) {
-                      setState(() {
-                        _isReplicationEnvironment = value;
-                      });
+                const SizedBox(width: 16),
+                Expanded(
+                  child: NumericField(
+                    controller: _portController,
+                    label: appLocaleString(context, 'Porta', 'Port'),
+                    hint: AppConstants.defaultSybasePort.toString(),
+                    prefixIcon: FluentIcons.number_field,
+                    minValue: 1,
+                    maxValue: 65535,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return appLocaleString(
+                          context,
+                          'Porta e obrigatoria',
+                          'Port is required',
+                        );
+                      }
+                      final port = int.tryParse(value);
+                      if (port == null || port < 1 || port > 65535) {
+                        return appLocaleString(
+                          context,
+                          'Porta deve estar entre 1 e 65535',
+                          'Port must be between 1 and 65535',
+                        );
+                      }
+                      return null;
                     },
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        FluentIcons.info,
-                        size: 18,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _t(
-                            'Quando ativado, bloqueia backup de log com modo '
-                                '"Truncar" (TRUNCATE). Use "Renomear" ou "Apenas" '
-                                'para ambientes com SQL Remote ou MobiLink.',
-                            'When enabled, blocks log backup with "Truncate" '
-                                'mode (TRUNCATE). Use "Rename" or "Only" for '
-                                'environments with SQL Remote or MobiLink.',
-                          ),
-                          style: FluentTheme.of(context).typography.caption,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 16),
+            AppTextField(
+              controller: _databaseNameController,
+              label: appLocaleString(
+                context,
+                'Nome do banco de dados (DBN)',
+                'Database name (DBN)',
+              ),
+              hint: appLocaleString(
+                context,
+                'Ex: VL (geralmente igual ao Engine Name)',
+                'Ex: VL (usually same as Engine Name)',
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return appLocaleString(
+                    context,
+                    'Nome do banco de dados é obrigatório',
+                    'Database name is required',
+                  );
+                }
+                return null;
+              },
+              prefixIcon: const Icon(FluentIcons.database),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    FluentIcons.info,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      appLocaleString(
+                        context,
+                        'O Engine Name e DBN geralmente sao iguais ao nome do servico Sybase (ex: VL)',
+                        'Engine Name and DBN are usually equal to Sybase service name (ex: VL)',
+                      ),
+                      style: FluentTheme.of(context).typography.caption,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            AppTextField(
+              controller: _usernameController,
+              label: appLocaleString(context, 'Usuario', 'Username'),
+              hint: appLocaleString(
+                context,
+                'DBA ou usuario do Sybase',
+                'DBA or Sybase user',
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return appLocaleString(
+                    context,
+                    'Usuário é obrigatório',
+                    'Username is required',
+                  );
+                }
+                return null;
+              },
+              prefixIcon: const Icon(FluentIcons.contact),
+            ),
+            const SizedBox(height: 16),
+            PasswordField(controller: _passwordController),
+            const SizedBox(height: 16),
+            InfoLabel(
+              label: appLocaleString(context, 'Habilitado', 'Enabled'),
+              child: ToggleSwitch(
+                checked: _isEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _isEnabled = value;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              appLocaleString(
+                context,
+                'Permitir uso desta configuração em agendamentos',
+                'Allow this configuration in schedules',
+              ),
+              style: FluentTheme.of(context).typography.caption,
+            ),
+            const SizedBox(height: 16),
+            InfoLabel(
+              label: appLocaleString(
+                context,
+                'Ambiente de replicação (SQL Remote, MobiLink)',
+                'Replication environment (SQL Remote, MobiLink)',
+              ),
+              child: ToggleSwitch(
+                checked: _isReplicationEnvironment,
+                onChanged: (value) {
+                  setState(() {
+                    _isReplicationEnvironment = value;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    FluentIcons.info,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      appLocaleString(
+                        context,
+                        'Quando ativado, bloqueia backup de log com modo '
+                            '"Truncar" (TRUNCATE). Use "Renomear" ou "Apenas" '
+                            'para ambientes com SQL Remote ou MobiLink.',
+                        'When enabled, blocks log backup with "Truncate" '
+                            'mode (TRUNCATE). Use "Rename" or "Only" for '
+                            'environments with SQL Remote or MobiLink.',
+                      ),
+                      style: FluentTheme.of(context).typography.caption,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
+      dialogActions: [
         const CancelButton(),
         ActionButton(
-          label: _t('Testar conexão', 'Test connection'),
+          label: appLocaleString(context, 'Testar conexão', 'Test connection'),
           icon: FluentIcons.check_mark,
           onPressed: _testConnection,
           isLoading: _isTestingConnection,
         ),
         SaveButton(onPressed: _save, isEditing: isEditing),
       ],
+      onSubmitIntent: _save,
     );
   }
 }

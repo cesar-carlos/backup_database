@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/connection_log_provider.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/connection_log.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -14,17 +17,11 @@ class ConnectionLogsList extends StatefulWidget {
 }
 
 class _ConnectionLogsListState extends State<ConnectionLogsList> {
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ConnectionLogProvider>().loadLogs();
+      unawaited(context.read<ConnectionLogProvider>().loadLogs());
     });
   }
 
@@ -55,8 +52,10 @@ class _ConnectionLogsListState extends State<ConnectionLogsList> {
                   ),
                   const SizedBox(height: 16),
                   Button(
-                    onPressed: () => provider.loadLogs(),
-                    child: Text(_t('Tentar novamente', 'Try again')),
+                    onPressed: () => unawaited(provider.loadLogs()),
+                    child: Text(
+                      appLocaleString(context, 'Tentar novamente', 'Try again'),
+                    ),
                   ),
                 ],
               ),
@@ -67,9 +66,13 @@ class _ConnectionLogsListState extends State<ConnectionLogsList> {
           return AppCard(
             child: EmptyState(
               icon: FluentIcons.history,
-              message: _t('Nenhum registro de conexao', 'No connection logs'),
-              actionLabel: _t('Atualizar', 'Refresh'),
-              onAction: () => provider.loadLogs(),
+              message: appLocaleString(
+                context,
+                'Nenhum registro de conexao',
+                'No connection logs',
+              ),
+              actionLabel: appLocaleString(context, 'Atualizar', 'Refresh'),
+              onAction: () => unawaited(provider.loadLogs()),
             ),
           );
         }
@@ -85,20 +88,14 @@ class _ConnectionLogsContent extends StatelessWidget {
   final ConnectionLogProvider provider;
   static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm:ss');
 
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   String _filterLabel(BuildContext context, ConnectionLogFilter filter) {
     switch (filter) {
       case ConnectionLogFilter.all:
-        return _t(context, 'Todos', 'All');
+        return appLocaleString(context, 'Todos', 'All');
       case ConnectionLogFilter.success:
-        return _t(context, 'Sucesso', 'Success');
+        return appLocaleString(context, 'Sucesso', 'Success');
       case ConnectionLogFilter.failed:
-        return _t(context, 'Falha', 'Failure');
+        return appLocaleString(context, 'Falha', 'Failure');
     }
   }
 
@@ -131,7 +128,9 @@ class _ConnectionLogsContent extends StatelessWidget {
               child: ComboBox<ConnectionLogFilter>(
                 value: provider.filter,
                 isExpanded: true,
-                placeholder: Text(_t(context, 'Filtrar', 'Filter')),
+                placeholder: Text(
+                  appLocaleString(context, 'Filtrar', 'Filter'),
+                ),
                 items: filterOptions
                     .map(
                       (f) => ComboBoxItem<ConnectionLogFilter>(
@@ -147,13 +146,13 @@ class _ConnectionLogsContent extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Button(
-              onPressed: provider.loadLogs,
+              onPressed: () => unawaited(provider.loadLogs()),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(FluentIcons.refresh, size: 16),
                   const SizedBox(width: 6),
-                  Text(_t(context, 'Atualizar', 'Refresh')),
+                  Text(appLocaleString(context, 'Atualizar', 'Refresh')),
                 ],
               ),
             ),
@@ -166,7 +165,11 @@ class _ConnectionLogsContent extends StatelessWidget {
               minWidth: 1100,
               columns: [
                 AppDataGridColumn<ConnectionLog>(
-                  label: _t(context, 'Host do cliente', 'Client host'),
+                  label: appLocaleString(
+                    context,
+                    'Host do cliente',
+                    'Client host',
+                  ),
                   width: const FlexColumnWidth(2),
                   cellBuilder: (context, row) => Text(
                     row.clientHost,
@@ -179,14 +182,14 @@ class _ConnectionLogsContent extends StatelessWidget {
                   cellBuilder: (context, row) => SelectableText(_serverId(row)),
                 ),
                 AppDataGridColumn<ConnectionLog>(
-                  label: _t(context, 'Data/Hora', 'Date/Time'),
+                  label: appLocaleString(context, 'Data/Hora', 'Date/Time'),
                   width: const FlexColumnWidth(1.5),
                   cellBuilder: (context, row) => Text(
                     _dateFormat.format(row.timestamp),
                   ),
                 ),
                 AppDataGridColumn<ConnectionLog>(
-                  label: _t(context, 'Status', 'Status'),
+                  label: appLocaleString(context, 'Status', 'Status'),
                   width: const FlexColumnWidth(1.1),
                   cellAlignment: Alignment.center,
                   headerAlignment: Alignment.center,
@@ -194,7 +197,11 @@ class _ConnectionLogsContent extends StatelessWidget {
                       _StatusChip(success: row.success),
                 ),
                 AppDataGridColumn<ConnectionLog>(
-                  label: _t(context, 'Mensagem de erro', 'Error message'),
+                  label: appLocaleString(
+                    context,
+                    'Mensagem de erro',
+                    'Error message',
+                  ),
                   width: const FlexColumnWidth(3),
                   cellBuilder: (context, row) {
                     final message = _errorMessage(row);
@@ -230,12 +237,6 @@ class _StatusChip extends StatelessWidget {
 
   final bool success;
 
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   Widget build(BuildContext context) {
     final color = success ? AppColors.success : AppColors.error;
@@ -256,8 +257,8 @@ class _StatusChip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             success
-                ? _t(context, 'Sucesso', 'Success')
-                : _t(context, 'Falha', 'Failure'),
+                ? appLocaleString(context, 'Sucesso', 'Success')
+                : appLocaleString(context, 'Falha', 'Failure'),
             style: FluentTheme.of(context).typography.caption?.copyWith(
               color: color,
             ),

@@ -209,8 +209,9 @@ class LogService {
         // Cast inseguro `failure as Failure` substituído por verificação
         // explícita: protege contra exceptions inesperadas que não
         // implementam `Failure`.
-        final message =
-            failure is Failure ? failure.message : failure.toString();
+        final message = failure is Failure
+            ? failure.message
+            : failure.toString();
         LoggerService.warning('Erro ao limpar logs antigos: $message');
       },
     );

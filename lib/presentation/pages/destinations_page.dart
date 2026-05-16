@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/core/constants/route_names.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/destinations/destinations.dart';
@@ -23,7 +25,9 @@ class DestinationsPage extends StatelessWidget {
             CommandBarButton(
               icon: const Icon(FluentIcons.refresh),
               onPressed: () {
-                context.read<DestinationProvider>().loadDestinations();
+                unawaited(
+                  context.read<DestinationProvider>().loadDestinations(),
+                );
               },
             ),
             CommandBarButton(
@@ -53,10 +57,10 @@ class DestinationsPage extends StatelessWidget {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
+                            Icon(
                               FluentIcons.error,
                               size: 64,
-                              color: AppColors.error,
+                              color: context.appSemanticColors.danger,
                             ),
                             const SizedBox(height: 16),
                             Text(

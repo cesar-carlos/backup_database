@@ -28,7 +28,8 @@ Message createErrorMessage({
   ErrorCode? errorCode,
   int? statusCodeOverride,
 }) {
-  final statusCode = statusCodeOverride ??
+  final statusCode =
+      statusCodeOverride ??
       (errorCode != null
           ? StatusCodes.forErrorCode(errorCode)
           : StatusCodes.internalServerError);

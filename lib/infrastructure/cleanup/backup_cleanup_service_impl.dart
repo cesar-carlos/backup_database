@@ -309,8 +309,7 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       label: 'Nextcloud',
       destination: destination,
       backupHistoryId: backupHistoryId,
-      clean: () =>
-          _nextcloudDestinationService.cleanOldBackups(config: config),
+      clean: () => _nextcloudDestinationService.cleanOldBackups(config: config),
     );
   }
 

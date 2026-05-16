@@ -508,6 +508,10 @@ lib/
     └── di/             # Dependency Injection
 ```
 
+Decisões arquiteturais: [Architecture Decision Records](docs/adr/README.md).
+Onboarding: [visão geral da arquitetura](docs/onboarding/architecture_overview.md),
+[adicionar SGBD](docs/onboarding/adicionar_sgbd.md), [design system](docs/onboarding/design_system.md).
+
 ### Princípios Arquiteturais
 
 - **Dependency Inversion**: Domain Layer independe de outras camadas

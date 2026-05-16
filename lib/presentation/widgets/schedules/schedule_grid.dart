@@ -91,8 +91,7 @@ class ScheduleGrid extends StatelessWidget {
             icon: FluentIcons.play,
             tooltip: 'Executar agora',
             onPressed: (row) => onRunNow(row.id),
-            isEnabled: (row) =>
-                scheduleActionsEnabled && row.enabled,
+            isEnabled: (row) => scheduleActionsEnabled && row.enabled,
           ),
           AppDataGridAction<Schedule>(
             icon: FluentIcons.edit,
@@ -129,28 +128,6 @@ class ScheduleGrid extends StatelessWidget {
         return AppColors.scheduleMonthly;
       case ScheduleType.interval:
         return AppColors.scheduleInterval;
-    }
-  }
-
-  String getDatabaseTypeName(DatabaseType type) {
-    switch (type) {
-      case DatabaseType.sqlServer:
-        return 'SQL Server';
-      case DatabaseType.sybase:
-        return 'Sybase';
-      case DatabaseType.postgresql:
-        return 'PostgreSQL';
-    }
-  }
-
-  Color getDatabaseTypeColor(DatabaseType type) {
-    switch (type) {
-      case DatabaseType.sqlServer:
-        return AppColors.databaseSqlServer;
-      case DatabaseType.sybase:
-        return AppColors.databaseSybase;
-      case DatabaseType.postgresql:
-        return AppColors.databasePostgresql;
     }
   }
 }

@@ -3,6 +3,7 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -41,15 +42,17 @@ class ExecuteSqlServerBackup {
 
     return _backupService.executeBackup(
       config: config,
-      outputDirectory: outputDirectory,
-      scheduleId: scheduleId,
-      backupType: backupType,
-      customFileName: customFileName,
-      truncateLog: truncateLog,
-      enableChecksum: enableChecksum,
-      verifyAfterBackup: verifyAfterBackup,
-      verifyPolicy: verifyPolicy,
-      sqlServerBackupOptions: sqlServerBackupOptions,
+      context: BackupExecutionContext(
+        outputDirectory: outputDirectory,
+        scheduleId: scheduleId,
+        backupType: backupType,
+        customFileName: customFileName,
+        truncateLog: truncateLog,
+        enableChecksum: enableChecksum,
+        verifyAfterBackup: verifyAfterBackup,
+        verifyPolicy: verifyPolicy,
+        sqlServerBackupOptions: sqlServerBackupOptions,
+      ),
     );
   }
 }

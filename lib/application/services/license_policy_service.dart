@@ -91,7 +91,9 @@ class LicensePolicyService implements ILicensePolicyService {
     if (checks.isEmpty) return const rd.Success(unit);
 
     final results = await Future.wait(
-      checks.map((c) async => (check: c, allowed: await _isFeatureAllowed(c.feature))),
+      checks.map(
+        (c) async => (check: c, allowed: await _isFeatureAllowed(c.feature)),
+      ),
     );
 
     for (final r in results) {

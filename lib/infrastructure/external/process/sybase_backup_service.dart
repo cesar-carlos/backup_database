@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/backup_artifact_utils.dart';
+import 'package:backup_database/core/utils/backup_size_calculator.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
@@ -8,6 +10,7 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
@@ -35,6 +38,26 @@ class SybaseBackupService implements ISybaseBackupService {
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
+    required SybaseConfig config,
+    required BackupExecutionContext context,
+  }) {
+    return _executeBackupCore(
+      config: config,
+      outputDirectory: context.outputDirectory,
+      backupType: context.backupType,
+      customFileName: context.customFileName,
+      dbbackupPath: context.dbbackupPath,
+      truncateLog: context.truncateLog,
+      verifyAfterBackup: context.verifyAfterBackup,
+      verifyPolicy: context.verifyPolicy,
+      backupTimeout: context.backupTimeout,
+      verifyTimeout: context.verifyTimeout,
+      sybaseBackupOptions: context.sybaseBackupOptions,
+      cancelTag: context.cancelTag,
+    );
+  }
+
+  Future<rd.Result<BackupExecutionResult>> _executeBackupCore({
     required SybaseConfig config,
     required String outputDirectory,
     BackupType backupType = BackupType.full,
@@ -380,6 +403,8 @@ class SybaseBackupService implements ISybaseBackupService {
             databaseName,
           );
 
+          await BackupArtifactUtils.safeDeletePartial(backupPath);
+
           return rd.Failure(BackupFailure(message: errorMessage));
         }
 
@@ -405,15 +430,13 @@ class SybaseBackupService implements ISybaseBackupService {
           }
 
           if (!backupFound && await backupFile.exists()) {
-            final len = await backupFile.length();
-            if (len > 0) {
-              await Future<void>.delayed(const Duration(milliseconds: 200));
-              final len2 = await backupFile.length();
-              if (len2 == len) {
-                totalSize = len;
-                backupFound = true;
-                break;
-              }
+            final ready = await BackupArtifactUtils.waitForStableFile(
+              backupFile,
+            );
+            if (ready) {
+              totalSize = await backupFile.length();
+              backupFound = true;
+              break;
             }
           }
 
@@ -431,6 +454,7 @@ class SybaseBackupService implements ISybaseBackupService {
         }
 
         if (totalSize == 0) {
+          await BackupArtifactUtils.safeDeletePartial(backupPath);
           return rd.Failure(
             BackupFailure(
               message: _buildBackupEmptyMessage(backupPath),
@@ -910,18 +934,8 @@ class SybaseBackupService implements ISybaseBackupService {
     }
   }
 
-  Future<int> _sumFileLengthsInDirectory(Directory dir) async {
-    var sum = 0;
-    if (!await dir.exists()) {
-      return 0;
-    }
-    await for (final entity in dir.list()) {
-      if (entity is File) {
-        sum += await entity.length();
-      }
-    }
-    return sum;
-  }
+  Future<int> _sumFileLengthsInDirectory(Directory dir) =>
+      BackupSizeCalculator.sumBytesInDirectoryShallow(dir);
 
   /// Retorna a lista de arquivos de log encontrados no diretório de backup,
   /// ordenados pelo mais recente primeiro. Quando não há candidatos `.trn`

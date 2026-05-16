@@ -15,34 +15,34 @@ eliminadas**.
 
 ### 1.1. Bugs críticos de correção (8)
 
-| # | Arquivo | Bug | Impacto |
-|---|---|---|---|
-| 1 | `scheduler_service.dart` | `_updateAllNextRuns` usava `result.fold(async {})` sem `await` | Scheduler iniciava com `nextRunAt` obsoleto; schedules vencidos podiam disparar com timestamp errado |
-| 2 | `scheduler_service.dart` | Cast inseguro `failure as Failure` | Crash silencioso quando exception não era `Failure` |
-| 3 | `windows_service_service.dart` | 3× cast inseguro `failure as Failure` em `_runInstallPreflight`, `_configureNssm`, `stopService` | Crash potencial em operações de install/start/stop |
-| 4 | `backup_orchestrator_service.dart` | Caminho de erro de compressão deixava `BackupHistory` em status `running` | Backup "rodando" há horas que tinha falhado silenciosamente |
-| 5 | `backup_orchestrator_service.dart` | `logStep` ternário com ramos idênticos (dead code) | Indicava intenção perdida; sintoma de copy/paste |
-| 6 | `backup_orchestrator_service.dart` | `_log` (caminho non-step) ignorava `Result.create` | Falhas de I/O em log ficavam invisíveis |
-| 7 | `create_schedule.dart`, `update_schedule.dart` | 2× async-fold sem await em `refreshSchedule` | Scheduler operava com snapshot antigo após CRUD |
-| 8 | `scheduler_service.dart::waitForRunningBackups` | `% 10 == 0` para throttle pulava logs | Com `checkInterval=2s`, log de progresso nunca aparecia |
+| #   | Arquivo                                         | Bug                                                                                              | Impacto                                                                                              |
+| --- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| 1   | `scheduler_service.dart`                        | `_updateAllNextRuns` usava `result.fold(async {})` sem `await`                                   | Scheduler iniciava com `nextRunAt` obsoleto; schedules vencidos podiam disparar com timestamp errado |
+| 2   | `scheduler_service.dart`                        | Cast inseguro `failure as Failure`                                                               | Crash silencioso quando exception não era `Failure`                                                  |
+| 3   | `windows_service_service.dart`                  | 3× cast inseguro `failure as Failure` em `_runInstallPreflight`, `_configureNssm`, `stopService` | Crash potencial em operações de install/start/stop                                                   |
+| 4   | `backup_orchestrator_service.dart`              | Caminho de erro de compressão deixava `BackupHistory` em status `running`                        | Backup "rodando" há horas que tinha falhado silenciosamente                                          |
+| 5   | `backup_orchestrator_service.dart`              | `logStep` ternário com ramos idênticos (dead code)                                               | Indicava intenção perdida; sintoma de copy/paste                                                     |
+| 6   | `backup_orchestrator_service.dart`              | `_log` (caminho non-step) ignorava `Result.create`                                               | Falhas de I/O em log ficavam invisíveis                                                              |
+| 7   | `create_schedule.dart`, `update_schedule.dart`  | 2× async-fold sem await em `refreshSchedule`                                                     | Scheduler operava com snapshot antigo após CRUD                                                      |
+| 8   | `scheduler_service.dart::waitForRunningBackups` | `% 10 == 0` para throttle pulava logs                                                            | Com `checkInterval=2s`, log de progresso nunca aparecia                                              |
 
 ### 1.2. Bugs de qualidade/segurança (4)
 
-| # | Arquivo | Bug | Impacto |
-|---|---|---|---|
-| 9 | `signed_revocation_list_service.dart` | Fail-OPEN: lista corrompida = `_cachedRevokedKeys = {}` | Atacante quebrava lista → nenhum device aparecia revogado |
-| 10 | `signed_revocation_list_service.dart` | `$failure` interpolation no log | Mostrava "Failure(message: ..., code: null)" no log de operador |
-| 11 | `client_handler.dart` | Race condition em auth: stream não pausada durante validação async | Mensagens chegavam ao controller pré-auth |
-| 12 | `client_handler.dart`, `tcp_socket_client.dart` | Buffer overflow attack possível via `length` field não validado | Peer malicioso declarando 4 GB → OOM |
+| #   | Arquivo                                         | Bug                                                                | Impacto                                                         |
+| --- | ----------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------- |
+| 9   | `signed_revocation_list_service.dart`           | Fail-OPEN: lista corrompida = `_cachedRevokedKeys = {}`            | Atacante quebrava lista → nenhum device aparecia revogado       |
+| 10  | `signed_revocation_list_service.dart`           | `$failure` interpolation no log                                    | Mostrava "Failure(message: ..., code: null)" no log de operador |
+| 11  | `client_handler.dart`                           | Race condition em auth: stream não pausada durante validação async | Mensagens chegavam ao controller pré-auth                       |
+| 12  | `client_handler.dart`, `tcp_socket_client.dart` | Buffer overflow attack possível via `length` field não validado    | Peer malicioso declarando 4 GB → OOM                            |
 
 ### 1.3. Bugs descobertos por testes novos (4)
 
-| # | Arquivo | Bug | Detector |
-|---|---|---|---|
-| 13 | `directory_permission_check.dart` | Race entre chamadas paralelas (probe filename usava só timestamp) | Teste de paralelismo `[true, false, false]` |
-| 14 | `schedule_message_handler.dart` | 4× `result.fold(async, async)` sem await — silenciava erros de envio ao cliente | Audit |
-| 15 | `file_transfer_message_handler.dart` | `percent % 10 == 0` em loop de chunks — gerava 7.8k linhas duplicadas em milestones | Audit |
-| 16 | `sybase_backup_health_card.dart` | `_error = failure.toString()` exibia "Failure(message: ..., code: ...)" no UI | Audit |
+| #   | Arquivo                              | Bug                                                                                 | Detector                                    |
+| --- | ------------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------- |
+| 13  | `directory_permission_check.dart`    | Race entre chamadas paralelas (probe filename usava só timestamp)                   | Teste de paralelismo `[true, false, false]` |
+| 14  | `schedule_message_handler.dart`      | 4× `result.fold(async, async)` sem await — silenciava erros de envio ao cliente     | Audit                                       |
+| 15  | `file_transfer_message_handler.dart` | `percent % 10 == 0` em loop de chunks — gerava 7.8k linhas duplicadas em milestones | Audit                                       |
+| 16  | `sybase_backup_health_card.dart`     | `_error = failure.toString()` exibia "Failure(message: ..., code: ...)" no UI       | Audit                                       |
 
 ---
 
@@ -50,17 +50,17 @@ eliminadas**.
 
 ### 2.1. Helpers globais
 
-| Helper | Localização | Linhas | Consumidores | Linhas eliminadas |
-|---|---|---|---|---|
-| `RepositoryGuard` | `infrastructure/repositories/` | 107 | 11 repositórios | ~250 |
-| `AsyncStateMixin` | `application/providers/` | 130 | 13 providers | ~600 |
-| `ByteFormat` | `core/utils/` | 33 | 8 arquivos | ~65 |
-| `DirectoryPermissionCheck` | `core/utils/` | 67 | 4 arquivos (3 camadas) | ~80 |
-| `ToolPathHelp` | `core/utils/` | 163 | 2 arquivos | ~40 |
-| `EnvironmentLoader` | `core/config/` | ~50 | 1 arquivo (boot) | ~25 |
-| `UuidValidator` | `core/utils/` | 17 | 1 arquivo (boot) | (validação nova) |
-| `BackupCancellationService` | `infrastructure/external/process/` | ~40 | 2 services | ~30 |
-| `BackupHistoryStateMachine` | `domain/value_objects/` | ~60 | 2 repositórios | (lógica nova) |
+| Helper                      | Localização                        | Linhas | Consumidores           | Linhas eliminadas |
+| --------------------------- | ---------------------------------- | ------ | ---------------------- | ----------------- |
+| `RepositoryGuard`           | `infrastructure/repositories/`     | 107    | 11 repositórios        | ~250              |
+| `AsyncStateMixin`           | `application/providers/`           | 130    | 13 providers           | ~600              |
+| `ByteFormat`                | `core/utils/`                      | 33     | 8 arquivos             | ~65               |
+| `DirectoryPermissionCheck`  | `core/utils/`                      | 67     | 4 arquivos (3 camadas) | ~80               |
+| `ToolPathHelp`              | `core/utils/`                      | 163    | 2 arquivos             | ~40               |
+| `EnvironmentLoader`         | `core/config/`                     | ~50    | 1 arquivo (boot)       | ~25               |
+| `UuidValidator`             | `core/utils/`                      | 17     | 1 arquivo (boot)       | (validação nova)  |
+| `BackupCancellationService` | `infrastructure/external/process/` | ~40    | 2 services             | ~30               |
+| `BackupHistoryStateMachine` | `domain/value_objects/`            | ~60    | 2 repositórios         | (lógica nova)     |
 
 ### 2.2. Helpers locais (consolidados em arquivos específicos)
 
@@ -85,19 +85,19 @@ eliminadas**.
 
 ## 3. Padrões boilerplate eliminados (total: ~1.250 linhas)
 
-| Padrão | Cópias eliminadas | Helper substituto |
-|---|---|---|
-| `_NotFoundException` + `_mapNotFound` em repositórios | 9 cópias | `RepositoryGuard.run` com passthrough de `Failure` |
-| `try/catch + DatabaseFailure(message: ..., originalError: e)` | ~30 cópias | `RepositoryGuard.run/runVoid` |
-| `_isLoading + _error + notifyListeners` boilerplate | 13 providers × ~4 métodos | `AsyncStateMixin.runAsync` |
-| `_formatBytes` / `_formatFileSize` | 7 cópias | `ByteFormat.format` |
-| `_checkWritePermission` (probe file inline) | 4 cópias | `DirectoryPermissionCheck.hasWritePermission` |
-| `_checkWinRarAvailable` (path probe) | 2 cópias | `WinRarService.isInstalledInSystem` |
-| `failure as Failure` cast direto | 11 cópias | `is Failure ? f.message : f.toString()` |
-| `failure.toString()` exibido ao usuário | 1 cópia (presentation) | `f is Failure ? f.message : f.toString()` |
-| Tool not found message generation | 3 cópias | `ToolPathHelp.buildMessage` |
-| Send error em handlers de protocolo | 14 cópias (1 arquivo) | `_sendError` local |
-| `switch` com cases quase-idênticos | 1 caso refatorado | `Map<Enum, Config>` lookup |
+| Padrão                                                        | Cópias eliminadas         | Helper substituto                                  |
+| ------------------------------------------------------------- | ------------------------- | -------------------------------------------------- |
+| `_NotFoundException` + `_mapNotFound` em repositórios         | 9 cópias                  | `RepositoryGuard.run` com passthrough de `Failure` |
+| `try/catch + DatabaseFailure(message: ..., originalError: e)` | ~30 cópias                | `RepositoryGuard.run/runVoid`                      |
+| `_isLoading + _error + notifyListeners` boilerplate           | 13 providers × ~4 métodos | `AsyncStateMixin.runAsync`                         |
+| `_formatBytes` / `_formatFileSize`                            | 7 cópias                  | `ByteFormat.format`                                |
+| `_checkWritePermission` (probe file inline)                   | 4 cópias                  | `DirectoryPermissionCheck.hasWritePermission`      |
+| `_checkWinRarAvailable` (path probe)                          | 2 cópias                  | `WinRarService.isInstalledInSystem`                |
+| `failure as Failure` cast direto                              | 11 cópias                 | `is Failure ? f.message : f.toString()`            |
+| `failure.toString()` exibido ao usuário                       | 1 cópia (presentation)    | `f is Failure ? f.message : f.toString()`          |
+| Tool not found message generation                             | 3 cópias                  | `ToolPathHelp.buildMessage`                        |
+| Send error em handlers de protocolo                           | 14 cópias (1 arquivo)     | `_sendError` local                                 |
+| `switch` com cases quase-idênticos                            | 1 caso refatorado         | `Map<Enum, Config>` lookup                         |
 
 ---
 
@@ -105,19 +105,20 @@ eliminadas**.
 
 ### 4.1. Testes diretos para helpers críticos (83)
 
-| Helper | Testes | Detecta regressão de |
-|---|---|---|
-| `RepositoryGuard` | 11 | passthrough de `Failure` semântico, wrap defensivo, runVoid |
-| `AsyncStateMixin` | 21 | contador atômico vs boolean, error code extraction, dispose-safety |
-| `ByteFormat` | 11 | precisão 2 decimais, boundaries B/KB/MB/GB, sub-second truncation |
-| `ToolPathHelp` | 17 | 4 famílias de DBs + isToolNotFoundError em PT/EN/bash |
-| `UuidValidator` | 14 | UUIDs v1-v5 válidos, edge cases, defesas contra injection |
-| `DirectoryPermissionCheck` | 7 | parallel checks (capturou bug real), defensive contract, leftover guard |
-| Outros (já existiam) | 2 | — |
+| Helper                     | Testes | Detecta regressão de                                                    |
+| -------------------------- | ------ | ----------------------------------------------------------------------- |
+| `RepositoryGuard`          | 11     | passthrough de `Failure` semântico, wrap defensivo, runVoid             |
+| `AsyncStateMixin`          | 21     | contador atômico vs boolean, error code extraction, dispose-safety      |
+| `ByteFormat`               | 11     | precisão 2 decimais, boundaries B/KB/MB/GB, sub-second truncation       |
+| `ToolPathHelp`             | 17     | 4 famílias de DBs + isToolNotFoundError em PT/EN/bash                   |
+| `UuidValidator`            | 14     | UUIDs v1-v5 válidos, edge cases, defesas contra injection               |
+| `DirectoryPermissionCheck` | 7      | parallel checks (capturou bug real), defensive contract, leftover guard |
+| Outros (já existiam)       | 2      | —                                                                       |
 
 ### 4.2. Testes para lógica refatorada (3)
 
 `ValidateSybaseLogBackupPreflight`:
+
 - `nextLogSequence` calculation com logs antes do full (não conta)
 - chain-broken warning quando último terminal foi error
 - ignora running zombies ao detectar último terminal (proteção contra
@@ -198,11 +199,12 @@ os outros widgets já usavam o pattern correto após waves anteriores.
 ### 6.1. `architectural_patterns.mdc`
 
 Novo rule de ~600 linhas em `.cursor/rules/`. Documenta:
+
 - **5 helpers centrais** (RepositoryGuard, AsyncStateMixin, ByteFormat,
-  DirectoryPermissionCheck, _safeNotifier*)
+  DirectoryPermissionCheck, \_safeNotifier\*)
 - **8 anti-patterns recorrentes** (async-fold, cast as Failure, history
   em running, Result ignorado, throttle %N, failure.toString para
-  usuário, _sendError em handlers, switch com cases iguais)
+  usuário, \_sendError em handlers, switch com cases iguais)
 - **Convenções de naming** para novos helpers DRY
 - **Checklist final** de 13 itens para revisão de código
 
@@ -219,22 +221,22 @@ Novo rule de ~600 linhas em `.cursor/rules/`. Documenta:
 
 ## 7. Métricas finais
 
-| Métrica | Antes | Depois | Δ |
-|---|---|---|---|
-| Total de testes | 534 | 620 | **+86** |
-| Issues do analyzer | (não medido) | 0 | — |
-| Bugs ativos | (não medido) | 0 | — |
-| Casts inseguros `as Failure` | 11 | 0 | **−11** |
-| Async-fold bugs | 7+ | 0 | **−7+** |
-| Linhas duplicadas | (não medido) | — | **−1.250+** |
-| Helpers DRY criados | 0 | 9 globais + N locais | — |
-| Camadas auditadas | — | 8 (todas) | — |
-| Providers refatorados | 0 | 13 | — |
-| Repositórios refatorados | 0 | 11 | — |
-| Use cases refatorados | 0 | 3 | — |
-| Handlers refatorados | 0 | 2 | — |
-| Regras Cursor adicionadas | 0 | 1 nova + 2 atualizadas | — |
-| Itens no checklist final | — | 13 | — |
+| Métrica                      | Antes        | Depois                 | Δ           |
+| ---------------------------- | ------------ | ---------------------- | ----------- |
+| Total de testes              | 534          | 620                    | **+86**     |
+| Issues do analyzer           | (não medido) | 0                      | —           |
+| Bugs ativos                  | (não medido) | 0                      | —           |
+| Casts inseguros `as Failure` | 11           | 0                      | **−11**     |
+| Async-fold bugs              | 7+           | 0                      | **−7+**     |
+| Linhas duplicadas            | (não medido) | —                      | **−1.250+** |
+| Helpers DRY criados          | 0            | 9 globais + N locais   | —           |
+| Camadas auditadas            | —            | 8 (todas)              | —           |
+| Providers refatorados        | 0            | 13                     | —           |
+| Repositórios refatorados     | 0            | 11                     | —           |
+| Use cases refatorados        | 0            | 3                      | —           |
+| Handlers refatorados         | 0            | 2                      | —           |
+| Regras Cursor adicionadas    | 0            | 1 nova + 2 atualizadas | —           |
+| Itens no checklist final     | —            | 13                     | —           |
 
 ---
 

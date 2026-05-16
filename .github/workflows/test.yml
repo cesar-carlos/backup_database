@@ -35,6 +35,14 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
+      - name: Reject inline UI locale _t helpers (PR-D D1)
+        run: |
+          set -euo pipefail
+          if grep -RIn --include='*.dart' -E 'String _t\((String pt, String en|BuildContext context, String pt, String en)\)' lib; then
+            echo 'Forbidden: inline String _t(...) — use appLocaleString from core/l10n.'
+            exit 1
+          fi
+
       - name: Run unit tests
         run: flutter test test/unit/ --reporter compact
 

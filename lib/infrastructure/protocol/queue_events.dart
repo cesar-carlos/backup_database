@@ -35,20 +35,19 @@ Message createBackupQueuedEvent({
   int? queuePosition,
   String? requestedBy,
   String? message,
-}) =>
-    _buildQueueEvent(
-      type: MessageType.backupQueued,
-      runId: runId,
-      scheduleId: scheduleId,
-      sequence: sequence,
-      eventId: eventId,
-      serverTimeUtc: serverTimeUtc,
-      extra: <String, dynamic>{
-        'queuePosition': ?queuePosition,
-        'requestedBy': ?requestedBy,
-      },
-      message: message,
-    );
+}) => _buildQueueEvent(
+  type: MessageType.backupQueued,
+  runId: runId,
+  scheduleId: scheduleId,
+  sequence: sequence,
+  eventId: eventId,
+  serverTimeUtc: serverTimeUtc,
+  extra: <String, dynamic>{
+    'queuePosition': ?queuePosition,
+    'requestedBy': ?requestedBy,
+  },
+  message: message,
+);
 
 Message createBackupDequeuedEvent({
   required String runId,
@@ -58,19 +57,18 @@ Message createBackupDequeuedEvent({
   required DateTime serverTimeUtc,
   String? reason, // 'dispatched' (vai virar `backupStarted`) ou 'cancelled'
   String? message,
-}) =>
-    _buildQueueEvent(
-      type: MessageType.backupDequeued,
-      runId: runId,
-      scheduleId: scheduleId,
-      sequence: sequence,
-      eventId: eventId,
-      serverTimeUtc: serverTimeUtc,
-      extra: <String, dynamic>{
-        'reason': ?reason,
-      },
-      message: message,
-    );
+}) => _buildQueueEvent(
+  type: MessageType.backupDequeued,
+  runId: runId,
+  scheduleId: scheduleId,
+  sequence: sequence,
+  eventId: eventId,
+  serverTimeUtc: serverTimeUtc,
+  extra: <String, dynamic>{
+    'reason': ?reason,
+  },
+  message: message,
+);
 
 Message createBackupStartedEvent({
   required String runId,
@@ -79,16 +77,15 @@ Message createBackupStartedEvent({
   required String eventId,
   required DateTime serverTimeUtc,
   String? message,
-}) =>
-    _buildQueueEvent(
-      type: MessageType.backupStarted,
-      runId: runId,
-      scheduleId: scheduleId,
-      sequence: sequence,
-      eventId: eventId,
-      serverTimeUtc: serverTimeUtc,
-      message: message,
-    );
+}) => _buildQueueEvent(
+  type: MessageType.backupStarted,
+  runId: runId,
+  scheduleId: scheduleId,
+  sequence: sequence,
+  eventId: eventId,
+  serverTimeUtc: serverTimeUtc,
+  message: message,
+);
 
 Message _buildQueueEvent({
   required MessageType type,
@@ -170,7 +167,7 @@ QueueEvent? readQueueEvent(Message message) {
     sequence: p['sequence'] is int ? p['sequence'] as int : 0,
     serverTimeUtc: p['serverTimeUtc'] is String
         ? (DateTime.tryParse(p['serverTimeUtc'] as String) ??
-            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+              DateTime.fromMillisecondsSinceEpoch(0).toUtc())
         : DateTime.fromMillisecondsSinceEpoch(0).toUtc(),
     queuePosition: p['queuePosition'] is int ? p['queuePosition'] as int : null,
     reason: p['reason'] is String ? p['reason'] as String : null,
@@ -279,12 +276,18 @@ CancelQueuedBackupResult readCancelQueuedBackupResponse(Message message) {
   final runId = p['runId'] is String ? p['runId'] as String : '';
   final serverTime = p['serverTimeUtc'] is String
       ? (DateTime.tryParse(p['serverTimeUtc'] as String) ??
-          DateTime.fromMillisecondsSinceEpoch(0).toUtc())
+            DateTime.fromMillisecondsSinceEpoch(0).toUtc())
       : DateTime.fromMillisecondsSinceEpoch(0).toUtc();
-  final scheduleId = p['scheduleId'] is String ? p['scheduleId'] as String : null;
+  final scheduleId = p['scheduleId'] is String
+      ? p['scheduleId'] as String
+      : null;
   final messageText = p['message'] is String ? p['message'] as String : null;
-  final errorCodeRaw = p['errorCode'] is String ? p['errorCode'] as String : null;
-  final errorCode = errorCodeRaw != null ? ErrorCode.fromString(errorCodeRaw) : null;
+  final errorCodeRaw = p['errorCode'] is String
+      ? p['errorCode'] as String
+      : null;
+  final errorCode = errorCodeRaw != null
+      ? ErrorCode.fromString(errorCodeRaw)
+      : null;
   return CancelQueuedBackupResult(
     state: state,
     runId: runId,

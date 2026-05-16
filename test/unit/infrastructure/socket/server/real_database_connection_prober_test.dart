@@ -1,13 +1,19 @@
+import 'package:backup_database/core/errors/failure.dart'
+    show ValidationFailure;
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
+import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/infrastructure/external/process/firebird_backup_service_stub.dart';
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/socket/server/database_connection_prober.dart';
@@ -17,11 +23,20 @@ import 'package:mocktail/mocktail.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class _MockSybaseService extends Mock implements ISybaseBackupService {}
+
 class _MockSqlServerService extends Mock implements ISqlServerBackupService {}
+
 class _MockPostgresService extends Mock implements IPostgresBackupService {}
+
 class _MockSybaseRepo extends Mock implements ISybaseConfigRepository {}
+
 class _MockSqlServerRepo extends Mock implements ISqlServerConfigRepository {}
+
 class _MockPostgresRepo extends Mock implements IPostgresConfigRepository {}
+
+class _MockFirebirdService extends Mock implements IFirebirdBackupService {}
+
+class _MockFirebirdRepo extends Mock implements IFirebirdConfigRepository {}
 
 void main() {
   late _MockSybaseService sybaseSvc;
@@ -30,6 +45,8 @@ void main() {
   late _MockSybaseRepo sybaseRepo;
   late _MockSqlServerRepo sqlRepo;
   late _MockPostgresRepo pgRepo;
+  late _MockFirebirdService fbSvc;
+  late _MockFirebirdRepo fbRepo;
   late RealDatabaseConnectionProber prober;
 
   final sybaseCfg = SybaseConfig(
@@ -56,11 +73,20 @@ void main() {
     username: 'u',
     password: 'p',
   );
+  final fbCfg = FirebirdConfig(
+    id: 'fb-1',
+    name: 'n',
+    host: 'h',
+    databaseFile: r'C:\data\db.fdb',
+    username: 'u',
+    password: 'p',
+  );
 
   setUpAll(() {
     registerFallbackValue(sybaseCfg);
     registerFallbackValue(sqlCfg);
     registerFallbackValue(pgCfg);
+    registerFallbackValue(fbCfg);
   });
 
   setUp(() {
@@ -70,22 +96,28 @@ void main() {
     sybaseRepo = _MockSybaseRepo();
     sqlRepo = _MockSqlServerRepo();
     pgRepo = _MockPostgresRepo();
+    fbSvc = _MockFirebirdService();
+    fbRepo = _MockFirebirdRepo();
     prober = RealDatabaseConnectionProber(
       sybaseService: sybaseSvc,
       sqlServerService: sqlSvc,
       postgresService: pgSvc,
+      firebirdService: fbSvc,
       sybaseRepository: sybaseRepo,
       sqlServerRepository: sqlRepo,
       postgresRepository: pgRepo,
+      firebirdRepository: fbRepo,
     );
   });
 
   group('RealDatabaseConnectionProber — Sybase', () {
     test('por id: sucesso (testConnection true)', () async {
-      when(() => sybaseRepo.getById('sb-1'))
-          .thenAnswer((_) async => rd.Success(sybaseCfg));
-      when(() => sybaseSvc.testConnection(any()))
-          .thenAnswer((_) async => const rd.Success(true));
+      when(
+        () => sybaseRepo.getById('sb-1'),
+      ).thenAnswer((_) async => rd.Success(sybaseCfg));
+      when(
+        () => sybaseSvc.testConnection(any()),
+      ).thenAnswer((_) async => const rd.Success(true));
 
       final outcome = await prober.probe(
         databaseType: RemoteDatabaseType.sybase,
@@ -97,10 +129,12 @@ void main() {
     });
 
     test('por id: testConnection false vira authenticationFailed', () async {
-      when(() => sybaseRepo.getById('sb-1'))
-          .thenAnswer((_) async => rd.Success(sybaseCfg));
-      when(() => sybaseSvc.testConnection(any()))
-          .thenAnswer((_) async => const rd.Success(false));
+      when(
+        () => sybaseRepo.getById('sb-1'),
+      ).thenAnswer((_) async => rd.Success(sybaseCfg));
+      when(
+        () => sybaseSvc.testConnection(any()),
+      ).thenAnswer((_) async => const rd.Success(false));
 
       final outcome = await prober.probe(
         databaseType: RemoteDatabaseType.sybase,
@@ -111,8 +145,9 @@ void main() {
     });
 
     test('por id: config nao encontrada -> fileNotFound', () async {
-      when(() => sybaseRepo.getById('xx'))
-          .thenAnswer((_) async => rd.Failure(Exception('not found')));
+      when(
+        () => sybaseRepo.getById('xx'),
+      ).thenAnswer((_) async => rd.Failure(Exception('not found')));
 
       final outcome = await prober.probe(
         databaseType: RemoteDatabaseType.sybase,
@@ -122,25 +157,31 @@ void main() {
       expect(outcome.errorCode, ErrorCode.fileNotFound);
     });
 
-    test('por id: testConnection com Failure timeout vira ErrorCode.timeout',
-        () async {
-      when(() => sybaseRepo.getById('sb-1'))
-          .thenAnswer((_) async => rd.Success(sybaseCfg));
-      when(() => sybaseSvc.testConnection(any()))
-          .thenAnswer((_) async => rd.Failure(Exception('Timeout expirou')));
+    test(
+      'por id: testConnection com Failure timeout vira ErrorCode.timeout',
+      () async {
+        when(
+          () => sybaseRepo.getById('sb-1'),
+        ).thenAnswer((_) async => rd.Success(sybaseCfg));
+        when(
+          () => sybaseSvc.testConnection(any()),
+        ).thenAnswer((_) async => rd.Failure(Exception('Timeout expirou')));
 
-      final outcome = await prober.probe(
-        databaseType: RemoteDatabaseType.sybase,
-        configRef: const DatabaseConfigById('sb-1'),
-      );
-      expect(outcome.errorCode, ErrorCode.timeout);
-    });
+        final outcome = await prober.probe(
+          databaseType: RemoteDatabaseType.sybase,
+          configRef: const DatabaseConfigById('sb-1'),
+        );
+        expect(outcome.errorCode, ErrorCode.timeout);
+      },
+    );
 
     test('por id: testConnection com Failure socket -> ioError', () async {
-      when(() => sybaseRepo.getById('sb-1'))
-          .thenAnswer((_) async => rd.Success(sybaseCfg));
-      when(() => sybaseSvc.testConnection(any()))
-          .thenAnswer((_) async => rd.Failure(Exception('Socket connection refused')));
+      when(
+        () => sybaseRepo.getById('sb-1'),
+      ).thenAnswer((_) async => rd.Success(sybaseCfg));
+      when(() => sybaseSvc.testConnection(any())).thenAnswer(
+        (_) async => rd.Failure(Exception('Socket connection refused')),
+      );
 
       final outcome = await prober.probe(
         databaseType: RemoteDatabaseType.sybase,
@@ -149,24 +190,28 @@ void main() {
       expect(outcome.errorCode, ErrorCode.ioError);
     });
 
-    test('por id: testConnection com Failure auth-related -> authFailed',
-        () async {
-      when(() => sybaseRepo.getById('sb-1'))
-          .thenAnswer((_) async => rd.Success(sybaseCfg));
-      when(() => sybaseSvc.testConnection(any())).thenAnswer(
-        (_) async => rd.Failure(Exception('Login falhou: senha invalida')),
-      );
+    test(
+      'por id: testConnection com Failure auth-related -> authFailed',
+      () async {
+        when(
+          () => sybaseRepo.getById('sb-1'),
+        ).thenAnswer((_) async => rd.Success(sybaseCfg));
+        when(() => sybaseSvc.testConnection(any())).thenAnswer(
+          (_) async => rd.Failure(Exception('Login falhou: senha invalida')),
+        );
 
-      final outcome = await prober.probe(
-        databaseType: RemoteDatabaseType.sybase,
-        configRef: const DatabaseConfigById('sb-1'),
-      );
-      expect(outcome.errorCode, ErrorCode.authenticationFailed);
-    });
+        final outcome = await prober.probe(
+          databaseType: RemoteDatabaseType.sybase,
+          configRef: const DatabaseConfigById('sb-1'),
+        );
+        expect(outcome.errorCode, ErrorCode.authenticationFailed);
+      },
+    );
 
     test('ad-hoc: passa map -> entity sem persistir', () async {
-      when(() => sybaseSvc.testConnection(any()))
-          .thenAnswer((_) async => const rd.Success(true));
+      when(
+        () => sybaseSvc.testConnection(any()),
+      ).thenAnswer((_) async => const rd.Success(true));
 
       final outcome = await prober.probe(
         databaseType: RemoteDatabaseType.sybase,
@@ -196,10 +241,12 @@ void main() {
 
   group('RealDatabaseConnectionProber — SqlServer', () {
     test('despacha por tipo correto', () async {
-      when(() => sqlRepo.getById('sql-1'))
-          .thenAnswer((_) async => rd.Success(sqlCfg));
-      when(() => sqlSvc.testConnection(any()))
-          .thenAnswer((_) async => const rd.Success(true));
+      when(
+        () => sqlRepo.getById('sql-1'),
+      ).thenAnswer((_) async => rd.Success(sqlCfg));
+      when(
+        () => sqlSvc.testConnection(any()),
+      ).thenAnswer((_) async => const rd.Success(true));
 
       final outcome = await prober.probe(
         databaseType: RemoteDatabaseType.sqlServer,
@@ -209,15 +256,18 @@ void main() {
       verify(() => sqlSvc.testConnection(sqlCfg)).called(1);
       verifyNever(() => sybaseSvc.testConnection(any()));
       verifyNever(() => pgSvc.testConnection(any()));
+      verifyNever(() => fbSvc.testConnection(any()));
     });
   });
 
   group('RealDatabaseConnectionProber — Postgres', () {
     test('despacha por tipo correto', () async {
-      when(() => pgRepo.getById('pg-1'))
-          .thenAnswer((_) async => rd.Success(pgCfg));
-      when(() => pgSvc.testConnection(any()))
-          .thenAnswer((_) async => const rd.Success(true));
+      when(
+        () => pgRepo.getById('pg-1'),
+      ).thenAnswer((_) async => rd.Success(pgCfg));
+      when(
+        () => pgSvc.testConnection(any()),
+      ).thenAnswer((_) async => const rd.Success(true));
 
       final outcome = await prober.probe(
         databaseType: RemoteDatabaseType.postgres,
@@ -225,16 +275,103 @@ void main() {
       );
       expect(outcome.connected, isTrue);
       verify(() => pgSvc.testConnection(pgCfg)).called(1);
+      verifyNever(() => fbSvc.testConnection(any()));
+    });
+  });
+
+  group('RealDatabaseConnectionProber — Firebird', () {
+    test('por id: config nao encontrada -> fileNotFound', () async {
+      when(
+        () => fbRepo.getById('xx'),
+      ).thenAnswer((_) async => rd.Failure(Exception('not found')));
+
+      final outcome = await prober.probe(
+        databaseType: RemoteDatabaseType.firebird,
+        configRef: const DatabaseConfigById('xx'),
+      );
+      expect(outcome.connected, isFalse);
+      expect(outcome.errorCode, ErrorCode.fileNotFound);
+      verifyNever(() => fbSvc.testConnection(any()));
+    });
+
+    test('por id: despacha testConnection', () async {
+      when(
+        () => fbRepo.getById('fb-1'),
+      ).thenAnswer((_) async => rd.Success(fbCfg));
+      when(
+        () => fbSvc.testConnection(any()),
+      ).thenAnswer((_) async => const rd.Success(true));
+
+      final outcome = await prober.probe(
+        databaseType: RemoteDatabaseType.firebird,
+        configRef: const DatabaseConfigById('fb-1'),
+      );
+      expect(outcome.connected, isTrue);
+      verify(() => fbSvc.testConnection(fbCfg)).called(1);
+      verifyNever(() => sybaseSvc.testConnection(any()));
+    });
+
+    test('por id: Failure retorna outcome com mensagem', () async {
+      when(
+        () => fbRepo.getById('fb-1'),
+      ).thenAnswer((_) async => rd.Success(fbCfg));
+      when(
+        () => fbSvc.testConnection(any()),
+      ).thenAnswer(
+        (_) async => const rd.Failure(
+          ValidationFailure(
+            message: FirebirdBackupServiceStub.probePendingMessage,
+          ),
+        ),
+      );
+
+      final outcome = await prober.probe(
+        databaseType: RemoteDatabaseType.firebird,
+        configRef: const DatabaseConfigById('fb-1'),
+      );
+      expect(outcome.connected, isFalse);
+      expect(outcome.error, isNotNull);
+      expect(outcome.error!.isNotEmpty, isTrue);
+    });
+
+    test('ad-hoc: payload invalido -> invalidRequest', () async {
+      final outcome = await prober.probe(
+        databaseType: RemoteDatabaseType.firebird,
+        configRef: const DatabaseConfigAdhoc(<String, dynamic>{}),
+      );
+      expect(outcome.connected, isFalse);
+      expect(outcome.errorCode, ErrorCode.invalidRequest);
+      verifyNever(() => fbSvc.testConnection(any()));
+    });
+
+    test('ad-hoc: despacha sem getById', () async {
+      when(
+        () => fbSvc.testConnection(any()),
+      ).thenAnswer((_) async => const rd.Success(true));
+
+      final outcome = await prober.probe(
+        databaseType: RemoteDatabaseType.firebird,
+        configRef: const DatabaseConfigAdhoc(<String, dynamic>{
+          'name': 't',
+          'host': 'localhost',
+          'databaseFile': r'C:\x.fdb',
+          'username': 'u',
+        }),
+      );
+      expect(outcome.connected, isTrue);
+      verifyNever(() => fbRepo.getById(any()));
     });
   });
 
   group('Latencia', () {
     test('latencyMs e nao-negativo em todos os paths', () async {
       // sucesso
-      when(() => sybaseRepo.getById(any()))
-          .thenAnswer((_) async => rd.Success(sybaseCfg));
-      when(() => sybaseSvc.testConnection(any()))
-          .thenAnswer((_) async => const rd.Success(true));
+      when(
+        () => sybaseRepo.getById(any()),
+      ).thenAnswer((_) async => rd.Success(sybaseCfg));
+      when(
+        () => sybaseSvc.testConnection(any()),
+      ).thenAnswer((_) async => const rd.Success(true));
       var outcome = await prober.probe(
         databaseType: RemoteDatabaseType.sybase,
         configRef: const DatabaseConfigById('x'),
@@ -242,8 +379,9 @@ void main() {
       expect(outcome.latencyMs, greaterThanOrEqualTo(0));
 
       // falha
-      when(() => sybaseRepo.getById(any()))
-          .thenAnswer((_) async => rd.Failure(Exception('not found')));
+      when(
+        () => sybaseRepo.getById(any()),
+      ).thenAnswer((_) async => rd.Failure(Exception('not found')));
       outcome = await prober.probe(
         databaseType: RemoteDatabaseType.sybase,
         configRef: const DatabaseConfigById('x'),

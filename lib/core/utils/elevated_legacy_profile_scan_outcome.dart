@@ -94,10 +94,11 @@ ElevatedLegacyProfileScanOutcome decodeElevatedLegacyProfileScanJson(
       methodUsed: methodUsed,
     );
   }
-  final paths = list
-      .map((dynamic e) => _windowsPathContext.normalize(e.toString()))
-      .toList()
-    ..sort();
+  final paths =
+      list
+          .map((dynamic e) => _windowsPathContext.normalize(e.toString()))
+          .toList()
+        ..sort();
 
   return ElevatedLegacyProfileScanOutcome.success(
     paths: paths,

@@ -66,8 +66,9 @@ class LicenseRepository implements ILicenseRepository {
       // Caso "criar": não havia existing.
       create,
       (failure) {
-        final original =
-            failure is DatabaseFailure ? failure.originalError : null;
+        final original = failure is DatabaseFailure
+            ? failure.originalError
+            : null;
         if (original is _UpsertNeedsUpdate) {
           return update(original.licenseToUpdate);
         }
@@ -145,7 +146,6 @@ class LicenseRepository implements ILicenseRepository {
       updatedAt: Value(license.updatedAt),
     );
   }
-
 }
 
 /// Sentinel para o `upsertByDeviceKey`: sinaliza que a licença deve ir

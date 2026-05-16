@@ -45,6 +45,7 @@ class NotificationService implements INotificationService {
   final ILicenseValidationService _licenseValidationService;
   final IMetricsCollector? _metricsCollector;
   static const int _maxParallelRecipientSends = 4;
+
   /// Máximo de configurações de e-mail processadas em paralelo. Cada
   /// config faz auth + envio SMTP — paralelizar reduz tempo total
   /// quando há 2+ configs (ex.: corporativa + auditoria).
@@ -175,36 +176,34 @@ Data/Hora do teste: ${DateTime.now()}
       body: body,
     );
 
-    sendResult.fold(
-      (_) async {
-        LoggerService.info(
-          '[NotificationService] Teste SMTP aceito | '
-          'correlationId=$correlationId '
-          'to=$destinationRecipient',
-        );
-        await _saveEmailTestAudit(
-          config: config,
-          correlationId: correlationId,
-          recipientEmail: destinationRecipient,
-          senderEmail: senderEmail,
-        );
-      },
-      (failure) async {
-        LoggerService.warning(
-          '[NotificationService] Teste SMTP falhou | '
-          'correlationId=$correlationId '
-          'to=$destinationRecipient '
-          'erro=$failure',
-        );
-        await _saveEmailTestAudit(
-          config: config,
-          correlationId: correlationId,
-          recipientEmail: destinationRecipient,
-          senderEmail: senderEmail,
-          failure: failure,
-        );
-      },
-    );
+    if (sendResult.isSuccess()) {
+      LoggerService.info(
+        '[NotificationService] Teste SMTP aceito | '
+        'correlationId=$correlationId '
+        'to=$destinationRecipient',
+      );
+      await _saveEmailTestAudit(
+        config: config,
+        correlationId: correlationId,
+        recipientEmail: destinationRecipient,
+        senderEmail: senderEmail,
+      );
+    } else {
+      final Object? failure = sendResult.exceptionOrNull();
+      LoggerService.warning(
+        '[NotificationService] Teste SMTP falhou | '
+        'correlationId=$correlationId '
+        'to=$destinationRecipient '
+        'erro=$failure',
+      );
+      await _saveEmailTestAudit(
+        config: config,
+        correlationId: correlationId,
+        recipientEmail: destinationRecipient,
+        senderEmail: senderEmail,
+        failure: failure,
+      );
+    }
 
     return sendResult;
   }
@@ -518,10 +517,9 @@ Data/Hora do teste: ${DateTime.now()}
         // Constrói uma mensagem de warning baseada no errorMessage do
         // histórico (que carrega o motivo do warning, ex.: "Backup
         // finalizado sem novos dados").
-        final warningMessage =
-            (history.errorMessage?.isNotEmpty ?? false)
-                ? history.errorMessage!
-                : 'Backup concluído com aviso (sem detalhes).';
+        final warningMessage = (history.errorMessage?.isNotEmpty ?? false)
+            ? history.errorMessage!
+            : 'Backup concluído com aviso (sem detalhes).';
         sendResult = await _emailService.sendBackupWarningNotification(
           config: targetConfig,
           databaseName: history.databaseName,
@@ -960,8 +958,7 @@ class _ConfigSendOutcome {
     this.failure,
   });
 
-  factory _ConfigSendOutcome.empty() =>
-      const _ConfigSendOutcome._(sent: false);
+  factory _ConfigSendOutcome.empty() => const _ConfigSendOutcome._(sent: false);
 
   factory _ConfigSendOutcome.failure(Object failure) =>
       _ConfigSendOutcome._(sent: false, failure: failure);

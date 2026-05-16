@@ -1,4 +1,5 @@
-﻿import 'dart:ui' as ui;
+﻿import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/material.dart';
@@ -101,9 +102,11 @@ class WindowManagerService with WindowListener {
     LoggerService.debug('Fechar para bandeja: $value');
 
     // Configurar preventClose baseado na configuração (assíncrono em background)
-    _updatePreventClose(value).catchError((e) {
-      LoggerService.warning('Erro ao configurar preventClose: $e');
-    });
+    unawaited(
+      _updatePreventClose(value).catchError((e) {
+        LoggerService.warning('Erro ao configurar preventClose: $e');
+      }),
+    );
   }
 
   Future<void> _updatePreventClose(bool closeToTray) async {
@@ -252,9 +255,11 @@ class WindowManagerService with WindowListener {
   @override
   void onWindowMinimize() {
     if (_minimizeToTray) {
-      hide().catchError((e) {
-        LoggerService.error('Erro ao ocultar janela ao minimizar', e);
-      });
+      unawaited(
+        hide().catchError((e) {
+          LoggerService.error('Erro ao ocultar janela ao minimizar', e);
+        }),
+      );
     }
     _onMinimize?.call();
   }

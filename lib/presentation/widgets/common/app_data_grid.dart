@@ -2,6 +2,10 @@ import 'dart:math' as math;
 
 import 'package:fluent_ui/fluent_ui.dart';
 
+const double _kAppDataGridActionSlotWidth = 44;
+const double _kAppDataGridActionsPadding = 16;
+const double _kAppDataGridActionsMinWidth = 120;
+
 typedef AppDataGridCellBuilder<T> =
     Widget Function(BuildContext context, T row);
 
@@ -126,9 +130,11 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
             i: widget.columns[i].width,
           if (hasActions)
             widget.columns.length: FixedColumnWidth(
-              math
-                  .max(76, ((widget.actions.length * 36) + 16) * 0.83)
-                  .toDouble(),
+              math.max(
+                _kAppDataGridActionsMinWidth,
+                widget.actions.length * _kAppDataGridActionSlotWidth +
+                    _kAppDataGridActionsPadding,
+              ),
             ),
         };
         final viewportWidth = constraints.maxWidth.isFinite

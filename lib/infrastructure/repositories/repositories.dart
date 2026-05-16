@@ -1,11 +1,13 @@
 export 'backup_destination_repository.dart';
 export 'backup_history_repository.dart';
 export 'backup_log_repository.dart';
+export 'base_database_config_repository.dart';
 export 'cached_backup_history_repository.dart';
 export 'connection_log_repository.dart';
 export 'email_config_repository.dart';
 export 'email_notification_target_repository.dart';
 export 'email_test_audit_repository.dart';
+export 'firebird_config_repository.dart';
 export 'license_repository.dart';
 export 'machine_settings_repository.dart';
 export 'postgres_config_repository.dart';

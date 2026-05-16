@@ -205,9 +205,9 @@ class UnsupportedProtocolVersionException extends ProtocolException {
     required this.receivedVersion,
     required this.supportedVersions,
   }) : super(
-          'Unsupported protocol wire version: $receivedVersion '
-          '(supported: ${supportedVersions.join(', ')})',
-        );
+         'Unsupported protocol wire version: $receivedVersion '
+         '(supported: ${supportedVersions.join(', ')})',
+       );
 
   final int receivedVersion;
   final Set<int> supportedVersions;

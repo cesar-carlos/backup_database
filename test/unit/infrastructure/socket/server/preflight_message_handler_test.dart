@@ -38,17 +38,17 @@ void main() {
         final handler = PreflightMessageHandler(
           checks: {
             'compression_tool': () async => const PreflightCheckResult(
-                  name: 'compression_tool',
-                  passed: true,
-                  severity: PreflightSeverity.blocking,
-                  message: 'WinRAR OK',
-                ),
+              name: 'compression_tool',
+              passed: true,
+              severity: PreflightSeverity.blocking,
+              message: 'WinRAR OK',
+            ),
             'disk_space': () async => const PreflightCheckResult(
-                  name: 'disk_space',
-                  passed: true,
-                  severity: PreflightSeverity.warning,
-                  message: '50GB livres',
-                ),
+              name: 'disk_space',
+              passed: true,
+              severity: PreflightSeverity.warning,
+              message: '50GB livres',
+            ),
           },
         );
 
@@ -70,17 +70,17 @@ void main() {
         final handler = PreflightMessageHandler(
           checks: {
             'compression_tool': () async => const PreflightCheckResult(
-                  name: 'compression_tool',
-                  passed: true,
-                  severity: PreflightSeverity.blocking,
-                  message: 'OK',
-                ),
+              name: 'compression_tool',
+              passed: true,
+              severity: PreflightSeverity.blocking,
+              message: 'OK',
+            ),
             'disk_space': () async => const PreflightCheckResult(
-                  name: 'disk_space',
-                  passed: false,
-                  severity: PreflightSeverity.warning,
-                  message: 'Pouco espaco',
-                ),
+              name: 'disk_space',
+              passed: false,
+              severity: PreflightSeverity.warning,
+              message: 'Pouco espaco',
+            ),
           },
         );
 
@@ -103,17 +103,17 @@ void main() {
         final handler = PreflightMessageHandler(
           checks: {
             'compression_tool': () async => const PreflightCheckResult(
-                  name: 'compression_tool',
-                  passed: false,
-                  severity: PreflightSeverity.blocking,
-                  message: 'WinRAR nao encontrado',
-                ),
+              name: 'compression_tool',
+              passed: false,
+              severity: PreflightSeverity.blocking,
+              message: 'WinRAR nao encontrado',
+            ),
             'disk_space': () async => const PreflightCheckResult(
-                  name: 'disk_space',
-                  passed: false,
-                  severity: PreflightSeverity.warning,
-                  message: 'Pouco espaco',
-                ),
+              name: 'disk_space',
+              passed: false,
+              severity: PreflightSeverity.warning,
+              message: 'Pouco espaco',
+            ),
           },
         );
 
@@ -174,11 +174,11 @@ void main() {
         final handler = PreflightMessageHandler(
           checks: {
             'tool_version': () async => const PreflightCheckResult(
-                  name: 'tool_version',
-                  passed: false,
-                  severity: PreflightSeverity.info,
-                  message: 'Versao desconhecida',
-                ),
+              name: 'tool_version',
+              passed: false,
+              severity: PreflightSeverity.info,
+              message: 'Versao desconhecida',
+            ),
           },
         );
 
@@ -199,12 +199,12 @@ void main() {
       final handler = PreflightMessageHandler(
         checks: {
           'disk_space': () async => const PreflightCheckResult(
-                name: 'disk_space',
-                passed: true,
-                severity: PreflightSeverity.warning,
-                message: 'OK',
-                details: {'freeBytes': 50000000000, 'requiredBytes': 1000000000},
-              ),
+            name: 'disk_space',
+            passed: true,
+            severity: PreflightSeverity.warning,
+            message: 'OK',
+            details: {'freeBytes': 50000000000, 'requiredBytes': 1000000000},
+          ),
         },
       );
 

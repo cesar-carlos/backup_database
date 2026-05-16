@@ -79,6 +79,9 @@ Apontamentos pragmaticos para quem for implementar.
 | [ADR-001](001-modelo-hibrido-scheduler.md) | Modelo hibrido para origem de execucao do scheduler | accepted | 2026-04-19 |
 | [ADR-002](002-transferencia-v1-streaming-sem-fileack.md) | Transferencia de arquivos `v1` sem `fileAck` (streaming puro) | accepted | 2026-04-19 |
 | [ADR-003](003-versionamento-protocolo.md) | Versionamento formal do protocolo socket (`protocolVersion`) | accepted | 2026-04-19 |
+| [ADR-004](004-generic-hexagonal-ports-sgbds.md) | Ports genericos e template para SGBDs (config + backup + DI) | accepted | 2026-05-15 |
+| [ADR-005](005-layer-first-code-organization.md) | Manter organizacao do codigo por camada (layer-first) | accepted | 2026-05-15 |
+| [ADR-009](009-design-system-themeextension-composition.md) | Design system: tokens semanticos via ThemeExtension + composition over inheritance | accepted | 2026-05-15 |
 
 ## Convencoes
 

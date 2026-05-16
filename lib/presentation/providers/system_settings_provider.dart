@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
-import 'package:backup_database/core/di/service_locator.dart' as service_locator;
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';

@@ -200,7 +200,9 @@ class ClientHandler {
         final message = _protocol.deserializeMessage(messageBytes);
 
         // Log received message
-        _socketLogger?.logReceived(message);
+        unawaited(
+          _socketLogger?.logReceived(message) ?? Future<void>.value(),
+        );
 
         if (isAuthRequestMessage(message) && !_authHandled) {
           _authHandled = true;
@@ -211,54 +213,58 @@ class ClientHandler {
             // `_messageController` SEM `isAuthenticated=true`),
             // permitindo executar comandos antes de validar credencial.
             _socketSubscription?.pause();
-            _authentication.validateAuthRequest(message).then((
-              AuthValidationResult validationResult,
-            ) async {
-              try {
-                final valid = validationResult.isValid;
-                isAuthenticated = valid;
-                final serverId = message.payload['serverId'] as String?;
-                if (valid && serverId != null && serverId.isNotEmpty) {
-                  // Persiste para que SessionMessageHandler possa
-                  // reportar a sessao corrente sem depender do payload
-                  // original do auth.
-                  authenticatedServerId = serverId;
-                }
+            unawaited(
+              _authentication.validateAuthRequest(message).then((
+                AuthValidationResult validationResult,
+              ) async {
                 try {
-                  await _connectionLogDao?.insertConnectionAttempt(
-                    clientHost: _remoteAddress,
-                    serverId: serverId,
-                    success: valid,
-                    errorMessage: valid ? null : validationResult.errorMessage,
-                    clientId: _clientId,
+                  final valid = validationResult.isValid;
+                  isAuthenticated = valid;
+                  final serverId = message.payload['serverId'] as String?;
+                  if (valid && serverId != null && serverId.isNotEmpty) {
+                    // Persiste para que SessionMessageHandler possa
+                    // reportar a sessao corrente sem depender do payload
+                    // original do auth.
+                    authenticatedServerId = serverId;
+                  }
+                  try {
+                    await _connectionLogDao?.insertConnectionAttempt(
+                      clientHost: _remoteAddress,
+                      serverId: serverId,
+                      success: valid,
+                      errorMessage: valid
+                          ? null
+                          : validationResult.errorMessage,
+                      clientId: _clientId,
+                    );
+                  } on Object catch (e) {
+                    LoggerService.warning(
+                      'ClientHandler: failed to log auth: $e',
+                    );
+                  }
+                  await send(
+                    createAuthResponse(
+                      success: valid,
+                      error: validationResult.errorMessage,
+                      errorCode: validationResult.errorCode,
+                    ),
                   );
-                } on Object catch (e) {
-                  LoggerService.warning(
-                    'ClientHandler: failed to log auth: $e',
-                  );
+                  if (!valid) {
+                    disconnect();
+                    return;
+                  }
+                  _safeAddMessage(message);
+                } finally {
+                  // Retoma o stream para processar mensagens pós-auth.
+                  if (_socketSubscription?.isPaused ?? false) {
+                    _socketSubscription?.resume();
+                    // Mensagens que já estão no buffer precisam ser
+                    // reprocessadas — `_tryParseMessages` é idempotente.
+                    _tryParseMessages();
+                  }
                 }
-                await send(
-                  createAuthResponse(
-                    success: valid,
-                    error: validationResult.errorMessage,
-                    errorCode: validationResult.errorCode,
-                  ),
-                );
-                if (!valid) {
-                  disconnect();
-                  return;
-                }
-                _safeAddMessage(message);
-              } finally {
-                // Retoma o stream para processar mensagens pós-auth.
-                if (_socketSubscription?.isPaused ?? false) {
-                  _socketSubscription?.resume();
-                  // Mensagens que já estão no buffer precisam ser
-                  // reprocessadas — `_tryParseMessages` é idempotente.
-                  _tryParseMessages();
-                }
-              }
-            });
+              }),
+            );
             return;
           }
           isAuthenticated = true;
@@ -386,7 +392,7 @@ class ClientHandler {
     final next = _sendQueue.then((_) async {
       try {
         final data = _protocol.serializeMessage(message);
-        _socketLogger?.logSent(message);
+        await (_socketLogger?.logSent(message) ?? Future<void>.value());
         _socket.add(data);
         await _socket.flush();
       } on Object catch (e) {
@@ -403,10 +409,13 @@ class ClientHandler {
   void disconnect() {
     _heartbeatManager?.stop();
     _heartbeatManager = null;
-    _socketSubscription?.cancel();
+    final subscription = _socketSubscription;
     _socketSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
     if (!_messageController.isClosed) {
-      _messageController.close();
+      unawaited(_messageController.close());
     }
     _socket.destroy();
     _onDisconnect(_clientId);

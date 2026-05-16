@@ -37,13 +37,20 @@ void main() {
 
     test('sequence eh monotonico em multiplas publicacoes', () async {
       await bus.publishQueued(
-        clientId: 'c1', runId: 'r1', scheduleId: 's1',
+        clientId: 'c1',
+        runId: 'r1',
+        scheduleId: 's1',
       );
       await bus.publishStarted(
-        clientId: 'c1', runId: 'r1', scheduleId: 's1',
+        clientId: 'c1',
+        runId: 'r1',
+        scheduleId: 's1',
       );
       await bus.publishDequeued(
-        clientId: 'c1', runId: 'r1', scheduleId: 's1', reason: 'cancelled',
+        clientId: 'c1',
+        runId: 'r1',
+        scheduleId: 's1',
+        reason: 'cancelled',
       );
 
       final sequences = sent
@@ -88,7 +95,10 @@ void main() {
 
     test('publishDequeued inclui reason no payload', () async {
       await bus.publishDequeued(
-        clientId: 'c', runId: 'r', scheduleId: 's', reason: 'dispatched',
+        clientId: 'c',
+        runId: 'r',
+        scheduleId: 's',
+        reason: 'dispatched',
       );
       final ev = readQueueEvent(sent.single.message)!;
       expect(ev.reason, 'dispatched');

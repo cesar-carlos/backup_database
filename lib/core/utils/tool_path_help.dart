@@ -28,6 +28,15 @@ class ToolPathHelp {
     'dbvalid',
   };
 
+  /// Conjunto de prefixos de executáveis associados ao Firebird.
+  static const Set<String> _firebirdTools = {
+    'gbak',
+    'nbackup',
+    'gstat',
+    'isql',
+    'isql-fb',
+  };
+
   /// Identifica a "família" da ferramenta a partir do nome do executável.
   /// Faz match por substring (case-insensitive) para tolerar caminhos com
   /// extensão (`pg_basebackup.exe`).
@@ -36,6 +45,7 @@ class ToolPathHelp {
     if (_postgresTools.any(lower.contains)) return _ToolFamily.postgres;
     if (_sqlServerTools.any(lower.contains)) return _ToolFamily.sqlServer;
     if (_sybaseTools.any(lower.contains)) return _ToolFamily.sybase;
+    if (_firebirdTools.any(lower.contains)) return _ToolFamily.firebird;
     return _ToolFamily.unknown;
   }
 
@@ -57,10 +67,18 @@ class ToolPathHelp {
     return 'dbverify';
   }
 
+  /// Devolve o nome canônico da ferramenta para Firebird (best-effort).
+  static String _firebirdToolName(String executable) {
+    final lower = executable.toLowerCase();
+    for (final tool in _firebirdTools) {
+      if (lower.contains(tool)) return tool;
+    }
+    return 'gbak';
+  }
+
   /// Mensagem amigável de "ferramenta não encontrada no PATH" com instruções
-  /// específicas para a família detectada (PostgreSQL, SQL Server, Sybase).
-  ///
-  /// Para executáveis desconhecidos retorna uma mensagem genérica.
+  /// específicas para a família detectada (PostgreSQL, SQL Server, Sybase,
+  /// Firebird). Para executáveis desconhecidos retorna uma mensagem genérica.
   static String buildMessage(String executable) {
     switch (_classify(executable)) {
       case _ToolFamily.postgres:
@@ -123,6 +141,30 @@ class ToolPathHelp {
             '  - Durante a instalação, selecione "Add to PATH"\n\n'
             r'Consulte: docs\path_setup.md para mais detalhes.';
 
+      case _ToolFamily.firebird:
+        final tool = _firebirdToolName(executable);
+        return '$tool não encontrado no PATH do sistema.\n\n'
+            'As ferramentas de linha de comando do Firebird não estão '
+            'disponíveis.\n\n'
+            'OPÇÕES PARA RESOLVER:\n\n'
+            'Opção 1: Adicionar ao PATH manualmente\n'
+            '  - Localize a pasta bin da instalação do Firebird\n'
+            '    (ex.: C:\\Program Files\\Firebird\\Firebird_5_0\\)\n'
+            '  - Adicione ao PATH do Windows:\n'
+            '    * Pressione Win + X → "Sistema"\n'
+            '    * Clique em "Configurações avançadas do sistema"\n'
+            '    * Na aba "Avançado", clique em "Variáveis de Ambiente"\n'
+            '    * Em "Variáveis do sistema", encontre "Path" e clique em '
+            '"Editar"\n'
+            '    * Clique em "Novo" e adicione o caminho completo da pasta '
+            'bin\n'
+            '    * Clique em "OK" em todas as janelas\n\n'
+            'Opção 2: Instalar ou reparar o Firebird\n'
+            '  - Baixe o instalador em https://firebirdsql.org/\n'
+            '  - Marque a opção que adiciona as ferramentas ao PATH, se '
+            'disponível\n\n'
+            r'Consulte: docs\path_setup.md para mais detalhes.';
+
       case _ToolFamily.unknown:
         return '$executable não encontrado no PATH do sistema.\n\n'
             'Verifique se a ferramenta está instalada e adicionada ao PATH.';
@@ -160,4 +202,4 @@ class ToolPathHelp {
   }
 }
 
-enum _ToolFamily { postgres, sqlServer, sybase, unknown }
+enum _ToolFamily { postgres, sqlServer, sybase, firebird, unknown }

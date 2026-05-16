@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/application/providers/remote_schedules_provider.dart';
@@ -31,7 +33,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
       _connectionProvider!.addListener(_onConnectionChanged);
 
       if (_connectionProvider!.isConnected) {
-        context.read<RemoteSchedulesProvider>().loadSchedules();
+        unawaited(context.read<RemoteSchedulesProvider>().loadSchedules());
         _hasLoadedInitialSchedules = true;
       }
     });
@@ -47,7 +49,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     if (_connectionProvider == null) return;
 
     if (_connectionProvider!.isConnected && !_hasLoadedInitialSchedules) {
-      context.read<RemoteSchedulesProvider>().loadSchedules();
+      unawaited(context.read<RemoteSchedulesProvider>().loadSchedules());
       _hasLoadedInitialSchedules = true;
     }
 
@@ -112,7 +114,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                             ),
                             const SizedBox(height: 16),
                             Button(
-                              onPressed: () => provider.loadSchedules(),
+                              onPressed: () => unawaited(provider.loadSchedules()),
                               child: const Text('Tentar Novamente'),
                             ),
                           ],
@@ -126,7 +128,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                         icon: FluentIcons.calendar,
                         message: 'Nenhum agendamento no servidor',
                         actionLabel: 'Atualizar',
-                        onAction: () => provider.loadSchedules(),
+                        onAction: () => unawaited(provider.loadSchedules()),
                       ),
                     );
                   }
@@ -213,7 +215,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
             primaryItems: [
               CommandBarButton(
                 icon: const Icon(FluentIcons.refresh),
-                onPressed: () => provider.loadSchedules(),
+                onPressed: () => unawaited(provider.loadSchedules()),
               ),
             ],
           ),
@@ -272,14 +274,18 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     final success = await provider.updateSchedule(updated);
     if (context.mounted) {
       if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: enabled ? 'Agendamento ativado.' : 'Agendamento desativado.',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: enabled ? 'Agendamento ativado.' : 'Agendamento desativado.',
+          ),
         );
       } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao atualizar.',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao atualizar.',
+          ),
         );
       }
     }
@@ -295,11 +301,13 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     final success = await provider.executeSchedule(scheduleId);
     if (context.mounted) {
       if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Execução iniciada no servidor.',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: 'Execução iniciada no servidor.',
+          ),
         );
-        provider.loadSchedules();
+        await provider.loadSchedules();
       } else {
         final code = provider.lastErrorCode;
         final message = provider.error ?? 'Erro ao executar.';
@@ -340,14 +348,18 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
       final success = await provider.cancelSchedule();
       if (context.mounted) {
         if (success) {
-          MessageModal.showSuccess(
-            context,
-            message: 'Backup cancelado no servidor.',
+          unawaited(
+            MessageModal.showSuccess(
+              context,
+              message: 'Backup cancelado no servidor.',
+            ),
           );
         } else {
-          MessageModal.showError(
-            context,
-            message: provider.error ?? 'Erro ao cancelar backup.',
+          unawaited(
+            MessageModal.showError(
+              context,
+              message: provider.error ?? 'Erro ao cancelar backup.',
+            ),
           );
         }
       }
@@ -408,9 +420,11 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
         result.toList(),
       );
       if (context.mounted) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Destinos vinculados ao agendamento.',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: 'Destinos vinculados ao agendamento.',
+          ),
         );
       }
     }

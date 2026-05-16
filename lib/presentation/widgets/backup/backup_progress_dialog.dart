@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
 import 'package:backup_database/core/di/service_locator.dart';
@@ -28,7 +30,7 @@ class BackupProgressDialog extends StatelessWidget {
         if (progress == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!context.mounted) return;
-            Navigator.of(context).maybePop();
+            unawaited(Navigator.of(context).maybePop());
           });
           return const SizedBox.shrink();
         }
@@ -162,13 +164,13 @@ class BackupProgressDialog extends StatelessWidget {
                       (progress.cancelRequested || progress.historyId == null)
                       ? null
                       : () {
-                          // Confirmação rápida via diálogo simples
-                          // para evitar cancelamento acidental.
-                          _confirmAndCancel(
-                            context: context,
-                            provider: provider,
-                            historyId: progress.historyId!,
-                            texts: texts,
+                          unawaited(
+                            _confirmAndCancel(
+                              context: context,
+                              provider: provider,
+                              historyId: progress.historyId!,
+                              texts: texts,
+                            ),
                           );
                         },
                   child: Text(

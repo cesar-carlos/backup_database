@@ -16,29 +16,31 @@ void main() {
       expect(getRunIdFromExecutionStatusRequest(msg), 'sched-1_uuid-aaa');
     });
 
-    test('createExecutionStatusResponseMessage running com snapshot completo',
-        () {
-      final clock = DateTime.utc(2026, 4, 19, 12);
-      final started = DateTime.utc(2026, 4, 19, 11, 30);
-      final msg = createExecutionStatusResponseMessage(
-        requestId: 2,
-        runId: 'sched-1_uuid-aaa',
-        state: ExecutionState.running,
-        serverTimeUtc: clock,
-        scheduleId: 'sched-1',
-        clientId: 'client-X',
-        startedAt: started,
-      );
+    test(
+      'createExecutionStatusResponseMessage running com snapshot completo',
+      () {
+        final clock = DateTime.utc(2026, 4, 19, 12);
+        final started = DateTime.utc(2026, 4, 19, 11, 30);
+        final msg = createExecutionStatusResponseMessage(
+          requestId: 2,
+          runId: 'sched-1_uuid-aaa',
+          state: ExecutionState.running,
+          serverTimeUtc: clock,
+          scheduleId: 'sched-1',
+          clientId: 'client-X',
+          startedAt: started,
+        );
 
-      expect(msg.header.type, MessageType.executionStatusResponse);
-      expect(msg.payload['runId'], 'sched-1_uuid-aaa');
-      expect(msg.payload['state'], 'running');
-      expect(msg.payload['scheduleId'], 'sched-1');
-      expect(msg.payload['clientId'], 'client-X');
-      expect(msg.payload['startedAt'], '2026-04-19T11:30:00.000Z');
-      expect(msg.payload['serverTimeUtc'], '2026-04-19T12:00:00.000Z');
-      expect(msg.payload.containsKey('queuedPosition'), isFalse);
-    });
+        expect(msg.header.type, MessageType.executionStatusResponse);
+        expect(msg.payload['runId'], 'sched-1_uuid-aaa');
+        expect(msg.payload['state'], 'running');
+        expect(msg.payload['scheduleId'], 'sched-1');
+        expect(msg.payload['clientId'], 'client-X');
+        expect(msg.payload['startedAt'], '2026-04-19T11:30:00.000Z');
+        expect(msg.payload['serverTimeUtc'], '2026-04-19T12:00:00.000Z');
+        expect(msg.payload.containsKey('queuedPosition'), isFalse);
+      },
+    );
 
     test('createExecutionStatusResponseMessage notFound minimal payload', () {
       final msg = createExecutionStatusResponseMessage(
@@ -149,24 +151,26 @@ void main() {
       expect(ExecutionState.unknown.isTerminal, isFalse);
     });
 
-    test('readExecutionStatusFromResponse com startedAt invalido vira null',
-        () {
-      final msg = Message(
-        header: MessageHeader(
-          type: MessageType.executionStatusResponse,
-          length: 0,
-          requestId: 1,
-        ),
-        payload: const <String, dynamic>{
-          'runId': 'r1',
-          'state': 'running',
-          'startedAt': 'not-a-date',
-        },
-        checksum: 0,
-      );
+    test(
+      'readExecutionStatusFromResponse com startedAt invalido vira null',
+      () {
+        final msg = Message(
+          header: MessageHeader(
+            type: MessageType.executionStatusResponse,
+            length: 0,
+            requestId: 1,
+          ),
+          payload: const <String, dynamic>{
+            'runId': 'r1',
+            'state': 'running',
+            'startedAt': 'not-a-date',
+          },
+          checksum: 0,
+        );
 
-      final result = readExecutionStatusFromResponse(msg);
-      expect(result.startedAt, isNull);
-    });
+        final result = readExecutionStatusFromResponse(msg);
+        expect(result.startedAt, isNull);
+      },
+    );
   });
 }

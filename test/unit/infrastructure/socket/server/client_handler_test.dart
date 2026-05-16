@@ -296,7 +296,8 @@ void main() {
         void onData(List<int> data) {
           buffer.addAll(data);
           if (buffer.length >= 16 + 4) {
-            final length = (buffer[5] << 24) |
+            final length =
+                (buffer[5] << 24) |
                 (buffer[6] << 16) |
                 (buffer[7] << 8) |
                 buffer[8];
@@ -327,8 +328,7 @@ void main() {
 
         final response = await responseCompleter.future.timeout(
           const Duration(seconds: 2),
-          onTimeout: () =>
-              throw TimeoutException('No error response received'),
+          onTimeout: () => throw TimeoutException('No error response received'),
         );
 
         expect(response.header.type, MessageType.error);
@@ -372,7 +372,8 @@ void main() {
         void onData(List<int> data) {
           buffer.addAll(data);
           if (buffer.length >= 16 + 4) {
-            final length = (buffer[5] << 24) |
+            final length =
+                (buffer[5] << 24) |
                 (buffer[6] << 16) |
                 (buffer[7] << 8) |
                 buffer[8];
@@ -450,7 +451,8 @@ void main() {
         void onData(List<int> data) {
           buffer.addAll(data);
           if (buffer.length >= 16 + 4) {
-            final length = (buffer[5] << 24) |
+            final length =
+                (buffer[5] << 24) |
                 (buffer[6] << 16) |
                 (buffer[7] << 8) |
                 buffer[8];
@@ -473,8 +475,9 @@ void main() {
         // Constroi um header artesanal com tipo `executeSchedule` (limite
         // pequeno: ~4KB) declarando length 1MB no header. Nao envia o
         // payload — o handler deve rejeitar so com base no header.
-        final maxForType =
-            PayloadLimits.maxPayloadBytesFor(MessageType.executeSchedule);
+        final maxForType = PayloadLimits.maxPayloadBytesFor(
+          MessageType.executeSchedule,
+        );
         final oversizedLength = maxForType + 1024; // estoura o limite
 
         final header = Uint8List(16);
@@ -499,8 +502,7 @@ void main() {
 
         final response = await responseCompleter.future.timeout(
           const Duration(seconds: 2),
-          onTimeout: () =>
-              throw TimeoutException('No error response received'),
+          onTimeout: () => throw TimeoutException('No error response received'),
         );
 
         expect(response.header.type, MessageType.error);

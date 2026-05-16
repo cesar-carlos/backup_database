@@ -16,22 +16,20 @@ class DatabaseConfigOutcome {
   factory DatabaseConfigOutcome.success({
     Map<String, dynamic>? config,
     List<Map<String, dynamic>>? configs,
-  }) =>
-      DatabaseConfigOutcome(
-        success: true,
-        config: config,
-        configs: configs,
-      );
+  }) => DatabaseConfigOutcome(
+    success: true,
+    config: config,
+    configs: configs,
+  );
 
   factory DatabaseConfigOutcome.failure({
     required String error,
     required ErrorCode errorCode,
-  }) =>
-      DatabaseConfigOutcome(
-        success: false,
-        error: error,
-        errorCode: errorCode,
-      );
+  }) => DatabaseConfigOutcome(
+    success: false,
+    error: error,
+    errorCode: errorCode,
+  );
 
   final bool success;
   final Map<String, dynamic>? config;
@@ -77,7 +75,8 @@ class NotConfiguredDatabaseConfigStore implements DatabaseConfigStore {
 
   static DatabaseConfigOutcome _notConfigured(String op) =>
       DatabaseConfigOutcome.failure(
-        error: 'CRUD de database config nao configurado para esta operacao: $op',
+        error:
+            'CRUD de database config nao configurado para esta operacao: $op',
         errorCode: ErrorCode.unknown,
       );
 
@@ -89,20 +88,17 @@ class NotConfiguredDatabaseConfigStore implements DatabaseConfigStore {
   Future<DatabaseConfigOutcome> create(
     RemoteDatabaseType type,
     Map<String, dynamic> config,
-  ) async =>
-      _notConfigured('create ${type.wireName}');
+  ) async => _notConfigured('create ${type.wireName}');
 
   @override
   Future<DatabaseConfigOutcome> update(
     RemoteDatabaseType type,
     Map<String, dynamic> config,
-  ) async =>
-      _notConfigured('update ${type.wireName}');
+  ) async => _notConfigured('update ${type.wireName}');
 
   @override
   Future<DatabaseConfigOutcome> delete(
     RemoteDatabaseType type,
     String configId,
-  ) async =>
-      _notConfigured('delete ${type.wireName}');
+  ) async => _notConfigured('delete ${type.wireName}');
 }

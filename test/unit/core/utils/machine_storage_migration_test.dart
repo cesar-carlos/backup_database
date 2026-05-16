@@ -163,45 +163,48 @@ void main() {
       expect(copied, isFalse);
     });
 
-    test('cleans up partial destination files when bundle copy fails', () async {
-      final tmp = await Directory.systemTemp.createTemp(
-        'machine_migration_partial_cleanup',
-      );
-      addTearDown(() async {
-        if (tmp.existsSync()) {
-          await tmp.delete(recursive: true);
-        }
-      });
+    test(
+      'cleans up partial destination files when bundle copy fails',
+      () async {
+        final tmp = await Directory.systemTemp.createTemp(
+          'machine_migration_partial_cleanup',
+        );
+        addTearDown(() async {
+          if (tmp.existsSync()) {
+            await tmp.delete(recursive: true);
+          }
+        });
 
-      final legacyDir = Directory(p.join(tmp.path, 'legacy'))..createSync();
-      final dataDir = Directory(p.join(tmp.path, 'data'))..createSync();
+        final legacyDir = Directory(p.join(tmp.path, 'legacy'))..createSync();
+        final dataDir = Directory(p.join(tmp.path, 'data'))..createSync();
 
-      writeMinimalValidSqliteDbFile(
-        p.join(legacyDir.path, 'backup_database.db'),
-      );
-      await File(
-        p.join(legacyDir.path, 'backup_database.db-wal'),
-      ).writeAsString('wal');
+        writeMinimalValidSqliteDbFile(
+          p.join(legacyDir.path, 'backup_database.db'),
+        );
+        await File(
+          p.join(legacyDir.path, 'backup_database.db-wal'),
+        ).writeAsString('wal');
 
-      Directory(
-        p.join(dataDir.path, 'backup_database.db-wal'),
-      ).createSync(recursive: true);
+        Directory(
+          p.join(dataDir.path, 'backup_database.db-wal'),
+        ).createSync(recursive: true);
 
-      expect(
-        () => migrateSqliteDatabaseBundleIfNeeded(
-          legacyDir: legacyDir,
-          dataDir: dataDir,
-          baseName: 'backup_database',
-          runQuickCheck: false,
-        ),
-        throwsA(isA<SqliteBundleCopyException>()),
-      );
+        expect(
+          () => migrateSqliteDatabaseBundleIfNeeded(
+            legacyDir: legacyDir,
+            dataDir: dataDir,
+            baseName: 'backup_database',
+            runQuickCheck: false,
+          ),
+          throwsA(isA<SqliteBundleCopyException>()),
+        );
 
-      expect(
-        await File(p.join(dataDir.path, 'backup_database.db')).exists(),
-        isFalse,
-      );
-    });
+        expect(
+          await File(p.join(dataDir.path, 'backup_database.db')).exists(),
+          isFalse,
+        );
+      },
+    );
   });
 
   group('findLegacyBackupDatabasePathsOutsideCurrentUser', () {

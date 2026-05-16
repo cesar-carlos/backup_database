@@ -52,9 +52,7 @@ class AppCleanup {
 
     await _runStep('liberar lock de instância única', () async {
       if (service_locator.getIt.isRegistered<ISingleInstanceService>()) {
-        await service_locator
-            .getIt<ISingleInstanceService>()
-            .releaseLock();
+        await service_locator.getIt<ISingleInstanceService>().releaseLock();
       }
     });
 

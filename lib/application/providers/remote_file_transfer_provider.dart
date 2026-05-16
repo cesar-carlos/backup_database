@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File;
 
@@ -352,7 +353,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
           st,
         );
       }
-      loadTransferHistory();
+      unawaited(loadTransferHistory());
     }
 
     if (success && _selectedDestinationIds.isNotEmpty) {
@@ -634,7 +635,10 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         },
         (failure) {
           final errMsg = '${destination.name}: $failure';
-          LoggerService.error('Erro no upload para ${destination.name}', failure);
+          LoggerService.error(
+            'Erro no upload para ${destination.name}',
+            failure,
+          );
           errors.add(errMsg);
         },
       );

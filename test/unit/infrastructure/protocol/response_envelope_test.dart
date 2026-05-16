@@ -61,6 +61,7 @@ void main() {
         supportsArtifactRetention: false,
         supportsChunkAck: false,
         supportsExecutionQueue: false,
+        supportsFirebird: false,
         chunkSize: 65536,
         compression: 'gzip',
         serverTimeUtc: DateTime.utc(2026, 4, 19),
@@ -83,21 +84,23 @@ void main() {
       expect(getSuccessFromMessage(msg), isNull);
     });
 
-    test('retorna null quando success nao e bool (defesa contra payload corrompido)',
-        () {
-      final msg = Message(
-        header: MessageHeader(
-          type: MessageType.capabilitiesResponse,
-          length: 0,
-          requestId: 1,
-        ),
-        payload: const <String, dynamic>{
-          'success': 'true', // string em vez de bool
-        },
-        checksum: 0,
-      );
-      expect(getSuccessFromMessage(msg), isNull);
-    });
+    test(
+      'retorna null quando success nao e bool (defesa contra payload corrompido)',
+      () {
+        final msg = Message(
+          header: MessageHeader(
+            type: MessageType.capabilitiesResponse,
+            length: 0,
+            requestId: 1,
+          ),
+          payload: const <String, dynamic>{
+            'success': 'true', // string em vez de bool
+          },
+          checksum: 0,
+        );
+        expect(getSuccessFromMessage(msg), isNull);
+      },
+    );
   });
 
   group('invariante: todos os response factories aplicam o envelope', () {
@@ -116,6 +119,7 @@ void main() {
         supportsArtifactRetention: false,
         supportsChunkAck: false,
         supportsExecutionQueue: false,
+        supportsFirebird: false,
         chunkSize: 1024,
         compression: 'gzip',
         serverTimeUtc: DateTime.utc(2026),

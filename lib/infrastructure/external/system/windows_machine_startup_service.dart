@@ -29,7 +29,8 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
     final taskArguments = hasScheduledTask
         ? await _readScheduledTaskArguments(diagnostics)
         : null;
-    final taskArgsNeedMigration = taskArguments != null &&
+    final taskArgsNeedMigration =
+        taskArguments != null &&
         SingleInstanceConfig.machineStartupArgsNeedProtocolMigration(
           taskArguments,
         );

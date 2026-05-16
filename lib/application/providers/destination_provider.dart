@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -12,7 +14,7 @@ class DestinationProvider extends ChangeNotifier with AsyncStateMixin {
     this._scheduleRepository,
     this._licensePolicyService,
   ) {
-    loadDestinations();
+    unawaited(loadDestinations());
   }
   final IBackupDestinationRepository _repository;
   final IScheduleRepository _scheduleRepository;
@@ -103,8 +105,7 @@ class DestinationProvider extends ChangeNotifier with AsyncStateMixin {
         final result = await _repository.delete(id);
         return result.fold(
           (_) {
-            _destinations =
-                _destinations.where((d) => d.id != id).toList();
+            _destinations = _destinations.where((d) => d.id != id).toList();
             return true;
           },
           (failure) => throw failure,

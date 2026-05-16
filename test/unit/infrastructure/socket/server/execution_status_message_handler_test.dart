@@ -176,6 +176,7 @@ void main() {
     late RemoteExecutionRegistry registry;
     late ExecutionStatusMessageHandler handler;
     final fixedNow = DateTime.utc(2026, 4, 23, 10);
+
     /// Clock fixo (UTC) na fila evita desvio local vs payload ISO em `startedAt`.
     final queueClock = DateTime.utc(2026, 4, 23, 9, 30);
 
@@ -211,38 +212,41 @@ void main() {
       );
     });
 
-    test('fila: runId enfileirado responde queued com queuedPosition', () async {
-      final item = await queue.tryEnqueue(
-        scheduleId: 'sched-q',
-        clientId: 'client-A',
-        requestId: 1,
-        requestedBy: 'client-A',
-      );
-      await queue.tryEnqueue(
-        scheduleId: 'sched-b',
-        clientId: 'c',
-        requestId: 2,
-        requestedBy: 'c',
-      );
-      final runId = item!.runId;
-      expect(queue.findQueuedByRunId(runId)!.queuedPosition, 1);
+    test(
+      'fila: runId enfileirado responde queued com queuedPosition',
+      () async {
+        final item = await queue.tryEnqueue(
+          scheduleId: 'sched-q',
+          clientId: 'client-A',
+          requestId: 1,
+          requestedBy: 'client-A',
+        );
+        await queue.tryEnqueue(
+          scheduleId: 'sched-b',
+          clientId: 'c',
+          requestId: 2,
+          requestedBy: 'c',
+        );
+        final runId = item!.runId;
+        expect(queue.findQueuedByRunId(runId)!.queuedPosition, 1);
 
-      Message? sent;
-      await handler.handle(
-        'c1',
-        createExecutionStatusRequestMessage(requestId: 1, runId: runId),
-        (a, m) async => sent = m,
-      );
+        Message? sent;
+        await handler.handle(
+          'c1',
+          createExecutionStatusRequestMessage(requestId: 1, runId: runId),
+          (a, m) async => sent = m,
+        );
 
-      final r = readExecutionStatusFromResponse(sent!);
-      expect(r.state, ExecutionState.queued);
-      expect(r.queuedPosition, 1);
-      expect(r.scheduleId, 'sched-q');
-      expect(r.clientId, 'client-A');
-      expect(r.startedAt, queueClock);
-      expect(item.queuedAt, queueClock);
-      expect(r.serverTimeUtc, fixedNow);
-    });
+        final r = readExecutionStatusFromResponse(sent!);
+        expect(r.state, ExecutionState.queued);
+        expect(r.queuedPosition, 1);
+        expect(r.scheduleId, 'sched-q');
+        expect(r.clientId, 'client-A');
+        expect(r.startedAt, queueClock);
+        expect(item.queuedAt, queueClock);
+        expect(r.serverTimeUtc, fixedNow);
+      },
+    );
 
     test('historico: success -> completed', () async {
       const runId = 'hist-ok-1';
@@ -305,51 +309,56 @@ void main() {
       expect(r.state, ExecutionState.cancelled);
     });
 
-    test('historico: running (sem registry) -> running com startedAt do DB', () async {
-      const runId = 'hist-run-1';
-      final started = DateTime.utc(2026, 3, 15, 8);
-      when(() => historyRepo.getByRunId(runId)).thenAnswer(
-        (_) async => rd.Success(
-          historyFixture(runId: runId, status: BackupStatus.running).copyWith(
-            startedAt: started,
+    test(
+      'historico: running (sem registry) -> running com startedAt do DB',
+      () async {
+        const runId = 'hist-run-1';
+        final started = DateTime.utc(2026, 3, 15, 8);
+        when(() => historyRepo.getByRunId(runId)).thenAnswer(
+          (_) async => rd.Success(
+            historyFixture(runId: runId, status: BackupStatus.running).copyWith(
+              startedAt: started,
+            ),
           ),
-        ),
-      );
-      Message? sent;
-      await handler.handle(
-        'c1',
-        createExecutionStatusRequestMessage(requestId: 1, runId: runId),
-        (a, m) async => sent = m,
-      );
-      final r = readExecutionStatusFromResponse(sent!);
-      expect(r.state, ExecutionState.running);
-      expect(r.startedAt, started);
-    });
+        );
+        Message? sent;
+        await handler.handle(
+          'c1',
+          createExecutionStatusRequestMessage(requestId: 1, runId: runId),
+          (a, m) async => sent = m,
+        );
+        final r = readExecutionStatusFromResponse(sent!);
+        expect(r.state, ExecutionState.running);
+        expect(r.startedAt, started);
+      },
+    );
 
-    test('fila vence historico: mesmo runId enfileirado nao cai em completed do repo',
-        () async {
-      final enqueued = await queue.tryEnqueue(
-        scheduleId: 'sched-both',
-        clientId: 'cZ',
-        requestId: 1,
-        requestedBy: 'cZ',
-      );
-      final runId = enqueued!.runId;
-      when(() => historyRepo.getByRunId(runId)).thenAnswer(
-        (_) async => rd.Success(
-          historyFixture(runId: runId, status: BackupStatus.success),
-        ),
-      );
-      Message? sent;
-      await handler.handle(
-        'c1',
-        createExecutionStatusRequestMessage(requestId: 1, runId: runId),
-        (a, m) async => sent = m,
-      );
-      final r = readExecutionStatusFromResponse(sent!);
-      expect(r.state, ExecutionState.queued);
-      expect(r.queuedPosition, 1);
-    });
+    test(
+      'fila vence historico: mesmo runId enfileirado nao cai em completed do repo',
+      () async {
+        final enqueued = await queue.tryEnqueue(
+          scheduleId: 'sched-both',
+          clientId: 'cZ',
+          requestId: 1,
+          requestedBy: 'cZ',
+        );
+        final runId = enqueued!.runId;
+        when(() => historyRepo.getByRunId(runId)).thenAnswer(
+          (_) async => rd.Success(
+            historyFixture(runId: runId, status: BackupStatus.success),
+          ),
+        );
+        Message? sent;
+        await handler.handle(
+          'c1',
+          createExecutionStatusRequestMessage(requestId: 1, runId: runId),
+          (a, m) async => sent = m,
+        );
+        final r = readExecutionStatusFromResponse(sent!);
+        expect(r.state, ExecutionState.queued);
+        expect(r.queuedPosition, 1);
+      },
+    );
 
     test('getByRunId sem sucesso: notFound', () async {
       const runId = 'nada-1';

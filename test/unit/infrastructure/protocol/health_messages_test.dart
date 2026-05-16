@@ -79,8 +79,14 @@ void main() {
       );
       final health = readHealthFromResponse(msg);
       expect(health.stagingUsageBytes, 6 * 1024 * 1024 * 1024);
-      expect(health.stagingUsageWarnThresholdBytes, StagingUsagePolicy.warnThresholdBytes);
-      expect(health.stagingUsageBlockThresholdBytes, StagingUsagePolicy.blockThresholdBytes);
+      expect(
+        health.stagingUsageWarnThresholdBytes,
+        StagingUsagePolicy.warnThresholdBytes,
+      );
+      expect(
+        health.stagingUsageBlockThresholdBytes,
+        StagingUsagePolicy.blockThresholdBytes,
+      );
       expect(health.stagingUsageLevel, 'warn');
       expect(health.isDegraded, isTrue);
     });

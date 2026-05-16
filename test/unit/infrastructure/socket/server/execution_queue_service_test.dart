@@ -53,25 +53,27 @@ void main() {
       expect(await svc.dequeue(), isNull);
     });
 
-    test('dedup por scheduleId: 2a tentativa do mesmo schedule retorna null',
-        () async {
-      final svc = ExecutionQueueService();
-      final first = await svc.tryEnqueue(
-        scheduleId: 's',
-        clientId: 'c',
-        requestId: 1,
-        requestedBy: 'c',
-      );
-      final second = await svc.tryEnqueue(
-        scheduleId: 's',
-        clientId: 'c',
-        requestId: 2,
-        requestedBy: 'c',
-      );
-      expect(first, isNotNull);
-      expect(second, isNull);
-      expect(svc.queueSize, 1);
-    });
+    test(
+      'dedup por scheduleId: 2a tentativa do mesmo schedule retorna null',
+      () async {
+        final svc = ExecutionQueueService();
+        final first = await svc.tryEnqueue(
+          scheduleId: 's',
+          clientId: 'c',
+          requestId: 1,
+          requestedBy: 'c',
+        );
+        final second = await svc.tryEnqueue(
+          scheduleId: 's',
+          clientId: 'c',
+          requestId: 2,
+          requestedBy: 'c',
+        );
+        expect(first, isNotNull);
+        expect(second, isNull);
+        expect(svc.queueSize, 1);
+      },
+    );
 
     test('apos dequeue, schedule pode ser re-enfileirado', () async {
       final svc = ExecutionQueueService();
@@ -114,28 +116,31 @@ void main() {
       expect(overflow, isNull);
     });
 
-    test('snapshot retorna lista ordenada com queuedPosition 1-based', () async {
-      final svc = ExecutionQueueService();
-      await svc.tryEnqueue(
-        scheduleId: 'a',
-        clientId: 'c',
-        requestId: 1,
-        requestedBy: 'c',
-      );
-      await svc.tryEnqueue(
-        scheduleId: 'b',
-        clientId: 'c',
-        requestId: 2,
-        requestedBy: 'c',
-      );
+    test(
+      'snapshot retorna lista ordenada com queuedPosition 1-based',
+      () async {
+        final svc = ExecutionQueueService();
+        await svc.tryEnqueue(
+          scheduleId: 'a',
+          clientId: 'c',
+          requestId: 1,
+          requestedBy: 'c',
+        );
+        await svc.tryEnqueue(
+          scheduleId: 'b',
+          clientId: 'c',
+          requestId: 2,
+          requestedBy: 'c',
+        );
 
-      final snap = svc.snapshot();
-      expect(snap, hasLength(2));
-      expect(snap[0].scheduleId, 'a');
-      expect(snap[0].queuedPosition, 1);
-      expect(snap[1].scheduleId, 'b');
-      expect(snap[1].queuedPosition, 2);
-    });
+        final snap = svc.snapshot();
+        expect(snap, hasLength(2));
+        expect(snap[0].scheduleId, 'a');
+        expect(snap[0].queuedPosition, 1);
+        expect(snap[1].scheduleId, 'b');
+        expect(snap[1].queuedPosition, 2);
+      },
+    );
 
     test('removeByRunId remove o item correto', () async {
       final svc = ExecutionQueueService();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/core/constants/backup_constants.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
@@ -27,7 +29,7 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
   @override
   void initState() {
     super.initState();
-    _loadHealth();
+    unawaited(_loadHealth());
   }
 
   Future<void> _loadHealth() async {

@@ -19,13 +19,13 @@ class MetricsMessageHandler {
     RemoteExecutionRegistry? executionRegistry,
     Future<int> Function()? stagingUsageBytesProvider,
     DateTime Function()? clock,
-  })  : _backupHistoryRepository = backupHistoryRepository,
-        _scheduleRepository = scheduleRepository,
-        _backupRunningState = backupRunningState,
-        _metricsCollector = metricsCollector,
-        _executionRegistry = executionRegistry,
-        _stagingUsageBytesProvider = stagingUsageBytesProvider,
-        _clock = clock ?? DateTime.now;
+  }) : _backupHistoryRepository = backupHistoryRepository,
+       _scheduleRepository = scheduleRepository,
+       _backupRunningState = backupRunningState,
+       _metricsCollector = metricsCollector,
+       _executionRegistry = executionRegistry,
+       _stagingUsageBytesProvider = stagingUsageBytesProvider,
+       _clock = clock ?? DateTime.now;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;

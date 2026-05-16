@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:backup_database/application/providers/connected_client_provider.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/connection/connected_client.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -15,17 +16,11 @@ class ConnectedClientsList extends StatefulWidget {
 }
 
 class _ConnectedClientsListState extends State<ConnectedClientsList> {
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ConnectedClientProvider>().refresh();
+      unawaited(context.read<ConnectedClientProvider>().refresh());
     });
   }
 
@@ -60,7 +55,9 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
                   const SizedBox(height: 16),
                   Button(
                     onPressed: () => provider.refresh(),
-                    child: Text(_t('Tentar novamente', 'Try again')),
+                    child: Text(
+                      appLocaleString(context, 'Tentar novamente', 'Try again'),
+                    ),
                   ),
                 ],
               ),
@@ -71,8 +68,12 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
           return AppCard(
             child: EmptyState(
               icon: FluentIcons.people,
-              message: _t('Nenhum cliente conectado', 'No connected clients'),
-              actionLabel: _t('Atualizar', 'Refresh'),
+              message: appLocaleString(
+                context,
+                'Nenhum cliente conectado',
+                'No connected clients',
+              ),
+              actionLabel: appLocaleString(context, 'Atualizar', 'Refresh'),
               onAction: () => provider.refresh(),
             ),
           );
@@ -97,13 +98,18 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
             ),
             const SizedBox(height: 16),
             Text(
-              _t('Servidor nao esta em execucao', 'Server is not running'),
+              appLocaleString(
+                context,
+                'Servidor nao esta em execucao',
+                'Server is not running',
+              ),
               style: FluentTheme.of(context).typography.titleLarge,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              _t(
+              appLocaleString(
+                context,
                 'Inicie o servidor para aceitar conexoes de clientes.',
                 'Start the server to accept client connections.',
               ),
@@ -123,7 +129,9 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
             const SizedBox(height: 24),
             FilledButton(
               onPressed: provider.startServer,
-              child: Text(_t('Iniciar servidor', 'Start server')),
+              child: Text(
+                appLocaleString(context, 'Iniciar servidor', 'Start server'),
+              ),
             ),
           ],
         ),
@@ -146,17 +154,11 @@ class _ConnectedClientsContentState extends State<_ConnectedClientsContent> {
   static const Duration _pollInterval = Duration(seconds: 5);
   Timer? _pollTimer;
 
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
     _pollTimer = Timer.periodic(_pollInterval, (_) {
-      if (mounted) widget.provider.refresh();
+      if (mounted) unawaited(widget.provider.refresh());
     });
   }
 
@@ -180,7 +182,9 @@ class _ConnectedClientsContentState extends State<_ConnectedClientsContent> {
             ),
             CommandBarButton(
               icon: const Icon(FluentIcons.stop),
-              label: Text(_t('Parar servidor', 'Stop server')),
+              label: Text(
+                appLocaleString(context, 'Parar servidor', 'Stop server'),
+              ),
               onPressed: () => widget.provider.stopServer(),
             ),
           ],
@@ -214,12 +218,6 @@ class _ConnectedClientRow extends StatelessWidget {
   final ConnectedClient client;
   final VoidCallback onDisconnect;
 
-  String _t(BuildContext context, String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -252,8 +250,8 @@ class _ConnectedClientRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${_t(context, 'Conectado', 'Connected')}: ${_formatDateTime(context, client.connectedAt)} · '
-                    '${_t(context, 'Ultimo heartbeat', 'Last heartbeat')}: ${_formatDateTime(context, client.lastHeartbeat)}',
+                    '${appLocaleString(context, 'Conectado', 'Connected')}: ${_formatDateTime(context, client.connectedAt)} · '
+                    '${appLocaleString(context, 'Ultimo heartbeat', 'Last heartbeat')}: ${_formatDateTime(context, client.lastHeartbeat)}',
                     style: FluentTheme.of(context).typography.caption,
                   ),
                 ],
@@ -262,7 +260,7 @@ class _ConnectedClientRow extends StatelessWidget {
             _buildAuthChip(context),
             const SizedBox(width: 8),
             Tooltip(
-              message: _t(context, 'Desconectar', 'Disconnect'),
+              message: appLocaleString(context, 'Desconectar', 'Disconnect'),
               child: IconButton(
                 icon: const Icon(FluentIcons.plug_disconnected),
                 onPressed: onDisconnect,
@@ -286,8 +284,8 @@ class _ConnectedClientRow extends StatelessWidget {
       ),
       child: Text(
         client.isAuthenticated
-            ? _t(context, 'Autenticado', 'Authenticated')
-            : _t(context, 'Nao autenticado', 'Not authenticated'),
+            ? appLocaleString(context, 'Autenticado', 'Authenticated')
+            : appLocaleString(context, 'Nao autenticado', 'Not authenticated'),
         style: FluentTheme.of(context).typography.caption?.copyWith(
           color: color,
         ),
@@ -299,18 +297,26 @@ class _ConnectedClientRow extends StatelessWidget {
     final now = DateTime.now();
     final diff = now.difference(dt);
     if (diff.inDays > 0) {
-      return _t(context, '${diff.inDays}d atras', '${diff.inDays}d ago');
+      return appLocaleString(
+        context,
+        '${diff.inDays}d atras',
+        '${diff.inDays}d ago',
+      );
     }
     if (diff.inHours > 0) {
-      return _t(context, '${diff.inHours}h atras', '${diff.inHours}h ago');
+      return appLocaleString(
+        context,
+        '${diff.inHours}h atras',
+        '${diff.inHours}h ago',
+      );
     }
     if (diff.inMinutes > 0) {
-      return _t(
+      return appLocaleString(
         context,
         '${diff.inMinutes}min atras',
         '${diff.inMinutes}m ago',
       );
     }
-    return _t(context, 'Agora', 'Now');
+    return appLocaleString(context, 'Agora', 'Now');
   }
 }

@@ -13,16 +13,16 @@ import 'package:result_dart/result_dart.dart' as rd;
 class _MockScheduleRepository extends Mock implements IScheduleRepository {}
 
 Schedule _schedule({String id = 's1', bool enabled = true}) => Schedule(
-      id: id,
-      name: 'Backup Diario',
-      databaseConfigId: 'db-1',
-      databaseType: DatabaseType.sqlServer,
-      scheduleType: ScheduleType.daily.name,
-      scheduleConfig: '{}',
-      destinationIds: const ['dest-1'],
-      backupFolder: r'C:\backup',
-      enabled: enabled,
-    );
+  id: id,
+  name: 'Backup Diario',
+  databaseConfigId: 'db-1',
+  databaseType: DatabaseType.sqlServer,
+  scheduleType: ScheduleType.daily.name,
+  scheduleConfig: '{}',
+  destinationIds: const ['dest-1'],
+  backupFolder: r'C:\backup',
+  enabled: enabled,
+);
 
 void main() {
   late _MockScheduleRepository repo;
@@ -95,7 +95,9 @@ void main() {
     test('deleta com sucesso quando existe', () async {
       final s = _schedule();
       when(() => repo.getById(s.id)).thenAnswer((_) async => rd.Success(s));
-      when(() => repo.delete(s.id)).thenAnswer((_) async => const rd.Success('ok'));
+      when(
+        () => repo.delete(s.id),
+      ).thenAnswer((_) async => const rd.Success('ok'));
 
       final req = createDeleteScheduleMessage(requestId: 1, scheduleId: s.id);
       await handler.handle('c1', req, sendToClient);

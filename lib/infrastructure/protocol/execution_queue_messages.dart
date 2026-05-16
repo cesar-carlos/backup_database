@@ -137,9 +137,9 @@ ExecutionQueueResult readExecutionQueueFromResponse(Message message) {
   final rawQueue = payload['queue'];
   final queue = rawQueue is List
       ? rawQueue
-          .whereType<Map<String, dynamic>>()
-          .map(QueuedExecution.fromMap)
-          .toList()
+            .whereType<Map<String, dynamic>>()
+            .map(QueuedExecution.fromMap)
+            .toList()
       : <QueuedExecution>[];
   return ExecutionQueueResult(
     queue: queue,

@@ -1,39 +1,44 @@
+import 'package:backup_database/domain/entities/database_connection_config.dart';
+import 'package:backup_database/domain/entities/schedule.dart'
+    show DatabaseType;
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:uuid/uuid.dart';
 
-class SqlServerConfig {
+class SqlServerConfig extends DatabaseConnectionConfig {
   SqlServerConfig({
-    required this.name,
+    required super.name,
     required this.server,
     required this.database,
-    required this.username,
-    required this.password,
+    required super.username,
+    required super.password,
     String? id,
     PortNumber? port,
-    this.enabled = true,
+    super.enabled = true,
     this.useWindowsAuth = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : id = id ?? const Uuid().v4(),
-       port = port ?? PortNumber(1433),
-       createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
+  }) : super(
+         id: id ?? const Uuid().v4(),
+         port: port ?? PortNumber(1433),
+         createdAt: createdAt ?? DateTime.now(),
+         updatedAt: updatedAt ?? DateTime.now(),
+       );
 
-  final String id;
-  final String name;
   final String server;
   final DatabaseName database;
-  final String username;
-  final String password;
-  final PortNumber port;
-  final bool enabled;
   final bool useWindowsAuth;
-  final DateTime createdAt;
-  final DateTime updatedAt;
 
   String get databaseValue => database.value;
-  int get portValue => port.value;
+
+  @override
+  DatabaseType get databaseType => DatabaseType.sqlServer;
+
+  @override
+  String get host => server;
+
+  @override
+  DatabaseName get primaryDatabase => database;
 
   SqlServerConfig copyWith({
     String? id,

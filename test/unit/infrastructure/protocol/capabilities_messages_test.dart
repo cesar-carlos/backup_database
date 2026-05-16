@@ -26,6 +26,7 @@ void main() {
           supportsArtifactRetention: false,
           supportsChunkAck: false,
           supportsExecutionQueue: false,
+          supportsFirebird: false,
           chunkSize: 65536,
           compression: 'gzip',
           serverTimeUtc: clock,
@@ -39,6 +40,7 @@ void main() {
         expect(msg.payload['supportsArtifactRetention'], isFalse);
         expect(msg.payload['supportsChunkAck'], isFalse);
         expect(msg.payload['supportsExecutionQueue'], isFalse);
+        expect(msg.payload['supportsFirebird'], isFalse);
         expect(msg.payload['chunkSize'], 65536);
         expect(msg.payload['compression'], 'gzip');
         expect(msg.payload['serverTimeUtc'], '2026-04-19T12:00:00.000Z');
@@ -55,6 +57,7 @@ void main() {
         supportsArtifactRetention: true,
         supportsChunkAck: false,
         supportsExecutionQueue: true,
+        supportsFirebird: true,
         chunkSize: 32768,
         compression: 'gzip',
         serverTimeUtc: DateTime.utc(2026, 4, 19, 10),
@@ -68,6 +71,7 @@ void main() {
       expect(caps.supportsArtifactRetention, isTrue);
       expect(caps.supportsChunkAck, isFalse);
       expect(caps.supportsExecutionQueue, isTrue);
+      expect(caps.supportsFirebird, isTrue);
       expect(caps.chunkSize, 32768);
       expect(caps.compression, 'gzip');
       expect(caps.serverTimeUtc, DateTime.utc(2026, 4, 19, 10));
@@ -98,6 +102,7 @@ void main() {
         expect(caps.supportsArtifactRetention, isFalse);
         expect(caps.supportsChunkAck, isFalse);
         expect(caps.supportsExecutionQueue, isFalse);
+        expect(caps.supportsFirebird, isFalse);
         expect(caps.chunkSize, 65536);
         expect(caps.compression, 'gzip');
         expect(caps.serverTimeUtc, isNull);
@@ -134,6 +139,7 @@ void main() {
       expect(legacy.supportsArtifactRetention, isFalse);
       expect(legacy.supportsChunkAck, isFalse);
       expect(legacy.supportsExecutionQueue, isFalse);
+      expect(legacy.supportsFirebird, isFalse);
       // Mas mantem features ja existentes em v1
       expect(legacy.supportsResume, isTrue);
     });
@@ -151,6 +157,7 @@ void main() {
           supportsArtifactRetention: false,
           supportsChunkAck: false,
           supportsExecutionQueue: false,
+          supportsFirebird: false,
           chunkSize: 65536,
           compression: 'gzip',
           serverTimeUtc: localTime,

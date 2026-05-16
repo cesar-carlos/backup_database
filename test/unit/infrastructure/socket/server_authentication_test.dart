@@ -182,27 +182,30 @@ void main() {
       },
     );
 
-    test('should return false when license validation throws Failure', () async {
-      authentication = ServerAuthentication(
-        mockDao,
-        licenseValidationService: mockLicenseValidationService,
-      );
-      when(
-        () => mockLicenseValidationService.isFeatureAllowed(
-          LicenseFeatures.serverConnection,
-        ),
-      ).thenAnswer((_) async => rd.Failure(Exception('license error')));
+    test(
+      'should return false when license validation throws Failure',
+      () async {
+        authentication = ServerAuthentication(
+          mockDao,
+          licenseValidationService: mockLicenseValidationService,
+        );
+        when(
+          () => mockLicenseValidationService.isFeatureAllowed(
+            LicenseFeatures.serverConnection,
+          ),
+        ).thenAnswer((_) async => rd.Failure(Exception('license error')));
 
-      final message = createAuthRequestMessage(
-        serverId: serverId,
-        passwordHash: passwordHash,
-      );
-      final result = await authentication.validateAuthRequest(message);
+        final message = createAuthRequestMessage(
+          serverId: serverId,
+          passwordHash: passwordHash,
+        );
+        final result = await authentication.validateAuthRequest(message);
 
-      expect(result.isValid, isFalse);
-      expect(result.errorCode, ErrorCode.licenseDenied);
-      verifyNever(() => mockDao.getByServerId(any()));
-    });
+        expect(result.isValid, isFalse);
+        expect(result.errorCode, ErrorCode.licenseDenied);
+        verifyNever(() => mockDao.getByServerId(any()));
+      },
+    );
 
     test(
       'should return false when license service throws synchronously',

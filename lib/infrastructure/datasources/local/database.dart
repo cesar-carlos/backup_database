@@ -16,6 +16,7 @@ part 'database.g.dart';
     SqlServerConfigsTable,
     SybaseConfigsTable,
     PostgresConfigsTable,
+    FirebirdConfigsTable,
     BackupDestinationsTable,
     ScheduleDestinationsTable,
     SchedulesTable,
@@ -36,6 +37,7 @@ part 'database.g.dart';
     SqlServerConfigDao,
     SybaseConfigDao,
     PostgresConfigDao,
+    FirebirdConfigDao,
     BackupDestinationDao,
     ScheduleDestinationDao,
     ScheduleDao,
@@ -63,7 +65,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 32;
 
   @override
   MigrationStrategy get migration {
@@ -977,6 +979,21 @@ class AppDatabase extends _$AppDatabase {
             );
           }
         }
+
+        if (from < 32) {
+          try {
+            await m.createTable(firebirdConfigsTable);
+            LoggerService.info(
+              'Migração v32: firebird_configs_table criada.',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v32 para firebird_configs_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
       },
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -1181,7 +1198,7 @@ class AppDatabase extends _$AppDatabase {
       final tables = await customSelect(
         "SELECT name FROM sqlite_master WHERE type='table' "
         "AND name IN ('sql_server_configs_table', 'sybase_configs_table', "
-        "'postgres_configs_table', 'schedules_table')",
+        "'postgres_configs_table', 'firebird_configs_table', 'schedules_table')",
       ).get();
       final existingTableNames = tables
           .map((row) => row.data['name'] as String)
@@ -1191,6 +1208,7 @@ class AppDatabase extends _$AppDatabase {
         'sql_server_configs_table',
         'sybase_configs_table',
         'postgres_configs_table',
+        'firebird_configs_table',
         'schedules_table',
       ].where((table) => !existingTableNames.contains(table)).toList();
 

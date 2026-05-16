@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/services/i_metrics_analysis_service.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -54,7 +54,7 @@ class MetricsPercentilesCard extends StatelessWidget {
                       7: FlexColumnWidth(),
                     },
                     border: TableBorder.all(
-                      color: AppColors.grey600.withValues(alpha: 0.5),
+                      color: AppPalette.grey600.withValues(alpha: 0.5),
                     ),
                     children: [
                       TableRow(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:backup_database/application/providers/dropbox_auth_provider.dart';
@@ -8,6 +9,7 @@ import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
@@ -86,11 +88,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   bool get isEditing => widget.destination != null;
 
-  String _t(String pt, String en) {
-    if (!mounted) return en;
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
+  String _dialogLabel(String ptBr, String enUs) {
+    if (!mounted) return enUs;
+    return appLocaleString(context, ptBr, enUs);
   }
 
   @override
@@ -230,8 +230,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(width: 12),
         Text(
           isEditing
-              ? _t('Editar destino', 'Edit destination')
-              : _t('Novo destino', 'New destination'),
+              ? _dialogLabel('Editar destino', 'Edit destination')
+              : _dialogLabel('Novo destino', 'New destination'),
           style: FluentTheme.of(context).typography.title,
         ),
       ],
@@ -278,13 +278,17 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       isNextcloudBlocked) {
                     return InfoBar(
                       severity: InfoBarSeverity.warning,
-                      title: Text(_t('Recurso bloqueado', 'Feature blocked')),
+                      title: Text(
+                        _dialogLabel('Recurso bloqueado', 'Feature blocked'),
+                      ),
                       content: const Text(
                         'Este destino requer uma licença válida. '
                         'Acesse Configurações > Licenciamento para mais informações.',
                       ),
                       action: Button(
-                        child: Text(_t('Ver licenciamento', 'View licensing')),
+                        child: Text(
+                          _dialogLabel('Ver licenciamento', 'View licensing'),
+                        ),
                         onPressed: () {
                           Navigator.of(context).pop();
                         },
@@ -333,9 +337,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
             (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
 
         return AppDropdown<DestinationType>(
-          label: _t('Tipo de destino', 'Destination type'),
+          label: _dialogLabel('Tipo de destino', 'Destination type'),
           value: _selectedType,
-          placeholder: Text(_t('Tipo de destino', 'Destination type')),
+          placeholder: Text(
+            _dialogLabel('Tipo de destino', 'Destination type'),
+          ),
           items: DestinationType.values.map((type) {
             final isGoogleDriveBlocked =
                 type == DestinationType.googleDrive && !hasGoogleDrive;
@@ -368,7 +374,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         Flexible(
                           child: Text(
                             isBlocked
-                                ? '${_getTypeName(type)} (${_t('Requer licença', 'License required')})'
+                                ? '${_getTypeName(type)} (${_dialogLabel('Requer licença', 'License required')})'
                                 : _getTypeName(type),
                             textAlign: TextAlign.start,
                             style: TextStyle(
@@ -414,11 +420,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     if (isGoogleDriveBlocked ||
                         isDropboxBlocked ||
                         isNextcloudBlocked) {
-                      MessageModal.showWarning(
-                        context,
-                        message: _t(
-                          'Este destino requer uma licença válida. Acesse Configurações > Licenciamento para mais informações.',
-                          'This destination requires a valid license. Go to Settings > Licensing for more information.',
+                      unawaited(
+                        MessageModal.showWarning(
+                          context,
+                          message: _dialogLabel(
+                            'Este destino requer uma licença válida. Acesse Configurações > Licenciamento para mais informações.',
+                            'This destination requires a valid license. Go to Settings > Licensing for more information.',
+                          ),
                         ),
                       );
                       return;
@@ -437,15 +445,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Widget _buildNameField() {
     return AppTextField(
       controller: _nameController,
-      label: _t('Nome do destino', 'Destination name'),
-      hint: _t(
+      label: _dialogLabel('Nome do destino', 'Destination name'),
+      hint: _dialogLabel(
         'Ex: Backup local, FTP servidor, Google Drive, Dropbox',
         'Ex: Local backup, FTP server, Google Drive, Dropbox',
       ),
       prefixIcon: const Icon(FluentIcons.tag),
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return _t('Nome é obrigatório', 'Name is required');
+          return _dialogLabel('Nome é obrigatório', 'Name is required');
         }
         return null;
       },
@@ -471,19 +479,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
       children: [
         AppTextField(
           controller: _nextcloudServerUrlController,
-          label: _t('URL do Nextcloud', 'Nextcloud URL'),
+          label: _dialogLabel('URL do Nextcloud', 'Nextcloud URL'),
           hint: 'https://cloud.exemplo.com',
           prefixIcon: const Icon(FluentIcons.globe),
           validator: (value) {
             final text = value?.trim() ?? '';
-            if (text.isEmpty) return _t('URL é obrigatória', 'URL is required');
+            if (text.isEmpty) {
+              return _dialogLabel('URL é obrigatória', 'URL is required');
+            }
 
             final uri = Uri.tryParse(text);
             if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-              return _t('URL inválida', 'Invalid URL');
+              return _dialogLabel('URL inválida', 'Invalid URL');
             }
             if (uri.scheme != 'https' && uri.scheme != 'http') {
-              return _t('Use http ou https', 'Use http or https');
+              return _dialogLabel('Use http ou https', 'Use http or https');
             }
             return null;
           },
@@ -491,25 +501,33 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         AppTextField(
           controller: _nextcloudUsernameController,
-          label: _t('Usuario', 'Username'),
+          label: _dialogLabel('Usuario', 'Username'),
           hint: 'usuario',
           prefixIcon: const Icon(FluentIcons.contact),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t('Usuário é obrigatório', 'Username is required');
+              return _dialogLabel(
+                'Usuário é obrigatório',
+                'Username is required',
+              );
             }
             return null;
           },
         ),
         const SizedBox(height: 16),
         AppDropdown<NextcloudAuthMode>(
-          label: _t('Tipo de credencial', 'Credential type'),
+          label: _dialogLabel('Tipo de credencial', 'Credential type'),
           value: _nextcloudAuthMode,
-          placeholder: Text(_t('Tipo de credencial', 'Credential type')),
+          placeholder: Text(
+            _dialogLabel('Tipo de credencial', 'Credential type'),
+          ),
           items: NextcloudAuthMode.values.map((mode) {
             final label = mode == NextcloudAuthMode.appPassword
-                ? _t('App Password (recomendado)', 'App Password (recommended)')
-                : _t('Senha do usuario', 'User password');
+                ? _dialogLabel(
+                    'App Password (recomendado)',
+                    'App Password (recommended)',
+                  )
+                : _dialogLabel('Senha do usuario', 'User password');
             return ComboBoxItem<NextcloudAuthMode>(
               value: mode,
               child: Text(label),
@@ -526,18 +544,27 @@ class _DestinationDialogState extends State<DestinationDialog> {
         AppTextField(
           controller: _nextcloudAppPasswordController,
           label: _nextcloudAuthMode == NextcloudAuthMode.appPassword
-              ? _t('App Password', 'App Password')
-              : _t('Senha do usuario', 'User password'),
+              ? _dialogLabel('App Password', 'App Password')
+              : _dialogLabel('Senha do usuario', 'User password'),
           hint: _nextcloudAuthMode == NextcloudAuthMode.appPassword
-              ? _t('Senha de aplicativo do Nextcloud', 'Nextcloud app password')
-              : _t('Senha do usuario do Nextcloud', 'Nextcloud user password'),
+              ? _dialogLabel(
+                  'Senha de aplicativo do Nextcloud',
+                  'Nextcloud app password',
+                )
+              : _dialogLabel(
+                  'Senha do usuario do Nextcloud',
+                  'Nextcloud user password',
+                ),
           prefixIcon: const Icon(FluentIcons.lock),
           obscureText: true,
           validator: (value) {
             if (value == null || value.isEmpty) {
               return _nextcloudAuthMode == NextcloudAuthMode.appPassword
-                  ? _t('App Password é obrigatório', 'App Password is required')
-                  : _t(
+                  ? _dialogLabel(
+                      'App Password é obrigatório',
+                      'App Password is required',
+                    )
+                  : _dialogLabel(
                       'Senha do usuário é obrigatória',
                       'User password is required',
                     );
@@ -548,19 +575,22 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         AppTextField(
           controller: _nextcloudRemotePathController,
-          label: _t('Caminho remoto (opcional)', 'Remote path (optional)'),
+          label: _dialogLabel(
+            'Caminho remoto (opcional)',
+            'Remote path (optional)',
+          ),
           hint: '/ ou /Backups',
           prefixIcon: const Icon(FluentIcons.folder),
         ),
         const SizedBox(height: 16),
         AppTextField(
           controller: _nextcloudFolderNameController,
-          label: _t('Nome da pasta', 'Folder name'),
+          label: _dialogLabel('Nome da pasta', 'Folder name'),
           hint: 'Backups',
           prefixIcon: const Icon(FluentIcons.cloud),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t(
+              return _dialogLabel(
                 'Nome da pasta é obrigatório',
                 'Folder name is required',
               );
@@ -573,7 +603,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             InfoLabel(
-              label: _t(
+              label: _dialogLabel(
                 'Permitir certificado invalido (self-signed)',
                 'Allow invalid certificate (self-signed)',
               ),
@@ -584,7 +614,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
             ),
             const SizedBox(height: 8),
             Text(
-              _t(
+              _dialogLabel(
                 'Use apenas se seu Nextcloud usa certificado self-signed ou CA interna.',
                 'Use only if your Nextcloud uses self-signed cert or internal CA.',
               ),
@@ -594,7 +624,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         ActionButton(
-          label: _t('Testar conexão Nextcloud', 'Test Nextcloud connection'),
+          label: _dialogLabel(
+            'Testar conexão Nextcloud',
+            'Test Nextcloud connection',
+          ),
           icon: FluentIcons.network_tower,
           onPressed: _testNextcloudConnection,
           isLoading: _isTestingNextcloudConnection,
@@ -612,9 +645,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => ContentDialog(
-        title: Text(_t('Atenção', 'Attention')),
+        title: Text(_dialogLabel('Atenção', 'Attention')),
         content: Text(
-          _t(
+          _dialogLabel(
             'Permitir certificado inválido reduz a segurança da conexão.\nHabilite apenas se o servidor usa certificado self-signed ou CA interna.',
             'Allowing invalid certificate reduces connection security.\nEnable only if server uses self-signed cert or internal CA.',
           ),
@@ -622,11 +655,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
         actions: [
           Button(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_t('Cancelar', 'Cancel')),
+            child: Text(_dialogLabel('Cancelar', 'Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(_t('Habilitar', 'Enable')),
+            child: Text(_dialogLabel('Habilitar', 'Enable')),
           ),
         ],
       ),
@@ -643,8 +676,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
       children: [
         NumericField(
           controller: _retentionDaysController,
-          label: _t('Dias de retencao', 'Retention days'),
-          hint: _t(
+          label: _dialogLabel('Dias de retencao', 'Retention days'),
+          hint: _dialogLabel(
             'Ex: 7 (mantem backups por 7 dias)',
             'Ex: 7 (keeps backups for 7 days)',
           ),
@@ -681,7 +714,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _t('Limpeza automatica', 'Automatic cleanup'),
+                      _dialogLabel('Limpeza automatica', 'Automatic cleanup'),
                       style: FluentTheme.of(context).typography.caption
                           ?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -690,7 +723,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _t(
+                      _dialogLabel(
                         'Backups anteriores a ${_formatDate(cutoffDate)} serao excluidos automaticamente apos cada backup executado.',
                         'Backups older than ${_formatDate(cutoffDate)} will be automatically removed after each backup run.',
                       ),
@@ -708,7 +741,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Widget _buildCreateSubfoldersSwitch() {
     return InfoLabel(
-      label: _t('Criar subpastas por data', 'Create date-based subfolders'),
+      label: _dialogLabel(
+        'Criar subpastas por data',
+        'Create date-based subfolders',
+      ),
       child: ToggleSwitch(
         checked: _createSubfoldersByDate,
         onChanged: (value) {
@@ -725,7 +761,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InfoLabel(
-          label: _t('Usar FTPS', 'Use FTPS'),
+          label: _dialogLabel('Usar FTPS', 'Use FTPS'),
           child: ToggleSwitch(
             checked: _useFtps,
             onChanged: (value) {
@@ -737,12 +773,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t('Conexão FTP segura (SSL/TLS)', 'Secure FTP connection (SSL/TLS)'),
+          _dialogLabel(
+            'Conexão FTP segura (SSL/TLS)',
+            'Secure FTP connection (SSL/TLS)',
+          ),
           style: FluentTheme.of(context).typography.caption,
         ),
         const SizedBox(height: 16),
         InfoLabel(
-          label: _t(
+          label: _dialogLabel(
             'Retomada de upload (REST STREAM)',
             'Upload resume (REST STREAM)',
           ),
@@ -757,7 +796,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Retomar envio do ponto de interrupção quando o servidor suportar',
             'Resume upload from interruption point when server supports it',
           ),
@@ -765,7 +804,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         ActionButton(
-          label: _t('Testar conexão FTP', 'Test FTP connection'),
+          label: _dialogLabel('Testar conexão FTP', 'Test FTP connection'),
           icon: FluentIcons.network_tower,
           onPressed: _testFtpConnection,
           isLoading: _isTestingFtpConnection,
@@ -821,15 +860,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   String _getFtpIntegrityImpactText() {
     return switch (_ftpIntegrityPreset) {
-      _FtpIntegrityPreset.quick => _t(
+      _FtpIntegrityPreset.quick => _dialogLabel(
         'Impacto de performance: baixo. Menor confiança de integridade.',
         'Performance impact: low. Lower integrity confidence.',
       ),
-      _FtpIntegrityPreset.balanced => _t(
+      _FtpIntegrityPreset.balanced => _dialogLabel(
         'Impacto de performance: médio. Bom equilíbrio para uso diário.',
         'Performance impact: medium. Good balance for daily usage.',
       ),
-      _FtpIntegrityPreset.maximum => _t(
+      _FtpIntegrityPreset.maximum => _dialogLabel(
         'Impacto de performance: alto em arquivos grandes devido ao read-back.',
         'Performance impact: high on large files due to read-back.',
       ),
@@ -841,15 +880,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          _t('Opções avançadas', 'Advanced options'),
+          _dialogLabel('Opções avançadas', 'Advanced options'),
           style: FluentTheme.of(context).typography.bodyStrong,
         ),
         const SizedBox(height: 12),
         AppDropdown<_FtpIntegrityPreset>(
-          label: _t('Preset de integridade', 'Integrity preset'),
+          label: _dialogLabel('Preset de integridade', 'Integrity preset'),
           value: _ftpIntegrityPreset,
           placeholder: Text(
-            _t('Máxima integridade', 'Maximum integrity'),
+            _dialogLabel('Máxima integridade', 'Maximum integrity'),
           ),
           items: _FtpIntegrityPreset.values
               .map(
@@ -857,12 +896,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
                   value: preset,
                   child: Text(
                     switch (preset) {
-                      _FtpIntegrityPreset.quick => _t('Rápido', 'Quick'),
-                      _FtpIntegrityPreset.balanced => _t(
+                      _FtpIntegrityPreset.quick => _dialogLabel(
+                        'Rápido',
+                        'Quick',
+                      ),
+                      _FtpIntegrityPreset.balanced => _dialogLabel(
                         'Equilibrado',
                         'Balanced',
                       ),
-                      _FtpIntegrityPreset.maximum => _t(
+                      _FtpIntegrityPreset.maximum => _dialogLabel(
                         'Máxima integridade',
                         'Maximum integrity',
                       ),
@@ -882,7 +924,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Rápido: só tamanho. Equilibrado: hash remoto. '
                 'Máxima: hash remoto + read-back quando necessário.',
             'Quick: size only. Balanced: remote hash. '
@@ -922,7 +964,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         InfoLabel(
-          label: _t(
+          label: _dialogLabel(
             'Validação forte de integridade',
             'Strong integrity validation',
           ),
@@ -945,7 +987,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Além do tamanho, valida com hash do arquivo remoto para reduzir '
                 'falsos positivos.',
             'In addition to file size, validates using remote file hash to '
@@ -955,7 +997,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         InfoLabel(
-          label: _t(
+          label: _dialogLabel(
             'Read-back quando hash remoto indisponível',
             'Read-back when remote hash unavailable',
           ),
@@ -977,7 +1019,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Baixa o arquivo do FTP e compara SHA-256 com o local. '
                 'Mais confiável, porém mais lento para arquivos grandes.',
             'Downloads the file from FTP and compares SHA-256 with local. '
@@ -987,7 +1029,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         InfoLabel(
-          label: _t('Manter parcial ao cancelar', 'Keep partial on cancel'),
+          label: _dialogLabel(
+            'Manter parcial ao cancelar',
+            'Keep partial on cancel',
+          ),
           child: ToggleSwitch(
             checked: _keepPartOnCancelFtp,
             onChanged: (value) {
@@ -999,7 +1044,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Manter arquivo .part no servidor para retomar depois',
             'Keep .part file on server to resume later',
           ),
@@ -1007,13 +1052,16 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         AppDropdown<FtpWhenResumeNotSupported>(
-          label: _t(
+          label: _dialogLabel(
             'Quando servidor não suporta retomada',
             'When server does not support resume',
           ),
           value: _whenResumeNotSupportedFtp,
           placeholder: Text(
-            _t('Fallback (upload completo)', 'Fallback (full upload)'),
+            _dialogLabel(
+              'Fallback (upload completo)',
+              'Fallback (full upload)',
+            ),
           ),
           items: FtpWhenResumeNotSupported.values
               .map(
@@ -1021,11 +1069,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
                   value: e,
                   child: Text(
                     e == FtpWhenResumeNotSupported.fallback
-                        ? _t(
+                        ? _dialogLabel(
                             'Fallback (upload completo)',
                             'Fallback (full upload)',
                           )
-                        : _t('Falhar', 'Fail'),
+                        : _dialogLabel('Falhar', 'Fail'),
                   ),
                 ),
               )
@@ -1040,14 +1088,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         AppTextField(
-          label: _t('Máx. tentativas', 'Max attempts'),
+          label: _dialogLabel('Máx. tentativas', 'Max attempts'),
           controller: _maxAttemptsFtpController,
-          hint: _t('Padrão: 3', 'Default: 3'),
+          hint: _dialogLabel('Padrão: 3', 'Default: 3'),
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Número máximo de tentativas por upload',
             'Maximum number of attempts per upload',
           ),
@@ -1055,7 +1103,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         InfoLabel(
-          label: _t('Log detalhado FTP', 'Verbose FTP log'),
+          label: _dialogLabel('Log detalhado FTP', 'Verbose FTP log'),
           child: ToggleSwitch(
             checked: _enableVerboseLogFtp,
             onChanged: (value) {
@@ -1067,7 +1115,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Registrar comandos e respostas do protocolo FTP (útil para diagnóstico)',
             'Log FTP protocol commands and responses (useful for troubleshooting)',
           ),
@@ -1075,14 +1123,17 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         AppTextField(
-          label: _t('Timeout de conexão (s)', 'Connection timeout (s)'),
+          label: _dialogLabel(
+            'Timeout de conexão (s)',
+            'Connection timeout (s)',
+          ),
           controller: _connectionTimeoutSecondsController,
-          hint: _t('Padrão: 15', 'Default: 15'),
+          hint: _dialogLabel('Padrão: 15', 'Default: 15'),
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Tempo limite para conectar e autenticar no servidor FTP',
             'Time limit to connect and authenticate to FTP server',
           ),
@@ -1090,14 +1141,17 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 16),
         AppTextField(
-          label: _t('Timeout de upload (min)', 'Upload timeout (min)'),
+          label: _dialogLabel(
+            'Timeout de upload (min)',
+            'Upload timeout (min)',
+          ),
           controller: _uploadTimeoutMinutesController,
-          hint: _t('Padrão: 60', 'Default: 60'),
+          hint: _dialogLabel('Padrão: 60', 'Default: 60'),
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Tempo limite para sessão de upload (arquivos grandes podem precisar de mais)',
             'Time limit for upload session (large files may need more)',
           ),
@@ -1112,7 +1166,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InfoLabel(
-          label: _t('Habilitado', 'Enabled'),
+          label: _dialogLabel('Habilitado', 'Enabled'),
           child: ToggleSwitch(
             checked: _isEnabled,
             onChanged: (value) {
@@ -1124,7 +1178,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
         const SizedBox(height: 8),
         Text(
-          _t(
+          _dialogLabel(
             'Destino ativo para uso em agendamentos',
             'Destination active for schedule use',
           ),
@@ -1150,12 +1204,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
             Expanded(
               child: AppTextField(
                 controller: _localPathController,
-                label: _t('Caminho da pasta', 'Folder path'),
+                label: _dialogLabel('Caminho da pasta', 'Folder path'),
                 hint: r'C:\Backups',
                 prefixIcon: const Icon(FluentIcons.folder),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return _t('Caminho é obrigatório', 'Path is required');
+                    return _dialogLabel(
+                      'Caminho é obrigatório',
+                      'Path is required',
+                    );
                   }
                   return null;
                 },
@@ -1185,12 +1242,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
               flex: 3,
               child: AppTextField(
                 controller: _ftpHostController,
-                label: _t('Servidor FTP', 'FTP server'),
+                label: _dialogLabel('Servidor FTP', 'FTP server'),
                 hint: 'ftp.exemplo.com',
                 prefixIcon: const Icon(FluentIcons.server),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return _t('Servidor é obrigatório', 'Server is required');
+                    return _dialogLabel(
+                      'Servidor é obrigatório',
+                      'Server is required',
+                    );
                   }
                   return null;
                 },
@@ -1200,7 +1260,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
             Expanded(
               child: NumericField(
                 controller: _ftpPortController,
-                label: _t('Porta', 'Port'),
+                label: _dialogLabel('Porta', 'Port'),
                 hint: '21',
                 prefixIcon: FluentIcons.number_field,
                 minValue: 1,
@@ -1212,12 +1272,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         AppTextField(
           controller: _ftpUsernameController,
-          label: _t('Usuario', 'Username'),
+          label: _dialogLabel('Usuario', 'Username'),
           hint: 'usuario_ftp',
           prefixIcon: const Icon(FluentIcons.contact),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t('Usuário é obrigatório', 'Username is required');
+              return _dialogLabel(
+                'Usuário é obrigatório',
+                'Username is required',
+              );
             }
             return null;
           },
@@ -1225,18 +1288,18 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         PasswordField(
           controller: _ftpPasswordController,
-          label: _t('Senha FTP', 'FTP password'),
-          hint: _t('Senha do FTP', 'FTP password'),
+          label: _dialogLabel('Senha FTP', 'FTP password'),
+          hint: _dialogLabel('Senha do FTP', 'FTP password'),
         ),
         const SizedBox(height: 16),
         AppTextField(
           controller: _ftpRemotePathController,
-          label: _t('Caminho remoto', 'Remote path'),
+          label: _dialogLabel('Caminho remoto', 'Remote path'),
           hint: '/backups',
           prefixIcon: const Icon(FluentIcons.folder),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t(
+              return _dialogLabel(
                 'Caminho remoto é obrigatório',
                 'Remote path is required',
               );
@@ -1260,7 +1323,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
             if (!features.isExternalBrowserOAuthEnabled) ...[
               InfoBar(
                 title: Text(
-                  _t('Inicio de sessao OAuth', 'OAuth sign-in'),
+                  _dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in'),
                 ),
                 content: Text(
                   localizeCompatibilityReason(
@@ -1295,13 +1358,19 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Widget _buildGoogleFolderField(GoogleAuthProvider googleAuth) {
     return AppTextField(
       controller: _googleFolderNameController,
-      label: _t('Nome da pasta no Google Drive', 'Google Drive folder name'),
+      label: _dialogLabel(
+        'Nome da pasta no Google Drive',
+        'Google Drive folder name',
+      ),
       hint: 'Backups',
       prefixIcon: const Icon(FluentIcons.cloud),
       enabled: googleAuth.isSignedIn,
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
-          return _t('Nome da pasta é obrigatório', 'Folder name is required');
+          return _dialogLabel(
+            'Nome da pasta é obrigatório',
+            'Folder name is required',
+          );
         }
         return null;
       },
@@ -1322,7 +1391,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              _t(
+              _dialogLabel(
                 'Conecte-se ao Google para configurar o destino.',
                 'Sign in to Google to configure this destination.',
               ),
@@ -1377,11 +1446,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
               Expanded(
                 child: Text(
                   isSignedIn
-                      ? _t(
+                      ? _dialogLabel(
                           'Conectado como ${googleAuth.currentEmail ?? 'usuario'}',
                           'Connected as ${googleAuth.currentEmail ?? 'user'}',
                         )
-                      : _t(
+                      : _dialogLabel(
                           'Nao conectado ao Google',
                           'Not connected to Google',
                         ),
@@ -1403,7 +1472,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     children: [
                       const Icon(FluentIcons.sign_out, size: 18),
                       const SizedBox(width: 8),
-                      Text(_t('Desconectar', 'Disconnect')),
+                      Text(_dialogLabel('Desconectar', 'Disconnect')),
                     ],
                   ),
                 )
@@ -1426,8 +1495,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       const SizedBox(width: 8),
                       Text(
                         isLoading
-                            ? _t('Conectando...', 'Connecting...')
-                            : _t('Conectar ao Google', 'Connect to Google'),
+                            ? _dialogLabel('Conectando...', 'Connecting...')
+                            : _dialogLabel(
+                                'Conectar ao Google',
+                                'Connect to Google',
+                              ),
                       ),
                     ],
                   ),
@@ -1470,7 +1542,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
               const SizedBox(width: 8),
               Text(
-                _t('Configuração OAuth', 'OAuth configuration'),
+                _dialogLabel('Configuração OAuth', 'OAuth configuration'),
                 style: FluentTheme.of(
                   context,
                 ).typography.subtitle?.copyWith(color: AppColors.primary),
@@ -1479,7 +1551,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           ),
           const SizedBox(height: 12),
           Text(
-            _t(
+            _dialogLabel(
               'Para usar o Google Drive, configure as credenciais OAuth do Google Cloud Console.',
               'To use Google Drive, configure OAuth credentials in Google Cloud Console.',
             ),
@@ -1493,7 +1565,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
               children: [
                 const Icon(FluentIcons.lock, size: 18),
                 const SizedBox(width: 8),
-                Text(_t('Configurar credenciais', 'Configure credentials')),
+                Text(
+                  _dialogLabel(
+                    'Configurar credenciais',
+                    'Configure credentials',
+                  ),
+                ),
               ],
             ),
           ),
@@ -1509,7 +1586,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final success = await googleAuth.signIn();
     if (success && mounted) {
       _showSuccess(
-        _t(
+        _dialogLabel(
           'Conectado ao Google com sucesso!',
           'Connected to Google successfully!',
         ),
@@ -1529,7 +1606,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
     if ((result ?? false) && mounted) {
       _showSuccess(
-        _t('Credenciais OAuth configuradas!', 'OAuth credentials configured!'),
+        _dialogLabel(
+          'Credenciais OAuth configuradas!',
+          'OAuth credentials configured!',
+        ),
       );
     }
   }
@@ -1546,7 +1626,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
             if (!features.isExternalBrowserOAuthEnabled) ...[
               InfoBar(
                 title: Text(
-                  _t('Inicio de sessao OAuth', 'OAuth sign-in'),
+                  _dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in'),
                 ),
                 content: Text(
                   localizeCompatibilityReason(
@@ -1583,8 +1663,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
       children: [
         AppTextField(
           controller: _dropboxFolderPathController,
-          label: _t('Caminho da pasta (opcional)', 'Folder path (optional)'),
-          hint: _t(
+          label: _dialogLabel(
+            'Caminho da pasta (opcional)',
+            'Folder path (optional)',
+          ),
+          hint: _dialogLabel(
             '/Backups ou deixe vazio para raiz',
             '/Backups or leave empty for root',
           ),
@@ -1594,13 +1677,16 @@ class _DestinationDialogState extends State<DestinationDialog> {
         const SizedBox(height: 16),
         AppTextField(
           controller: _dropboxFolderNameController,
-          label: _t('Nome da pasta no Dropbox', 'Dropbox folder name'),
+          label: _dialogLabel(
+            'Nome da pasta no Dropbox',
+            'Dropbox folder name',
+          ),
           hint: 'Backups',
           prefixIcon: const Icon(FluentIcons.cloud),
           enabled: dropboxAuth.isSignedIn,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return _t(
+              return _dialogLabel(
                 'Nome da pasta é obrigatório',
                 'Folder name is required',
               );
@@ -1626,7 +1712,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              _t(
+              _dialogLabel(
                 'Conecte-se ao Dropbox para configurar o destino.',
                 'Sign in to Dropbox to configure this destination.',
               ),
@@ -1681,11 +1767,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
               Expanded(
                 child: Text(
                   isSignedIn
-                      ? _t(
+                      ? _dialogLabel(
                           'Conectado como ${dropboxAuth.currentEmail ?? 'usuario'}',
                           'Connected as ${dropboxAuth.currentEmail ?? 'user'}',
                         )
-                      : _t(
+                      : _dialogLabel(
                           'Nao conectado ao Dropbox',
                           'Not connected to Dropbox',
                         ),
@@ -1707,7 +1793,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     children: [
                       const Icon(FluentIcons.sign_out, size: 18),
                       const SizedBox(width: 8),
-                      Text(_t('Desconectar', 'Disconnect')),
+                      Text(_dialogLabel('Desconectar', 'Disconnect')),
                     ],
                   ),
                 )
@@ -1730,8 +1816,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       const SizedBox(width: 8),
                       Text(
                         isLoading
-                            ? _t('Conectando...', 'Connecting...')
-                            : _t('Conectar ao Dropbox', 'Connect to Dropbox'),
+                            ? _dialogLabel('Conectando...', 'Connecting...')
+                            : _dialogLabel(
+                                'Conectar ao Dropbox',
+                                'Connect to Dropbox',
+                              ),
                       ),
                     ],
                   ),
@@ -1777,7 +1866,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
               const SizedBox(width: 8),
               Text(
-                _t('Configuração OAuth', 'OAuth configuration'),
+                _dialogLabel('Configuração OAuth', 'OAuth configuration'),
                 style: FluentTheme.of(
                   context,
                 ).typography.subtitle?.copyWith(color: AppColors.primary),
@@ -1787,11 +1876,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(height: 12),
           Text(
             isConfigured && hasClientId
-                ? _t(
+                ? _dialogLabel(
                     'Credenciais OAuth configuradas. Clique em "Alterar credenciais" para modificar.',
                     'OAuth credentials configured. Click "Change credentials" to modify.',
                   )
-                : _t(
+                : _dialogLabel(
                     'Para usar o Dropbox, configure as credenciais OAuth do Dropbox App Console.',
                     'To use Dropbox, configure OAuth credentials in Dropbox App Console.',
                   ),
@@ -1807,8 +1896,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
                 const SizedBox(width: 8),
                 Text(
                   isConfigured && hasClientId
-                      ? _t('Alterar credenciais', 'Change credentials')
-                      : _t('Configurar credenciais', 'Configure credentials'),
+                      ? _dialogLabel(
+                          'Alterar credenciais',
+                          'Change credentials',
+                        )
+                      : _dialogLabel(
+                          'Configurar credenciais',
+                          'Configure credentials',
+                        ),
                 ),
               ],
             ),
@@ -1825,7 +1920,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final success = await dropboxAuth.signIn();
     if (success && mounted) {
       _showSuccess(
-        _t(
+        _dialogLabel(
           'Conectado ao Dropbox com sucesso!',
           'Connected to Dropbox successfully!',
         ),
@@ -1847,7 +1942,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
     if ((result ?? false) && mounted) {
       _showSuccess(
-        _t('Credenciais OAuth configuradas!', 'OAuth credentials configured!'),
+        _dialogLabel(
+          'Credenciais OAuth configuradas!',
+          'OAuth credentials configured!',
+        ),
       );
     }
   }
@@ -1870,9 +1968,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
   String _getTypeName(DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return _t('Pasta local', 'Local folder');
+        return _dialogLabel('Pasta local', 'Local folder');
       case DestinationType.ftp:
-        return _t('Servidor FTP', 'FTP server');
+        return _dialogLabel('Servidor FTP', 'FTP server');
       case DestinationType.googleDrive:
         return 'Google Drive';
       case DestinationType.dropbox:
@@ -1891,7 +1989,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Future<void> _selectLocalFolder() async {
     final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: _t(
+      dialogTitle: _dialogLabel(
         'Selecionar pasta de destino',
         'Select destination folder',
       ),
@@ -1905,19 +2003,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   Future<void> _testFtpConnection() async {
     if (_ftpHostController.text.trim().isEmpty) {
-      _showError(_t('Servidor FTP é obrigatório', 'FTP server is required'));
+      _showError(
+        _dialogLabel('Servidor FTP é obrigatório', 'FTP server is required'),
+      );
       return;
     }
     if (_ftpPortController.text.trim().isEmpty) {
-      _showError(_t('Porta é obrigatória', 'Port is required'));
+      _showError(_dialogLabel('Porta é obrigatória', 'Port is required'));
       return;
     }
     if (_ftpUsernameController.text.trim().isEmpty) {
-      _showError(_t('Usuário é obrigatório', 'Username is required'));
+      _showError(_dialogLabel('Usuário é obrigatório', 'Username is required'));
       return;
     }
     if (_ftpPasswordController.text.trim().isEmpty) {
-      _showError(_t('Senha é obrigatória', 'Password is required'));
+      _showError(_dialogLabel('Senha é obrigatória', 'Password is required'));
       return;
     }
 
@@ -1929,7 +2029,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       final port = int.tryParse(_ftpPortController.text.trim());
       if (port == null || port < 1 || port > 65535) {
         _showError(
-          _t(
+          _dialogLabel(
             'Porta inválida. Use um valor entre 1 e 65535',
             'Invalid port. Use a value between 1 and 65535',
           ),
@@ -1970,9 +2070,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
           if (testResult.ok) {
             final restInfo = switch (testResult.supportsRestStream) {
               true =>
-                '\n${_t("Suporta retomada de upload (REST STREAM).", "Supports upload resume (REST STREAM).")}',
+                '\n${_dialogLabel("Suporta retomada de upload (REST STREAM).", "Supports upload resume (REST STREAM).")}',
               false =>
-                '\n${_t(
+                '\n${_dialogLabel(
                   "Não suporta retomada de upload. "
                       "Em caso de interrupção, o envio será reiniciado do zero.",
                   "Does not support upload resume. "
@@ -1983,7 +2083,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
             final compatWarnings = <String>[];
             if (testResult.canWrite == false) {
               compatWarnings.add(
-                _t(
+                _dialogLabel(
                   'Sem permissão de escrita no diretório remoto.',
                   'No write permission on remote directory.',
                 ),
@@ -1991,7 +2091,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
             }
             if (testResult.canRename == false) {
               compatWarnings.add(
-                _t(
+                _dialogLabel(
                   'Renomear arquivos não permitido (RNFR/RNTO). '
                       'Upload pode falhar na publicação final.',
                   'File rename not allowed (RNFR/RNTO). '
@@ -2001,18 +2101,18 @@ class _DestinationDialogState extends State<DestinationDialog> {
             }
             final warningInfo = compatWarnings.isEmpty
                 ? ''
-                : '\n${_t("Avisos:", "Warnings:")} ${compatWarnings.join(" ")}'
+                : '\n${_dialogLabel("Avisos:", "Warnings:")} ${compatWarnings.join(" ")}'
                       '${compatWarnings.isNotEmpty ? " " : ""}'
-                      '${_t("Consulte o guia de configuração do servidor FTP.", "See FTP server configuration guide.")}';
+                      '${_dialogLabel("Consulte o guia de configuração do servidor FTP.", "See FTP server configuration guide.")}';
             _showSuccess(
-              _t(
+              _dialogLabel(
                 'Conexão FTP estabelecida com sucesso!$restInfo$warningInfo',
                 'FTP connection established successfully!$restInfo$warningInfo',
               ),
             );
           } else {
             _showError(
-              _t(
+              _dialogLabel(
                 'Falha ao conectar ao servidor FTP',
                 'Failed to connect to FTP server',
               ),
@@ -2024,7 +2124,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ? failure.message
               : failure.toString();
           _showError(
-            _t(
+            _dialogLabel(
               'Erro ao testar conexão FTP:\n$message',
               'Error testing FTP connection:\n$message',
             ),
@@ -2033,7 +2133,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       );
     } on Object catch (e) {
       if (mounted) {
-        _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
+        _showError(_dialogLabel('Erro inesperado: $e', 'Unexpected error: $e'));
       }
     } finally {
       if (mounted) {
@@ -2047,19 +2147,28 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Future<void> _testNextcloudConnection() async {
     if (_nextcloudServerUrlController.text.trim().isEmpty) {
       _showError(
-        _t('URL do Nextcloud é obrigatória', 'Nextcloud URL is required'),
+        _dialogLabel(
+          'URL do Nextcloud é obrigatória',
+          'Nextcloud URL is required',
+        ),
       );
       return;
     }
     if (_nextcloudUsernameController.text.trim().isEmpty) {
-      _showError(_t('Usuário é obrigatório', 'Username is required'));
+      _showError(_dialogLabel('Usuário é obrigatório', 'Username is required'));
       return;
     }
     if (_nextcloudAppPasswordController.text.trim().isEmpty) {
       _showError(
         _nextcloudAuthMode == NextcloudAuthMode.appPassword
-            ? _t('App Password é obrigatório', 'App Password is required')
-            : _t('Senha do usuário é obrigatória', 'User password is required'),
+            ? _dialogLabel(
+                'App Password é obrigatório',
+                'App Password is required',
+              )
+            : _dialogLabel(
+                'Senha do usuário é obrigatória',
+                'User password is required',
+              ),
       );
       return;
     }
@@ -2090,14 +2199,14 @@ class _DestinationDialogState extends State<DestinationDialog> {
         (success) {
           if (success) {
             _showSuccess(
-              _t(
+              _dialogLabel(
                 'Conexão Nextcloud estabelecida com sucesso!',
                 'Nextcloud connection established successfully!',
               ),
             );
           } else {
             _showError(
-              _t(
+              _dialogLabel(
                 'Falha ao conectar ao servidor Nextcloud',
                 'Failed to connect to Nextcloud server',
               ),
@@ -2109,7 +2218,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ? failure.message
               : failure.toString();
           _showError(
-            _t(
+            _dialogLabel(
               'Erro ao testar conexão Nextcloud:\n$message',
               'Error testing Nextcloud connection:\n$message',
             ),
@@ -2118,7 +2227,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       );
     } on Object catch (e) {
       if (mounted) {
-        _showError(_t('Erro inesperado: $e', 'Unexpected error: $e'));
+        _showError(_dialogLabel('Erro inesperado: $e', 'Unexpected error: $e'));
       }
     } finally {
       if (mounted) {
@@ -2131,12 +2240,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   void _showSuccess(String message) {
     if (!mounted) return;
-    MessageModal.showSuccess(context, message: message);
+    unawaited(MessageModal.showSuccess(context, message: message));
   }
 
   void _showError(String message) {
     if (!mounted) return;
-    MessageModal.showError(context, message: message);
+    unawaited(MessageModal.showError(context, message: message));
   }
 
   void _save() {
@@ -2149,7 +2258,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       final googleAuth = getIt<GoogleAuthProvider>();
       if (!googleAuth.isSignedIn) {
         _showError(
-          _t(
+          _dialogLabel(
             'Conecte-se ao Google antes de salvar.',
             'Connect to Google before saving.',
           ),
@@ -2162,7 +2271,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       final dropboxAuth = getIt<DropboxAuthProvider>();
       if (!dropboxAuth.isSignedIn) {
         _showError(
-          _t(
+          _dialogLabel(
             'Conecte-se ao Dropbox antes de salvar.',
             'Connect to Dropbox before saving.',
           ),
@@ -2179,7 +2288,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
       if (!hasNextcloud) {
         _showError(
-          _t(
+          _dialogLabel(
             'Este destino requer uma licença válida. Acesse Configurações > Licenciamento.',
             'This destination requires a valid license. Go to Settings > Licensing.',
           ),
@@ -2293,12 +2402,6 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
   late final TextEditingController _clientSecretController;
   bool _isLoading = false;
 
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -2317,9 +2420,15 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
 
   Future<void> _save() async {
     if (_clientIdController.text.trim().isEmpty) {
-      MessageModal.showError(
-        context,
-        message: _t('Client ID é obrigatório', 'Client ID is required'),
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: appLocaleString(
+            context,
+            'Client ID é obrigatório',
+            'Client ID is required',
+          ),
+        ),
       );
       return;
     }
@@ -2349,7 +2458,13 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
         children: [
           const Icon(FluentIcons.cloud),
           const SizedBox(width: 8),
-          Text(_t('Configurar Google OAuth', 'Configure Google OAuth')),
+          Text(
+            appLocaleString(
+              context,
+              'Configurar Google OAuth',
+              'Configure Google OAuth',
+            ),
+          ),
         ],
       ),
       content: SizedBox(
@@ -2359,7 +2474,8 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t(
+              appLocaleString(
+                context,
                 'Obtenha as credenciais no Google Cloud Console:',
                 'Get credentials from Google Cloud Console:',
               ),
@@ -2376,7 +2492,11 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
               enabled: !_isLoading,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return _t('Client ID é obrigatório', 'Client ID is required');
+                  return appLocaleString(
+                    context,
+                    'Client ID é obrigatório',
+                    'Client ID is required',
+                  );
                 }
                 return null;
               },
@@ -2411,25 +2531,32 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _t(
+            appLocaleString(
+              context,
               '1. Acesse console.cloud.google.com',
               '1. Go to console.cloud.google.com',
             ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            _t(
+            appLocaleString(
+              context,
               '2. Crie um projeto ou selecione existente',
               '2. Create a project or select an existing one',
             ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            _t('3. Ative a Google Drive API', '3. Enable Google Drive API'),
+            appLocaleString(
+              context,
+              '3. Ative a Google Drive API',
+              '3. Enable Google Drive API',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            _t(
+            appLocaleString(
+              context,
               '4. Crie credenciais OAuth (Desktop)',
               '4. Create OAuth credentials (Desktop)',
             ),
@@ -2437,7 +2564,8 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            _t(
+            appLocaleString(
+              context,
               '5. Na credencial criada, adicione em "URIs de redirecionamento autorizados":',
               '5. In the created credential, add this under "Authorized redirect URIs":',
             ),
@@ -2460,7 +2588,8 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            _t(
+            appLocaleString(
+              context,
               'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
               'Note: localhost is your own machine. The app creates a temporary local server during authentication.',
             ),
@@ -2495,12 +2624,6 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
   late final TextEditingController _clientSecretController;
   bool _isLoading = false;
 
-  String _t(String pt, String en) {
-    final isPt =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'pt';
-    return isPt ? pt : en;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -2519,9 +2642,15 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
 
   Future<void> _save() async {
     if (_clientIdController.text.trim().isEmpty) {
-      MessageModal.showError(
-        context,
-        message: _t('Client ID é obrigatório', 'Client ID is required'),
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: appLocaleString(
+            context,
+            'Client ID é obrigatório',
+            'Client ID is required',
+          ),
+        ),
       );
       return;
     }
@@ -2551,7 +2680,13 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
         children: [
           const Icon(FluentIcons.cloud),
           const SizedBox(width: 8),
-          Text(_t('Configurar Dropbox OAuth', 'Configure Dropbox OAuth')),
+          Text(
+            appLocaleString(
+              context,
+              'Configurar Dropbox OAuth',
+              'Configure Dropbox OAuth',
+            ),
+          ),
         ],
       ),
       content: SizedBox(
@@ -2561,7 +2696,8 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t(
+              appLocaleString(
+                context,
                 'Obtenha as credenciais no Dropbox App Console:',
                 'Get credentials from Dropbox App Console:',
               ),
@@ -2578,7 +2714,11 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
               enabled: !_isLoading,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return _t('App Key é obrigatório', 'App Key is required');
+                  return appLocaleString(
+                    context,
+                    'App Key é obrigatório',
+                    'App Key is required',
+                  );
                 }
                 return null;
               },
@@ -2613,25 +2753,32 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _t(
+            appLocaleString(
+              context,
               '1. Acesse dropbox.com/developers/apps',
               '1. Go to dropbox.com/developers/apps',
             ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            _t('2. Clique em "Create app"', '2. Click "Create app"'),
+            appLocaleString(
+              context,
+              '2. Clique em "Create app"',
+              '2. Click "Create app"',
+            ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            _t(
+            appLocaleString(
+              context,
               '3. Escolha "Scoped access" e "Full Dropbox"',
               '3. Choose "Scoped access" and "Full Dropbox"',
             ),
             style: FluentTheme.of(context).typography.caption,
           ),
           Text(
-            _t(
+            appLocaleString(
+              context,
               '4. Configure os scopes: files.content.write, files.content.read, account_info.read',
               '4. Configure scopes: files.content.write, files.content.read, account_info.read',
             ),
@@ -2639,7 +2786,8 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            _t(
+            appLocaleString(
+              context,
               '5. Na secao "OAuth 2", adicione em "Redirect URIs":',
               '5. In section "OAuth 2", add this in "Redirect URIs":',
             ),
@@ -2662,7 +2810,8 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            _t(
+            appLocaleString(
+              context,
               'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
               'Note: localhost is your own machine. The app creates a temporary local server during authentication.',
             ),

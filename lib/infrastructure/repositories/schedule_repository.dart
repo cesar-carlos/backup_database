@@ -160,8 +160,9 @@ class ScheduleRepository implements IScheduleRepository {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao buscar agendamentos vencidos',
       action: () async {
-        final schedules =
-            await _database.scheduleDao.getEnabledDueForExecution(beforeOrAt);
+        final schedules = await _database.scheduleDao.getEnabledDueForExecution(
+          beforeOrAt,
+        );
         if (schedules.isEmpty) return <Schedule>[];
         return _hydrateSchedules(schedules);
       },
@@ -220,7 +221,8 @@ class ScheduleRepository implements IScheduleRepository {
   ) {
     return RepositoryGuard.runVoid(
       errorMessage: 'Erro ao atualizar ultima execucao',
-      action: () => _database.scheduleDao.updateLastRun(id, lastRunAt, nextRunAt),
+      action: () =>
+          _database.scheduleDao.updateLastRun(id, lastRunAt, nextRunAt),
     );
   }
 
@@ -236,7 +238,8 @@ class ScheduleRepository implements IScheduleRepository {
     );
     final entities = <Schedule>[];
     for (final schedule in schedules) {
-      final destinationIds = destinationIdsBySchedule[schedule.id] ??
+      final destinationIds =
+          destinationIdsBySchedule[schedule.id] ??
           await _loadDestinationIdsFallback(
             schedule.id,
             schedule.destinationIds,

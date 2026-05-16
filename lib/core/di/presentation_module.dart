@@ -45,29 +45,6 @@ Future<void> setupPresentationModule(GetIt getIt) async {
     ),
   );
 
-  getIt.registerFactory<SqlServerConfigProvider>(
-    () => SqlServerConfigProvider(
-      getIt<ISqlServerConfigRepository>(),
-      getIt<IScheduleRepository>(),
-      getIt<ToolVerificationService>(),
-    ),
-  );
-
-  getIt.registerFactory<SybaseConfigProvider>(
-    () => SybaseConfigProvider(
-      getIt<ISybaseConfigRepository>(),
-      getIt<IScheduleRepository>(),
-      getIt<ToolVerificationService>(),
-    ),
-  );
-
-  getIt.registerFactory<PostgresConfigProvider>(
-    () => PostgresConfigProvider(
-      getIt<IPostgresConfigRepository>(),
-      getIt<IScheduleRepository>(),
-    ),
-  );
-
   getIt.registerFactory<DestinationProvider>(
     () => DestinationProvider(
       getIt<IBackupDestinationRepository>(),

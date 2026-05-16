@@ -128,10 +128,10 @@ class SchedulerService implements ISchedulerService {
     final jitterSeconds = Random().nextInt(30);
     Timer(Duration(seconds: jitterSeconds), () {
       if (!_isRunning) return;
-      _checkSchedules();
+      unawaited(_checkSchedules());
       _checkTimer = Timer.periodic(
         const Duration(minutes: 1),
-        (_) => _checkSchedules(),
+        (_) => unawaited(_checkSchedules()),
       );
     });
 
@@ -558,7 +558,8 @@ class SchedulerService implements ISchedulerService {
               );
           updateResult.fold(
             (_) {},
-            (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
+            (e) =>
+                LoggerService.warning('Erro ao atualizar histórico e log: $e'),
           );
 
           final notifyResult = await _notificationService.notifyBackupComplete(

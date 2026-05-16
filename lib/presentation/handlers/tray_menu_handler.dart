@@ -13,24 +13,24 @@ class TrayMenuHandler {
   static void handleAction(TrayMenuAction action) {
     switch (action) {
       case TrayMenuAction.show:
-        WindowManagerService().show();
+        unawaited(WindowManagerService().show());
 
       case TrayMenuAction.executeBackup:
-        _executeManualBackup();
+        unawaited(_executeManualBackup());
 
       case TrayMenuAction.pauseScheduler:
         service_locator.getIt<ISchedulerService>().stop();
-        TrayManagerService().setSchedulerPaused(true);
+        unawaited(TrayManagerService().setSchedulerPaused(true));
 
       case TrayMenuAction.resumeScheduler:
         unawaited(service_locator.getIt<ISchedulerService>().start());
-        TrayManagerService().setSchedulerPaused(false);
+        unawaited(TrayManagerService().setSchedulerPaused(false));
 
       case TrayMenuAction.settings:
         _navigateToSettings();
 
       case TrayMenuAction.exit:
-        _exitApp();
+        unawaited(_exitApp());
     }
   }
 
@@ -98,7 +98,7 @@ class TrayMenuHandler {
   static void _navigateToSettings() {
     LoggerService.info('Navegando para configurações via tray menu');
 
-    WindowManagerService().show();
+    unawaited(WindowManagerService().show());
 
     appRouter.go(RouteNames.settings);
   }

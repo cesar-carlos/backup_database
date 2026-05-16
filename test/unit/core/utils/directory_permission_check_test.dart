@@ -51,7 +51,9 @@ void main() {
         final leftovers = tempDir
             .listSync()
             .whereType<File>()
-            .where((f) => p.basename(f.path).startsWith('.backup_permission_test_'))
+            .where(
+              (f) => p.basename(f.path).startsWith('.backup_permission_test_'),
+            )
             .toList();
         expect(
           leftovers,

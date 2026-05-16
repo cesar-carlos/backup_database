@@ -38,11 +38,14 @@ void main() {
       expect(await s.tryAcquireLock(fp, owner: 'b', runId: 'r2'), isFalse);
     });
 
-    test('v1: mesmo runId permite re-adquire de outro owner (re-sincronizacao)', () async {
-      final s = svc();
-      expect(await s.tryAcquireLock(fp, owner: 'a', runId: 'r1'), isTrue);
-      expect(await s.tryAcquireLock(fp, owner: 'b', runId: 'r1'), isTrue);
-    });
+    test(
+      'v1: mesmo runId permite re-adquire de outro owner (re-sincronizacao)',
+      () async {
+        final s = svc();
+        expect(await s.tryAcquireLock(fp, owner: 'a', runId: 'r1'), isTrue);
+        expect(await s.tryAcquireLock(fp, owner: 'b', runId: 'r1'), isTrue);
+      },
+    );
 
     test('mesmo owner re-adquire (refresh)', () async {
       final s = svc();
@@ -53,7 +56,14 @@ void main() {
 
     test('apos expiracao, outro adquire', () async {
       final s = svc();
-      expect(await s.tryAcquireLock(fp, owner: 'a', leaseTtl: const Duration(minutes: 2)), isTrue);
+      expect(
+        await s.tryAcquireLock(
+          fp,
+          owner: 'a',
+          leaseTtl: const Duration(minutes: 2),
+        ),
+        isTrue,
+      );
       now = now.add(const Duration(minutes: 3));
       expect(await s.tryAcquireLock(fp, owner: 'b'), isTrue);
     });
@@ -61,7 +71,9 @@ void main() {
     test('lock legado (so ISO) bloqueia ate expirar', () async {
       final s = svc();
       final lockFile = File(p.join(tempDir.path, _lockFileNameForPath(fp)));
-      await lockFile.writeAsString(DateTime.utc(2026, 4, 23, 12).toIso8601String());
+      await lockFile.writeAsString(
+        DateTime.utc(2026, 4, 23, 12).toIso8601String(),
+      );
       now = DateTime.utc(2026, 4, 23, 12, 15);
       expect(
         await s.tryAcquireLock(fp, owner: 'a'),
@@ -71,7 +83,14 @@ void main() {
 
     test('isLocked falso quando v1 expirou (arquivo ainda no disco)', () async {
       final s = svc();
-      expect(await s.tryAcquireLock(fp, owner: 'a', leaseTtl: const Duration(minutes: 1)), isTrue);
+      expect(
+        await s.tryAcquireLock(
+          fp,
+          owner: 'a',
+          leaseTtl: const Duration(minutes: 1),
+        ),
+        isTrue,
+      );
       expect(await s.isLocked(fp), isTrue);
       now = now.add(const Duration(minutes: 2));
       expect(await s.isLocked(fp), isFalse);

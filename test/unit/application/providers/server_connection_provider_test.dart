@@ -47,8 +47,9 @@ void main() {
     manager = ConnectionManager();
     server = TcpSocketServer();
 
-    when(() => repo.getAll())
-        .thenAnswer((_) async => const rd.Success(<ServerConnection>[]));
+    when(
+      () => repo.getAll(),
+    ).thenAnswer((_) async => const rd.Success(<ServerConnection>[]));
     when(
       () => logRepo.insertAttempt(
         clientHost: any(named: 'clientHost'),
@@ -79,6 +80,10 @@ void main() {
         ServerCapabilities.legacyDefault.supportsRunId,
       );
       expect(provider.isChunkAckSupported, isFalse);
+      expect(
+        provider.isFirebirdSupported,
+        ServerCapabilities.legacyDefault.supportsFirebird,
+      );
     });
 
     test('serverCapabilities populated after connect (auto-refresh)', () async {
@@ -91,6 +96,7 @@ void main() {
       // Servidor atual responde com supportsRunId=true (M2.3)
       expect(provider.isRunIdSupported, isTrue);
       expect(provider.isChunkAckSupported, isFalse, reason: 'ADR-002');
+      expect(provider.isFirebirdSupported, isFalse);
     });
 
     test('disconnect invalidates capabilities cache', () async {
@@ -101,7 +107,11 @@ void main() {
 
       await provider.disconnect();
       expect(provider.serverCapabilities, isNull);
-      expect(provider.isRunIdSupported, isFalse, reason: 'volta a legacyDefault');
+      expect(
+        provider.isRunIdSupported,
+        isFalse,
+        reason: 'volta a legacyDefault',
+      );
     });
   });
 

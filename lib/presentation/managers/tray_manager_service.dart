@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/l10n/app_locale_string.dart';
@@ -74,7 +75,7 @@ class TrayManagerService with TrayListener {
       try {
         final tempDir = await getTemporaryDirectory();
         final iconFile = File('${tempDir.path}\\tray_icon.ico');
-        final data = await rootBundle.load('assets/icons/favicon.ico');
+        final data = await rootBundle.load('assets/image/new/app_tray.ico');
         final bytes = data.buffer.asUint8List();
 
         await iconFile.writeAsBytes(bytes);
@@ -88,9 +89,9 @@ class TrayManagerService with TrayListener {
       final executableDir = Directory(executablePath).parent.path;
 
       final paths = [
-        '$executableDir\\data\\flutter_assets\\assets\\icons\\favicon.ico',
-        '${Directory(executablePath).parent.parent.path}\\data\\flutter_assets\\assets\\icons\\favicon.ico',
-        '$executableDir\\assets\\icons\\favicon.ico',
+        '$executableDir\\data\\flutter_assets\\assets\\image\\new\\app_tray.ico',
+        '${Directory(executablePath).parent.parent.path}\\data\\flutter_assets\\assets\\image\\new\\app_tray.ico',
+        '$executableDir\\assets\\image\\new\\app_tray.ico',
         '$executableDir\\resources\\app_icon.ico',
       ];
 
@@ -103,7 +104,7 @@ class TrayManagerService with TrayListener {
 
       var currentDir = Directory(executablePath).parent;
       for (var i = 0; i < 6; i++) {
-        final iconPath = '${currentDir.path}\\assets\\icons\\favicon.ico';
+        final iconPath = '${currentDir.path}\\assets\\image\\new\\app_tray.ico';
         final iconFile = File(iconPath);
         if (iconFile.existsSync()) {
           return iconFile.absolute.path;
@@ -115,7 +116,7 @@ class TrayManagerService with TrayListener {
 
       return executablePath;
     }
-    return 'assets/icons/favicon.ico';
+    return 'assets/image/new/app_tray.ico';
   }
 
   Future<void> _updateMenu() async {
@@ -173,26 +174,32 @@ class TrayManagerService with TrayListener {
 
   @override
   void onTrayIconMouseDown() {
-    Future.delayed(const Duration(milliseconds: 200), () {
+    unawaited(
+      Future.delayed(const Duration(milliseconds: 200), () {
+        unawaited(
+          _restoreWindow()
+              .then((_) {
+                _onMenuAction?.call(TrayMenuAction.show);
+              })
+              .catchError((e) {
+                LoggerService.error('Erro ao restaurar janela do tray', e);
+              }),
+        );
+      }),
+    );
+  }
+
+  @override
+  void onTrayIconMouseUp() {
+    unawaited(
       _restoreWindow()
           .then((_) {
             _onMenuAction?.call(TrayMenuAction.show);
           })
           .catchError((e) {
             LoggerService.error('Erro ao restaurar janela do tray', e);
-          });
-    });
-  }
-
-  @override
-  void onTrayIconMouseUp() {
-    _restoreWindow()
-        .then((_) {
-          _onMenuAction?.call(TrayMenuAction.show);
-        })
-        .catchError((e) {
-          LoggerService.error('Erro ao restaurar janela do tray', e);
-        });
+          }),
+    );
   }
 
   Future<void> _restoreWindow() async {
@@ -237,7 +244,7 @@ class TrayManagerService with TrayListener {
 
   @override
   void onTrayIconRightMouseDown() {
-    _showContextMenu();
+    unawaited(_showContextMenu());
   }
 
   @override
@@ -262,13 +269,15 @@ class TrayManagerService with TrayListener {
   void onTrayMenuItemClick(MenuItem menuItem) {
     switch (menuItem.key) {
       case 'show':
-        _restoreWindow()
-            .then((_) {
-              _onMenuAction?.call(TrayMenuAction.show);
-            })
-            .catchError((e) {
-              LoggerService.error('Erro ao restaurar janela do menu', e);
-            });
+        unawaited(
+          _restoreWindow()
+              .then((_) {
+                _onMenuAction?.call(TrayMenuAction.show);
+              })
+              .catchError((e) {
+                LoggerService.error('Erro ao restaurar janela do menu', e);
+              }),
+        );
 
       case 'settings':
         _onMenuAction?.call(TrayMenuAction.settings);
@@ -283,6 +292,6 @@ class TrayManagerService with TrayListener {
 
   void dispose() {
     trayManager.removeListener(this);
-    trayManager.destroy();
+    unawaited(trayManager.destroy());
   }
 }

@@ -1,6 +1,9 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/presentation/widgets/common/app_text_field.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+/// **Molecule** — password entry with show/hide toggle.
 class PasswordField extends StatefulWidget {
   const PasswordField({
     super.key,
@@ -43,15 +46,38 @@ class _PasswordFieldState extends State<PasswordField> {
       onChanged: widget.onChanged,
       enabled: widget.enabled,
       prefixIcon: const Icon(FluentIcons.lock),
-      suffixIcon: IconButton(
-        icon: Icon(
-          _obscureText ? FluentIcons.view : FluentIcons.hide,
+      suffixIcon: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: AppTargetSize.comfortable,
+          minHeight: AppTargetSize.comfortable,
         ),
-        onPressed: () {
-          setState(() {
-            _obscureText = !_obscureText;
-          });
-        },
+        child: Semantics(
+          button: true,
+          label: _obscureText
+              ? appLocaleString(context, 'Mostrar senha', 'Show password')
+              : appLocaleString(context, 'Ocultar senha', 'Hide password'),
+          child: Tooltip(
+            message: _obscureText
+                ? appLocaleString(context, 'Mostrar senha', 'Show password')
+                : appLocaleString(context, 'Ocultar senha', 'Hide password'),
+            child: IconButton(
+              onPressed: widget.enabled
+                  ? () {
+                      setState(() {
+                        _obscureText = !_obscureText;
+                      });
+                    }
+                  : null,
+              icon: AnimatedSwitcher(
+                duration: AppDuration.fast,
+                child: Icon(
+                  _obscureText ? FluentIcons.view : FluentIcons.hide,
+                  key: ValueKey<bool>(_obscureText),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

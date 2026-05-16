@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/sybase_config_provider.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
@@ -27,7 +29,9 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
             CommandBarButton(
               icon: const Icon(FluentIcons.refresh),
               onPressed: () {
-                context.read<SybaseConfigProvider>().loadConfigs();
+                unawaited(
+                  context.read<SybaseConfigProvider>().loadConfigs(),
+                );
               },
             ),
             CommandBarButton(
@@ -132,16 +136,20 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: config == null
-              ? 'Configuração criada com sucesso!'
-              : 'Configuração atualizada com sucesso!',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: config == null
+                ? 'Configuração criada com sucesso!'
+                : 'Configuração atualizada com sucesso!',
+          ),
         );
       } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao salvar configuração',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao salvar configuração',
+          ),
         );
       }
     }
@@ -179,14 +187,18 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
       if (!mounted) return;
 
       if (success) {
-        MessageModal.showSuccess(
-          context,
-          message: 'Configuração excluída com sucesso!',
+        unawaited(
+          MessageModal.showSuccess(
+            context,
+            message: 'Configuração excluída com sucesso!',
+          ),
         );
       } else {
-        MessageModal.showError(
-          context,
-          message: provider.error ?? 'Erro ao excluir configuração',
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: provider.error ?? 'Erro ao excluir configuração',
+          ),
         );
       }
     }
@@ -199,14 +211,18 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
     if (!mounted) return;
 
     if (success) {
-      MessageModal.showSuccess(
-        context,
-        message: 'Configuração duplicada com sucesso!',
+      unawaited(
+        MessageModal.showSuccess(
+          context,
+          message: 'Configuração duplicada com sucesso!',
+        ),
       );
     } else {
-      MessageModal.showError(
-        context,
-        message: provider.error ?? 'Erro ao duplicar configuração',
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: provider.error ?? 'Erro ao duplicar configuração',
+        ),
       );
     }
   }

@@ -27,8 +27,7 @@ class DriftExecutionQueuePersistence implements ExecutionQueuePersistence {
   final ExecutionQueueDao _dao;
 
   @override
-  Future<List<QueuedExecutionItem>> loadOrderedFifo() =>
-      _dao.loadOrderedFifo();
+  Future<List<QueuedExecutionItem>> loadOrderedFifo() => _dao.loadOrderedFifo();
 
   @override
   Future<void> trimToMaxSize(int maxKeep) async {
@@ -41,8 +40,7 @@ class DriftExecutionQueuePersistence implements ExecutionQueuePersistence {
   Future<bool> tryInsert({
     required QueuedExecutionItem item,
     required int maxQueueSize,
-  }) =>
-      _dao.tryInsert(item: item, maxQueueSize: maxQueueSize);
+  }) => _dao.tryInsert(item: item, maxQueueSize: maxQueueSize);
 
   @override
   Future<QueuedExecutionItem?> deleteFifoHead() => _dao.deleteFifoHead();
