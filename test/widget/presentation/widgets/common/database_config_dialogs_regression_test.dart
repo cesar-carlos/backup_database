@@ -1,4 +1,5 @@
 import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
@@ -19,15 +20,20 @@ class _MockPostgresBackupService extends Mock
 
 class _MockSybaseBackupService extends Mock implements ISybaseBackupService {}
 
+class _MockFirebirdBackupService extends Mock
+    implements IFirebirdBackupService {}
+
 void main() {
   late _MockSqlServerBackupService mockSql;
   late _MockPostgresBackupService mockPostgres;
   late _MockSybaseBackupService mockSybase;
+  late _MockFirebirdBackupService mockFirebird;
 
   setUp(() async {
     mockSql = _MockSqlServerBackupService();
     mockPostgres = _MockPostgresBackupService();
     mockSybase = _MockSybaseBackupService();
+    mockFirebird = _MockFirebirdBackupService();
     if (getIt.isRegistered<ISqlServerBackupService>()) {
       await getIt.unregister<ISqlServerBackupService>();
     }
@@ -36,6 +42,10 @@ void main() {
       await getIt.unregister<IPostgresBackupService>();
     }
     getIt.registerSingleton<IPostgresBackupService>(mockPostgres);
+    if (getIt.isRegistered<IFirebirdBackupService>()) {
+      await getIt.unregister<IFirebirdBackupService>();
+    }
+    getIt.registerSingleton<IFirebirdBackupService>(mockFirebird);
   });
 
   tearDown(() async {
@@ -44,6 +54,9 @@ void main() {
     }
     if (getIt.isRegistered<IPostgresBackupService>()) {
       await getIt.unregister<IPostgresBackupService>();
+    }
+    if (getIt.isRegistered<IFirebirdBackupService>()) {
+      await getIt.unregister<IFirebirdBackupService>();
     }
   });
 
@@ -115,6 +128,7 @@ void main() {
       expect(find.text('New Firebird configuration'), findsOneWidget);
       expect(find.text('Database file (.fdb)'), findsOneWidget);
       expect(find.text('Authentication type'), findsNothing);
+      expect(find.text('Test connection'), findsOneWidget);
     });
   });
 }

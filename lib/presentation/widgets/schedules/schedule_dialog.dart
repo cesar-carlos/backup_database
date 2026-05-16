@@ -1192,7 +1192,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                                   ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
                                         'Garante que o backup está íntegro e pode ser restaurado.'
                                   : _databaseType == DatabaseType.firebird
-                                  ? 'Verificação pós-backup para Firebird será definida com a implementação do gbak.'
+                                  ? 'Verificação pós-backup para Firebird ainda '
+                                        'não está disponível nesta versão.'
                                   : 'Verifica a integridade do backup após criação usando dbvalid '
                                         '(fallback dbverify). Garante que o backup está íntegro.')
                             : 'Este recurso requer uma licença válida. '
