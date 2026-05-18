@@ -180,8 +180,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _truncateLog = widget.schedule!.truncateLog;
       _selectedDestinationIds = List.from(widget.schedule!.destinationIds);
       _compressBackup = widget.schedule!.compressBackup;
-      _compressionFormat =
-          widget.schedule!.compressionFormat ?? CompressionFormat.zip;
+      _compressionFormat = widget.schedule!.compressionFormat;
       _isEnabled = widget.schedule!.enabled;
       _enableChecksum = widget.schedule!.enableChecksum;
       _verifyAfterBackup = widget.schedule!.verifyAfterBackup;

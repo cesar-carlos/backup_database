@@ -43,5 +43,15 @@ permissão para alterar definições da app.
 
 ## Automatizado no CI
 
-`test/unit/presentation/boot/windows_native_chrome_bootstrap_test.dart` garante que,
-fora do Windows, o bootstrap não lança exceção (Linux/macOS no GitHub Actions).
+- `test/unit/presentation/boot/windows_native_chrome_bootstrap_test.dart` — bootstrap
+  não lança fora do Windows (Linux no GitHub Actions).
+- `test/unit/infrastructure/repositories/user_preferences_repository_test.dart` —
+  persistência `use_windows_mica_backdrop` / `use_system_accent_color`.
+
+## Script interativo (Windows)
+
+```powershell
+.\tools\smoke_m14_windows.ps1
+```
+
+Regista cenários A–G e falha se algum operador marcar `n`.

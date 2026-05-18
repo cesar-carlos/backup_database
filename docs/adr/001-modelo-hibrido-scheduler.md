@@ -147,3 +147,10 @@ ExecutionOrigin.local})`.
 - Migracao gradual: introduzir o enum com default `local` em PR
   preparatorio, sem mudar comportamento. Em PR-3a o handler remoto
   passa a usar `remoteCommand` e o orchestrator passa a respeitar.
+- **Timer local (2026-05)**: preferencia `local_schedule_timer_enabled`
+  em `IUserPreferencesRepository` (default `true`). Quando `false`,
+  `SchedulerService.start()` atualiza `nextRun` e reconcilia historico
+  `running` obsoleto, mas **nao** inicia `_checkTimer`; execucoes
+  manuais (`executeNow`), socket remoto e fila persistem. UI na aba
+  **Servico** (Configuracoes); reiniciar o servico Windows aplica a
+  preferencia no processo em segundo plano.

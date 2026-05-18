@@ -18,7 +18,7 @@ class SybaseRejectTruncateInReplicationRule
     required SybaseConfig config,
     required BackupType backupType,
   }) async {
-    final SybaseBackupOptions? sybaseOptions = schedule.sybaseBackupOptions;
+    final sybaseOptions = schedule.sybaseBackupOptions;
     if (sybaseOptions == null) {
       LoggerService.warning(
         'Schedule "${schedule.name}" do tipo Sybase foi carregado sem '

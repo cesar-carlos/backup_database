@@ -513,7 +513,7 @@ class ScheduleRepository implements IScheduleRepository {
       backupType: Value(schedule.backupType.name),
       truncateLog: Value(schedule.truncateLog),
       compressBackup: Value(schedule.compressBackup),
-      compressionFormat: Value(schedule.compressionFormat?.name ?? 'zip'),
+      compressionFormat: Value(schedule.compressionFormat.name),
       enabled: Value(schedule.enabled),
       enableChecksum: Value(schedule.enableChecksum),
       verifyAfterBackup: Value(schedule.verifyAfterBackup),

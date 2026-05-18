@@ -9,21 +9,21 @@ void main() {
         level: LogLevel.info,
         category: LogCategory.execution,
         message: 'first',
-        createdAt: DateTime(2026, 1, 1),
+        createdAt: DateTime(2026),
       );
       final b = BackupLog(
         id: 'log-1',
         level: LogLevel.error,
         category: LogCategory.system,
         message: 'second',
-        createdAt: DateTime(2026, 6, 1),
+        createdAt: DateTime(2026, 6),
       );
       final c = BackupLog(
         id: 'log-2',
         level: LogLevel.info,
         category: LogCategory.execution,
         message: 'first',
-        createdAt: DateTime(2026, 1, 1),
+        createdAt: DateTime(2026),
       );
 
       expect(a, equals(b));

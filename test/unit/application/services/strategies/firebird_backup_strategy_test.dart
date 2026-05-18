@@ -177,7 +177,7 @@ void main() {
             context: any(named: 'context'),
           ),
         ).thenAnswer((invocation) async {
-          final BackupExecutionContext ctx =
+          final ctx =
               invocation.namedArguments[#context]! as BackupExecutionContext;
           expect(ctx.firebirdNbackupPhysicalLevel, 4);
           return const rd.Success(

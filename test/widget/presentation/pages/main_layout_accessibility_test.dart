@@ -66,6 +66,12 @@ class _FakeUserPreferencesRepository implements IUserPreferencesRepository {
 
   @override
   Future<void> setUseWindowsMicaBackdrop(bool value) async {}
+
+  @override
+  Future<bool> getLocalScheduleTimerEnabled() async => true;
+
+  @override
+  Future<void> setLocalScheduleTimerEnabled(bool value) async {}
 }
 
 ({ThemeProvider theme, GoRouter router}) _createServerMainLayoutHarness() {

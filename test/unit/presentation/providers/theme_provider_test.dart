@@ -149,4 +149,10 @@ class _FakeUserPreferencesRepository implements IUserPreferencesRepository {
   ) async {
     r1Signature = signature;
   }
+
+  @override
+  Future<bool> getLocalScheduleTimerEnabled() async => true;
+
+  @override
+  Future<void> setLocalScheduleTimerEnabled(bool value) async {}
 }

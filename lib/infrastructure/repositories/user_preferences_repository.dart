@@ -9,6 +9,8 @@ class UserPreferencesRepository implements IUserPreferencesRepository {
   static const String _useSystemAccentColorKey = 'use_system_accent_color';
   static const String _uiDensityKey = 'ui_density';
   static const String _skeletonLoadingEnabledKey = 'skeleton_loading_enabled';
+  static const String _localScheduleTimerEnabledKey =
+      'local_schedule_timer_enabled';
   static const String _r1MultiProfileLegacyHintDismissedSigKey =
       'r1_multi_profile_legacy_hint_dismissed_sig';
 
@@ -105,6 +107,18 @@ class UserPreferencesRepository implements IUserPreferencesRepository {
   Future<void> setSkeletonLoadingEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_skeletonLoadingEnabledKey, value);
+  }
+
+  @override
+  Future<bool> getLocalScheduleTimerEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_localScheduleTimerEnabledKey) ?? true;
+  }
+
+  @override
+  Future<void> setLocalScheduleTimerEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_localScheduleTimerEnabledKey, value);
   }
 
   @override

@@ -1629,7 +1629,6 @@ void main() {
           context: BackupExecutionContext(
             outputDirectory: tempDir.path,
             scheduleId: 'sched-full-b1',
-            backupType: BackupType.full,
             firebirdNbackupPhysicalLevel: 1,
           ),
         );
@@ -1665,7 +1664,7 @@ void main() {
           (_) => fail('expected failure'),
           (Object failure) {
             expect(failure, isA<ValidationFailure>());
-            final ValidationFailure vf = failure as ValidationFailure;
+            final vf = failure as ValidationFailure;
             expect(vf.message, contains('app_full_'));
             expect(vf.message, contains('.nbk'));
           },

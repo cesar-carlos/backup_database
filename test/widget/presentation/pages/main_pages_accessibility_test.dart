@@ -20,7 +20,6 @@ import 'package:backup_database/presentation/pages/logs_page.dart';
 import 'package:backup_database/presentation/pages/schedules_page.dart';
 import 'package:backup_database/presentation/providers/skeleton_loading_preference_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart' show TextScaler;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
@@ -120,6 +119,12 @@ class _ShimmerOffUserPreferencesRepository
 
   @override
   Future<void> setUseWindowsMicaBackdrop(bool value) async {}
+
+  @override
+  Future<bool> getLocalScheduleTimerEnabled() async => true;
+
+  @override
+  Future<void> setLocalScheduleTimerEnabled(bool value) async {}
 }
 
 void main() {
@@ -147,7 +152,7 @@ void main() {
 
   Future<SkeletonLoadingPreferenceProvider>
   createShimmerOffSkeletonPreference() async {
-    final SkeletonLoadingPreferenceProvider provider =
+    final provider =
         SkeletonLoadingPreferenceProvider(
           userPreferencesRepository: _ShimmerOffUserPreferencesRepository(),
         );
@@ -167,12 +172,12 @@ void main() {
   testWidgets(
     'SchedulesPage meets text contrast accessibility guideline (light and dark)',
     (WidgetTester tester) async {
-      final _MockScheduleRepository scheduleRepo = _MockScheduleRepository();
+      final scheduleRepo = _MockScheduleRepository();
       when(
-        () => scheduleRepo.getAll(),
+        scheduleRepo.getAll,
       ).thenAnswer((_) async => const rd.Success(<Schedule>[]));
 
-      final SchedulerProvider schedulerProvider = SchedulerProvider(
+      final schedulerProvider = SchedulerProvider(
         repository: scheduleRepo,
         schedulerService: _MockSchedulerService(),
         createSchedule: _MockCreateSchedule(),
@@ -182,11 +187,11 @@ void main() {
       );
       addTearDown(schedulerProvider.dispose);
 
-      final SkeletonLoadingPreferenceProvider skeletonPrefs =
+      final skeletonPrefs =
           await createShimmerOffSkeletonPreference();
       addTearDown(skeletonPrefs.dispose);
 
-      for (final ThemeMode mode in <ThemeMode>[
+      for (final mode in <ThemeMode>[
         ThemeMode.light,
         ThemeMode.dark,
       ]) {
@@ -223,9 +228,9 @@ void main() {
   testWidgets(
     'DashboardPage meets text contrast accessibility guideline (light and dark)',
     (WidgetTester tester) async {
-      final _MockBackupHistoryRepository historyRepo =
+      final historyRepo =
           _MockBackupHistoryRepository();
-      final _MockScheduleRepository scheduleRepo = _MockScheduleRepository();
+      final scheduleRepo = _MockScheduleRepository();
 
       when(
         () => historyRepo.getAll(
@@ -237,20 +242,20 @@ void main() {
         () => historyRepo.getByDateRange(any(), any()),
       ).thenAnswer((_) async => const rd.Success(<BackupHistory>[]));
       when(
-        () => scheduleRepo.getEnabled(),
+        scheduleRepo.getEnabled,
       ).thenAnswer((_) async => const rd.Success(<Schedule>[]));
 
-      final DashboardProvider dashboardProvider = DashboardProvider(
+      final dashboardProvider = DashboardProvider(
         historyRepo,
         scheduleRepo,
       );
       addTearDown(dashboardProvider.dispose);
 
-      final SkeletonLoadingPreferenceProvider skeletonPrefs =
+      final skeletonPrefs =
           await createShimmerOffSkeletonPreference();
       addTearDown(skeletonPrefs.dispose);
 
-      for (final ThemeMode mode in <ThemeMode>[
+      for (final mode in <ThemeMode>[
         ThemeMode.light,
         ThemeMode.dark,
       ]) {
@@ -287,7 +292,7 @@ void main() {
   testWidgets(
     'LogsPage meets text contrast accessibility guideline (light and dark)',
     (WidgetTester tester) async {
-      final _MockBackupLogRepository logRepo = _MockBackupLogRepository();
+      final logRepo = _MockBackupLogRepository();
       when(
         () => logRepo.getAll(
           limit: any(named: 'limit'),
@@ -295,14 +300,14 @@ void main() {
         ),
       ).thenAnswer((_) async => const rd.Success(<BackupLog>[]));
 
-      final LogProvider logProvider = LogProvider(LogService(logRepo));
+      final logProvider = LogProvider(LogService(logRepo));
       addTearDown(logProvider.dispose);
 
-      final SkeletonLoadingPreferenceProvider skeletonPrefs =
+      final skeletonPrefs =
           await createShimmerOffSkeletonPreference();
       addTearDown(skeletonPrefs.dispose);
 
-      for (final ThemeMode mode in <ThemeMode>[
+      for (final mode in <ThemeMode>[
         ThemeMode.light,
         ThemeMode.dark,
       ]) {
@@ -341,7 +346,7 @@ void main() {
     (WidgetTester tester) async {
       final scheduleRepo = _MockScheduleRepository();
       when(
-        () => scheduleRepo.getAll(),
+        scheduleRepo.getAll,
       ).thenAnswer((_) async => const rd.Success(<Schedule>[]));
 
       final schedulerProvider = SchedulerProvider(
@@ -404,7 +409,7 @@ void main() {
         () => historyRepo.getByDateRange(any(), any()),
       ).thenAnswer((_) async => const rd.Success(<BackupHistory>[]));
       when(
-        () => scheduleRepo.getEnabled(),
+        scheduleRepo.getEnabled,
       ).thenAnswer((_) async => const rd.Success(<Schedule>[]));
 
       final dashboardProvider = DashboardProvider(

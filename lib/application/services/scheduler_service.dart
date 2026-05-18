@@ -49,6 +49,7 @@ class SchedulerService implements ISchedulerService {
     ITransferStagingService? transferStagingService,
     IMetricsCollector? metricsCollector,
     IBackupCancellationService? cancellationService,
+    IUserPreferencesRepository? userPreferencesRepository,
     Duration uploadTimeout = const Duration(hours: 4),
   }) : _scheduleRepository = scheduleRepository,
        _destinationRepository = destinationRepository,
@@ -64,6 +65,7 @@ class SchedulerService implements ISchedulerService {
        _transferStagingService = transferStagingService,
        _metricsCollector = metricsCollector,
        _cancellationService = cancellationService,
+       _userPreferencesRepository = userPreferencesRepository,
        _uploadTimeout = uploadTimeout;
 
   final IScheduleRepository _scheduleRepository;
@@ -90,6 +92,7 @@ class SchedulerService implements ISchedulerService {
   /// usuário pede para cancelar (antes a flag só interrompia no próximo
   /// checkpoint).
   final IBackupCancellationService? _cancellationService;
+  final IUserPreferencesRepository? _userPreferencesRepository;
 
   /// Timeout aplicado a todo o ciclo de upload para evitar que destinos
   /// travados (FTP lento, Drive offline) bloqueiem o backup
@@ -119,6 +122,17 @@ class SchedulerService implements ISchedulerService {
 
     await _updateAllNextRuns();
     await _reconcileStaleRunningBackups();
+
+    final localTimerEnabled =
+        await _userPreferencesRepository?.getLocalScheduleTimerEnabled() ??
+        true;
+    if (!localTimerEnabled) {
+      LoggerService.info(
+        'Timer de agendamento local desativado (preferência); '
+        'execuções apenas por comando remoto ou manual.',
+      );
+      return;
+    }
 
     // Jitter inicial (0-30s) antes do primeiro tick para evitar que
     // todos os servidores em um cluster batam o banco no mesmo segundo.

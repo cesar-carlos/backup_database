@@ -7,6 +7,8 @@ import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -22,14 +24,53 @@ class ServiceSettingsTab extends StatefulWidget {
 
 class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   late final ClipboardService _clipboardService;
+  bool _localScheduleTimerEnabled = true;
+  bool _isLoadingScheduleTimerPref = true;
 
   @override
   void initState() {
     super.initState();
     _clipboardService = getIt<ClipboardService>();
+    unawaited(_loadLocalScheduleTimerPreference());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(context.read<WindowsServiceProvider>().checkStatus());
     });
+  }
+
+  Future<void> _loadLocalScheduleTimerPreference() async {
+    try {
+      final enabled = await getIt<IUserPreferencesRepository>()
+          .getLocalScheduleTimerEnabled();
+      if (mounted) {
+        setState(() {
+          _localScheduleTimerEnabled = enabled;
+          _isLoadingScheduleTimerPref = false;
+        });
+      }
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Erro ao carregar preferência do timer de agendamento',
+        e,
+        s,
+      );
+      if (mounted) {
+        setState(() => _isLoadingScheduleTimerPref = false);
+      }
+    }
+  }
+
+  Future<void> _setLocalScheduleTimerEnabled(bool enabled) async {
+    setState(() => _localScheduleTimerEnabled = enabled);
+    await getIt<IUserPreferencesRepository>().setLocalScheduleTimerEnabled(
+      enabled,
+    );
+    if (getIt.isRegistered<ISchedulerService>()) {
+      final scheduler = getIt<ISchedulerService>();
+      scheduler.stop();
+      if (enabled) {
+        await scheduler.start();
+      }
+    }
   }
 
   Future<void> _copyCompatibilityDiagnostics(String summary) async {
@@ -198,6 +239,8 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                 const SizedBox(height: 24),
               ],
               _buildActionsCard(context, provider, serviceUiOk),
+              const SizedBox(height: 24),
+              _buildLocalScheduleTimerCard(context),
               const SizedBox(height: 24),
               _buildInfoCard(context),
             ],
@@ -429,6 +472,80 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocalScheduleTimerCard(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              appLocaleString(
+                context,
+                'Agendamento automático local',
+                'Local automatic scheduling',
+              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              appLocaleString(
+                context,
+                'Quando desativado, o servidor não verifica agendamentos '
+                    'vencidos por timer (cada minuto). Execuções manuais, '
+                    'comandos remotos do cliente e “Executar agora” '
+                    'continuam funcionando.',
+                'When off, the server does not poll for due schedules on a '
+                    'timer (every minute). Manual runs, remote client '
+                    'commands, and “Run now” still work.',
+              ),
+              style: FluentTheme.of(context).typography.caption,
+            ),
+            const SizedBox(height: 16),
+            InfoLabel(
+              label: appLocaleString(
+                context,
+                'Timer de verificação de agendamentos',
+                'Schedule check timer',
+              ),
+              child: _isLoadingScheduleTimerPref
+                  ? const ProgressRing()
+                  : ToggleSwitch(
+                      checked: _localScheduleTimerEnabled,
+                      onChanged: (bool enabled) {
+                        unawaited(_setLocalScheduleTimerEnabled(enabled));
+                      },
+                    ),
+            ),
+            if (!_localScheduleTimerEnabled) ...[
+              const SizedBox(height: 12),
+              InfoBar(
+                title: Text(
+                  appLocaleString(
+                    context,
+                    'Implantação controlada pelo cliente',
+                    'Client-driven deployment',
+                  ),
+                ),
+                content: Text(
+                  appLocaleString(
+                    context,
+                    'Reinicie o serviço do Windows (ou o app em modo '
+                        'servidor) para garantir que o processo em segundo '
+                        'plano aplique a preferência.',
+                    'Restart the Windows service (or the app in server mode) '
+                        'so the background process applies the preference.',
+                  ),
+                ),
+                isLong: true,
+              ),
+            ],
           ],
         ),
       ),

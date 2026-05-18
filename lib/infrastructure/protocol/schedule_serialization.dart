@@ -19,7 +19,7 @@ Map<String, dynamic> scheduleToMap(Schedule schedule) {
     'backupType': schedule.backupType.name,
     'truncateLog': schedule.truncateLog,
     'compressBackup': schedule.compressBackup,
-    'compressionFormat': schedule.compressionFormat?.name,
+    'compressionFormat': schedule.compressionFormat.name,
     'enabled': schedule.enabled,
     'enableChecksum': schedule.enableChecksum,
     'verifyAfterBackup': schedule.verifyAfterBackup,

@@ -85,6 +85,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       transferStagingService: getIt<ITransferStagingService>(),
       metricsCollector: getIt<IMetricsCollector>(),
       cancellationService: getIt<IBackupCancellationService>(),
+      userPreferencesRepository: getIt<IUserPreferencesRepository>(),
     ),
   );
 

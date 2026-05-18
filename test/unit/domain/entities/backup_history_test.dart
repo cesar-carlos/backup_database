@@ -14,7 +14,7 @@ void main() {
         backupPath: '/tmp/backup.bak',
         fileSize: 1024,
         status: status,
-        startedAt: DateTime(2026, 1, 1),
+        startedAt: DateTime(2026),
       );
     }
 

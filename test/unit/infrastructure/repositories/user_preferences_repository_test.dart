@@ -61,6 +61,15 @@ void main() {
       expect(await repository.getUseWindowsMicaBackdrop(), isFalse);
     });
 
+    test('getLocalScheduleTimerEnabled defaults to true when unset', () async {
+      expect(await repository.getLocalScheduleTimerEnabled(), isTrue);
+    });
+
+    test('setLocalScheduleTimerEnabled persists', () async {
+      await repository.setLocalScheduleTimerEnabled(false);
+      expect(await repository.getLocalScheduleTimerEnabled(), isFalse);
+    });
+
     test('getUseSystemAccentColor defaults to false when unset', () async {
       expect(await repository.getUseSystemAccentColor(), isFalse);
     });

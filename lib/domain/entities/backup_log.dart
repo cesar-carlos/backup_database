@@ -26,11 +26,8 @@ abstract class BackupLog with _$BackupLog {
   const BackupLog._();
 
   factory BackupLog({
-    String? id,
+    required LogLevel level, required LogCategory category, required String message, String? id,
     String? backupHistoryId,
-    required LogLevel level,
-    required LogCategory category,
-    required String message,
     String? details,
     DateTime? createdAt,
   }) {
@@ -47,12 +44,8 @@ abstract class BackupLog with _$BackupLog {
 
   const factory BackupLog.raw({
     required String id,
-    String? backupHistoryId,
-    required LogLevel level,
-    required LogCategory category,
-    required String message,
+    required LogLevel level, required LogCategory category, required String message, required DateTime createdAt, String? backupHistoryId,
     String? details,
-    required DateTime createdAt,
   }) = _BackupLog;
 
   @override

@@ -20,7 +20,7 @@ void main() {
   });
 
   test('returns null when nbackupLevel is zero', () async {
-    final String? r = await missingFirebirdNbackupChainPattern(
+    final r = await missingFirebirdNbackupChainPattern(
       outputDirectory: tempDir.path,
       databaseStem: 'app',
       nbackupLevel: 0,
@@ -29,8 +29,8 @@ void main() {
   });
 
   test('reports missing folder when outputDirectory does not exist', () async {
-    final String path = p.join(tempDir.path, 'nope');
-    final String? r = await missingFirebirdNbackupChainPattern(
+    final path = p.join(tempDir.path, 'nope');
+    final r = await missingFirebirdNbackupChainPattern(
       outputDirectory: path,
       databaseStem: 'app',
       nbackupLevel: 1,
@@ -40,7 +40,7 @@ void main() {
   });
 
   test('level 1 requires only full nbk prefix', () async {
-    final String? empty = await missingFirebirdNbackupChainPattern(
+    final empty = await missingFirebirdNbackupChainPattern(
       outputDirectory: tempDir.path,
       databaseStem: 'app',
       nbackupLevel: 1,
@@ -48,7 +48,7 @@ void main() {
     expect(empty, '"app_full_*.nbk"');
 
     await File(p.join(tempDir.path, 'app_full_x.nbk')).writeAsString('x');
-    final String? ok = await missingFirebirdNbackupChainPattern(
+    final ok = await missingFirebirdNbackupChainPattern(
       outputDirectory: tempDir.path,
       databaseStem: 'app',
       nbackupLevel: 1,
@@ -58,7 +58,7 @@ void main() {
 
   test('level 2 requires full and B1 nbk prefixes', () async {
     await File(p.join(tempDir.path, 'app_full_x.nbk')).writeAsString('x');
-    final String? missingB1 = await missingFirebirdNbackupChainPattern(
+    final missingB1 = await missingFirebirdNbackupChainPattern(
       outputDirectory: tempDir.path,
       databaseStem: 'app',
       nbackupLevel: 2,
@@ -66,7 +66,7 @@ void main() {
     expect(missingB1, '"app_nbackup_B1_*.nbk"');
 
     await File(p.join(tempDir.path, 'app_nbackup_B1_y.nbk')).writeAsString('y');
-    final String? ok = await missingFirebirdNbackupChainPattern(
+    final ok = await missingFirebirdNbackupChainPattern(
       outputDirectory: tempDir.path,
       databaseStem: 'app',
       nbackupLevel: 2,
@@ -76,7 +76,7 @@ void main() {
 
   test('matches .nbk case-insensitively', () async {
     await File(p.join(tempDir.path, 'app_full_x.NBK')).writeAsString('x');
-    final String? r = await missingFirebirdNbackupChainPattern(
+    final r = await missingFirebirdNbackupChainPattern(
       outputDirectory: tempDir.path,
       databaseStem: 'app',
       nbackupLevel: 1,
@@ -86,7 +86,7 @@ void main() {
 
   test('ignores subdirectories and non-files', () async {
     await Directory(p.join(tempDir.path, 'app_full_fake')).create();
-    final String? r = await missingFirebirdNbackupChainPattern(
+    final r = await missingFirebirdNbackupChainPattern(
       outputDirectory: tempDir.path,
       databaseStem: 'app',
       nbackupLevel: 1,

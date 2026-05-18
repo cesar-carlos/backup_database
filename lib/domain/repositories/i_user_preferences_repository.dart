@@ -32,6 +32,10 @@ abstract class IUserPreferencesRepository {
 
   Future<void> setSkeletonLoadingEnabled(bool value);
 
+  Future<bool> getLocalScheduleTimerEnabled();
+
+  Future<void> setLocalScheduleTimerEnabled(bool value);
+
   Future<String?> getR1MultiProfileLegacyHintLastDismissedSignature();
 
   Future<void> setR1MultiProfileLegacyHintLastDismissedSignature(

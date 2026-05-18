@@ -7,9 +7,17 @@ Status: **Código no repositório** (PR-A–E); **M2 (lint extra)** concluído
 configs SGBD + `Schedule` + `BackupLog`/`BackupHistory` + piloto
 `BackupExecutionContext`; `implements DatabaseConnectionConfig`). **PR-C** fechamento residual **C0.10/C0.12**
 (2026-05-15: densidade de tabelas persistida + `AppZIndex.stackByZIndex` no
-progress bar). **Roadmap §11 implementado** (M1–M14 código/docs/commits **2026-05-18**:
-7 commits via `tools/plan_commit_groups.ps1`). Restam apenas **smokes manuais**
-(M14 Win10/11 — `smoke_windows_mica_m14.md`; Firebird §8.1).
+progress bar). **Roadmap §11 implementado** (M1–M14 código/docs/commits **2026-05-18**).
+**Implementação encerrada** — não há mais entregáveis de código neste plano.
+Restam **smokes manuais** (operador em Windows / VM Firebird):
+
+| Smoke | Runbook / ferramenta |
+|-------|----------------------|
+| M14 Mica Win10/11 | `docs/notes/smoke_windows_mica_m14.md`, `tools/smoke_m14_windows.ps1` |
+| Firebird §8 | `docs/notes/smoke_firebird_operacional.md`, §8.1 do plano Firebird |
+
+Automação já no CI: `windows_native_chrome_bootstrap_test.dart`, prefs Mica em
+`user_preferences_repository_test.dart`, `design_system_guard` + cobertura.
 Escopo: 4 PRs sequenciais de **bug fixes + refatoração DRY + melhorias
 de UX + consolidação arquitetural via ports/adapters genéricos**.
 Pré-requisito para o plano de adoção do Firebird (ver
@@ -1639,8 +1647,10 @@ backdrop). Validado em [arhaminfo 2026](https://www.arhaminfo.com/2025/11/flutte
 - [x] Adicionar setting "Cor de destaque do sistema" / accent Fluent
       (default: `false`; quando `true`, `accentColor` do tema segue o Windows)
 - [ ] **Teste**: smoke manual em Windows 10 (sem Mica) e Windows 11
-      (com Mica) — runbook: `docs/notes/smoke_windows_mica_m14.md`; gate CI:
-      `windows_native_chrome_bootstrap_test.dart` (no-op fora do Windows)
+      (com Mica) — runbook: `docs/notes/smoke_windows_mica_m14.md`;
+      script: `tools/smoke_m14_windows.ps1`; gate CI:
+      `windows_native_chrome_bootstrap_test.dart` + prefs em
+      `user_preferences_repository_test.dart` (**execução manual pendente**)
 - [x] Documentar como **ADR-013**
 
 ---

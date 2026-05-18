@@ -4,7 +4,6 @@ import 'package:backup_database/application/services/strategies/rules/sql_server
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
@@ -26,7 +25,7 @@ class SqlServerBackupStrategyFactory {
             required BackupType backupType,
             required String cancelTag,
           }) {
-            final SqlServerBackupOptions? backupOptions =
+            final backupOptions =
                 schedule.sqlServerBackupOptions;
             if (backupOptions == null) {
               LoggerService.warning(

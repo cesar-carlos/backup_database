@@ -35,7 +35,7 @@ abstract class FirebirdConfig
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
-    final String normalizedHost =
+    final normalizedHost =
         host.trim().isEmpty ? 'localhost' : host.trim();
     return FirebirdConfig.raw(
       id: id ?? const Uuid().v4(),
@@ -65,7 +65,7 @@ abstract class FirebirdConfig
     required String username,
     required String password,
     required PortNumber port,
-    String? aliasName,
+    required DateTime createdAt, required DateTime updatedAt, String? aliasName,
     @Default(false) bool useEmbedded,
     String? clientLibraryPath,
     @Default(FirebirdServerVersionHint.auto)
@@ -74,8 +74,6 @@ abstract class FirebirdConfig
     FirebirdServiceManagerMode serviceManagerMode,
     @Default('') String cryptKey,
     @Default(true) bool enabled,
-    required DateTime createdAt,
-    required DateTime updatedAt,
   }) = _FirebirdConfig;
 
   @override

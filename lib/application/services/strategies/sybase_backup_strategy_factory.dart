@@ -5,7 +5,6 @@ import 'package:backup_database/application/services/strategies/rules/sybase_rej
 import 'package:backup_database/application/services/strategies/rules/sybase_reject_truncate_in_replication_rule.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/domain/entities/sybase_backup_options.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
@@ -33,7 +32,7 @@ class SybaseBackupStrategyFactory {
             required BackupType backupType,
             required String cancelTag,
           }) {
-            final SybaseBackupOptions? sybaseOptions =
+            final sybaseOptions =
                 schedule.sybaseBackupOptions;
             return BackupExecutionContext(
               outputDirectory: outputDirectory,

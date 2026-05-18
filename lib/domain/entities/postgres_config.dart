@@ -48,9 +48,7 @@ abstract class PostgresConfig
     required String username,
     required String password,
     required PortNumber port,
-    @Default(true) bool enabled,
-    required DateTime createdAt,
-    required DateTime updatedAt,
+    required DateTime createdAt, required DateTime updatedAt, @Default(true) bool enabled,
   }) = _PostgresConfig;
 
   @override

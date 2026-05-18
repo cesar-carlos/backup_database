@@ -51,12 +51,9 @@ abstract class SybaseConfig
     required DatabaseName databaseName,
     required String username,
     required String password,
-    @Default('') String databaseFile,
-    required PortNumber port,
+    required PortNumber port, required DateTime createdAt, required DateTime updatedAt, @Default('') String databaseFile,
     @Default(true) bool enabled,
     @Default(false) bool isReplicationEnvironment,
-    required DateTime createdAt,
-    required DateTime updatedAt,
   }) = _SybaseConfig;
 
   @override

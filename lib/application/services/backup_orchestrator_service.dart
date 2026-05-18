@@ -346,7 +346,7 @@ class BackupOrchestratorService {
 
         final compressionResult = await _compressionOrchestrator.compressBackup(
           backupPath: backupPath,
-          format: schedule.compressionFormat ?? CompressionFormat.none,
+          format: schedule.compressionFormat,
           databaseType: schedule.databaseType,
           backupType: backupType,
           progressNotifier: _progressNotifier,

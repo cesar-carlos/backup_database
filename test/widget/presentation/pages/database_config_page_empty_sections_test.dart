@@ -15,7 +15,6 @@ import 'package:backup_database/domain/repositories/i_user_preferences_repositor
 import 'package:backup_database/presentation/pages/database_config_page.dart';
 import 'package:backup_database/presentation/providers/skeleton_loading_preference_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart' show TextScaler;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
@@ -296,7 +295,7 @@ void main() {
       await skeletonPrefs.initialize();
       addTearDown(skeletonPrefs.dispose);
 
-      for (final double scale in <double>[1.5, 2.0]) {
+      for (final scale in <double>[1.5, 2]) {
         await pumpEmptyPage(
           tester,
           skeletonLoadingPreference: skeletonPrefs,
@@ -366,4 +365,10 @@ class _ShimmerOffUserPreferencesRepository
 
   @override
   Future<void> setUseWindowsMicaBackdrop(bool value) async {}
+
+  @override
+  Future<bool> getLocalScheduleTimerEnabled() async => true;
+
+  @override
+  Future<void> setLocalScheduleTimerEnabled(bool value) async {}
 }

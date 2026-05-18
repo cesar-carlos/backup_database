@@ -993,8 +993,9 @@ secção documental **§3** (*PR-E — Domain + Infraestrutura + CLI*; p.ex.
 marcar os `- [ ]` do §8. Isto **não** faz parte do critério **§3.0** de MVP no
 repositório (já satisfeito por código + CI). O CI cobre mocks e fluxos sem motor.
 
-Checklist detalhada: continuar a usar as sub-listas do §8 abaixo; para Mica/accent Windows
-ver `docs/notes/smoke_windows_mica_m14.md` (plano de refatoração M14).
+Checklist consolidada: `docs/notes/smoke_firebird_operacional.md`. Sub-listas do §8
+abaixo mantêm o detalhe por versão; para Mica/accent Windows ver
+`docs/notes/smoke_windows_mica_m14.md` (plano de refatoração M14).
 Quem só precisa de **declarar o MVP fechado no repositório** (sem matriz §8.1)
 deve seguir **§8.2**.
 

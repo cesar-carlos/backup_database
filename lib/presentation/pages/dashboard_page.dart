@@ -273,7 +273,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     if (!isClientMode) ...[
                       const SizedBox(height: 32),
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Expanded(
                             child: Text(

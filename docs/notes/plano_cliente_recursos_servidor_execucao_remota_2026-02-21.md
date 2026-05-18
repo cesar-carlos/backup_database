@@ -19,7 +19,7 @@ Objetivo desta leitura: alinhar o **texto** do plano (checklists e matrizes) com
 ### Proxima onda de implementacao (ordem sugerida)
 
 1. **PR-4 (P0)**: [x] nucleo (staging, TTL, fila, modo servico, thresholds, lease v1, **health com staging**). Restante: refinamentos/PR-5/ADR-001.
-2. **Modelo hibrido (ADR-001) — restante**: `executionOrigin` **ja** distingue remoto (sem upload no host) de local; falta decidir **policy** de `_checkTimer` (ex. desativar agendado automatico quando implantacao e 100% cliente) e, se necessario, flag por schedule. Ver implementacao 2026-04-23 no `SchedulerService` + handlers socket.
+2. **Modelo hibrido (ADR-001) — restante**: `executionOrigin` **ja** distingue remoto (sem upload no host); preferencia `local_schedule_timer_enabled` (2026-05) desliga `_checkTimer` para implantacao 100% cliente. Opcional futuro: flag por schedule. Ver `SchedulerService` + aba Servico.
 3. **PR-3c — entrega base (2026-04-23)**: `getExecutionStatus` com `queued` / `completed` / `failed` / `cancelled` a partir de fila + `BackupHistory.runId` — **feito**; re-sync / politica **M8.4** (cliente apos caos) segue [~] conforme cenarios ainda nao formalizados em testes.
 4. **PR-5**: rate limit, audit log, telemetria `socket_request_duration` / `socket_error_total`, testes carga/chaos, idempotency key obrigatoria (F2.14) se produto exigir.
 
@@ -158,7 +158,7 @@ confirmados" para detalhes). Itens sem marca ainda bloqueiam.
 - Padronizar API socket com comunicacao inspirada em REST (status code + erro estruturado + `requestId` de transporte + correlacao `runId`/`idempotencyKey` no payload) — F0 entregue 2026-04-19.
 - [~] Definir catalogo completo de recursos cliente->servidor com contrato padrao por endpoint — nucleo remoto fechado em PR-1/2/3; refinamentos em PR-4/5 (rate limit, audit, `getExecutionStatus` estendido).
 - Permitir que o cliente configure bases de dados no servidor e execute testes de conexao pelo servidor — PR-2 + wiring real 2026-04-19.
-- [~] Definir explicitamente o modelo de agenda remota (ADR-001) — **decisao** documentada; **implementacao** `executionOrigin` + alinhamento do timer local ainda pendente.
+- [x] Definir explicitamente o modelo de agenda remota (ADR-001) — decisao + `executionOrigin` + preferencia para desligar timer local (`local_schedule_timer_enabled`).
 - Garantir que, no fluxo remoto server-first, o destino final seja controlado pelo cliente e nunca pelo servidor.
 - Garantir que todo fluxo de backup (dump, compactacao, validacao e artefato final) ocorra no servidor — execucao remota continua no servidor.
 - [~] Garantir que compressao, checksum e demais opcoes sejam aplicadas no servidor conforme configuracao enviada pelo cliente — regra de dominio existente; preflight ainda com checks reais opcionais no DI.
@@ -364,8 +364,8 @@ Politica oficial:
 - Cliente autentica no servidor com licenca valida para controle remoto. *(F0.1: guard pre-auth com `notAuthenticated/401` — 2026-04-19)*
 - Cliente cria/edita/remove configuracoes de banco de dados no servidor. *(CRUD remoto + wiring — 2026-04-19)*
 - Cliente executa teste de conexao de banco remotamente, com validacao feita no servidor. *(PR-2 + `RealDatabaseConnectionProber` — 2026-04-19)*
-- [~] Cliente controla agenda de execucao e envia comando de backup para o servidor no momento devido. *(CRUD de schedule + `startBackup`/`executeSchedule`; `executeSchedule` legado ainda bloqueante; **timer** `_checkTimer` ainda ativo — alinhar ADR-001)*
-- [~] Servidor executa backup somente por comando do cliente no modo **puro** server-first — ainda nao: timer local dispara agendados independentemente; precisa `executionOrigin` + politica hibrida.
+- [~] Cliente controla agenda de execucao e envia comando de backup para o servidor no momento devido. *(CRUD + `startBackup`/`executeSchedule`; desligar timer local na aba Servico quando implantacao for 100% cliente)*
+- [~] Servidor executa backup somente por comando do cliente no modo **puro** server-first — operador desativa timer local; `executionOrigin` ja distingue upload no host.
 - [~] Servidor salva artefato em politica de staging alinhada ao remoto. *(pasta configuravel; indexacao ainda muito por `scheduleId` no staging — migrar `runId` em PR-4)*
 - Servidor publica progresso em tempo real para cliente (incl. `runId` quando suportado).
 - Servidor disponibiliza arquivo final em staging remoto para download.
@@ -375,7 +375,7 @@ Politica oficial:
 
 ## Premissas de Projeto
 
-- [~] Fechar **implementacao** alinhada ao ADR-001 (fonte de verdade hibrida) — ADR publicado; codigo de `executionOrigin` pendente.
+- [x] Fechar **implementacao** alinhada ao ADR-001 (fonte de verdade hibrida) — `executionOrigin` + preferencia de timer local.
 - Cliente nao executa dump de banco; somente orquestra e consome artefato final.
 - [~] Controle de licenca remota fail-closed. *(auth + execucao; rever escopo em **todos** os endpoints mutaveis se policy exigir)*
 - API remota versionada (`protocolVersion`/`wireVersion` + `capabilities`) e erros com `ErrorCode` + `statusCode` (F0 + ADR-003).
