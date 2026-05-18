@@ -160,10 +160,10 @@ class ServiceModeInitializer {
             return;
           }
 
-          autoUpdateService!.setBeforeInstallHook(() async {
+          autoUpdateService!.beforeInstallHook = () async {
             await shutdownHandler?.shutdown();
             await singleInstanceService?.releaseLock();
-          });
+          };
           await autoUpdateService!.initialize();
           if (!autoUpdateService!.isInitialized) {
             LoggerService.info(

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import urllib.request
 import zipfile
+import hashlib
 from pathlib import Path
 
 
@@ -97,6 +98,23 @@ def normalize_version(version: str | None) -> str | None:
     if not version:
         return None
     return version.split("+", 1)[0].strip()
+
+
+def write_sha256_sidecar(file_path: Path) -> Path:
+    digest = hashlib.sha256()
+    with file_path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+
+    sidecar_path = file_path.with_name(f"{file_path.name}.sha256")
+    sidecar_path.write_text(
+        f"{digest.hexdigest()}  {file_path.name}\n",
+        encoding="utf-8",
+    )
+    return sidecar_path
 
 
 def ensure_nssm_exe(script_root: Path) -> bool:
@@ -262,14 +280,16 @@ def main() -> int:
         if installers:
             latest = installers[0]
             size_mb = round(latest.stat().st_size / (1024 * 1024), 2)
+            sidecar = write_sha256_sidecar(latest)
             print()
             print(f"Arquivo: {latest}")
             print(f"Tamanho: {size_mb} MB")
+            print(f"SHA-256: {sidecar}")
             print()
 
     print("Proximos passos:")
     print("1. Teste o instalador em uma VM limpa (recomendado)")
-    print("2. Faca upload para GitHub Releases")
+    print("2. Faca upload do .exe e do .sha256 para GitHub Releases")
     print("3. O GitHub Actions atualizara o appcast.xml automaticamente")
     return 0
 

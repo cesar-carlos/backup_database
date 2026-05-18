@@ -434,12 +434,34 @@ var
   ModeFilePath: String;
   EnvExamplePath: String;
   EnvPath: String;
+  LegacyEnvPath: String;
+  MigratedBackupPath: String;
 begin
   // Write .install_mode only after files are installed, when {app} is defined
   if CurStep = ssPostInstall then
   begin
     EnvExamplePath := ExpandConstant('{commonappdata}\BackupDatabase\config\.env.example');
     EnvPath := ExpandConstant('{commonappdata}\BackupDatabase\config\.env');
+    LegacyEnvPath := ExpandConstant('{app}\.env');
+    MigratedBackupPath := ExpandConstant('{commonappdata}\BackupDatabase\config\.env.migrated-from-appdir.bak');
+
+    if not FileExists(EnvPath) and FileExists(LegacyEnvPath) then
+    begin
+      if CopyFile(LegacyEnvPath, EnvPath, False) then
+      begin
+        Log('Migrated legacy {app}\.env to machine-scope ProgramData\.env');
+        if not FileExists(MigratedBackupPath) then
+        begin
+          if CopyFile(LegacyEnvPath, MigratedBackupPath, False) then
+            Log('Created ProgramData backup of legacy {app}\.env')
+          else
+            Log('Warning: Failed to create ProgramData backup of legacy {app}\.env');
+        end;
+      end
+      else
+        Log('Warning: Failed to migrate legacy {app}\.env to machine-scope .env');
+    end;
+
     if FileExists(EnvExamplePath) and not FileExists(EnvPath) then
     begin
       if CopyFile(EnvExamplePath, EnvPath, False) then

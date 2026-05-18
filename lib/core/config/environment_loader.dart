@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:path/path.dart' as p;
 
 enum EnvironmentSource { externalMachineFile, bundledAsset }
 
@@ -28,6 +29,7 @@ class EnvironmentLoader {
   EnvironmentLoader._();
 
   static const String bundledAssetFileName = '.env';
+  static const String migratedBackupFileName = '.env.migrated-from-appdir.bak';
 
   static EnvironmentLoadPlan resolveLoadPlan({
     required bool isWindows,
@@ -48,6 +50,43 @@ class EnvironmentLoader {
     );
   }
 
+  static File resolveLegacyInstalledEnvironmentFile({
+    String? executablePath,
+  }) {
+    final resolvedExecutable = executablePath ?? Platform.resolvedExecutable;
+    final appDir = File(resolvedExecutable).parent.path;
+    return File(p.join(appDir, bundledAssetFileName));
+  }
+
+  static Future<bool> migrateLegacyWindowsEnvironmentIfNeeded({
+    required bool isWindows,
+    required File externalEnvFile,
+    required File legacyEnvFile,
+    String? logPrefix,
+  }) async {
+    if (!isWindows ||
+        await externalEnvFile.exists() ||
+        !await legacyEnvFile.exists()) {
+      return false;
+    }
+
+    await externalEnvFile.parent.create(recursive: true);
+    await legacyEnvFile.copy(externalEnvFile.path);
+
+    final backupFile = File(
+      p.join(externalEnvFile.parent.path, migratedBackupFileName),
+    );
+    if (!await backupFile.exists()) {
+      await legacyEnvFile.copy(backupFile.path);
+    }
+
+    LoggerService.info(
+      '${logPrefix ?? '[env]'} arquivo legado migrado de '
+      '${legacyEnvFile.path} para ${externalEnvFile.path}',
+    );
+    return true;
+  }
+
   /// Carrega o arquivo `.env` se ainda nÃ£o foi carregado. Captura erros
   /// para nÃ£o interromper o boot â€” variÃ¡veis ausentes serÃ£o tratadas como
   /// `null` pelos consumidores.
@@ -61,6 +100,12 @@ class EnvironmentLoader {
 
     try {
       final externalEnvFile = await resolveMachineEnvironmentFile();
+      await migrateLegacyWindowsEnvironmentIfNeeded(
+        isWindows: Platform.isWindows,
+        externalEnvFile: externalEnvFile,
+        legacyEnvFile: resolveLegacyInstalledEnvironmentFile(),
+        logPrefix: logPrefix,
+      );
       final loadPlan = resolveLoadPlan(
         isWindows: Platform.isWindows,
         externalFileExists: await externalEnvFile.exists(),
@@ -72,7 +117,7 @@ class EnvironmentLoader {
           final envText = await File(loadPlan.filePath!).readAsString();
           dotenv.loadFromString(envString: envText);
         case EnvironmentSource.bundledAsset:
-          await dotenv.load(fileName: bundledAssetFileName);
+          await dotenv.load();
       }
 
       LoggerService.info(

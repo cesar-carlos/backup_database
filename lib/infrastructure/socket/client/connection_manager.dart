@@ -335,20 +335,22 @@ class ConnectionManager {
           return;
         }
       }
+      final backupState = _activeBackups[requestId];
+      if (backupState != null) {
+        _handleBackupProgressMessage(message, backupState);
+        return;
+      }
+      // Stream sem listener (ex.: progresso chegou antes do cliente
+      // registrar runId apos `startRemoteBackup`). Nao completar RPC
+      // pendente com backupProgress/Complete — corrompe o Future de
+      // startBackupResponse.
+      return;
     }
     final pendingCompleter = _pendingRequests[requestId];
-    if (pendingCompleter != null && !_isBackupStreamMessage(message.header.type)) {
+    if (pendingCompleter != null) {
       _pendingRequests.remove(requestId);
       pendingCompleter.complete(message);
-      return;
     }
-    final backupState = _activeBackups[requestId];
-    if (backupState != null) {
-      _handleBackupProgressMessage(message, backupState);
-      return;
-    }
-    final completer = _pendingRequests.remove(requestId);
-    completer?.complete(message);
   }
 
   bool _isBackupStreamMessage(MessageType type) =>

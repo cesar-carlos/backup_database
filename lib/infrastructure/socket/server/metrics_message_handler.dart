@@ -8,6 +8,7 @@ import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
     show RemoteExecutionRegistry, SendToClient;
+import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
 import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
 class MetricsMessageHandler {
@@ -18,6 +19,7 @@ class MetricsMessageHandler {
     IMetricsCollector? metricsCollector,
     RemoteExecutionRegistry? executionRegistry,
     Future<int> Function()? stagingUsageBytesProvider,
+    SocketServerTelemetry? socketTelemetry,
     DateTime Function()? clock,
   }) : _backupHistoryRepository = backupHistoryRepository,
        _scheduleRepository = scheduleRepository,
@@ -25,6 +27,7 @@ class MetricsMessageHandler {
        _metricsCollector = metricsCollector,
        _executionRegistry = executionRegistry,
        _stagingUsageBytesProvider = stagingUsageBytesProvider,
+       _socketTelemetry = socketTelemetry,
        _clock = clock ?? DateTime.now;
 
   final IBackupHistoryRepository _backupHistoryRepository;
@@ -43,6 +46,7 @@ class MetricsMessageHandler {
   /// `lib/infrastructure/utils/staging_usage_measurer.dart`) como
   /// implementacao padrao.
   final Future<int> Function()? _stagingUsageBytesProvider;
+  final SocketServerTelemetry? _socketTelemetry;
 
   /// Relogio injetavel para `serverTimeUtc`. Em producao usa
   /// `DateTime.now`; testes podem cravar valor para validar wire format.
@@ -132,9 +136,12 @@ class MetricsMessageHandler {
       'serverTimeUtc': now.toUtc().toIso8601String(),
     };
 
-    final metricsSnapshot = _metricsCollector?.getSnapshot();
-    if (metricsSnapshot != null && metricsSnapshot.isNotEmpty) {
-      payload['observability'] = metricsSnapshot;
+    final observability = <String, dynamic>{
+      ...?_metricsCollector?.getSnapshot(),
+      ...?_socketTelemetry?.observabilitySnapshot(),
+    };
+    if (observability.isNotEmpty) {
+      payload['observability'] = observability;
     }
     if (_backupRunningState.isRunning &&
         _backupRunningState.currentBackupName != null) {

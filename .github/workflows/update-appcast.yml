@@ -3,6 +3,13 @@ name: Update Appcast on Release
 on:
   release:
     types: [published]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/update-appcast.yml
+      - scripts/sync_appcast_from_releases.py
+      - scripts/appcast_policy.json
+  workflow_dispatch:
 
 jobs:
   update-appcast:
@@ -21,6 +28,62 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Validate release assets
+        if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_ID: ${{ github.event.release.id }}
+        run: |
+          python - <<'PY'
+          import fnmatch
+          import json
+          import os
+          import urllib.request
+
+          installer_pattern = "BackupDatabase-Setup-*.exe"
+          release_id = os.environ["RELEASE_ID"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GITHUB_TOKEN"]
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/{repo}/releases/{release_id}",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {token}",
+                  "User-Agent": "backup-database-appcast-validate",
+              },
+          )
+          with urllib.request.urlopen(request) as response:
+              release = json.loads(response.read().decode("utf-8"))
+
+          assets = release.get("assets", [])
+          exe_assets = [asset for asset in assets if asset.get("name", "").endswith(".exe")]
+          matching = [
+              asset
+              for asset in exe_assets
+              if fnmatch.fnmatch(asset.get("name", ""), installer_pattern)
+          ]
+          if len(matching) == 1:
+              installer = matching[0]
+          elif len(matching) > 1:
+              raise SystemExit(
+                  f"More than one installer matches {installer_pattern}: "
+                  + ", ".join(asset.get("name", "") for asset in matching)
+              )
+          elif len(exe_assets) == 1:
+              installer = exe_assets[0]
+          else:
+              raise SystemExit("Expected exactly one installer .exe asset in the release")
+
+          expected_sidecar = f"{installer['name']}.sha256"
+          if not any(asset.get("name") == expected_sidecar for asset in assets):
+              raise SystemExit(
+                  f"Missing checksum sidecar for {installer['name']}. "
+                  f"Upload {expected_sidecar} with the release."
+              )
+          print(f"Validated release assets: {installer['name']} + {expected_sidecar}")
+          PY
 
       - name: Rebuild appcast.xml from releases
         env:

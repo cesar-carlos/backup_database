@@ -589,7 +589,7 @@ class FirebirdBackupService implements IFirebirdBackupService {
     }
 
     LoggerService.info(
-      'Firebird 4.0 nbackup: parente via GUID do motor (RDB\$BACKUP_HISTORY, '
+      r'Firebird 4.0 nbackup: parente via GUID do motor (RDB$BACKUP_HISTORY, '
       'nivel $parentLevel).',
     );
     return rd.Success(parentGuid);
@@ -640,7 +640,7 @@ QUIT;
       return run.fold((processResult) {
         if (!processResult.isSuccess) {
           LoggerService.warning(
-            'Consulta RDB\$BACKUP_HISTORY falhou (exit '
+            r'Consulta RDB$BACKUP_HISTORY falhou (exit '
             '${processResult.exitCode}): ${processResult.stderr}',
           );
           return null;
@@ -776,18 +776,21 @@ QUIT;
         nbackupLevel,
       );
     }
-    final rd.Result<String> nbackupBResult = useGbak
-        ? const rd.Success('0')
-        : await _resolveNbackupBArgument(
-            config: config,
-            dbSpec: dbSpec,
-            nbackupLevel: nbackupLevel,
-            outputDirectory: context.outputDirectory,
-            databaseStem: config.primaryDatabase.value,
-            resolvedGbakTagline: resolvedGbakTagline,
-            backupTimeout: context.backupTimeout,
-            cancelTag: context.cancelTag,
-          );
+    final rd.Result<String> nbackupBResult;
+    if (useGbak) {
+      nbackupBResult = const rd.Success('0');
+    } else {
+      nbackupBResult = await _resolveNbackupBArgument(
+        config: config,
+        dbSpec: dbSpec,
+        nbackupLevel: nbackupLevel,
+        outputDirectory: context.outputDirectory,
+        databaseStem: config.primaryDatabase.value,
+        resolvedGbakTagline: resolvedGbakTagline,
+        backupTimeout: context.backupTimeout,
+        cancelTag: context.cancelTag,
+      );
+    }
     if (nbackupBResult.isError()) {
       return rd.Failure(_asFailure(nbackupBResult.exceptionOrNull()!));
     }

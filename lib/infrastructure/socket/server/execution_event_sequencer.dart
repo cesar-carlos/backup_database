@@ -1,3 +1,4 @@
+import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart' show QueueEventBus;
 import 'package:uuid/uuid.dart';
 
 /// Metadados de correlacao para eventos de execucao remota (F2.17).

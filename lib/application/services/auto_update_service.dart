@@ -26,6 +26,17 @@ enum AppUpdateStatus {
   disabled,
 }
 
+enum AppUpdateStage {
+  blockedByOtherInstance,
+  fetchingFeed,
+  evaluatingRelease,
+  downloadingInstaller,
+  validatingInstaller,
+  preparingInstall,
+  launchingInstaller,
+  completed,
+}
+
 @immutable
 class AppcastRelease {
   const AppcastRelease({
@@ -78,22 +89,32 @@ class AppUpdateSnapshot {
     this.feedUrl,
     this.currentVersion,
     this.release,
+    this.stage,
     this.message,
     this.errorMessage,
     this.lastCheckAt,
     this.lastErrorAt,
     this.lastSource,
+    this.lastFailureStage,
+    this.lastAttemptNumber,
+    this.lastDownloadDuration,
+    this.lastCheckDuration,
   });
 
   final AppUpdateStatus status;
   final String? feedUrl;
   final String? currentVersion;
   final AppcastRelease? release;
+  final AppUpdateStage? stage;
   final String? message;
   final String? errorMessage;
   final DateTime? lastCheckAt;
   final DateTime? lastErrorAt;
   final AppUpdateSource? lastSource;
+  final AppUpdateStage? lastFailureStage;
+  final int? lastAttemptNumber;
+  final Duration? lastDownloadDuration;
+  final Duration? lastCheckDuration;
 
   static const _unset = Object();
 
@@ -105,11 +126,16 @@ class AppUpdateSnapshot {
     Object? feedUrl = _unset,
     Object? currentVersion = _unset,
     Object? release = _unset,
+    Object? stage = _unset,
     Object? message = _unset,
     Object? errorMessage = _unset,
     Object? lastCheckAt = _unset,
     Object? lastErrorAt = _unset,
     Object? lastSource = _unset,
+    Object? lastFailureStage = _unset,
+    Object? lastAttemptNumber = _unset,
+    Object? lastDownloadDuration = _unset,
+    Object? lastCheckDuration = _unset,
   }) {
     return AppUpdateSnapshot(
       status: status ?? this.status,
@@ -120,6 +146,7 @@ class AppUpdateSnapshot {
       release: identical(release, _unset)
           ? this.release
           : release as AppcastRelease?,
+      stage: identical(stage, _unset) ? this.stage : stage as AppUpdateStage?,
       message: identical(message, _unset) ? this.message : message as String?,
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
@@ -133,6 +160,18 @@ class AppUpdateSnapshot {
       lastSource: identical(lastSource, _unset)
           ? this.lastSource
           : lastSource as AppUpdateSource?,
+      lastFailureStage: identical(lastFailureStage, _unset)
+          ? this.lastFailureStage
+          : lastFailureStage as AppUpdateStage?,
+      lastAttemptNumber: identical(lastAttemptNumber, _unset)
+          ? this.lastAttemptNumber
+          : lastAttemptNumber as int?,
+      lastDownloadDuration: identical(lastDownloadDuration, _unset)
+          ? this.lastDownloadDuration
+          : lastDownloadDuration as Duration?,
+      lastCheckDuration: identical(lastCheckDuration, _unset)
+          ? this.lastCheckDuration
+          : lastCheckDuration as Duration?,
     );
   }
 }
@@ -144,6 +183,44 @@ typedef ExitProcess = void Function(int code);
 typedef DetachedProcessStarter =
     Future<void> Function(String executable, List<String> arguments);
 typedef BeforeInstallHook = Future<void> Function();
+
+class AppUpdateLockHandle {
+  AppUpdateLockHandle(this._file, {Map<String, String>? metadata})
+    : _metadata = <String, String>{...?metadata};
+
+  final File _file;
+  final Map<String, String> _metadata;
+
+  Future<void> updateMetadata(Map<String, String?> values) async {
+    values.forEach((key, value) {
+      if (value == null || value.isEmpty) {
+        _metadata.remove(key);
+      } else {
+        _metadata[key] = value;
+      }
+    });
+    await _persist();
+  }
+
+  Future<void> _persist() async {
+    final buffer = StringBuffer();
+    final keys = _metadata.keys.toList()..sort();
+    for (final key in keys) {
+      buffer.writeln('$key=${_metadata[key]}');
+    }
+    await _file.writeAsString(buffer.toString(), flush: true);
+  }
+
+  Future<void> release() async {
+    try {
+      if (await _file.exists()) {
+        await _file.delete();
+      }
+    } on Object {
+      // Ignorado: o processo pode estar encerrando em paralelo.
+    }
+  }
+}
 
 class AutoUpdateService {
   AutoUpdateService({
@@ -174,6 +251,7 @@ class AutoUpdateService {
     '/SUPPRESSMSGBOXES',
     '/NORESTART',
   ];
+  static const Duration defaultLockStaleAfter = Duration(hours: 2);
   static final Version _fallbackVersion = Version(0, 0, 0);
 
   final Dio _dio;
@@ -189,9 +267,10 @@ class AutoUpdateService {
 
   Timer? _periodicTimer;
   Future<void>? _activeCheck;
+  int _checkAttemptCounter = 0;
   bool _isInitialized = false;
   String? _feedUrl;
-  BeforeInstallHook? _beforeInstallHook;
+  BeforeInstallHook? beforeInstallHook;
   AppUpdateSnapshot _snapshot = const AppUpdateSnapshot(
     status: AppUpdateStatus.idle,
   );
@@ -221,6 +300,7 @@ class AutoUpdateService {
         AppUpdateSnapshot(
           status: AppUpdateStatus.disabled,
           currentVersion: currentVersion.toString(),
+          stage: AppUpdateStage.completed,
           message: 'Atualizacoes automaticas disponiveis apenas no Windows.',
         ),
       );
@@ -233,6 +313,7 @@ class AutoUpdateService {
         AppUpdateSnapshot(
           status: AppUpdateStatus.disabled,
           currentVersion: currentVersion.toString(),
+          stage: AppUpdateStage.completed,
           message:
               'AUTO_UPDATE_FEED_URL nao configurada em '
               r'C:\ProgramData\BackupDatabase\config\.env.',
@@ -250,15 +331,12 @@ class AutoUpdateService {
         status: AppUpdateStatus.idle,
         currentVersion: currentVersion.toString(),
         feedUrl: _feedUrl,
+        stage: AppUpdateStage.completed,
         message: 'Atualizador pronto para verificar novas versoes.',
       ),
     );
 
     LoggerService.info('AutoUpdateService pronto com feed $_feedUrl');
-  }
-
-  void setBeforeInstallHook(BeforeInstallHook? hook) {
-    _beforeInstallHook = hook;
   }
 
   void startPeriodicChecks({
@@ -291,10 +369,9 @@ class AutoUpdateService {
       return _activeCheck;
     }
 
-    _activeCheck = _runCheck(source).whenComplete(() {
+    return _activeCheck = _runCheck(source).whenComplete(() {
       _activeCheck = null;
     });
-    return _activeCheck;
   }
 
   void clearError() {
@@ -449,105 +526,203 @@ class AutoUpdateService {
       return;
     }
 
-    final lockHandle = await _tryAcquireLock();
+    final attemptNumber = ++_checkAttemptCounter;
+    final checkStopwatch = Stopwatch()..start();
+    Duration? downloadDuration;
+    var currentStage = AppUpdateStage.fetchingFeed;
+    final now = DateTime.now();
+    final currentVersion = await _resolveCurrentVersion();
+
+    final lockHandle = await _tryAcquireLock(
+      source: source,
+      currentVersion: currentVersion.toString(),
+      attemptNumber: attemptNumber,
+    );
     if (lockHandle == null) {
+      _logTelemetry(
+        'lock ocupado por outra instancia',
+        source: source,
+        attemptNumber: attemptNumber,
+        stage: AppUpdateStage.blockedByOtherInstance,
+      );
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.idle,
+          stage: AppUpdateStage.blockedByOtherInstance,
           message:
               'Outra instancia da aplicacao ja esta processando a atualizacao.',
           errorMessage: null,
           lastSource: source,
+          lastAttemptNumber: attemptNumber,
+          lastCheckAt: now,
         ),
       );
       return;
     }
 
-    final now = DateTime.now();
-    final currentVersion = await _resolveCurrentVersion();
-
     try {
+      _logTelemetry(
+        'iniciando ciclo de verificacao',
+        source: source,
+        attemptNumber: attemptNumber,
+        stage: currentStage,
+        currentVersion: currentVersion.toString(),
+      );
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.checking,
           currentVersion: currentVersion.toString(),
           feedUrl: _feedUrl,
           release: null,
+          stage: currentStage,
           message: 'Verificando novas versoes no feed configurado...',
           errorMessage: null,
           lastSource: source,
+          lastAttemptNumber: attemptNumber,
+          lastFailureStage: null,
         ),
       );
 
       final releases = await _fetchReleases();
+      currentStage = AppUpdateStage.evaluatingRelease;
+      await lockHandle.updateMetadata({
+        'stage': _stageToken(currentStage),
+      });
       final decision = evaluateRelease(
         releases: releases,
         currentVersion: currentVersion,
       );
 
       if (!decision.isUpdateAvailable) {
+        checkStopwatch.stop();
+        await lockHandle.updateMetadata({
+          'stage': _stageToken(AppUpdateStage.completed),
+        });
+        _logTelemetry(
+          'nenhuma atualizacao disponivel',
+          source: source,
+          attemptNumber: attemptNumber,
+          stage: AppUpdateStage.completed,
+          currentVersion: currentVersion.toString(),
+          totalDuration: checkStopwatch.elapsed,
+        );
         _emitSnapshot(
           _snapshot.copyWith(
             status: AppUpdateStatus.upToDate,
             currentVersion: currentVersion.toString(),
             release: null,
+            stage: AppUpdateStage.completed,
             message: 'Aplicacao ja esta na versao mais recente.',
             errorMessage: null,
             lastCheckAt: now,
             lastSource: source,
+            lastAttemptNumber: attemptNumber,
+            lastCheckDuration: checkStopwatch.elapsed,
           ),
         );
         return;
       }
 
       final release = decision.latestRelease!;
+      await lockHandle.updateMetadata({
+        'stage': _stageToken(AppUpdateStage.evaluatingRelease),
+        'targetVersion': release.targetVersion,
+      });
 
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.updateAvailable,
           currentVersion: currentVersion.toString(),
           release: release,
+          stage: AppUpdateStage.evaluatingRelease,
           message:
               'Nova versao ${release.targetVersion} encontrada. '
               'Iniciando download silencioso.',
           errorMessage: null,
           lastCheckAt: now,
           lastSource: source,
+          lastAttemptNumber: attemptNumber,
         ),
       );
 
+      currentStage = AppUpdateStage.downloadingInstaller;
+      await lockHandle.updateMetadata({
+        'stage': _stageToken(currentStage),
+      });
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.downloading,
           release: release,
+          stage: currentStage,
           message:
               'Baixando instalador ${release.installerFileName} para staging...',
         ),
       );
 
+      final downloadStopwatch = Stopwatch()..start();
       final installer = await _downloadInstaller(release);
+      downloadStopwatch.stop();
+      downloadDuration = downloadStopwatch.elapsed;
+      _logTelemetry(
+        'download do instalador concluido',
+        source: source,
+        attemptNumber: attemptNumber,
+        stage: currentStage,
+        targetVersion: release.targetVersion,
+        totalDuration: downloadDuration,
+      );
+
+      currentStage = AppUpdateStage.validatingInstaller;
+      await lockHandle.updateMetadata({
+        'stage': _stageToken(currentStage),
+      });
       await validateDownloadedInstaller(installer, release);
 
+      currentStage = AppUpdateStage.preparingInstall;
+      await lockHandle.updateMetadata({
+        'stage': _stageToken(currentStage),
+      });
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.installing,
           release: release,
+          stage: currentStage,
+          lastDownloadDuration: downloadDuration,
           message:
               'Instalador validado. Preparando troca silenciosa para '
               '${release.targetVersion}.',
         ),
       );
 
-      if (_beforeInstallHook != null) {
-        await _beforeInstallHook!.call();
+      if (beforeInstallHook != null) {
+        await beforeInstallHook!.call();
       }
 
+      currentStage = AppUpdateStage.launchingInstaller;
+      await lockHandle.updateMetadata({
+        'stage': _stageToken(currentStage),
+      });
       await _launchInstaller(installer);
 
+      checkStopwatch.stop();
+      await lockHandle.updateMetadata({
+        'stage': _stageToken(AppUpdateStage.completed),
+      });
+      _logTelemetry(
+        'instalador silencioso iniciado',
+        source: source,
+        attemptNumber: attemptNumber,
+        stage: currentStage,
+        targetVersion: release.targetVersion,
+        totalDuration: checkStopwatch.elapsed,
+      );
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.installing,
           release: release,
+          stage: AppUpdateStage.completed,
+          lastDownloadDuration: downloadDuration,
+          lastCheckDuration: checkStopwatch.elapsed,
           message:
               'Instalador iniciado em background. Encerrando processo atual...',
         ),
@@ -556,16 +731,29 @@ class AutoUpdateService {
       await Future<void>.delayed(const Duration(milliseconds: 250));
       _exitProcess(0);
     } on Object catch (e, s) {
-      LoggerService.error('Erro no pipeline de auto update', e, s);
+      if (checkStopwatch.isRunning) {
+        checkStopwatch.stop();
+      }
+      LoggerService.error(
+        'Erro no pipeline de auto update '
+        '(tentativa #$attemptNumber, etapa ${_stageToken(currentStage)})',
+        e,
+        s,
+      );
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.error,
           currentVersion: currentVersion.toString(),
+          stage: currentStage,
           message: 'Falha ao processar a atualizacao automatica.',
           errorMessage: e.toString(),
           lastCheckAt: now,
           lastErrorAt: now,
           lastSource: source,
+          lastFailureStage: currentStage,
+          lastAttemptNumber: attemptNumber,
+          lastDownloadDuration: downloadDuration,
+          lastCheckDuration: checkStopwatch.elapsed,
         ),
       );
     } finally {
@@ -640,25 +828,87 @@ class AutoUpdateService {
     }
   }
 
-  Future<_UpdateLockHandle?> _tryAcquireLock() async {
-    final locksDir = await _locksDirectoryResolver();
+  @visibleForTesting
+  static Future<AppUpdateLockHandle?> tryAcquireGlobalLock({
+    required Directory locksDir,
+    required Map<String, String?> metadata,
+    Duration staleAfter = defaultLockStaleAfter,
+    DateTime? now,
+  }) async {
     await locksDir.create(recursive: true);
 
-    final file = File(p.join(locksDir.path, 'auto_update.lock'));
-    final raf = await file.open(mode: FileMode.write);
+    final lockFile = File(p.join(locksDir.path, 'auto_update.lock'));
+    final acquiredAt = (now ?? DateTime.now()).toUtc();
 
-    try {
-      await raf.lock(FileLock.exclusive);
-      return _UpdateLockHandle(raf);
-    } on FileSystemException catch (e, s) {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await lockFile.create(exclusive: true);
+        final handle = AppUpdateLockHandle(lockFile);
+        await handle.updateMetadata({
+          'pid': '$pid',
+          'acquiredAt': acquiredAt.toIso8601String(),
+          ...metadata,
+        });
+        return handle;
+      } on PathExistsException {
+        final isStale = await _isStaleLockFile(
+          lockFile,
+          staleAfter: staleAfter,
+          now: acquiredAt,
+        );
+        if (!isStale) {
+          final summary = await _describeLockOwner(lockFile);
+          LoggerService.info(
+            'AutoUpdateService: lock global ainda valido em '
+            '${lockFile.path}${summary == null ? '' : ' ($summary)'}',
+          );
+          return null;
+        }
+
+        try {
+          await lockFile.delete();
+        } on Object catch (e, s) {
+          LoggerService.info(
+            'AutoUpdateService: lock obsoleto nao pode ser removido',
+            e,
+            s,
+          );
+          return null;
+        }
+      } on FileSystemException catch (e, s) {
+        LoggerService.info(
+          'AutoUpdateService: falha ao adquirir lock global',
+          e,
+          s,
+        );
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  Future<AppUpdateLockHandle?> _tryAcquireLock({
+    required AppUpdateSource source,
+    required String currentVersion,
+    required int attemptNumber,
+  }) async {
+    final locksDir = await _locksDirectoryResolver();
+    final handle = await tryAcquireGlobalLock(
+      locksDir: locksDir,
+      metadata: {
+        'source': source.name,
+        'currentVersion': currentVersion,
+        'attempt': '$attemptNumber',
+        'stage': _stageToken(AppUpdateStage.fetchingFeed),
+      },
+    );
+    if (handle == null) {
       LoggerService.info(
         'AutoUpdateService: lock global ocupado por outro processo',
-        e,
-        s,
       );
-      await raf.close();
-      return null;
     }
+    return handle;
   }
 
   void _emitSnapshot(AppUpdateSnapshot snapshot) {
@@ -714,19 +964,87 @@ class AutoUpdateService {
       }
     }
   }
-}
 
-class _UpdateLockHandle {
-  const _UpdateLockHandle(this._raf);
+  void _logTelemetry(
+    String message, {
+    required AppUpdateSource source,
+    required int attemptNumber,
+    required AppUpdateStage stage,
+    String? currentVersion,
+    String? targetVersion,
+    Duration? totalDuration,
+  }) {
+    final details = <String>[
+      'tentativa=$attemptNumber',
+      'origem=${source.name}',
+      'etapa=${_stageToken(stage)}',
+      if (currentVersion != null) 'versaoAtual=$currentVersion',
+      if (targetVersion != null) 'versaoAlvo=$targetVersion',
+      if (totalDuration != null) 'duracaoMs=${totalDuration.inMilliseconds}',
+    ];
+    LoggerService.info('AutoUpdateService: $message (${details.join(', ')})');
+  }
 
-  final RandomAccessFile _raf;
+  static String _stageToken(AppUpdateStage stage) {
+    return switch (stage) {
+      AppUpdateStage.blockedByOtherInstance => 'blocked_by_other_instance',
+      AppUpdateStage.fetchingFeed => 'fetching_feed',
+      AppUpdateStage.evaluatingRelease => 'evaluating_release',
+      AppUpdateStage.downloadingInstaller => 'downloading_installer',
+      AppUpdateStage.validatingInstaller => 'validating_installer',
+      AppUpdateStage.preparingInstall => 'preparing_install',
+      AppUpdateStage.launchingInstaller => 'launching_installer',
+      AppUpdateStage.completed => 'completed',
+    };
+  }
 
-  Future<void> release() async {
+  static Future<String?> _describeLockOwner(File file) async {
     try {
-      await _raf.unlock();
+      final lines = await file.readAsLines();
+      if (lines.isEmpty) {
+        return null;
+      }
+
+      final parts = <String>[];
+      for (final line in lines) {
+        final separatorIndex = line.indexOf('=');
+        if (separatorIndex <= 0) {
+          continue;
+        }
+        final key = line.substring(0, separatorIndex).trim();
+        final value = line.substring(separatorIndex + 1).trim();
+        if (key.isEmpty || value.isEmpty) {
+          continue;
+        }
+        if (key == 'source' ||
+            key == 'attempt' ||
+            key == 'stage' ||
+            key == 'targetVersion') {
+          parts.add('$key=$value');
+        }
+      }
+      if (parts.isEmpty) {
+        return null;
+      }
+      return parts.join(', ');
     } on Object {
-      // Ignorado: o handle pode ter sido fechado por encerramento do processo.
+      return null;
     }
-    await _raf.close();
+  }
+
+  static Future<bool> _isStaleLockFile(
+    File file, {
+    required Duration staleAfter,
+    required DateTime now,
+  }) async {
+    try {
+      final stat = await file.stat();
+      if (stat.type == FileSystemEntityType.notFound) {
+        return false;
+      }
+      return now.difference(stat.modified.toUtc()) > staleAfter;
+    } on Object {
+      return false;
+    }
   }
 }

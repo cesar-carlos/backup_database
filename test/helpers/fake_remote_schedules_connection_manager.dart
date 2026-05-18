@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/remote_schedules_provider.dart'
+    show RemoteSchedulesProvider;
 import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
@@ -35,7 +37,7 @@ class FakeRemoteSchedulesConnectionManager extends ConnectionManager {
     PreflightResult(
       status: PreflightStatus.passed,
       checks: const [],
-      serverTimeUtc: DateTime.utc(2026, 1, 1),
+      serverTimeUtc: DateTime.utc(2026),
     ),
   );
 
@@ -130,7 +132,7 @@ class FakeRemoteSchedulesConnectionManager extends ConnectionManager {
           ArtifactMetadataResult(
             runId: runId,
             found: true,
-            serverTimeUtc: DateTime.utc(2026, 1, 1),
+            serverTimeUtc: DateTime.utc(2026),
             stagingPath: 'remote/run-test/backup.zip',
           ),
         );
@@ -148,7 +150,7 @@ class FakeRemoteSchedulesConnectionManager extends ConnectionManager {
         runId: runId ?? 'run',
         state: ExecutionState.cancelled,
         scheduleId: scheduleId ?? 'sch',
-        serverTimeUtc: DateTime.utc(2026, 1, 1),
+        serverTimeUtc: DateTime.utc(2026),
       ),
     );
   }

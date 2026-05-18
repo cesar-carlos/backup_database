@@ -96,7 +96,8 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _troubleshootingWithEnv =
       'Tente:\n'
       '1. Executar como Administrador\n'
-      r'2. Verificar se existe C:\ProgramData\BackupDatabase\config\.env' '\n'
+      r'2. Verificar se existe C:\ProgramData\BackupDatabase\config\.env'
+      '\n'
       '3. Verificar logs em $_logPath (service_stdout.log, service_stderr.log)\n'
       '4. Atualizar o status e tentar novamente';
   static const int _serviceNotInstalledWinError = 1060;
@@ -129,11 +130,11 @@ class WindowsServiceService implements IWindowsServiceService {
         r'\BackupDatabase\config\.env';
     if (!File(envPath).existsSync()) {
       LoggerService.warning(
-        'Arquivo .env não encontrado em $appDir. '
-        'Copie .env.example para .env. O serviço pode falhar ao iniciar.',
+        'Arquivo .env nao encontrado em $envPath. '
+        'Copie .env.example para esse caminho em ProgramData. '
+        'O servico pode falhar ao iniciar.',
       );
     }
-
     try {
       final logDir = Directory(_logPath);
       logDir.createSync(recursive: true);
@@ -578,7 +579,7 @@ class WindowsServiceService implements IWindowsServiceService {
         'AppParameters',
         '--mode=server --minimized --run-as-service',
       ],
-      // Critical: working dir is needed for .env and asset resolution.
+      // Critical: working dir is still needed for assets and helper scripts.
       ['set', _serviceName, 'AppDirectory', appDir],
       // Critical: environment variable used as the primary service-mode signal.
       ['set', _serviceName, 'AppEnvironmentExtra', 'SERVICE_MODE=server'],
@@ -992,7 +993,7 @@ class WindowsServiceService implements IWindowsServiceService {
                     '2. Verificar os logs em $_logPath '
                     '(service_stdout.log e service_stderr.log)\n'
                     '3. Se o serviço falha ao iniciar: verifique se existe '
-                    'arquivo .env na pasta do aplicativo (copie de .env.example)',
+                    r'arquivo .env em C:\ProgramData\BackupDatabase\config (copie de .env.example se necessario)',
               ),
             );
           }

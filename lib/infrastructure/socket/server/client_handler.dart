@@ -17,6 +17,7 @@ import 'package:backup_database/infrastructure/protocol/payload_limits.dart';
 import 'package:backup_database/infrastructure/socket/heartbeat.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_rate_limiter.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
 import 'package:uuid/uuid.dart';
 
 const int _headerSize = 16;
@@ -30,12 +31,14 @@ class ClientHandler {
     ServerAuthentication? authentication,
     ConnectionLogDao? connectionLogDao,
     SocketLoggerService? socketLogger,
+    SocketServerTelemetry? socketTelemetry,
   }) : _socket = socket,
        _protocol = protocol,
        _onDisconnect = onDisconnect,
        _authentication = authentication,
        _connectionLogDao = connectionLogDao,
        _socketLogger = socketLogger,
+       _socketTelemetry = socketTelemetry,
        _clientId = const Uuid().v4() {
     _remoteAddress = _socket.remoteAddress.address;
     _remotePort = _socket.remotePort;
@@ -47,6 +50,7 @@ class ClientHandler {
   final ServerAuthentication? _authentication;
   final ConnectionLogDao? _connectionLogDao;
   final SocketLoggerService? _socketLogger;
+  final SocketServerTelemetry? _socketTelemetry;
   final String _clientId;
   bool _authHandled = false;
 
@@ -315,6 +319,7 @@ class ClientHandler {
             continue;
           }
         }
+        _socketTelemetry?.onRequestReceived(_clientId, message);
         if (_rejectIfRateLimited(message)) {
           continue;
         }
@@ -424,6 +429,7 @@ class ClientHandler {
       try {
         final data = _protocol.serializeMessage(message);
         await (_socketLogger?.logSent(message) ?? Future<void>.value());
+        _socketTelemetry?.onResponseSent(_clientId, message);
         _socket.add(data);
         await _socket.flush();
       } on Object catch (e) {
@@ -438,6 +444,7 @@ class ClientHandler {
   }
 
   void disconnect() {
+    _socketTelemetry?.clearClient(_clientId);
     _heartbeatManager?.stop();
     _heartbeatManager = null;
     final subscription = _socketSubscription;

@@ -12,7 +12,6 @@ import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/destination/destination_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/file_transfer_lock_service.dart';
-import 'package:backup_database/infrastructure/protocol/idempotency_policy.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_store.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
@@ -24,10 +23,10 @@ import 'package:backup_database/infrastructure/socket/server/database_config_sto
 import 'package:backup_database/infrastructure/socket/server/database_connection_prober.dart';
 import 'package:backup_database/infrastructure/socket/server/diagnostics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/diagnostics_provider.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_persistence.dart';
-import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
@@ -43,6 +42,7 @@ import 'package:backup_database/infrastructure/socket/server/schedule_crud_messa
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/server_preflight_checks.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
 import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
 import 'package:backup_database/infrastructure/transfer_staging_service.dart';
@@ -271,6 +271,10 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     () => RemoteStagingCleanupScheduler(getIt<ITransferStagingService>()),
   );
 
+  getIt.registerLazySingleton<SocketServerTelemetry>(
+    () => SocketServerTelemetry(metricsCollector: getIt<IMetricsCollector>()),
+  );
+
   getIt.registerLazySingleton<MetricsMessageHandler>(
     () => MetricsMessageHandler(
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
@@ -285,6 +289,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       // que `TransferStagingService` ja usa para escrita.
       stagingUsageBytesProvider: () =>
           StagingUsageMeasurer.measure(transferBasePath),
+      socketTelemetry: getIt<SocketServerTelemetry>(),
     ),
   );
   // CapabilitiesMessageHandler nao tem dependencias externas (apenas
@@ -327,7 +332,6 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // sejam deduplicadas mesmo se chegarem em handlers diferentes.
   getIt.registerLazySingleton<IdempotencyRegistry>(
     () => IdempotencyRegistry(
-      ttl: IdempotencyPolicy.defaultTtl,
       store: DriftIdempotencyStore(getIt<AppDatabase>().idempotencyDao),
     ),
   );
@@ -469,6 +473,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       executionHandler: getIt<ExecutionMessageHandler>(),
       scheduleCrudHandler: getIt<ScheduleCrudMessageHandler>(),
       diagnosticsHandler: getIt<DiagnosticsMessageHandler>(),
+      socketTelemetry: getIt<SocketServerTelemetry>(),
     );
     // Resolve dependencia circular pos-instanciacao:
     // QueueEventBus precisa do `sendToClient` do server; o

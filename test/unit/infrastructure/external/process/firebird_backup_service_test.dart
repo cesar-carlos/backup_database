@@ -1563,7 +1563,7 @@ void main() {
     });
 
     test(
-      'executeBackup FB4 differential uses parent GUID from RDB\$BACKUP_HISTORY',
+      r'executeBackup FB4 differential uses parent GUID from RDB$BACKUP_HISTORY',
       () async {
         const parentGuid = '{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}';
         final fb4Config = tcpConfig.copyWith(
@@ -1659,7 +1659,7 @@ void main() {
     );
 
     test(
-      'executeBackup FB4 differential fails when RDB\$BACKUP_HISTORY has no parent GUID',
+      r'executeBackup FB4 differential fails when RDB$BACKUP_HISTORY has no parent GUID',
       () async {
         final fb4Config = tcpConfig.copyWith(
           serverVersionHint: FirebirdServerVersionHint.v40,

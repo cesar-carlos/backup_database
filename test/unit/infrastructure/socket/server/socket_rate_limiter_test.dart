@@ -16,7 +16,7 @@ void main() {
     });
 
     test('should deny when requests per second exceeded', () {
-      var now = DateTime.utc(2026, 1, 1, 12, 0, 0);
+      var now = DateTime.utc(2026, 1, 1, 12);
       final limiter = SocketRateLimiter(
         maxRequestsPerSecond: 2,
         clock: () => now,
@@ -34,7 +34,7 @@ void main() {
     });
 
     test('should deny mutating commands when per-minute limit exceeded', () {
-      var now = DateTime.utc(2026, 1, 1, 12, 0, 0);
+      final now = DateTime.utc(2026, 1, 1, 12);
       final limiter = SocketRateLimiter(
         maxRequestsPerSecond: 100,
         maxMutatingPerMinute: 2,

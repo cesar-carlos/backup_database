@@ -15,6 +15,7 @@ AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_datab
 ```
 
 3. Ter uma release publicada no GitHub com um unico instalador `.exe`
+4. Ter o sidecar correspondente `.exe.sha256` anexado na release
 
 ## Teste manual na UI
 
@@ -69,6 +70,12 @@ Confira o `appcast.xml` publicado e valide:
 
 - Reexecute `python scripts/sync_appcast_from_releases.py`
 - Publique novamente o resultado do workflow se necessario
+
+### Rollback de release ruim
+
+- Adicione a versao em `scripts/appcast_policy.json`
+- Faça push na `main` ou execute manualmente o workflow `update-appcast`
+- Confirme que o `appcast.xml` publicado nao lista mais a versao bloqueada
 
 ### Nenhuma atualizacao detectada
 

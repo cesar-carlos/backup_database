@@ -100,7 +100,8 @@ Este script:
 3. Baixa `vc_redist.x64.exe` automaticamente se ausente
 4. Garante `nssm.exe` (win64) em `dependencies\nssm-2.24\win64\`, baixando o zip oficial se necessário
 5. Compila o instalador usando Inno Setup
-6. Informa onde o instalador foi criado
+6. Gera o sidecar `BackupDatabase-Setup-<versao>.exe.sha256`
+7. Informa onde o instalador foi criado
 
 ## Estrutura do Instalador
 

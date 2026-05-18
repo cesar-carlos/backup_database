@@ -42,7 +42,7 @@ void main() {
           final versionRow = await dbMigrated
               .customSelect('PRAGMA user_version')
               .getSingle();
-          expect(versionRow.read<int>('user_version'), 32);
+          expect(versionRow.read<int>('user_version'), 33);
 
           final tableRows = await dbMigrated
               .customSelect(

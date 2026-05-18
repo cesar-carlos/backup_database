@@ -83,7 +83,7 @@ void main() {
               message: 'Sem permissão no staging',
             ),
           ],
-          serverTimeUtc: DateTime.utc(2026, 1, 1),
+          serverTimeUtc: DateTime.utc(2026),
         ),
       );
 
@@ -137,7 +137,7 @@ void main() {
       connectionManager.executionStatusToReturn = ExecutionStatusResult(
         runId: '${scheduleId}_run-test',
         state: ExecutionState.running,
-        serverTimeUtc: DateTime.utc(2026, 1, 1),
+        serverTimeUtc: DateTime.utc(2026),
         scheduleId: scheduleId,
       );
       connectionManager.waitForCompletionResult = const rd.Success(

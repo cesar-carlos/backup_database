@@ -25,7 +25,7 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 ///   seguida de leitura concorrente sem race).
 ///
 /// **Persistencia (F2.16 / PR-5)**:
-/// Quando [store] esta configurado, respostas bem-sucedidas sao gravadas
+/// Quando um [IdempotencyStore] esta configurado, respostas bem-sucedidas sao gravadas
 /// em SQLite e reidratadas apos restart do servidor (dentro do TTL).
 /// - Cliente e responsavel por escolher chaves estaveis (`scheduleId`
 ///   + epoch ms truncado por minuto, ou UUID v4 cacheado por
@@ -87,7 +87,7 @@ class IdempotencyRegistry {
     _purgeExpired();
     final existing = _entries[key];
     if (existing == null && _store != null) {
-      final persisted = await _store!.loadValid(key, _clock());
+      final persisted = await _store.loadValid(key, _clock());
       if (persisted != null) {
         if (persisted is T) return persisted as T;
         throw StateError(

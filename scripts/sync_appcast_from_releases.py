@@ -7,6 +7,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -18,7 +19,9 @@ SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 DEFAULT_REPO = "cesar-carlos/backup_database"
 DEFAULT_CHANNEL_TITLE = "Backup Database Updates"
 DEFAULT_CHANNEL_DESCRIPTION = "Backup Database updates feed"
+DEFAULT_POLICY_PATH = "scripts/appcast_policy.json"
 INSTALLER_PATTERN = "BackupDatabase-Setup-*.exe"
+CHECKSUM_SUFFIX = ".sha256"
 
 
 @dataclass(frozen=True)
@@ -27,6 +30,7 @@ class ReleaseAsset:
     url: str
     size: int
     sha256: str
+    sha256_source: str
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,11 @@ class PublishedRelease:
     published_at: str
     body: str
     asset: ReleaseAsset
+
+
+@dataclass(frozen=True)
+class AppcastPolicy:
+    blocked_versions: frozenset[str]
 
 
 def _build_api_url(repo: str) -> str:
@@ -85,6 +94,63 @@ def _sha256_from_url(url: str) -> str:
     return digest.hexdigest()
 
 
+def load_policy(path: Path) -> AppcastPolicy:
+    if not path.exists():
+        return AppcastPolicy(blocked_versions=frozenset())
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Appcast policy must be a JSON object: {path}")
+
+    raw_versions = payload.get("blocked_versions", [])
+    if not isinstance(raw_versions, list):
+        raise RuntimeError(
+            f"blocked_versions must be a JSON array in appcast policy: {path}"
+        )
+
+    versions = {
+        _normalize_version(version.strip())
+        for version in raw_versions
+        if isinstance(version, str) and version.strip()
+    }
+    return AppcastPolicy(blocked_versions=frozenset(versions))
+
+
+def _sha256_from_sidecar_content(content: str, installer_name: str) -> str | None:
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        parts = re.split(r"\s+", line, maxsplit=1)
+        if not parts:
+            continue
+
+        digest = parts[0].strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            continue
+
+        if len(parts) == 1:
+            return digest
+
+        candidate_name = parts[1].strip().lstrip("*").strip()
+        if candidate_name == installer_name:
+            return digest
+
+    return None
+
+
+def _read_checksum_sidecar(asset: dict, installer_name: str) -> str | None:
+    url = asset.get("browser_download_url")
+    if not isinstance(url, str):
+        return None
+
+    request = urllib.request.Request(url, headers=_build_headers())
+    with urllib.request.urlopen(request) as response:
+        content = response.read().decode("utf-8", errors="replace")
+    return _sha256_from_sidecar_content(content, installer_name)
+
+
 def _select_installer_asset(release: dict) -> ReleaseAsset:
     assets = release.get("assets", [])
     exe_assets = [asset for asset in assets if asset.get("name", "").endswith(".exe")]
@@ -113,15 +179,37 @@ def _select_installer_asset(release: dict) -> ReleaseAsset:
     if not isinstance(url, str) or not isinstance(name, str) or not isinstance(size, int):
         raise RuntimeError(f"{release.get('tag_name')}: installer asset metadata is invalid")
 
+    checksum_assets = [
+        asset
+        for asset in assets
+        if asset.get("name", "") in {f"{name}{CHECKSUM_SUFFIX}", f"{name}.sha256"}
+    ]
+    if len(checksum_assets) > 1:
+        raise RuntimeError(
+            f"{release.get('tag_name')}: more than one checksum sidecar found for {name}"
+        )
+
+    if checksum_assets:
+        sha256 = _read_checksum_sidecar(checksum_assets[0], name)
+        if sha256 is None:
+            raise RuntimeError(
+                f"{release.get('tag_name')}: invalid checksum sidecar for {name}"
+            )
+        sha256_source = "release-sidecar"
+    else:
+        sha256 = _sha256_from_url(url)
+        sha256_source = "downloaded-installer"
+
     return ReleaseAsset(
         name=name,
         url=url,
         size=size,
-        sha256=_sha256_from_url(url),
+        sha256=sha256,
+        sha256_source=sha256_source,
     )
 
 
-def build_published_releases(repo: str) -> list[PublishedRelease]:
+def build_published_releases(repo: str, policy: AppcastPolicy) -> list[PublishedRelease]:
     releases = fetch_releases(repo)
     by_version: dict[str, PublishedRelease] = {}
 
@@ -132,6 +220,8 @@ def build_published_releases(repo: str) -> list[PublishedRelease]:
         tag_name = release.get("tag_name", "")
         version = _normalize_version(tag_name)
         if not version:
+            continue
+        if version in policy.blocked_versions:
             continue
 
         asset = _select_installer_asset(release)
@@ -202,16 +292,26 @@ def write_appcast(path: Path, tree: ET.ElementTree) -> None:
 def main() -> int:
     repo = os.environ.get("APPCAST_REPO", DEFAULT_REPO)
     output_path = Path(os.environ.get("APPCAST_OUTPUT", "appcast.xml"))
+    policy_path = Path(os.environ.get("APPCAST_POLICY_PATH", DEFAULT_POLICY_PATH))
 
     try:
-        releases = build_published_releases(repo)
+        policy = load_policy(policy_path)
+        releases = build_published_releases(repo, policy)
         tree = render_appcast(repo, releases)
         write_appcast(output_path, tree)
     except Exception as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    print(f"OK: rebuilt {output_path} with {len(releases)} release item(s)")
+    sidecar_count = sum(
+        1 for release in releases if release.asset.sha256_source == "release-sidecar"
+    )
+    downloaded_count = len(releases) - sidecar_count
+    print(
+        f"OK: rebuilt {output_path} with {len(releases)} release item(s) "
+        f"(sidecar={sidecar_count}, fallback_download={downloaded_count}, "
+        f"blocked={len(policy.blocked_versions)})"
+    )
     return 0
 
 

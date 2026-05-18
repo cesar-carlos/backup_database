@@ -1,12 +1,10 @@
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
-import 'package:backup_database/infrastructure/protocol/idempotency_policy.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_store.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
-import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -17,7 +15,6 @@ void main() {
     setUp(() {
       database = AppDatabase.inMemory();
       registry = IdempotencyRegistry(
-        ttl: IdempotencyPolicy.defaultTtl,
         store: DriftIdempotencyStore(database.idempotencyDao),
       );
     });
@@ -46,7 +43,6 @@ void main() {
       );
 
       final registryAfterRestart = IdempotencyRegistry(
-        ttl: IdempotencyPolicy.defaultTtl,
         store: DriftIdempotencyStore(database.idempotencyDao),
       );
 

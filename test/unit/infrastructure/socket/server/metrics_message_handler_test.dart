@@ -1,13 +1,18 @@
+import 'package:backup_database/application/services/metrics_collector.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_running_state.dart';
+import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_telemetry_constants.dart';
 import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -199,6 +204,53 @@ void main() {
 
         final payload = await captureMetricsPayload(handler);
         expect(payload['stagingUsageBytes'], 0);
+      },
+    );
+
+    test(
+      'mescla socket telemetry em payload.observability',
+      () async {
+        final metrics = MetricsCollector();
+        final telemetry = SocketServerTelemetry(metricsCollector: metrics);
+        const clientId = 'metrics-client';
+        const requestId = 42;
+
+        final startRequest = createStartBackupRequest(
+          scheduleId: 'sch-metrics',
+          idempotencyKey: 'idem-metrics',
+          requestId: requestId,
+        );
+        telemetry.onRequestReceived(clientId, startRequest);
+        telemetry.onResponseSent(
+          clientId,
+          createStartBackupResponse(
+            requestId: requestId,
+            runId: 'sch-metrics_test',
+            state: ExecutionState.running,
+            scheduleId: 'sch-metrics',
+            serverTimeUtc: DateTime.utc(2026, 4, 19),
+          ),
+        );
+
+        final handler = MetricsMessageHandler(
+          backupHistoryRepository: historyRepo,
+          scheduleRepository: scheduleRepo,
+          backupRunningState: runningState,
+          metricsCollector: metrics,
+          socketTelemetry: telemetry,
+        );
+
+        final payload = await captureMetricsPayload(handler);
+        final observability =
+            payload['observability'] as Map<String, dynamic>? ?? {};
+        final durationKey = SocketTelemetryMetrics.requestDurationMs(
+          MessageType.startBackupRequest.name,
+        );
+        expect(observability['${durationKey}_count'], greaterThan(0));
+        expect(
+          observability['socketRecentMutableAudits'],
+          isA<List<dynamic>>(),
+        );
       },
     );
 

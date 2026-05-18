@@ -29,6 +29,7 @@ import 'package:backup_database/infrastructure/socket/server/schedule_message_ha
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
 import 'package:backup_database/infrastructure/socket/server/session_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
 
 class TcpSocketServer implements SocketServerService {
   TcpSocketServer({
@@ -51,6 +52,7 @@ class TcpSocketServer implements SocketServerService {
     ScheduleCrudMessageHandler? scheduleCrudHandler,
     DiagnosticsMessageHandler? diagnosticsHandler,
     SocketLoggerService? socketLogger,
+    SocketServerTelemetry? socketTelemetry,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
        _authentication = serverCredentialDao != null
@@ -76,7 +78,8 @@ class TcpSocketServer implements SocketServerService {
        _executionHandler = executionHandler,
        _scheduleCrudHandler = scheduleCrudHandler,
        _diagnosticsHandler = diagnosticsHandler ?? DiagnosticsMessageHandler(),
-       _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
+       _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>(),
+       _socketTelemetry = socketTelemetry {
     // PR-3: quando ExecutionMessageHandler estiver cabeado, injeta
     // resolver que despacha mensagens para o ClientHandler vivo
     // pelo clientId. Sem isso, drains da fila perdem a capacidade de
@@ -122,6 +125,7 @@ class TcpSocketServer implements SocketServerService {
   // usa NotConfiguredDiagnosticsProvider — wiring real fica para DI.
   final DiagnosticsMessageHandler _diagnosticsHandler;
   final SocketLoggerService _socketLogger;
+  final SocketServerTelemetry? _socketTelemetry;
   ServerSocket? _serverSocket;
   int _port = SocketConfig.defaultPort;
   bool _isRunning = false;
@@ -188,6 +192,7 @@ class TcpSocketServer implements SocketServerService {
       authentication: _authentication,
       connectionLogDao: _connectionLogDao,
       socketLogger: _socketLogger,
+      socketTelemetry: _socketTelemetry,
     );
     final clientId = handler.clientId;
     final connectedAt = DateTime.now();

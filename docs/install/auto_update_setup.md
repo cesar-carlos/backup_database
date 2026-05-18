@@ -32,6 +32,13 @@ Esse arquivo tem precedencia sobre o asset `.env` empacotado no app.
 
 O asset `.env` continua existindo apenas como fallback para desenvolvimento local com `flutter run`.
 
+O instalador e o runtime tentam migrar automaticamente um `.env` legado
+da pasta `{app}` para `ProgramData`, preservando um backup em:
+
+```text
+C:\ProgramData\BackupDatabase\config\.env.migrated-from-appdir.bak
+```
+
 ## Variavel obrigatoria
 
 ```env
@@ -73,10 +80,21 @@ O feed nao e mais editado inline no workflow.
 O fluxo oficial agora e:
 
 1. Publicar a release no GitHub com o instalador `.exe`
-2. O workflow `.github/workflows/update-appcast.yml` executa
-3. O script `scripts/sync_appcast_from_releases.py` reconstrui o `appcast.xml` do zero
-4. O script deduplica versoes, ordena por `published_at` e calcula `sha256`
-5. O workflow faz commit do `appcast.xml` atualizado na `main`
+2. Publicar tambem o sidecar `BackupDatabase-Setup-<versao>.exe.sha256`
+3. O workflow `.github/workflows/update-appcast.yml` executa
+4. O script `scripts/sync_appcast_from_releases.py` reconstrui o `appcast.xml` do zero
+5. O script deduplica versoes, ordena por `published_at` e reaproveita o hash do sidecar quando existir
+6. O workflow faz commit do `appcast.xml` atualizado na `main`
+
+## Rollback operacional
+
+Se uma release publicada precisar sair do feed sem ser apagada do GitHub:
+
+1. Edite [scripts/appcast_policy.json](/D:/Developer/Flutter/backup_database/scripts/appcast_policy.json)
+2. Adicione a versao em `blocked_versions`
+3. Faça push na `main` ou rode o workflow manualmente
+
+O workflow reconstrói o `appcast.xml` sem as versoes bloqueadas.
 
 ## Observacoes
 

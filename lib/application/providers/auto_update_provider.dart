@@ -34,6 +34,12 @@ class AutoUpdateProvider extends ChangeNotifier {
   String? get targetVersion => _snapshot.targetVersion;
   String? get statusMessage => _snapshot.message;
   bool get isDisabled => status == AppUpdateStatus.disabled;
+  AppUpdateStage? get currentStage => _snapshot.stage;
+  AppUpdateStage? get lastFailureStage => _snapshot.lastFailureStage;
+  AppUpdateSource? get lastSource => _snapshot.lastSource;
+  int? get lastAttemptNumber => _snapshot.lastAttemptNumber;
+  Duration? get lastDownloadDuration => _snapshot.lastDownloadDuration;
+  Duration? get lastCheckDuration => _snapshot.lastCheckDuration;
 
   Future<void> checkForUpdates() {
     return _autoUpdateService.checkNow(source: AppUpdateSource.manual);

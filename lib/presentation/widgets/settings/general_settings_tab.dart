@@ -289,6 +289,87 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     }
   }
 
+  String _buildAutoUpdateStageText(AppUpdateStage? stage) {
+    if (stage == null) {
+      return appLocaleString(
+        context,
+        'Sem etapa registrada',
+        'No stage recorded',
+      );
+    }
+
+    switch (stage) {
+      case AppUpdateStage.blockedByOtherInstance:
+        return appLocaleString(
+          context,
+          'Aguardando outra instancia liberar o lock',
+          'Waiting for another instance to release the lock',
+        );
+      case AppUpdateStage.fetchingFeed:
+        return appLocaleString(
+          context,
+          'Lendo feed de releases',
+          'Fetching releases feed',
+        );
+      case AppUpdateStage.evaluatingRelease:
+        return appLocaleString(
+          context,
+          'Comparando versoes e escolhendo release alvo',
+          'Comparing versions and choosing target release',
+        );
+      case AppUpdateStage.downloadingInstaller:
+        return appLocaleString(
+          context,
+          'Baixando instalador',
+          'Downloading installer',
+        );
+      case AppUpdateStage.validatingInstaller:
+        return appLocaleString(
+          context,
+          'Validando tamanho e SHA-256',
+          'Validating size and SHA-256',
+        );
+      case AppUpdateStage.preparingInstall:
+        return appLocaleString(
+          context,
+          'Preparando troca silenciosa',
+          'Preparing silent handoff',
+        );
+      case AppUpdateStage.launchingInstaller:
+        return appLocaleString(
+          context,
+          'Disparando instalador silencioso',
+          'Launching silent installer',
+        );
+      case AppUpdateStage.completed:
+        return appLocaleString(
+          context,
+          'Ciclo concluido',
+          'Cycle completed',
+        );
+    }
+  }
+
+  String _buildAutoUpdateSourceText(AppUpdateSource? source) {
+    switch (source) {
+      case AppUpdateSource.startup:
+        return appLocaleString(context, 'Startup', 'Startup');
+      case AppUpdateSource.manual:
+        return appLocaleString(context, 'Manual', 'Manual');
+      case AppUpdateSource.periodic:
+        return appLocaleString(context, 'Periodico', 'Periodic');
+      case null:
+        return appLocaleString(context, 'Desconhecida', 'Unknown');
+    }
+  }
+
+  String _formatAutoUpdateDuration(Duration? duration) {
+    if (duration == null) {
+      return appLocaleString(context, 'Nao disponivel', 'Not available');
+    }
+    return '${duration.inMilliseconds} ms';
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -851,6 +932,59 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                       ),
                       subtitle: Text(
                         autoUpdateProvider.lastErrorDate!.toLocal().toString(),
+                      ),
+                      trailing: const Icon(FluentIcons.warning),
+                    ),
+                  if (autoUpdateProvider.lastAttemptNumber != null)
+                    ListTile(
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Ultimo ciclo',
+                          'Last cycle',
+                        ),
+                      ),
+                      subtitle: Text(
+                        '#${autoUpdateProvider.lastAttemptNumber} • '
+                        '${_buildAutoUpdateSourceText(autoUpdateProvider.lastSource)} • '
+                        '${_buildAutoUpdateStageText(autoUpdateProvider.currentStage)}',
+                      ),
+                      trailing: const Icon(FluentIcons.timeline),
+                    ),
+                  if (autoUpdateProvider.lastCheckDuration != null ||
+                      autoUpdateProvider.lastDownloadDuration != null)
+                    ListTile(
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Telemetria do updater',
+                          'Updater telemetry',
+                        ),
+                      ),
+                      subtitle: Text(
+                        appLocaleString(
+                          context,
+                          'Ciclo: ${_formatAutoUpdateDuration(autoUpdateProvider.lastCheckDuration)} • '
+                              'Download: ${_formatAutoUpdateDuration(autoUpdateProvider.lastDownloadDuration)}',
+                          'Cycle: ${_formatAutoUpdateDuration(autoUpdateProvider.lastCheckDuration)} • '
+                              'Download: ${_formatAutoUpdateDuration(autoUpdateProvider.lastDownloadDuration)}',
+                        ),
+                      ),
+                      trailing: const Icon(FluentIcons.speed_high),
+                    ),
+                  if (autoUpdateProvider.lastFailureStage != null)
+                    ListTile(
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Etapa da ultima falha',
+                          'Last failure stage',
+                        ),
+                      ),
+                      subtitle: Text(
+                        _buildAutoUpdateStageText(
+                          autoUpdateProvider.lastFailureStage,
+                        ),
                       ),
                       trailing: const Icon(FluentIcons.warning),
                     ),

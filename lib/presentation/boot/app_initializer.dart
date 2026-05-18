@@ -84,7 +84,7 @@ class AppInitializer {
         return;
       }
       final autoUpdateService = service_locator.getIt<AutoUpdateService>();
-      autoUpdateService.setBeforeInstallHook(AppCleanup.cleanup);
+      autoUpdateService.beforeInstallHook = AppCleanup.cleanup;
       await autoUpdateService.initialize();
       if (!autoUpdateService.isInitialized) {
         LoggerService.info(
