@@ -86,6 +86,11 @@ def run(cmd: list[str]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dart-mode", action="store_true", help="Use dart coverage:test_with_coverage")
+    parser.add_argument(
+        "--filter-only",
+        action="store_true",
+        help="Skip test run; filter existing coverage/lcov.info (e.g. after CI flutter test --coverage)",
+    )
     parser.add_argument("--fail-under", type=int, default=0, help="Fail if coverage is below this value")
     parser.add_argument(
         "--test-targets",
@@ -100,6 +105,23 @@ def main() -> int:
         if args.fail_under > 0:
             cmd.extend(["--fail-under", str(args.fail_under)])
         return run(cmd)
+
+    if args.filter_only:
+        lcov_path = Path("coverage/lcov.info")
+        filtered_lcov_path = Path("coverage/lcov.filtered.info")
+        if not lcov_path.exists():
+            print(f"ERROR: coverage file not found: {lcov_path}")
+            return 1
+        step("Filtering generated/test files from lcov")
+        filter_lcov(lcov_path, filtered_lcov_path)
+        coverage = lcov_coverage(filtered_lcov_path)
+        print(f"Line coverage (filtered): {coverage}%")
+        print(f"Filtered report: {filtered_lcov_path}")
+        if args.fail_under > 0 and coverage < args.fail_under:
+            print(f"ERROR: coverage {coverage}% is below threshold {args.fail_under}%.")
+            return 1
+        step("Coverage completed")
+        return 0
 
     step("Running Flutter tests with coverage")
     cmd = ["flutter", "test", "--coverage"]

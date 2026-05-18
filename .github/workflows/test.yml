@@ -23,6 +23,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify W3C design token snapshot is in sync
+        run: dart run tools/generate_tokens.dart --check
+
       - name: Create minimal .env for tests
         run: |
           if [ -f .env.example ]; then
@@ -35,6 +38,9 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
+      - name: Design system guard (atoms/molecules/organisms)
+        run: dart run tools/design_system_guard.dart --fail-on-findings --enforce-target-size
+
       - name: Reject inline UI locale _t helpers (PR-D D1)
         run: |
           set -euo pipefail
@@ -43,8 +49,28 @@ jobs:
             exit 1
           fi
 
-      - name: Run unit tests
-        run: flutter test test/unit/ --reporter compact
+      - name: Run unit tests with coverage
+        run: flutter test test/unit/ --coverage --reporter compact
+
+      - name: Report filtered line coverage
+        run: python scripts/coverage.py --filter-only
+
+      - name: Upload filtered coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-lcov-filtered
+          path: coverage/lcov.filtered.info
+          if-no-files-found: ignore
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        if: always()
+        with:
+          files: coverage/lcov.filtered.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          verbose: true
 
       - name: Integration tests skipped on GitHub Actions
         run: echo "Integration tests run only in local/dev environments."
