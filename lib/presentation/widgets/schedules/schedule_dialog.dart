@@ -14,14 +14,18 @@ import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
-import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
-import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/infrastructure/external/compression/winrar_service.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_advanced_database_section.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_firebird_nbackup_section.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_general_section.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_schedule_section.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_script_tab.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_settings_tab.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
@@ -52,6 +56,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   final _postBackupScriptController = TextEditingController();
   final _backupTimeoutMinutesController = TextEditingController();
   final _verifyTimeoutMinutesController = TextEditingController();
+  final _firebirdNbackupPhysicalLevelController = TextEditingController();
 
   DatabaseType _databaseType = DatabaseType.sqlServer;
   String? _selectedDatabaseConfigId;
@@ -97,6 +102,34 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   bool get isEditing => widget.schedule != null;
 
+  bool get _hideRemoteFirebird {
+    if (currentAppMode != AppMode.client) {
+      return false;
+    }
+    try {
+      final scp = context.watch<ServerConnectionProvider>();
+      return scp.isConnected && !scp.isFirebirdSupported;
+    } on ProviderNotFoundException {
+      return false;
+    }
+  }
+
+  List<DatabaseType> _databaseTypesForGeneralPicker() {
+    if (!_hideRemoteFirebird) {
+      return DatabaseType.values.toList();
+    }
+    final withoutFb = DatabaseType.values
+        .where((DatabaseType t) => t != DatabaseType.firebird)
+        .toList();
+    final keepFirebird =
+        widget.schedule?.databaseType == DatabaseType.firebird ||
+        _databaseType == DatabaseType.firebird;
+    if (!keepFirebird) {
+      return withoutFb;
+    }
+    return <DatabaseType>[...withoutFb, DatabaseType.firebird];
+  }
+
   BackupType _normalizeBackupTypeForDatabase(
     DatabaseType databaseType,
     BackupType backupType,
@@ -109,6 +142,20 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     if (databaseType == DatabaseType.sybase &&
         backupType == BackupType.differential) {
       return BackupType.full;
+    }
+    if (databaseType == DatabaseType.firebird) {
+      switch (backupType) {
+        case BackupType.full:
+        case BackupType.fullSingle:
+          return backupType;
+        case BackupType.convertedFullSingle:
+          return BackupType.fullSingle;
+        case BackupType.log:
+        case BackupType.differential:
+        case BackupType.convertedDifferential:
+        case BackupType.convertedLog:
+          return BackupType.full;
+      }
     }
     return backupType;
   }
@@ -146,15 +193,19 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _verifyTimeoutMinutesController.text = _verifyTimeout.inMinutes
           .toString();
 
-      switch (widget.schedule) {
-        case SqlServerBackupSchedule(:final sqlServerBackupOptions):
+      switch (widget.schedule!.databaseType) {
+        case DatabaseType.sqlServer:
+          final sqlServerBackupOptions =
+              widget.schedule!.resolvedSqlServerBackupOptions;
           _compression = sqlServerBackupOptions.compression;
           _maxTransferSize = sqlServerBackupOptions.maxTransferSize;
           _bufferCount = sqlServerBackupOptions.bufferCount;
           _blockSize = sqlServerBackupOptions.blockSize;
           _stripingCount = sqlServerBackupOptions.stripingCount;
           _statsPercent = sqlServerBackupOptions.statsPercent;
-        case SybaseBackupSchedule(:final sybaseBackupOptions):
+        case DatabaseType.sybase:
+          final sybaseBackupOptions =
+              widget.schedule!.resolvedSybaseBackupOptions;
           _sybaseCheckpointLog = sybaseBackupOptions.checkpointLog;
           _sybaseServerSide = sybaseBackupOptions.serverSide;
           _sybaseAutoTuneWriters = sybaseBackupOptions.autoTuneWriters;
@@ -164,7 +215,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               (widget.schedule!.truncateLog
                   ? SybaseLogBackupMode.truncate
                   : SybaseLogBackupMode.only);
-        case _:
+        case DatabaseType.postgresql:
+        case DatabaseType.firebird:
+          break;
       }
 
       _backupFolderController.text = widget.schedule!.backupFolder.isNotEmpty
@@ -172,6 +225,11 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           : _getDefaultBackupFolder();
       _postBackupScriptController.text =
           widget.schedule!.postBackupScript ?? '';
+
+      if (widget.schedule!.firebirdNbackupPhysicalLevel != null) {
+        _firebirdNbackupPhysicalLevelController.text =
+            '${widget.schedule!.firebirdNbackupPhysicalLevel}';
+      }
 
       _parseScheduleConfig(widget.schedule!.scheduleConfig);
     }
@@ -280,6 +338,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
   }
 
+  int? _parseFirebirdNbackupLevelFromController() {
+    final trimmed = _firebirdNbackupPhysicalLevelController.text.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return int.parse(trimmed);
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -288,6 +354,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     _postBackupScriptController.dispose();
     _backupTimeoutMinutesController.dispose();
     _verifyTimeoutMinutesController.dispose();
+    _firebirdNbackupPhysicalLevelController.dispose();
     super.dispose();
   }
 
@@ -338,7 +405,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     Tab(
                       text: const Text(ScheduleDialogStrings.tabScriptSql),
                       icon: const Icon(FluentIcons.code),
-                      body: _buildScriptTab(),
+                      body: ScheduleDialogScriptTab(
+                        postBackupScriptController: _postBackupScriptController,
+                      ),
                     ),
                   ],
                 ),
@@ -357,1008 +426,220 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AppTextField(
-            controller: _nameController,
-            label: 'Nome do Agendamento',
-            hint: 'Ex: Backup Diário Produção',
-            prefixIcon: const Icon(FluentIcons.tag),
-            validator: (value) {
-              if (_nameFieldTouched) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Nome é obrigatório';
-                }
-              }
-              return null;
+          ScheduleDialogGeneralSection(
+            formKey: _formKey,
+            nameController: _nameController,
+            nameFieldTouched: _nameFieldTouched,
+            onNameFirstInteraction: () {
+              setState(() {
+                _nameFieldTouched = true;
+              });
             },
-            onChanged: (value) {
-              if (!_nameFieldTouched) {
-                setState(() {
-                  _nameFieldTouched = true;
-                });
-              }
-            },
-          ),
-          const SizedBox(height: 24),
-          _buildSectionTitle('Banco de Dados'),
-          const SizedBox(height: 12),
-          AppDropdown<DatabaseType>(
-            label: 'Tipo de Banco',
-            value: _databaseType,
-            placeholder: const Text('Tipo de Banco'),
-            items: DatabaseType.values.map((type) {
-              return ComboBoxItem<DatabaseType>(
-                value: type,
-                child: Text(DatabaseTypeMetadata.of(type).titleLabel),
-              );
-            }).toList(),
-            onChanged: isEditing
+            databaseTypesForPicker: _databaseTypesForGeneralPicker(),
+            databaseType: _databaseType,
+            onDatabaseTypeChanged: isEditing
                 ? null
-                : (value) {
-                    if (value != null) {
-                      setState(() {
-                        _selectedDatabaseConfigId = null;
-                        _databaseType = value;
-                        _backupType = _normalizeBackupTypeForDatabase(
-                          _databaseType,
-                          _backupType,
-                        );
-                        _onBackupTypeChanged();
-                      });
-                      _formKey.currentState?.validate();
-                    }
-                  },
-          ),
-          const SizedBox(height: 16),
-          Builder(
-            key: ValueKey(
-              'database_config_dropdown_${_databaseType}_${_selectedDatabaseConfigId ?? 'null'}',
-            ),
-            builder: (context) => _buildDatabaseConfigDropdown(),
-          ),
-          const SizedBox(height: 24),
-          _buildSectionTitle('Tipo de Backup'),
-          const SizedBox(height: 12),
-          Consumer<LicenseProvider>(
-            builder: (context, licenseProvider, child) {
-              final license = licenseProvider.currentLicense;
-              final hasDifferential =
-                  licenseProvider.hasValidLicense &&
-                  (license?.hasFeature(LicenseFeatures.differentialBackup) ??
-                      false);
-              final hasLog =
-                  licenseProvider.hasValidLicense &&
-                  (license?.hasFeature(LicenseFeatures.logBackup) ?? false);
-
-              final isSybaseConvertedDifferential =
-                  _databaseType == DatabaseType.sybase &&
-                  isEditing &&
-                  (widget.schedule?.isConvertedDifferential ?? false);
-
-              List<BackupType> allTypes;
-              if (_databaseType == DatabaseType.sybase) {
-                allTypes = [
-                  BackupType.full,
-                  BackupType.log,
-                  if (isSybaseConvertedDifferential) BackupType.differential,
-                ];
-              } else if (_databaseType == DatabaseType.postgresql ||
-                  _databaseType == DatabaseType.firebird) {
-                allTypes = [
-                  BackupType.full,
-                  BackupType.fullSingle,
-                  BackupType.differential,
-                  BackupType.log,
-                ];
-              } else {
-                allTypes = [
-                  BackupType.full,
-                  BackupType.differential,
-                  BackupType.log,
-                ];
-              }
-
-              return AppDropdown<BackupType>(
-                label: 'Tipo de Backup',
-                value: _backupType,
-                placeholder: const Text('Tipo de Backup'),
-                items: allTypes.map((type) {
-                  final isDifferentialBlocked =
-                      type == BackupType.differential && !hasDifferential;
-                  final isLogBlocked = type == BackupType.log && !hasLog;
-                  final isSybaseConvertedType =
-                      _databaseType == DatabaseType.sybase &&
-                      type == BackupType.differential;
-                  final isBlocked = isDifferentialBlocked || isLogBlocked;
-
-                  return ComboBoxItem<BackupType>(
-                    value: type,
-                    enabled: !isBlocked,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  isBlocked
-                                      ? '${type.displayName} (Requer licença)'
-                                      : isSybaseConvertedType
-                                      ? 'Incremental (Transaction Log)'
-                                      : type.displayName,
-                                  textAlign: TextAlign.start,
-                                  style: TextStyle(
-                                    color: isBlocked
-                                        ? FluentTheme.of(context)
-                                              .resources
-                                              .controlStrokeColorDefault
-                                              .withValues(alpha: 0.4)
-                                        : isSybaseConvertedType
-                                        ? FluentTheme.of(
-                                            context,
-                                          ).accentColor.defaultBrushFor(
-                                            FluentTheme.of(context).brightness,
-                                          )
-                                        : null,
-                                    fontStyle: isSybaseConvertedType
-                                        ? FontStyle.italic
-                                        : null,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (isBlocked) ...[
-                                const SizedBox(width: 8),
-                                Icon(
-                                  FluentIcons.lock,
-                                  size: 16,
-                                  color: FluentTheme.of(context)
-                                      .resources
-                                      .controlStrokeColorDefault
-                                      .withValues(alpha: 0.4),
-                                ),
-                              ],
-                              if (isSybaseConvertedType) ...[
-                                const SizedBox(width: 8),
-                                Icon(
-                                  FluentIcons.switch_widget,
-                                  size: 14,
-                                  color: FluentTheme.of(context).accentColor,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    final license = licenseProvider.currentLicense;
-                    final hasDifferential =
-                        licenseProvider.hasValidLicense &&
-                        (license?.hasFeature(
-                              LicenseFeatures.differentialBackup,
-                            ) ??
-                            false);
-                    final hasLog =
-                        licenseProvider.hasValidLicense &&
-                        (license?.hasFeature(LicenseFeatures.logBackup) ??
-                            false);
-
-                    final isDifferentialBlocked =
-                        value == BackupType.differential && !hasDifferential;
-                    final isLogBlocked = value == BackupType.log && !hasLog;
-
-                    if (isDifferentialBlocked || isLogBlocked) {
-                      unawaited(
-                        MessageModal.showWarning(
-                          context,
-                          message:
-                              'Este tipo de backup requer uma licença válida. '
-                              'Acesse Configurações > Licenciamento para mais informações.',
-                        ),
-                      );
-                      return;
-                    }
-
+                : (DatabaseType value) {
                     setState(() {
-                      _backupType = value;
+                      _selectedDatabaseConfigId = null;
+                      _databaseType = value;
+                      _backupType = _normalizeBackupTypeForDatabase(
+                        _databaseType,
+                        _backupType,
+                      );
                       _onBackupTypeChanged();
                     });
-                  }
-                },
-              );
+                  },
+            databaseConfigDropdownKey: ValueKey<String>(
+              'database_config_dropdown_${_databaseType}_${_selectedDatabaseConfigId ?? 'null'}',
+            ),
+            databaseConfigDropdownBuilder: (BuildContext context) =>
+                _buildDatabaseConfigDropdown(),
+            backupType: _backupType,
+            isSybaseConvertedDifferential:
+                _databaseType == DatabaseType.sybase &&
+                isEditing &&
+                (widget.schedule?.isConvertedDifferential ?? false),
+            onBackupTypeCommitted: (BackupType value) {
+              setState(() {
+                _backupType = value;
+                _onBackupTypeChanged();
+              });
             },
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _getBackupTypeDescription(_backupType),
-            style: FluentTheme.of(context).typography.caption,
           ),
           const SizedBox(height: 24),
-          _buildSectionTitle('Agendamento'),
-          const SizedBox(height: 12),
-          Consumer<LicenseProvider>(
-            builder: (context, licenseProvider, child) {
-              final license = licenseProvider.currentLicense;
-              final hasInterval =
-                  licenseProvider.hasValidLicense &&
-                  (license?.hasFeature(LicenseFeatures.intervalSchedule) ??
-                      false);
-
-              return AppDropdown<ScheduleType>(
-                label: 'Frequência',
-                value: _scheduleType,
-                placeholder: const Text('Frequência'),
-                items: ScheduleType.values.map((type) {
-                  final isIntervalBlocked =
-                      type == ScheduleType.interval && !hasInterval;
-
-                  return ComboBoxItem<ScheduleType>(
-                    value: type,
-                    enabled: !isIntervalBlocked,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  isIntervalBlocked
-                                      ? '${_getScheduleTypeName(type)} (Requer licença)'
-                                      : _getScheduleTypeName(type),
-                                  textAlign: TextAlign.start,
-                                  style: TextStyle(
-                                    color: isIntervalBlocked
-                                        ? FluentTheme.of(context)
-                                              .resources
-                                              .controlStrokeColorDefault
-                                              .withValues(alpha: 0.4)
-                                        : null,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (isIntervalBlocked) ...[
-                                const SizedBox(width: 8),
-                                Icon(
-                                  FluentIcons.lock,
-                                  size: 16,
-                                  color: FluentTheme.of(context)
-                                      .resources
-                                      .controlStrokeColorDefault
-                                      .withValues(alpha: 0.4),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    final license = licenseProvider.currentLicense;
-                    final hasInterval =
-                        licenseProvider.hasValidLicense &&
-                        (license?.hasFeature(
-                              LicenseFeatures.intervalSchedule,
-                            ) ??
-                            false);
-
-                    if (value == ScheduleType.interval && !hasInterval) {
-                      unawaited(
-                        MessageModal.showWarning(
-                          context,
-                          message:
-                              'Agendamento por intervalo requer uma licença válida. '
-                              'Acesse Configurações > Licenciamento para mais informações.',
-                        ),
-                      );
-                      return;
-                    }
-
-                    setState(() {
-                      _scheduleType = value;
-                    });
-                  }
-                },
-              );
+          ScheduleDialogScheduleSection(
+            scheduleType: _scheduleType,
+            onScheduleTypeCommitted: (ScheduleType value) {
+              setState(() {
+                _scheduleType = value;
+              });
             },
+            backupType: _backupType,
+            databaseType: _databaseType,
+            truncateLog: _truncateLog,
+            onTruncateLogChanged: (bool value) {
+              setState(() {
+                _truncateLog = value;
+              });
+            },
+            sybaseLogModeSelector:
+                _backupType == BackupType.log &&
+                    _databaseType == DatabaseType.sybase
+                ? _buildSybaseLogBackupModeSelector()
+                : null,
+            scheduleFields: _buildScheduleFields(),
           ),
-          const SizedBox(height: 16),
-          if (_backupType == BackupType.log &&
-              _databaseType == DatabaseType.sybase)
-            _buildSybaseLogBackupModeSelector(),
-          if (_backupType == BackupType.log &&
-              _databaseType != DatabaseType.sybase)
-            InfoLabel(
-              label: 'Truncar log após backup',
-              child: ToggleSwitch(
-                checked: _truncateLog,
-                onChanged: (value) {
-                  setState(() {
-                    _truncateLog = value;
-                  });
-                },
-              ),
-            ),
-          if (_backupType == BackupType.log) const SizedBox(height: 8),
-          if (_backupType == BackupType.log &&
-              _databaseType != DatabaseType.sybase)
-            Text(
-              'Quando habilitado, o backup de log libera espaço (SQL Server: padrão; Sybase: depende do motor).',
-              style: FluentTheme.of(context).typography.caption,
-            ),
-          if (_backupType == BackupType.log &&
-              _databaseType == DatabaseType.sybase)
-            Text(
-              'Truncar: libera espaço. Renomear: recomendado para replicação (SQL Remote, MobiLink).',
-              style: FluentTheme.of(context).typography.caption,
-            ),
-          const SizedBox(height: 16),
-          _buildScheduleFields(),
         ],
       ),
     );
   }
 
   Widget _buildSettingsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildSectionTitle(ScheduleDialogStrings.destinations),
-          const SizedBox(height: 12),
-          _buildDestinationSelector(),
-          const SizedBox(height: 24),
-          _buildSectionTitle(ScheduleDialogStrings.backupFolderSection),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: AppTextField(
-                  controller: _backupFolderController,
-                  label: ScheduleDialogStrings.backupFolderLabel,
-                  hint: ScheduleDialogStrings.backupFolderHint,
-                  prefixIcon: const Icon(FluentIcons.folder),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return ScheduleDialogStrings.backupFolderRequired;
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(top: 24),
-                child: IconButton(
-                  icon: const Icon(FluentIcons.folder_open),
-                  onPressed: _selectBackupFolder,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            ScheduleDialogStrings.backupFolderDescription,
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 24),
-          _buildSectionTitle(ScheduleDialogStrings.options),
-          const SizedBox(height: 12),
-          InfoLabel(
-            label: ScheduleDialogStrings.compressBackup,
-            child: ToggleSwitch(
-              checked: _compressBackup,
-              onChanged: (value) {
-                setState(() {
-                  _compressBackup = value;
-                  if (!value) {
-                    _compressionFormat = CompressionFormat.none;
-                  } else if (_compressionFormat == CompressionFormat.none) {
-                    _compressionFormat = CompressionFormat.zip;
-                  }
-                });
-              },
-            ),
-          ),
-          if (_compressBackup) ...[
-            const SizedBox(height: 16),
-            AppDropdown<CompressionFormat>(
-              label: ScheduleDialogStrings.compressionFormat,
-              value: _compressionFormat,
-              placeholder: const Text(
-                ScheduleDialogStrings.compressionFormatPlaceholder,
-              ),
-              items: const [
-                ComboBoxItem<CompressionFormat>(
-                  value: CompressionFormat.zip,
-                  child: Text(ScheduleDialogStrings.compressionFormatZip),
-                ),
-                ComboBoxItem<CompressionFormat>(
-                  value: CompressionFormat.rar,
-                  child: Text(ScheduleDialogStrings.compressionFormatRar),
-                ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    _compressionFormat = value;
-                  });
-                }
-              },
-            ),
-          ],
-          const SizedBox(height: 16),
-          InfoLabel(
-            label: ScheduleDialogStrings.schedulingEnabled,
-            child: ToggleSwitch(
-              checked: _isEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _isEnabled = value;
-                });
-              },
-            ),
-          ),
-          const SizedBox(height: 24),
-          _buildSectionTitle(ScheduleDialogStrings.timeoutsSection),
-          const SizedBox(height: 12),
-          InfoLabel(
-            label: ScheduleDialogStrings.backupTimeout,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: InfoLabel(
-                    label: ScheduleDialogStrings.minutes,
-                    child: NumericField(
-                      controller: _backupTimeoutMinutesController,
-                      label: '',
-                      minValue: 1,
-                      maxValue: 1440,
-                      onChanged: (value) {
-                        final minutes = int.tryParse(value) ?? 120;
-                        setState(() {
-                          _backupTimeout = Duration(minutes: minutes);
-                        });
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    ScheduleDialogStrings.max24Hours,
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          InfoLabel(
-            label: ScheduleDialogStrings.verifyTimeout,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: InfoLabel(
-                    label: ScheduleDialogStrings.minutes,
-                    child: NumericField(
-                      controller: _verifyTimeoutMinutesController,
-                      label: '',
-                      minValue: 1,
-                      maxValue: 1440,
-                      onChanged: (value) {
-                        final minutes = int.tryParse(value) ?? 30;
-                        setState(() {
-                          _verifyTimeout = Duration(minutes: minutes);
-                        });
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    ScheduleDialogStrings.max24Hours,
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            ScheduleDialogStrings.timeoutsDescription,
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 24),
-          _buildIntegrityOptions(),
-          if (_databaseType == DatabaseType.sqlServer)
-            _buildAdvancedPerformanceOptions(),
-          if (_databaseType == DatabaseType.sybase)
-            _buildSybaseAdvancedPerformanceOptions(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAdvancedPerformanceOptions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSectionTitle('Performance Avançada (SQL Server)'),
-        const SizedBox(height: 12),
-        InfoLabel(
-          label: 'Compressão Nativa (COMPRESSION)',
-          child: ToggleSwitch(
-            checked: _compression,
-            onChanged: (value) {
+    return ScheduleDialogSettingsTab(
+      destinationSelector: _buildDestinationSelector(),
+      backupFolderController: _backupFolderController,
+      onSelectBackupFolderPressed: () {
+        unawaited(_selectBackupFolder());
+      },
+      compressBackup: _compressBackup,
+      onCompressBackupChanged: (bool value) {
+        setState(() {
+          _compressBackup = value;
+          if (!value) {
+            _compressionFormat = CompressionFormat.none;
+          } else if (_compressionFormat == CompressionFormat.none) {
+            _compressionFormat = CompressionFormat.zip;
+          }
+        });
+      },
+      compressionFormat: _compressionFormat,
+      onCompressionFormatChanged: (CompressionFormat value) {
+        setState(() {
+          _compressionFormat = value;
+        });
+      },
+      schedulingEnabled: _isEnabled,
+      onSchedulingEnabledChanged: (bool value) {
+        setState(() {
+          _isEnabled = value;
+        });
+      },
+      backupTimeoutMinutesController: _backupTimeoutMinutesController,
+      verifyTimeoutMinutesController: _verifyTimeoutMinutesController,
+      onBackupTimeoutMinutesParsed: (int minutes) {
+        setState(() {
+          _backupTimeout = Duration(minutes: minutes);
+        });
+      },
+      onVerifyTimeoutMinutesParsed: (int minutes) {
+        setState(() {
+          _verifyTimeout = Duration(minutes: minutes);
+        });
+      },
+      databaseType: _databaseType,
+      backupType: _backupType,
+      enableChecksum: _enableChecksum,
+      onEnableChecksumChanged: (bool value) {
+        setState(() {
+          _enableChecksum = value;
+        });
+      },
+      verifyAfterBackup: _verifyAfterBackup,
+      onVerifyAfterBackupChanged: (bool value) {
+        setState(() {
+          _verifyAfterBackup = value;
+        });
+      },
+      verifyPolicy: _verifyPolicy,
+      onVerifyPolicyChanged: (VerifyPolicy value) {
+        setState(() {
+          _verifyPolicy = value;
+        });
+      },
+      sqlServerAdvancedBuilder: () =>
+          ScheduleDialogSqlServerAdvancedPerformanceSection(
+            compression: _compression,
+            onCompressionChanged: (bool value) {
               setState(() {
                 _compression = value;
               });
             },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Compressão nativa do SQL Server. Requer edição Enterprise do SQL Server 2008+.',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<int?>(
-          label: 'Tamanho Máximo de Transferência (MAXTRANSFERSIZE)',
-          value: _maxTransferSize,
-          placeholder: const Text('Usar padrão do SQL Server'),
-          items: const [
-            ComboBoxItem(child: Text('Usar padrão')),
-            ComboBoxItem(value: 4194304, child: Text('4 MB')),
-            ComboBoxItem(value: 16777216, child: Text('16 MB')),
-            ComboBoxItem(value: 67108864, child: Text('64 MB')),
-          ],
-          onChanged: (value) {
-            final newValue = value ?? 4194304;
-            setState(() {
-              _maxTransferSize = newValue;
-            });
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Tamanho máximo de transferência em bytes. Múltiplo de 64KB.',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<int?>(
-          label: 'Buffer Count (BUFFERCOUNT)',
-          value: _bufferCount,
-          placeholder: const Text('Usar padrão do SQL Server'),
-          items: const [
-            ComboBoxItem(child: Text('Usar padrão')),
-            ComboBoxItem(value: 50, child: Text('50')),
-            ComboBoxItem(value: 100, child: Text('100')),
-            ComboBoxItem(value: 200, child: Text('200')),
-          ],
-          onChanged: (value) {
-            final newValue = value ?? 10;
-            setState(() {
-              _bufferCount = newValue;
-            });
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Número de buffers de I/O. Valores altos podem causar consumo excessivo de memória.',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<int>(
-          label: 'STATS Percentual',
-          value: _statsPercent,
-          placeholder: const Text('10%'),
-          items: const [
-            ComboBoxItem<int>(value: 1, child: Text('1%')),
-            ComboBoxItem<int>(value: 5, child: Text('5%')),
-            ComboBoxItem<int>(value: 10, child: Text('10%')),
-          ],
-          onChanged: (value) {
-            final newValue = value ?? 10;
-            setState(() {
-              _statsPercent = newValue;
-            });
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Porcentagem de progresso para exibir. O SQL Server relata progresso a cada X%.',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<int>(
-          label: 'Striping (arquivos paralelos)',
-          value: _stripingCount,
-          placeholder: const Text('1 (sem striping)'),
-          items: const [
-            ComboBoxItem<int>(value: 1, child: Text('1 (sem striping)')),
-            ComboBoxItem<int>(value: 2, child: Text('2 arquivos')),
-            ComboBoxItem<int>(value: 3, child: Text('3 arquivos')),
-            ComboBoxItem<int>(value: 4, child: Text('4 arquivos')),
-          ],
-          onChanged: (value) {
-            final newValue = value ?? 1;
-            setState(() {
-              _stripingCount = newValue;
-            });
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Distribui o backup em N arquivos `<base>.partXofN.bak` que o '
-          'SQL Server escreve em paralelo. Pode aumentar throughput em '
-          'discos rápidos. Aplicado apenas a backups Full e Differential '
-          '(Log permanece com 1 arquivo).',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSybaseAdvancedPerformanceOptions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSectionTitle('Performance Avançada (Sybase)'),
-        const SizedBox(height: 12),
-        AppDropdown<SybaseCheckpointLog?>(
-          label: 'CHECKPOINT LOG (backup Full)',
-          value: _sybaseCheckpointLog,
-          placeholder: const Text('Padrão do servidor'),
-          items: const [
-            ComboBoxItem(child: Text('Padrão')),
-            ComboBoxItem(value: SybaseCheckpointLog.copy, child: Text('COPY')),
-            ComboBoxItem(
-              value: SybaseCheckpointLog.nocopy,
-              child: Text('NOCOPY'),
-            ),
-            ComboBoxItem(value: SybaseCheckpointLog.auto, child: Text('AUTO')),
-            ComboBoxItem(
-              value: SybaseCheckpointLog.recover,
-              child: Text('RECOVER'),
-            ),
-          ],
-          onChanged: (value) {
-            setState(() => _sybaseCheckpointLog = value);
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'COPY: mais rápido no restore; NOCOPY: backup menor. Apenas para backup Full.',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: 'Modo Server-Side (dbbackup -s)',
-          child: ToggleSwitch(
-            checked: _sybaseServerSide,
-            onChanged: (value) {
-              setState(() => _sybaseServerSide = value);
+            maxTransferSize: _maxTransferSize,
+            onMaxTransferSizeChanged: (int value) {
+              setState(() {
+                _maxTransferSize = value;
+              });
+            },
+            bufferCount: _bufferCount,
+            onBufferCountChanged: (int value) {
+              setState(() {
+                _bufferCount = value;
+              });
+            },
+            statsPercent: _statsPercent,
+            onStatsPercentChanged: (int value) {
+              setState(() {
+                _statsPercent = value;
+              });
+            },
+            stripingCount: _stripingCount,
+            onStripingCountChanged: (int value) {
+              setState(() {
+                _stripingCount = value;
+              });
             },
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Backup gerado no servidor. Aplica-se quando dbbackup é usado.',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: 'AUTO TUNE WRITERS',
-          child: ToggleSwitch(
-            checked: _sybaseAutoTuneWriters,
-            onChanged: (value) {
-              setState(() => _sybaseAutoTuneWriters = value);
+      sybaseAdvancedBuilder: () =>
+          ScheduleDialogSybaseAdvancedPerformanceSection(
+            checkpointLog: _sybaseCheckpointLog,
+            onCheckpointLogChanged: (SybaseCheckpointLog? value) {
+              setState(() {
+                _sybaseCheckpointLog = value;
+              });
+            },
+            serverSide: _sybaseServerSide,
+            onServerSideChanged: (bool value) {
+              setState(() {
+                _sybaseServerSide = value;
+              });
+            },
+            autoTuneWriters: _sybaseAutoTuneWriters,
+            onAutoTuneWritersChanged: (bool value) {
+              setState(() {
+                _sybaseAutoTuneWriters = value;
+              });
+            },
+            blockSize: _sybaseBlockSize,
+            onBlockSizeChanged: (int? value) {
+              setState(() {
+                _sybaseBlockSize = value;
+              });
             },
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Ajuste automático de threads de escrita. Recomendado em ambientes I/O-bound.',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<int?>(
-          label: 'Block Size (dbbackup -b)',
-          value: _sybaseBlockSize,
-          placeholder: const Text('Padrão (128 páginas)'),
-          items: const [
-            ComboBoxItem(child: Text('Padrão')),
-            ComboBoxItem(value: 64, child: Text('64')),
-            ComboBoxItem(value: 128, child: Text('128')),
-            ComboBoxItem(value: 256, child: Text('256')),
-            ComboBoxItem(value: 512, child: Text('512')),
+      firebirdAdvancedBuilder: () {
+        FirebirdConfig? firebirdConfig;
+        final configId = _selectedDatabaseConfigId;
+        if (configId != null) {
+          for (final c in _firebirdConfigs) {
+            if (c.id == configId) {
+              firebirdConfig = c;
+              break;
+            }
+          }
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ScheduleDialogFirebirdAdvancedSummarySection(
+              config: firebirdConfig,
+            ),
+            ScheduleDialogFirebirdNbackupLevelSection(
+              levelController: _firebirdNbackupPhysicalLevelController,
+            ),
           ],
-          onChanged: (value) {
-            setState(() => _sybaseBlockSize = value);
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Tamanho do bloco em páginas. Valores maiores podem melhorar throughput.',
-          style: FluentTheme.of(context).typography.caption,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildIntegrityOptions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSectionTitle('Verificação de Integridade'),
-        const SizedBox(height: 12),
-        if (_databaseType == DatabaseType.sqlServer)
-          Consumer<LicenseProvider>(
-            builder: (context, licenseProvider, child) {
-              final license = licenseProvider.currentLicense;
-              final hasChecksum =
-                  licenseProvider.hasValidLicense &&
-                  (license?.hasFeature(LicenseFeatures.checksum) ?? false);
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildCheckboxWithInfo(
-                          label: hasChecksum
-                              ? 'Enable CheckSum'
-                              : 'Enable CheckSum (Requer licença)',
-                          value: _enableChecksum,
-                          onChanged: hasChecksum
-                              ? (value) {
-                                  setState(() {
-                                    _enableChecksum = value;
-                                  });
-                                }
-                              : null,
-                          infoText: hasChecksum
-                              ? 'Habilita o cálculo de checksums durante o backup. '
-                                    'Detecta corrupção de dados durante o processo de backup.'
-                              : 'Este recurso requer uma licença válida. '
-                                    'Acesse Configurações > Licenciamento para mais informações.',
-                        ),
-                      ),
-                      if (!hasChecksum) ...[
-                        const SizedBox(width: 8),
-                        Icon(
-                          FluentIcons.lock,
-                          size: 16,
-                          color: FluentTheme.of(context)
-                              .resources
-                              .controlStrokeColorDefault
-                              .withValues(alpha: 0.4),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              );
-            },
-          ),
-        Consumer<LicenseProvider>(
-          builder: (context, licenseProvider, child) {
-            final license = licenseProvider.currentLicense;
-            final hasVerifyIntegrity =
-                licenseProvider.hasValidLicense &&
-                (license?.hasFeature(LicenseFeatures.verifyIntegrity) ?? false);
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildCheckboxWithInfo(
-                        label: hasVerifyIntegrity
-                            ? 'Verify After Backup'
-                            : 'Verify After Backup (Requer licença)',
-                        value: _verifyAfterBackup,
-                        onChanged: hasVerifyIntegrity
-                            ? (value) {
-                                setState(() {
-                                  _verifyAfterBackup = value;
-                                });
-                              }
-                            : null,
-                        infoText: hasVerifyIntegrity
-                            ? (_databaseType == DatabaseType.sqlServer
-                                  ? 'Verifica a integridade do backup após criação usando RESTORE VERIFYONLY. '
-                                        'Garante que o backup pode ser restaurado sem restaurar os dados.'
-                                  : _databaseType == DatabaseType.postgresql
-                                  ? 'Verifica a integridade do backup após criação usando pg_verifybackup. '
-                                        'Garante que o backup está íntegro e pode ser restaurado.'
-                                  : _databaseType == DatabaseType.firebird
-                                  ? 'Verificação pós-backup para Firebird ainda '
-                                        'não está disponível nesta versão.'
-                                  : 'Verifica a integridade do backup após criação usando dbvalid '
-                                        '(fallback dbverify). Garante que o backup está íntegro.')
-                            : 'Este recurso requer uma licença válida. '
-                                  'Acesse Configurações > Licenciamento para mais informações.',
-                      ),
-                    ),
-                    if (!hasVerifyIntegrity) ...[
-                      const SizedBox(width: 8),
-                      Icon(
-                        FluentIcons.lock,
-                        size: 16,
-                        color: FluentTheme.of(context)
-                            .resources
-                            .controlStrokeColorDefault
-                            .withValues(alpha: 0.4),
-                      ),
-                    ],
-                  ],
-                ),
-                if (_verifyAfterBackup) ...[
-                  const SizedBox(height: 16),
-                  AppDropdown<VerifyPolicy>(
-                    label: 'Política de Verificação',
-                    value: _verifyPolicy,
-                    placeholder: const Text('Política de Verificação'),
-                    items: const [
-                      ComboBoxItem<VerifyPolicy>(
-                        value: VerifyPolicy.bestEffort,
-                        child: Text('Melhor Esforço (Best Effort)'),
-                      ),
-                      ComboBoxItem<VerifyPolicy>(
-                        value: VerifyPolicy.strict,
-                        child: Text('Estrito (Strict)'),
-                      ),
-                      ComboBoxItem<VerifyPolicy>(
-                        value: VerifyPolicy.none,
-                        child: Text('Nenhum (None)'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _verifyPolicy = value;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _getVerifyPolicyDescription(_verifyPolicy),
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  String _getVerifyPolicyDescription(VerifyPolicy policy) {
-    switch (policy) {
-      case VerifyPolicy.bestEffort:
-        return 'Verifica a integridade do backup, mas continua mesmo em caso de falha na verificação.';
-      case VerifyPolicy.strict:
-        return 'Verifica a integridade do backup. Se a verificação falhar, o backup é considerado falho.';
-      case VerifyPolicy.none:
-        return 'Não realiza verificação de integridade do backup.';
-    }
-  }
-
-  Widget _buildCheckboxWithInfo({
-    required String label,
-    required bool value,
-    required String infoText,
-    ValueChanged<bool>? onChanged,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: InfoLabel(
-            label: label,
-            child: Checkbox(
-              checked: value,
-              onChanged: onChanged != null
-                  ? (checked) => onChanged(checked ?? false)
-                  : null,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Padding(
-          padding: const EdgeInsets.only(top: 24),
-          child: Tooltip(
-            message: infoText,
-            child: IconButton(
-              icon: const Icon(FluentIcons.info, size: 16),
-              onPressed: () {},
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildScriptTab() {
-    return Consumer<LicenseProvider>(
-      builder: (context, licenseProvider, child) {
-        final license = licenseProvider.currentLicense;
-        final hasPostScript =
-            licenseProvider.hasValidLicense &&
-            (license?.hasFeature(LicenseFeatures.postBackupScript) ?? false);
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildSectionTitle(ScheduleDialogStrings.scriptTabTitle),
-              const SizedBox(height: 16),
-              if (!hasPostScript)
-                const InfoBar(
-                  severity: InfoBarSeverity.warning,
-                  title: Text(
-                    ScheduleDialogStrings.scriptLicenseBlockedTitle,
-                  ),
-                  content: Text(
-                    ScheduleDialogStrings.scriptLicenseBlockedMessage,
-                  ),
-                ),
-              if (!hasPostScript) const SizedBox(height: 16),
-              InfoLabel(
-                label: ScheduleDialogStrings.scriptFieldLabel,
-                child: TextBox(
-                  controller: _postBackupScriptController,
-                  placeholder: ScheduleDialogStrings.scriptFieldPlaceholder,
-                  maxLines: 15,
-                  minLines: 10,
-                  readOnly: !hasPostScript,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const InfoBar(
-                title: Text(
-                  ScheduleDialogStrings.scriptInfoTitle,
-                ),
-                content: Text(
-                  ScheduleDialogStrings.scriptInfoMessage,
-                ),
-              ),
-            ],
-          ),
         );
       },
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: FluentTheme.of(
-        context,
-      ).typography.subtitle?.copyWith(fontWeight: FontWeight.bold),
     );
   }
 
@@ -1933,7 +1214,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     onChanged: (value) {
                       if ((value ?? false) && blocked) {
                         unawaited(
-                          MessageModal.showWarning(
+                          FluentInfoBarFeedback.showWarning(
                             context,
                             message:
                                 'Este destino requer uma licença válida. '
@@ -1958,70 +1239,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         );
       },
     );
-  }
-
-  String _getScheduleTypeName(ScheduleType type) {
-    switch (type) {
-      case ScheduleType.daily:
-        return 'Diário';
-      case ScheduleType.weekly:
-        return 'Semanal';
-      case ScheduleType.monthly:
-        return 'Mensal';
-      case ScheduleType.interval:
-        return 'Por Intervalo';
-    }
-  }
-
-  String _getBackupTypeDescription(BackupType type) {
-    if (_databaseType == DatabaseType.postgresql) {
-      switch (type) {
-        case BackupType.full:
-          return 'Backup físico completo usando pg_basebackup. Banco ONLINE. Inclui todos os bancos do cluster, dados, estrutura e catálogo.';
-        case BackupType.fullSingle:
-          return 'Backup lógico completo usando pg_dump. Banco ONLINE. Inclui apenas a base de dados especificada na configuração. Formato .backup.';
-        case BackupType.log:
-        case BackupType.convertedLog:
-          return 'Captura de WAL para PITR usando pg_receivewal em modo one-shot (ate um LSN alvo). Pode usar replication slot dedicado quando habilitado por ambiente.';
-        case BackupType.differential:
-        case BackupType.convertedDifferential:
-          return 'Backup incremental usando pg_basebackup. Requer backup FULL anterior com manifest. (PostgreSQL 17+)';
-        case BackupType.convertedFullSingle:
-          return 'Backup lógico completo usando pg_dump. Banco ONLINE. Inclui apenas a base de dados especificada na configuração. Formato .backup.';
-      }
-    }
-    if (_databaseType == DatabaseType.sybase) {
-      switch (type) {
-        case BackupType.full:
-          return 'Backup completo do banco de dados via BACKUP DATABASE/dbbackup.';
-        case BackupType.log:
-        case BackupType.convertedLog:
-          return 'Backup do log de transações. Pode ser executado frequentemente e requer backup Full anterior.';
-        case BackupType.differential:
-        case BackupType.convertedDifferential:
-          return 'Sybase SQL Anywhere não suporta backup diferencial nativo; '
-              'este tipo é convertido automaticamente para Incremental (Transaction Log).';
-        case BackupType.fullSingle:
-        case BackupType.convertedFullSingle:
-          return 'Sybase trata este tipo como backup Full.';
-      }
-    }
-    switch (type) {
-      case BackupType.full:
-        return 'Backup completo do banco de dados. Base para backups diferenciais e logs.';
-      case BackupType.fullSingle:
-        return 'Backup completo de uma base de dados específica.';
-      case BackupType.differential:
-        return 'Backup apenas das alterações desde o último backup completo. Requer backup Full anterior.';
-      case BackupType.log:
-        return 'Backup do log de transações. Pode ser executado frequentemente. Requer backup Full anterior.';
-      case BackupType.convertedDifferential:
-        return 'Backup convertido de Differential para Full.';
-      case BackupType.convertedFullSingle:
-        return 'Backup convertido de Full Single para Full.';
-      case BackupType.convertedLog:
-        return 'Backup convertido de Log para Log.';
-    }
   }
 
   String _getDestinationTypeName(DestinationType type) {
@@ -2069,7 +1286,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     final path = _backupFolderController.text.trim();
     if (path.isEmpty) {
       unawaited(
-        MessageModal.showWarning(
+        FluentInfoBarFeedback.showWarning(
           context,
           message: 'Pasta de backup é obrigatória',
         ),
@@ -2153,7 +1370,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       });
       _formKey.currentState?.validate();
       unawaited(
-        MessageModal.showWarning(
+        FluentInfoBarFeedback.showWarning(
           context,
           message: 'Nome do agendamento é obrigatório',
         ),
@@ -2170,7 +1387,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
     if (_selectedDatabaseConfigId == null) {
       unawaited(
-        MessageModal.showWarning(
+        FluentInfoBarFeedback.showWarning(
           context,
           message: 'Selecione uma configuração de banco de dados',
         ),
@@ -2180,7 +1397,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
     if (_selectedDestinationIds.isEmpty) {
       unawaited(
-        MessageModal.showWarning(
+        FluentInfoBarFeedback.showWarning(
           context,
           message: 'Selecione pelo menos um destino',
         ),
@@ -2236,6 +1453,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       }
     }
 
+    if (!mounted) return;
+
     final effectiveCompressionFormat = _compressBackup
         ? _compressionFormat
         : CompressionFormat.none;
@@ -2243,6 +1462,24 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _databaseType,
       _backupType,
     );
+
+    if (_databaseType == DatabaseType.firebird) {
+      final t = _firebirdNbackupPhysicalLevelController.text.trim();
+      if (t.isNotEmpty) {
+        final v = int.tryParse(t);
+        if (v == null || v < 0 || v > 9) {
+          unawaited(
+            FluentInfoBarFeedback.showWarning(
+              context,
+              message:
+                  'Nivel nbackup: use um inteiro de 0 a 9 ou deixe vazio '
+                  '(automatico).',
+            ),
+          );
+          return;
+        }
+      }
+    }
 
     final isValidFolder = await _validateBackupFolder();
     if (!isValidFolder) {
@@ -2261,7 +1498,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       final validation = sybaseOptions.validate();
       if (!validation.isValid) {
         unawaited(
-          MessageModal.showWarning(
+          FluentInfoBarFeedback.showWarning(
             context,
             message: 'Opções Sybase inválidas: ${validation.errorMessage}',
           ),
@@ -2316,7 +1553,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
     final Schedule schedule;
     if (_databaseType == DatabaseType.sqlServer) {
-      schedule = SqlServerBackupSchedule(
+      schedule = Schedule(
         id: widget.schedule?.id,
         name: _nameController.text.trim(),
         databaseConfigId: _selectedDatabaseConfigId!,
@@ -2358,7 +1595,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         blockSize: _sybaseBlockSize,
         logBackupMode: effectiveLogMode,
       );
-      schedule = SybaseBackupSchedule(
+      schedule = Schedule(
         id: widget.schedule?.id,
         name: _nameController.text.trim(),
         databaseConfigId: _selectedDatabaseConfigId!,
@@ -2389,6 +1626,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             (_backupType == BackupType.differential),
       );
     } else {
+      final firebirdNbackupPhysicalLevel =
+          _databaseType == DatabaseType.firebird
+          ? _parseFirebirdNbackupLevelFromController()
+          : null;
       schedule = Schedule(
         id: widget.schedule?.id,
         name: _nameController.text.trim(),
@@ -2414,6 +1655,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         truncateLog: _truncateLog,
         backupTimeout: _backupTimeout,
         verifyTimeout: _verifyTimeout,
+        firebirdNbackupPhysicalLevel: firebirdNbackupPhysicalLevel,
       );
     }
 

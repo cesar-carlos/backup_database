@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/database_connection_test_snapshot.dart';
 import 'package:backup_database/application/providers/firebird_config_provider.dart';
 import 'package:backup_database/application/providers/postgres_config_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
+import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
 import 'package:backup_database/application/providers/sybase_config_provider.dart';
+import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
@@ -24,6 +27,18 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+String _addDatabaseConfigSectionLabel(
+  BuildContext context,
+  DatabaseType type,
+) {
+  final title = DatabaseTypeMetadata.of(type).titleLabel;
+  return appLocaleString(
+    context,
+    'Adicionar configuração ($title)',
+    'Add configuration ($title)',
+  );
+}
+
 class DatabaseConfigPage extends StatefulWidget {
   const DatabaseConfigPage({super.key});
 
@@ -32,12 +47,26 @@ class DatabaseConfigPage extends StatefulWidget {
 }
 
 class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
+  bool _hideFirebirdRemoteUi(BuildContext context) {
+    if (currentAppMode != AppMode.client) {
+      return false;
+    }
+    try {
+      final scp = context.watch<ServerConnectionProvider>();
+      return scp.isConnected && !scp.isFirebirdSupported;
+    } on ProviderNotFoundException {
+      return false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(context.read<SqlServerConfigProvider>().loadConfigs());
       unawaited(context.read<SybaseConfigProvider>().loadConfigs());
+      unawaited(context.read<PostgresConfigProvider>().loadConfigs());
+      unawaited(context.read<FirebirdConfigProvider>().loadConfigs());
     });
   }
 
@@ -49,6 +78,16 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _showNewConfigDialog() async {
+    var hideFirebirdOption = false;
+    if (currentAppMode == AppMode.client) {
+      try {
+        final scp = context.read<ServerConnectionProvider>();
+        hideFirebirdOption = scp.isConnected && !scp.isFirebirdSupported;
+      } on ProviderNotFoundException {
+        hideFirebirdOption = false;
+      }
+    }
+
     final kind = await showDialog<DatabaseType>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -92,14 +131,16 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                FilledButton(
-                  child: Text(
-                    DatabaseTypeMetadata.of(DatabaseType.firebird).titleLabel,
+                if (!hideFirebirdOption) ...[
+                  FilledButton(
+                    child: Text(
+                      DatabaseTypeMetadata.of(DatabaseType.firebird).titleLabel,
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(
+                      DatabaseType.firebird,
+                    ),
                   ),
-                  onPressed: () => Navigator.of(dialogContext).pop(
-                    DatabaseType.firebird,
-                  ),
-                ),
+                ],
               ],
             ),
           ),
@@ -156,6 +197,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     final sybaseProvider = context.watch<SybaseConfigProvider>();
     final postgresProvider = context.watch<PostgresConfigProvider>();
     final firebirdProvider = context.watch<FirebirdConfigProvider>();
+    final hideFirebirdRemote = _hideFirebirdRemoteUi(context);
 
     return ScaffoldPage(
       header: PageHeader(
@@ -194,8 +236,8 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
           sybaseProvider: sybaseProvider,
           postgresProvider: postgresProvider,
           firebirdProvider: firebirdProvider,
+          hideFirebirdSection: hideFirebirdRemote,
           onRefresh: _refresh,
-          onAddConfig: _showNewConfigDialog,
           onEditSql: _showConfigDialog,
           onDuplicateSql: _duplicateSqlServerConfig,
           onDeleteSql: _confirmDeleteSqlServer,
@@ -218,17 +260,24 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _duplicateSqlServerConfig(SqlServerConfig config) async {
-    final confirmed = await _confirmDuplicateConfiguration(config.name);
-    if (!confirmed || !mounted) return;
+    final newName = await _promptDuplicateConfigurationName(
+      config.name,
+    );
+    if (newName == null || !mounted) {
+      return;
+    }
 
     final provider = context.read<SqlServerConfigProvider>();
-    final success = await provider.duplicateConfig(config);
+    final duplicate = provider
+        .duplicateConfigCopy(config)
+        .copyWith(name: newName);
+    final success = await provider.createConfig(duplicate);
 
     if (!mounted) return;
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: appLocaleString(
             context,
@@ -254,17 +303,24 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _duplicateSybaseConfig(SybaseConfig config) async {
-    final confirmed = await _confirmDuplicateConfiguration(config.name);
-    if (!confirmed || !mounted) return;
+    final newName = await _promptDuplicateConfigurationName(
+      config.name,
+    );
+    if (newName == null || !mounted) {
+      return;
+    }
 
     final provider = context.read<SybaseConfigProvider>();
-    final success = await provider.duplicateConfig(config);
+    final duplicate = provider
+        .duplicateConfigCopy(config)
+        .copyWith(name: newName);
+    final success = await provider.createConfig(duplicate);
 
     if (!mounted) return;
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: appLocaleString(
             context,
@@ -311,7 +367,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: config == null
               ? appLocaleString(
@@ -359,7 +415,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
 
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: config == null
                 ? appLocaleString(
@@ -407,7 +463,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
 
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: config == null
                 ? appLocaleString(
@@ -440,17 +496,24 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _duplicatePostgresConfig(PostgresConfig config) async {
-    final confirmed = await _confirmDuplicateConfiguration(config.name);
-    if (!confirmed || !mounted) return;
+    final newName = await _promptDuplicateConfigurationName(
+      config.name,
+    );
+    if (newName == null || !mounted) {
+      return;
+    }
 
     final provider = context.read<PostgresConfigProvider>();
-    final success = await provider.duplicateConfig(config);
+    final duplicate = provider
+        .duplicateConfigCopy(config)
+        .copyWith(name: newName);
+    final success = await provider.createConfig(duplicate);
 
     if (!mounted) return;
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: appLocaleString(
             context,
@@ -529,7 +592,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
 
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: config == null
                 ? appLocaleString(
@@ -562,13 +625,18 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
   }
 
   Future<void> _duplicateFirebirdConfig(FirebirdConfig config) async {
-    final confirmed = await _confirmDuplicateConfiguration(config.name);
-    if (!confirmed || !mounted) {
+    final newName = await _promptDuplicateConfigurationName(
+      config.name,
+    );
+    if (newName == null || !mounted) {
       return;
     }
 
     final provider = context.read<FirebirdConfigProvider>();
-    final success = await provider.duplicateConfig(config);
+    final duplicate = provider
+        .duplicateConfigCopy(config)
+        .copyWith(name: newName);
+    final success = await provider.createConfig(duplicate);
 
     if (!mounted) {
       return;
@@ -576,7 +644,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: appLocaleString(
             context,
@@ -753,7 +821,7 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     if (!mounted) return;
 
     if (success) {
-      await MessageModal.showSuccess(context, message: successMessage);
+      await FluentInfoBarFeedback.showSuccess(context, message: successMessage);
       return;
     }
 
@@ -773,8 +841,9 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
     );
   }
 
-  Future<bool> _confirmDuplicateConfiguration(String configName) {
-    return MessageModal.showConfirm(
+  Future<String?> _promptDuplicateConfigurationName(String sourceName) {
+    final initial = '$sourceName (cópia)';
+    return MessageModal.showInputConfirm(
       context,
       title: appLocaleString(
         context,
@@ -783,9 +852,15 @@ class _DatabaseConfigPageState extends State<DatabaseConfigPage> {
       ),
       message: appLocaleString(
         context,
-        'Tem certeza que deseja duplicar "$configName"?',
-        'Are you sure you want to duplicate "$configName"?',
+        'Informe o nome da nova configuração.',
+        'Enter a name for the new configuration.',
       ),
+      fieldLabel: appLocaleString(
+        context,
+        'Nome da nova configuração',
+        'New configuration name',
+      ),
+      initialValue: initial,
       confirmLabel: appLocaleString(context, 'Duplicar', 'Duplicate'),
       confirmIcon: FluentIcons.copy,
     );
@@ -798,8 +873,8 @@ class _DatabaseConfigsContent extends StatelessWidget {
     required this.sybaseProvider,
     required this.postgresProvider,
     required this.firebirdProvider,
+    required this.hideFirebirdSection,
     required this.onRefresh,
-    required this.onAddConfig,
     required this.onEditSql,
     required this.onDuplicateSql,
     required this.onDeleteSql,
@@ -822,9 +897,9 @@ class _DatabaseConfigsContent extends StatelessWidget {
   final SybaseConfigProvider sybaseProvider;
   final PostgresConfigProvider postgresProvider;
   final FirebirdConfigProvider firebirdProvider;
+  final bool hideFirebirdSection;
 
   final VoidCallback onRefresh;
-  final VoidCallback onAddConfig;
 
   final Future<void> Function(SqlServerConfig?) onEditSql;
   final Future<void> Function(SqlServerConfig) onDuplicateSql;
@@ -851,7 +926,7 @@ class _DatabaseConfigsContent extends StatelessWidget {
     if (sqlProvider.isLoading ||
         sybaseProvider.isLoading ||
         postgresProvider.isLoading ||
-        firebirdProvider.isLoading) {
+        (!hideFirebirdSection && firebirdProvider.isLoading)) {
       return const _LoadingState();
     }
 
@@ -859,7 +934,7 @@ class _DatabaseConfigsContent extends StatelessWidget {
         sqlProvider.error ??
         sybaseProvider.error ??
         postgresProvider.error ??
-        firebirdProvider.error;
+        (hideFirebirdSection ? null : firebirdProvider.error);
     if (errorMessage != null) {
       return _ErrorState(
         errorMessage: errorMessage,
@@ -867,113 +942,46 @@ class _DatabaseConfigsContent extends StatelessWidget {
       );
     }
 
-    if (sqlProvider.configs.isEmpty &&
-        sybaseProvider.configs.isEmpty &&
-        postgresProvider.configs.isEmpty &&
-        firebirdProvider.configs.isEmpty) {
-      return _EmptyState(onAddConfig: onAddConfig);
-    }
-
-    final hasSql = sqlProvider.configs.isNotEmpty;
-    final hasSybase = sybaseProvider.configs.isNotEmpty;
-    final hasPostgres = postgresProvider.configs.isNotEmpty;
-    final hasFirebird = firebirdProvider.configs.isNotEmpty;
-    final visibleSections =
-        (hasSql ? 1 : 0) +
-        (hasSybase ? 1 : 0) +
-        (hasPostgres ? 1 : 0) +
-        (hasFirebird ? 1 : 0);
-
-    if (visibleSections == 1) {
-      if (hasSql) {
-        return _SqlServerConfigSection(
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      children: [
+        _SqlServerConfigSection(
           configs: sqlProvider.configs,
+          connectionTestSnapshot: sqlProvider.connectionTestSnapshotFor,
           onEdit: onEditSql,
           onDuplicate: onDuplicateSql,
           onDelete: onDeleteSql,
           onToggleEnabled: onToggleSqlEnabled,
-          showHeader: false,
-        );
-      }
-
-      if (hasSybase) {
-        return _SybaseConfigSection(
+        ),
+        const SizedBox(height: 24),
+        _SybaseConfigSection(
           configs: sybaseProvider.configs,
+          connectionTestSnapshot: sybaseProvider.connectionTestSnapshotFor,
           onEdit: onEditSybase,
           onDuplicate: onDuplicateSybase,
           onDelete: onDeleteSybase,
           onToggleEnabled: onToggleSybaseEnabled,
-          showHeader: false,
-        );
-      }
-
-      if (hasPostgres) {
-        return _PostgresConfigSection(
+        ),
+        const SizedBox(height: 24),
+        _PostgresConfigSection(
           configs: postgresProvider.configs,
+          connectionTestSnapshot: postgresProvider.connectionTestSnapshotFor,
           onEdit: onEditPostgres,
           onDuplicate: onDuplicatePostgres,
           onDelete: onDeletePostgres,
           onToggleEnabled: onTogglePostgresEnabled,
-          showHeader: false,
-        );
-      }
-
-      return _FirebirdConfigSection(
-        configs: firebirdProvider.configs,
-        onEdit: onEditFirebird,
-        onDuplicate: onDuplicateFirebird,
-        onDelete: onDeleteFirebird,
-        onToggleEnabled: onToggleFirebirdEnabled,
-        showHeader: false,
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      children: [
-        if (hasSql) ...[
-          _SqlServerConfigSection(
-            configs: sqlProvider.configs,
-            onEdit: onEditSql,
-            onDuplicate: onDuplicateSql,
-            onDelete: onDeleteSql,
-            onToggleEnabled: onToggleSqlEnabled,
-            showHeader: true,
-          ),
-          if (hasSybase || hasPostgres || hasFirebird)
-            const SizedBox(height: 24),
-        ],
-        if (hasSybase) ...[
-          _SybaseConfigSection(
-            configs: sybaseProvider.configs,
-            onEdit: onEditSybase,
-            onDuplicate: onDuplicateSybase,
-            onDelete: onDeleteSybase,
-            onToggleEnabled: onToggleSybaseEnabled,
-            showHeader: true,
-          ),
-          if (hasPostgres || hasFirebird) const SizedBox(height: 24),
-        ],
-        if (hasPostgres) ...[
-          _PostgresConfigSection(
-            configs: postgresProvider.configs,
-            onEdit: onEditPostgres,
-            onDuplicate: onDuplicatePostgres,
-            onDelete: onDeletePostgres,
-            onToggleEnabled: onTogglePostgresEnabled,
-            showHeader: true,
-          ),
-          if (hasFirebird) const SizedBox(height: 24),
-        ],
-        if (hasFirebird)
+        ),
+        if (!hideFirebirdSection) ...[
+          const SizedBox(height: 24),
           _FirebirdConfigSection(
             configs: firebirdProvider.configs,
+            connectionTestSnapshot: firebirdProvider.connectionTestSnapshotFor,
             onEdit: onEditFirebird,
             onDuplicate: onDuplicateFirebird,
             onDelete: onDeleteFirebird,
             onToggleEnabled: onToggleFirebirdEnabled,
-            showHeader: true,
           ),
+        ],
       ],
     );
   }
@@ -982,19 +990,20 @@ class _DatabaseConfigsContent extends StatelessWidget {
 class _SqlServerConfigSection extends StatelessWidget {
   const _SqlServerConfigSection({
     required this.configs,
+    required this.connectionTestSnapshot,
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
     required this.onToggleEnabled,
-    required this.showHeader,
   });
 
   final List<SqlServerConfig> configs;
+  final DatabaseConnectionTestSnapshot? Function(String configId)
+  connectionTestSnapshot;
   final Future<void> Function(SqlServerConfig?) onEdit;
   final Future<void> Function(SqlServerConfig) onDuplicate;
   final Future<void> Function(String) onDelete;
   final void Function(String, bool) onToggleEnabled;
-  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -1004,11 +1013,15 @@ class _SqlServerConfigSection extends StatelessWidget {
       onDuplicate: onDuplicate,
       onDelete: onDelete,
       onToggleEnabled: onToggleEnabled,
+      onAddWhenEmpty: () {
+        unawaited(onEdit(null));
+      },
+      addWhenEmptyButtonLabel: _addDatabaseConfigSectionLabel(
+        context,
+        DatabaseType.sqlServer,
+      ),
+      connectionTestSnapshot: connectionTestSnapshot,
     );
-
-    if (!showHeader) {
-      return list;
-    }
 
     final activeCount = configs.where((c) => c.enabled).length;
     final inactiveCount = configs.where((c) => !c.enabled).length;
@@ -1032,19 +1045,20 @@ class _SqlServerConfigSection extends StatelessWidget {
 class _SybaseConfigSection extends StatelessWidget {
   const _SybaseConfigSection({
     required this.configs,
+    required this.connectionTestSnapshot,
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
     required this.onToggleEnabled,
-    required this.showHeader,
   });
 
   final List<SybaseConfig> configs;
+  final DatabaseConnectionTestSnapshot? Function(String configId)
+  connectionTestSnapshot;
   final Future<void> Function(SybaseConfig?) onEdit;
   final Future<void> Function(SybaseConfig) onDuplicate;
   final Future<void> Function(String) onDelete;
   final void Function(String, bool) onToggleEnabled;
-  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -1054,11 +1068,15 @@ class _SybaseConfigSection extends StatelessWidget {
       onDuplicate: onDuplicate,
       onDelete: onDelete,
       onToggleEnabled: onToggleEnabled,
+      onAddWhenEmpty: () {
+        unawaited(onEdit(null));
+      },
+      addWhenEmptyButtonLabel: _addDatabaseConfigSectionLabel(
+        context,
+        DatabaseType.sybase,
+      ),
+      connectionTestSnapshot: connectionTestSnapshot,
     );
-
-    if (!showHeader) {
-      return list;
-    }
 
     final activeCount = configs.where((c) => c.enabled).length;
     final inactiveCount = configs.where((c) => !c.enabled).length;
@@ -1082,19 +1100,20 @@ class _SybaseConfigSection extends StatelessWidget {
 class _PostgresConfigSection extends StatelessWidget {
   const _PostgresConfigSection({
     required this.configs,
+    required this.connectionTestSnapshot,
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
     required this.onToggleEnabled,
-    required this.showHeader,
   });
 
   final List<PostgresConfig> configs;
+  final DatabaseConnectionTestSnapshot? Function(String configId)
+  connectionTestSnapshot;
   final Future<void> Function(PostgresConfig?) onEdit;
   final Future<void> Function(PostgresConfig) onDuplicate;
   final Future<void> Function(String) onDelete;
   final void Function(String, bool) onToggleEnabled;
-  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -1104,11 +1123,15 @@ class _PostgresConfigSection extends StatelessWidget {
       onDuplicate: onDuplicate,
       onDelete: onDelete,
       onToggleEnabled: onToggleEnabled,
+      onAddWhenEmpty: () {
+        unawaited(onEdit(null));
+      },
+      addWhenEmptyButtonLabel: _addDatabaseConfigSectionLabel(
+        context,
+        DatabaseType.postgresql,
+      ),
+      connectionTestSnapshot: connectionTestSnapshot,
     );
-
-    if (!showHeader) {
-      return grid;
-    }
 
     final activeCount = configs.where((c) => c.enabled).length;
     final inactiveCount = configs.where((c) => !c.enabled).length;
@@ -1132,19 +1155,20 @@ class _PostgresConfigSection extends StatelessWidget {
 class _FirebirdConfigSection extends StatelessWidget {
   const _FirebirdConfigSection({
     required this.configs,
+    required this.connectionTestSnapshot,
     required this.onEdit,
     required this.onDuplicate,
     required this.onDelete,
     required this.onToggleEnabled,
-    required this.showHeader,
   });
 
   final List<FirebirdConfig> configs;
+  final DatabaseConnectionTestSnapshot? Function(String configId)
+  connectionTestSnapshot;
   final Future<void> Function(FirebirdConfig?) onEdit;
   final Future<void> Function(FirebirdConfig) onDuplicate;
   final Future<void> Function(String) onDelete;
   final void Function(String, bool) onToggleEnabled;
-  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -1154,11 +1178,15 @@ class _FirebirdConfigSection extends StatelessWidget {
       onDuplicate: onDuplicate,
       onDelete: onDelete,
       onToggleEnabled: onToggleEnabled,
+      onAddWhenEmpty: () {
+        unawaited(onEdit(null));
+      },
+      addWhenEmptyButtonLabel: _addDatabaseConfigSectionLabel(
+        context,
+        DatabaseType.firebird,
+      ),
+      connectionTestSnapshot: connectionTestSnapshot,
     );
-
-    if (!showHeader) {
-      return grid;
-    }
 
     final activeCount = configs.where((c) => c.enabled).length;
     final inactiveCount = configs.where((c) => !c.enabled).length;
@@ -1184,11 +1212,9 @@ class _LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(64),
-        child: ProgressRing(),
-      ),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: SkeletonDatabaseConfigBody(),
     );
   }
 }
@@ -1230,35 +1256,6 @@ class _ErrorState extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.onAddConfig,
-  });
-
-  final VoidCallback onAddConfig;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(64),
-      child: EmptyState(
-        icon: FluentIcons.database,
-        message: appLocaleString(
-          context,
-          'Nenhuma configuração de banco de dados cadastrada',
-          'No database configuration registered',
-        ),
-        actionLabel: appLocaleString(
-          context,
-          'Adicionar configuração',
-          'Add configuration',
-        ),
-        onAction: onAddConfig,
       ),
     );
   }

@@ -1,6 +1,8 @@
+import 'package:backup_database/core/theme/tokens/app_radius.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+/// **Atom** — compact badge for [DestinationType] identity.
 class DestinationTypeBadge extends StatelessWidget {
   const DestinationTypeBadge({required this.type, super.key});
 
@@ -43,7 +45,7 @@ class DestinationTypeBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: _color(theme).withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppRadius.circularSm,
         border: Border.all(
           color: _color(theme),
         ),

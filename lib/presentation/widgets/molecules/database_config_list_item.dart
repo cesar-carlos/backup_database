@@ -1,6 +1,6 @@
 import 'package:backup_database/core/utils/database_type_metadata.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
+import 'package:backup_database/presentation/widgets/molecules/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 const double databaseConfigListSubtitleTightGap = 2;

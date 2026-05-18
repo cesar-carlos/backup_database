@@ -1,9 +1,9 @@
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
-import 'package:backup_database/presentation/widgets/common/app_button.dart';
-import 'package:backup_database/presentation/widgets/common/app_card.dart';
-import 'package:backup_database/presentation/widgets/common/app_text_field.dart';
-import 'package:backup_database/presentation/widgets/common/empty_state.dart';
-import 'package:backup_database/presentation/widgets/common/message_modal.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_text_field.dart';
+import 'package:backup_database/presentation/widgets/atoms/empty_state.dart';
+import 'package:backup_database/presentation/widgets/organisms/message_modal.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 

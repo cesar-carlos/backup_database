@@ -68,55 +68,65 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     final password = _passwordController.text;
 
     if (name.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe o nome da conexão.',
-          'Enter connection name.',
+          message: appLocaleString(
+            context,
+            'Informe o nome da conexão.',
+            'Enter connection name.',
+          ),
         ),
-      ));
+      );
       return;
     }
     if (serverId.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe o Server ID.',
-          'Enter Server ID.',
+          message: appLocaleString(
+            context,
+            'Informe o Server ID.',
+            'Enter Server ID.',
+          ),
         ),
-      ));
+      );
       return;
     }
     if (host.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(context, 'Informe o host.', 'Enter host.'),
-      ));
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: appLocaleString(context, 'Informe o host.', 'Enter host.'),
+        ),
+      );
       return;
     }
     final port = int.tryParse(portStr);
     if (port == null || port < 1 || port > 65535) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe uma porta valida (1-65535).',
-          'Enter a valid port (1-65535).',
+          message: appLocaleString(
+            context,
+            'Informe uma porta valida (1-65535).',
+            'Enter a valid port (1-65535).',
+          ),
         ),
-      ));
+      );
       return;
     }
     if (password.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe a senha.',
-          'Enter password.',
+          message: appLocaleString(
+            context,
+            'Informe a senha.',
+            'Enter password.',
+          ),
         ),
-      ));
+      );
       return;
     }
 
@@ -139,44 +149,52 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     final password = _passwordController.text;
 
     if (serverId.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe o Server ID.',
-          'Enter Server ID.',
+          message: appLocaleString(
+            context,
+            'Informe o Server ID.',
+            'Enter Server ID.',
+          ),
         ),
-      ));
+      );
       return;
     }
     if (host.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(context, 'Informe o host.', 'Enter host.'),
-      ));
+      unawaited(
+        MessageModal.showError(
+          context,
+          message: appLocaleString(context, 'Informe o host.', 'Enter host.'),
+        ),
+      );
       return;
     }
     final port = int.tryParse(portStr);
     if (port == null || port < 1 || port > 65535) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe uma porta valida (1-65535).',
-          'Enter a valid port (1-65535).',
+          message: appLocaleString(
+            context,
+            'Informe uma porta valida (1-65535).',
+            'Enter a valid port (1-65535).',
+          ),
         ),
-      ));
+      );
       return;
     }
     if (password.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe a senha.',
-          'Enter password.',
+          message: appLocaleString(
+            context,
+            'Informe a senha.',
+            'Enter password.',
+          ),
         ),
-      ));
+      );
       return;
     }
 
@@ -198,26 +216,30 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     setState(() => _isTesting = false);
     if (ok) {
       if (!mounted) return;
-      unawaited(MessageModal.showSuccess(
-        context,
-        message: appLocaleString(
+      unawaited(
+        FluentInfoBarFeedback.showSuccess(
           context,
-          'Conexao bem-sucedida com $host:$port',
-          'Successful connection to $host:$port',
+          message: appLocaleString(
+            context,
+            'Conexao bem-sucedida com $host:$port',
+            'Successful connection to $host:$port',
+          ),
         ),
-      ));
+      );
     } else {
       if (!mounted) return;
-      unawaited(MessageModal.showError(
-        context,
-        message:
-            provider.error ??
-            appLocaleString(
-              context,
-              'Falha ao conectar.',
-              'Connection failed.',
-            ),
-      ));
+      unawaited(
+        MessageModal.showError(
+          context,
+          message:
+              provider.error ??
+              appLocaleString(
+                context,
+                'Falha ao conectar.',
+                'Connection failed.',
+              ),
+        ),
+      );
     }
   }
 

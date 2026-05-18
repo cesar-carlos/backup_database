@@ -1,5 +1,5 @@
 import 'package:backup_database/core/errors/failure.dart';
-import 'package:backup_database/presentation/widgets/common/test_connection_runner.dart';
+import 'package:backup_database/presentation/widgets/molecules/test_connection_runner.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -88,6 +88,28 @@ void main() {
       await ok.execute(afterValidation: () => afterCalls++);
       expect(afterCalls, 1);
     });
+
+    test(
+      'invokes onProbeStarted only after validate and buildConfig',
+      () async {
+        var probeCalls = 0;
+        final runner = TestConnectionRunner<int>(
+          validate: () => null,
+          buildConfig: () => 7,
+          runTest: (_) async => const TestConnectionSucceeded(),
+        );
+        await runner.execute(onProbeStarted: () => probeCalls++);
+        expect(probeCalls, 1);
+
+        final blocked = TestConnectionRunner<int>(
+          validate: () => 'no',
+          buildConfig: () => 1,
+          runTest: (_) async => const TestConnectionSucceeded(),
+        );
+        await blocked.execute(onProbeStarted: () => probeCalls++);
+        expect(probeCalls, 1);
+      },
+    );
 
     test('TestConnectionSucceeded carries databases', () async {
       final runner = TestConnectionRunner<void>(

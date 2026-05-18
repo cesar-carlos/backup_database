@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:backup_database/core/theme/tokens/app_radius.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 const double _kAppDataGridActionSlotWidth = 44;
@@ -9,6 +11,7 @@ const double _kAppDataGridActionsMinWidth = 120;
 typedef AppDataGridCellBuilder<T> =
     Widget Function(BuildContext context, T row);
 
+/// **Organism** — scrollable data grid with configurable columns and row actions.
 class AppDataGridColumn<T> {
   const AppDataGridColumn({
     required this.label,
@@ -115,25 +118,46 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
     return false;
   }
 
+  EdgeInsets _scaledColumnPadding(
+    BuildContext context,
+    AppDataGridColumn<T> column,
+    double densityMultiplier,
+  ) {
+    final resolved = column.padding.resolve(Directionality.of(context));
+    return EdgeInsets.fromLTRB(
+      resolved.left * densityMultiplier,
+      resolved.top * densityMultiplier,
+      resolved.right * densityMultiplier,
+      resolved.bottom * densityMultiplier,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final densityMultiplier = InheritedAppDensity.resolve(
+          context,
+        ).spacingMultiplier;
         final hasActions = widget.actions.isNotEmpty;
         final theme = FluentTheme.of(context);
         final resources = theme.resources;
         final headerStyle =
             theme.typography.bodyStrong ??
             const TextStyle(fontWeight: FontWeight.w600);
+        final actionSlotWidth =
+            _kAppDataGridActionSlotWidth * densityMultiplier;
+        final actionsPadding = _kAppDataGridActionsPadding * densityMultiplier;
+        final actionsMinWidth =
+            _kAppDataGridActionsMinWidth * densityMultiplier;
         final columnWidths = <int, TableColumnWidth>{
           for (var i = 0; i < widget.columns.length; i++)
             i: widget.columns[i].width,
           if (hasActions)
             widget.columns.length: FixedColumnWidth(
               math.max(
-                _kAppDataGridActionsMinWidth,
-                widget.actions.length * _kAppDataGridActionSlotWidth +
-                    _kAppDataGridActionsPadding,
+                actionsMinWidth,
+                widget.actions.length * actionSlotWidth + actionsPadding,
               ),
             ),
         };
@@ -148,7 +172,7 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
         return NotificationListener<ScrollMetricsNotification>(
           onNotification: _onScrollMetricsNotification,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: AppRadius.circularMd,
             child: RawScrollbar(
               controller: _horizontalScrollController,
               thumbVisibility: _hasHorizontalOverflow,
@@ -186,12 +210,20 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
                           for (final column in widget.columns)
                             _GridCell(
                               alignment: column.headerAlignment,
-                              padding: column.padding,
+                              padding: _scaledColumnPadding(
+                                context,
+                                column,
+                                densityMultiplier,
+                              ),
                               child: Text(column.label, style: headerStyle),
                             ),
                           if (hasActions)
                             _GridCell(
                               alignment: Alignment.center,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12 * densityMultiplier,
+                                vertical: 10 * densityMultiplier,
+                              ),
                               child: Text(
                                 widget.actionsLabel,
                                 style: headerStyle,
@@ -205,10 +237,19 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
                             for (final column in widget.columns)
                               _GridCell(
                                 alignment: column.cellAlignment,
-                                padding: column.padding,
+                                padding: _scaledColumnPadding(
+                                  context,
+                                  column,
+                                  densityMultiplier,
+                                ),
                                 child: column.cellBuilder(context, row),
                               ),
-                            if (hasActions) _buildActionsCell(context, row),
+                            if (hasActions)
+                              _buildActionsCell(
+                                context,
+                                row,
+                                densityMultiplier,
+                              ),
                           ],
                         ),
                     ],
@@ -222,9 +263,17 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
     );
   }
 
-  Widget _buildActionsCell(BuildContext context, T row) {
+  Widget _buildActionsCell(
+    BuildContext context,
+    T row,
+    double densityMultiplier,
+  ) {
     return _GridCell(
       alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(
+        horizontal: 12 * densityMultiplier,
+        vertical: 10 * densityMultiplier,
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

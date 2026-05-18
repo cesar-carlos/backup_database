@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:backup_database/presentation/widgets/common/database_config_dialog_shell.dart';
+import 'package:backup_database/presentation/widgets/organisms/database_config_dialog_shell.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' show MaterialPageRoute;
 import 'package:flutter/services.dart';

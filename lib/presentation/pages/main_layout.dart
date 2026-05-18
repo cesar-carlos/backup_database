@@ -12,6 +12,7 @@ import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
+import 'package:backup_database/core/theme/tokens/app_target_size.dart';
 import 'package:backup_database/presentation/providers/theme_provider.dart';
 import 'package:backup_database/presentation/widgets/navigation/navigation_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -193,6 +194,33 @@ class _MainLayoutState extends State<MainLayout> {
     context.go(_navigationItems(context)[index].route);
   }
 
+  Widget _toolbarIconButton({
+    required BuildContext context,
+    required String semanticsLabel,
+    required String tooltip,
+    required Widget icon,
+    required VoidCallback onPressed,
+  }) {
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      child: Tooltip(
+        message: tooltip,
+        child: SizedBox(
+          width: AppTargetSize.comfortable,
+          height: AppTargetSize.comfortable,
+          child: Center(
+            child: IconButton(
+              iconButtonMode: IconButtonMode.large,
+              icon: icon,
+              onPressed: onPressed,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return NavigationView(
@@ -223,15 +251,25 @@ class _MainLayoutState extends State<MainLayout> {
             final index = entry.key;
             final item = entry.value;
             final isSelected = index == _selectedIndex;
-            return ListTile(
-              leading: Icon(
-                item.icon,
-                color: isSelected
-                    ? AppPalette.primary
-                    : FluentTheme.of(context).resources.textFillColorSecondary,
+            return ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: AppTargetSize.comfortable,
               ),
-              title: Text(item.label),
-              onPressed: () => _onDestinationSelected(index),
+              child: ListTile(
+                semanticLabel: item.label,
+                leading: ExcludeSemantics(
+                  child: Icon(
+                    item.icon,
+                    color: isSelected
+                        ? AppPalette.primary
+                        : FluentTheme.of(
+                            context,
+                          ).resources.textFillColorSecondary,
+                  ),
+                ),
+                title: Text(item.label),
+                onPressed: () => _onDestinationSelected(index),
+              ),
             );
           },
         ).toList(),
@@ -261,24 +299,36 @@ class _MainLayoutState extends State<MainLayout> {
             style: FluentTheme.of(context).typography.title,
           ),
           const Spacer(),
-          Tooltip(
-            message: appLocaleString(context, 'Atualizar', 'Refresh'),
-            child: IconButton(
-              icon: const Icon(FluentIcons.refresh),
-              onPressed: _handleRefresh,
+          _toolbarIconButton(
+            context: context,
+            semanticsLabel: appLocaleString(
+              context,
+              'Atualizar',
+              'Refresh',
             ),
+            tooltip: appLocaleString(context, 'Atualizar', 'Refresh'),
+            icon: const Icon(FluentIcons.refresh),
+            onPressed: _handleRefresh,
           ),
           const SizedBox(width: 8),
-          Tooltip(
-            message: appLocaleString(context, 'Alternar tema', 'Toggle theme'),
-            child: IconButton(
-              icon: Icon(
-                themeProvider.isDarkMode
-                    ? FluentIcons.brightness
-                    : FluentIcons.brightness,
-              ),
-              onPressed: themeProvider.toggleTheme,
+          _toolbarIconButton(
+            context: context,
+            semanticsLabel: appLocaleString(
+              context,
+              'Alternar tema',
+              'Toggle theme',
             ),
+            tooltip: appLocaleString(
+              context,
+              'Alternar tema',
+              'Toggle theme',
+            ),
+            icon: Icon(
+              themeProvider.isDarkMode
+                  ? FluentIcons.brightness
+                  : FluentIcons.brightness,
+            ),
+            onPressed: themeProvider.toggleTheme,
           ),
         ],
       ),

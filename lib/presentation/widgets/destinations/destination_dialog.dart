@@ -421,7 +421,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                         isDropboxBlocked ||
                         isNextcloudBlocked) {
                       unawaited(
-                        MessageModal.showWarning(
+                        FluentInfoBarFeedback.showWarning(
                           context,
                           message: _dialogLabel(
                             'Este destino requer uma licença válida. Acesse Configurações > Licenciamento para mais informações.',
@@ -2240,7 +2240,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   void _showSuccess(String message) {
     if (!mounted) return;
-    unawaited(MessageModal.showSuccess(context, message: message));
+    unawaited(FluentInfoBarFeedback.showSuccess(context, message: message));
   }
 
   void _showError(String message) {

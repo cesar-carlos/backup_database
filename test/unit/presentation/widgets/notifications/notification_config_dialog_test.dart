@@ -104,7 +104,7 @@ void main() {
     );
 
     testWidgets(
-      'connect oauth updates account and shows success message',
+      'connect oauth updates account and shows connected account copy',
       (tester) async {
         final oauthConfig = EmailConfig(
           id: 'cfg-oauth-connect',
@@ -144,15 +144,18 @@ void main() {
         final connectButton = _findTextPtOrEn('Conectar', 'Connect');
         await tester.ensureVisible(connectButton);
         await tester.tap(connectButton);
-        await tester.pumpAndSettle();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
 
         expect(
           _findTextPtOrEn(
-            'Conta OAuth SMTP conectada com sucesso.',
-            'SMTP OAuth account connected successfully.',
+            'Conta conectada: oauth-user@example.com',
+            'Account connected: oauth-user@example.com',
           ),
           findsOneWidget,
         );
+
+        await tester.pump(const Duration(seconds: 5));
       },
     );
   });

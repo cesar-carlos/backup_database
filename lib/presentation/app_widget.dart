@@ -24,7 +24,27 @@ class BackupDatabaseApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(
           create: (_) {
+            final provider = AppDensityProvider(
+              userPreferencesRepository: service_locator
+                  .getIt<IUserPreferencesRepository>(),
+            );
+            unawaited(provider.initialize());
+            return provider;
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (_) {
             final provider = ThemeProvider(
+              userPreferencesRepository: service_locator
+                  .getIt<IUserPreferencesRepository>(),
+            );
+            unawaited(provider.initialize());
+            return provider;
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = SkeletonLoadingPreferenceProvider(
               userPreferencesRepository: service_locator
                   .getIt<IUserPreferencesRepository>(),
             );
@@ -105,21 +125,26 @@ class BackupDatabaseApp extends StatelessWidget {
           create: (_) => service_locator.getIt<ServerConnectionProvider>(),
         ),
       ],
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, _) {
+      child: Consumer2<ThemeProvider, AppDensityProvider>(
+        builder: (context, themeProvider, densityProvider, _) {
+          final density = densityProvider.density;
+          final accent = themeProvider.fluentAccentColor;
           return FluentApp.router(
             title: getWindowTitleForMode(currentAppMode),
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightFluentTheme,
-            darkTheme: AppTheme.darkFluentTheme,
+            theme: AppTheme.lightFluentTheme.copyWith(accentColor: accent),
+            darkTheme: AppTheme.darkFluentTheme.copyWith(accentColor: accent),
             themeMode: themeProvider.isDarkMode
                 ? ThemeMode.dark
                 : ThemeMode.light,
             routerConfig: appRouter,
             builder: (context, child) {
-              return R1MultiProfileLegacyHintHost(
-                child: GlobalBackupProgressListener(
-                  child: child ?? const SizedBox.shrink(),
+              return InheritedAppDensity(
+                density: density,
+                child: R1MultiProfileLegacyHintHost(
+                  child: GlobalBackupProgressListener(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               );
             },

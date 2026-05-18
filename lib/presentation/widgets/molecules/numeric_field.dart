@@ -1,7 +1,8 @@
-import 'package:backup_database/presentation/widgets/common/app_text_field.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_text_field.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
+/// **Molecule** — integer entry built on [AppTextField].
 class NumericField extends StatelessWidget {
   const NumericField({
     required this.label,

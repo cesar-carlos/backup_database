@@ -1,5 +1,6 @@
 import 'package:backup_database/core/errors/failure.dart';
 
+/// **Molecule** — normalized outcomes for database connection test flows.
 sealed class TestConnectionOutcome {
   const TestConnectionOutcome();
 }
@@ -8,10 +9,12 @@ final class TestConnectionSucceeded extends TestConnectionOutcome {
   const TestConnectionSucceeded({
     this.databases = const <String>[],
     this.listWarning,
+    this.versionHint,
   });
 
   final List<String> databases;
   final String? listWarning;
+  final String? versionHint;
 }
 
 final class TestConnectionFailed extends TestConnectionOutcome {
@@ -52,6 +55,7 @@ class TestConnectionRunner<TConfig> {
 
   Future<TestConnectionOutcome> execute({
     void Function()? afterValidation,
+    void Function()? onProbeStarted,
   }) async {
     final validationError = validate();
     if (validationError != null) {
@@ -59,6 +63,7 @@ class TestConnectionRunner<TConfig> {
     }
     afterValidation?.call();
     final config = buildConfig();
+    onProbeStarted?.call();
     return runTest(config);
   }
 }

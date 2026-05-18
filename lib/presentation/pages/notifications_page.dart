@@ -38,7 +38,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Future<void> _openConfigModal({EmailConfig? initial}) async {
     final licenseProvider = context.read<LicenseProvider>();
     if (!_hasEmailNotificationFeature(licenseProvider)) {
-      await MessageModal.showWarning(
+      await FluentInfoBarFeedback.showWarning(
         context,
         message: appLocaleString(
           context,
@@ -95,7 +95,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (!mounted) return;
 
     if (success) {
-      await MessageModal.showSuccess(
+      await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
@@ -121,7 +121,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final provider = context.read<NotificationProvider>();
     final selectedConfig = provider.selectedConfig;
     if (selectedConfig == null) {
-      await MessageModal.showWarning(
+      await FluentInfoBarFeedback.showWarning(
         context,
         message: appLocaleString(
           context,
@@ -149,7 +149,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     if (success) {
-      await MessageModal.showSuccess(
+      await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
@@ -197,7 +197,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     if (success) {
-      await MessageModal.showSuccess(
+      await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
@@ -244,7 +244,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     if (success) {
-      await MessageModal.showSuccess(
+      await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
@@ -313,7 +313,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (!mounted) return;
 
     if (success) {
-      await MessageModal.showSuccess(
+      await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
@@ -568,8 +568,7 @@ class _NotificationsContentSection extends StatelessWidget {
           onCreate: onCreateConfig,
           onEdit: onEditConfig,
           onDelete: onDeleteConfig,
-          onSelect: (config) =>
-              unawaited(provider.selectConfig(config.id)),
+          onSelect: (config) => unawaited(provider.selectConfig(config.id)),
           onToggleEnabled: (config, enabled) {
             unawaited(
               provider.toggleConfigEnabled(config.id, enabled),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/firebird_config_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
@@ -11,7 +12,11 @@ import 'package:backup_database/domain/value_objects/firebird_config_enums.dart'
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
+/// **Organism** — Fluent dialog to create or edit a Firebird connection inside
+/// [DatabaseConfigDialogShell]; includes connection test and tool-path hints.
 class FirebirdConfigDialog extends StatefulWidget {
   const FirebirdConfigDialog({super.key, this.config});
 
@@ -55,6 +60,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
 
   bool _isTestingConnection = false;
 
+  late final String _configSessionId;
   late final IFirebirdBackupService _backupService;
 
   bool get _isEditing => widget.config != null;
@@ -62,6 +68,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _configSessionId = widget.config?.id ?? const Uuid().v4();
     _backupService = getIt<IFirebirdBackupService>();
     if (widget.config != null) {
       final c = widget.config!;
@@ -417,6 +424,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
     }
 
     try {
+      var probeStarted = false;
       final mSuccess = appLocaleString(
         context,
         'Conexão testada com sucesso!',
@@ -427,15 +435,20 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
         'Erro desconhecido ao testar conexão',
         'Unknown error testing connection',
       );
-      final mConnFailed = appLocaleString(
-        context,
-        'Conexão falhou',
-        'Connection failed',
-      );
       final mErrTitle = appLocaleString(
         context,
         'Erro ao testar conexão',
         'Error testing connection',
+      );
+      final mUnknownShort = appLocaleString(
+        context,
+        'Erro desconhecido',
+        'Unknown error',
+      );
+      final mListPrefix = appLocaleString(
+        context,
+        'Conexão OK, mas erro ao identificar a base: ',
+        'Connection OK, but error resolving database identity: ',
       );
 
       final outcome =
@@ -443,24 +456,43 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
             validate: _validateFirebirdTestInputs,
             buildConfig: _buildFirebirdTestConfig,
             runTest: (FirebirdConfig config) async {
-              final result = await _backupService.testConnection(config);
-              final ok = result.getOrNull();
-              if (ok != null && ok) {
-                return const TestConnectionSucceeded();
+              final probeResult = await _backupService
+                  .probeGstatHeaderConnection(
+                    config,
+                  );
+              if (probeResult.isError()) {
+                final failure = probeResult.exceptionOrNull()!;
+                var msg = testConnectionUserMessage(
+                  failure,
+                  fallback: mUnknownConn,
+                );
+                final lower = msg.toLowerCase();
+                if (ToolPathHelp.isToolNotFoundError(lower, 'gstat')) {
+                  msg = ToolPathHelp.buildMessage('gstat');
+                }
+                return TestConnectionFailed(msg);
               }
-              if (ok != null && !ok) {
-                return TestConnectionFailed(mConnFailed);
-              }
-              final failure = result.exceptionOrNull();
-              var msg = testConnectionUserMessage(
-                failure,
-                fallback: mUnknownConn,
+              final data = probeResult.getOrNull()!;
+              final hint = data.versionHint;
+              final listResult = await _backupService.listDatabases(
+                config: config,
               );
-              final lower = msg.toLowerCase();
-              if (ToolPathHelp.isToolNotFoundError(lower, 'gstat')) {
-                msg = ToolPathHelp.buildMessage('gstat');
+              final names = listResult.getOrNull();
+              if (names != null) {
+                return TestConnectionSucceeded(
+                  versionHint: hint.isEmpty ? null : hint,
+                  databases: names,
+                );
               }
-              return TestConnectionFailed(msg);
+              final listFailure = listResult.exceptionOrNull();
+              final detail = testConnectionUserMessage(
+                listFailure,
+                fallback: mUnknownShort,
+              );
+              return TestConnectionSucceeded(
+                versionHint: hint.isEmpty ? null : hint,
+                listWarning: '$mListPrefix$detail',
+              );
             },
           ).execute(
             afterValidation: () {
@@ -471,13 +503,54 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                 _isTestingConnection = true;
               });
             },
+            onProbeStarted: () {
+              probeStarted = true;
+            },
           );
       if (!mounted) {
         return;
       }
+      if (probeStarted) {
+        context.read<FirebirdConfigProvider>().recordConnectionTest(
+          _configSessionId,
+          success: outcome is TestConnectionSucceeded,
+        );
+      }
       switch (outcome) {
-        case TestConnectionSucceeded():
-          unawaited(MessageModal.showSuccess(context, message: mSuccess));
+        case TestConnectionSucceeded(
+          :final versionHint,
+          :final databases,
+          :final listWarning,
+        ):
+          if (listWarning != null) {
+            unawaited(
+              FluentInfoBarFeedback.showWarning(
+                context,
+                message: listWarning,
+              ),
+            );
+            break;
+          }
+          final dbExtra = databases.isEmpty
+              ? ''
+              : appLocaleString(
+                  context,
+                  ' Base: ${databases.first}',
+                  ' Database: ${databases.first}',
+                );
+          final extra = versionHint == null || versionHint.trim().isEmpty
+              ? ''
+              : appLocaleString(
+                  context,
+                  ' Versao detectada: $versionHint',
+                  ' Detected version: $versionHint',
+                );
+          unawaited(
+            FluentInfoBarFeedback.showSuccess(
+              context,
+              message: '$mSuccess$dbExtra$extra',
+            ),
+          );
         case TestConnectionFailed(:final message):
           final rawMessage = message.isNotEmpty ? message : mUnknownConn;
           unawaited(
@@ -564,6 +637,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
         ? null
         : clientLibTrimmed;
     return FirebirdConfig(
+      id: _configSessionId,
       name: 'temp',
       host: _hostController.text.trim(),
       databaseFile: _databaseFileController.text.trim(),
@@ -661,7 +735,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
         : clientLibTrimmed;
 
     final firebirdConfig = FirebirdConfig(
-      id: widget.config?.id,
+      id: _configSessionId,
       name: _nameController.text.trim(),
       host: _hostController.text.trim(),
       databaseFile: _databaseFileController.text.trim(),

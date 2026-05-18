@@ -1,3 +1,4 @@
+import 'package:backup_database/core/theme/app_theme.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
 import 'package:backup_database/presentation/providers/theme_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,6 +49,22 @@ void main() {
       expect(provider.isDarkMode, isTrue);
       expect(prefs.darkMode, isTrue);
     });
+
+    test('fluentAccentColor uses brand when system accent is off', () async {
+      prefs.useSystemAccentColor = false;
+      await provider.initialize();
+      expect(
+        identical(provider.fluentAccentColor, AppTheme.brandFluentAccent),
+        isTrue,
+      );
+    });
+
+    test('setUseSystemAccentColor persists', () async {
+      await provider.initialize();
+      await provider.setUseSystemAccentColor(true);
+      expect(provider.useSystemAccentColor, isTrue);
+      expect(prefs.useSystemAccentColor, isTrue);
+    });
   });
 }
 
@@ -56,6 +73,8 @@ class _FakeUserPreferencesRepository implements IUserPreferencesRepository {
   bool minimizeToTray = false;
   bool closeToTray = false;
   String? r1Signature;
+  bool useSystemAccentColor = false;
+  bool useWindowsMicaBackdrop = true;
 
   @override
   Future<void> ensureTrayDefaults() async {}
@@ -81,6 +100,42 @@ class _FakeUserPreferencesRepository implements IUserPreferencesRepository {
   @override
   Future<void> setDarkMode(bool value) async {
     darkMode = value;
+  }
+
+  @override
+  Future<bool> getUseSystemAccentColor() async => useSystemAccentColor;
+
+  @override
+  Future<bool> getUseWindowsMicaBackdrop() async => useWindowsMicaBackdrop;
+
+  @override
+  Future<void> setUseSystemAccentColor(bool value) async {
+    useSystemAccentColor = value;
+  }
+
+  @override
+  Future<void> setUseWindowsMicaBackdrop(bool value) async {
+    useWindowsMicaBackdrop = value;
+  }
+
+  String? uiDensity;
+
+  @override
+  Future<String?> getUiDensity() async => uiDensity;
+
+  @override
+  Future<void> setUiDensity(String name) async {
+    uiDensity = name;
+  }
+
+  bool skeletonLoadingEnabled = true;
+
+  @override
+  Future<bool> getSkeletonLoadingEnabled() async => skeletonLoadingEnabled;
+
+  @override
+  Future<void> setSkeletonLoadingEnabled(bool value) async {
+    skeletonLoadingEnabled = value;
   }
 
   @override

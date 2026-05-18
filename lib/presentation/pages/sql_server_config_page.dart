@@ -129,7 +129,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: config == null
               ? 'Configuração criada com sucesso!'
@@ -179,7 +179,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
 
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: 'Configuração excluída com sucesso!',
           ),
@@ -203,7 +203,7 @@ class _SqlServerConfigPageState extends State<SqlServerConfigPage> {
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: 'Configuração duplicada com sucesso!',
         ),

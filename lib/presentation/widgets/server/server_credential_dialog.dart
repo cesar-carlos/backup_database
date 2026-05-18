@@ -151,70 +151,82 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
     final confirm = _confirmPasswordController.text;
 
     if (serverId.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe o Server ID.',
-          'Enter Server ID.',
+          message: appLocaleString(
+            context,
+            'Informe o Server ID.',
+            'Enter Server ID.',
+          ),
         ),
-      ));
+      );
       return;
     }
     if (name.isEmpty) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'Informe um nome para a credencial.',
-          'Enter a name for the credential.',
+          message: appLocaleString(
+            context,
+            'Informe um nome para a credencial.',
+            'Enter a name for the credential.',
+          ),
         ),
-      ));
+      );
       return;
     }
     if (!_isEditing) {
       if (password.isEmpty) {
-        unawaited(MessageModal.showError(
-          context,
-          message: appLocaleString(
+        unawaited(
+          MessageModal.showError(
             context,
-            'Informe a senha.',
-            'Enter password.',
+            message: appLocaleString(
+              context,
+              'Informe a senha.',
+              'Enter password.',
+            ),
           ),
-        ));
+        );
         return;
       }
       if (password.length < _minPasswordLength) {
-        unawaited(MessageModal.showError(
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: appLocaleString(
+              context,
+              'A senha deve ter pelo menos $_minPasswordLength caracteres.',
+              'Password must have at least $_minPasswordLength characters.',
+            ),
+          ),
+        );
+        return;
+      }
+    } else if (password.isNotEmpty && password.length < _minPasswordLength) {
+      unawaited(
+        MessageModal.showError(
           context,
           message: appLocaleString(
             context,
             'A senha deve ter pelo menos $_minPasswordLength caracteres.',
             'Password must have at least $_minPasswordLength characters.',
           ),
-        ));
-        return;
-      }
-    } else if (password.isNotEmpty && password.length < _minPasswordLength) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
-          context,
-          'A senha deve ter pelo menos $_minPasswordLength caracteres.',
-          'Password must have at least $_minPasswordLength characters.',
         ),
-      ));
+      );
       return;
     }
     if (password != confirm) {
-      unawaited(MessageModal.showError(
-        context,
-        message: appLocaleString(
+      unawaited(
+        MessageModal.showError(
           context,
-          'As senhas não coincidem.',
-          'Passwords do not match.',
+          message: appLocaleString(
+            context,
+            'As senhas não coincidem.',
+            'Passwords do not match.',
+          ),
         ),
-      ));
+      );
       return;
     }
 
@@ -277,7 +289,7 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
                               Clipboard.setData(ClipboardData(text: text)),
                             );
                             unawaited(
-                              MessageModal.showInfo(
+                              FluentInfoBarFeedback.showInfo(
                                 context,
                                 message: appLocaleString(
                                   context,
@@ -345,7 +357,7 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
                               Clipboard.setData(ClipboardData(text: text)),
                             );
                             unawaited(
-                              MessageModal.showInfo(
+                              FluentInfoBarFeedback.showInfo(
                                 context,
                                 message: appLocaleString(
                                   context,

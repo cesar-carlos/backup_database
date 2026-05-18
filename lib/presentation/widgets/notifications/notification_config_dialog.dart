@@ -285,7 +285,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     });
 
     if (errorMessage == null) {
-      await MessageModal.showSuccess(
+      await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
@@ -366,7 +366,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
       }
     });
 
-    await MessageModal.showSuccess(
+    await FluentInfoBarFeedback.showSuccess(
       context,
       message: appLocaleString(
         context,
@@ -440,7 +440,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
       }
     });
 
-    await MessageModal.showSuccess(
+    await FluentInfoBarFeedback.showSuccess(
       context,
       message: appLocaleString(
         context,
@@ -486,7 +486,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
       _oauthConnectedAt = updated.oauthConnectedAt;
     });
 
-    await MessageModal.showSuccess(
+    await FluentInfoBarFeedback.showSuccess(
       context,
       message: appLocaleString(
         context,

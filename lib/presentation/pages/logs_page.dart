@@ -73,7 +73,10 @@ class _LogsPageState extends State<LogsPage> {
       if (!mounted) return;
 
       unawaited(
-        MessageModal.showSuccess(context, message: 'Logs limpos com sucesso'),
+        FluentInfoBarFeedback.showSuccess(
+          context,
+          message: 'Logs limpos com sucesso',
+        ),
       );
     }
   }
@@ -93,7 +96,7 @@ class _LogsPageState extends State<LogsPage> {
     if (format == null) {
       if (mounted) {
         unawaited(
-          MessageModal.showWarning(
+          FluentInfoBarFeedback.showWarning(
             context,
             message: 'Formato de arquivo não suportado',
           ),
@@ -110,7 +113,7 @@ class _LogsPageState extends State<LogsPage> {
 
     if (filePath != null && mounted) {
       unawaited(
-        MessageModal.showInfo(
+        FluentInfoBarFeedback.showInfo(
           context,
           message: 'Logs exportados para: $filePath',
         ),
@@ -308,7 +311,7 @@ class _LogsContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (provider.isLoading && provider.logs.isEmpty) {
-      return const Center(child: ProgressRing());
+      return const SkeletonGrid(rowCount: 10);
     }
 
     if (provider.error != null && provider.logs.isEmpty) {

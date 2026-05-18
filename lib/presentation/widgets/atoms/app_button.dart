@@ -106,11 +106,17 @@ class AppButton extends StatelessWidget {
       );
     }
 
+    final leadingForRow = switch (leading) {
+      null => null,
+      final Widget w when label.isNotEmpty => ExcludeSemantics(child: w),
+      final Widget w => w,
+    };
+
     final child = (leading != null || trailing != null)
         ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ?leading,
+              ?leadingForRow,
               if (leading != null)
                 const SizedBox(width: AppSpacing.sm, height: AppSpacing.sm),
               if (label.isNotEmpty) Text(label),

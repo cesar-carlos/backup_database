@@ -5,6 +5,7 @@ import 'package:backup_database/application/services/backup_orchestrator_service
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/upload_progress_labels.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_z_index.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -261,25 +262,32 @@ class _CustomProgressBar extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(4),
-        child: Stack(
-          children: [
-            Container(
-              width: double.infinity,
-              height: double.infinity,
-              color: theme.resources.cardBackgroundFillColorDefault,
-            ),
-            FractionallySizedBox(
-              widthFactor: clampedValue,
-              alignment: Alignment.centerLeft,
+        child: AppZIndex.stackByZIndex(
+          <({int zIndex, Widget child})>[
+            (
+              zIndex: AppZIndex.base,
               child: Container(
+                width: double.infinity,
                 height: double.infinity,
-                decoration: BoxDecoration(
-                  color: theme.accentColor,
-                  borderRadius: BorderRadius.circular(4),
+                color: theme.resources.cardBackgroundFillColorDefault,
+              ),
+            ),
+            (
+              zIndex: AppZIndex.dropdown,
+              child: FractionallySizedBox(
+                widthFactor: clampedValue,
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    color: theme.accentColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
               ),
             ),
           ],
+          fit: StackFit.expand,
         ),
       ),
     );

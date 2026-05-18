@@ -1,11 +1,21 @@
+import 'package:backup_database/application/providers/database_connection_test_snapshot.dart';
+import 'package:backup_database/core/theme/tokens/app_density.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
-import 'package:backup_database/presentation/widgets/common/database_config_data_grid.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
+import 'package:backup_database/presentation/widgets/organisms/database_config_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+Widget _densityHarness(Widget home) {
+  return InheritedAppDensity(
+    density: AppDensity.comfortable,
+    child: home,
+  );
+}
 
 void main() {
   testWidgets('DatabaseConfigDataGrid shows empty state when list empty', (
@@ -15,12 +25,14 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      const FluentApp(
-        locale: Locale('en'),
-        home: ScaffoldPage(
-          content: DatabaseConfigDataGrid<SqlServerConfig>(
-            configs: [],
-            rowOf: _neverSql,
+      FluentApp(
+        locale: const Locale('en'),
+        home: _densityHarness(
+          const ScaffoldPage(
+            content: DatabaseConfigDataGrid<SqlServerConfig>(
+              configs: [],
+              rowOf: _neverSql,
+            ),
           ),
         ),
       ),
@@ -48,16 +60,18 @@ void main() {
     await tester.pumpWidget(
       FluentApp(
         locale: const Locale('en'),
-        home: ScaffoldPage(
-          content: DatabaseConfigDataGrid<SqlServerConfig>(
-            configs: [cfg],
-            rowOf: (c) => DatabaseConfigGridRow(
-              name: c.name,
-              serverEndpoint: '${c.server}:${c.portValue}',
-              database: c.databaseValue,
-              username: c.username,
-              id: c.id,
-              enabled: c.enabled,
+        home: _densityHarness(
+          ScaffoldPage(
+            content: DatabaseConfigDataGrid<SqlServerConfig>(
+              configs: [cfg],
+              rowOf: (c) => DatabaseConfigGridRow(
+                name: c.name,
+                serverEndpoint: '${c.server}:${c.portValue}',
+                database: c.databaseValue,
+                username: c.username,
+                id: c.id,
+                enabled: c.enabled,
+              ),
             ),
           ),
         ),
@@ -90,16 +104,18 @@ void main() {
     await tester.pumpWidget(
       FluentApp(
         locale: const Locale('en'),
-        home: ScaffoldPage(
-          content: DatabaseConfigDataGrid<SybaseConfig>(
-            configs: [cfg],
-            rowOf: (c) => DatabaseConfigGridRow(
-              name: c.name,
-              serverEndpoint: '${c.serverName}:${c.portValue}',
-              database: c.databaseNameValue,
-              username: c.username,
-              id: c.id,
-              enabled: c.enabled,
+        home: _densityHarness(
+          ScaffoldPage(
+            content: DatabaseConfigDataGrid<SybaseConfig>(
+              configs: [cfg],
+              rowOf: (c) => DatabaseConfigGridRow(
+                name: c.name,
+                serverEndpoint: '${c.serverName}:${c.portValue}',
+                database: c.databaseNameValue,
+                username: c.username,
+                id: c.id,
+                enabled: c.enabled,
+              ),
             ),
           ),
         ),
@@ -130,16 +146,18 @@ void main() {
     await tester.pumpWidget(
       FluentApp(
         locale: const Locale('en'),
-        home: ScaffoldPage(
-          content: DatabaseConfigDataGrid<PostgresConfig>(
-            configs: [cfg],
-            rowOf: (c) => DatabaseConfigGridRow(
-              name: c.name,
-              serverEndpoint: '${c.host}:${c.portValue}',
-              database: c.databaseValue,
-              username: c.username,
-              id: c.id,
-              enabled: c.enabled,
+        home: _densityHarness(
+          ScaffoldPage(
+            content: DatabaseConfigDataGrid<PostgresConfig>(
+              configs: [cfg],
+              rowOf: (c) => DatabaseConfigGridRow(
+                name: c.name,
+                serverEndpoint: '${c.host}:${c.portValue}',
+                database: c.databaseValue,
+                username: c.username,
+                id: c.id,
+                enabled: c.enabled,
+              ),
             ),
           ),
         ),
@@ -150,6 +168,58 @@ void main() {
     expect(find.text('pg1:5432'), findsOneWidget);
     expect(find.text('db3'), findsOneWidget);
   });
+
+  testWidgets(
+    'DatabaseConfigDataGrid shows Last check when snapshot provided',
+    (
+      WidgetTester tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 720));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final cfg = SqlServerConfig(
+        id: 'id-snap',
+        name: 'Snap',
+        server: 'srv',
+        database: DatabaseName('db'),
+        username: 'u',
+        password: 'p',
+        port: PortNumber(1433),
+      );
+
+      DatabaseConnectionTestSnapshot? snapshotFor(String id) {
+        if (id != 'id-snap') {
+          return null;
+        }
+        return (testedAt: DateTime.utc(2026, 5, 15, 12, 30), success: true);
+      }
+
+      await tester.pumpWidget(
+        FluentApp(
+          locale: const Locale('en'),
+          home: _densityHarness(
+            ScaffoldPage(
+              content: DatabaseConfigDataGrid<SqlServerConfig>(
+                configs: [cfg],
+                connectionTestSnapshot: snapshotFor,
+                rowOf: (c) => DatabaseConfigGridRow(
+                  name: c.name,
+                  serverEndpoint: '${c.server}:${c.portValue}',
+                  database: c.databaseValue,
+                  username: c.username,
+                  id: c.id,
+                  enabled: c.enabled,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Last check'), findsOneWidget);
+      expect(find.text('Never'), findsNothing);
+    },
+  );
 }
 
 DatabaseConfigGridRow _neverSql(SqlServerConfig c) =>

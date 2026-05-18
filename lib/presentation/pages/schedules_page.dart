@@ -86,7 +86,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
               child: Consumer<SchedulerProvider>(
                 builder: (context, provider, child) {
                   if (provider.isLoading) {
-                    return const Center(child: ProgressRing());
+                    return const SkeletonGrid(rowCount: 8);
                   }
 
                   if (provider.error != null) {
@@ -174,7 +174,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
 
       if (success && context.mounted) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: schedule == null
                 ? 'Agendamento criado com sucesso!'
@@ -218,7 +218,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
 
       if (success && context.mounted) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: 'Agendamento excluído com sucesso!',
           ),
@@ -307,7 +307,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: 'Agendamento duplicado com sucesso!',
         ),

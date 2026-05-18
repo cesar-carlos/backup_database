@@ -127,7 +127,7 @@ class DestinationsPage extends StatelessWidget {
           : await provider.updateDestination(result);
 
       if (success && context.mounted) {
-        await MessageModal.showSuccess(
+        await FluentInfoBarFeedback.showSuccess(
           context,
           message: destination == null
               ? 'Destino criado com sucesso!'
@@ -172,7 +172,7 @@ class DestinationsPage extends StatelessWidget {
     if (!context.mounted) return;
 
     if (success) {
-      await MessageModal.showSuccess(
+      await FluentInfoBarFeedback.showSuccess(
         context,
         message: 'Destino duplicado com sucesso!',
       );
@@ -240,7 +240,7 @@ class DestinationsPage extends StatelessWidget {
       if (!context.mounted) return;
 
       if (success) {
-        await MessageModal.showSuccess(
+        await FluentInfoBarFeedback.showSuccess(
           context,
           message: 'Destino excluido com sucesso!',
         );

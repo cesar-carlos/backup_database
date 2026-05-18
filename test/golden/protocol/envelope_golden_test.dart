@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
@@ -523,6 +524,29 @@ void main() {
           idempotencyKey: 'idem-create',
         );
         _assertGolden(msg, 'create_schedule_request');
+      });
+
+      test('createSchedule request (Firebird / fullSingle)', () {
+        final s = Schedule(
+          id: 's-fb-1',
+          name: 'Backup Firebird Nightly',
+          databaseConfigId: 'fb-cfg-1',
+          databaseType: DatabaseType.firebird,
+          scheduleType: ScheduleType.daily.name,
+          scheduleConfig: '{}',
+          destinationIds: const ['dest-1'],
+          backupFolder: r'C:\backup\fb',
+          backupType: BackupType.fullSingle,
+          truncateLog: false,
+          createdAt: DateTime.utc(2026, 4, 19, 12),
+          updatedAt: DateTime.utc(2026, 4, 19, 12),
+        );
+        final msg = createCreateScheduleMessage(
+          requestId: 5,
+          schedule: s,
+          idempotencyKey: 'idem-firebird',
+        );
+        _assertGolden(msg, 'schedule_message_firebird');
       });
 
       test('deleteSchedule request', () {

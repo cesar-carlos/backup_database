@@ -1,6 +1,8 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+/// **Molecule** — generic configuration row with toggle and row actions.
 class ConfigListItem extends StatelessWidget {
   const ConfigListItem({
     required this.name,
@@ -31,14 +33,14 @@ class ConfigListItem extends StatelessWidget {
     final effectiveIconColor =
         iconColor ??
         (enabled
-            ? AppColors.primary
+            ? AppPalette.primary
             : FluentTheme.of(context).resources.textFillColorSecondary);
 
     return Card(
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: enabled
-              ? AppColors.primary.withValues(alpha: 0.2)
+              ? AppPalette.primary.withValues(alpha: 0.2)
               : FluentTheme.of(context).resources.cardStrokeColorDefault,
           child: Icon(icon, color: effectiveIconColor),
         ),
@@ -54,19 +56,19 @@ class ConfigListItem extends StatelessWidget {
           children: [
             if (trailingAction != null) ...[
               trailingAction!,
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
             ],
             if (onToggleEnabled != null)
               ToggleSwitch(checked: enabled, onChanged: onToggleEnabled),
             if (onEdit != null) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               IconButton(
                 icon: const Icon(FluentIcons.edit),
                 onPressed: onEdit,
               ),
             ],
             if (onDelete != null) ...[
-              const SizedBox(width: 4),
+              const SizedBox(width: AppSpacing.xs),
               IconButton(
                 icon: const Icon(FluentIcons.delete),
                 onPressed: onDelete,

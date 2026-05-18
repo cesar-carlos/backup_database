@@ -96,7 +96,7 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
       if (context.mounted) {
         if (success) {
           unawaited(
-            MessageModal.showSuccess(
+            FluentInfoBarFeedback.showSuccess(
               context,
               message: 'Credencial criada com sucesso.',
             ),
@@ -121,7 +121,7 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
       if (context.mounted) {
         if (success) {
           unawaited(
-            MessageModal.showSuccess(
+            FluentInfoBarFeedback.showSuccess(
               context,
               message: 'Credencial atualizada com sucesso.',
             ),
@@ -168,7 +168,7 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
     if (context.mounted) {
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: 'Credencial excluída com sucesso.',
           ),

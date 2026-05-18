@@ -162,7 +162,7 @@ class ServerLoginPage extends StatelessWidget {
       if (context.mounted) {
         if (success) {
           unawaited(
-            MessageModal.showSuccess(
+            FluentInfoBarFeedback.showSuccess(
               context,
               message: 'Conexão salva com sucesso.',
             ),
@@ -188,7 +188,7 @@ class ServerLoginPage extends StatelessWidget {
       if (context.mounted) {
         if (success) {
           unawaited(
-            MessageModal.showSuccess(
+            FluentInfoBarFeedback.showSuccess(
               context,
               message: 'Conexão atualizada com sucesso.',
             ),
@@ -270,7 +270,7 @@ class ServerLoginPage extends StatelessWidget {
     if (!context.mounted) return;
     if (ok) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message:
               'Conexão bem-sucedida com ${connection.host}:${connection.port}',
@@ -315,7 +315,7 @@ class ServerLoginPage extends StatelessWidget {
     if (context.mounted) {
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: 'Conexão excluída com sucesso.',
           ),

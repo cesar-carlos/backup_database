@@ -4,7 +4,7 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
-import 'package:backup_database/presentation/widgets/common/database_config_list_item.dart';
+import 'package:backup_database/presentation/widgets/molecules/database_config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 

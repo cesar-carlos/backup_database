@@ -130,7 +130,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                   if (!context.mounted) return;
                                   if (success) {
                                     unawaited(
-                                      MessageModal.showSuccess(
+                                      FluentInfoBarFeedback.showSuccess(
                                         context,
                                         message: appLocaleString(
                                           context,
@@ -185,7 +185,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                               if (!context.mounted) return;
                               if (success) {
                                 unawaited(
-                                  MessageModal.showSuccess(
+                                  FluentInfoBarFeedback.showSuccess(
                                     context,
                                     message: appLocaleString(
                                       context,
@@ -751,7 +751,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                                 errorMessage = null;
                               });
                               unawaited(
-                                MessageModal.showSuccess(
+                                FluentInfoBarFeedback.showSuccess(
                                   ctx,
                                   message: appLocaleString(
                                     ctx,

@@ -2,7 +2,7 @@ import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
-import 'package:backup_database/presentation/widgets/common/database_config_list_item.dart';
+import 'package:backup_database/presentation/widgets/molecules/database_config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class SybaseConfigListItem extends StatelessWidget {

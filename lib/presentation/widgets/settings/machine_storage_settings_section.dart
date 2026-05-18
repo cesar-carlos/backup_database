@@ -165,7 +165,7 @@ class _MachineStorageSettingsSectionState
                 'the application as administrator.',
           );
         }
-        await MessageModal.showWarning(context, message: message);
+        await FluentInfoBarFeedback.showWarning(context, message: message);
         return;
       }
       final merged = await mergeLegacyProfilePathsExcludingCurrentUser(
@@ -333,7 +333,7 @@ class _MachineStorageSettingsSectionState
         ),
       );
     }
-    await MessageModal.showSuccess(
+    await FluentInfoBarFeedback.showSuccess(
       context,
       message: buf.toString().trim(),
     );
@@ -381,7 +381,7 @@ class _MachineStorageSettingsSectionState
         return;
       }
       if (!ok) {
-        await MessageModal.showWarning(
+        await FluentInfoBarFeedback.showWarning(
           context,
           message: appLocaleString(
             context,
@@ -421,7 +421,7 @@ class _MachineStorageSettingsSectionState
     final path = _selectedOtherProfileLegacyPath;
     if (path == null || path.isEmpty) {
       if (mounted) {
-        await MessageModal.showWarning(
+        await FluentInfoBarFeedback.showWarning(
           context,
           message: appLocaleString(
             context,

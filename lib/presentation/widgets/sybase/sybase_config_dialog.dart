@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/sybase_config_provider.dart';
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
@@ -10,6 +11,8 @@ import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 class SybaseConfigDialog extends StatefulWidget {
   const SybaseConfigDialog({
@@ -51,6 +54,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   bool _isReplicationEnvironment = false;
   bool _isTestingConnection = false;
 
+  late final String _configSessionId;
   late final ISybaseBackupService _backupService;
 
   bool get isEditing => widget.config != null;
@@ -58,6 +62,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _configSessionId = widget.config?.id ?? const Uuid().v4();
     _backupService = widget.backupService;
 
     if (widget.config != null) {
@@ -94,6 +99,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
     }
 
     try {
+      var probeStarted = false;
       final mSuccess = appLocaleString(
         context,
         'Conexão testada com sucesso!',
@@ -140,13 +146,24 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                 _isTestingConnection = true;
               });
             },
+            onProbeStarted: () {
+              probeStarted = true;
+            },
           );
       if (!mounted) {
         return;
       }
+      if (probeStarted) {
+        context.read<SybaseConfigProvider>().recordConnectionTest(
+          _configSessionId,
+          success: outcome is TestConnectionSucceeded,
+        );
+      }
       switch (outcome) {
         case TestConnectionSucceeded():
-          unawaited(MessageModal.showSuccess(context, message: mSuccess));
+          unawaited(
+            FluentInfoBarFeedback.showSuccess(context, message: mSuccess),
+          );
         case TestConnectionFailed(:final message):
           final rawMessage = message.isNotEmpty ? message : mUnknownConn;
           unawaited(
@@ -207,6 +224,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
         int.tryParse(_portController.text.trim()) ??
         AppConstants.defaultSybasePort;
     return SybaseConfig(
+      id: _configSessionId,
       name: _nameController.text.trim(),
       serverName: _serverNameController.text.trim(),
       databaseName: DatabaseName(_databaseNameController.text.trim()),
@@ -225,7 +243,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
     final port = int.tryParse(_portController.text) ?? 2638;
     final config = SybaseConfig(
-      id: widget.config?.id,
+      id: _configSessionId,
       name: _nameController.text.trim(),
       serverName: _serverNameController.text.trim(),
       databaseName: DatabaseName(_databaseNameController.text.trim()),

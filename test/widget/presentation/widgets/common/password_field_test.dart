@@ -1,4 +1,4 @@
-import 'package:backup_database/presentation/widgets/common/password_field.dart';
+import 'package:backup_database/presentation/widgets/molecules/password_field.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 

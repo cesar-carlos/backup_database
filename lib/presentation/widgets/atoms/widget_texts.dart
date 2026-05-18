@@ -1,6 +1,7 @@
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+/// **Atom** — localized strings shared by common dialog actions.
 class WidgetTexts {
   const WidgetTexts._({
     required this.cancel,

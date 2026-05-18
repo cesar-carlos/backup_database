@@ -1,16 +1,21 @@
+import 'package:backup_database/application/providers/firebird_config_provider.dart';
+import 'package:backup_database/application/providers/postgres_config_provider.dart';
+import 'package:backup_database/application/providers/sql_server_config_provider.dart';
+import 'package:backup_database/application/providers/sybase_config_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
-import 'package:backup_database/presentation/widgets/common/database_config_dialog_shell.dart';
 import 'package:backup_database/presentation/widgets/firebird/firebird_config_dialog.dart';
+import 'package:backup_database/presentation/widgets/organisms/database_config_dialog_shell.dart';
 import 'package:backup_database/presentation/widgets/postgres/postgres_config_dialog.dart';
 import 'package:backup_database/presentation/widgets/sql_server/sql_server_config_dialog.dart';
 import 'package:backup_database/presentation/widgets/sybase/sybase_config_dialog.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:provider/provider.dart';
 
 class _MockSqlServerBackupService extends Mock
     implements ISqlServerBackupService {}
@@ -23,17 +28,59 @@ class _MockSybaseBackupService extends Mock implements ISybaseBackupService {}
 class _MockFirebirdBackupService extends Mock
     implements IFirebirdBackupService {}
 
+class _MockSqlConfigProvider extends Mock implements SqlServerConfigProvider {}
+
+class _MockPostgresConfigProvider extends Mock
+    implements PostgresConfigProvider {}
+
+class _MockSybaseConfigProvider extends Mock implements SybaseConfigProvider {}
+
+class _MockFirebirdConfigProvider extends Mock
+    implements FirebirdConfigProvider {}
+
 void main() {
   late _MockSqlServerBackupService mockSql;
   late _MockPostgresBackupService mockPostgres;
   late _MockSybaseBackupService mockSybase;
   late _MockFirebirdBackupService mockFirebird;
+  late _MockSqlConfigProvider mockSqlConfigProvider;
+  late _MockPostgresConfigProvider mockPostgresConfigProvider;
+  late _MockSybaseConfigProvider mockSybaseConfigProvider;
+  late _MockFirebirdConfigProvider mockFirebirdConfigProvider;
 
   setUp(() async {
     mockSql = _MockSqlServerBackupService();
     mockPostgres = _MockPostgresBackupService();
     mockSybase = _MockSybaseBackupService();
     mockFirebird = _MockFirebirdBackupService();
+    mockSqlConfigProvider = _MockSqlConfigProvider();
+    mockPostgresConfigProvider = _MockPostgresConfigProvider();
+    mockSybaseConfigProvider = _MockSybaseConfigProvider();
+    mockFirebirdConfigProvider = _MockFirebirdConfigProvider();
+    when(
+      () => mockSqlConfigProvider.recordConnectionTest(
+        any(),
+        success: any(named: 'success'),
+      ),
+    ).thenAnswer((_) {});
+    when(
+      () => mockPostgresConfigProvider.recordConnectionTest(
+        any(),
+        success: any(named: 'success'),
+      ),
+    ).thenAnswer((_) {});
+    when(
+      () => mockSybaseConfigProvider.recordConnectionTest(
+        any(),
+        success: any(named: 'success'),
+      ),
+    ).thenAnswer((_) {});
+    when(
+      () => mockFirebirdConfigProvider.recordConnectionTest(
+        any(),
+        success: any(named: 'success'),
+      ),
+    ).thenAnswer((_) {});
     if (getIt.isRegistered<ISqlServerBackupService>()) {
       await getIt.unregister<ISqlServerBackupService>();
     }
@@ -76,7 +123,10 @@ void main() {
     ) async {
       await pumpDialog(
         tester,
-        const SqlServerConfigDialog(),
+        ChangeNotifierProvider<SqlServerConfigProvider>.value(
+          value: mockSqlConfigProvider,
+          child: const SqlServerConfigDialog(),
+        ),
       );
 
       expect(find.byType(DatabaseConfigDialogShell), findsOneWidget);
@@ -91,7 +141,10 @@ void main() {
     ) async {
       await pumpDialog(
         tester,
-        const PostgresConfigDialog(),
+        ChangeNotifierProvider<PostgresConfigProvider>.value(
+          value: mockPostgresConfigProvider,
+          child: const PostgresConfigDialog(),
+        ),
       );
 
       expect(find.byType(DatabaseConfigDialogShell), findsOneWidget);
@@ -106,7 +159,10 @@ void main() {
     ) async {
       await pumpDialog(
         tester,
-        SybaseConfigDialog(backupService: mockSybase),
+        ChangeNotifierProvider<SybaseConfigProvider>.value(
+          value: mockSybaseConfigProvider,
+          child: SybaseConfigDialog(backupService: mockSybase),
+        ),
       );
 
       expect(find.byType(DatabaseConfigDialogShell), findsOneWidget);
@@ -121,7 +177,10 @@ void main() {
     ) async {
       await pumpDialog(
         tester,
-        const FirebirdConfigDialog(),
+        ChangeNotifierProvider<FirebirdConfigProvider>.value(
+          value: mockFirebirdConfigProvider,
+          child: const FirebirdConfigDialog(),
+        ),
       );
 
       expect(find.byType(DatabaseConfigDialogShell), findsOneWidget);

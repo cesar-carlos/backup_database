@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/postgres_config_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
@@ -10,6 +11,8 @@ import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 class PostgresConfigDialog extends StatefulWidget {
   const PostgresConfigDialog({super.key, this.config});
@@ -49,6 +52,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
   List<String> _databases = <String>[];
   String? _selectedDatabase;
 
+  late final String _configSessionId;
   late final IPostgresBackupService _backupService;
 
   bool get isEditing => widget.config != null;
@@ -56,6 +60,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _configSessionId = widget.config?.id ?? const Uuid().v4();
     _backupService = getIt<IPostgresBackupService>();
 
     if (widget.config != null) {
@@ -389,7 +394,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
         _usernameController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
       unawaited(
-        MessageModal.showWarning(
+        FluentInfoBarFeedback.showWarning(
           context,
           message: appLocaleString(
             context,
@@ -402,6 +407,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
     }
 
     try {
+      var probeStarted = false;
       final outcome =
           await TestConnectionRunner<PostgresConfig>(
             validate: _validatePostgresTestConnectionPort,
@@ -419,9 +425,18 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
                 _selectedDatabase = null;
               });
             },
+            onProbeStarted: () {
+              probeStarted = true;
+            },
           );
       if (!mounted) {
         return;
+      }
+      if (probeStarted) {
+        context.read<PostgresConfigProvider>().recordConnectionTest(
+          _configSessionId,
+          success: outcome is TestConnectionSucceeded,
+        );
       }
       _presentPostgresTestConnectionOutcome(outcome);
     } on Object catch (e) {
@@ -450,6 +465,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
   PostgresConfig _buildTempPostgresConfigForTest() {
     final port = int.tryParse(_portController.text.trim())!;
     return PostgresConfig(
+      id: _configSessionId,
       name: 'temp',
       host: _hostController.text.trim(),
       port: PortNumber(port),
@@ -533,11 +549,13 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
           }
         });
         if (listWarning != null) {
-          unawaited(MessageModal.showWarning(context, message: listWarning));
+          unawaited(
+            FluentInfoBarFeedback.showWarning(context, message: listWarning),
+          );
           return;
         }
         unawaited(
-          MessageModal.showInfo(
+          FluentInfoBarFeedback.showInfo(
             context,
             message: databases.isEmpty
                 ? appLocaleString(
@@ -603,7 +621,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
     }
 
     final postgresConfig = PostgresConfig(
-      id: widget.config?.id,
+      id: _configSessionId,
       name: _nameController.text.trim(),
       host: _hostController.text.trim(),
       port: PortNumber(portParsed),

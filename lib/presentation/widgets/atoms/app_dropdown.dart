@@ -1,6 +1,7 @@
-import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
+import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+/// **Atom** — labeled Fluent combo box bound to a value list.
 class AppDropdown<T> extends StatelessWidget {
   const AppDropdown({
     required this.label,

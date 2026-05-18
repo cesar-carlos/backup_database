@@ -137,7 +137,7 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
 
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: config == null
                 ? 'Configuração criada com sucesso!'
@@ -188,7 +188,7 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
 
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: 'Configuração excluída com sucesso!',
           ),
@@ -212,7 +212,7 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
 
     if (success) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: 'Configuração duplicada com sucesso!',
         ),

@@ -1,12 +1,16 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
+import 'package:backup_database/core/theme/tokens/app_radius.dart';
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/presentation/widgets/common/app_card.dart';
-import 'package:backup_database/presentation/widgets/common/cancel_button.dart';
-import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
+import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
+import 'package:backup_database/presentation/widgets/molecules/cancel_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 enum DependencyDialogAction { close, goToSchedules }
 
+/// **Organism** — blocking dialog when a database config has schedule dependencies.
 class DatabaseConfigDependencyDialog extends StatelessWidget {
   const DatabaseConfigDependencyDialog({
     required this.databaseLabel,
@@ -38,12 +42,13 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texts = WidgetTexts.fromContext(context);
+    final colors = context.colors;
 
     return ContentDialog(
       title: Row(
         children: [
-          const Icon(FluentIcons.warning, color: AppColors.warning),
-          const SizedBox(width: 8),
+          Icon(FluentIcons.warning, color: colors.warning),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(texts.deletionBlockedByDependencies)),
         ],
       ),
@@ -58,19 +63,19 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
               'excluida porque possui agendamentos vinculados.',
               style: FluentTheme.of(context).typography.body,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               'Exclua primeiro os agendamentos abaixo na tela de '
               'Agendamentos.',
               style: FluentTheme.of(context).typography.body,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: schedules.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
                 itemBuilder: (context, index) {
                   final schedule = schedules[index];
                   final isEnabled = schedule.enabled;
@@ -80,7 +85,7 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
                     child: Row(
                       children: [
                         const Icon(FluentIcons.calendar, size: 18),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,10 +97,10 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
                                     .subtitle
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: AppSpacing.xs),
                               Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
+                                spacing: AppSpacing.sm,
+                                runSpacing: AppSpacing.sm,
                                 children: [
                                   _Tag(
                                     label: _getScheduleTypeLabel(
@@ -104,15 +109,15 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
                                       ),
                                       texts,
                                     ),
-                                    color: AppColors.scheduleDaily,
+                                    color: AppPalette.scheduleDaily,
                                   ),
                                   _Tag(
                                     label: isEnabled
                                         ? texts.active
                                         : texts.inactive,
                                     color: isEnabled
-                                        ? AppColors.success
-                                        : AppColors.grey600,
+                                        ? AppPalette.success
+                                        : AppPalette.grey600,
                                   ),
                                 ],
                               ),
@@ -160,7 +165,7 @@ class _Tag extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppRadius.circularSm,
       ),
       child: Text(
         label,

@@ -1,7 +1,7 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
-import 'package:backup_database/presentation/widgets/common/config_list_item.dart';
+import 'package:backup_database/presentation/widgets/molecules/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class DestinationListItem extends StatelessWidget {

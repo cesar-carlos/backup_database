@@ -1,4 +1,6 @@
-import 'package:backup_database/presentation/widgets/common/app_data_grid.dart';
+import 'package:backup_database/core/theme/tokens/app_density.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
+import 'package:backup_database/presentation/widgets/organisms/app_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,7 +16,12 @@ void main() {
     return FluentApp(
       home: NavigationView(
         content: ScaffoldPage(
-          content: Center(child: child),
+          content: Center(
+            child: InheritedAppDensity(
+              density: AppDensity.comfortable,
+              child: child,
+            ),
+          ),
         ),
       ),
     );

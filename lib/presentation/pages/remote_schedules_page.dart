@@ -114,7 +114,8 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                             ),
                             const SizedBox(height: 16),
                             Button(
-                              onPressed: () => unawaited(provider.loadSchedules()),
+                              onPressed: () =>
+                                  unawaited(provider.loadSchedules()),
                               child: const Text('Tentar Novamente'),
                             ),
                           ],
@@ -275,9 +276,11 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     if (context.mounted) {
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
-            message: enabled ? 'Agendamento ativado.' : 'Agendamento desativado.',
+            message: enabled
+                ? 'Agendamento ativado.'
+                : 'Agendamento desativado.',
           ),
         );
       } else {
@@ -302,7 +305,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     if (context.mounted) {
       if (success) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: 'Execução iniciada no servidor.',
           ),
@@ -349,7 +352,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
       if (context.mounted) {
         if (success) {
           unawaited(
-            MessageModal.showSuccess(
+            FluentInfoBarFeedback.showSuccess(
               context,
               message: 'Backup cancelado no servidor.',
             ),
@@ -421,7 +424,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
       );
       if (context.mounted) {
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: 'Destinos vinculados ao agendamento.',
           ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/sql_server_config_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
@@ -9,6 +10,8 @@ import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 class SqlServerConfigDialog extends StatefulWidget {
   const SqlServerConfigDialog({super.key, this.config});
@@ -49,6 +52,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   List<String> _databases = <String>[];
   String? _selectedDatabase;
 
+  late final String _configSessionId;
   late final ISqlServerBackupService _backupService;
 
   bool get isEditing => widget.config != null;
@@ -56,6 +60,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   @override
   void initState() {
     super.initState();
+    _configSessionId = widget.config?.id ?? const Uuid().v4();
     _backupService = getIt<ISqlServerBackupService>();
 
     if (widget.config != null) {
@@ -405,7 +410,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         (!_useWindowsAuth && _usernameController.text.trim().isEmpty) ||
         (!_useWindowsAuth && _passwordController.text.isEmpty)) {
       unawaited(
-        MessageModal.showWarning(
+        FluentInfoBarFeedback.showWarning(
           context,
           message: appLocaleString(
             context,
@@ -418,6 +423,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     }
 
     try {
+      var probeStarted = false;
       final outcome =
           await TestConnectionRunner<SqlServerConfig>(
             validate: _validateSqlTestConnectionPort,
@@ -435,9 +441,18 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
                 _selectedDatabase = null;
               });
             },
+            onProbeStarted: () {
+              probeStarted = true;
+            },
           );
       if (!mounted) {
         return;
+      }
+      if (probeStarted) {
+        context.read<SqlServerConfigProvider>().recordConnectionTest(
+          _configSessionId,
+          success: outcome is TestConnectionSucceeded,
+        );
       }
       _presentSqlTestConnectionOutcome(outcome);
     } on Object catch (e) {
@@ -469,6 +484,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
   SqlServerConfig _buildTempSqlServerConfigForTest() {
     final port = int.tryParse(_portController.text.trim())!;
     return SqlServerConfig(
+      id: _configSessionId,
       name: 'temp',
       server: _serverController.text.trim(),
       port: PortNumber(port),
@@ -549,11 +565,13 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           }
         });
         if (listWarning != null) {
-          unawaited(MessageModal.showWarning(context, message: listWarning));
+          unawaited(
+            FluentInfoBarFeedback.showWarning(context, message: listWarning),
+          );
           return;
         }
         unawaited(
-          MessageModal.showInfo(
+          FluentInfoBarFeedback.showInfo(
             context,
             message: databases.isEmpty
                 ? appLocaleString(
@@ -619,7 +637,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
     }
 
     final sqlServerConfig = SqlServerConfig(
-      id: widget.config?.id,
+      id: _configSessionId,
       name: _nameController.text.trim(),
       server: _serverController.text.trim(),
       database: DatabaseName(database),

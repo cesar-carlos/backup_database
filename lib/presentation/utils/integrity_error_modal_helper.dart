@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:backup_database/core/constants/integrity_ui_strings.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
-import 'package:backup_database/presentation/widgets/common/message_modal.dart';
+import 'package:backup_database/presentation/widgets/molecules/fluent_info_bar_feedback.dart';
+import 'package:backup_database/presentation/widgets/organisms/message_modal.dart';
 import 'package:flutter/widgets.dart';
 
 class IntegrityErrorModalHelper {
@@ -19,7 +20,7 @@ class IntegrityErrorModalHelper {
     if (failureCode == FailureCodes.integrityValidationInconclusive ||
         failureCode == FailureCodes.ftpIntegrityValidationInconclusive) {
       unawaited(
-        MessageModal.showWarning(
+        FluentInfoBarFeedback.showWarning(
           context,
           title: IntegrityUiStrings.integrityInconclusiveTitle(locale),
           message: IntegrityUiStrings.integrityInconclusiveMessage(

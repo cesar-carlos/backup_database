@@ -1,6 +1,8 @@
-import 'package:backup_database/presentation/widgets/common/widget_texts.dart';
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
+import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+/// **Molecule** — save/create action with loading affordance.
 class SaveButton extends StatelessWidget {
   const SaveButton({
     required this.onPressed,
@@ -28,7 +30,7 @@ class SaveButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(FluentIcons.save),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 Text(isEditing ? texts.save : texts.create),
               ],
             ),

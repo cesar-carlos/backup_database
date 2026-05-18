@@ -1,4 +1,4 @@
-import 'package:backup_database/presentation/widgets/common/message_modal.dart';
+import 'package:backup_database/presentation/widgets/organisms/message_modal.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/destination_provider.dart';
+import 'package:backup_database/application/providers/firebird_config_provider.dart';
 import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/application/providers/postgres_config_provider.dart';
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
@@ -6,11 +7,11 @@ import 'package:backup_database/application/providers/sybase_config_provider.dar
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
-import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/sybase_tools_status.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
@@ -27,6 +28,7 @@ void main() {
   late MockSqlServerConfigRepository mockSqlRepo;
   late MockSybaseConfigRepository mockSybaseRepo;
   late MockPostgresConfigRepository mockPostgresRepo;
+  late MockFirebirdConfigRepository mockFirebirdRepo;
   late MockBackupDestinationRepository mockDestRepo;
   late MockScheduleRepository mockScheduleRepo;
   late MockToolVerificationService mockToolVerification;
@@ -43,6 +45,7 @@ void main() {
     mockSqlRepo = MockSqlServerConfigRepository();
     mockSybaseRepo = MockSybaseConfigRepository();
     mockPostgresRepo = MockPostgresConfigRepository();
+    mockFirebirdRepo = MockFirebirdConfigRepository();
     mockDestRepo = MockBackupDestinationRepository();
     mockScheduleRepo = MockScheduleRepository();
     mockToolVerification = MockToolVerificationService();
@@ -68,6 +71,9 @@ void main() {
       () => mockPostgresRepo.getAll(),
     ).thenAnswer((_) async => const rd.Success(<PostgresConfig>[]));
     when(
+      () => mockFirebirdRepo.getAll(),
+    ).thenAnswer((_) async => const rd.Success(<FirebirdConfig>[]));
+    when(
       () => mockDestRepo.getAll(),
     ).thenAnswer((_) async => rd.Success(destinations));
     when(
@@ -82,6 +88,9 @@ void main() {
           dbverify: SybaseToolStatus.ok,
         ),
       ),
+    );
+    when(() => mockToolVerification.verifyFirebirdCliTools()).thenAnswer(
+      (_) async => const rd.Success(true),
     );
     when(() => mockLicenseValidation.getCurrentLicense()).thenAnswer(
       (_) async => license != null
@@ -105,6 +114,11 @@ void main() {
     final postgresProvider = PostgresConfigProvider(
       mockPostgresRepo,
       mockScheduleRepo,
+    );
+    final firebirdProvider = FirebirdConfigProvider(
+      mockFirebirdRepo,
+      mockScheduleRepo,
+      mockToolVerification,
     );
     final destProvider = DestinationProvider(
       mockDestRepo,
@@ -134,6 +148,9 @@ void main() {
             ),
             ChangeNotifierProvider<PostgresConfigProvider>.value(
               value: postgresProvider,
+            ),
+            ChangeNotifierProvider<FirebirdConfigProvider>.value(
+              value: firebirdProvider,
             ),
             ChangeNotifierProvider<DestinationProvider>.value(
               value: destProvider,
@@ -204,7 +221,7 @@ void main() {
     testWidgets(
       'legacy Sybase schedule with isConvertedDifferential shows Differential as Incremental (Transaction Log)',
       (tester) async {
-        final schedule = SybaseBackupSchedule(
+        final schedule = Schedule(
           name: 'Legacy Sybase',
           databaseConfigId: 'sybase-cfg-1',
           databaseType: DatabaseType.sybase,

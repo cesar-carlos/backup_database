@@ -7,6 +7,7 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
@@ -25,6 +26,7 @@ import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart
 import 'package:backup_database/presentation/boot/service_mode_initializer.dart';
 import 'package:backup_database/presentation/boot/single_instance_checker.dart';
 import 'package:backup_database/presentation/boot/ui_scheduler_policy.dart';
+import 'package:backup_database/presentation/boot/windows_native_chrome_bootstrap.dart';
 import 'package:backup_database/presentation/handlers/tray_menu_handler.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -216,6 +218,15 @@ Future<void> _initializeWindowManager(
       title: getWindowTitleForMode(currentAppMode),
       startMinimized: launchConfig.startMinimized,
     );
+    if (Platform.isWindows) {
+      final prefsRepo = service_locator.getIt<IUserPreferencesRepository>();
+      final micaOn = await prefsRepo.getUseWindowsMicaBackdrop();
+      final isDark = await prefsRepo.getDarkMode();
+      await WindowsNativeChromeBootstrap.setBackdrop(
+        micaEnabled: micaOn,
+        isDark: isDark,
+      );
+    }
   } on Object catch (e) {
     LoggerService.warning(
       'Erro ao inicializar window manager (continuando sem UI): $e',

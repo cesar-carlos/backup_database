@@ -1,0 +1,29 @@
+name: widgetbook_workspace
+description: Widget catalog for backup_database design-system widgets.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.10.1
+
+dependencies:
+  backup_database:
+    path: ../
+  fluent_ui: ^4.13.0
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  widgetbook: ^3.23.0
+  widgetbook_annotation: ^3.11.0
+
+dev_dependencies:
+  build_runner: ^2.15.0
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+  widgetbook_generator: ^3.23.0
+  widgetbook_golden_test: ^0.4.0
+
+flutter:
+  uses-material-design: true

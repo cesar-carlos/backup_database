@@ -21,6 +21,8 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  static const double _dashboardStatsCardWidth = 280;
+
   static const String _dashboardStatIconAsset =
       'assets/image/new/database_128px.png';
 
@@ -127,11 +129,9 @@ class _DashboardPageState extends State<DashboardPage> {
             Consumer<DashboardProvider>(
               builder: (context, provider, child) {
                 if (provider.isLoading && provider.totalBackups == 0) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(48),
-                      child: ProgressRing(),
-                    ),
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: SkeletonDashboardMetrics(),
                   );
                 }
 
@@ -146,44 +146,52 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     if (!isClientMode) const SizedBox(height: 4),
                     if (!isClientMode)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: StatsCard(
-                              title: 'Total de Backups',
-                              value: provider.totalBackups.toString(),
-                              iconAsset: _dashboardStatIconAsset,
-                              color: AppColors.primary,
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: _dashboardStatsCardWidth,
+                              child: StatsCard(
+                                title: 'Total de Backups',
+                                value: provider.totalBackups.toString(),
+                                iconAsset: _dashboardStatIconAsset,
+                                color: AppColors.primary,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: StatsCard(
-                              title: 'Backups Hoje',
-                              value: provider.backupsToday.toString(),
-                              iconAsset: _dashboardStatIconAsset,
-                              color: AppColors.statsBackups,
+                            const SizedBox(width: 16),
+                            SizedBox(
+                              width: _dashboardStatsCardWidth,
+                              child: StatsCard(
+                                title: 'Backups Hoje',
+                                value: provider.backupsToday.toString(),
+                                iconAsset: _dashboardStatIconAsset,
+                                color: AppColors.statsBackups,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: StatsCard(
-                              title: 'Falharam Hoje',
-                              value: provider.failedToday.toString(),
-                              iconAsset: _dashboardStatIconAsset,
-                              color: AppColors.statsFailed,
+                            const SizedBox(width: 16),
+                            SizedBox(
+                              width: _dashboardStatsCardWidth,
+                              child: StatsCard(
+                                title: 'Falharam Hoje',
+                                value: provider.failedToday.toString(),
+                                iconAsset: _dashboardStatIconAsset,
+                                color: AppColors.statsFailed,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: StatsCard(
-                              title: 'Agendamentos Ativos',
-                              value: provider.activeSchedules.toString(),
-                              iconAsset: _dashboardStatIconAsset,
-                              color: AppColors.statsActive,
+                            const SizedBox(width: 16),
+                            SizedBox(
+                              width: _dashboardStatsCardWidth,
+                              child: StatsCard(
+                                title: 'Agendamentos Ativos',
+                                value: provider.activeSchedules.toString(),
+                                iconAsset: _dashboardStatIconAsset,
+                                color: AppColors.statsActive,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     if (provider.serverMetrics != null) ...[
                       const SizedBox(height: 24),
@@ -192,56 +200,64 @@ class _DashboardPageState extends State<DashboardPage> {
                         style: FluentTheme.of(context).typography.subtitle,
                       ),
                       const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: StatsCard(
-                              title: 'Total de Backups (Servidor)',
-                              value: _serverMetric(
-                                provider.serverMetrics!,
-                                'totalBackups',
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: _dashboardStatsCardWidth,
+                              child: StatsCard(
+                                title: 'Total de Backups (Servidor)',
+                                value: _serverMetric(
+                                  provider.serverMetrics!,
+                                  'totalBackups',
+                                ),
+                                iconAsset: _dashboardStatIconAsset,
+                                color: AppColors.primary,
                               ),
-                              iconAsset: _dashboardStatIconAsset,
-                              color: AppColors.primary,
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: StatsCard(
-                              title: 'Backups Hoje (Servidor)',
-                              value: _serverMetric(
-                                provider.serverMetrics!,
-                                'backupsToday',
+                            const SizedBox(width: 16),
+                            SizedBox(
+                              width: _dashboardStatsCardWidth,
+                              child: StatsCard(
+                                title: 'Backups Hoje (Servidor)',
+                                value: _serverMetric(
+                                  provider.serverMetrics!,
+                                  'backupsToday',
+                                ),
+                                iconAsset: _dashboardStatIconAsset,
+                                color: AppColors.statsBackups,
                               ),
-                              iconAsset: _dashboardStatIconAsset,
-                              color: AppColors.statsBackups,
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: StatsCard(
-                              title: 'Falharam Hoje (Servidor)',
-                              value: _serverMetric(
-                                provider.serverMetrics!,
-                                'failedToday',
+                            const SizedBox(width: 16),
+                            SizedBox(
+                              width: _dashboardStatsCardWidth,
+                              child: StatsCard(
+                                title: 'Falharam Hoje (Servidor)',
+                                value: _serverMetric(
+                                  provider.serverMetrics!,
+                                  'failedToday',
+                                ),
+                                iconAsset: _dashboardStatIconAsset,
+                                color: AppColors.statsFailed,
                               ),
-                              iconAsset: _dashboardStatIconAsset,
-                              color: AppColors.statsFailed,
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: StatsCard(
-                              title: 'Agendamentos Ativos (Servidor)',
-                              value: _serverMetric(
-                                provider.serverMetrics!,
-                                'activeSchedules',
+                            const SizedBox(width: 16),
+                            SizedBox(
+                              width: _dashboardStatsCardWidth,
+                              child: StatsCard(
+                                title: 'Agendamentos Ativos (Servidor)',
+                                value: _serverMetric(
+                                  provider.serverMetrics!,
+                                  'activeSchedules',
+                                ),
+                                iconAsset: _dashboardStatIconAsset,
+                                color: AppColors.statsActive,
                               ),
-                              iconAsset: _dashboardStatIconAsset,
-                              color: AppColors.statsActive,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                     if (!isClientMode && provider.metricsReport != null) ...[
@@ -257,11 +273,15 @@ class _DashboardPageState extends State<DashboardPage> {
                     if (!isClientMode) ...[
                       const SizedBox(height: 32),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            'Backups Recentes',
-                            style: FluentTheme.of(context).typography.title,
+                          Expanded(
+                            child: Text(
+                              'Backups Recentes',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: FluentTheme.of(context).typography.title,
+                            ),
                           ),
                           IconButton(
                             icon: const Icon(FluentIcons.refresh),

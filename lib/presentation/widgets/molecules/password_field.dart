@@ -1,6 +1,6 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
-import 'package:backup_database/presentation/widgets/common/app_text_field.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_text_field.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 /// **Molecule** — password entry with show/hide toggle.
@@ -45,7 +45,9 @@ class _PasswordFieldState extends State<PasswordField> {
           },
       onChanged: widget.onChanged,
       enabled: widget.enabled,
-      prefixIcon: const Icon(FluentIcons.lock),
+      prefixIcon: const ExcludeSemantics(
+        child: Icon(FluentIcons.lock),
+      ),
       suffixIcon: ConstrainedBox(
         constraints: const BoxConstraints(
           minWidth: AppTargetSize.comfortable,

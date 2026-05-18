@@ -40,7 +40,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     }
     if (copied) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: appLocaleString(
             context,

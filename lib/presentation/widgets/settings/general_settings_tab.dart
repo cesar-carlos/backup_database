@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:backup_database/application/providers/auto_update_provider.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
@@ -7,8 +8,11 @@ import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_density.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
+import 'package:backup_database/presentation/boot/windows_native_chrome_bootstrap.dart';
 import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -30,6 +34,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
   bool _isLoadingVersion = true;
   String? _tempDownloadsPath;
   bool _isLoadingTempPath = false;
+  bool _useWindowsMicaBackdrop = true;
 
   final TempDirectoryService _tempService = getIt<TempDirectoryService>();
   late final ClipboardService _clipboardService;
@@ -40,6 +45,22 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     _clipboardService = getIt<ClipboardService>();
     unawaited(_loadPackageInfo());
     unawaited(_loadTempPath());
+    unawaited(_loadWindowsChromePrefs());
+  }
+
+  Future<void> _loadWindowsChromePrefs() async {
+    if (!Platform.isWindows) {
+      return;
+    }
+    try {
+      final repo = getIt<IUserPreferencesRepository>();
+      final v = await repo.getUseWindowsMicaBackdrop();
+      if (mounted) {
+        setState(() => _useWindowsMicaBackdrop = v);
+      }
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao carregar preferência Mica', e, s);
+    }
   }
 
   Future<void> _copyCompatibilityDiagnostics(String summary) async {
@@ -50,7 +71,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     }
     if (copied) {
       unawaited(
-        MessageModal.showSuccess(
+        FluentInfoBarFeedback.showSuccess(
           context,
           message: appLocaleString(
             context,
@@ -171,7 +192,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
           return;
         }
         unawaited(
-          MessageModal.showSuccess(
+          FluentInfoBarFeedback.showSuccess(
             context,
             message: appLocaleString(
               context,
@@ -241,6 +262,148 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                     checked: themeProvider.isDarkMode,
                     onChanged: themeProvider.setDarkMode,
                   ),
+                ),
+                if (Platform.isWindows) ...[
+                  const SizedBox(height: 16),
+                  InfoLabel(
+                    label: appLocaleString(
+                      context,
+                      'Backdrop Mica (Windows 11)',
+                      'Mica backdrop (Windows 11)',
+                    ),
+                    child: ToggleSwitch(
+                      checked: _useWindowsMicaBackdrop,
+                      onChanged: (bool enabled) async {
+                        setState(() => _useWindowsMicaBackdrop = enabled);
+                        await getIt<IUserPreferencesRepository>()
+                            .setUseWindowsMicaBackdrop(enabled);
+                        await WindowsNativeChromeBootstrap.setBackdrop(
+                          micaEnabled: enabled,
+                          isDark: themeProvider.isDarkMode,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    appLocaleString(
+                      context,
+                      'No Windows 10 o efeito pode não estar disponível; o '
+                          'sistema ignora silenciosamente.',
+                      'On Windows 10 the effect may be unavailable; the system '
+                          'may ignore it silently.',
+                    ),
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
+                  const SizedBox(height: 16),
+                  InfoLabel(
+                    label: appLocaleString(
+                      context,
+                      'Cor de destaque do sistema',
+                      'System accent color',
+                    ),
+                    child: ToggleSwitch(
+                      checked: themeProvider.useSystemAccentColor,
+                      onChanged: themeProvider.setUseSystemAccentColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    appLocaleString(
+                      context,
+                      'Quando ativo, botões e realces seguem o accent do '
+                          'Windows em vez da cor da marca.',
+                      'When on, buttons and highlights follow the Windows '
+                          'accent instead of the brand color.',
+                    ),
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Consumer<AppDensityProvider>(
+                  builder: (context, densityProvider, _) {
+                    return InfoLabel(
+                      label: appLocaleString(
+                        context,
+                        'Densidade das tabelas',
+                        'Table density',
+                      ),
+                      child: ComboBox<AppDensity>(
+                        value: densityProvider.density,
+                        items: [
+                          ComboBoxItem(
+                            value: AppDensity.compact,
+                            child: Text(
+                              appLocaleString(context, 'Compacta', 'Compact'),
+                            ),
+                          ),
+                          ComboBoxItem(
+                            value: AppDensity.comfortable,
+                            child: Text(
+                              appLocaleString(
+                                context,
+                                'Confortável',
+                                'Comfortable',
+                              ),
+                            ),
+                          ),
+                          ComboBoxItem(
+                            value: AppDensity.spacious,
+                            child: Text(
+                              appLocaleString(
+                                context,
+                                'Espaçosa',
+                                'Spacious',
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (AppDensity? value) {
+                          if (value != null) {
+                            unawaited(densityProvider.setDensity(value));
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                Consumer<SkeletonLoadingPreferenceProvider>(
+                  builder: (context, skeletonPrefs, _) {
+                    return InfoLabel(
+                      label: appLocaleString(
+                        context,
+                        'Animações de carregamento',
+                        'Loading animations',
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ToggleSwitch(
+                            checked: skeletonPrefs.shimmerLoadingEffectsEnabled,
+                            onChanged: (bool enabled) {
+                              unawaited(
+                                skeletonPrefs.setShimmerLoadingEffectsEnabled(
+                                  enabled,
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            appLocaleString(
+                              context,
+                              'Desative para reduzir movimento na tela '
+                                  '(acessibilidade).',
+                              'Turn off to reduce on-screen motion '
+                                  '(accessibility).',
+                            ),
+                            style: FluentTheme.of(context).typography.caption,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
                 const Divider(),

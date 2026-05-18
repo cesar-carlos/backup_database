@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart';
 
+/// **Organism** — padded vertical stack for standard page bodies.
 class PageContentLayout extends StatelessWidget {
   const PageContentLayout({
     required this.children,
