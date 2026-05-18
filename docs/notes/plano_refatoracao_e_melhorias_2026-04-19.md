@@ -7,9 +7,9 @@ Status: **Código no repositório** (PR-A–E); **M2 (lint extra)** concluído
 configs SGBD + `Schedule` + `BackupLog`/`BackupHistory` + piloto
 `BackupExecutionContext`; `implements DatabaseConnectionConfig`). **PR-C** fechamento residual **C0.10/C0.12**
 (2026-05-15: densidade de tabelas persistida + `AppZIndex.stackByZIndex` no
-progress bar). Pendências **processo Git**: commits por etapa (§8–9); roadmap §11
-**implementado** (M1–M14 código/docs); restam smokes manuais (M14/Firebird),
-Widgetbook Cloud (adiado) e smokes manuais Windows/Firebird (runbooks).
+progress bar). **Roadmap §11 implementado** (M1–M14 código/docs/commits **2026-05-18**:
+7 commits via `tools/plan_commit_groups.ps1`). Restam apenas **smokes manuais**
+(M14 Win10/11 — `smoke_windows_mica_m14.md`; Firebird §8.1).
 Escopo: 4 PRs sequenciais de **bug fixes + refatoração DRY + melhorias
 de UX + consolidação arquitetural via ports/adapters genéricos**.
 Pré-requisito para o plano de adoção do Firebird (ver
