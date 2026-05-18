@@ -1,5 +1,6 @@
 import 'package:backup_database/application/services/license_generation_service.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
+import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_license_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -19,6 +20,9 @@ class MockSybaseConfigRepository extends Mock
 
 class MockPostgresConfigRepository extends Mock
     implements IPostgresConfigRepository {}
+
+class MockFirebirdConfigRepository extends Mock
+    implements IFirebirdConfigRepository {}
 
 class MockBackupDestinationRepository extends Mock
     implements IBackupDestinationRepository {}
