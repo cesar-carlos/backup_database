@@ -1,7 +1,12 @@
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
+import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
+import 'package:backup_database/domain/entities/sybase_backup_options.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:uuid/uuid.dart';
+
+part 'schedule.freezed.dart';
 
 enum ScheduleType { daily, weekly, monthly, interval }
 
@@ -37,114 +42,99 @@ ScheduleType scheduleTypeFromString(String value) {
   }
 }
 
-class Schedule {
-  Schedule({
-    required this.name,
-    required this.databaseConfigId,
-    required this.databaseType,
-    required this.scheduleType,
-    required this.scheduleConfig,
-    required this.destinationIds,
-    required this.backupFolder,
-    String? id,
-    this.backupType = BackupType.full,
-    this.truncateLog = true,
-    this.compressBackup = true,
-    CompressionFormat? compressionFormat,
-    this.enabled = true,
-    this.enableChecksum = false,
-    this.verifyAfterBackup = false,
-    this.verifyPolicy = VerifyPolicy.bestEffort,
-    this.postBackupScript,
-    this.backupTimeout = const Duration(hours: 2),
-    this.verifyTimeout = const Duration(minutes: 30),
-    this.lastRunAt,
-    this.nextRunAt,
-    this.createdAt,
-    this.updatedAt,
-    this.isConvertedDifferential = false,
-  }) : id = id ?? const Uuid().v4(),
-       compressionFormat = compressionFormat ?? CompressionFormat.none;
+@freezed
+abstract class Schedule with _$Schedule {
+  const Schedule._();
 
-  final String id;
-  final String name;
-  final String databaseConfigId;
-  final DatabaseType databaseType;
-  final String scheduleType;
-  final String scheduleConfig;
-  final List<String> destinationIds;
-  final String backupFolder;
-  final BackupType backupType;
-  final bool truncateLog;
-  final bool compressBackup;
-  final CompressionFormat? compressionFormat;
-  final bool enabled;
-  final bool enableChecksum;
-  final bool verifyAfterBackup;
-  final VerifyPolicy verifyPolicy;
-  final String? postBackupScript;
-  final Duration backupTimeout;
-  final Duration verifyTimeout;
-  final DateTime? lastRunAt;
-  final DateTime? nextRunAt;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-  final bool isConvertedDifferential;
-
-  Schedule copyWith({
+  factory Schedule({
+    required String name,
+    required String databaseConfigId,
+    required DatabaseType databaseType,
+    required String scheduleType,
+    required String scheduleConfig,
+    required List<String> destinationIds,
+    required String backupFolder,
     String? id,
-    String? name,
-    String? databaseConfigId,
-    DatabaseType? databaseType,
-    String? scheduleType,
-    String? scheduleConfig,
-    List<String>? destinationIds,
-    String? backupFolder,
-    BackupType? backupType,
-    bool? truncateLog,
-    bool? compressBackup,
+    BackupType backupType = BackupType.full,
+    bool truncateLog = true,
+    bool compressBackup = true,
     CompressionFormat? compressionFormat,
-    bool? enabled,
-    bool? enableChecksum,
-    bool? verifyAfterBackup,
-    VerifyPolicy? verifyPolicy,
+    bool enabled = true,
+    bool enableChecksum = false,
+    bool verifyAfterBackup = false,
+    VerifyPolicy verifyPolicy = VerifyPolicy.bestEffort,
     String? postBackupScript,
-    Duration? backupTimeout,
-    Duration? verifyTimeout,
+    Duration backupTimeout = const Duration(hours: 2),
+    Duration verifyTimeout = const Duration(minutes: 30),
     DateTime? lastRunAt,
     DateTime? nextRunAt,
     DateTime? createdAt,
     DateTime? updatedAt,
-    bool? isConvertedDifferential,
+    bool isConvertedDifferential = false,
+    int? firebirdNbackupPhysicalLevel,
+    SqlServerBackupOptions? sqlServerBackupOptions,
+    SybaseBackupOptions? sybaseBackupOptions,
   }) {
-    return Schedule(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      databaseConfigId: databaseConfigId ?? this.databaseConfigId,
-      databaseType: databaseType ?? this.databaseType,
-      scheduleType: scheduleType ?? this.scheduleType,
-      scheduleConfig: scheduleConfig ?? this.scheduleConfig,
-      destinationIds: destinationIds ?? this.destinationIds,
-      backupFolder: backupFolder ?? this.backupFolder,
-      backupType: backupType ?? this.backupType,
-      truncateLog: truncateLog ?? this.truncateLog,
-      compressBackup: compressBackup ?? this.compressBackup,
-      compressionFormat: compressionFormat ?? this.compressionFormat,
-      enabled: enabled ?? this.enabled,
-      enableChecksum: enableChecksum ?? this.enableChecksum,
-      verifyAfterBackup: verifyAfterBackup ?? this.verifyAfterBackup,
-      verifyPolicy: verifyPolicy ?? this.verifyPolicy,
-      postBackupScript: postBackupScript ?? this.postBackupScript,
-      backupTimeout: backupTimeout ?? this.backupTimeout,
-      verifyTimeout: verifyTimeout ?? this.verifyTimeout,
-      lastRunAt: lastRunAt ?? this.lastRunAt,
-      nextRunAt: nextRunAt ?? this.nextRunAt,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      isConvertedDifferential:
-          isConvertedDifferential ?? this.isConvertedDifferential,
+    return Schedule.raw(
+      id: id ?? const Uuid().v4(),
+      name: name,
+      databaseConfigId: databaseConfigId,
+      databaseType: databaseType,
+      scheduleType: scheduleType,
+      scheduleConfig: scheduleConfig,
+      destinationIds: destinationIds,
+      backupFolder: backupFolder,
+      backupType: backupType,
+      truncateLog: truncateLog,
+      compressBackup: compressBackup,
+      compressionFormat: compressionFormat ?? CompressionFormat.none,
+      enabled: enabled,
+      enableChecksum: enableChecksum,
+      verifyAfterBackup: verifyAfterBackup,
+      verifyPolicy: verifyPolicy,
+      postBackupScript: postBackupScript,
+      backupTimeout: backupTimeout,
+      verifyTimeout: verifyTimeout,
+      lastRunAt: lastRunAt,
+      nextRunAt: nextRunAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      isConvertedDifferential: isConvertedDifferential,
+      firebirdNbackupPhysicalLevel: firebirdNbackupPhysicalLevel,
+      sqlServerBackupOptions: sqlServerBackupOptions,
+      sybaseBackupOptions: sybaseBackupOptions,
     );
   }
+
+  const factory Schedule.raw({
+    required String id,
+    required String name,
+    required String databaseConfigId,
+    required DatabaseType databaseType,
+    required String scheduleType,
+    required String scheduleConfig,
+    required List<String> destinationIds,
+    required String backupFolder,
+    @Default(BackupType.full) BackupType backupType,
+    @Default(true) bool truncateLog,
+    @Default(true) bool compressBackup,
+    required CompressionFormat compressionFormat,
+    @Default(true) bool enabled,
+    @Default(false) bool enableChecksum,
+    @Default(false) bool verifyAfterBackup,
+    @Default(VerifyPolicy.bestEffort) VerifyPolicy verifyPolicy,
+    String? postBackupScript,
+    @Default(Duration(hours: 2)) Duration backupTimeout,
+    @Default(Duration(minutes: 30)) Duration verifyTimeout,
+    DateTime? lastRunAt,
+    DateTime? nextRunAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    @Default(false) bool isConvertedDifferential,
+    int? firebirdNbackupPhysicalLevel,
+    SqlServerBackupOptions? sqlServerBackupOptions,
+    SybaseBackupOptions? sybaseBackupOptions,
+  }) = _Schedule;
 
   @override
   bool operator ==(Object other) =>
@@ -153,4 +143,12 @@ class Schedule {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+extension ScheduleEngineOptions on Schedule {
+  SqlServerBackupOptions get resolvedSqlServerBackupOptions =>
+      sqlServerBackupOptions ?? const SqlServerBackupOptions();
+
+  SybaseBackupOptions get resolvedSybaseBackupOptions =>
+      sybaseBackupOptions ?? SybaseBackupOptions.safeDefaults;
 }

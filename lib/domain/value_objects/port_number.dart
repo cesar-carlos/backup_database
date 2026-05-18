@@ -14,13 +14,6 @@ class PortNumber {
 
   int get value => _value;
 
-  bool get isDefault =>
-      _value == 1433 ||
-      _value == 2638 ||
-      _value == 3050 ||
-      _value == 3306 ||
-      _value == 5432;
-
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;

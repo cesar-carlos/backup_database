@@ -4,125 +4,96 @@ import 'package:backup_database/domain/entities/schedule.dart'
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/firebird_config_enums.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:uuid/uuid.dart';
 
-class FirebirdConfig extends DatabaseConnectionConfig {
-  FirebirdConfig({
-    required super.name,
+part 'firebird_config.freezed.dart';
+
+@freezed
+abstract class FirebirdConfig
+    with _$FirebirdConfig
+    implements DatabaseConnectionConfig {
+  const FirebirdConfig._();
+
+  factory FirebirdConfig({
+    required String name,
     required String host,
-    required this.databaseFile,
-    required super.username,
-    required super.password,
+    required String databaseFile,
+    required String username,
+    required String password,
     String? id,
     PortNumber? port,
-    this.aliasName,
-    this.useEmbedded = false,
-    this.clientLibraryPath,
-    this.serverVersionHint = FirebirdServerVersionHint.auto,
-    this.serviceManagerMode = FirebirdServiceManagerMode.auto,
-    this.cryptKey = '',
-    super.enabled = true,
+    String? aliasName,
+    bool useEmbedded = false,
+    String? clientLibraryPath,
+    FirebirdServerVersionHint serverVersionHint =
+        FirebirdServerVersionHint.auto,
+    FirebirdServiceManagerMode serviceManagerMode =
+        FirebirdServiceManagerMode.auto,
+    String cryptKey = '',
+    bool enabled = true,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : _host = host.trim().isEmpty ? 'localhost' : host.trim(),
-       super(
-         id: id ?? const Uuid().v4(),
-         port: port ?? PortNumber(3050),
-         createdAt: createdAt ?? DateTime.now(),
-         updatedAt: updatedAt ?? DateTime.now(),
-       );
+  }) {
+    final String normalizedHost =
+        host.trim().isEmpty ? 'localhost' : host.trim();
+    return FirebirdConfig.raw(
+      id: id ?? const Uuid().v4(),
+      name: name,
+      host: normalizedHost,
+      databaseFile: databaseFile,
+      username: username,
+      password: password,
+      port: port ?? PortNumber(3050),
+      aliasName: aliasName,
+      useEmbedded: useEmbedded,
+      clientLibraryPath: clientLibraryPath,
+      serverVersionHint: serverVersionHint,
+      serviceManagerMode: serviceManagerMode,
+      cryptKey: cryptKey,
+      enabled: enabled,
+      createdAt: createdAt ?? DateTime.now(),
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
 
-  final String _host;
-
-  final String databaseFile;
-  final String? aliasName;
-  final bool useEmbedded;
-  final String? clientLibraryPath;
-  final FirebirdServerVersionHint serverVersionHint;
-  final FirebirdServiceManagerMode serviceManagerMode;
-  final String cryptKey;
-
-  @override
-  String get host => _host;
+  const factory FirebirdConfig.raw({
+    required String id,
+    required String name,
+    required String host,
+    required String databaseFile,
+    required String username,
+    required String password,
+    required PortNumber port,
+    String? aliasName,
+    @Default(false) bool useEmbedded,
+    String? clientLibraryPath,
+    @Default(FirebirdServerVersionHint.auto)
+    FirebirdServerVersionHint serverVersionHint,
+    @Default(FirebirdServiceManagerMode.auto)
+    FirebirdServiceManagerMode serviceManagerMode,
+    @Default('') String cryptKey,
+    @Default(true) bool enabled,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+  }) = _FirebirdConfig;
 
   @override
   DatabaseType get databaseType => DatabaseType.firebird;
 
   @override
-  DatabaseName get primaryDatabase {
-    final label = _primaryLabelFromAliasOrPath();
-    return DatabaseName(label);
-  }
+  DatabaseName get primaryDatabase => DatabaseName(
+        firebirdPrimaryLabel(
+          aliasName: aliasName,
+          databaseFile: databaseFile,
+        ),
+      );
 
   @override
   String? get backupTarget => databaseFile;
 
-  String _primaryLabelFromAliasOrPath() {
-    final trimmed = aliasName?.trim();
-    if (trimmed != null && trimmed.isNotEmpty) {
-      return trimmed;
-    }
-    return _stemFromDatabasePath(databaseFile);
-  }
-
-  static String _stemFromDatabasePath(String path) {
-    final trimmed = path.trim();
-    if (trimmed.isEmpty) {
-      return 'firebird_db';
-    }
-    final base = trimmed.replaceAll('/', r'\');
-    final segs = base.split(r'\');
-    var file = segs.isNotEmpty ? segs.last : base;
-    if (file.toLowerCase().endsWith('.fdb')) {
-      file = file.substring(0, file.length - 4);
-    }
-    file = file.replaceAll(RegExp(r'[*?"<>|\x00\r\n\t/\\]'), '_');
-    if (file.isEmpty) {
-      file = 'firebird_db';
-    }
-    if (file.length > 128) {
-      file = file.substring(0, 128);
-    }
-    return file;
-  }
-
-  FirebirdConfig copyWith({
-    String? id,
-    String? name,
-    String? host,
-    PortNumber? port,
-    String? databaseFile,
-    String? aliasName,
-    bool? useEmbedded,
-    String? clientLibraryPath,
-    FirebirdServerVersionHint? serverVersionHint,
-    FirebirdServiceManagerMode? serviceManagerMode,
-    String? username,
-    String? password,
-    String? cryptKey,
-    bool? enabled,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return FirebirdConfig(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      host: host ?? this.host,
-      databaseFile: databaseFile ?? this.databaseFile,
-      username: username ?? this.username,
-      password: password ?? this.password,
-      port: port ?? this.port,
-      aliasName: aliasName ?? this.aliasName,
-      useEmbedded: useEmbedded ?? this.useEmbedded,
-      clientLibraryPath: clientLibraryPath ?? this.clientLibraryPath,
-      serverVersionHint: serverVersionHint ?? this.serverVersionHint,
-      serviceManagerMode: serviceManagerMode ?? this.serviceManagerMode,
-      cryptKey: cryptKey ?? this.cryptKey,
-      enabled: enabled ?? this.enabled,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? DateTime.now(),
-    );
-  }
+  @override
+  int get portValue => port.value;
 
   @override
   bool operator ==(Object other) =>
@@ -133,4 +104,36 @@ class FirebirdConfig extends DatabaseConnectionConfig {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+String firebirdPrimaryLabel({
+  required String? aliasName,
+  required String databaseFile,
+}) {
+  final trimmed = aliasName?.trim();
+  if (trimmed != null && trimmed.isNotEmpty) {
+    return trimmed;
+  }
+  return firebirdStemFromDatabasePath(databaseFile);
+}
+
+String firebirdStemFromDatabasePath(String path) {
+  final trimmed = path.trim();
+  if (trimmed.isEmpty) {
+    return 'firebird_db';
+  }
+  final base = trimmed.replaceAll('/', r'\');
+  final segs = base.split(r'\');
+  var file = segs.isNotEmpty ? segs.last : base;
+  if (file.toLowerCase().endsWith('.fdb')) {
+    file = file.substring(0, file.length - 4);
+  }
+  file = file.replaceAll(RegExp(r'[*?"<>|\x00\r\n\t/\\]'), '_');
+  if (file.isEmpty) {
+    file = 'firebird_db';
+  }
+  if (file.length > 128) {
+    file = file.substring(0, 128);
+  }
+  return file;
 }

@@ -1,3 +1,4 @@
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
@@ -10,6 +11,7 @@ abstract class ISqlScriptExecutionService {
     required SqlServerConfig? sqlServerConfig,
     required SybaseConfig? sybaseConfig,
     required PostgresConfig? postgresConfig,
+    required FirebirdConfig? firebirdConfig,
     required String script,
     Duration? timeout,
   });

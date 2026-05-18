@@ -49,8 +49,9 @@ class GetDatabaseConfig {
         return result.map((config) => config as Object);
 
       case DatabaseType.firebird:
-        final firebirdResult =
-            await _firebirdConfigRepository.getById(configId);
+        final firebirdResult = await _firebirdConfigRepository.getById(
+          configId,
+        );
         return firebirdResult.map((config) => config as Object);
     }
   }

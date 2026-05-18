@@ -1,4 +1,5 @@
 import 'package:backup_database/domain/entities/database_connection_config.dart';
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart'
     show DatabaseType;
@@ -68,6 +69,24 @@ void main() {
       expect(readPrimaryDbName(asBase), 'db3');
       expect(asBase.backupTarget, isNull);
       expect(asBase.portValue, 2638);
+    });
+
+    test('FirebirdConfig exposes unified view', () {
+      final fb = FirebirdConfig(
+        name: 'n',
+        host: 'fb-host',
+        databaseFile: r'C:\data\my_db.fdb',
+        username: 'u',
+        password: 'p',
+        port: PortNumber(3050),
+      );
+
+      final DatabaseConnectionConfig asBase = fb;
+      expect(readHost(asBase), 'fb-host');
+      expect(readType(asBase), DatabaseType.firebird);
+      expect(readPrimaryDbName(asBase), 'my_db');
+      expect(asBase.backupTarget, r'C:\data\my_db.fdb');
+      expect(asBase.portValue, 3050);
     });
   });
 }

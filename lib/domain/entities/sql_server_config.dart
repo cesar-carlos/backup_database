@@ -3,33 +3,58 @@ import 'package:backup_database/domain/entities/schedule.dart'
     show DatabaseType;
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:uuid/uuid.dart';
 
-class SqlServerConfig extends DatabaseConnectionConfig {
-  SqlServerConfig({
-    required super.name,
-    required this.server,
-    required this.database,
-    required super.username,
-    required super.password,
+part 'sql_server_config.freezed.dart';
+
+@freezed
+abstract class SqlServerConfig
+    with _$SqlServerConfig
+    implements DatabaseConnectionConfig {
+  const SqlServerConfig._();
+
+  factory SqlServerConfig({
+    required String name,
+    required String server,
+    required DatabaseName database,
+    required String username,
+    required String password,
     String? id,
     PortNumber? port,
-    super.enabled = true,
-    this.useWindowsAuth = false,
+    bool enabled = true,
+    bool useWindowsAuth = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : super(
-         id: id ?? const Uuid().v4(),
-         port: port ?? PortNumber(1433),
-         createdAt: createdAt ?? DateTime.now(),
-         updatedAt: updatedAt ?? DateTime.now(),
-       );
+  }) {
+    return SqlServerConfig.raw(
+      id: id ?? const Uuid().v4(),
+      name: name,
+      server: server,
+      database: database,
+      username: username,
+      password: password,
+      port: port ?? PortNumber(1433),
+      enabled: enabled,
+      useWindowsAuth: useWindowsAuth,
+      createdAt: createdAt ?? DateTime.now(),
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
 
-  final String server;
-  final DatabaseName database;
-  final bool useWindowsAuth;
-
-  String get databaseValue => database.value;
+  const factory SqlServerConfig.raw({
+    required String id,
+    required String name,
+    required String server,
+    required DatabaseName database,
+    required String username,
+    required String password,
+    required PortNumber port,
+    @Default(true) bool enabled,
+    @Default(false) bool useWindowsAuth,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+  }) = _SqlServerConfig;
 
   @override
   DatabaseType get databaseType => DatabaseType.sqlServer;
@@ -40,33 +65,13 @@ class SqlServerConfig extends DatabaseConnectionConfig {
   @override
   DatabaseName get primaryDatabase => database;
 
-  SqlServerConfig copyWith({
-    String? id,
-    String? name,
-    String? server,
-    DatabaseName? database,
-    String? username,
-    String? password,
-    PortNumber? port,
-    bool? enabled,
-    bool? useWindowsAuth,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return SqlServerConfig(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      server: server ?? this.server,
-      database: database ?? this.database,
-      username: username ?? this.username,
-      password: password ?? this.password,
-      port: port ?? this.port,
-      enabled: enabled ?? this.enabled,
-      useWindowsAuth: useWindowsAuth ?? this.useWindowsAuth,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? DateTime.now(),
-    );
-  }
+  @override
+  String? get backupTarget => null;
+
+  @override
+  int get portValue => port.value;
+
+  String get databaseValue => database.value;
 
   @override
   bool operator ==(Object other) =>

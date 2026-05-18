@@ -66,7 +66,7 @@ void main() {
       ),
     );
     registerFallbackValue(
-      BackupExecutionContext(outputDirectory: 'o', scheduleId: 's'),
+      const BackupExecutionContext(outputDirectory: 'o', scheduleId: 's'),
     );
   });
 
@@ -95,7 +95,7 @@ void main() {
       ).thenAnswer((_) async => const rd.Success(result));
 
       useSqlServerPort(mock);
-      final ctx = BackupExecutionContext(
+      const ctx = BackupExecutionContext(
         outputDirectory: '/tmp',
         scheduleId: 'sched',
       );
@@ -128,7 +128,7 @@ void main() {
       ).thenAnswer((_) async => const rd.Success(execResult));
 
       usePostgresPort(mock);
-      final ctx = BackupExecutionContext(
+      const ctx = BackupExecutionContext(
         outputDirectory: '/tmp',
         scheduleId: 'sched',
       );
@@ -161,7 +161,7 @@ void main() {
       ).thenAnswer((_) async => const rd.Success(execResult));
 
       useSybasePort(mock);
-      final ctx = BackupExecutionContext(
+      const ctx = BackupExecutionContext(
         outputDirectory: '/tmp',
         scheduleId: 'sched',
       );

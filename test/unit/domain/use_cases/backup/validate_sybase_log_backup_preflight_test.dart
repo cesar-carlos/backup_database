@@ -1,7 +1,6 @@
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/domain/use_cases/backup/validate_sybase_log_backup_preflight.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +19,7 @@ void main() {
     useCase = ValidateSybaseLogBackupPreflight(repository);
   });
 
-  Schedule sybaseLogSchedule() => SybaseBackupSchedule(
+  Schedule sybaseLogSchedule() => Schedule(
     name: 'Sybase Log',
     databaseConfigId: 'cfg-1',
     databaseType: DatabaseType.sybase,

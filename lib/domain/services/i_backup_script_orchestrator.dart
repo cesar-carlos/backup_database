@@ -1,5 +1,6 @@
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
+import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
@@ -20,6 +21,7 @@ abstract class IBackupScriptOrchestrator {
   /// - [sqlServerConfigRepository]: Repository for SQL Server configs
   /// - [sybaseConfigRepository]: Repository for Sybase configs
   /// - [postgresConfigRepository]: Repository for PostgreSQL configs
+  /// - [firebirdConfigRepository]: Repository for Firebird configs
   /// - [scriptService]: Service for executing SQL scripts
   /// - [logRepository]: Repository for logging execution results
   ///
@@ -31,6 +33,7 @@ abstract class IBackupScriptOrchestrator {
     required ISqlServerConfigRepository sqlServerConfigRepository,
     required ISybaseConfigRepository sybaseConfigRepository,
     required IPostgresConfigRepository postgresConfigRepository,
+    required IFirebirdConfigRepository firebirdConfigRepository,
     required ISqlScriptExecutionService scriptService,
     required IBackupLogRepository logRepository,
   });

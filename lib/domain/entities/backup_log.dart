@@ -1,4 +1,7 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:uuid/uuid.dart';
+
+part 'backup_log.freezed.dart';
 
 enum LogLevel {
   debug,
@@ -7,8 +10,6 @@ enum LogLevel {
   error
   ;
 
-  /// Converte uma string para o [LogLevel] correspondente. Faz match
-  /// case-insensitive e cai em [LogLevel.info] para valores desconhecidos.
   static LogLevel fromString(String value) {
     final normalized = value.trim().toLowerCase();
     for (final level in LogLevel.values) {
@@ -20,24 +21,39 @@ enum LogLevel {
 
 enum LogCategory { execution, system, audit }
 
-class BackupLog {
-  BackupLog({
-    required this.level,
-    required this.category,
-    required this.message,
+@freezed
+abstract class BackupLog with _$BackupLog {
+  const BackupLog._();
+
+  factory BackupLog({
     String? id,
-    this.backupHistoryId,
-    this.details,
+    String? backupHistoryId,
+    required LogLevel level,
+    required LogCategory category,
+    required String message,
+    String? details,
     DateTime? createdAt,
-  }) : id = id ?? const Uuid().v4(),
-       createdAt = createdAt ?? DateTime.now();
-  final String id;
-  final String? backupHistoryId;
-  final LogLevel level;
-  final LogCategory category;
-  final String message;
-  final String? details;
-  final DateTime createdAt;
+  }) {
+    return BackupLog.raw(
+      id: id ?? const Uuid().v4(),
+      backupHistoryId: backupHistoryId,
+      level: level,
+      category: category,
+      message: message,
+      details: details,
+      createdAt: createdAt ?? DateTime.now(),
+    );
+  }
+
+  const factory BackupLog.raw({
+    required String id,
+    String? backupHistoryId,
+    required LogLevel level,
+    required LogCategory category,
+    required String message,
+    String? details,
+    required DateTime createdAt,
+  }) = _BackupLog;
 
   @override
   bool operator ==(Object other) =>

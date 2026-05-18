@@ -71,6 +71,9 @@ class BackupMetrics {
       'stripingCount': flags.stripingCount,
       'withChecksum': flags.withChecksum,
       'stopOnError': flags.stopOnError,
+      if (flags.tool != null) 'tool': flags.tool,
+      if (flags.firebirdVersion != null)
+        'firebirdVersion': flags.firebirdVersion,
     },
     if (sybaseOptions != null && sybaseOptions!.isNotEmpty)
       'sybaseOptions': sybaseOptions,
@@ -98,6 +101,8 @@ class BackupMetrics {
               stripingCount: flagsMap['stripingCount'] as int? ?? 1,
               withChecksum: flagsMap['withChecksum'] as bool? ?? false,
               stopOnError: flagsMap['stopOnError'] as bool? ?? true,
+              tool: flagsMap['tool'] as String?,
+              firebirdVersion: flagsMap['firebirdVersion'] as String?,
             )
           : const BackupFlags(
               compression: false,
@@ -150,6 +155,8 @@ class BackupFlags {
     required this.stripingCount,
     required this.withChecksum,
     required this.stopOnError,
+    this.tool,
+    this.firebirdVersion,
   });
 
   final bool compression;
@@ -157,4 +164,6 @@ class BackupFlags {
   final int stripingCount;
   final bool withChecksum;
   final bool stopOnError;
+  final String? tool;
+  final String? firebirdVersion;
 }

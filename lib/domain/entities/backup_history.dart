@@ -1,73 +1,65 @@
 import 'package:backup_database/domain/entities/backup_metrics.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:uuid/uuid.dart';
+
+part 'backup_history.freezed.dart';
 
 enum BackupStatus { success, error, warning, running }
 
-class BackupHistory {
-  BackupHistory({
-    required this.databaseName,
-    required this.databaseType,
-    required this.backupPath,
-    required this.fileSize,
-    required this.status,
-    required this.startedAt,
-    String? id,
-    this.runId,
-    this.scheduleId,
-    this.backupType = 'full',
-    this.errorMessage,
-    this.finishedAt,
-    this.durationSeconds,
-    this.metrics,
-  }) : id = id ?? const Uuid().v4();
-  final String id;
-  final String? runId;
-  final String? scheduleId;
-  final String databaseName;
-  final String databaseType;
-  final String backupPath;
-  final int fileSize;
-  final String backupType;
-  final BackupStatus status;
-  final String? errorMessage;
-  final DateTime startedAt;
-  final DateTime? finishedAt;
-  final int? durationSeconds;
-  final BackupMetrics? metrics;
+@freezed
+abstract class BackupHistory with _$BackupHistory {
+  const BackupHistory._();
 
-  BackupHistory copyWith({
+  factory BackupHistory({
+    required String databaseName,
+    required String databaseType,
+    required String backupPath,
+    required int fileSize,
+    required BackupStatus status,
+    required DateTime startedAt,
     String? id,
     String? runId,
     String? scheduleId,
-    String? databaseName,
-    String? databaseType,
-    String? backupPath,
-    int? fileSize,
-    String? backupType,
-    BackupStatus? status,
+    String backupType = 'full',
     String? errorMessage,
-    DateTime? startedAt,
     DateTime? finishedAt,
     int? durationSeconds,
     BackupMetrics? metrics,
   }) {
-    return BackupHistory(
-      id: id ?? this.id,
-      runId: runId ?? this.runId,
-      scheduleId: scheduleId ?? this.scheduleId,
-      databaseName: databaseName ?? this.databaseName,
-      databaseType: databaseType ?? this.databaseType,
-      backupPath: backupPath ?? this.backupPath,
-      fileSize: fileSize ?? this.fileSize,
-      backupType: backupType ?? this.backupType,
-      status: status ?? this.status,
-      errorMessage: errorMessage ?? this.errorMessage,
-      startedAt: startedAt ?? this.startedAt,
-      finishedAt: finishedAt ?? this.finishedAt,
-      durationSeconds: durationSeconds ?? this.durationSeconds,
-      metrics: metrics ?? this.metrics,
+    return BackupHistory.raw(
+      id: id ?? const Uuid().v4(),
+      runId: runId,
+      scheduleId: scheduleId,
+      databaseName: databaseName,
+      databaseType: databaseType,
+      backupPath: backupPath,
+      fileSize: fileSize,
+      backupType: backupType,
+      status: status,
+      errorMessage: errorMessage,
+      startedAt: startedAt,
+      finishedAt: finishedAt,
+      durationSeconds: durationSeconds,
+      metrics: metrics,
     );
   }
+
+  const factory BackupHistory.raw({
+    required String id,
+    String? runId,
+    String? scheduleId,
+    required String databaseName,
+    required String databaseType,
+    required String backupPath,
+    required int fileSize,
+    @Default('full') String backupType,
+    required BackupStatus status,
+    String? errorMessage,
+    required DateTime startedAt,
+    DateTime? finishedAt,
+    int? durationSeconds,
+    BackupMetrics? metrics,
+  }) = _BackupHistory;
 
   @override
   bool operator ==(Object other) =>

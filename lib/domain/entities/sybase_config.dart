@@ -3,35 +3,61 @@ import 'package:backup_database/domain/entities/schedule.dart'
     show DatabaseType;
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:uuid/uuid.dart';
 
-class SybaseConfig extends DatabaseConnectionConfig {
-  SybaseConfig({
-    required super.name,
-    required this.serverName,
-    required this.databaseName,
-    required super.username,
-    required super.password,
+part 'sybase_config.freezed.dart';
+
+@freezed
+abstract class SybaseConfig
+    with _$SybaseConfig
+    implements DatabaseConnectionConfig {
+  const SybaseConfig._();
+
+  factory SybaseConfig({
+    required String name,
+    required String serverName,
+    required DatabaseName databaseName,
+    required String username,
+    required String password,
     String? id,
-    this.databaseFile = '',
+    String databaseFile = '',
     PortNumber? port,
-    super.enabled = true,
-    this.isReplicationEnvironment = false,
+    bool enabled = true,
+    bool isReplicationEnvironment = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : super(
-         id: id ?? const Uuid().v4(),
-         port: port ?? PortNumber(2638),
-         createdAt: createdAt ?? DateTime.now(),
-         updatedAt: updatedAt ?? DateTime.now(),
-       );
+  }) {
+    return SybaseConfig.raw(
+      id: id ?? const Uuid().v4(),
+      name: name,
+      serverName: serverName,
+      databaseName: databaseName,
+      username: username,
+      password: password,
+      databaseFile: databaseFile,
+      port: port ?? PortNumber(2638),
+      enabled: enabled,
+      isReplicationEnvironment: isReplicationEnvironment,
+      createdAt: createdAt ?? DateTime.now(),
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
 
-  final String serverName;
-  final DatabaseName databaseName;
-  final String databaseFile;
-  final bool isReplicationEnvironment;
-
-  String get databaseNameValue => databaseName.value;
+  const factory SybaseConfig.raw({
+    required String id,
+    required String name,
+    required String serverName,
+    required DatabaseName databaseName,
+    required String username,
+    required String password,
+    @Default('') String databaseFile,
+    required PortNumber port,
+    @Default(true) bool enabled,
+    @Default(false) bool isReplicationEnvironment,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+  }) = _SybaseConfig;
 
   @override
   DatabaseType get databaseType => DatabaseType.sybase;
@@ -42,36 +68,13 @@ class SybaseConfig extends DatabaseConnectionConfig {
   @override
   DatabaseName get primaryDatabase => databaseName;
 
-  SybaseConfig copyWith({
-    String? id,
-    String? name,
-    String? serverName,
-    DatabaseName? databaseName,
-    String? databaseFile,
-    PortNumber? port,
-    String? username,
-    String? password,
-    bool? enabled,
-    bool? isReplicationEnvironment,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return SybaseConfig(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      serverName: serverName ?? this.serverName,
-      databaseName: databaseName ?? this.databaseName,
-      databaseFile: databaseFile ?? this.databaseFile,
-      port: port ?? this.port,
-      username: username ?? this.username,
-      password: password ?? this.password,
-      enabled: enabled ?? this.enabled,
-      isReplicationEnvironment:
-          isReplicationEnvironment ?? this.isReplicationEnvironment,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? DateTime.now(),
-    );
-  }
+  @override
+  String? get backupTarget => null;
+
+  @override
+  int get portValue => port.value;
+
+  String get databaseNameValue => databaseName.value;
 
   @override
   bool operator ==(Object other) =>
