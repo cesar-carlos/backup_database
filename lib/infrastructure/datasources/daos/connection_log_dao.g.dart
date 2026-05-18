@@ -6,4 +6,15 @@ part of 'connection_log_dao.dart';
 mixin _$ConnectionLogDaoMixin on DatabaseAccessor<AppDatabase> {
   $ConnectionLogsTableTable get connectionLogsTable =>
       attachedDatabase.connectionLogsTable;
+  ConnectionLogDaoManager get managers => ConnectionLogDaoManager(this);
+}
+
+class ConnectionLogDaoManager {
+  final _$ConnectionLogDaoMixin _db;
+  ConnectionLogDaoManager(this._db);
+  $$ConnectionLogsTableTableTableManager get connectionLogsTable =>
+      $$ConnectionLogsTableTableTableManager(
+        _db.attachedDatabase,
+        _db.connectionLogsTable,
+      );
 }

@@ -5,6 +5,10 @@ class UserPreferencesRepository implements IUserPreferencesRepository {
   static const String _minimizeToTrayKey = 'minimize_to_tray';
   static const String _closeToTrayKey = 'close_to_tray';
   static const String _darkModeKey = 'dark_mode';
+  static const String _useWindowsMicaBackdropKey = 'use_windows_mica_backdrop';
+  static const String _useSystemAccentColorKey = 'use_system_accent_color';
+  static const String _uiDensityKey = 'ui_density';
+  static const String _skeletonLoadingEnabledKey = 'skeleton_loading_enabled';
   static const String _r1MultiProfileLegacyHintDismissedSigKey =
       'r1_multi_profile_legacy_hint_dismissed_sig';
 
@@ -53,6 +57,54 @@ class UserPreferencesRepository implements IUserPreferencesRepository {
   Future<void> setDarkMode(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_darkModeKey, value);
+  }
+
+  @override
+  Future<bool> getUseWindowsMicaBackdrop() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_useWindowsMicaBackdropKey) ?? true;
+  }
+
+  @override
+  Future<void> setUseWindowsMicaBackdrop(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_useWindowsMicaBackdropKey, value);
+  }
+
+  @override
+  Future<bool> getUseSystemAccentColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_useSystemAccentColorKey) ?? false;
+  }
+
+  @override
+  Future<void> setUseSystemAccentColor(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_useSystemAccentColorKey, value);
+  }
+
+  @override
+  Future<String?> getUiDensity() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_uiDensityKey);
+  }
+
+  @override
+  Future<void> setUiDensity(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_uiDensityKey, name);
+  }
+
+  @override
+  Future<bool> getSkeletonLoadingEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_skeletonLoadingEnabledKey) ?? true;
+  }
+
+  @override
+  Future<void> setSkeletonLoadingEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_skeletonLoadingEnabledKey, value);
   }
 
   @override

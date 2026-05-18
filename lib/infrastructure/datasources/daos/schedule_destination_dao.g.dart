@@ -9,4 +9,26 @@ mixin _$ScheduleDestinationDaoMixin on DatabaseAccessor<AppDatabase> {
       attachedDatabase.backupDestinationsTable;
   $ScheduleDestinationsTableTable get scheduleDestinationsTable =>
       attachedDatabase.scheduleDestinationsTable;
+  ScheduleDestinationDaoManager get managers =>
+      ScheduleDestinationDaoManager(this);
+}
+
+class ScheduleDestinationDaoManager {
+  final _$ScheduleDestinationDaoMixin _db;
+  ScheduleDestinationDaoManager(this._db);
+  $$SchedulesTableTableTableManager get schedulesTable =>
+      $$SchedulesTableTableTableManager(
+        _db.attachedDatabase,
+        _db.schedulesTable,
+      );
+  $$BackupDestinationsTableTableTableManager get backupDestinationsTable =>
+      $$BackupDestinationsTableTableTableManager(
+        _db.attachedDatabase,
+        _db.backupDestinationsTable,
+      );
+  $$ScheduleDestinationsTableTableTableManager get scheduleDestinationsTable =>
+      $$ScheduleDestinationsTableTableTableManager(
+        _db.attachedDatabase,
+        _db.scheduleDestinationsTable,
+      );
 }

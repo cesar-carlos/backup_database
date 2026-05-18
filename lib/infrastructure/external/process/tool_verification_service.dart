@@ -1,5 +1,6 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/sybase_tools_status.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -429,5 +430,141 @@ class ToolVerificationService {
         );
       },
     );
+  }
+
+  Future<rd.Result<bool>> verifyFirebirdCliTools() async {
+    try {
+      LoggerService.info(
+        'Verificando ferramentas Firebird (gbak, nbackup, gstat, isql)...',
+      );
+
+      final gbakResult = await _processService.run(
+        executable: 'gbak',
+        arguments: const ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      final gbakOk = gbakResult.fold(
+        (pr) => pr.isSuccess,
+        (_) => false,
+      );
+      if (!gbakOk) {
+        LoggerService.warning(
+          'gbak indisponivel ou falhou ao executar -?',
+        );
+        return rd.Failure(
+          ValidationFailure(
+            message: ToolPathHelp.buildMessage('gbak'),
+          ),
+        );
+      }
+      LoggerService.info('gbak encontrado e disponivel');
+
+      final nbackupResult = await _processService.run(
+        executable: 'nbackup',
+        arguments: const ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      final nbackupOk = nbackupResult.fold(
+        (pr) => pr.isSuccess,
+        (_) => false,
+      );
+      if (!nbackupOk) {
+        LoggerService.warning(
+          'nbackup indisponivel ou falhou ao executar -?',
+        );
+        return rd.Failure(
+          ValidationFailure(
+            message: ToolPathHelp.buildMessage('nbackup'),
+          ),
+        );
+      }
+      LoggerService.info('nbackup encontrado e disponivel');
+
+      final gstatResult = await _processService.run(
+        executable: 'gstat',
+        arguments: const ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      final gstatOutcome = gstatResult.fold<rd.Result<bool>>(
+        (pr) {
+          if (pr.isSuccess) {
+            LoggerService.info('gstat encontrado e disponivel');
+            return const rd.Success(true);
+          }
+          LoggerService.warning(
+            'gstat indisponivel ou falhou ao executar -? '
+            '(exit: ${pr.exitCode})',
+          );
+          return rd.Failure(
+            ValidationFailure(
+              message: ToolPathHelp.buildMessage('gstat'),
+            ),
+          );
+        },
+        (Object failure) {
+          final errorMessage = failure is Failure
+              ? failure.message
+              : failure.toString();
+          LoggerService.warning('Erro ao verificar gstat: $errorMessage');
+          return rd.Failure(
+            ValidationFailure(
+              message: ToolPathHelp.buildMessage('gstat'),
+            ),
+          );
+        },
+      );
+      if (gstatOutcome.isError()) {
+        return gstatOutcome;
+      }
+
+      final isqlResult = await _processService.run(
+        executable: 'isql',
+        arguments: const ['-?'],
+        timeout: const Duration(seconds: 5),
+      );
+
+      return isqlResult.fold(
+        (pr) {
+          if (pr.isSuccess) {
+            LoggerService.info('isql encontrado e disponivel');
+            return const rd.Success(true);
+          }
+          LoggerService.warning(
+            'isql indisponivel ou falhou ao executar -? '
+            '(exit: ${pr.exitCode})',
+          );
+          return rd.Failure(
+            ValidationFailure(
+              message: ToolPathHelp.buildMessage('isql'),
+            ),
+          );
+        },
+        (Object failure) {
+          final errorMessage = failure is Failure
+              ? failure.message
+              : failure.toString();
+          LoggerService.warning('Erro ao verificar isql: $errorMessage');
+          return rd.Failure(
+            ValidationFailure(
+              message: ToolPathHelp.buildMessage('isql'),
+            ),
+          );
+        },
+      );
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao verificar ferramentas Firebird',
+        e,
+        stackTrace,
+      );
+      return rd.Failure(
+        ValidationFailure(
+          message: 'Erro ao verificar ferramentas Firebird: $e',
+        ),
+      );
+    }
   }
 }

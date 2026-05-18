@@ -71,6 +71,7 @@ class StatusCodes {
     ErrorCode.parseError: badRequest,
     ErrorCode.payloadTooLarge: badRequest,
     ErrorCode.invalidChecksum: badRequest,
+    ErrorCode.unsupportedDatabaseType: badRequest,
 
     // Auth / autorizacao
     ErrorCode.authenticationFailed: unauthorized,

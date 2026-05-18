@@ -6,4 +6,15 @@ part of 'sybase_config_dao.dart';
 mixin _$SybaseConfigDaoMixin on DatabaseAccessor<AppDatabase> {
   $SybaseConfigsTableTable get sybaseConfigsTable =>
       attachedDatabase.sybaseConfigsTable;
+  SybaseConfigDaoManager get managers => SybaseConfigDaoManager(this);
+}
+
+class SybaseConfigDaoManager {
+  final _$SybaseConfigDaoMixin _db;
+  SybaseConfigDaoManager(this._db);
+  $$SybaseConfigsTableTableTableManager get sybaseConfigsTable =>
+      $$SybaseConfigsTableTableTableManager(
+        _db.attachedDatabase,
+        _db.sybaseConfigsTable,
+      );
 }

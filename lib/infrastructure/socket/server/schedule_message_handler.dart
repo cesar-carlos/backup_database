@@ -3,6 +3,7 @@ import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_license_policy_service.dart';
@@ -28,13 +29,15 @@ class ScheduleMessageHandler {
     required ExecuteScheduledBackup executeBackup,
     required IBackupProgressNotifier progressNotifier,
     RemoteExecutionRegistry? executionRegistry,
+    bool supportsFirebird = true,
   }) : _scheduleRepository = scheduleRepository,
        _licensePolicyService = licensePolicyService,
        _schedulerService = schedulerService,
        _updateSchedule = updateSchedule,
        _executeBackup = executeBackup,
        _progressNotifier = progressNotifier,
-       _executionRegistry = executionRegistry ?? RemoteExecutionRegistry() {
+       _executionRegistry = executionRegistry ?? RemoteExecutionRegistry(),
+       _supportsFirebird = supportsFirebird {
     _progressNotifier.addListener(_onProgressChanged);
   }
 
@@ -52,6 +55,7 @@ class ScheduleMessageHandler {
   /// no scheduler), mas a estrutura suporta a fila planejada para PR-3b
   /// sem reescrita do handler.
   final RemoteExecutionRegistry _executionRegistry;
+  final bool _supportsFirebird;
 
   void dispose() {
     _progressNotifier.removeListener(_onProgressChanged);
@@ -324,6 +328,18 @@ class ScheduleMessageHandler {
           'Agendamento não encontrado',
           sendToClient,
           errorCode: ErrorCode.scheduleNotFound,
+        );
+        return;
+      }
+
+      if (schedule.databaseType == DatabaseType.firebird &&
+          !_supportsFirebird) {
+        await _sendError(
+          clientId,
+          requestId,
+          ErrorCode.unsupportedDatabaseType.defaultMessage,
+          sendToClient,
+          errorCode: ErrorCode.unsupportedDatabaseType,
         );
         return;
       }

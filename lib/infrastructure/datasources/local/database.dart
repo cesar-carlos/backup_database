@@ -1813,7 +1813,9 @@ class AppDatabase extends _$AppDatabase {
         BEFORE INSERT ON schedules_table
         BEGIN
           SELECT RAISE(ABORT, 'database_type invalido em schedules_table')
-          WHERE NEW.database_type NOT IN ('sqlServer', 'sybase', 'postgresql');
+          WHERE NEW.database_type NOT IN (
+            'sqlServer', 'sybase', 'postgresql', 'firebird'
+          );
 
           SELECT RAISE(ABORT, 'Configuracao SQL Server inexistente para agendamento')
           WHERE NEW.database_type = 'sqlServer' AND NOT EXISTS (
@@ -1830,6 +1832,12 @@ class AppDatabase extends _$AppDatabase {
           SELECT RAISE(ABORT, 'Configuracao PostgreSQL inexistente para agendamento')
           WHERE NEW.database_type = 'postgresql' AND NOT EXISTS (
             SELECT 1 FROM postgres_configs_table c
+            WHERE c.id = NEW.database_config_id
+          );
+
+          SELECT RAISE(ABORT, 'Configuracao Firebird inexistente para agendamento')
+          WHERE NEW.database_type = 'firebird' AND NOT EXISTS (
+            SELECT 1 FROM firebird_configs_table c
             WHERE c.id = NEW.database_config_id
           );
         END;
@@ -1843,7 +1851,9 @@ class AppDatabase extends _$AppDatabase {
         BEFORE UPDATE OF database_type, database_config_id ON schedules_table
         BEGIN
           SELECT RAISE(ABORT, 'database_type invalido em schedules_table')
-          WHERE NEW.database_type NOT IN ('sqlServer', 'sybase', 'postgresql');
+          WHERE NEW.database_type NOT IN (
+            'sqlServer', 'sybase', 'postgresql', 'firebird'
+          );
 
           SELECT RAISE(ABORT, 'Configuracao SQL Server inexistente para agendamento')
           WHERE NEW.database_type = 'sqlServer' AND NOT EXISTS (
@@ -1860,6 +1870,12 @@ class AppDatabase extends _$AppDatabase {
           SELECT RAISE(ABORT, 'Configuracao PostgreSQL inexistente para agendamento')
           WHERE NEW.database_type = 'postgresql' AND NOT EXISTS (
             SELECT 1 FROM postgres_configs_table c
+            WHERE c.id = NEW.database_config_id
+          );
+
+          SELECT RAISE(ABORT, 'Configuracao Firebird inexistente para agendamento')
+          WHERE NEW.database_type = 'firebird' AND NOT EXISTS (
+            SELECT 1 FROM firebird_configs_table c
             WHERE c.id = NEW.database_config_id
           );
         END;
@@ -1908,6 +1924,22 @@ class AppDatabase extends _$AppDatabase {
           WHERE EXISTS (
             SELECT 1 FROM schedules_table s
             WHERE s.database_type = 'postgresql'
+              AND s.database_config_id = OLD.id
+          );
+        END;
+      ''');
+
+      await customStatement(
+        'DROP TRIGGER IF EXISTS trg_firebird_configs_restrict_delete',
+      );
+      await customStatement('''
+        CREATE TRIGGER trg_firebird_configs_restrict_delete
+        BEFORE DELETE ON firebird_configs_table
+        BEGIN
+          SELECT RAISE(ABORT, 'Configuracao em uso por agendamentos')
+          WHERE EXISTS (
+            SELECT 1 FROM schedules_table s
+            WHERE s.database_type = 'firebird'
               AND s.database_config_id = OLD.id
           );
         END;

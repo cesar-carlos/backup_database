@@ -7,16 +7,18 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   AppTheme._();
 
+  static final AccentColor brandFluentAccent = AccentColor('normal', const {
+    'normal': AppPalette.primary,
+    'dark': AppPalette.primaryDark,
+    'light': AppPalette.primaryLight,
+  });
+
   static FluentThemeData get lightFluentTheme {
     final montserratTextTheme = GoogleFonts.montserratTextTheme();
     final theme = FluentThemeData.light();
     return theme.copyWith(
       extensions: const [AppSemanticColors.light],
-      accentColor: AccentColor('normal', const {
-        'normal': AppPalette.primary,
-        'dark': AppPalette.primaryDark,
-        'light': AppPalette.primaryLight,
-      }),
+      accentColor: brandFluentAccent,
       typography: Typography.raw(
         caption: montserratTextTheme.bodySmall,
         body: montserratTextTheme.bodyMedium,
@@ -37,11 +39,7 @@ class AppTheme {
     final theme = FluentThemeData.dark();
     return theme.copyWith(
       extensions: const [AppSemanticColors.dark],
-      accentColor: AccentColor('normal', const {
-        'normal': AppPalette.primary,
-        'dark': AppPalette.primaryDark,
-        'light': AppPalette.primaryLight,
-      }),
+      accentColor: brandFluentAccent,
       typography: Typography.raw(
         caption: montserratTextTheme.bodySmall,
         body: montserratTextTheme.bodyMedium,

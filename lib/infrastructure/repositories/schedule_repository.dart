@@ -5,9 +5,7 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
-import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
-import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
@@ -21,6 +19,8 @@ class ScheduleRepository implements IScheduleRepository {
   static const _verifyPolicyKey = '_verifyPolicy';
   static const _sqlServerBackupOptionsKey = '_sqlServerBackupOptions';
   static const _sybaseBackupOptionsKey = '_sybaseBackupOptions';
+  static const _firebirdNbackupPhysicalLevelKey =
+      '_firebirdNbackupPhysicalLevel';
 
   @override
   Future<rd.Result<List<Schedule>>> getAll() {
@@ -255,13 +255,16 @@ class ScheduleRepository implements IScheduleRepository {
   ) async {
     final scheduleConfigMap = _safeDecodeScheduleConfig(data.scheduleConfig);
     final verifyPolicy = _parseVerifyPolicy(scheduleConfigMap);
+    final firebirdNbackupPhysicalLevel = _parseFirebirdNbackupPhysicalLevel(
+      scheduleConfigMap,
+    );
     final databaseType = DatabaseType.values.firstWhere(
       (e) => e.name == data.databaseType,
     );
 
     if (databaseType == DatabaseType.sqlServer) {
       final sqlOptions = _parseSqlServerBackupOptions(scheduleConfigMap);
-      return SqlServerBackupSchedule(
+      return Schedule(
         id: data.id,
         name: data.name,
         databaseConfigId: data.databaseConfigId,
@@ -286,12 +289,13 @@ class ScheduleRepository implements IScheduleRepository {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         sqlServerBackupOptions: sqlOptions,
+        firebirdNbackupPhysicalLevel: firebirdNbackupPhysicalLevel,
       );
     }
 
     if (databaseType == DatabaseType.sybase) {
       final sybaseOptions = _parseSybaseBackupOptions(scheduleConfigMap);
-      return SybaseBackupSchedule(
+      return Schedule(
         id: data.id,
         name: data.name,
         databaseConfigId: data.databaseConfigId,
@@ -316,6 +320,7 @@ class ScheduleRepository implements IScheduleRepository {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
         sybaseBackupOptions: sybaseOptions,
+        firebirdNbackupPhysicalLevel: firebirdNbackupPhysicalLevel,
       );
     }
 
@@ -343,6 +348,7 @@ class ScheduleRepository implements IScheduleRepository {
       nextRunAt: data.nextRunAt,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
+      firebirdNbackupPhysicalLevel: firebirdNbackupPhysicalLevel,
     );
   }
 
@@ -462,27 +468,35 @@ class ScheduleRepository implements IScheduleRepository {
       schedule.scheduleConfig,
     );
     scheduleConfigMap[_verifyPolicyKey] = schedule.verifyPolicy.name;
+    if (schedule.firebirdNbackupPhysicalLevel != null) {
+      scheduleConfigMap[_firebirdNbackupPhysicalLevelKey] =
+          schedule.firebirdNbackupPhysicalLevel;
+    } else {
+      scheduleConfigMap.remove(_firebirdNbackupPhysicalLevelKey);
+    }
 
     if (schedule.databaseType == DatabaseType.sqlServer &&
-        schedule is SqlServerBackupSchedule) {
+        schedule.sqlServerBackupOptions != null) {
+      final sqlOptions = schedule.sqlServerBackupOptions!;
       scheduleConfigMap[_sqlServerBackupOptionsKey] = {
-        'compression': schedule.sqlServerBackupOptions.compression,
-        'maxTransferSize': schedule.sqlServerBackupOptions.maxTransferSize,
-        'bufferCount': schedule.sqlServerBackupOptions.bufferCount,
-        'blockSize': schedule.sqlServerBackupOptions.blockSize,
-        'stripingCount': schedule.sqlServerBackupOptions.stripingCount,
-        'statsPercent': schedule.sqlServerBackupOptions.statsPercent,
+        'compression': sqlOptions.compression,
+        'maxTransferSize': sqlOptions.maxTransferSize,
+        'bufferCount': sqlOptions.bufferCount,
+        'blockSize': sqlOptions.blockSize,
+        'stripingCount': sqlOptions.stripingCount,
+        'statsPercent': sqlOptions.statsPercent,
       };
     }
 
     if (schedule.databaseType == DatabaseType.sybase &&
-        schedule is SybaseBackupSchedule) {
+        schedule.sybaseBackupOptions != null) {
+      final sybaseOptions = schedule.sybaseBackupOptions!;
       scheduleConfigMap[_sybaseBackupOptionsKey] = {
-        'checkpointLog': schedule.sybaseBackupOptions.checkpointLog?.name,
-        'serverSide': schedule.sybaseBackupOptions.serverSide,
-        'autoTuneWriters': schedule.sybaseBackupOptions.autoTuneWriters,
-        'blockSize': schedule.sybaseBackupOptions.blockSize,
-        'logBackupMode': schedule.sybaseBackupOptions.logBackupMode?.name,
+        'checkpointLog': sybaseOptions.checkpointLog?.name,
+        'serverSide': sybaseOptions.serverSide,
+        'autoTuneWriters': sybaseOptions.autoTuneWriters,
+        'blockSize': sybaseOptions.blockSize,
+        'logBackupMode': sybaseOptions.logBackupMode?.name,
       };
     }
 
@@ -544,6 +558,33 @@ class ScheduleRepository implements IScheduleRepository {
       (value) => value.name == rawValue,
       orElse: () => VerifyPolicy.bestEffort,
     );
+  }
+
+  int? _parseFirebirdNbackupPhysicalLevel(Map<String, dynamic> configMap) {
+    final Object? raw = configMap[_firebirdNbackupPhysicalLevelKey];
+    if (raw == null) {
+      return null;
+    }
+    if (raw is int) {
+      if (raw >= 0 && raw <= 9) {
+        return raw;
+      }
+      return null;
+    }
+    if (raw is num) {
+      final v = raw.toInt();
+      if (v >= 0 && v <= 9) {
+        return v;
+      }
+      return null;
+    }
+    if (raw is String) {
+      final v = int.tryParse(raw.trim());
+      if (v != null && v >= 0 && v <= 9) {
+        return v;
+      }
+    }
+    return null;
   }
 
   SqlServerBackupOptions _parseSqlServerBackupOptions(

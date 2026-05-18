@@ -28,9 +28,13 @@ class FirebirdBackupStrategyFactory {
               scheduleId: schedule.id,
               backupType: backupType,
               verifyAfterBackup: schedule.verifyAfterBackup,
+              verifyPolicy: schedule.verifyPolicy,
+              enableChecksum: schedule.enableChecksum,
               backupTimeout: schedule.backupTimeout,
               verifyTimeout: schedule.verifyTimeout,
               cancelTag: cancelTag,
+              firebirdNbackupPhysicalLevel:
+                  schedule.firebirdNbackupPhysicalLevel,
             );
           },
     );

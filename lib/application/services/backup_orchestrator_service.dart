@@ -36,6 +36,7 @@ class BackupOrchestratorService {
     required ISqlServerConfigRepository sqlServerConfigRepository,
     required ISybaseConfigRepository sybaseConfigRepository,
     required IPostgresConfigRepository postgresConfigRepository,
+    required IFirebirdConfigRepository firebirdConfigRepository,
     required IBackupHistoryRepository backupHistoryRepository,
     required IBackupLogRepository backupLogRepository,
     required ISqlServerBackupService sqlServerBackupService,
@@ -66,6 +67,7 @@ class BackupOrchestratorService {
        _sqlServerConfigRepository = sqlServerConfigRepository,
        _sybaseConfigRepository = sybaseConfigRepository,
        _postgresConfigRepository = postgresConfigRepository,
+       _firebirdConfigRepository = firebirdConfigRepository,
        _backupHistoryRepository = backupHistoryRepository,
        _backupLogRepository = backupLogRepository,
        _compressionOrchestrator = compressionOrchestrator,
@@ -80,6 +82,7 @@ class BackupOrchestratorService {
   final ISqlServerConfigRepository _sqlServerConfigRepository;
   final ISybaseConfigRepository _sybaseConfigRepository;
   final IPostgresConfigRepository _postgresConfigRepository;
+  final IFirebirdConfigRepository _firebirdConfigRepository;
   final IBackupHistoryRepository _backupHistoryRepository;
   final IBackupLogRepository _backupLogRepository;
   final IBackupCompressionOrchestrator _compressionOrchestrator;
@@ -419,6 +422,7 @@ class BackupOrchestratorService {
           sqlServerConfigRepository: _sqlServerConfigRepository,
           sybaseConfigRepository: _sybaseConfigRepository,
           postgresConfigRepository: _postgresConfigRepository,
+          firebirdConfigRepository: _firebirdConfigRepository,
           scriptService: _sqlScriptExecutionService,
           logRepository: _backupLogRepository,
         );

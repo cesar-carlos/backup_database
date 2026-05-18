@@ -2,6 +2,10 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 
+/// Converte `Schedule` para mapa neutro usado em `schedule_messages`.
+///
+/// O campo `databaseType` usa `DatabaseType.name` no wire (`sqlServer`,
+/// `sybase`, `postgresql`, `firebird`).
 Map<String, dynamic> scheduleToMap(Schedule schedule) {
   return <String, dynamic>{
     'id': schedule.id,
@@ -19,6 +23,8 @@ Map<String, dynamic> scheduleToMap(Schedule schedule) {
     'enabled': schedule.enabled,
     'enableChecksum': schedule.enableChecksum,
     'verifyAfterBackup': schedule.verifyAfterBackup,
+    if (schedule.firebirdNbackupPhysicalLevel != null)
+      'firebirdNbackupPhysicalLevel': schedule.firebirdNbackupPhysicalLevel,
     if (schedule.postBackupScript != null)
       'postBackupScript': schedule.postBackupScript,
     if (schedule.lastRunAt != null)
@@ -51,6 +57,9 @@ Schedule scheduleFromMap(Map<String, dynamic> map) {
     enabled: map['enabled'] as bool? ?? true,
     enableChecksum: map['enableChecksum'] as bool? ?? false,
     verifyAfterBackup: map['verifyAfterBackup'] as bool? ?? false,
+    firebirdNbackupPhysicalLevel: _parseOptionalFirebirdNbackupWireLevel(
+      map['firebirdNbackupPhysicalLevel'],
+    ),
     postBackupScript: map['postBackupScript'] as String?,
     lastRunAt: map['lastRunAt'] != null
         ? DateTime.parse(map['lastRunAt'] as String)
@@ -65,4 +74,30 @@ Schedule scheduleFromMap(Map<String, dynamic> map) {
         ? DateTime.parse(map['updatedAt'] as String)
         : null,
   );
+}
+
+int? _parseOptionalFirebirdNbackupWireLevel(Object? raw) {
+  if (raw == null) {
+    return null;
+  }
+  if (raw is int) {
+    if (raw >= 0 && raw <= 9) {
+      return raw;
+    }
+    return null;
+  }
+  if (raw is num) {
+    final v = raw.toInt();
+    if (v >= 0 && v <= 9) {
+      return v;
+    }
+    return null;
+  }
+  if (raw is String) {
+    final v = int.tryParse(raw.trim());
+    if (v != null && v >= 0 && v <= 9) {
+      return v;
+    }
+  }
+  return null;
 }

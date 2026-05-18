@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'package:backup_database/application/providers/database_connection_test_snapshot.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/database_connection_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -24,7 +25,32 @@ abstract class DatabaseConfigProviderBase<T extends DatabaseConnectionConfig>
 
   List<T> _configs = [];
 
+  Map<String, DatabaseConnectionTestSnapshot> _connectionTestsByConfigId =
+      <String, DatabaseConnectionTestSnapshot>{};
+
   List<T> get configs => _configs;
+
+  DatabaseConnectionTestSnapshot? connectionTestSnapshotFor(String configId) =>
+      _connectionTestsByConfigId[configId];
+
+  void recordConnectionTest(String configId, {required bool success}) {
+    _connectionTestsByConfigId =
+        Map<String, DatabaseConnectionTestSnapshot>.from(
+          _connectionTestsByConfigId,
+        )..[configId] = (testedAt: DateTime.now(), success: success);
+    notifyListeners();
+  }
+
+  void _forgetConnectionTest(String configId) {
+    if (!_connectionTestsByConfigId.containsKey(configId)) {
+      return;
+    }
+    _connectionTestsByConfigId =
+        Map<String, DatabaseConnectionTestSnapshot>.from(
+          _connectionTestsByConfigId,
+        )..remove(configId);
+    notifyListeners();
+  }
 
   List<T> get activeConfigs => _configs.where((c) => c.enabled).toList();
 
@@ -88,6 +114,9 @@ abstract class DatabaseConfigProviderBase<T extends DatabaseConnectionConfig>
         );
       },
     );
+    if (ok ?? false) {
+      _forgetConnectionTest(config.id);
+    }
     return ok ?? false;
   }
 
@@ -116,6 +145,7 @@ abstract class DatabaseConfigProviderBase<T extends DatabaseConnectionConfig>
         return result.fold(
           (_) {
             _configs = _configs.where((c) => c.id != id).toList();
+            _forgetConnectionTest(id);
             return true;
           },
           (failure) => throw failure,

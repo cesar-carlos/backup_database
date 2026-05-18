@@ -200,6 +200,86 @@ void main() {
         ).called(1);
       },
     );
+
+    test(
+      'executeSchedule proceeds for Firebird when supportsFirebird is true',
+      () async {
+        final firebirdSchedule = schedule.copyWith(
+          databaseType: DatabaseType.firebird,
+        );
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(firebirdSchedule));
+
+        Message? sentMessage;
+        Future<void> sendToClient(String clientId, Message msg) async {
+          sentMessage = msg;
+        }
+
+        final message = createExecuteScheduleMessage(
+          requestId: 1,
+          scheduleId: scheduleId,
+        );
+
+        await handler.handle('client-1', message, sendToClient);
+
+        expect(sentMessage, isNotNull);
+        verify(
+          () => executeBackup(
+            scheduleId,
+            executionOrigin: ExecutionOrigin.remoteCommand,
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'executeSchedule rejects Firebird when supportsFirebird is false',
+      () async {
+        final firebirdSchedule = schedule.copyWith(
+          databaseType: DatabaseType.firebird,
+        );
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(firebirdSchedule));
+
+        handler.dispose();
+        handler = ScheduleMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          updateSchedule: updateSchedule,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          supportsFirebird: false,
+        );
+
+        Message? sentMessage;
+        Future<void> sendToClient(String clientId, Message msg) async {
+          sentMessage = msg;
+        }
+
+        final message = createExecuteScheduleMessage(
+          requestId: 1,
+          scheduleId: scheduleId,
+        );
+
+        await handler.handle('client-1', message, sendToClient);
+
+        expect(sentMessage, isNotNull);
+        expect(
+          getErrorCodeFromMessage(sentMessage!),
+          ErrorCode.unsupportedDatabaseType,
+        );
+        verifyNever(
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        );
+      },
+    );
   });
 
   group('ScheduleMessageHandler execution registry integration', () {

@@ -6,4 +6,15 @@ part of 'firebird_config_dao.dart';
 mixin _$FirebirdConfigDaoMixin on DatabaseAccessor<AppDatabase> {
   $FirebirdConfigsTableTable get firebirdConfigsTable =>
       attachedDatabase.firebirdConfigsTable;
+  FirebirdConfigDaoManager get managers => FirebirdConfigDaoManager(this);
+}
+
+class FirebirdConfigDaoManager {
+  final _$FirebirdConfigDaoMixin _db;
+  FirebirdConfigDaoManager(this._db);
+  $$FirebirdConfigsTableTableTableManager get firebirdConfigsTable =>
+      $$FirebirdConfigsTableTableTableManager(
+        _db.attachedDatabase,
+        _db.firebirdConfigsTable,
+      );
 }

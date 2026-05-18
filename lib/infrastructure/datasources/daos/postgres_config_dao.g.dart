@@ -6,4 +6,15 @@ part of 'postgres_config_dao.dart';
 mixin _$PostgresConfigDaoMixin on DatabaseAccessor<AppDatabase> {
   $PostgresConfigsTableTable get postgresConfigsTable =>
       attachedDatabase.postgresConfigsTable;
+  PostgresConfigDaoManager get managers => PostgresConfigDaoManager(this);
+}
+
+class PostgresConfigDaoManager {
+  final _$PostgresConfigDaoMixin _db;
+  PostgresConfigDaoManager(this._db);
+  $$PostgresConfigsTableTableTableManager get postgresConfigsTable =>
+      $$PostgresConfigsTableTableTableManager(
+        _db.attachedDatabase,
+        _db.postgresConfigsTable,
+      );
 }

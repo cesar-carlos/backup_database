@@ -48,6 +48,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       sqlServerConfigRepository: getIt<ISqlServerConfigRepository>(),
       sybaseConfigRepository: getIt<ISybaseConfigRepository>(),
       postgresConfigRepository: getIt<IPostgresConfigRepository>(),
+      firebirdConfigRepository: getIt<IFirebirdConfigRepository>(),
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
       backupLogRepository: getIt<IBackupLogRepository>(),
       sqlServerBackupService: getIt<ISqlServerBackupService>(),

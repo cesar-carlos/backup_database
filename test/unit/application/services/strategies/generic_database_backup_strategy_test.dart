@@ -125,7 +125,7 @@ void main() {
       ),
     );
     registerFallbackValue(
-      BackupExecutionContext(
+      const BackupExecutionContext(
         outputDirectory: 'o',
         scheduleId: 'sid',
       ),

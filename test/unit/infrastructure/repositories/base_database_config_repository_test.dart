@@ -41,22 +41,38 @@ class _MemRow {
   final DateTime updatedAt;
 }
 
-class _TestConfig extends DatabaseConnectionConfig {
+class _TestConfig implements DatabaseConnectionConfig {
   _TestConfig({
-    required super.id,
-    required super.name,
+    required this.id,
+    required this.name,
     required this.hostValue,
-    required super.port,
-    required super.username,
-    required super.password,
-    required super.enabled,
-    required super.createdAt,
-    required super.updatedAt,
+    required this.port,
+    required this.username,
+    required this.password,
+    required this.enabled,
+    required this.createdAt,
+    required this.updatedAt,
     required this.databaseValue,
   });
 
+  @override
+  final String id;
+  @override
+  final String name;
   final String hostValue;
+  @override
+  final PortNumber port;
   final String databaseValue;
+  @override
+  final String username;
+  @override
+  final String password;
+  @override
+  final bool enabled;
+  @override
+  final DateTime createdAt;
+  @override
+  final DateTime updatedAt;
 
   @override
   DatabaseType get databaseType => DatabaseType.postgresql;
@@ -66,6 +82,12 @@ class _TestConfig extends DatabaseConnectionConfig {
 
   @override
   DatabaseName get primaryDatabase => DatabaseName(databaseValue);
+
+  @override
+  String? get backupTarget => null;
+
+  @override
+  int get portValue => port.value;
 }
 
 class _FakeConfigRepository

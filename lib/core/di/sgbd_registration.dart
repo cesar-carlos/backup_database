@@ -99,6 +99,7 @@ void registerBackupDatabaseDefaultSgbds(GetIt getIt) {
     () => FirebirdConfigProvider(
       getIt<IFirebirdConfigRepository>(),
       getIt<IScheduleRepository>(),
+      getIt<ToolVerificationService>(),
     ),
   );
 

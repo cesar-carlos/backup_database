@@ -9,6 +9,7 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/backup_execution_context.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
@@ -18,6 +19,7 @@ import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 class _MockPg extends Mock implements IPostgresBackupService {}
 
@@ -46,7 +48,7 @@ void main() {
       ),
     );
     registerFallbackValue(
-      BackupExecutionContext(
+      const BackupExecutionContext(
         outputDirectory: 'o',
         scheduleId: 's',
       ),
@@ -156,8 +158,28 @@ void main() {
     expect(r.isError(), isTrue);
   });
 
-  test('Firebird factory rejects log before service', () async {
+  test('Firebird factory forwards log to service after validation', () async {
     final mock = _MockFb();
+    final captured = <BackupExecutionContext>[];
+    when(
+      () => mock.executeBackup(
+        config: any(named: 'config'),
+        context: any(named: 'context'),
+      ),
+    ).thenAnswer((invocation) async {
+      captured.add(
+        invocation.namedArguments[#context]! as BackupExecutionContext,
+      );
+      return const rd.Success(
+        BackupExecutionResult(
+          backupPath: '/x.nbk',
+          fileSize: 8,
+          duration: Duration.zero,
+          databaseName: 'd',
+          executedBackupType: BackupType.differential,
+        ),
+      );
+    });
     final strategy = FirebirdBackupStrategyFactory.create(mock);
     final schedule = Schedule(
       name: 'sch',
@@ -175,12 +197,13 @@ void main() {
       backupType: BackupType.log,
       cancelTag: 't',
     );
-    expect(r.isError(), isTrue);
-    verifyNever(
+    expect(r.isSuccess(), isTrue);
+    expect(captured.single.backupType, BackupType.log);
+    verify(
       () => mock.executeBackup(
-        config: any(named: 'config'),
+        config: fbCfg,
         context: any(named: 'context'),
       ),
-    );
+    ).called(1);
   });
 }

@@ -3,7 +3,6 @@ import 'package:backup_database/application/services/strategies/rules/sybase_rej
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
-import 'package:backup_database/domain/entities/sybase_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,7 +18,7 @@ void main() {
       username: 'u',
       password: 'p',
     );
-    final schedule = SybaseBackupSchedule(
+    final schedule = Schedule(
       name: 'sch',
       databaseConfigId: 'cfg',
       databaseType: DatabaseType.sybase,
@@ -50,7 +49,7 @@ void main() {
       password: 'p',
       isReplicationEnvironment: true,
     );
-    final schedule = SybaseBackupSchedule(
+    final schedule = Schedule(
       name: 'sch',
       databaseConfigId: 'cfg',
       databaseType: DatabaseType.sybase,

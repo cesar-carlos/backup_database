@@ -1,10 +1,12 @@
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
+import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sql_server_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_sybase_config_repository.dart';
@@ -23,6 +25,7 @@ class BackupScriptOrchestratorImpl implements IBackupScriptOrchestrator {
     required ISqlServerConfigRepository sqlServerConfigRepository,
     required ISybaseConfigRepository sybaseConfigRepository,
     required IPostgresConfigRepository postgresConfigRepository,
+    required IFirebirdConfigRepository firebirdConfigRepository,
     required ISqlScriptExecutionService scriptService,
     required IBackupLogRepository logRepository,
   }) async {
@@ -42,6 +45,7 @@ class BackupScriptOrchestratorImpl implements IBackupScriptOrchestrator {
       SqlServerConfig? sqlServerConfig;
       SybaseConfig? sybaseConfig;
       PostgresConfig? postgresConfig;
+      FirebirdConfig? firebirdConfig;
 
       // Get appropriate config based on database type
       if (schedule.databaseType == DatabaseType.sqlServer) {
@@ -65,6 +69,13 @@ class BackupScriptOrchestratorImpl implements IBackupScriptOrchestrator {
         if (configResult.isSuccess()) {
           postgresConfig = configResult.getOrNull();
         }
+      } else if (schedule.databaseType == DatabaseType.firebird) {
+        final configResult = await firebirdConfigRepository.getById(
+          schedule.databaseConfigId,
+        );
+        if (configResult.isSuccess()) {
+          firebirdConfig = configResult.getOrNull();
+        }
       }
 
       final scriptTimeout = schedule.verifyTimeout == Duration.zero
@@ -76,6 +87,7 @@ class BackupScriptOrchestratorImpl implements IBackupScriptOrchestrator {
         sqlServerConfig: sqlServerConfig,
         sybaseConfig: sybaseConfig,
         postgresConfig: postgresConfig,
+        firebirdConfig: firebirdConfig,
         script: schedule.postBackupScript!,
         timeout: scriptTimeout,
       );

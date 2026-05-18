@@ -40,4 +40,28 @@ class FirebirdBackupServiceStub implements IFirebirdBackupService {
       ValidationFailure(message: notImplementedMessage),
     );
   }
+
+  @override
+  Future<rd.Result<FirebirdGstatHeaderProbe>> probeGstatHeaderConnection(
+    FirebirdConfig config,
+  ) async {
+    return const rd.Failure(
+      ValidationFailure(message: probePendingMessage),
+    );
+  }
+
+  @override
+  Future<rd.Result<String>> getGstatHeaderVersionHint(
+    FirebirdConfig config,
+  ) async {
+    return const rd.Success('');
+  }
+
+  @override
+  Future<rd.Result<List<String>>> listDatabases({
+    required FirebirdConfig config,
+    Duration? timeout,
+  }) async {
+    return const rd.Success(<String>[]);
+  }
 }

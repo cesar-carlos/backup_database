@@ -4,6 +4,7 @@ import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_license_policy_service.dart';
@@ -51,6 +52,7 @@ class ExecutionMessageHandler {
     this.eventBus,
     DateTime Function()? clock,
     Future<int> Function()? stagingUsageBytesProvider,
+    bool supportsFirebird = true,
   }) : _scheduleRepository = scheduleRepository,
        _licensePolicyService = licensePolicyService,
        _schedulerService = schedulerService,
@@ -60,7 +62,8 @@ class ExecutionMessageHandler {
        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
        _queueService = queueService ?? ExecutionQueueService(),
        _clock = clock ?? DateTime.now,
-       _stagingUsageBytesProvider = stagingUsageBytesProvider;
+       _stagingUsageBytesProvider = stagingUsageBytesProvider,
+       _supportsFirebird = supportsFirebird;
 
   final IScheduleRepository _scheduleRepository;
   final ILicensePolicyService _licensePolicyService;
@@ -82,6 +85,7 @@ class ExecutionMessageHandler {
   /// Quando definido, o fluxo `startBackup` falha com [ErrorCode.stagingFull]
   /// se o uso exceder [StagingUsagePolicy.blockThresholdBytes].
   final Future<int> Function()? _stagingUsageBytesProvider;
+  final bool _supportsFirebird;
 
   /// Acesso ao queue service para wirings externos (ex.:
   /// `ExecutionQueueMessageHandler` que reporta a fila ao cliente).
@@ -207,6 +211,23 @@ class ExecutionMessageHandler {
       // Cliente aceita ser enfileirado. Verifica se schedule ja esta
       // na fila (defesa contra cliente que retransmite enqueue) e
       // se a fila tem espaco.
+      final queuedScheduleResult = await _scheduleRepository.getById(
+        scheduleId,
+      );
+      final queuedSchedule = queuedScheduleResult.getOrNull();
+      if (queuedScheduleResult.isError() || queuedSchedule == null) {
+        throw const _StartFailure(
+          'Agendamento nao encontrado',
+          ErrorCode.scheduleNotFound,
+        );
+      }
+      if (queuedSchedule.databaseType == DatabaseType.firebird &&
+          !_supportsFirebird) {
+        throw _StartFailure(
+          ErrorCode.unsupportedDatabaseType.defaultMessage,
+          ErrorCode.unsupportedDatabaseType,
+        );
+      }
       if (_queueService.isScheduleQueued(scheduleId)) {
         throw const _StartFailure(
           'Agendamento ja esta enfileirado',
@@ -268,6 +289,13 @@ class ExecutionMessageHandler {
       throw const _StartFailure(
         'Agendamento nao encontrado',
         ErrorCode.scheduleNotFound,
+      );
+    }
+
+    if (schedule.databaseType == DatabaseType.firebird && !_supportsFirebird) {
+      throw _StartFailure(
+        ErrorCode.unsupportedDatabaseType.defaultMessage,
+        ErrorCode.unsupportedDatabaseType,
       );
     }
 
@@ -461,6 +489,28 @@ class ExecutionMessageHandler {
         scheduleId: next.scheduleId,
       );
       // Recursivo (sem await — fire-and-forget) para tentar proximo
+      unawaited(_drainNextFromQueue());
+      return;
+    }
+
+    if (schedule.databaseType == DatabaseType.firebird && !_supportsFirebird) {
+      LoggerService.warningWithContext(
+        'queue drain: Firebird backups are disabled on this server',
+        clientId: next.clientId,
+        requestId: next.requestId.toString(),
+        scheduleId: next.scheduleId,
+      );
+      unawaited(
+        sendToClientResolver(
+          next.clientId,
+          createBackupFailedMessage(
+            requestId: next.requestId,
+            scheduleId: next.scheduleId,
+            error: ErrorCode.unsupportedDatabaseType.defaultMessage,
+            runId: next.runId,
+          ),
+        ),
+      );
       unawaited(_drainNextFromQueue());
       return;
     }

@@ -6,4 +6,15 @@ part of 'backup_destination_dao.dart';
 mixin _$BackupDestinationDaoMixin on DatabaseAccessor<AppDatabase> {
   $BackupDestinationsTableTable get backupDestinationsTable =>
       attachedDatabase.backupDestinationsTable;
+  BackupDestinationDaoManager get managers => BackupDestinationDaoManager(this);
+}
+
+class BackupDestinationDaoManager {
+  final _$BackupDestinationDaoMixin _db;
+  BackupDestinationDaoManager(this._db);
+  $$BackupDestinationsTableTableTableManager get backupDestinationsTable =>
+      $$BackupDestinationsTableTableTableManager(
+        _db.attachedDatabase,
+        _db.backupDestinationsTable,
+      );
 }

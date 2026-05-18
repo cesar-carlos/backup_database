@@ -19,17 +19,17 @@ class FirebirdSupportedBackupTypesRule
     switch (backupType) {
       case BackupType.full:
       case BackupType.fullSingle:
-        return const rd.Success(unit);
-      case BackupType.log:
       case BackupType.differential:
+      case BackupType.log:
       case BackupType.convertedDifferential:
-      case BackupType.convertedFullSingle:
       case BackupType.convertedLog:
+        return const rd.Success(unit);
+      case BackupType.convertedFullSingle:
         return const rd.Failure(
           ValidationFailure(
             message:
-                'Firebird suporta apenas backup completo (Full ou Full Single). '
-                'Tipos de log, diferencial ou convertidos nao estao disponiveis.',
+                'Firebird nao suporta o tipo Full Single (convertido). Use Full '
+                'Single (gbak) ou Full (nbackup nivel 0).',
           ),
         );
     }

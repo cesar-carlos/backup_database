@@ -80,24 +80,27 @@ void main() {
       expect(result, isNot(contains('pgSecret')));
     });
 
-    test('redactCommandForLogging redige -password <valor> (Firebird gbak)', () {
-      final result = ProcessService.redactCommandForLogging(
-        'gbak',
-        [
-          '-b',
-          '-user',
-          'SYSDBA',
-          '-password',
-          'masterkey',
-          r'C:\data\db.fdb',
-          r'C:\backup\db.fbk',
-        ],
-      );
+    test(
+      'redactCommandForLogging redige -password <valor> (Firebird gbak)',
+      () {
+        final result = ProcessService.redactCommandForLogging(
+          'gbak',
+          [
+            '-b',
+            '-user',
+            'SYSDBA',
+            '-password',
+            'masterkey',
+            r'C:\data\db.fdb',
+            r'C:\backup\db.fbk',
+          ],
+        );
 
-      expect(result, contains('***REDACTED***'));
-      expect(result, isNot(contains('masterkey')));
-      expect(result, contains('-password'));
-    });
+        expect(result, contains('***REDACTED***'));
+        expect(result, isNot(contains('masterkey')));
+        expect(result, contains('-password'));
+      },
+    );
 
     test('redactCommandForLogging redige -pas <valor> (Firebird)', () {
       final result = ProcessService.redactCommandForLogging(

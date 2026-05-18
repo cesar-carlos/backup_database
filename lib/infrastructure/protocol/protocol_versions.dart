@@ -43,23 +43,17 @@ const int kCurrentWireVersion = 0x01;
 const Set<int> kSupportedWireVersions = {kCurrentWireVersion};
 
 /// Versao logica do protocolo refletindo o conjunto de features
-/// suportado. Bumpada a cada PR principal:
+/// suportado. Bumpada quando o contrato observavel pelo cliente muda
+/// (payloads / capabilities), nao quando apenas o wire muda.
 ///
-/// - `1`: estado em producao antes de PR-1.
-/// - `2`: PR-1 mergeado (envelope REST-like, capabilities, health,
-///   session, guard pre-auth explicito).
-/// - `3`: PR-2 mergeado (CRUD DB config, executeBackup nao-bloqueante,
-///   runId formal no contrato, getExecutionStatus).
-/// - `4`: PR-3 mergeado (mutex/fila, eventos de fila, staging por
-///   runId).
-/// - `5`: PR-4 mergeado (artefato com TTL, cleanupStaging remoto,
-///   lease de lock).
+/// - `1`: baseline ate PR-G (servidor sem bump desta constante).
+/// - `2`: PR-G aditivo — Firebird remoto: `supportsFirebird`,
+///   `UNSUPPORTED_DATABASE_TYPE`, schedules com `databaseType.firebird`
+///   no CRUD remoto; wire inalterado.
 ///
 /// Cliente recebe via `getServerCapabilities.protocolVersion` e usa
-/// como gate de feature. Servidor ainda nao implementou
-/// `getServerCapabilities`; quando implementar, deve retornar este
-/// valor.
-const int kCurrentProtocolVersion = 1;
+/// como gate de feature.
+const int kCurrentProtocolVersion = 2;
 
 /// Helper que confirma se uma wire version recebida e suportada.
 /// Centraliza a regra para evitar duplicacao em multiplos pontos do

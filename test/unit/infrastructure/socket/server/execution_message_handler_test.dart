@@ -134,6 +134,74 @@ void main() {
       },
     );
 
+    test(
+      'startBackup rejects Firebird when supportsFirebird is false',
+      () async {
+        final firebirdSchedule = schedule.copyWith(
+          databaseType: DatabaseType.firebird,
+        );
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(firebirdSchedule));
+
+        handler = ExecutionMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          clock: () => DateTime.utc(2026, 4, 19, 12),
+          stagingUsageBytesProvider: () async => 0,
+          supportsFirebird: false,
+        );
+
+        final req = createStartBackupRequest(scheduleId: scheduleId);
+        await handler.handle('c1', req, sendToClient);
+
+        final msg = sent.single.message;
+        expect(msg.header.type, MessageType.error);
+        expect(getErrorCodeFromMessage(msg), ErrorCode.unsupportedDatabaseType);
+        verifyNever(
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'startBackup invokes executeBackup for Firebird when supportsFirebird is '
+      'true',
+      () async {
+        final firebirdSchedule = schedule.copyWith(
+          databaseType: DatabaseType.firebird,
+        );
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(firebirdSchedule));
+
+        final req = createStartBackupRequest(scheduleId: scheduleId);
+        await handler.handle('c1', req, sendToClient);
+
+        expect(sent, hasLength(1));
+        expect(
+          sent.single.message.header.type,
+          MessageType.startBackupResponse,
+        );
+        expect(sent.single.message.payload['statusCode'], 202);
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        verify(
+          () => executeBackup(
+            scheduleId,
+            executionOrigin: ExecutionOrigin.remoteCommand,
+          ),
+        ).called(1);
+      },
+    );
+
     test('responde IMEDIATAMENTE com runId + state=running + 202', () async {
       // Bloqueia o backup async para confirmar que o handler nao
       // espera por ele antes de responder.
@@ -425,6 +493,52 @@ void main() {
     );
 
     test(
+      'queueIfBusy=true rejeita Firebird quando supportsFirebird is false',
+      () async {
+        when(() => schedulerService.isExecutingBackup).thenReturn(true);
+        final firebirdSchedule = schedule.copyWith(
+          databaseType: DatabaseType.firebird,
+        );
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(firebirdSchedule));
+
+        final queue = ExecutionQueueService();
+        handler = ExecutionMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          queueService: queue,
+          clock: () => DateTime.utc(2026, 4, 19, 12),
+          supportsFirebird: false,
+        );
+
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          queueIfBusy: true,
+        );
+        await handler.handle('c1', req, sendToClient);
+
+        final resp = sent.single.message;
+        expect(resp.header.type, MessageType.error);
+        expect(
+          getErrorCodeFromMessage(resp),
+          ErrorCode.unsupportedDatabaseType,
+        );
+        expect(queue.queueSize, 0);
+        verifyNever(
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        );
+      },
+    );
+
+    test(
       'queueIfBusy=false (default): rejeita com 409 quando ocupado',
       () async {
         when(() => schedulerService.isExecutingBackup).thenReturn(true);
@@ -503,6 +617,95 @@ void main() {
       expect(resp.header.type, MessageType.error);
       expect(getErrorFromMessage(resp), contains('Fila'));
     });
+  });
+
+  group('queue drain (PR-3a)', () {
+    test(
+      'envia backupFailed ao cliente enfileirado quando schedule e '
+      'Firebird e supportsFirebird is false',
+      () async {
+        const queuedScheduleId = 'sch-queued';
+        const runnerScheduleId = 'sch-runner';
+        final sqlRunner = schedule.copyWith(id: runnerScheduleId);
+        final firebirdQueued = schedule.copyWith(
+          id: queuedScheduleId,
+          databaseType: DatabaseType.firebird,
+        );
+
+        when(
+          () => scheduleRepository.getById(runnerScheduleId),
+        ).thenAnswer((_) async => rd.Success(sqlRunner));
+        when(
+          () => scheduleRepository.getById(queuedScheduleId),
+        ).thenAnswer((_) async => rd.Success(firebirdQueued));
+
+        final queue = ExecutionQueueService();
+        final queuedItem = (await queue.tryEnqueue(
+          scheduleId: queuedScheduleId,
+          clientId: 'c-queue',
+          requestId: 42,
+          requestedBy: 'c-queue',
+        ))!;
+
+        handler = ExecutionMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          queueService: queue,
+          clock: () => DateTime.utc(2026),
+          supportsFirebird: false,
+        );
+        handler.sendToClientResolver = sendToClient;
+
+        final req = createStartBackupRequest(
+          scheduleId: runnerScheduleId,
+        );
+        await handler.handle('c-runner', req, sendToClient);
+
+        expect(sent.first.message.header.type, MessageType.startBackupResponse);
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+
+        final failedForQueue = sent.where((s) {
+          final m = s.message;
+          if (m.header.type != MessageType.backupFailed) {
+            return false;
+          }
+          return m.payload['runId'] == queuedItem.runId;
+        }).toList();
+        expect(
+          failedForQueue,
+          hasLength(1),
+          reason: 'deve notificar cliente da fila com backupFailed',
+        );
+        expect(failedForQueue.single.clientId, 'c-queue');
+        expect(
+          failedForQueue.single.message.payload['scheduleId'],
+          queuedScheduleId,
+        );
+        expect(
+          failedForQueue.single.message.payload['error'],
+          ErrorCode.unsupportedDatabaseType.defaultMessage,
+        );
+
+        verify(
+          () => executeBackup(
+            runnerScheduleId,
+            executionOrigin: ExecutionOrigin.remoteCommand,
+          ),
+        ).called(1);
+        verifyNever(
+          () => executeBackup(
+            queuedScheduleId,
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        );
+        expect(queue.queueSize, 0);
+      },
+    );
   });
 
   group('cancelQueuedBackup (PR-3a)', () {

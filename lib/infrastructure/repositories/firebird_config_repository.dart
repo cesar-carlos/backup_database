@@ -56,9 +56,12 @@ class FirebirdConfigRepository
       aliasName: data.aliasName,
       useEmbedded: data.useEmbedded,
       clientLibraryPath: data.clientLibraryPath,
-      serverVersionHint: FirebirdServerVersionHint.parse(data.serverVersionHint),
-      serviceManagerMode:
-          FirebirdServiceManagerMode.parse(data.serviceManagerMode),
+      serverVersionHint: FirebirdServerVersionHint.parse(
+        data.serverVersionHint,
+      ),
+      serviceManagerMode: FirebirdServiceManagerMode.parse(
+        data.serviceManagerMode,
+      ),
       username: data.username,
       password: password,
       cryptKey: data.cryptKey,

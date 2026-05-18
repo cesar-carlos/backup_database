@@ -4,6 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('StatusCodes (F0.5 / F0.6 / P1.2)', () {
+    test('fromString resolves UNSUPPORTED_DATABASE_TYPE', () {
+      expect(
+        ErrorCode.fromString('UNSUPPORTED_DATABASE_TYPE'),
+        ErrorCode.unsupportedDatabaseType,
+      );
+    });
+
     test('constantes seguem semantica HTTP padrao', () {
       expect(StatusCodes.ok, 200);
       expect(StatusCodes.accepted, 202);
@@ -35,6 +42,10 @@ void main() {
         );
         expect(
           StatusCodes.forErrorCode(ErrorCode.invalidChecksum),
+          StatusCodes.badRequest,
+        );
+        expect(
+          StatusCodes.forErrorCode(ErrorCode.unsupportedDatabaseType),
           StatusCodes.badRequest,
         );
       });

@@ -222,6 +222,14 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<RemoteExecutionRegistry>(
     RemoteExecutionRegistry.new,
   );
+
+  /// Firebird remoto: mesmo valor anunciado em [CapabilitiesMessageHandler].
+  /// Os handlers de execucao/CRUD usam o default `supportsFirebird: true`;
+  /// ao desligar Firebird no processo servidor, passe `supportsFirebird: false`
+  /// explicitamente em [ScheduleMessageHandler], [ExecutionMessageHandler] e
+  /// [ScheduleCrudMessageHandler] e mantenha este const coerente.
+  const kSocketServerSupportsFirebird = true;
+
   getIt.registerLazySingleton<ScheduleMessageHandler>(
     () => ScheduleMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
@@ -276,7 +284,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // com os outros handlers e para permitir override em testes/mocks
   // futuros (ex.: clock injetado).
   getIt.registerLazySingleton<CapabilitiesMessageHandler>(
-    CapabilitiesMessageHandler.new,
+    () => CapabilitiesMessageHandler(
+      supportsFirebird: kSocketServerSupportsFirebird,
+    ),
   );
   // HealthMessageHandler com checks minimos + pressao de staging (PR-4).
   // Mesmo `StagingUsageMeasurer` que `MetricsMessageHandler` / execucao.

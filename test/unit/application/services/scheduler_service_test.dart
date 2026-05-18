@@ -325,6 +325,37 @@ void main() {
     });
 
     test(
+      'executeNow forwards Firebird schedule to BackupOrchestratorService',
+      () async {
+        final schedule = buildSchedule().copyWith(
+          databaseType: DatabaseType.firebird,
+        );
+        Schedule? scheduleSeen;
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+          ),
+        ).thenAnswer((invocation) async {
+          scheduleSeen = invocation.namedArguments[#schedule] as Schedule;
+          return const rd.Failure(
+            ValidationFailure(message: 'early stop'),
+          );
+        });
+
+        final result = await service.executeNow(scheduleId);
+
+        expect(result.isError(), isTrue);
+        expect(scheduleSeen, isNotNull);
+        expect(scheduleSeen!.databaseType, DatabaseType.firebird);
+        expect(scheduleSeen!.id, scheduleId);
+      },
+    );
+
+    test(
       'executeNow propaga ValidationFailure de espaço insuficiente vinda '
       'do BackupOrchestratorService',
       () async {

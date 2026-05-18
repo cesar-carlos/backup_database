@@ -24,6 +24,17 @@ Schedule _schedule({String id = 's1', bool enabled = true}) => Schedule(
   enabled: enabled,
 );
 
+Schedule _firebirdSchedule({String id = 'fb-1'}) => Schedule(
+  id: id,
+  name: 'Backup Firebird',
+  databaseConfigId: 'db-fb-1',
+  databaseType: DatabaseType.firebird,
+  scheduleType: ScheduleType.daily.name,
+  scheduleConfig: '{}',
+  destinationIds: const ['dest-1'],
+  backupFolder: r'C:\backup',
+);
+
 void main() {
   late _MockScheduleRepository repo;
   late ScheduleCrudMessageHandler handler;
@@ -89,6 +100,50 @@ void main() {
       expect(resp.header.type, MessageType.error);
       expect(getErrorCodeFromMessage(resp), ErrorCode.invalidRequest);
     });
+
+    test(
+      'Firebird rejeitado com UNSUPPORTED_DATABASE_TYPE quando servidor '
+      'nao declara suporte',
+      () async {
+        handler = ScheduleCrudMessageHandler(
+          scheduleRepository: repo,
+          supportsFirebird: false,
+        );
+        final s = _firebirdSchedule();
+        when(
+          () => repo.create(any()),
+        ).thenAnswer((_) async => rd.Success(s));
+
+        final req = createCreateScheduleMessage(requestId: 1, schedule: s);
+        await handler.handle('c1', req, sendToClient);
+
+        verifyNever(() => repo.create(any()));
+        expect(sent.single.header.type, MessageType.error);
+        expect(
+          getErrorCodeFromMessage(sent.single),
+          ErrorCode.unsupportedDatabaseType,
+        );
+      },
+    );
+
+    test(
+      'cria Firebird com sucesso quando servidor declara suporte (default)',
+      () async {
+        final s = _firebirdSchedule();
+        when(() => repo.create(any())).thenAnswer((_) async => rd.Success(s));
+
+        final req = createCreateScheduleMessage(requestId: 1, schedule: s);
+        await handler.handle('c1', req, sendToClient);
+
+        verify(() => repo.create(any())).called(1);
+        final resp = sent.single;
+        expect(resp.header.type, MessageType.scheduleMutationResponse);
+        expect(resp.payload['operation'], 'created');
+        expect(resp.payload['scheduleId'], s.id);
+        expect(resp.payload['statusCode'], 200);
+        expect(resp.payload['success'], isTrue);
+      },
+    );
   });
 
   group('deleteSchedule', () {

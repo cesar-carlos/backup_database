@@ -6,4 +6,15 @@ part of 'server_credential_dao.dart';
 mixin _$ServerCredentialDaoMixin on DatabaseAccessor<AppDatabase> {
   $ServerCredentialsTableTable get serverCredentialsTable =>
       attachedDatabase.serverCredentialsTable;
+  ServerCredentialDaoManager get managers => ServerCredentialDaoManager(this);
+}
+
+class ServerCredentialDaoManager {
+  final _$ServerCredentialDaoMixin _db;
+  ServerCredentialDaoManager(this._db);
+  $$ServerCredentialsTableTableTableManager get serverCredentialsTable =>
+      $$ServerCredentialsTableTableTableManager(
+        _db.attachedDatabase,
+        _db.serverCredentialsTable,
+      );
 }

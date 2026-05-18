@@ -505,5 +505,76 @@ void main() {
       expect(provider.error, isNotNull);
       expect(provider.error, contains('db off'));
     });
+
+    test('recordConnectionTest stores snapshot per config id', () async {
+      final repo = _MockRepo();
+      final schedules = _MockScheduleRepo();
+      when(() => repo.getAll()).thenAnswer(
+        (_) async => const rd.Success(<PostgresConfig>[]),
+      );
+
+      final provider = _TestPgProvider(repo, schedules);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(provider.connectionTestSnapshotFor('c1'), isNull);
+      provider.recordConnectionTest('c1', success: true);
+      final s1 = provider.connectionTestSnapshotFor(
+        'c1',
+      );
+      expect(s1, isNotNull);
+      expect(s1!.success, isTrue);
+      provider.recordConnectionTest('c1', success: false);
+      expect(provider.connectionTestSnapshotFor('c1')!.success, isFalse);
+    });
+
+    test('updateConfig clears connection test snapshot for that id', () async {
+      final repo = _MockRepo();
+      final schedules = _MockScheduleRepo();
+      final cfg = _samplePostgres(id: 'u1');
+      when(() => repo.getAll()).thenAnswer(
+        (_) async => rd.Success(<PostgresConfig>[cfg]),
+      );
+      when(() => repo.update(any())).thenAnswer(
+        (_) async => rd.Success(cfg.copyWith(name: 'renamed')),
+      );
+      when(() => schedules.getByDatabaseConfig(any())).thenAnswer(
+        (_) async => const rd.Success(<Schedule>[]),
+      );
+
+      final provider = _TestPgProvider(repo, schedules);
+      await Future<void>.delayed(Duration.zero);
+
+      provider.recordConnectionTest('u1', success: true);
+      expect(provider.connectionTestSnapshotFor('u1'), isNotNull);
+
+      final ok = await provider.updateConfig(cfg.copyWith(name: 'renamed'));
+      expect(ok, isTrue);
+      expect(provider.connectionTestSnapshotFor('u1'), isNull);
+    });
+
+    test('deleteConfig clears connection test snapshot', () async {
+      final repo = _MockRepo();
+      final schedules = _MockScheduleRepo();
+      final cfg = _samplePostgres(id: 'd1');
+      when(() => repo.getAll()).thenAnswer(
+        (_) async => rd.Success(<PostgresConfig>[cfg]),
+      );
+      when(
+        () => repo.delete('d1'),
+      ).thenAnswer((_) async => const rd.Success(unit));
+      when(() => schedules.getByDatabaseConfig('d1')).thenAnswer(
+        (_) async => const rd.Success(<Schedule>[]),
+      );
+
+      final provider = _TestPgProvider(repo, schedules);
+      await Future<void>.delayed(Duration.zero);
+
+      provider.recordConnectionTest('d1', success: true);
+      expect(provider.connectionTestSnapshotFor('d1'), isNotNull);
+
+      final ok = await provider.deleteConfig('d1');
+      expect(ok, isTrue);
+      expect(provider.connectionTestSnapshotFor('d1'), isNull);
+    });
   });
 }

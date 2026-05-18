@@ -73,6 +73,14 @@ enum ErrorCode {
   artifactExpired(
     'ARTIFACT_EXPIRED',
     'Artefato de backup removido ou fora do periodo de retencao',
+  ),
+
+  /// Cliente enviou operacao com tipo de base nao permitido nas
+  /// capabilities do servidor remoto (ex.: Firebird quando
+  /// `supportsFirebird` e falso). Mapeia para 400.
+  unsupportedDatabaseType(
+    'UNSUPPORTED_DATABASE_TYPE',
+    'Tipo de base de dados nao suportado neste servidor',
   )
   ;
 

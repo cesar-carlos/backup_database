@@ -5,7 +5,6 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
-import 'package:backup_database/domain/entities/sql_server_backup_schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
@@ -27,11 +26,9 @@ class SqlServerBackupStrategyFactory {
             required BackupType backupType,
             required String cancelTag,
           }) {
-            final SqlServerBackupOptions? backupOptions;
-            if (schedule is SqlServerBackupSchedule) {
-              backupOptions = schedule.sqlServerBackupOptions;
-            } else {
-              backupOptions = null;
+            final SqlServerBackupOptions? backupOptions =
+                schedule.sqlServerBackupOptions;
+            if (backupOptions == null) {
               LoggerService.warning(
                 'Schedule "${schedule.name}" do tipo SQL Server foi carregado '
                 'sem SqlServerBackupOptions. Backup usará defaults do servidor.',

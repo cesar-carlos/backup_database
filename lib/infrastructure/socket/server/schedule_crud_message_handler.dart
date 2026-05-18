@@ -23,11 +23,14 @@ class ScheduleCrudMessageHandler {
   ScheduleCrudMessageHandler({
     required IScheduleRepository scheduleRepository,
     IdempotencyRegistry? idempotencyRegistry,
+    bool supportsFirebird = true,
   }) : _scheduleRepository = scheduleRepository,
-       _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry();
+       _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
+       _supportsFirebird = supportsFirebird;
 
   final IScheduleRepository _scheduleRepository;
   final IdempotencyRegistry _idempotencyRegistry;
+  final bool _supportsFirebird;
 
   Future<void> handle(
     String clientId,
@@ -177,6 +180,13 @@ class ScheduleCrudMessageHandler {
       throw _CrudFailure(
         'Payload `schedule` invalido: $e',
         ErrorCode.invalidRequest,
+      );
+    }
+
+    if (schedule.databaseType == DatabaseType.firebird && !_supportsFirebird) {
+      throw _CrudFailure(
+        ErrorCode.unsupportedDatabaseType.defaultMessage,
+        ErrorCode.unsupportedDatabaseType,
       );
     }
 
