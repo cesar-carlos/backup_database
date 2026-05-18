@@ -125,7 +125,10 @@ void main() {
           stagingUsageBytesProvider: () async =>
               StagingUsagePolicy.blockThresholdBytes,
         );
-        final req = createStartBackupRequest(scheduleId: scheduleId);
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-default',
+        );
         await handler.handle('c1', req, sendToClient);
         final msg = sent.single.message;
         expect(msg.header.type, MessageType.error);
@@ -156,7 +159,10 @@ void main() {
           supportsFirebird: false,
         );
 
-        final req = createStartBackupRequest(scheduleId: scheduleId);
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-default',
+        );
         await handler.handle('c1', req, sendToClient);
 
         final msg = sent.single.message;
@@ -182,7 +188,10 @@ void main() {
           () => scheduleRepository.getById(scheduleId),
         ).thenAnswer((_) async => rd.Success(firebirdSchedule));
 
-        final req = createStartBackupRequest(scheduleId: scheduleId);
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-default',
+        );
         await handler.handle('c1', req, sendToClient);
 
         expect(sent, hasLength(1));
@@ -213,7 +222,10 @@ void main() {
         ),
       ).thenAnswer((_) => blockBackup.future);
 
-      final req = createStartBackupRequest(scheduleId: scheduleId);
+      final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-default',
+        );
       await handler.handle('c1', req, sendToClient);
 
       // Resposta ja deve estar no `sent` MESMO sem ter resolvido o backup
@@ -230,6 +242,20 @@ void main() {
       // Libera para evitar pending Future warnings
       blockBackup.complete(const rd.Success(true));
       await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+
+    test('rejeita startBackup sem idempotencyKey (F2.14)', () async {
+      final req = createStartBackupRequest(scheduleId: scheduleId);
+      await handler.handle('c1', req, sendToClient);
+      final resp = sent.single.message;
+      expect(resp.header.type, MessageType.error);
+      expect(getErrorCodeFromMessage(resp), ErrorCode.invalidRequest);
+      verifyNever(
+        () => executeBackup(
+          any(),
+          executionOrigin: any(named: 'executionOrigin'),
+        ),
+      );
     });
 
     test('rejeita scheduleId vazio com error invalidRequest', () async {
@@ -250,7 +276,10 @@ void main() {
 
     test('rejeita quando ja existe backup em execucao', () async {
       when(() => schedulerService.isExecutingBackup).thenReturn(true);
-      final req = createStartBackupRequest(scheduleId: scheduleId);
+      final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-default',
+        );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.header.type, MessageType.error);
@@ -264,7 +293,10 @@ void main() {
       when(
         () => scheduleRepository.getById(scheduleId),
       ).thenAnswer((_) async => rd.Failure(Exception('not found')));
-      final req = createStartBackupRequest(scheduleId: scheduleId);
+      final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-default',
+        );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.header.type, MessageType.error);
@@ -275,7 +307,10 @@ void main() {
       when(
         () => licensePolicyService.validateExecutionCapabilities(any(), any()),
       ).thenAnswer((_) async => rd.Failure(Exception('license denied')));
-      final req = createStartBackupRequest(scheduleId: scheduleId);
+      final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-default',
+        );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.header.type, MessageType.error);
@@ -356,7 +391,10 @@ void main() {
         () => schedulerService.cancelExecution(scheduleId),
       ).thenAnswer((_) async => const rd.Success(true));
 
-      final req = createCancelBackupRequest(runId: 'r1');
+      final req = createCancelBackupRequest(
+        runId: 'r1',
+        idempotencyKey: 'idem-cancel',
+      );
       await handler.handle('c1', req, sendToClient);
 
       final resp = sent.single.message;
@@ -378,13 +416,19 @@ void main() {
         () => schedulerService.cancelExecution(scheduleId),
       ).thenAnswer((_) async => const rd.Success(true));
 
-      final req = createCancelBackupRequest(scheduleId: scheduleId);
+      final req = createCancelBackupRequest(
+        scheduleId: scheduleId,
+        idempotencyKey: 'idem-cancel-sch',
+      );
       await handler.handle('c1', req, sendToClient);
       expect(sent.single.message.payload['state'], 'cancelled');
     });
 
     test('runId desconhecido -> noActiveExecution', () async {
-      final req = createCancelBackupRequest(runId: 'r-nope');
+      final req = createCancelBackupRequest(
+        runId: 'r-nope',
+        idempotencyKey: 'idem-cancel-nope',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.payload['state'], 'notFound');
@@ -393,7 +437,10 @@ void main() {
     });
 
     test('scheduleId sem execucao ativa -> noActiveExecution', () async {
-      final req = createCancelBackupRequest(scheduleId: 'sch-x');
+      final req = createCancelBackupRequest(
+        scheduleId: 'sch-x',
+        idempotencyKey: 'idem-cancel-x',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.payload['errorCode'], 'NO_ACTIVE_EXECUTION');
@@ -427,7 +474,10 @@ void main() {
         () => schedulerService.cancelExecution(scheduleId),
       ).thenAnswer((_) async => rd.Failure(Exception('cancel failed')));
 
-      final req = createCancelBackupRequest(runId: 'r1');
+      final req = createCancelBackupRequest(
+        runId: 'r1',
+        idempotencyKey: 'idem-cancel',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.payload['state'], 'failed');
@@ -478,6 +528,7 @@ void main() {
         final req = createStartBackupRequest(
           scheduleId: scheduleId,
           queueIfBusy: true,
+          idempotencyKey: 'idem-queue',
         );
         await handler.handle('c1', req, sendToClient);
 
@@ -519,6 +570,7 @@ void main() {
         final req = createStartBackupRequest(
           scheduleId: scheduleId,
           queueIfBusy: true,
+          idempotencyKey: 'idem-queue',
         );
         await handler.handle('c1', req, sendToClient);
 
@@ -542,7 +594,10 @@ void main() {
       'queueIfBusy=false (default): rejeita com 409 quando ocupado',
       () async {
         when(() => schedulerService.isExecutingBackup).thenReturn(true);
-        final req = createStartBackupRequest(scheduleId: scheduleId);
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-default',
+        );
         await handler.handle('c1', req, sendToClient);
         final resp = sent.single.message;
         expect(resp.header.type, MessageType.error);
@@ -577,6 +632,7 @@ void main() {
         final req = createStartBackupRequest(
           scheduleId: scheduleId,
           queueIfBusy: true,
+          idempotencyKey: 'idem-queue',
         );
         await handler.handle('c1', req, sendToClient);
         final resp = sent.single.message;
@@ -611,6 +667,7 @@ void main() {
       final req = createStartBackupRequest(
         scheduleId: scheduleId,
         queueIfBusy: true,
+        idempotencyKey: 'idem-queue-full',
       );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
@@ -662,6 +719,7 @@ void main() {
 
         final req = createStartBackupRequest(
           scheduleId: runnerScheduleId,
+          idempotencyKey: 'idem-drain',
         );
         await handler.handle('c-runner', req, sendToClient);
 

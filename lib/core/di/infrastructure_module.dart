@@ -12,7 +12,9 @@ import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/destination/destination_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/file_transfer_lock_service.dart';
+import 'package:backup_database/infrastructure/protocol/idempotency_policy.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
+import 'package:backup_database/infrastructure/protocol/idempotency_store.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
@@ -25,6 +27,7 @@ import 'package:backup_database/infrastructure/socket/server/diagnostics_provide
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_persistence.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/file_transfer_message_handler.dart';
@@ -38,6 +41,7 @@ import 'package:backup_database/infrastructure/socket/server/real_diagnostics_pr
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_crud_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/server_preflight_checks.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
 import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
@@ -222,6 +226,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<RemoteExecutionRegistry>(
     RemoteExecutionRegistry.new,
   );
+  getIt.registerLazySingleton<ExecutionEventSequencer>(
+    ExecutionEventSequencer.new,
+  );
 
   /// Firebird remoto: mesmo valor anunciado em [CapabilitiesMessageHandler].
   /// Os handlers de execucao/CRUD usam o default `supportsFirebird: true`;
@@ -239,6 +246,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       executeBackup: getIt<ExecuteScheduledBackup>(),
       progressNotifier: getIt<IBackupProgressNotifier>(),
       executionRegistry: getIt<RemoteExecutionRegistry>(),
+      eventSequencer: getIt<ExecutionEventSequencer>(),
     ),
   );
 
@@ -301,7 +309,13 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // `temp_dir_writable`, `disk_space` reusando ToolVerificationService,
   // validate_backup_directory e StorageChecker (ver F1.8 do plano).
   getIt.registerLazySingleton<PreflightMessageHandler>(
-    PreflightMessageHandler.new,
+    () => PreflightMessageHandler(
+      checks: buildServerPreflightChecks(
+        stagingBasePath: transferBasePath,
+        validateBackupDirectory: const ValidateBackupDirectory(),
+        storageChecker: getIt<IStorageChecker>(),
+      ),
+    ),
   );
   // ========================================================================
   // PR-2 / PR-3: Wirings concretos para handlers cabeados ao dominio
@@ -311,7 +325,12 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // `idempotencyKey` (start/cancel backup, schedule CRUD, database CRUD,
   // cleanupStaging). Singleton garante que retransmissoes via reconnect
   // sejam deduplicadas mesmo se chegarem em handlers diferentes.
-  getIt.registerLazySingleton<IdempotencyRegistry>(IdempotencyRegistry.new);
+  getIt.registerLazySingleton<IdempotencyRegistry>(
+    () => IdempotencyRegistry(
+      ttl: IdempotencyPolicy.defaultTtl,
+      store: DriftIdempotencyStore(getIt<AppDatabase>().idempotencyDao),
+    ),
+  );
 
   // ExecutionQueueService compartilhado: persistencia Drift (F2.16).
   // Chame `initialize()` no bootstrap antes do socket server (main.dart).
@@ -344,6 +363,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       executionRegistry: getIt<RemoteExecutionRegistry>(),
       idempotencyRegistry: getIt<IdempotencyRegistry>(),
       queueService: getIt<ExecutionQueueService>(),
+      eventSequencer: getIt<ExecutionEventSequencer>(),
       stagingUsageBytesProvider: () =>
           StagingUsageMeasurer.measure(transferBasePath),
       // QueueEventBus injetado mais abaixo apos TcpSocketServer existir
@@ -457,6 +477,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     // nao seriam publicados no socket.
     final eventBus = QueueEventBus(
       broadcast: server.sendToClient,
+      sequencer: getIt<ExecutionEventSequencer>(),
     );
     getIt<ExecutionMessageHandler>().eventBus = eventBus;
     if (!getIt.isRegistered<QueueEventBus>()) {

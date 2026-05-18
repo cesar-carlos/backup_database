@@ -1,147 +1,219 @@
 #!/usr/bin/env python3
-"""Sync appcast.xml with all public GitHub releases."""
+"""Rebuild appcast.xml from published GitHub releases."""
 
 from __future__ import annotations
 
+import fnmatch
+import hashlib
 import json
 import os
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
-REPO = "cesar-carlos/backup_database"
-RELEASES_URL = f"https://api.github.com/repos/{REPO}/releases"
-REPO_RELEASES_LINK = f"https://github.com/{REPO}/releases"
+DEFAULT_REPO = "cesar-carlos/backup_database"
+DEFAULT_CHANNEL_TITLE = "Backup Database Updates"
+DEFAULT_CHANNEL_DESCRIPTION = "Backup Database updates feed"
+INSTALLER_PATTERN = "BackupDatabase-Setup-*.exe"
 
 
-def get_releases() -> list[dict]:
-    """Fetch releases from GitHub API."""
-    request = urllib.request.Request(
-        RELEASES_URL,
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "backup-database-appcast-sync"},
+@dataclass(frozen=True)
+class ReleaseAsset:
+    name: str
+    url: str
+    size: int
+    sha256: str
+
+
+@dataclass(frozen=True)
+class PublishedRelease:
+    version: str
+    published_at: str
+    body: str
+    asset: ReleaseAsset
+
+
+def _build_api_url(repo: str) -> str:
+    return f"https://api.github.com/repos/{repo}/releases"
+
+
+def _build_repo_releases_link(repo: str) -> str:
+    return f"https://github.com/{repo}/releases"
+
+
+def _build_headers() -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "backup-database-appcast-sync",
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _get_json(url: str) -> object:
+    request = urllib.request.Request(url, headers=_build_headers())
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def fetch_releases(repo: str) -> list[dict]:
+    payload = _get_json(_build_api_url(repo))
+    if not isinstance(payload, list):
+        raise RuntimeError("GitHub API did not return a releases list")
+    return payload
+
+
+def _normalize_version(tag_name: str) -> str:
+    return tag_name[1:] if tag_name.startswith("v") else tag_name
+
+
+def _sha256_from_url(url: str) -> str:
+    request = urllib.request.Request(url, headers=_build_headers())
+    digest = hashlib.sha256()
+    with urllib.request.urlopen(request) as response:
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _select_installer_asset(release: dict) -> ReleaseAsset:
+    assets = release.get("assets", [])
+    exe_assets = [asset for asset in assets if asset.get("name", "").endswith(".exe")]
+    matching_pattern = [
+        asset
+        for asset in exe_assets
+        if fnmatch.fnmatch(asset.get("name", ""), INSTALLER_PATTERN)
+    ]
+
+    if len(matching_pattern) == 1:
+        selected = matching_pattern[0]
+    elif len(matching_pattern) > 1:
+        raise RuntimeError(
+            f"{release.get('tag_name')}: more than one installer matches {INSTALLER_PATTERN}"
+        )
+    elif len(exe_assets) == 1:
+        selected = exe_assets[0]
+    else:
+        raise RuntimeError(
+            f"{release.get('tag_name')}: expected exactly one .exe installer asset"
+        )
+
+    url = selected.get("browser_download_url")
+    size = selected.get("size")
+    name = selected.get("name")
+    if not isinstance(url, str) or not isinstance(name, str) or not isinstance(size, int):
+        raise RuntimeError(f"{release.get('tag_name')}: installer asset metadata is invalid")
+
+    return ReleaseAsset(
+        name=name,
+        url=url,
+        size=size,
+        sha256=_sha256_from_url(url),
     )
-    try:
-        with urllib.request.urlopen(request) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            if not isinstance(data, list):
-                return []
-            return data
-    except Exception as error:  # pragma: no cover - network failures
-        print(f"ERROR: failed to fetch releases: {error}")
-        return []
 
 
-def get_exe_asset(release: dict) -> dict | None:
-    """Return .exe asset from a release, if present."""
-    for asset in release.get("assets", []):
-        if asset.get("name", "").endswith(".exe"):
-            return asset
-    return None
+def build_published_releases(repo: str) -> list[PublishedRelease]:
+    releases = fetch_releases(repo)
+    by_version: dict[str, PublishedRelease] = {}
 
-
-def create_or_load_appcast(path: str) -> tuple[ET.Element, ET.Element]:
-    """Load appcast root/channel or create new structure."""
-    if os.path.exists(path):
-        tree = ET.parse(path)
-        root = tree.getroot()
-        channel = root.find("channel")
-        if channel is None:
-            raise RuntimeError(f"channel not found in {path}")
-
-        for item in list(channel.findall("item")):
-            channel.remove(item)
-        return root, channel
-
-    root = ET.Element("rss")
-    root.set("version", "2.0")
-    root.set("xmlns:sparkle", SPARKLE_NS)
-    channel = ET.SubElement(root, "channel")
-    ET.SubElement(channel, "title").text = "Backup Database Updates"
-    ET.SubElement(channel, "link").text = REPO_RELEASES_LINK
-    ET.SubElement(channel, "description").text = "Backup Database updates feed"
-    return root, channel
-
-
-def format_pub_date(published_at: str | None) -> str:
-    """Convert GitHub published_at to RSS pubDate."""
-    if not published_at:
-        return datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
-    try:
-        parsed = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
-        return parsed.strftime("%a, %d %b %Y %H:%M:%S +0000")
-    except ValueError:
-        return datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
-
-
-def update_appcast() -> int:
-    """Rebuild appcast.xml from non-draft and non-prerelease releases."""
-    print("Fetching releases from GitHub...")
-    releases = get_releases()
-    if not releases:
-        print("ERROR: no releases found")
-        return 1
-
-    appcast_file = "appcast.xml"
-    ET.register_namespace("sparkle", SPARKLE_NS)
-
-    try:
-        root, channel = create_or_load_appcast(appcast_file)
-    except Exception as error:
-        print(f"ERROR: unable to load/create appcast: {error}")
-        return 1
-
-    items_added = 0
     for release in releases:
-        if release.get("draft", False) or release.get("prerelease", False):
-            print(f"Skipping {release.get('tag_name', '<unknown>')} (draft/prerelease)")
+        if release.get("draft") or release.get("prerelease"):
             continue
 
         tag_name = release.get("tag_name", "")
-        version = tag_name[1:] if tag_name.startswith("v") else tag_name
+        version = _normalize_version(tag_name)
         if not version:
             continue
 
-        exe_asset = get_exe_asset(release)
-        if not exe_asset:
-            print(f"WARN: no .exe asset for {tag_name}")
-            continue
+        asset = _select_installer_asset(release)
+        published_release = PublishedRelease(
+            version=version,
+            published_at=release.get("published_at") or "",
+            body=(release.get("body") or "").strip(),
+            asset=asset,
+        )
 
-        asset_url = exe_asset.get("browser_download_url")
-        asset_size = exe_asset.get("size")
-        if not asset_url or asset_size is None:
-            print(f"WARN: invalid asset metadata for {tag_name}")
-            continue
+        existing = by_version.get(version)
+        if existing is None or published_release.published_at > existing.published_at:
+            by_version[version] = published_release
 
+    ordered = sorted(
+        by_version.values(),
+        key=lambda item: item.published_at,
+        reverse=True,
+    )
+    if not ordered:
+        raise RuntimeError("No published releases with valid installers were found")
+    return ordered
+
+
+def _format_pub_date(published_at: str) -> str:
+    parsed = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+    return parsed.strftime("%a, %d %b %Y %H:%M:%S +0000")
+
+
+def render_appcast(repo: str, releases: list[PublishedRelease]) -> ET.ElementTree:
+    ET.register_namespace("sparkle", SPARKLE_NS)
+
+    root = ET.Element("rss")
+    root.set("version", "2.0")
+
+    channel = ET.SubElement(root, "channel")
+    ET.SubElement(channel, "title").text = DEFAULT_CHANNEL_TITLE
+    ET.SubElement(channel, "link").text = _build_repo_releases_link(repo)
+    ET.SubElement(channel, "description").text = DEFAULT_CHANNEL_DESCRIPTION
+
+    for release in releases:
         item = ET.SubElement(channel, "item")
-        ET.SubElement(item, "title").text = f"Version {version}"
-        ET.SubElement(item, "pubDate").text = format_pub_date(release.get("published_at"))
-
-        body = release.get("body") or "Automatic update via GitHub Release."
-        desc = ET.SubElement(item, "description")
-        desc.text = f"<![CDATA[<h2>Version {version}</h2><p>{body}</p>]]>"
+        ET.SubElement(item, "title").text = f"Version {release.version}"
+        ET.SubElement(item, "pubDate").text = _format_pub_date(release.published_at)
+        ET.SubElement(item, "description").text = (
+            release.body or "Automatic update via GitHub Release."
+        )
 
         enclosure = ET.SubElement(item, "enclosure")
-        enclosure.set("url", asset_url)
-        enclosure.set(f"{{{SPARKLE_NS}}}version", version)
+        enclosure.set("url", release.asset.url)
+        enclosure.set(f"{{{SPARKLE_NS}}}version", release.version)
         enclosure.set(f"{{{SPARKLE_NS}}}os", "windows")
-        enclosure.set("length", str(asset_size))
+        enclosure.set("length", str(release.asset.size))
         enclosure.set("type", "application/octet-stream")
-
-        items_added += 1
-        print(f"OK: added {tag_name} ({version})")
+        enclosure.set("sha256", release.asset.sha256)
 
     tree = ET.ElementTree(root)
     ET.indent(tree, space="  ")
+    return tree
 
-    with open(appcast_file, "wb") as output:
+
+def write_appcast(path: Path, tree: ET.ElementTree) -> None:
+    with path.open("wb") as output:
         output.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
         tree.write(output, encoding="utf-8", xml_declaration=False)
 
-    print(f"\nOK: appcast.xml updated with {items_added} release item(s)")
+
+def main() -> int:
+    repo = os.environ.get("APPCAST_REPO", DEFAULT_REPO)
+    output_path = Path(os.environ.get("APPCAST_OUTPUT", "appcast.xml"))
+
+    try:
+        releases = build_published_releases(repo)
+        tree = render_appcast(repo, releases)
+        write_appcast(output_path, tree)
+    except Exception as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+    print(f"OK: rebuilt {output_path} with {len(releases)} release item(s)")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(update_appcast())
+    raise SystemExit(main())

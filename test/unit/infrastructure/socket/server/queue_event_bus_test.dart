@@ -1,5 +1,6 @@
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/queue_events.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uuid/uuid.dart';
@@ -71,7 +72,7 @@ void main() {
       // continuar a partir dele em vez de zerar.
       bus = QueueEventBus(
         broadcast: (c, m) async => sent.add((clientId: c, message: m)),
-        initialSequence: 100,
+        sequencer: ExecutionEventSequencer(initialSequence: 100),
       );
       await bus.publishQueued(clientId: 'c', runId: 'r', scheduleId: 's');
       final ev = readQueueEvent(sent.single.message)!;

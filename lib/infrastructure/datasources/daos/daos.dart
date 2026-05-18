@@ -6,6 +6,7 @@ export 'email_config_dao.dart';
 export 'email_notification_target_dao.dart';
 export 'email_test_audit_dao.dart';
 export 'execution_queue_dao.dart';
+export 'idempotency_dao.dart';
 export 'file_transfer_dao.dart';
 export 'firebird_config_dao.dart';
 export 'license_dao.dart';

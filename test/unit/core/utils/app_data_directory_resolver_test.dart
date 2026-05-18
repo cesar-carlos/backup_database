@@ -133,6 +133,44 @@ void main() {
     );
 
     test(
+      'resolveMachineConfigDirectory appends config',
+      () async {
+        final root = await resolveMachineRootDirectory();
+        final config = await resolveMachineConfigDirectory();
+        expect(
+          p.normalize(config.path).toLowerCase(),
+          p
+              .normalize(
+                p.join(root.path, MachineStorageLayout.config),
+              )
+              .toLowerCase(),
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'resolveMachineUpdateDownloadsDirectory appends staging/updates',
+      () async {
+        final root = await resolveMachineRootDirectory();
+        final updates = await resolveMachineUpdateDownloadsDirectory();
+        expect(
+          p.normalize(updates.path).toLowerCase(),
+          p
+              .normalize(
+                p.join(
+                  root.path,
+                  MachineStorageLayout.staging,
+                  MachineStorageLayout.updates,
+                ),
+              )
+              .toLowerCase(),
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
       'resolveMachineSecretsDirectory appends secrets',
       () async {
         final root = await resolveMachineRootDirectory();

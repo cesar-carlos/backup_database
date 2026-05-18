@@ -15,11 +15,13 @@ import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
+import 'package:backup_database/infrastructure/protocol/idempotency_policy.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
@@ -50,6 +52,7 @@ class ExecutionMessageHandler {
     IdempotencyRegistry? idempotencyRegistry,
     ExecutionQueueService? queueService,
     this.eventBus,
+    ExecutionEventSequencer? eventSequencer,
     DateTime Function()? clock,
     Future<int> Function()? stagingUsageBytesProvider,
     bool supportsFirebird = true,
@@ -61,6 +64,7 @@ class ExecutionMessageHandler {
        _executionRegistry = executionRegistry,
        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
        _queueService = queueService ?? ExecutionQueueService(),
+       _eventSequencer = eventSequencer ?? ExecutionEventSequencer(),
        _clock = clock ?? DateTime.now,
        _stagingUsageBytesProvider = stagingUsageBytesProvider,
        _supportsFirebird = supportsFirebird;
@@ -79,7 +83,10 @@ class ExecutionMessageHandler {
   // Mutavel pos-construcao para dependencia circular DI
   // (ver infrastructure_module.dart).
   QueueEventBus? eventBus;
+  final ExecutionEventSequencer _eventSequencer;
   final DateTime Function() _clock;
+
+  ExecutionEventSequencer get _events => eventBus?.sequencer ?? _eventSequencer;
 
   /// Mesmo medidor que alimenta `metrics.stagingUsageBytes` (M5.3).
   /// Quando definido, o fluxo `startBackup` falha com [ErrorCode.stagingFull]
@@ -136,6 +143,15 @@ class ExecutionMessageHandler {
       return;
     }
     final queueIfBusy = payload['queueIfBusy'] == true;
+
+    final keyError = IdempotencyPolicy.missingKeyErrorMessage(
+      message: message,
+      operationType: MessageType.startBackupRequest,
+    );
+    if (keyError != null) {
+      await sendToClient(clientId, keyError);
+      return;
+    }
 
     final idempotencyKey = getIdempotencyKey(message);
 
@@ -392,6 +408,7 @@ class ExecutionMessageHandler {
           scheduleId: scheduleId,
           error: failure,
         );
+        final failedMeta = _events.next();
         await sendToClient(
           clientId,
           createBackupFailedMessage(
@@ -399,6 +416,8 @@ class ExecutionMessageHandler {
             scheduleId: scheduleId,
             error: errorMessage,
             runId: runId,
+            eventId: failedMeta.eventId,
+            sequence: failedMeta.sequence,
           ),
         );
         _progressNotifier.failBackup(errorMessage);
@@ -425,6 +444,7 @@ class ExecutionMessageHandler {
         stackTrace: st,
       );
       try {
+        final failedMeta = _events.next();
         await sendToClient(
           clientId,
           createBackupFailedMessage(
@@ -432,6 +452,8 @@ class ExecutionMessageHandler {
             scheduleId: scheduleId,
             error: e.toString(),
             runId: runId,
+            eventId: failedMeta.eventId,
+            sequence: failedMeta.sequence,
           ),
         );
         _progressNotifier.failBackup(e.toString());
@@ -500,6 +522,7 @@ class ExecutionMessageHandler {
         requestId: next.requestId.toString(),
         scheduleId: next.scheduleId,
       );
+      final failedMeta = _events.next();
       unawaited(
         sendToClientResolver(
           next.clientId,
@@ -508,6 +531,8 @@ class ExecutionMessageHandler {
             scheduleId: next.scheduleId,
             error: ErrorCode.unsupportedDatabaseType.defaultMessage,
             runId: next.runId,
+            eventId: failedMeta.eventId,
+            sequence: failedMeta.sequence,
           ),
         ),
       );
@@ -712,6 +737,15 @@ class ExecutionMessageHandler {
         ErrorCode.invalidRequest,
         sendToClient,
       );
+      return;
+    }
+
+    final keyError = IdempotencyPolicy.missingKeyErrorMessage(
+      message: message,
+      operationType: MessageType.cancelBackupRequest,
+    );
+    if (keyError != null) {
+      await sendToClient(clientId, keyError);
       return;
     }
 

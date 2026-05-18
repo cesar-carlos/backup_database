@@ -27,6 +27,7 @@ Message createErrorMessage({
   required String errorMessage,
   ErrorCode? errorCode,
   int? statusCodeOverride,
+  int? retryAfterSeconds,
 }) {
   final statusCode =
       statusCodeOverride ??
@@ -38,6 +39,9 @@ Message createErrorMessage({
     'error': errorMessage,
     'statusCode': statusCode,
     ...?(errorCode != null ? {'errorCode': errorCode.code} : null),
+    ...?(retryAfterSeconds != null
+        ? {'retryAfterSeconds': retryAfterSeconds}
+        : null),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -69,6 +73,13 @@ ErrorCode? getErrorCodeFromMessage(Message message) {
 /// conservador quando quiser tratar como erro de servidor.
 int? getStatusCodeFromMessage(Message message) {
   final raw = message.payload['statusCode'];
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  return null;
+}
+
+int? getRetryAfterSecondsFromMessage(Message message) {
+  final raw = message.payload['retryAfterSeconds'];
   if (raw is int) return raw;
   if (raw is num) return raw.toInt();
   return null;

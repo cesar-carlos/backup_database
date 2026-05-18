@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$BackupHistory {
 
- String get id; String? get runId; String? get scheduleId; String get databaseName; String get databaseType; String get backupPath; int get fileSize; String get backupType; BackupStatus get status; String? get errorMessage; DateTime get startedAt; DateTime? get finishedAt; int? get durationSeconds; BackupMetrics? get metrics;
+ String get id; String get databaseName; String get databaseType; String get backupPath; int get fileSize; BackupStatus get status; DateTime get startedAt; String? get runId; String? get scheduleId; String get backupType; String? get errorMessage; DateTime? get finishedAt; int? get durationSeconds; BackupMetrics? get metrics;
 /// Create a copy of BackupHistory
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,7 +27,7 @@ $BackupHistoryCopyWith<BackupHistory> get copyWith => _$BackupHistoryCopyWithImp
 
 @override
 String toString() {
-  return 'BackupHistory(id: $id, runId: $runId, scheduleId: $scheduleId, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, backupType: $backupType, status: $status, errorMessage: $errorMessage, startedAt: $startedAt, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics)';
+  return 'BackupHistory(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics)';
 }
 
 
@@ -38,7 +38,7 @@ abstract mixin class $BackupHistoryCopyWith<$Res>  {
   factory $BackupHistoryCopyWith(BackupHistory value, $Res Function(BackupHistory) _then) = _$BackupHistoryCopyWithImpl;
 @useResult
 $Res call({
- String id, String? runId, String? scheduleId, String databaseName, String databaseType, String backupPath, int fileSize, String backupType, BackupStatus status, String? errorMessage, DateTime startedAt, DateTime? finishedAt, int? durationSeconds, BackupMetrics? metrics
+ String id, String databaseName, String databaseType, String backupPath, int fileSize, BackupStatus status, DateTime startedAt, String? runId, String? scheduleId, String backupType, String? errorMessage, DateTime? finishedAt, int? durationSeconds, BackupMetrics? metrics
 });
 
 
@@ -55,20 +55,20 @@ class _$BackupHistoryCopyWithImpl<$Res>
 
 /// Create a copy of BackupHistory
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? runId = freezed,Object? scheduleId = freezed,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? backupType = null,Object? status = null,Object? errorMessage = freezed,Object? startedAt = null,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? status = null,Object? startedAt = null,Object? runId = freezed,Object? scheduleId = freezed,Object? backupType = null,Object? errorMessage = freezed,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,runId: freezed == runId ? _self.runId : runId // ignore: cast_nullable_to_non_nullable
-as String?,scheduleId: freezed == scheduleId ? _self.scheduleId : scheduleId // ignore: cast_nullable_to_non_nullable
-as String?,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
+as String,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
 as String,databaseType: null == databaseType ? _self.databaseType : databaseType // ignore: cast_nullable_to_non_nullable
 as String,backupPath: null == backupPath ? _self.backupPath : backupPath // ignore: cast_nullable_to_non_nullable
 as String,fileSize: null == fileSize ? _self.fileSize : fileSize // ignore: cast_nullable_to_non_nullable
-as int,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
-as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
-as BackupStatus,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
-as String?,startedAt: null == startedAt ? _self.startedAt : startedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,finishedAt: freezed == finishedAt ? _self.finishedAt : finishedAt // ignore: cast_nullable_to_non_nullable
+as int,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as BackupStatus,startedAt: null == startedAt ? _self.startedAt : startedAt // ignore: cast_nullable_to_non_nullable
+as DateTime,runId: freezed == runId ? _self.runId : runId // ignore: cast_nullable_to_non_nullable
+as String?,scheduleId: freezed == scheduleId ? _self.scheduleId : scheduleId // ignore: cast_nullable_to_non_nullable
+as String?,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
+as String,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
+as String?,finishedAt: freezed == finishedAt ? _self.finishedAt : finishedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,durationSeconds: freezed == durationSeconds ? _self.durationSeconds : durationSeconds // ignore: cast_nullable_to_non_nullable
 as int?,metrics: freezed == metrics ? _self.metrics : metrics // ignore: cast_nullable_to_non_nullable
 as BackupMetrics?,
@@ -156,10 +156,10 @@ return raw(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String? runId,  String? scheduleId,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  String backupType,  BackupStatus status,  String? errorMessage,  DateTime startedAt,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)?  raw,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)?  raw,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BackupHistory() when raw != null:
-return raw(_that.id,_that.runId,_that.scheduleId,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.backupType,_that.status,_that.errorMessage,_that.startedAt,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
+return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
   return orElse();
 
 }
@@ -177,10 +177,10 @@ return raw(_that.id,_that.runId,_that.scheduleId,_that.databaseName,_that.databa
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String? runId,  String? scheduleId,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  String backupType,  BackupStatus status,  String? errorMessage,  DateTime startedAt,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)  raw,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)  raw,}) {final _that = this;
 switch (_that) {
 case _BackupHistory():
-return raw(_that.id,_that.runId,_that.scheduleId,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.backupType,_that.status,_that.errorMessage,_that.startedAt,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
+return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +197,10 @@ return raw(_that.id,_that.runId,_that.scheduleId,_that.databaseName,_that.databa
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String? runId,  String? scheduleId,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  String backupType,  BackupStatus status,  String? errorMessage,  DateTime startedAt,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)?  raw,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)?  raw,}) {final _that = this;
 switch (_that) {
 case _BackupHistory() when raw != null:
-return raw(_that.id,_that.runId,_that.scheduleId,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.backupType,_that.status,_that.errorMessage,_that.startedAt,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
+return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
   return null;
 
 }
@@ -212,20 +212,20 @@ return raw(_that.id,_that.runId,_that.scheduleId,_that.databaseName,_that.databa
 
 
 class _BackupHistory extends BackupHistory {
-  const _BackupHistory({required this.id, this.runId, this.scheduleId, required this.databaseName, required this.databaseType, required this.backupPath, required this.fileSize, this.backupType = 'full', required this.status, this.errorMessage, required this.startedAt, this.finishedAt, this.durationSeconds, this.metrics}): super._();
+  const _BackupHistory({required this.id, required this.databaseName, required this.databaseType, required this.backupPath, required this.fileSize, required this.status, required this.startedAt, this.runId, this.scheduleId, this.backupType = 'full', this.errorMessage, this.finishedAt, this.durationSeconds, this.metrics}): super._();
   
 
 @override final  String id;
-@override final  String? runId;
-@override final  String? scheduleId;
 @override final  String databaseName;
 @override final  String databaseType;
 @override final  String backupPath;
 @override final  int fileSize;
-@override@JsonKey() final  String backupType;
 @override final  BackupStatus status;
-@override final  String? errorMessage;
 @override final  DateTime startedAt;
+@override final  String? runId;
+@override final  String? scheduleId;
+@override@JsonKey() final  String backupType;
+@override final  String? errorMessage;
 @override final  DateTime? finishedAt;
 @override final  int? durationSeconds;
 @override final  BackupMetrics? metrics;
@@ -242,7 +242,7 @@ _$BackupHistoryCopyWith<_BackupHistory> get copyWith => __$BackupHistoryCopyWith
 
 @override
 String toString() {
-  return 'BackupHistory.raw(id: $id, runId: $runId, scheduleId: $scheduleId, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, backupType: $backupType, status: $status, errorMessage: $errorMessage, startedAt: $startedAt, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics)';
+  return 'BackupHistory.raw(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics)';
 }
 
 
@@ -253,7 +253,7 @@ abstract mixin class _$BackupHistoryCopyWith<$Res> implements $BackupHistoryCopy
   factory _$BackupHistoryCopyWith(_BackupHistory value, $Res Function(_BackupHistory) _then) = __$BackupHistoryCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String? runId, String? scheduleId, String databaseName, String databaseType, String backupPath, int fileSize, String backupType, BackupStatus status, String? errorMessage, DateTime startedAt, DateTime? finishedAt, int? durationSeconds, BackupMetrics? metrics
+ String id, String databaseName, String databaseType, String backupPath, int fileSize, BackupStatus status, DateTime startedAt, String? runId, String? scheduleId, String backupType, String? errorMessage, DateTime? finishedAt, int? durationSeconds, BackupMetrics? metrics
 });
 
 
@@ -270,20 +270,20 @@ class __$BackupHistoryCopyWithImpl<$Res>
 
 /// Create a copy of BackupHistory
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? runId = freezed,Object? scheduleId = freezed,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? backupType = null,Object? status = null,Object? errorMessage = freezed,Object? startedAt = null,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? status = null,Object? startedAt = null,Object? runId = freezed,Object? scheduleId = freezed,Object? backupType = null,Object? errorMessage = freezed,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,}) {
   return _then(_BackupHistory(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,runId: freezed == runId ? _self.runId : runId // ignore: cast_nullable_to_non_nullable
-as String?,scheduleId: freezed == scheduleId ? _self.scheduleId : scheduleId // ignore: cast_nullable_to_non_nullable
-as String?,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
+as String,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
 as String,databaseType: null == databaseType ? _self.databaseType : databaseType // ignore: cast_nullable_to_non_nullable
 as String,backupPath: null == backupPath ? _self.backupPath : backupPath // ignore: cast_nullable_to_non_nullable
 as String,fileSize: null == fileSize ? _self.fileSize : fileSize // ignore: cast_nullable_to_non_nullable
-as int,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
-as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
-as BackupStatus,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
-as String?,startedAt: null == startedAt ? _self.startedAt : startedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,finishedAt: freezed == finishedAt ? _self.finishedAt : finishedAt // ignore: cast_nullable_to_non_nullable
+as int,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as BackupStatus,startedAt: null == startedAt ? _self.startedAt : startedAt // ignore: cast_nullable_to_non_nullable
+as DateTime,runId: freezed == runId ? _self.runId : runId // ignore: cast_nullable_to_non_nullable
+as String?,scheduleId: freezed == scheduleId ? _self.scheduleId : scheduleId // ignore: cast_nullable_to_non_nullable
+as String?,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
+as String,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
+as String?,finishedAt: freezed == finishedAt ? _self.finishedAt : finishedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,durationSeconds: freezed == durationSeconds ? _self.durationSeconds : durationSeconds // ignore: cast_nullable_to_non_nullable
 as int?,metrics: freezed == metrics ? _self.metrics : metrics // ignore: cast_nullable_to_non_nullable
 as BackupMetrics?,

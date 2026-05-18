@@ -6,6 +6,7 @@ export 'email_configs_table.dart';
 export 'email_notification_targets_table.dart';
 export 'email_test_audit_table.dart';
 export 'execution_queue_items_table.dart';
+export 'idempotency_entries_table.dart';
 export 'file_transfers_table.dart';
 export 'firebird_configs_table.dart';
 export 'licenses_table.dart';

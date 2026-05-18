@@ -1086,6 +1086,51 @@ void main() {
     );
 
     test(
+      'executeBackup fullSingle hint v40 passes crypt key as -KEYNAME to gbak',
+      () async {
+        final cfg = tcpConfig.copyWith(
+          serverVersionHint: FirebirdServerVersionHint.v40,
+          cryptKey: 'MyDbKey',
+        );
+        when(
+          () => processService.run(
+            executable: 'gbak',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).thenAnswer((invocation) async {
+          final args = invocation.namedArguments[#arguments]! as List<String>;
+          expect(args, contains('-KEYNAME'));
+          expect(args, contains('MyDbKey'));
+          expect(args, isNot(contains('-key')));
+          await File(args.last).writeAsBytes(List<int>.filled(32, 1));
+          return const rd.Success(
+            ProcessResult(
+              exitCode: 0,
+              stdout: '',
+              stderr: '',
+              duration: Duration(milliseconds: 3),
+            ),
+          );
+        });
+
+        final result = await service.executeBackup(
+          config: cfg,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sched-keyname',
+            backupType: BackupType.fullSingle,
+          ),
+        );
+
+        expect(result.isSuccess(), isTrue);
+      },
+    );
+
+    test(
       'executeBackup passes tcp connection spec and crypt key to gbak',
       () async {
         final cfg = FirebirdConfig(
@@ -1516,6 +1561,169 @@ void main() {
         (_) => fail('expected success'),
       );
     });
+
+    test(
+      'executeBackup FB4 differential uses parent GUID from RDB\$BACKUP_HISTORY',
+      () async {
+        const parentGuid = '{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}';
+        final fb4Config = tcpConfig.copyWith(
+          serverVersionHint: FirebirdServerVersionHint.v40,
+        );
+
+        when(
+          () => processService.run(
+            executable: 'isql',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).thenAnswer((invocation) async {
+          final args =
+              invocation.namedArguments[#arguments]! as List<String>;
+          final iIndex = args.indexOf('-i');
+          if (iIndex >= 0 && iIndex + 1 < args.length) {
+            final scriptPath = args[iIndex + 1];
+            final script = await File(scriptPath).readAsString();
+            if (script.contains(r'RDB$BACKUP_HISTORY')) {
+              return const rd.Success(
+                ProcessResult(
+                  exitCode: 0,
+                  stdout: '$parentGuid\n',
+                  stderr: '',
+                  duration: Duration(milliseconds: 1),
+                ),
+              );
+            }
+          }
+          return const rd.Success(
+            ProcessResult(
+              exitCode: 1,
+              stdout: '',
+              stderr: 'isql default stub skips MON path',
+              duration: Duration(milliseconds: 1),
+            ),
+          );
+        });
+
+        when(
+          () => processService.run(
+            executable: 'nbackup',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).thenAnswer((invocation) async {
+          final args =
+              invocation.namedArguments[#arguments]! as List<String>;
+          final bIndex = args.indexOf('-B');
+          expect(bIndex, greaterThanOrEqualTo(0));
+          expect(args[bIndex + 1], parentGuid);
+          expect(args, isNot(contains('1')));
+          final outPath = args.last;
+          await File(outPath).writeAsBytes(List<int>.filled(10, 1));
+          return const rd.Success(
+            ProcessResult(
+              exitCode: 0,
+              stdout: '',
+              stderr: '',
+              duration: Duration(milliseconds: 2),
+            ),
+          );
+        });
+
+        final result = await service.executeBackup(
+          config: fb4Config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sched-fb4-guid',
+            backupType: BackupType.differential,
+          ),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => processService.run(
+            executable: 'isql',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).called(greaterThanOrEqualTo(1));
+      },
+    );
+
+    test(
+      'executeBackup FB4 differential fails when RDB\$BACKUP_HISTORY has no parent GUID',
+      () async {
+        final fb4Config = tcpConfig.copyWith(
+          serverVersionHint: FirebirdServerVersionHint.v40,
+        );
+
+        when(
+          () => processService.run(
+            executable: 'isql',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).thenAnswer((invocation) async {
+          final args =
+              invocation.namedArguments[#arguments]! as List<String>;
+          final iIndex = args.indexOf('-i');
+          if (iIndex >= 0 && iIndex + 1 < args.length) {
+            final scriptPath = args[iIndex + 1];
+            final script = await File(scriptPath).readAsString();
+            if (script.contains(r'RDB$BACKUP_HISTORY')) {
+              return const rd.Success(
+                ProcessResult(
+                  exitCode: 0,
+                  stdout: '\n',
+                  stderr: '',
+                  duration: Duration(milliseconds: 1),
+                ),
+              );
+            }
+          }
+          return const rd.Success(
+            ProcessResult(
+              exitCode: 1,
+              stdout: '',
+              stderr: 'isql default stub',
+              duration: Duration(milliseconds: 1),
+            ),
+          );
+        });
+
+        final result = await service.executeBackup(
+          config: fb4Config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sched-fb4-no-guid',
+            backupType: BackupType.differential,
+          ),
+        );
+
+        expect(result.isError(), isTrue);
+        verifyNever(
+          () => processService.run(
+            executable: 'nbackup',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        );
+      },
+    );
 
     test('executeBackup differential override runs nbackup -B 2', () async {
       when(
@@ -2439,6 +2647,73 @@ Data pages: 10
               tag: any(named: 'tag'),
             ),
           ).called(1);
+        },
+      );
+
+      test(
+        'gbak -z cache is per host:port:target — different hosts probe twice',
+        () async {
+          final probed = FirebirdBackupService(processService);
+          var zProbeCount = 0;
+          when(
+            () => processService.run(
+              executable: any(named: 'executable'),
+              arguments: any(named: 'arguments'),
+              workingDirectory: any(named: 'workingDirectory'),
+              environment: any(named: 'environment'),
+              timeout: any(named: 'timeout'),
+              tag: any(named: 'tag'),
+            ),
+          ).thenAnswer((invocation) async {
+            final exe = invocation.namedArguments[#executable]! as String;
+            final args = invocation.namedArguments[#arguments]! as List<String>;
+            if (exe == 'gbak' && args.length == 1 && args.first == '-z') {
+              zProbeCount++;
+              return const rd.Success(
+                ProcessResult(
+                  exitCode: 0,
+                  stdout: 'WI-V4.0.0.1',
+                  stderr: '',
+                  duration: Duration(milliseconds: 1),
+                ),
+              );
+            }
+            if (exe == 'gbak' && args.contains('-b')) {
+              await File(args.last).writeAsBytes(List<int>.filled(12, 1));
+              return const rd.Success(
+                ProcessResult(
+                  exitCode: 0,
+                  stdout: '',
+                  stderr: '',
+                  duration: Duration(milliseconds: 1),
+                ),
+              );
+            }
+            if (exe == 'nbackup') {
+              await File(args.last).writeAsBytes(List<int>.filled(12, 1));
+              return const rd.Success(
+                ProcessResult(
+                  exitCode: 0,
+                  stdout: '',
+                  stderr: '',
+                  duration: Duration(milliseconds: 1),
+                ),
+              );
+            }
+            fail('unexpected: $exe $args');
+          });
+
+          final cfgA = tcpConfig.copyWith(host: 'host-a.example');
+          final cfgB = tcpConfig.copyWith(host: 'host-b.example');
+          final ctx = BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sched-z-host',
+            backupType: BackupType.fullSingle,
+          );
+          await probed.executeBackup(config: cfgA, context: ctx);
+          await probed.executeBackup(config: cfgB, context: ctx);
+
+          expect(zProbeCount, 2);
         },
       );
 

@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$SqlServerConfig {
 
- String get id; String get name; String get server; DatabaseName get database; String get username; String get password; PortNumber get port; bool get enabled; bool get useWindowsAuth; DateTime get createdAt; DateTime get updatedAt;
+ String get id; String get name; String get server; DatabaseName get database; String get username; String get password; PortNumber get port; DateTime get createdAt; DateTime get updatedAt; bool get enabled; bool get useWindowsAuth;
 /// Create a copy of SqlServerConfig
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,7 +27,7 @@ $SqlServerConfigCopyWith<SqlServerConfig> get copyWith => _$SqlServerConfigCopyW
 
 @override
 String toString() {
-  return 'SqlServerConfig(id: $id, name: $name, server: $server, database: $database, username: $username, password: $password, port: $port, enabled: $enabled, useWindowsAuth: $useWindowsAuth, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'SqlServerConfig(id: $id, name: $name, server: $server, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled, useWindowsAuth: $useWindowsAuth)';
 }
 
 
@@ -38,7 +38,7 @@ abstract mixin class $SqlServerConfigCopyWith<$Res>  {
   factory $SqlServerConfigCopyWith(SqlServerConfig value, $Res Function(SqlServerConfig) _then) = _$SqlServerConfigCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String server, DatabaseName database, String username, String password, PortNumber port, bool enabled, bool useWindowsAuth, DateTime createdAt, DateTime updatedAt
+ String id, String name, String server, DatabaseName database, String username, String password, PortNumber port, DateTime createdAt, DateTime updatedAt, bool enabled, bool useWindowsAuth
 });
 
 
@@ -55,7 +55,7 @@ class _$SqlServerConfigCopyWithImpl<$Res>
 
 /// Create a copy of SqlServerConfig
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? server = null,Object? database = null,Object? username = null,Object? password = null,Object? port = null,Object? enabled = null,Object? useWindowsAuth = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? server = null,Object? database = null,Object? username = null,Object? password = null,Object? port = null,Object? createdAt = null,Object? updatedAt = null,Object? enabled = null,Object? useWindowsAuth = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -64,11 +64,11 @@ as String,database: null == database ? _self.database : database // ignore: cast
 as DatabaseName,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
 as String,port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
-as PortNumber,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,useWindowsAuth: null == useWindowsAuth ? _self.useWindowsAuth : useWindowsAuth // ignore: cast_nullable_to_non_nullable
-as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as PortNumber,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,useWindowsAuth: null == useWindowsAuth ? _self.useWindowsAuth : useWindowsAuth // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -153,10 +153,10 @@ return raw(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String server,  DatabaseName database,  String username,  String password,  PortNumber port,  bool enabled,  bool useWindowsAuth,  DateTime createdAt,  DateTime updatedAt)?  raw,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String server,  DatabaseName database,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  bool enabled,  bool useWindowsAuth)?  raw,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SqlServerConfig() when raw != null:
-return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.password,_that.port,_that.enabled,_that.useWindowsAuth,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.enabled,_that.useWindowsAuth);case _:
   return orElse();
 
 }
@@ -174,10 +174,10 @@ return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String server,  DatabaseName database,  String username,  String password,  PortNumber port,  bool enabled,  bool useWindowsAuth,  DateTime createdAt,  DateTime updatedAt)  raw,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String server,  DatabaseName database,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  bool enabled,  bool useWindowsAuth)  raw,}) {final _that = this;
 switch (_that) {
 case _SqlServerConfig():
-return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.password,_that.port,_that.enabled,_that.useWindowsAuth,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.enabled,_that.useWindowsAuth);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -194,10 +194,10 @@ return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String server,  DatabaseName database,  String username,  String password,  PortNumber port,  bool enabled,  bool useWindowsAuth,  DateTime createdAt,  DateTime updatedAt)?  raw,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String server,  DatabaseName database,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  bool enabled,  bool useWindowsAuth)?  raw,}) {final _that = this;
 switch (_that) {
 case _SqlServerConfig() when raw != null:
-return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.password,_that.port,_that.enabled,_that.useWindowsAuth,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.enabled,_that.useWindowsAuth);case _:
   return null;
 
 }
@@ -209,7 +209,7 @@ return raw(_that.id,_that.name,_that.server,_that.database,_that.username,_that.
 
 
 class _SqlServerConfig extends SqlServerConfig {
-  const _SqlServerConfig({required this.id, required this.name, required this.server, required this.database, required this.username, required this.password, required this.port, this.enabled = true, this.useWindowsAuth = false, required this.createdAt, required this.updatedAt}): super._();
+  const _SqlServerConfig({required this.id, required this.name, required this.server, required this.database, required this.username, required this.password, required this.port, required this.createdAt, required this.updatedAt, this.enabled = true, this.useWindowsAuth = false}): super._();
   
 
 @override final  String id;
@@ -219,10 +219,10 @@ class _SqlServerConfig extends SqlServerConfig {
 @override final  String username;
 @override final  String password;
 @override final  PortNumber port;
-@override@JsonKey() final  bool enabled;
-@override@JsonKey() final  bool useWindowsAuth;
 @override final  DateTime createdAt;
 @override final  DateTime updatedAt;
+@override@JsonKey() final  bool enabled;
+@override@JsonKey() final  bool useWindowsAuth;
 
 /// Create a copy of SqlServerConfig
 /// with the given fields replaced by the non-null parameter values.
@@ -236,7 +236,7 @@ _$SqlServerConfigCopyWith<_SqlServerConfig> get copyWith => __$SqlServerConfigCo
 
 @override
 String toString() {
-  return 'SqlServerConfig.raw(id: $id, name: $name, server: $server, database: $database, username: $username, password: $password, port: $port, enabled: $enabled, useWindowsAuth: $useWindowsAuth, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'SqlServerConfig.raw(id: $id, name: $name, server: $server, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled, useWindowsAuth: $useWindowsAuth)';
 }
 
 
@@ -247,7 +247,7 @@ abstract mixin class _$SqlServerConfigCopyWith<$Res> implements $SqlServerConfig
   factory _$SqlServerConfigCopyWith(_SqlServerConfig value, $Res Function(_SqlServerConfig) _then) = __$SqlServerConfigCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String server, DatabaseName database, String username, String password, PortNumber port, bool enabled, bool useWindowsAuth, DateTime createdAt, DateTime updatedAt
+ String id, String name, String server, DatabaseName database, String username, String password, PortNumber port, DateTime createdAt, DateTime updatedAt, bool enabled, bool useWindowsAuth
 });
 
 
@@ -264,7 +264,7 @@ class __$SqlServerConfigCopyWithImpl<$Res>
 
 /// Create a copy of SqlServerConfig
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? server = null,Object? database = null,Object? username = null,Object? password = null,Object? port = null,Object? enabled = null,Object? useWindowsAuth = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? server = null,Object? database = null,Object? username = null,Object? password = null,Object? port = null,Object? createdAt = null,Object? updatedAt = null,Object? enabled = null,Object? useWindowsAuth = null,}) {
   return _then(_SqlServerConfig(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -273,11 +273,11 @@ as String,database: null == database ? _self.database : database // ignore: cast
 as DatabaseName,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
 as String,port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
-as PortNumber,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,useWindowsAuth: null == useWindowsAuth ? _self.useWindowsAuth : useWindowsAuth // ignore: cast_nullable_to_non_nullable
-as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as PortNumber,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,useWindowsAuth: null == useWindowsAuth ? _self.useWindowsAuth : useWindowsAuth // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

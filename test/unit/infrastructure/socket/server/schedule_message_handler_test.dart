@@ -725,6 +725,8 @@ void main() {
         expect(getRunIdFromBackupMessage(progressMsg), runId);
         expect(progressMsg.payload['scheduleId'], 'schedule-X');
         expect(progressMsg.header.requestId, 555);
+        expect(getEventIdFromBackupMessage(progressMsg), isNotEmpty);
+        expect(getSequenceFromBackupMessage(progressMsg), greaterThan(0));
 
         localHandler.dispose();
       },
@@ -776,9 +778,12 @@ void main() {
         await Future(() => capturedListener!());
         await Future.delayed(Duration.zero);
 
+        final progressMsg = sentMessages.firstWhere(isBackupProgressMessage);
         final completeMsg = sentMessages.firstWhere(isBackupCompleteMessage);
         expect(getRunIdFromBackupMessage(completeMsg), runId);
         expect(completeMsg.payload['backupPath'], '/tmp/x.zip');
+        expect(getSequenceFromBackupMessage(completeMsg)!,
+            greaterThan(getSequenceFromBackupMessage(progressMsg)!));
         // Apos enviar Concluído o registry desregistra (limpeza)
         expect(localRegistry.hasActiveForSchedule('schedule-Y'), isFalse);
 

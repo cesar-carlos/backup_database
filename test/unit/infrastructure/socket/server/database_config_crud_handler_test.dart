@@ -122,6 +122,7 @@ void main() {
       final req = createCreateDatabaseConfigRequest(
         databaseType: RemoteDatabaseType.sybase,
         config: const {'id': 'new-id', 'name': 'Foo'},
+        idempotencyKey: 'idem-create-db',
       );
       await handler.handle('c1', req, sendToClient);
 
@@ -142,6 +143,7 @@ void main() {
         ),
         payload: const <String, dynamic>{
           'databaseType': 'sybase',
+          'idempotencyKey': 'idem-bad-db',
         },
         checksum: 0,
       );
@@ -196,6 +198,7 @@ void main() {
       final req = createDeleteDatabaseConfigRequest(
         databaseType: RemoteDatabaseType.sqlServer,
         configId: 'cfg-99',
+        idempotencyKey: 'idem-delete-db',
       );
       await handler.handle('c1', req, sendToClient);
       expect(store.calls.single.op, 'delete');
@@ -210,6 +213,7 @@ void main() {
       final req = createDeleteDatabaseConfigRequest(
         databaseType: RemoteDatabaseType.sqlServer,
         configId: '',
+        idempotencyKey: 'idem-delete-empty',
       );
       await handler.handle('c1', req, sendToClient);
       expect(getErrorCodeFromMessage(sent.single), ErrorCode.invalidRequest);

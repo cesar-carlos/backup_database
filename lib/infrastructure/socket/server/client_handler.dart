@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/payload_limits.dart';
 import 'package:backup_database/infrastructure/socket/heartbeat.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_rate_limiter.dart';
 import 'package:uuid/uuid.dart';
 
 const int _headerSize = 16;
@@ -66,6 +67,7 @@ class ClientHandler {
   DateTime _lastHeartbeat = DateTime.now();
   HeartbeatManager? _heartbeatManager;
   StreamSubscription<List<int>>? _socketSubscription;
+  final SocketRateLimiter _rateLimiter = SocketRateLimiter();
 
   /// Serializa as escritas no socket para evitar interleaving de bytes
   /// quando heartbeat e mensagens normais (ex.: progress) tentam emitir
@@ -313,6 +315,9 @@ class ClientHandler {
             continue;
           }
         }
+        if (_rejectIfRateLimited(message)) {
+          continue;
+        }
         _safeAddMessage(message);
       } on UnsupportedProtocolVersionException catch (e) {
         // Wire version desconhecida: peer com protocolo binario
@@ -352,6 +357,32 @@ class ClientHandler {
         );
       }
     }
+  }
+
+  /// M5.1 — rejeita mensagem quando o cliente excede req/s ou
+  /// mutacoes/minuto. Nao desconecta; cliente aplica backoff via
+  /// `retryAfterSeconds`.
+  bool _rejectIfRateLimited(Message message) {
+    final decision = _rateLimiter.check(message.header.type);
+    if (decision is RateLimitAllowed) {
+      return false;
+    }
+    final denied = decision as RateLimitDenied;
+    LoggerService.warning(
+      'ClientHandler $_clientId: rate limit (${message.header.type.name}) '
+      'retryAfter=${denied.retryAfterSeconds}s',
+    );
+    unawaited(
+      send(
+        createErrorMessage(
+          requestId: message.header.requestId,
+          errorMessage: ErrorCode.rateLimitExceeded.defaultMessage,
+          errorCode: ErrorCode.rateLimitExceeded,
+          retryAfterSeconds: denied.retryAfterSeconds,
+        ),
+      ),
+    );
+    return true;
   }
 
   /// Emite no `_messageController` apenas se ele ainda está aberto.

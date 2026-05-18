@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Schedule {
 
- String get id; String get name; String get databaseConfigId; DatabaseType get databaseType; String get scheduleType; String get scheduleConfig; List<String> get destinationIds; String get backupFolder; BackupType get backupType; bool get truncateLog; bool get compressBackup; CompressionFormat get compressionFormat; bool get enabled; bool get enableChecksum; bool get verifyAfterBackup; VerifyPolicy get verifyPolicy; String? get postBackupScript; Duration get backupTimeout; Duration get verifyTimeout; DateTime? get lastRunAt; DateTime? get nextRunAt; DateTime? get createdAt; DateTime? get updatedAt; bool get isConvertedDifferential; int? get firebirdNbackupPhysicalLevel; SqlServerBackupOptions? get sqlServerBackupOptions; SybaseBackupOptions? get sybaseBackupOptions;
+ String get id; String get name; String get databaseConfigId; DatabaseType get databaseType; String get scheduleType; String get scheduleConfig; List<String> get destinationIds; String get backupFolder; CompressionFormat get compressionFormat; BackupType get backupType; bool get truncateLog; bool get compressBackup; bool get enabled; bool get enableChecksum; bool get verifyAfterBackup; VerifyPolicy get verifyPolicy; String? get postBackupScript; Duration get backupTimeout; Duration get verifyTimeout; DateTime? get lastRunAt; DateTime? get nextRunAt; DateTime? get createdAt; DateTime? get updatedAt; bool get isConvertedDifferential; int? get firebirdNbackupPhysicalLevel; SqlServerBackupOptions? get sqlServerBackupOptions; SybaseBackupOptions? get sybaseBackupOptions;
 /// Create a copy of Schedule
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,7 +27,7 @@ $ScheduleCopyWith<Schedule> get copyWith => _$ScheduleCopyWithImpl<Schedule>(thi
 
 @override
 String toString() {
-  return 'Schedule(id: $id, name: $name, databaseConfigId: $databaseConfigId, databaseType: $databaseType, scheduleType: $scheduleType, scheduleConfig: $scheduleConfig, destinationIds: $destinationIds, backupFolder: $backupFolder, backupType: $backupType, truncateLog: $truncateLog, compressBackup: $compressBackup, compressionFormat: $compressionFormat, enabled: $enabled, enableChecksum: $enableChecksum, verifyAfterBackup: $verifyAfterBackup, verifyPolicy: $verifyPolicy, postBackupScript: $postBackupScript, backupTimeout: $backupTimeout, verifyTimeout: $verifyTimeout, lastRunAt: $lastRunAt, nextRunAt: $nextRunAt, createdAt: $createdAt, updatedAt: $updatedAt, isConvertedDifferential: $isConvertedDifferential, firebirdNbackupPhysicalLevel: $firebirdNbackupPhysicalLevel, sqlServerBackupOptions: $sqlServerBackupOptions, sybaseBackupOptions: $sybaseBackupOptions)';
+  return 'Schedule(id: $id, name: $name, databaseConfigId: $databaseConfigId, databaseType: $databaseType, scheduleType: $scheduleType, scheduleConfig: $scheduleConfig, destinationIds: $destinationIds, backupFolder: $backupFolder, compressionFormat: $compressionFormat, backupType: $backupType, truncateLog: $truncateLog, compressBackup: $compressBackup, enabled: $enabled, enableChecksum: $enableChecksum, verifyAfterBackup: $verifyAfterBackup, verifyPolicy: $verifyPolicy, postBackupScript: $postBackupScript, backupTimeout: $backupTimeout, verifyTimeout: $verifyTimeout, lastRunAt: $lastRunAt, nextRunAt: $nextRunAt, createdAt: $createdAt, updatedAt: $updatedAt, isConvertedDifferential: $isConvertedDifferential, firebirdNbackupPhysicalLevel: $firebirdNbackupPhysicalLevel, sqlServerBackupOptions: $sqlServerBackupOptions, sybaseBackupOptions: $sybaseBackupOptions)';
 }
 
 
@@ -38,7 +38,7 @@ abstract mixin class $ScheduleCopyWith<$Res>  {
   factory $ScheduleCopyWith(Schedule value, $Res Function(Schedule) _then) = _$ScheduleCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String databaseConfigId, DatabaseType databaseType, String scheduleType, String scheduleConfig, List<String> destinationIds, String backupFolder, BackupType backupType, bool truncateLog, bool compressBackup, CompressionFormat compressionFormat, bool enabled, bool enableChecksum, bool verifyAfterBackup, VerifyPolicy verifyPolicy, String? postBackupScript, Duration backupTimeout, Duration verifyTimeout, DateTime? lastRunAt, DateTime? nextRunAt, DateTime? createdAt, DateTime? updatedAt, bool isConvertedDifferential, int? firebirdNbackupPhysicalLevel, SqlServerBackupOptions? sqlServerBackupOptions, SybaseBackupOptions? sybaseBackupOptions
+ String id, String name, String databaseConfigId, DatabaseType databaseType, String scheduleType, String scheduleConfig, List<String> destinationIds, String backupFolder, CompressionFormat compressionFormat, BackupType backupType, bool truncateLog, bool compressBackup, bool enabled, bool enableChecksum, bool verifyAfterBackup, VerifyPolicy verifyPolicy, String? postBackupScript, Duration backupTimeout, Duration verifyTimeout, DateTime? lastRunAt, DateTime? nextRunAt, DateTime? createdAt, DateTime? updatedAt, bool isConvertedDifferential, int? firebirdNbackupPhysicalLevel, SqlServerBackupOptions? sqlServerBackupOptions, SybaseBackupOptions? sybaseBackupOptions
 });
 
 
@@ -55,7 +55,7 @@ class _$ScheduleCopyWithImpl<$Res>
 
 /// Create a copy of Schedule
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? databaseConfigId = null,Object? databaseType = null,Object? scheduleType = null,Object? scheduleConfig = null,Object? destinationIds = null,Object? backupFolder = null,Object? backupType = null,Object? truncateLog = null,Object? compressBackup = null,Object? compressionFormat = null,Object? enabled = null,Object? enableChecksum = null,Object? verifyAfterBackup = null,Object? verifyPolicy = null,Object? postBackupScript = freezed,Object? backupTimeout = null,Object? verifyTimeout = null,Object? lastRunAt = freezed,Object? nextRunAt = freezed,Object? createdAt = freezed,Object? updatedAt = freezed,Object? isConvertedDifferential = null,Object? firebirdNbackupPhysicalLevel = freezed,Object? sqlServerBackupOptions = freezed,Object? sybaseBackupOptions = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? databaseConfigId = null,Object? databaseType = null,Object? scheduleType = null,Object? scheduleConfig = null,Object? destinationIds = null,Object? backupFolder = null,Object? compressionFormat = null,Object? backupType = null,Object? truncateLog = null,Object? compressBackup = null,Object? enabled = null,Object? enableChecksum = null,Object? verifyAfterBackup = null,Object? verifyPolicy = null,Object? postBackupScript = freezed,Object? backupTimeout = null,Object? verifyTimeout = null,Object? lastRunAt = freezed,Object? nextRunAt = freezed,Object? createdAt = freezed,Object? updatedAt = freezed,Object? isConvertedDifferential = null,Object? firebirdNbackupPhysicalLevel = freezed,Object? sqlServerBackupOptions = freezed,Object? sybaseBackupOptions = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -65,11 +65,11 @@ as DatabaseType,scheduleType: null == scheduleType ? _self.scheduleType : schedu
 as String,scheduleConfig: null == scheduleConfig ? _self.scheduleConfig : scheduleConfig // ignore: cast_nullable_to_non_nullable
 as String,destinationIds: null == destinationIds ? _self.destinationIds : destinationIds // ignore: cast_nullable_to_non_nullable
 as List<String>,backupFolder: null == backupFolder ? _self.backupFolder : backupFolder // ignore: cast_nullable_to_non_nullable
-as String,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
+as String,compressionFormat: null == compressionFormat ? _self.compressionFormat : compressionFormat // ignore: cast_nullable_to_non_nullable
+as CompressionFormat,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
 as BackupType,truncateLog: null == truncateLog ? _self.truncateLog : truncateLog // ignore: cast_nullable_to_non_nullable
 as bool,compressBackup: null == compressBackup ? _self.compressBackup : compressBackup // ignore: cast_nullable_to_non_nullable
-as bool,compressionFormat: null == compressionFormat ? _self.compressionFormat : compressionFormat // ignore: cast_nullable_to_non_nullable
-as CompressionFormat,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
 as bool,enableChecksum: null == enableChecksum ? _self.enableChecksum : enableChecksum // ignore: cast_nullable_to_non_nullable
 as bool,verifyAfterBackup: null == verifyAfterBackup ? _self.verifyAfterBackup : verifyAfterBackup // ignore: cast_nullable_to_non_nullable
 as bool,verifyPolicy: null == verifyPolicy ? _self.verifyPolicy : verifyPolicy // ignore: cast_nullable_to_non_nullable
@@ -169,10 +169,10 @@ return raw(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String databaseConfigId,  DatabaseType databaseType,  String scheduleType,  String scheduleConfig,  List<String> destinationIds,  String backupFolder,  BackupType backupType,  bool truncateLog,  bool compressBackup,  CompressionFormat compressionFormat,  bool enabled,  bool enableChecksum,  bool verifyAfterBackup,  VerifyPolicy verifyPolicy,  String? postBackupScript,  Duration backupTimeout,  Duration verifyTimeout,  DateTime? lastRunAt,  DateTime? nextRunAt,  DateTime? createdAt,  DateTime? updatedAt,  bool isConvertedDifferential,  int? firebirdNbackupPhysicalLevel,  SqlServerBackupOptions? sqlServerBackupOptions,  SybaseBackupOptions? sybaseBackupOptions)?  raw,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String databaseConfigId,  DatabaseType databaseType,  String scheduleType,  String scheduleConfig,  List<String> destinationIds,  String backupFolder,  CompressionFormat compressionFormat,  BackupType backupType,  bool truncateLog,  bool compressBackup,  bool enabled,  bool enableChecksum,  bool verifyAfterBackup,  VerifyPolicy verifyPolicy,  String? postBackupScript,  Duration backupTimeout,  Duration verifyTimeout,  DateTime? lastRunAt,  DateTime? nextRunAt,  DateTime? createdAt,  DateTime? updatedAt,  bool isConvertedDifferential,  int? firebirdNbackupPhysicalLevel,  SqlServerBackupOptions? sqlServerBackupOptions,  SybaseBackupOptions? sybaseBackupOptions)?  raw,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Schedule() when raw != null:
-return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.scheduleType,_that.scheduleConfig,_that.destinationIds,_that.backupFolder,_that.backupType,_that.truncateLog,_that.compressBackup,_that.compressionFormat,_that.enabled,_that.enableChecksum,_that.verifyAfterBackup,_that.verifyPolicy,_that.postBackupScript,_that.backupTimeout,_that.verifyTimeout,_that.lastRunAt,_that.nextRunAt,_that.createdAt,_that.updatedAt,_that.isConvertedDifferential,_that.firebirdNbackupPhysicalLevel,_that.sqlServerBackupOptions,_that.sybaseBackupOptions);case _:
+return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.scheduleType,_that.scheduleConfig,_that.destinationIds,_that.backupFolder,_that.compressionFormat,_that.backupType,_that.truncateLog,_that.compressBackup,_that.enabled,_that.enableChecksum,_that.verifyAfterBackup,_that.verifyPolicy,_that.postBackupScript,_that.backupTimeout,_that.verifyTimeout,_that.lastRunAt,_that.nextRunAt,_that.createdAt,_that.updatedAt,_that.isConvertedDifferential,_that.firebirdNbackupPhysicalLevel,_that.sqlServerBackupOptions,_that.sybaseBackupOptions);case _:
   return orElse();
 
 }
@@ -190,10 +190,10 @@ return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.s
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String databaseConfigId,  DatabaseType databaseType,  String scheduleType,  String scheduleConfig,  List<String> destinationIds,  String backupFolder,  BackupType backupType,  bool truncateLog,  bool compressBackup,  CompressionFormat compressionFormat,  bool enabled,  bool enableChecksum,  bool verifyAfterBackup,  VerifyPolicy verifyPolicy,  String? postBackupScript,  Duration backupTimeout,  Duration verifyTimeout,  DateTime? lastRunAt,  DateTime? nextRunAt,  DateTime? createdAt,  DateTime? updatedAt,  bool isConvertedDifferential,  int? firebirdNbackupPhysicalLevel,  SqlServerBackupOptions? sqlServerBackupOptions,  SybaseBackupOptions? sybaseBackupOptions)  raw,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String databaseConfigId,  DatabaseType databaseType,  String scheduleType,  String scheduleConfig,  List<String> destinationIds,  String backupFolder,  CompressionFormat compressionFormat,  BackupType backupType,  bool truncateLog,  bool compressBackup,  bool enabled,  bool enableChecksum,  bool verifyAfterBackup,  VerifyPolicy verifyPolicy,  String? postBackupScript,  Duration backupTimeout,  Duration verifyTimeout,  DateTime? lastRunAt,  DateTime? nextRunAt,  DateTime? createdAt,  DateTime? updatedAt,  bool isConvertedDifferential,  int? firebirdNbackupPhysicalLevel,  SqlServerBackupOptions? sqlServerBackupOptions,  SybaseBackupOptions? sybaseBackupOptions)  raw,}) {final _that = this;
 switch (_that) {
 case _Schedule():
-return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.scheduleType,_that.scheduleConfig,_that.destinationIds,_that.backupFolder,_that.backupType,_that.truncateLog,_that.compressBackup,_that.compressionFormat,_that.enabled,_that.enableChecksum,_that.verifyAfterBackup,_that.verifyPolicy,_that.postBackupScript,_that.backupTimeout,_that.verifyTimeout,_that.lastRunAt,_that.nextRunAt,_that.createdAt,_that.updatedAt,_that.isConvertedDifferential,_that.firebirdNbackupPhysicalLevel,_that.sqlServerBackupOptions,_that.sybaseBackupOptions);case _:
+return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.scheduleType,_that.scheduleConfig,_that.destinationIds,_that.backupFolder,_that.compressionFormat,_that.backupType,_that.truncateLog,_that.compressBackup,_that.enabled,_that.enableChecksum,_that.verifyAfterBackup,_that.verifyPolicy,_that.postBackupScript,_that.backupTimeout,_that.verifyTimeout,_that.lastRunAt,_that.nextRunAt,_that.createdAt,_that.updatedAt,_that.isConvertedDifferential,_that.firebirdNbackupPhysicalLevel,_that.sqlServerBackupOptions,_that.sybaseBackupOptions);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -210,10 +210,10 @@ return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.s
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String databaseConfigId,  DatabaseType databaseType,  String scheduleType,  String scheduleConfig,  List<String> destinationIds,  String backupFolder,  BackupType backupType,  bool truncateLog,  bool compressBackup,  CompressionFormat compressionFormat,  bool enabled,  bool enableChecksum,  bool verifyAfterBackup,  VerifyPolicy verifyPolicy,  String? postBackupScript,  Duration backupTimeout,  Duration verifyTimeout,  DateTime? lastRunAt,  DateTime? nextRunAt,  DateTime? createdAt,  DateTime? updatedAt,  bool isConvertedDifferential,  int? firebirdNbackupPhysicalLevel,  SqlServerBackupOptions? sqlServerBackupOptions,  SybaseBackupOptions? sybaseBackupOptions)?  raw,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String databaseConfigId,  DatabaseType databaseType,  String scheduleType,  String scheduleConfig,  List<String> destinationIds,  String backupFolder,  CompressionFormat compressionFormat,  BackupType backupType,  bool truncateLog,  bool compressBackup,  bool enabled,  bool enableChecksum,  bool verifyAfterBackup,  VerifyPolicy verifyPolicy,  String? postBackupScript,  Duration backupTimeout,  Duration verifyTimeout,  DateTime? lastRunAt,  DateTime? nextRunAt,  DateTime? createdAt,  DateTime? updatedAt,  bool isConvertedDifferential,  int? firebirdNbackupPhysicalLevel,  SqlServerBackupOptions? sqlServerBackupOptions,  SybaseBackupOptions? sybaseBackupOptions)?  raw,}) {final _that = this;
 switch (_that) {
 case _Schedule() when raw != null:
-return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.scheduleType,_that.scheduleConfig,_that.destinationIds,_that.backupFolder,_that.backupType,_that.truncateLog,_that.compressBackup,_that.compressionFormat,_that.enabled,_that.enableChecksum,_that.verifyAfterBackup,_that.verifyPolicy,_that.postBackupScript,_that.backupTimeout,_that.verifyTimeout,_that.lastRunAt,_that.nextRunAt,_that.createdAt,_that.updatedAt,_that.isConvertedDifferential,_that.firebirdNbackupPhysicalLevel,_that.sqlServerBackupOptions,_that.sybaseBackupOptions);case _:
+return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.scheduleType,_that.scheduleConfig,_that.destinationIds,_that.backupFolder,_that.compressionFormat,_that.backupType,_that.truncateLog,_that.compressBackup,_that.enabled,_that.enableChecksum,_that.verifyAfterBackup,_that.verifyPolicy,_that.postBackupScript,_that.backupTimeout,_that.verifyTimeout,_that.lastRunAt,_that.nextRunAt,_that.createdAt,_that.updatedAt,_that.isConvertedDifferential,_that.firebirdNbackupPhysicalLevel,_that.sqlServerBackupOptions,_that.sybaseBackupOptions);case _:
   return null;
 
 }
@@ -225,7 +225,7 @@ return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.s
 
 
 class _Schedule extends Schedule {
-  const _Schedule({required this.id, required this.name, required this.databaseConfigId, required this.databaseType, required this.scheduleType, required this.scheduleConfig, required final  List<String> destinationIds, required this.backupFolder, this.backupType = BackupType.full, this.truncateLog = true, this.compressBackup = true, required this.compressionFormat, this.enabled = true, this.enableChecksum = false, this.verifyAfterBackup = false, this.verifyPolicy = VerifyPolicy.bestEffort, this.postBackupScript, this.backupTimeout = const Duration(hours: 2), this.verifyTimeout = const Duration(minutes: 30), this.lastRunAt, this.nextRunAt, this.createdAt, this.updatedAt, this.isConvertedDifferential = false, this.firebirdNbackupPhysicalLevel, this.sqlServerBackupOptions, this.sybaseBackupOptions}): _destinationIds = destinationIds,super._();
+  const _Schedule({required this.id, required this.name, required this.databaseConfigId, required this.databaseType, required this.scheduleType, required this.scheduleConfig, required final  List<String> destinationIds, required this.backupFolder, required this.compressionFormat, this.backupType = BackupType.full, this.truncateLog = true, this.compressBackup = true, this.enabled = true, this.enableChecksum = false, this.verifyAfterBackup = false, this.verifyPolicy = VerifyPolicy.bestEffort, this.postBackupScript, this.backupTimeout = const Duration(hours: 2), this.verifyTimeout = const Duration(minutes: 30), this.lastRunAt, this.nextRunAt, this.createdAt, this.updatedAt, this.isConvertedDifferential = false, this.firebirdNbackupPhysicalLevel, this.sqlServerBackupOptions, this.sybaseBackupOptions}): _destinationIds = destinationIds,super._();
   
 
 @override final  String id;
@@ -242,10 +242,10 @@ class _Schedule extends Schedule {
 }
 
 @override final  String backupFolder;
+@override final  CompressionFormat compressionFormat;
 @override@JsonKey() final  BackupType backupType;
 @override@JsonKey() final  bool truncateLog;
 @override@JsonKey() final  bool compressBackup;
-@override final  CompressionFormat compressionFormat;
 @override@JsonKey() final  bool enabled;
 @override@JsonKey() final  bool enableChecksum;
 @override@JsonKey() final  bool verifyAfterBackup;
@@ -274,7 +274,7 @@ _$ScheduleCopyWith<_Schedule> get copyWith => __$ScheduleCopyWithImpl<_Schedule>
 
 @override
 String toString() {
-  return 'Schedule.raw(id: $id, name: $name, databaseConfigId: $databaseConfigId, databaseType: $databaseType, scheduleType: $scheduleType, scheduleConfig: $scheduleConfig, destinationIds: $destinationIds, backupFolder: $backupFolder, backupType: $backupType, truncateLog: $truncateLog, compressBackup: $compressBackup, compressionFormat: $compressionFormat, enabled: $enabled, enableChecksum: $enableChecksum, verifyAfterBackup: $verifyAfterBackup, verifyPolicy: $verifyPolicy, postBackupScript: $postBackupScript, backupTimeout: $backupTimeout, verifyTimeout: $verifyTimeout, lastRunAt: $lastRunAt, nextRunAt: $nextRunAt, createdAt: $createdAt, updatedAt: $updatedAt, isConvertedDifferential: $isConvertedDifferential, firebirdNbackupPhysicalLevel: $firebirdNbackupPhysicalLevel, sqlServerBackupOptions: $sqlServerBackupOptions, sybaseBackupOptions: $sybaseBackupOptions)';
+  return 'Schedule.raw(id: $id, name: $name, databaseConfigId: $databaseConfigId, databaseType: $databaseType, scheduleType: $scheduleType, scheduleConfig: $scheduleConfig, destinationIds: $destinationIds, backupFolder: $backupFolder, compressionFormat: $compressionFormat, backupType: $backupType, truncateLog: $truncateLog, compressBackup: $compressBackup, enabled: $enabled, enableChecksum: $enableChecksum, verifyAfterBackup: $verifyAfterBackup, verifyPolicy: $verifyPolicy, postBackupScript: $postBackupScript, backupTimeout: $backupTimeout, verifyTimeout: $verifyTimeout, lastRunAt: $lastRunAt, nextRunAt: $nextRunAt, createdAt: $createdAt, updatedAt: $updatedAt, isConvertedDifferential: $isConvertedDifferential, firebirdNbackupPhysicalLevel: $firebirdNbackupPhysicalLevel, sqlServerBackupOptions: $sqlServerBackupOptions, sybaseBackupOptions: $sybaseBackupOptions)';
 }
 
 
@@ -285,7 +285,7 @@ abstract mixin class _$ScheduleCopyWith<$Res> implements $ScheduleCopyWith<$Res>
   factory _$ScheduleCopyWith(_Schedule value, $Res Function(_Schedule) _then) = __$ScheduleCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String databaseConfigId, DatabaseType databaseType, String scheduleType, String scheduleConfig, List<String> destinationIds, String backupFolder, BackupType backupType, bool truncateLog, bool compressBackup, CompressionFormat compressionFormat, bool enabled, bool enableChecksum, bool verifyAfterBackup, VerifyPolicy verifyPolicy, String? postBackupScript, Duration backupTimeout, Duration verifyTimeout, DateTime? lastRunAt, DateTime? nextRunAt, DateTime? createdAt, DateTime? updatedAt, bool isConvertedDifferential, int? firebirdNbackupPhysicalLevel, SqlServerBackupOptions? sqlServerBackupOptions, SybaseBackupOptions? sybaseBackupOptions
+ String id, String name, String databaseConfigId, DatabaseType databaseType, String scheduleType, String scheduleConfig, List<String> destinationIds, String backupFolder, CompressionFormat compressionFormat, BackupType backupType, bool truncateLog, bool compressBackup, bool enabled, bool enableChecksum, bool verifyAfterBackup, VerifyPolicy verifyPolicy, String? postBackupScript, Duration backupTimeout, Duration verifyTimeout, DateTime? lastRunAt, DateTime? nextRunAt, DateTime? createdAt, DateTime? updatedAt, bool isConvertedDifferential, int? firebirdNbackupPhysicalLevel, SqlServerBackupOptions? sqlServerBackupOptions, SybaseBackupOptions? sybaseBackupOptions
 });
 
 
@@ -302,7 +302,7 @@ class __$ScheduleCopyWithImpl<$Res>
 
 /// Create a copy of Schedule
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? databaseConfigId = null,Object? databaseType = null,Object? scheduleType = null,Object? scheduleConfig = null,Object? destinationIds = null,Object? backupFolder = null,Object? backupType = null,Object? truncateLog = null,Object? compressBackup = null,Object? compressionFormat = null,Object? enabled = null,Object? enableChecksum = null,Object? verifyAfterBackup = null,Object? verifyPolicy = null,Object? postBackupScript = freezed,Object? backupTimeout = null,Object? verifyTimeout = null,Object? lastRunAt = freezed,Object? nextRunAt = freezed,Object? createdAt = freezed,Object? updatedAt = freezed,Object? isConvertedDifferential = null,Object? firebirdNbackupPhysicalLevel = freezed,Object? sqlServerBackupOptions = freezed,Object? sybaseBackupOptions = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? databaseConfigId = null,Object? databaseType = null,Object? scheduleType = null,Object? scheduleConfig = null,Object? destinationIds = null,Object? backupFolder = null,Object? compressionFormat = null,Object? backupType = null,Object? truncateLog = null,Object? compressBackup = null,Object? enabled = null,Object? enableChecksum = null,Object? verifyAfterBackup = null,Object? verifyPolicy = null,Object? postBackupScript = freezed,Object? backupTimeout = null,Object? verifyTimeout = null,Object? lastRunAt = freezed,Object? nextRunAt = freezed,Object? createdAt = freezed,Object? updatedAt = freezed,Object? isConvertedDifferential = null,Object? firebirdNbackupPhysicalLevel = freezed,Object? sqlServerBackupOptions = freezed,Object? sybaseBackupOptions = freezed,}) {
   return _then(_Schedule(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -312,11 +312,11 @@ as DatabaseType,scheduleType: null == scheduleType ? _self.scheduleType : schedu
 as String,scheduleConfig: null == scheduleConfig ? _self.scheduleConfig : scheduleConfig // ignore: cast_nullable_to_non_nullable
 as String,destinationIds: null == destinationIds ? _self._destinationIds : destinationIds // ignore: cast_nullable_to_non_nullable
 as List<String>,backupFolder: null == backupFolder ? _self.backupFolder : backupFolder // ignore: cast_nullable_to_non_nullable
-as String,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
+as String,compressionFormat: null == compressionFormat ? _self.compressionFormat : compressionFormat // ignore: cast_nullable_to_non_nullable
+as CompressionFormat,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
 as BackupType,truncateLog: null == truncateLog ? _self.truncateLog : truncateLog // ignore: cast_nullable_to_non_nullable
 as bool,compressBackup: null == compressBackup ? _self.compressBackup : compressBackup // ignore: cast_nullable_to_non_nullable
-as bool,compressionFormat: null == compressionFormat ? _self.compressionFormat : compressionFormat // ignore: cast_nullable_to_non_nullable
-as CompressionFormat,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
 as bool,enableChecksum: null == enableChecksum ? _self.enableChecksum : enableChecksum // ignore: cast_nullable_to_non_nullable
 as bool,verifyAfterBackup: null == verifyAfterBackup ? _self.verifyAfterBackup : verifyAfterBackup // ignore: cast_nullable_to_non_nullable
 as bool,verifyPolicy: null == verifyPolicy ? _self.verifyPolicy : verifyPolicy // ignore: cast_nullable_to_non_nullable

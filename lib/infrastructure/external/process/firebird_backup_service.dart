@@ -6,6 +6,7 @@ import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/backup_size_calculator.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/firebird_nbackup_output_chain_check.dart';
+import 'package:backup_database/core/utils/firebird_runtime_version.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/core/utils/unit.dart';
@@ -44,13 +45,55 @@ class FirebirdBackupService implements IFirebirdBackupService {
         .normalize((config.clientLibraryPath ?? '').trim())
         .toLowerCase();
     final embedded = config.useEmbedded ? '1' : '0';
-    final db = p.normalize(config.databaseFile.trim()).toLowerCase();
-    return '$embedded|$lib|$db';
+    if (config.useEmbedded) {
+      final db = p.normalize(config.databaseFile.trim()).toLowerCase();
+      return '$embedded|$lib|$db';
+    }
+    final host = config.host.trim().toLowerCase();
+    final port = '${config.portValue}';
+    final alias = (config.aliasName ?? '').trim().toLowerCase();
+    final db = config.databaseFile.trim().toLowerCase();
+    final target = alias.isNotEmpty ? 'alias:$alias' : 'db:$db';
+    return '$embedded|$lib|$host|$port|$target';
+  }
+
+  static List<String> _gbakCryptCliArgs(
+    FirebirdConfig config, {
+    String? resolvedGbakTagline,
+  }) {
+    final key = config.cryptKey.trim();
+    if (key.isEmpty) {
+      return const <String>[];
+    }
+    if (firebirdGbakUsesKeyNameEncryption(
+      serverVersionHint: config.serverVersionHint,
+      gbakWiTagline: resolvedGbakTagline,
+    )) {
+      return <String>['-KEYNAME', key];
+    }
+    return <String>['-key', key];
+  }
+
+  static void _warnCryptKeyServerHintMismatch(FirebirdConfig config) {
+    if (config.cryptKey.trim().isEmpty) {
+      return;
+    }
+    if (config.serverVersionHint == FirebirdServerVersionHint.v25) {
+      LoggerService.warning(
+        'Firebird: chave de criptografia configurada com hint 2.5; gbak usa '
+        '-key (plugin legado). Para criptografia nativa Firebird 4 (-KEYNAME), '
+        'defina hint 4.0 ou Automatico com gbak -z.',
+      );
+    }
   }
 
   @visibleForTesting
   static void resetGbakZProbeCacheForTest() {
     _gbakZTaglineCache.clear();
+  }
+
+  static void invalidateGbakZProbeCacheForConfig(FirebirdConfig config) {
+    _gbakZTaglineCache.remove(_gbakZCacheKey(config));
   }
 
   static const Duration _defaultProbeTimeout = Duration(seconds: 30);
@@ -65,6 +108,9 @@ class FirebirdBackupService implements IFirebirdBackupService {
     caseSensitive: false,
   );
   static final RegExp _isqlSingleIntLine = RegExp(r'^\s*(\d+)\s*$');
+  static final RegExp _isqlGuidLine = RegExp(
+    r'^\s*(\{?[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}?)\s*$',
+  );
 
   static const String _engine12Dll = 'engine12.dll';
   static const String _engine13Dll = 'engine13.dll';
@@ -483,6 +529,167 @@ class FirebirdBackupService implements IFirebirdBackupService {
     }
   }
 
+  Future<rd.Result<String>> _resolveNbackupBArgument({
+    required FirebirdConfig config,
+    required String dbSpec,
+    required int nbackupLevel,
+    required String outputDirectory,
+    required String databaseStem,
+    required String? resolvedGbakTagline,
+    required Duration? backupTimeout,
+    String? cancelTag,
+  }) async {
+    if (nbackupLevel <= 0) {
+      return const rd.Success('0');
+    }
+
+    final useGuidParent = firebirdRuntimeSupportsNbackupGuidMode(
+      serverVersionHint: config.serverVersionHint,
+      gbakWiTagline: resolvedGbakTagline,
+    );
+
+    if (!useGuidParent) {
+      final missingPattern = await missingFirebirdNbackupChainPattern(
+        outputDirectory: outputDirectory,
+        databaseStem: databaseStem,
+        nbackupLevel: nbackupLevel,
+      );
+      if (missingPattern != null) {
+        return rd.Failure(
+          ValidationFailure(
+            message:
+                'Backup incremental Firebird (nbackup -B $nbackupLevel): '
+                'na pasta de saida falta ficheiro da cadeia ($missingPattern). '
+                'Execute os backups fisicos anteriores nessa pasta ou copie os '
+                '.nbk necessarios antes de nivel $nbackupLevel.',
+          ),
+        );
+      }
+      return rd.Success('$nbackupLevel');
+    }
+
+    final parentLevel = nbackupLevel - 1;
+    final parentGuid = await _queryLatestNbackupParentGuid(
+      config: config,
+      dbSpec: dbSpec,
+      parentLevel: parentLevel,
+      timeout: backupTimeout ?? _defaultBackupTimeout,
+      cancelTag: cancelTag,
+    );
+    if (parentGuid == null || parentGuid.isEmpty) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Firebird 4.0 nbackup -B $nbackupLevel: nao foi encontrado GUID do '
+              'backup nivel $parentLevel em RDB\$BACKUP_HISTORY. Execute um '
+              'backup fisico nivel 0 (Full) nesta base antes do incremental, ou '
+              'use hint de versao 2.5/3.0 se o servidor nao for Firebird 4.',
+        ),
+      );
+    }
+
+    LoggerService.info(
+      'Firebird 4.0 nbackup: parente via GUID do motor (RDB\$BACKUP_HISTORY, '
+      'nivel $parentLevel).',
+    );
+    return rd.Success(parentGuid);
+  }
+
+  Future<String?> _queryLatestNbackupParentGuid({
+    required FirebirdConfig config,
+    required String dbSpec,
+    required int parentLevel,
+    required Duration timeout,
+    String? cancelTag,
+  }) async {
+    Directory? tempDir;
+    try {
+      tempDir = await Directory.systemTemp.createTemp('fb_nbackup_guid_');
+      final scriptFile = File(p.join(tempDir.path, 'nbackup_parent_guid.sql'));
+      final sql =
+          '''
+SET HEADING OFF;
+SET LIST OFF;
+SELECT FIRST 1 TRIM(CAST(RDB\$GUID AS VARCHAR(38)))
+FROM RDB\$BACKUP_HISTORY
+WHERE RDB\$BACKUP_LEVEL = $parentLevel
+ORDER BY RDB\$TIMESTAMP DESC;
+QUIT;
+''';
+      await scriptFile.writeAsString(sql, flush: true);
+
+      final arguments = <String>[
+        '-q',
+        '-user',
+        config.username,
+        '-password',
+        config.password,
+        '-i',
+        scriptFile.path,
+        dbSpec,
+      ];
+
+      final run = await _runFirebirdCliWithOptionalLegacyRetry(
+        executable: 'isql',
+        arguments: arguments,
+        config: config,
+        timeout: timeout,
+        cancelTag: cancelTag,
+      );
+
+      return run.fold((processResult) {
+        if (!processResult.isSuccess) {
+          LoggerService.warning(
+            'Consulta RDB\$BACKUP_HISTORY falhou (exit '
+            '${processResult.exitCode}): ${processResult.stderr}',
+          );
+          return null;
+        }
+        final text = '${processResult.stdout}\n${processResult.stderr}';
+        return _parseGuidFromIsql(text);
+      }, (_) => null);
+    } on Object catch (e, stackTrace) {
+      LoggerService.debug(
+        'Consulta RDB\$BACKUP_HISTORY ignorada: $e',
+        e,
+        stackTrace,
+      );
+      return null;
+    } finally {
+      if (tempDir != null) {
+        try {
+          if (await tempDir.exists()) {
+            await tempDir.delete(recursive: true);
+          }
+        } on Object catch (e, s) {
+          LoggerService.warning(
+            r'Falha ao remover diretorio temporario isql (RDB$BACKUP_HISTORY)',
+            e,
+            s,
+          );
+        }
+      }
+    }
+  }
+
+  static String? _parseGuidFromIsql(String text) {
+    final lines = text.split(RegExp(r'[\r\n]+'));
+    for (var i = lines.length - 1; i >= 0; i--) {
+      final line = lines[i].trim();
+      if (_isIsqlNoiseLine(line)) {
+        continue;
+      }
+      final m = _isqlGuidLine.firstMatch(line);
+      if (m != null) {
+        return m.group(1);
+      }
+      if (line.isNotEmpty) {
+        return line;
+      }
+    }
+    return null;
+  }
+
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
     required FirebirdConfig config,
@@ -569,24 +776,22 @@ class FirebirdBackupService implements IFirebirdBackupService {
         nbackupLevel,
       );
     }
-    if (!useGbak && nbackupLevel >= 1) {
-      final missingPattern = await missingFirebirdNbackupChainPattern(
-        outputDirectory: context.outputDirectory,
-        databaseStem: config.primaryDatabase.value,
-        nbackupLevel: nbackupLevel,
-      );
-      if (missingPattern != null) {
-        return rd.Failure(
-          ValidationFailure(
-            message:
-                'Backup incremental Firebird (nbackup -B $nbackupLevel): '
-                'na pasta de saida falta ficheiro da cadeia ($missingPattern). '
-                'Execute os backups fisicos anteriores nessa pasta ou copie os '
-                '.nbk necessarios antes de nivel $nbackupLevel.',
-          ),
-        );
-      }
+    final rd.Result<String> nbackupBResult = useGbak
+        ? const rd.Success('0')
+        : await _resolveNbackupBArgument(
+            config: config,
+            dbSpec: dbSpec,
+            nbackupLevel: nbackupLevel,
+            outputDirectory: context.outputDirectory,
+            databaseStem: config.primaryDatabase.value,
+            resolvedGbakTagline: resolvedGbakTagline,
+            backupTimeout: context.backupTimeout,
+            cancelTag: context.cancelTag,
+          );
+    if (nbackupBResult.isError()) {
+      return rd.Failure(_asFailure(nbackupBResult.exceptionOrNull()!));
     }
+    final nbackupBArg = nbackupBResult.getOrNull()!;
     final backupFileName =
         context.customFileName ??
         (useGbak
@@ -598,6 +803,7 @@ class FirebirdBackupService implements IFirebirdBackupService {
     final backupPath = p.join(context.outputDirectory, backupFileName);
 
     if (useGbak) {
+      _warnCryptKeyServerHintMismatch(config);
       LoggerService.info(
         'Iniciando backup Firebird logico (gbak): '
         '${config.primaryDatabase.value}',
@@ -612,10 +818,10 @@ class FirebirdBackupService implements IFirebirdBackupService {
           '-pas',
           config.password,
           '-y',
-          if (config.cryptKey.trim().isNotEmpty) ...[
-            '-key',
-            config.cryptKey.trim(),
-          ],
+          ..._gbakCryptCliArgs(
+            config,
+            resolvedGbakTagline: resolvedGbakTagline,
+          ),
           dbSpec,
           backupPath,
         ],
@@ -630,7 +836,7 @@ class FirebirdBackupService implements IFirebirdBackupService {
     }
 
     LoggerService.info(
-      'Iniciando backup Firebird fisico (nbackup -B $nbackupLevel): '
+      'Iniciando backup Firebird fisico (nbackup -B $nbackupBArg): '
       '${config.primaryDatabase.value}',
     );
     return _runCliBackup(
@@ -642,7 +848,7 @@ class FirebirdBackupService implements IFirebirdBackupService {
         config.password,
         ..._firebirdServiceManagerSwitch(config),
         '-B',
-        '$nbackupLevel',
+        nbackupBArg,
         dbSpec,
         backupPath,
       ],
@@ -720,6 +926,7 @@ class FirebirdBackupService implements IFirebirdBackupService {
               backupPath: backupPath,
               config: config,
               context: context,
+              resolvedGbakTagline: resolvedGbakTagline,
             );
             verifySw.stop();
             verifyDuration = verifySw.elapsed;
@@ -848,6 +1055,7 @@ class FirebirdBackupService implements IFirebirdBackupService {
   Future<rd.Result<String>> _gstatHeaderProbeWithConnectionLogs(
     FirebirdConfig config,
   ) async {
+    invalidateGbakZProbeCacheForConfig(config);
     LoggerService.info(
       'Testando conexao Firebird (gstat): ${config.primaryDatabase.value}',
     );
@@ -1449,6 +1657,7 @@ QUIT;
     required String backupPath,
     required FirebirdConfig config,
     required BackupExecutionContext context,
+    String? resolvedGbakTagline,
   }) async {
     final stamp =
         '${DateTime.now().microsecondsSinceEpoch}_'
@@ -1478,10 +1687,10 @@ QUIT;
       config.password,
       '-y',
       logPath,
-      if (config.cryptKey.trim().isNotEmpty) ...[
-        '-key',
-        config.cryptKey.trim(),
-      ],
+      ..._gbakCryptCliArgs(
+        config,
+        resolvedGbakTagline: resolvedGbakTagline,
+      ),
     ];
 
     try {

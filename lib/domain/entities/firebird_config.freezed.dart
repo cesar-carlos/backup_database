@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$FirebirdConfig {
 
- String get id; String get name; String get host; String get databaseFile; String get username; String get password; PortNumber get port; String? get aliasName; bool get useEmbedded; String? get clientLibraryPath; FirebirdServerVersionHint get serverVersionHint; FirebirdServiceManagerMode get serviceManagerMode; String get cryptKey; bool get enabled; DateTime get createdAt; DateTime get updatedAt;
+ String get id; String get name; String get host; String get databaseFile; String get username; String get password; PortNumber get port; DateTime get createdAt; DateTime get updatedAt; String? get aliasName; bool get useEmbedded; String? get clientLibraryPath; FirebirdServerVersionHint get serverVersionHint; FirebirdServiceManagerMode get serviceManagerMode; String get cryptKey; bool get enabled;
 /// Create a copy of FirebirdConfig
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,7 +27,7 @@ $FirebirdConfigCopyWith<FirebirdConfig> get copyWith => _$FirebirdConfigCopyWith
 
 @override
 String toString() {
-  return 'FirebirdConfig(id: $id, name: $name, host: $host, databaseFile: $databaseFile, username: $username, password: $password, port: $port, aliasName: $aliasName, useEmbedded: $useEmbedded, clientLibraryPath: $clientLibraryPath, serverVersionHint: $serverVersionHint, serviceManagerMode: $serviceManagerMode, cryptKey: $cryptKey, enabled: $enabled, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'FirebirdConfig(id: $id, name: $name, host: $host, databaseFile: $databaseFile, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, aliasName: $aliasName, useEmbedded: $useEmbedded, clientLibraryPath: $clientLibraryPath, serverVersionHint: $serverVersionHint, serviceManagerMode: $serviceManagerMode, cryptKey: $cryptKey, enabled: $enabled)';
 }
 
 
@@ -38,7 +38,7 @@ abstract mixin class $FirebirdConfigCopyWith<$Res>  {
   factory $FirebirdConfigCopyWith(FirebirdConfig value, $Res Function(FirebirdConfig) _then) = _$FirebirdConfigCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String host, String databaseFile, String username, String password, PortNumber port, String? aliasName, bool useEmbedded, String? clientLibraryPath, FirebirdServerVersionHint serverVersionHint, FirebirdServiceManagerMode serviceManagerMode, String cryptKey, bool enabled, DateTime createdAt, DateTime updatedAt
+ String id, String name, String host, String databaseFile, String username, String password, PortNumber port, DateTime createdAt, DateTime updatedAt, String? aliasName, bool useEmbedded, String? clientLibraryPath, FirebirdServerVersionHint serverVersionHint, FirebirdServiceManagerMode serviceManagerMode, String cryptKey, bool enabled
 });
 
 
@@ -55,7 +55,7 @@ class _$FirebirdConfigCopyWithImpl<$Res>
 
 /// Create a copy of FirebirdConfig
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? host = null,Object? databaseFile = null,Object? username = null,Object? password = null,Object? port = null,Object? aliasName = freezed,Object? useEmbedded = null,Object? clientLibraryPath = freezed,Object? serverVersionHint = null,Object? serviceManagerMode = null,Object? cryptKey = null,Object? enabled = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? host = null,Object? databaseFile = null,Object? username = null,Object? password = null,Object? port = null,Object? createdAt = null,Object? updatedAt = null,Object? aliasName = freezed,Object? useEmbedded = null,Object? clientLibraryPath = freezed,Object? serverVersionHint = null,Object? serviceManagerMode = null,Object? cryptKey = null,Object? enabled = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -64,16 +64,16 @@ as String,databaseFile: null == databaseFile ? _self.databaseFile : databaseFile
 as String,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
 as String,port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
-as PortNumber,aliasName: freezed == aliasName ? _self.aliasName : aliasName // ignore: cast_nullable_to_non_nullable
+as PortNumber,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
+as DateTime,aliasName: freezed == aliasName ? _self.aliasName : aliasName // ignore: cast_nullable_to_non_nullable
 as String?,useEmbedded: null == useEmbedded ? _self.useEmbedded : useEmbedded // ignore: cast_nullable_to_non_nullable
 as bool,clientLibraryPath: freezed == clientLibraryPath ? _self.clientLibraryPath : clientLibraryPath // ignore: cast_nullable_to_non_nullable
 as String?,serverVersionHint: null == serverVersionHint ? _self.serverVersionHint : serverVersionHint // ignore: cast_nullable_to_non_nullable
 as FirebirdServerVersionHint,serviceManagerMode: null == serviceManagerMode ? _self.serviceManagerMode : serviceManagerMode // ignore: cast_nullable_to_non_nullable
 as FirebirdServiceManagerMode,cryptKey: null == cryptKey ? _self.cryptKey : cryptKey // ignore: cast_nullable_to_non_nullable
 as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
-as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as bool,
   ));
 }
 
@@ -158,10 +158,10 @@ return raw(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String host,  String databaseFile,  String username,  String password,  PortNumber port,  String? aliasName,  bool useEmbedded,  String? clientLibraryPath,  FirebirdServerVersionHint serverVersionHint,  FirebirdServiceManagerMode serviceManagerMode,  String cryptKey,  bool enabled,  DateTime createdAt,  DateTime updatedAt)?  raw,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String host,  String databaseFile,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  String? aliasName,  bool useEmbedded,  String? clientLibraryPath,  FirebirdServerVersionHint serverVersionHint,  FirebirdServiceManagerMode serviceManagerMode,  String cryptKey,  bool enabled)?  raw,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _FirebirdConfig() when raw != null:
-return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_that.password,_that.port,_that.aliasName,_that.useEmbedded,_that.clientLibraryPath,_that.serverVersionHint,_that.serviceManagerMode,_that.cryptKey,_that.enabled,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.aliasName,_that.useEmbedded,_that.clientLibraryPath,_that.serverVersionHint,_that.serviceManagerMode,_that.cryptKey,_that.enabled);case _:
   return orElse();
 
 }
@@ -179,10 +179,10 @@ return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String host,  String databaseFile,  String username,  String password,  PortNumber port,  String? aliasName,  bool useEmbedded,  String? clientLibraryPath,  FirebirdServerVersionHint serverVersionHint,  FirebirdServiceManagerMode serviceManagerMode,  String cryptKey,  bool enabled,  DateTime createdAt,  DateTime updatedAt)  raw,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String host,  String databaseFile,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  String? aliasName,  bool useEmbedded,  String? clientLibraryPath,  FirebirdServerVersionHint serverVersionHint,  FirebirdServiceManagerMode serviceManagerMode,  String cryptKey,  bool enabled)  raw,}) {final _that = this;
 switch (_that) {
 case _FirebirdConfig():
-return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_that.password,_that.port,_that.aliasName,_that.useEmbedded,_that.clientLibraryPath,_that.serverVersionHint,_that.serviceManagerMode,_that.cryptKey,_that.enabled,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.aliasName,_that.useEmbedded,_that.clientLibraryPath,_that.serverVersionHint,_that.serviceManagerMode,_that.cryptKey,_that.enabled);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -199,10 +199,10 @@ return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String host,  String databaseFile,  String username,  String password,  PortNumber port,  String? aliasName,  bool useEmbedded,  String? clientLibraryPath,  FirebirdServerVersionHint serverVersionHint,  FirebirdServiceManagerMode serviceManagerMode,  String cryptKey,  bool enabled,  DateTime createdAt,  DateTime updatedAt)?  raw,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String host,  String databaseFile,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  String? aliasName,  bool useEmbedded,  String? clientLibraryPath,  FirebirdServerVersionHint serverVersionHint,  FirebirdServiceManagerMode serviceManagerMode,  String cryptKey,  bool enabled)?  raw,}) {final _that = this;
 switch (_that) {
 case _FirebirdConfig() when raw != null:
-return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_that.password,_that.port,_that.aliasName,_that.useEmbedded,_that.clientLibraryPath,_that.serverVersionHint,_that.serviceManagerMode,_that.cryptKey,_that.enabled,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.aliasName,_that.useEmbedded,_that.clientLibraryPath,_that.serverVersionHint,_that.serviceManagerMode,_that.cryptKey,_that.enabled);case _:
   return null;
 
 }
@@ -214,7 +214,7 @@ return raw(_that.id,_that.name,_that.host,_that.databaseFile,_that.username,_tha
 
 
 class _FirebirdConfig extends FirebirdConfig {
-  const _FirebirdConfig({required this.id, required this.name, required this.host, required this.databaseFile, required this.username, required this.password, required this.port, this.aliasName, this.useEmbedded = false, this.clientLibraryPath, this.serverVersionHint = FirebirdServerVersionHint.auto, this.serviceManagerMode = FirebirdServiceManagerMode.auto, this.cryptKey = '', this.enabled = true, required this.createdAt, required this.updatedAt}): super._();
+  const _FirebirdConfig({required this.id, required this.name, required this.host, required this.databaseFile, required this.username, required this.password, required this.port, required this.createdAt, required this.updatedAt, this.aliasName, this.useEmbedded = false, this.clientLibraryPath, this.serverVersionHint = FirebirdServerVersionHint.auto, this.serviceManagerMode = FirebirdServiceManagerMode.auto, this.cryptKey = '', this.enabled = true}): super._();
   
 
 @override final  String id;
@@ -224,6 +224,8 @@ class _FirebirdConfig extends FirebirdConfig {
 @override final  String username;
 @override final  String password;
 @override final  PortNumber port;
+@override final  DateTime createdAt;
+@override final  DateTime updatedAt;
 @override final  String? aliasName;
 @override@JsonKey() final  bool useEmbedded;
 @override final  String? clientLibraryPath;
@@ -231,8 +233,6 @@ class _FirebirdConfig extends FirebirdConfig {
 @override@JsonKey() final  FirebirdServiceManagerMode serviceManagerMode;
 @override@JsonKey() final  String cryptKey;
 @override@JsonKey() final  bool enabled;
-@override final  DateTime createdAt;
-@override final  DateTime updatedAt;
 
 /// Create a copy of FirebirdConfig
 /// with the given fields replaced by the non-null parameter values.
@@ -246,7 +246,7 @@ _$FirebirdConfigCopyWith<_FirebirdConfig> get copyWith => __$FirebirdConfigCopyW
 
 @override
 String toString() {
-  return 'FirebirdConfig.raw(id: $id, name: $name, host: $host, databaseFile: $databaseFile, username: $username, password: $password, port: $port, aliasName: $aliasName, useEmbedded: $useEmbedded, clientLibraryPath: $clientLibraryPath, serverVersionHint: $serverVersionHint, serviceManagerMode: $serviceManagerMode, cryptKey: $cryptKey, enabled: $enabled, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'FirebirdConfig.raw(id: $id, name: $name, host: $host, databaseFile: $databaseFile, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, aliasName: $aliasName, useEmbedded: $useEmbedded, clientLibraryPath: $clientLibraryPath, serverVersionHint: $serverVersionHint, serviceManagerMode: $serviceManagerMode, cryptKey: $cryptKey, enabled: $enabled)';
 }
 
 
@@ -257,7 +257,7 @@ abstract mixin class _$FirebirdConfigCopyWith<$Res> implements $FirebirdConfigCo
   factory _$FirebirdConfigCopyWith(_FirebirdConfig value, $Res Function(_FirebirdConfig) _then) = __$FirebirdConfigCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String host, String databaseFile, String username, String password, PortNumber port, String? aliasName, bool useEmbedded, String? clientLibraryPath, FirebirdServerVersionHint serverVersionHint, FirebirdServiceManagerMode serviceManagerMode, String cryptKey, bool enabled, DateTime createdAt, DateTime updatedAt
+ String id, String name, String host, String databaseFile, String username, String password, PortNumber port, DateTime createdAt, DateTime updatedAt, String? aliasName, bool useEmbedded, String? clientLibraryPath, FirebirdServerVersionHint serverVersionHint, FirebirdServiceManagerMode serviceManagerMode, String cryptKey, bool enabled
 });
 
 
@@ -274,7 +274,7 @@ class __$FirebirdConfigCopyWithImpl<$Res>
 
 /// Create a copy of FirebirdConfig
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? host = null,Object? databaseFile = null,Object? username = null,Object? password = null,Object? port = null,Object? aliasName = freezed,Object? useEmbedded = null,Object? clientLibraryPath = freezed,Object? serverVersionHint = null,Object? serviceManagerMode = null,Object? cryptKey = null,Object? enabled = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? host = null,Object? databaseFile = null,Object? username = null,Object? password = null,Object? port = null,Object? createdAt = null,Object? updatedAt = null,Object? aliasName = freezed,Object? useEmbedded = null,Object? clientLibraryPath = freezed,Object? serverVersionHint = null,Object? serviceManagerMode = null,Object? cryptKey = null,Object? enabled = null,}) {
   return _then(_FirebirdConfig(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -283,16 +283,16 @@ as String,databaseFile: null == databaseFile ? _self.databaseFile : databaseFile
 as String,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
 as String,port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
-as PortNumber,aliasName: freezed == aliasName ? _self.aliasName : aliasName // ignore: cast_nullable_to_non_nullable
+as PortNumber,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
+as DateTime,aliasName: freezed == aliasName ? _self.aliasName : aliasName // ignore: cast_nullable_to_non_nullable
 as String?,useEmbedded: null == useEmbedded ? _self.useEmbedded : useEmbedded // ignore: cast_nullable_to_non_nullable
 as bool,clientLibraryPath: freezed == clientLibraryPath ? _self.clientLibraryPath : clientLibraryPath // ignore: cast_nullable_to_non_nullable
 as String?,serverVersionHint: null == serverVersionHint ? _self.serverVersionHint : serverVersionHint // ignore: cast_nullable_to_non_nullable
 as FirebirdServerVersionHint,serviceManagerMode: null == serviceManagerMode ? _self.serviceManagerMode : serviceManagerMode // ignore: cast_nullable_to_non_nullable
 as FirebirdServiceManagerMode,cryptKey: null == cryptKey ? _self.cryptKey : cryptKey // ignore: cast_nullable_to_non_nullable
 as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
-as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as bool,
   ));
 }
 

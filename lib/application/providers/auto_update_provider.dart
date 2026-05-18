@@ -1,44 +1,51 @@
-﻿import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'dart:async';
+
 import 'package:backup_database/application/services/auto_update_service.dart';
-import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/foundation.dart';
 
-class AutoUpdateProvider extends ChangeNotifier with AsyncStateMixin {
+class AutoUpdateProvider extends ChangeNotifier {
   AutoUpdateProvider({required AutoUpdateService autoUpdateService})
-    : _autoUpdateService = autoUpdateService;
-  final AutoUpdateService _autoUpdateService;
-
-  bool _updateAvailable = false;
-  DateTime? _lastCheckDate;
-
-  /// Mantido como alias para compatibilidade com a UI atual: a verificação
-  /// de atualizações usa o mesmo `isLoading` do mixin.
-  bool get isChecking => isLoading;
-  bool get updateAvailable => _updateAvailable;
-  DateTime? get lastCheckDate => _lastCheckDate;
-  bool get isInitialized => _autoUpdateService.isInitialized;
-  String? get feedUrl => _autoUpdateService.feedUrl;
-
-  Future<void> checkForUpdates() async {
-    if (!_autoUpdateService.isInitialized) {
-      setErrorManual('Serviço de atualização não inicializado');
-      return;
-    }
-
-    await runAsync<void>(
-      action: () async {
-        await _autoUpdateService.checkForUpdatesManually();
-        _lastCheckDate = DateTime.now();
-        LoggerService.info('Verificação de atualizações concluída');
-      },
-    );
-    if (error != null) {
-      LoggerService.error('Erro ao verificar atualizações: $error');
-    }
+    : _autoUpdateService = autoUpdateService,
+      _snapshot = autoUpdateService.snapshot {
+    _subscription = _autoUpdateService.snapshots.listen((snapshot) {
+      _snapshot = snapshot;
+      notifyListeners();
+    });
   }
 
-  void setUpdateAvailable(bool available) {
-    _updateAvailable = available;
-    notifyListeners();
+  final AutoUpdateService _autoUpdateService;
+  late final StreamSubscription<AppUpdateSnapshot> _subscription;
+
+  AppUpdateSnapshot _snapshot;
+
+  AppUpdateSnapshot get snapshot => _snapshot;
+  AppUpdateStatus get status => _snapshot.status;
+  bool get isChecking =>
+      status == AppUpdateStatus.checking ||
+      status == AppUpdateStatus.downloading ||
+      status == AppUpdateStatus.installing;
+  bool get updateAvailable => _snapshot.updateAvailable;
+  DateTime? get lastCheckDate => _snapshot.lastCheckAt;
+  DateTime? get lastErrorDate => _snapshot.lastErrorAt;
+  String? get error => _snapshot.errorMessage;
+  bool get isInitialized => _autoUpdateService.isInitialized;
+  String? get feedUrl => _autoUpdateService.feedUrl;
+  String? get currentVersion => _snapshot.currentVersion;
+  String? get targetVersion => _snapshot.targetVersion;
+  String? get statusMessage => _snapshot.message;
+  bool get isDisabled => status == AppUpdateStatus.disabled;
+
+  Future<void> checkForUpdates() {
+    return _autoUpdateService.checkNow(source: AppUpdateSource.manual);
+  }
+
+  void clearError() {
+    _autoUpdateService.clearError();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_subscription.cancel());
+    super.dispose();
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/application/services/initial_setup_service.dart';
@@ -7,8 +9,8 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/domain/repositories/repositories.dart';
+import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppInitializer {
   static Future<void> initialize() async {
@@ -82,9 +84,19 @@ class AppInitializer {
         return;
       }
       final autoUpdateService = service_locator.getIt<AutoUpdateService>();
-      final feedUrl = dotenv.env['AUTO_UPDATE_FEED_URL'];
-      await autoUpdateService.initialize(feedUrl);
-      LoggerService.info('AutoUpdateService inicializado');
+      autoUpdateService.setBeforeInstallHook(AppCleanup.cleanup);
+      await autoUpdateService.initialize();
+      if (!autoUpdateService.isInitialized) {
+        LoggerService.info(
+          'AutoUpdateService inicializado em modo desabilitado/sem feed',
+        );
+        return;
+      }
+      autoUpdateService.startPeriodicChecks();
+      unawaited(
+        autoUpdateService.checkNow(source: AppUpdateSource.startup),
+      );
+      LoggerService.info('AutoUpdateService pronto');
     } on Object catch (e) {
       LoggerService.warning('Erro ao inicializar AutoUpdateService: $e');
     }

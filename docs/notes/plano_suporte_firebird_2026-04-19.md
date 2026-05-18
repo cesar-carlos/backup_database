@@ -198,9 +198,9 @@ via `_firebirdServiceManagerSwitch` no `FirebirdBackupService` (`gbak` após
    ficheiro `firebird_server_version.dart` com enum `{ unknown, … }` nem helpers
    estáticos listados no rascunho original; parsing de saída `gbak -z` /
    `gstat -h` vive no `FirebirdBackupService` (métricas / UI).
-2. **Cache de versão (parcial)**: `gbak -z` com cache em memória por chave de
-   instalação no serviço (`_gbakZTaglineCache`); invalidação completa por
-   `host:port:db` como no desenho original = backlog fino.
+2. **Cache de versão**: `gbak -z` com cache em memória (`_gbakZTaglineCache`);
+   chave inclui `host|port|alias|db` (TCP) ou path (embedded); **Testar conexão**
+   invalida via `invalidateGbakZProbeCacheForConfig`.
 3. **Resolução em ordem (operacional)**: respeitar `serverVersionHint`; com
    **Auto**, sonda `gbak -z` antes de backup quando activo; hint ODS/WI-V na UI
    via `probeGstatHeaderConnection` (`gstat -h`).
@@ -220,9 +220,9 @@ via `_firebirdServiceManagerSwitch` no `FirebirdBackupService` (`gbak` após
    `useEmbedded` ou `never`; em **`always`**, excepto `serverVersionHint == v25`;
    em **`auto`**, só para hints **v30** e **v40** (não para `auto` nem `v25`).
    Testes em `firebird_backup_service_test.dart`.
-8. **Criptografia lógica**: campo `cryptKey` na config; CLI actual usa **`-key`**
-   no `gbak -b`/`-c` (não `-KEYNAME`/`-CRYPT` do manual FB4); evolução para
-   flags completas = backlog.
+8. **Criptografia lógica**: campo `cryptKey` na config; **`gbak -b`/`-c`** usam
+   **`-KEYNAME`** em hint **v40** ou **Auto** com `WI-V4+`; **`-key`** em 2.5/3.0;
+   aviso em log se `cryptKey` com hint **v25**. Flags `-CRYPT`/`-KEYHOLDER` = backlog.
 
 ---
 
@@ -364,27 +364,11 @@ já estão `[x]` no repo; não bloqueavam o critério de MVP):
 
 **Fora do escopo actual do código** (mesmo inventário que **E4** / tabela §1.4;
 **E4** = subsecção na secção documental **§3**, *PR-E*):
-exposição de `nbackup` **-B 2..9** (UI / tipos), cadeia por **GUID** FB4,
-restauro dedicado para artefactos **nbackup** (sem verify pós-backup além do
-decidido em **§10**); resolução fina de versão.
+restauro dedicado para artefactos **nbackup**; flags avançadas FB4 (`-CRYPT`,
+`-KEYHOLDER`, `-FE`); import legado via `RDB$BACKUP_HISTORY` (§7).
 
-**Prioridade sugerida (pós-MVP, sem prazo):** (1) **cadeia nbackup** —
-validação no destino por convenção de nomes (`*_full_*.nbk` e, para `-B N` com
-`N>1`, também `*_nbackup_B1_*` … `*_nbackup_B(N-1)_*` antes de executar
-`nbackup`; ver `missingFirebirdNbackupChainPattern` + §10); (2)
-**`-B 2..9` / GUID FB4** — nivel **0–9** opcional no agendamento + execucao
-(`firebirdNbackupPhysicalLevel`); **GUID** / parent real pela GUID do motor
-permanecem por definir (§6); (3)
-**verify pós-`nbackup`** — **fechado (§10):** sem restauro/verify de `.nbk`;
-manter **`gbak -c`** só em **Full Single** + aviso na UI (Configurações) +
-runtime existente (`FirebirdBackupService`: strict bloqueado; best-effort
-ignora o passo em `nbackup`); (4)
-**`listDatabases` Firebird** — **fechado (§10):** sem catálogo multi-base; API
-`IFirebirdBackupService.listDatabases` + `FirebirdBackupService` consulta
-`MON$DATABASE_NAME` via `isql` com fallback para alias/caminho configurado;
-`FirebirdConfigDialog` chama após `probeGstatHeaderConnection` (sucesso parcial
-com `listWarning` se `isql` falhar). Testes: `firebird_backup_service_test`,
-`firebird_config_dialog_test`.
+**Prioridade sugerida (pós-MVP, sem prazo):** checklist **§10** concluída no
+repositório. Evolução opcional: flags `-CRYPT`/plugin holder; smoke **§8.1**.
 
 *(Itens de **código** do plano Firebird concluídos; o §8 mantém `- [ ]` só para
 QA manual.)*
@@ -541,13 +525,9 @@ em diretório temporário.
 > **embedded** quando `gstat` falha. Conexão `host/port:path` ou alias;
 > embedded por path local; `-key` quando `cryptKey`; env `PATH` com
 > `clientLibraryPath`. Usa `BackupArtifactUtils`, `BackupSizeCalculator`,
-> `ByteFormat`, `ToolPathHelp`. **Trabalho futuro:** `nbackup` níveis **>1** /
-> cadeia completa / GUID FB4, verify adicional para **nbackup**, resolução
-> fina de versão. **listDatabases** (Firebird): ver **§10** — identificador da
-> base ligada (`MON$DATABASE_NAME` via `isql` + fallback), não catálogo
-> multi-base.
-> **Ordem sugerida:** ver parágrafo *Prioridade sugerida* em **§3.0** (doc ↔
-> código).
+> `ByteFormat`, `ToolPathHelp`. **Trabalho futuro:** `-CRYPT`/`-KEYHOLDER`/`-FE`;
+> import legado `RDB$BACKUP_HISTORY`. **Entregue (§10):** cadeia, níveis **0–9**,
+> GUID FB4, verify, **listDatabases**, **`-KEYNAME`** FB4, cache `gbak -z`.
 
 - [x] `lib/infrastructure/external/process/firebird_backup_service.dart`
 - [x] `ProcessService.redactCommandForLogging` (`-pas`/`-password`) e
@@ -852,7 +832,7 @@ moderno em servidor moderno opera Firebird remoto.
 | Cache de versão pode ficar stale após upgrade do servidor | E + F | Cache em memória (perde no restart); botão "Testar conexão" no dialog força re-detecção; documentar que mudança de versão exige restart ou save da config |
 | `cryptKey` salvo na storage segura mas utilizador muda `serverVersionHint` para `v25` (que ignora) | E + F | Service loga warning único por execução; UI mostra warning não-bloqueante no dialog |
 | Backup nbackup com nível incremental sem o nível anterior gera erro críptico | E | **MVP:** avisos em log (`_warnFirebirdNbackupOperationalSemantics` em `firebird_backup_service.dart`); sem validação prévia da cadeia nem fallback automático para `-B 0` — o erro vem do `nbackup`. **Backlog:** validar cadeia (p.ex. `.nbk` de nível 0 no destino) e opcional fallback / `executedBackupType` alinhado a Postgres incremental. |
-| `nbackup` em FB 4.0 com GUID-based incompatível com cadeia FB 3.0 antiga | E | Cache de versão impede misturar; ao detectar mudança de versão entre execuções na mesma cadeia, forçar fallback para `BackupType.full` (level 0) com log explicativo |
+| `nbackup` em FB 4.0 com GUID-based incompatível com cadeia FB 3.0 antiga | E | Modo GUID só activa com hint **v40** ou `WI-V4+` em `gbak -z`; FB 2.5/3.0 mantêm `-B` numérico + ficheiros `.nbk` na pasta; upgrade de servidor: executar Full (nível 0) antes de incrementais |
 | Embedded em FB 3.0+ exige plugins (`engine12.dll`/`engine13.dll`) na pasta — utilizador aponta `clientLibraryPath` mas esquece plugins | E | `_validateEmbeddedEnginePlugins` em `firebird_backup_service.dart` (antes de `gstat`/`gbak`); falha com mensagem clara |
 | Tamanho do banco indisponível (`MON$DATABASE` sem permissão, ficheiro remoto/UNC inacessível) | E | Cair em fallback `gstat -h` → `BackupConstants.minFreeSpaceForBackupBytes` com warning |
 | Refator U7 (TabView no schedule_dialog) muda fluxo de UX a que os utilizadores estão habituados | F | Comunicar mudança no changelog; preferir fluxo conservador com tabs em ordem alinhada à dos campos atuais |
@@ -1147,16 +1127,20 @@ e **E4** na secção documental **§3** (*PR-E*); ver também §6 (riscos).
 - [x] **Cadeia nbackup:** validação no destino (`missingFirebirdNbackupChainPattern`
       — nível 0 + ficheiros `*_nbackup_Bk_*` para `k < N` quando `N>1`; mensagem
       antes de `nbackup`; testes em `firebird_nbackup_output_chain_check_test.dart`
-      e `firebird_backup_service_test.dart`). **Não** cobre GUID FB4 nem escolha
-      automática do ficheiro-pai (ver item seguinte e §6).
+      e `firebird_backup_service_test.dart`). Em FB 4.0, parente incremental via
+      GUID (item seguinte) dispensa a convencao de nomes na pasta.
 - [x] **`nbackup` -B 2..9 / GUID FB4:** nivel fisico **0–9** opcional
       (`Schedule.firebirdNbackupPhysicalLevel` em `scheduleConfig` JSON;
       `schedule_serialization`; `BackupExecutionContext.firebirdNbackupPhysicalLevel`;
       campo no dialogo de agendamento Firebird; `FirebirdBackupService` +
       `firebird_backup_strategy_factory`; testes em `firebird_backup_service_test`,
-      `schedule_serialization_test`, `firebird_backup_strategy_test`). **GUID
-      FB4** e escolha automatica do ficheiro-pai pela GUID do motor **nao**
-      implementados (continuam §3.0 *Fora do escopo* / §6).
+      `schedule_serialization_test`, `firebird_backup_strategy_test`).
+- [x] **GUID FB4 (parente no motor):** em hint **v40** ou **Auto** com token
+      `WI-V4+` (`firebird_runtime_version.dart`), incrementais `nbackup` usam
+      `-B {GUID}` do ultimo backup nivel `N-1` em `RDB$BACKUP_HISTORY` (`isql`);
+      FB 2.5/3.0 mantem `-B` numerico + `missingFirebirdNbackupChainPattern`;
+      `invalidateGbakZProbeCacheForConfig` no teste de conexao; testes em
+      `firebird_backup_service_test`, `firebird_runtime_version_test`.
 - [x] **Verify pós-`nbackup`:** decisão de produto **sem** restauro/verify de
       `.nbk`; manter **`gbak -c`** apenas em **Full Single** (`.fbk`). UI:
       `ScheduleDialogIntegritySection` — `InfoBar` (aviso) quando Firebird +
@@ -1168,6 +1152,14 @@ e **E4** na secção documental **§3** (*PR-E*); ver também §6 (riscos).
       `isql`, fallback alias/caminho; integração no teste de conexão do dialogo
       (`firebird_config_dialog.dart`); testes em `firebird_backup_service_test`,
       `firebird_config_dialog_test`; stub em `firebird_backup_service_stub.dart`.
+- [x] **Criptografia `gbak` (FB4 `-KEYNAME`):** `_gbakCryptCliArgs` em
+      `firebird_backup_service.dart` — **v40** / **Auto**+`WI-V4+` usam
+      `-KEYNAME`; 2.5/3.0 mantêm `-key`; verify `gbak -c` alinhado; aviso com
+      hint **v25**; testes em `firebird_backup_service_test`,
+      `firebird_runtime_version_test`.
+- [x] **Cache `gbak -z` por instalação+alvo:** `_gbakZCacheKey` com
+      `host|port|alias|db` (TCP); teste de hosts distintos em
+      `firebird_backup_service_test`.
 
 *Manutenção:* ao fechar um item, actualizar o parágrafo *Prioridade sugerida* e
 o texto da subsecção **E4** em **§3** se a narrativa ou o inventário mudarem.

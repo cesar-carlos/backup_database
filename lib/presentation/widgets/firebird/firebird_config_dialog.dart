@@ -353,8 +353,8 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               ),
               hint: appLocaleString(
                 context,
-                'Somente se o banco usar crypt plugin',
-                'Only if the database uses a crypt plugin',
+                'FB 4: nome da chave (-KEYNAME); FB 2.5/3: senha (-key)',
+                'FB 4: key name (-KEYNAME); FB 2.5/3: passphrase (-key)',
               ),
               prefixIcon: const Icon(FluentIcons.lock),
             ),

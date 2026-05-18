@@ -59,7 +59,11 @@ void main() {
       final s = _schedule();
       when(() => repo.create(any())).thenAnswer((_) async => rd.Success(s));
 
-      final req = createCreateScheduleMessage(requestId: 1, schedule: s);
+      final req = createCreateScheduleMessage(
+        requestId: 1,
+        schedule: s,
+        idempotencyKey: 'idem-create',
+      );
       await handler.handle('c1', req, sendToClient);
 
       final resp = sent.single;
@@ -78,6 +82,7 @@ void main() {
       final req = createCreateScheduleMessage(
         requestId: 1,
         schedule: _schedule(),
+        idempotencyKey: 'idem-create-fail',
       );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single;
@@ -92,7 +97,7 @@ void main() {
           length: 0,
           requestId: 1,
         ),
-        payload: const <String, dynamic>{},
+        payload: const <String, dynamic>{'idempotencyKey': 'idem-bad'},
         checksum: 0,
       );
       await handler.handle('c1', bad, sendToClient);
@@ -114,7 +119,11 @@ void main() {
           () => repo.create(any()),
         ).thenAnswer((_) async => rd.Success(s));
 
-        final req = createCreateScheduleMessage(requestId: 1, schedule: s);
+        final req = createCreateScheduleMessage(
+        requestId: 1,
+        schedule: s,
+        idempotencyKey: 'idem-create',
+      );
         await handler.handle('c1', req, sendToClient);
 
         verifyNever(() => repo.create(any()));
@@ -132,7 +141,11 @@ void main() {
         final s = _firebirdSchedule();
         when(() => repo.create(any())).thenAnswer((_) async => rd.Success(s));
 
-        final req = createCreateScheduleMessage(requestId: 1, schedule: s);
+        final req = createCreateScheduleMessage(
+        requestId: 1,
+        schedule: s,
+        idempotencyKey: 'idem-create',
+      );
         await handler.handle('c1', req, sendToClient);
 
         verify(() => repo.create(any())).called(1);
@@ -154,7 +167,11 @@ void main() {
         () => repo.delete(s.id),
       ).thenAnswer((_) async => const rd.Success('ok'));
 
-      final req = createDeleteScheduleMessage(requestId: 1, scheduleId: s.id);
+      final req = createDeleteScheduleMessage(
+        requestId: 1,
+        scheduleId: s.id,
+        idempotencyKey: 'idem-delete',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single;
       expect(resp.payload['operation'], 'deleted');
@@ -166,7 +183,11 @@ void main() {
       when(() => repo.getById('x')).thenAnswer(
         (_) async => rd.Failure(Exception('not found')),
       );
-      final req = createDeleteScheduleMessage(requestId: 1, scheduleId: 'x');
+      final req = createDeleteScheduleMessage(
+        requestId: 1,
+        scheduleId: 'x',
+        idempotencyKey: 'idem-delete-x',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single;
       expect(resp.header.type, MessageType.error);
@@ -174,7 +195,11 @@ void main() {
     });
 
     test('scheduleId vazio -> invalidRequest', () async {
-      final req = createDeleteScheduleMessage(requestId: 1, scheduleId: '');
+      final req = createDeleteScheduleMessage(
+        requestId: 1,
+        scheduleId: '',
+        idempotencyKey: 'idem-delete-empty',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single;
       expect(getErrorCodeFromMessage(resp), ErrorCode.invalidRequest);

@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$BackupLog {
 
- String get id; String? get backupHistoryId; LogLevel get level; LogCategory get category; String get message; String? get details; DateTime get createdAt;
+ String get id; LogLevel get level; LogCategory get category; String get message; DateTime get createdAt; String? get backupHistoryId; String? get details;
 /// Create a copy of BackupLog
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,7 +27,7 @@ $BackupLogCopyWith<BackupLog> get copyWith => _$BackupLogCopyWithImpl<BackupLog>
 
 @override
 String toString() {
-  return 'BackupLog(id: $id, backupHistoryId: $backupHistoryId, level: $level, category: $category, message: $message, details: $details, createdAt: $createdAt)';
+  return 'BackupLog(id: $id, level: $level, category: $category, message: $message, createdAt: $createdAt, backupHistoryId: $backupHistoryId, details: $details)';
 }
 
 
@@ -38,7 +38,7 @@ abstract mixin class $BackupLogCopyWith<$Res>  {
   factory $BackupLogCopyWith(BackupLog value, $Res Function(BackupLog) _then) = _$BackupLogCopyWithImpl;
 @useResult
 $Res call({
- String id, String? backupHistoryId, LogLevel level, LogCategory category, String message, String? details, DateTime createdAt
+ String id, LogLevel level, LogCategory category, String message, DateTime createdAt, String? backupHistoryId, String? details
 });
 
 
@@ -55,16 +55,16 @@ class _$BackupLogCopyWithImpl<$Res>
 
 /// Create a copy of BackupLog
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? backupHistoryId = freezed,Object? level = null,Object? category = null,Object? message = null,Object? details = freezed,Object? createdAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? level = null,Object? category = null,Object? message = null,Object? createdAt = null,Object? backupHistoryId = freezed,Object? details = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,backupHistoryId: freezed == backupHistoryId ? _self.backupHistoryId : backupHistoryId // ignore: cast_nullable_to_non_nullable
-as String?,level: null == level ? _self.level : level // ignore: cast_nullable_to_non_nullable
+as String,level: null == level ? _self.level : level // ignore: cast_nullable_to_non_nullable
 as LogLevel,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
 as LogCategory,message: null == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
-as String,details: freezed == details ? _self.details : details // ignore: cast_nullable_to_non_nullable
-as String?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime,backupHistoryId: freezed == backupHistoryId ? _self.backupHistoryId : backupHistoryId // ignore: cast_nullable_to_non_nullable
+as String?,details: freezed == details ? _self.details : details // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -149,10 +149,10 @@ return raw(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String? backupHistoryId,  LogLevel level,  LogCategory category,  String message,  String? details,  DateTime createdAt)?  raw,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  LogLevel level,  LogCategory category,  String message,  DateTime createdAt,  String? backupHistoryId,  String? details)?  raw,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BackupLog() when raw != null:
-return raw(_that.id,_that.backupHistoryId,_that.level,_that.category,_that.message,_that.details,_that.createdAt);case _:
+return raw(_that.id,_that.level,_that.category,_that.message,_that.createdAt,_that.backupHistoryId,_that.details);case _:
   return orElse();
 
 }
@@ -170,10 +170,10 @@ return raw(_that.id,_that.backupHistoryId,_that.level,_that.category,_that.messa
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String? backupHistoryId,  LogLevel level,  LogCategory category,  String message,  String? details,  DateTime createdAt)  raw,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  LogLevel level,  LogCategory category,  String message,  DateTime createdAt,  String? backupHistoryId,  String? details)  raw,}) {final _that = this;
 switch (_that) {
 case _BackupLog():
-return raw(_that.id,_that.backupHistoryId,_that.level,_that.category,_that.message,_that.details,_that.createdAt);case _:
+return raw(_that.id,_that.level,_that.category,_that.message,_that.createdAt,_that.backupHistoryId,_that.details);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -190,10 +190,10 @@ return raw(_that.id,_that.backupHistoryId,_that.level,_that.category,_that.messa
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String? backupHistoryId,  LogLevel level,  LogCategory category,  String message,  String? details,  DateTime createdAt)?  raw,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  LogLevel level,  LogCategory category,  String message,  DateTime createdAt,  String? backupHistoryId,  String? details)?  raw,}) {final _that = this;
 switch (_that) {
 case _BackupLog() when raw != null:
-return raw(_that.id,_that.backupHistoryId,_that.level,_that.category,_that.message,_that.details,_that.createdAt);case _:
+return raw(_that.id,_that.level,_that.category,_that.message,_that.createdAt,_that.backupHistoryId,_that.details);case _:
   return null;
 
 }
@@ -205,16 +205,16 @@ return raw(_that.id,_that.backupHistoryId,_that.level,_that.category,_that.messa
 
 
 class _BackupLog extends BackupLog {
-  const _BackupLog({required this.id, this.backupHistoryId, required this.level, required this.category, required this.message, this.details, required this.createdAt}): super._();
+  const _BackupLog({required this.id, required this.level, required this.category, required this.message, required this.createdAt, this.backupHistoryId, this.details}): super._();
   
 
 @override final  String id;
-@override final  String? backupHistoryId;
 @override final  LogLevel level;
 @override final  LogCategory category;
 @override final  String message;
-@override final  String? details;
 @override final  DateTime createdAt;
+@override final  String? backupHistoryId;
+@override final  String? details;
 
 /// Create a copy of BackupLog
 /// with the given fields replaced by the non-null parameter values.
@@ -228,7 +228,7 @@ _$BackupLogCopyWith<_BackupLog> get copyWith => __$BackupLogCopyWithImpl<_Backup
 
 @override
 String toString() {
-  return 'BackupLog.raw(id: $id, backupHistoryId: $backupHistoryId, level: $level, category: $category, message: $message, details: $details, createdAt: $createdAt)';
+  return 'BackupLog.raw(id: $id, level: $level, category: $category, message: $message, createdAt: $createdAt, backupHistoryId: $backupHistoryId, details: $details)';
 }
 
 
@@ -239,7 +239,7 @@ abstract mixin class _$BackupLogCopyWith<$Res> implements $BackupLogCopyWith<$Re
   factory _$BackupLogCopyWith(_BackupLog value, $Res Function(_BackupLog) _then) = __$BackupLogCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String? backupHistoryId, LogLevel level, LogCategory category, String message, String? details, DateTime createdAt
+ String id, LogLevel level, LogCategory category, String message, DateTime createdAt, String? backupHistoryId, String? details
 });
 
 
@@ -256,16 +256,16 @@ class __$BackupLogCopyWithImpl<$Res>
 
 /// Create a copy of BackupLog
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? backupHistoryId = freezed,Object? level = null,Object? category = null,Object? message = null,Object? details = freezed,Object? createdAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? level = null,Object? category = null,Object? message = null,Object? createdAt = null,Object? backupHistoryId = freezed,Object? details = freezed,}) {
   return _then(_BackupLog(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,backupHistoryId: freezed == backupHistoryId ? _self.backupHistoryId : backupHistoryId // ignore: cast_nullable_to_non_nullable
-as String?,level: null == level ? _self.level : level // ignore: cast_nullable_to_non_nullable
+as String,level: null == level ? _self.level : level // ignore: cast_nullable_to_non_nullable
 as LogLevel,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
 as LogCategory,message: null == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
-as String,details: freezed == details ? _self.details : details // ignore: cast_nullable_to_non_nullable
-as String?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime,backupHistoryId: freezed == backupHistoryId ? _self.backupHistoryId : backupHistoryId // ignore: cast_nullable_to_non_nullable
+as String?,details: freezed == details ? _self.details : details // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

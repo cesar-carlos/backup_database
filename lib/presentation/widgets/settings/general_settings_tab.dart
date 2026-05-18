@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:backup_database/application/providers/auto_update_provider.dart';
+import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/di/service_locator.dart';
@@ -232,6 +233,59 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     if ((confirmed ?? false) && mounted) {
       await _tempService.clearCustomTempPath();
       await _loadTempPath();
+    }
+  }
+
+  String _buildAutoUpdateStatusText(AutoUpdateProvider provider) {
+    switch (provider.status) {
+      case AppUpdateStatus.idle:
+        return appLocaleString(
+          context,
+          'Pronto para verificar novas versoes.',
+          'Ready to check for new versions.',
+        );
+      case AppUpdateStatus.checking:
+        return appLocaleString(
+          context,
+          'Verificando appcast e comparando versoes...',
+          'Checking appcast and comparing versions...',
+        );
+      case AppUpdateStatus.updateAvailable:
+        return appLocaleString(
+          context,
+          'Nova versao encontrada. O download silencioso sera iniciado.',
+          'New version found. Silent download will start.',
+        );
+      case AppUpdateStatus.downloading:
+        return appLocaleString(
+          context,
+          'Baixando instalador para staging local...',
+          'Downloading installer to local staging...',
+        );
+      case AppUpdateStatus.installing:
+        return appLocaleString(
+          context,
+          'Instalador silencioso em andamento.',
+          'Silent installer is running.',
+        );
+      case AppUpdateStatus.upToDate:
+        return appLocaleString(
+          context,
+          'A aplicacao ja esta na versao mais recente.',
+          'The application is already up to date.',
+        );
+      case AppUpdateStatus.error:
+        return appLocaleString(
+          context,
+          'A ultima tentativa falhou. Revise o erro abaixo.',
+          'The last attempt failed. Review the error below.',
+        );
+      case AppUpdateStatus.disabled:
+        return appLocaleString(
+          context,
+          r'Configure AUTO_UPDATE_FEED_URL em C:\ProgramData\BackupDatabase\config\.env.',
+          r'Configure AUTO_UPDATE_FEED_URL in C:\ProgramData\BackupDatabase\config\.env.',
+        );
     }
   }
 
@@ -716,15 +770,43 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                       ),
                     ),
                     subtitle: Text(
-                      appLocaleString(
-                        context,
-                        'Configure AUTO_UPDATE_FEED_URL no arquivo .env',
-                        'Configure AUTO_UPDATE_FEED_URL in .env file',
-                      ),
+                      autoUpdateProvider.statusMessage ??
+                          _buildAutoUpdateStatusText(autoUpdateProvider),
                     ),
                     trailing: const Icon(FluentIcons.info),
                   )
                 else ...[
+                  ListTile(
+                    title: Text(
+                      appLocaleString(
+                        context,
+                        'Status do updater',
+                        'Updater status',
+                      ),
+                    ),
+                    subtitle: Text(
+                      autoUpdateProvider.statusMessage ??
+                          _buildAutoUpdateStatusText(autoUpdateProvider),
+                    ),
+                    trailing: autoUpdateProvider.targetVersion != null
+                        ? Text(
+                            'v${autoUpdateProvider.targetVersion}',
+                            style: FluentTheme.of(context).typography.caption,
+                          )
+                        : const Icon(FluentIcons.info),
+                  ),
+                  if (autoUpdateProvider.feedUrl != null)
+                    ListTile(
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Feed configurado',
+                          'Configured feed',
+                        ),
+                      ),
+                      subtitle: Text(autoUpdateProvider.feedUrl!),
+                      trailing: const Icon(FluentIcons.link),
+                    ),
                   ListTile(
                     title: Text(
                       appLocaleString(
@@ -758,6 +840,20 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                                 : autoUpdateProvider.checkForUpdates,
                           ),
                   ),
+                  if (autoUpdateProvider.lastErrorDate != null)
+                    ListTile(
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Ultima falha',
+                          'Last failure',
+                        ),
+                      ),
+                      subtitle: Text(
+                        autoUpdateProvider.lastErrorDate!.toLocal().toString(),
+                      ),
+                      trailing: const Icon(FluentIcons.warning),
+                    ),
                   if (autoUpdateProvider.error != null)
                     ListTile(
                       title: Text(

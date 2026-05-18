@@ -81,6 +81,13 @@ enum ErrorCode {
   unsupportedDatabaseType(
     'UNSUPPORTED_DATABASE_TYPE',
     'Tipo de base de dados nao suportado neste servidor',
+  ),
+
+  /// Taxa de requisicoes do cliente excedeu o limite (M5.1).
+  /// Mapeia para 429. Payload inclui `retryAfterSeconds`.
+  rateLimitExceeded(
+    'RATE_LIMIT_EXCEEDED',
+    'Limite de requisicoes excedido',
   )
   ;
 

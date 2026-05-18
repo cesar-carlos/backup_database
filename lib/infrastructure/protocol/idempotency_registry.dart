@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:backup_database/infrastructure/protocol/idempotency_policy.dart';
+import 'package:backup_database/infrastructure/protocol/idempotency_store.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 
 /// Registry de idempotencia para comandos mutaveis (F2.5/F2.14).
@@ -22,10 +24,9 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 /// - Thread-safe via Future-based completion (gravacao atomica
 ///   seguida de leitura concorrente sem race).
 ///
-/// **Limitacoes conhecidas (v1)**:
-/// - In-memory: reinicio do servidor perde o registry. Cliente que
-///   tentar retransmitir apos restart vai disparar nova execucao.
-///   Persistencia (F2.16) entra em PR-3.
+/// **Persistencia (F2.16 / PR-5)**:
+/// Quando [store] esta configurado, respostas bem-sucedidas sao gravadas
+/// em SQLite e reidratadas apos restart do servidor (dentro do TTL).
 /// - Cliente e responsavel por escolher chaves estaveis (`scheduleId`
 ///   + epoch ms truncado por minuto, ou UUID v4 cacheado por
 ///   `requestId` no cliente). Chave nao-estavel anula a defesa.
@@ -41,13 +42,16 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 /// ```
 class IdempotencyRegistry {
   IdempotencyRegistry({
-    Duration ttl = const Duration(minutes: 5),
+    Duration ttl = IdempotencyPolicy.defaultTtl,
     DateTime Function()? clock,
+    IdempotencyStore? store,
   }) : _ttl = ttl,
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now,
+       _store = store;
 
   final Duration _ttl;
   final DateTime Function() _clock;
+  final IdempotencyStore? _store;
   final Map<String, _CachedEntry> _entries = <String, _CachedEntry>{};
 
   /// Tamanho atual do registry — exposto para testes/observabilidade.
@@ -82,6 +86,16 @@ class IdempotencyRegistry {
 
     _purgeExpired();
     final existing = _entries[key];
+    if (existing == null && _store != null) {
+      final persisted = await _store!.loadValid(key, _clock());
+      if (persisted != null) {
+        if (persisted is T) return persisted as T;
+        throw StateError(
+          'IdempotencyRegistry: chave "$key" persistida com tipo '
+          'diferente (${persisted.runtimeType} vs $T).',
+        );
+      }
+    }
     if (existing != null) {
       // Cast seguro: registry e por-tipo de comando; se chave foi
       // usada com tipo diferente, e bug de chamador (chave duplicada
@@ -105,6 +119,18 @@ class IdempotencyRegistry {
     try {
       final value = await compute();
       completer.complete(value);
+      final store = _store;
+      if (store != null && value is Message) {
+        final now = _clock();
+        unawaited(
+          store.save(
+            key: key,
+            response: value,
+            createdAt: now,
+            expiresAt: now.add(_ttl),
+          ),
+        );
+      }
       return value;
     } on Object catch (e, st) {
       // Falha NAO e cacheada — request quebrou e cliente deve poder
@@ -127,6 +153,10 @@ class IdempotencyRegistry {
   void _purgeExpired() {
     final now = _clock();
     _entries.removeWhere((_, entry) => entry.expiresAt.isBefore(now));
+    final store = _store;
+    if (store != null) {
+      unawaited(store.purgeExpiredBefore(now));
+    }
   }
 
   /// Limpa o registry. Util em testes e em shutdown.

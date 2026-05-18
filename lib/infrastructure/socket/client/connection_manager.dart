@@ -25,6 +25,7 @@ import 'package:backup_database/infrastructure/protocol/preflight_messages.dart'
 import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/protocol/session_messages.dart';
+import 'package:backup_database/infrastructure/socket/client/backup_event_deduplicator.dart';
 import 'package:backup_database/infrastructure/socket/client/file_transfer_resume_metadata_store.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:backup_database/infrastructure/socket/client/tcp_socket_client.dart';
@@ -67,6 +68,10 @@ class ConnectionManager {
 
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
+  final Map<String, _BackupProgressState> _activeBackupsByRunId = {};
+  final BackupEventDeduplicator _backupEventDedup = BackupEventDeduplicator();
+
+  static const Duration _executionStatusPollInterval = Duration(seconds: 2);
 
   /// Cache do snapshot de capabilities da conexao atual.
   ///
@@ -297,6 +302,13 @@ class ConnectionManager {
       }
     }
     _activeBackups.clear();
+    for (final state in _activeBackupsByRunId.values) {
+      if (!state.completer.isCompleted) {
+        state.completer.complete(rd.Failure(exception));
+      }
+    }
+    _activeBackupsByRunId.clear();
+    _backupEventDedup.clear();
     for (final state in _activeTransfers.values) {
       if (!state.completer.isCompleted) {
         state.completer.complete(rd.Failure(exception));
@@ -314,6 +326,22 @@ class ConnectionManager {
       );
       return;
     }
+    if (_isBackupStreamMessage(message.header.type)) {
+      final messageRunId = getRunIdFromBackupMessage(message);
+      if (messageRunId != null && messageRunId.isNotEmpty) {
+        final byRunId = _activeBackupsByRunId[messageRunId];
+        if (byRunId != null) {
+          _handleBackupProgressMessage(message, byRunId);
+          return;
+        }
+      }
+    }
+    final pendingCompleter = _pendingRequests[requestId];
+    if (pendingCompleter != null && !_isBackupStreamMessage(message.header.type)) {
+      _pendingRequests.remove(requestId);
+      pendingCompleter.complete(message);
+      return;
+    }
     final backupState = _activeBackups[requestId];
     if (backupState != null) {
       _handleBackupProgressMessage(message, backupState);
@@ -322,6 +350,12 @@ class ConnectionManager {
     final completer = _pendingRequests.remove(requestId);
     completer?.complete(message);
   }
+
+  bool _isBackupStreamMessage(MessageType type) =>
+      type == MessageType.backupProgress ||
+      type == MessageType.backupStep ||
+      type == MessageType.backupComplete ||
+      type == MessageType.backupFailed;
 
   Future<void> _handleFileTransferMessage(
     int requestId,
@@ -560,6 +594,14 @@ class ConnectionManager {
     Message message,
     _BackupProgressState state,
   ) {
+    if (!_backupEventDedup.shouldAccept(message)) {
+      LoggerService.debug(
+        '[ConnectionManager] evento de backup duplicado ignorado '
+        '(eventId/sequence): ${message.header.type.name}',
+      );
+      return;
+    }
+
     // Log para rastrear tipo de mensagem recebida
     LoggerService.info(
       '[ConnectionManager._handleBackupProgressMessage] Tipo: ${message.header.type.name}, RequestID: ${message.header.requestId}',
@@ -595,7 +637,7 @@ class ConnectionManager {
       );
       final path = getBackupPathFromBackupComplete(message);
       LoggerService.info('[ConnectionManager] backupPath extraído: "$path"');
-      _activeBackups.remove(message.header.requestId);
+      _removeBackupProgressState(message, state);
       state.onProgress?.call('Concluído', 'Backup concluído com sucesso!', 1);
       if (!state.completer.isCompleted) {
         state.completer.complete(rd.Success(path ?? ''));
@@ -603,7 +645,7 @@ class ConnectionManager {
       return;
     }
     if (isBackupFailedMessage(message)) {
-      _activeBackups.remove(message.header.requestId);
+      _removeBackupProgressState(message, state);
       final error = getErrorFromBackupFailed(message) ?? 'Erro desconhecido';
       LoggerService.warning(
         '[ConnectionManager] backupFailed'
@@ -611,6 +653,15 @@ class ConnectionManager {
       );
       state.completer.complete(rd.Failure(Exception(error)));
       return;
+    }
+  }
+
+  void _removeBackupProgressState(Message message, _BackupProgressState state) {
+    _activeBackups.remove(message.header.requestId);
+    final runId = state.runId ?? getRunIdFromBackupMessage(message);
+    if (runId != null && runId.isNotEmpty) {
+      _activeBackupsByRunId.remove(runId);
+      _backupEventDedup.forgetRun(runId);
     }
   }
 
@@ -647,6 +698,15 @@ class ConnectionManager {
       }
     }
     _activeBackups.clear();
+    for (final state in _activeBackupsByRunId.values) {
+      if (!state.completer.isCompleted) {
+        state.completer.complete(
+          rd.Failure(Exception('Disconnected during backup')),
+        );
+      }
+    }
+    _activeBackupsByRunId.clear();
+    _backupEventDedup.clear();
     for (final completer in _pendingRequests.values) {
       if (!completer.isCompleted) {
         completer.completeError(StateError('Disconnected'));
@@ -1438,6 +1498,237 @@ class ConnectionManager {
     }
   }
 
+  /// Dispara `startBackup` e aguarda o artefato via stream (`runId`).
+  /// Usa fila quando [queueIfBusy] e o servidor suporta fila.
+  Future<rd.Result<String>> executeRemoteBackup({
+    required String scheduleId,
+    String? idempotencyKey,
+    bool queueIfBusy = true,
+    BackupProgressCallback? onProgress,
+    void Function(String runId)? onRunIdKnown,
+  }) async {
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+
+    final startResult = await startRemoteBackup(
+      scheduleId: scheduleId,
+      idempotencyKey: idempotencyKey,
+      queueIfBusy: queueIfBusy,
+    );
+
+    return startResult.fold(
+      (start) async {
+        final runId = start.runId;
+        if (runId.isEmpty) {
+          return rd.Failure(Exception('Servidor não retornou runId'));
+        }
+        onRunIdKnown?.call(runId);
+
+        if (start.state == ExecutionState.queued) {
+          final waitResult = await _waitForQueuedRemoteBackup(
+            runId: runId,
+            onProgress: onProgress,
+          );
+          return waitResult.fold(
+            (terminal) async {
+              if (terminal == ExecutionState.running) {
+                return _waitForRemoteBackupByRunId(
+                  runId,
+                  onProgress: onProgress,
+                );
+              }
+              return _resolveBackupPathForTerminal(runId, terminal);
+            },
+            rd.Failure.new,
+          );
+        }
+
+        if (start.state == ExecutionState.running) {
+          return _waitForRemoteBackupByRunId(
+            runId,
+            onProgress: onProgress,
+          );
+        }
+
+        if (start.state.isTerminal) {
+          return _resolveBackupPathForTerminal(runId, start.state);
+        }
+
+        return rd.Failure(
+          Exception(
+            start.message ?? 'Servidor recusou iniciar backup remoto',
+          ),
+        );
+      },
+      rd.Failure.new,
+    );
+  }
+
+  /// Reassina progresso/conclusão para um [runId] ativo (M8.4).
+  void attachRemoteBackupListener({
+    required String runId,
+    required BackupProgressCallback? onProgress,
+  }) {
+    final existing = _activeBackupsByRunId[runId];
+    if (existing != null && !existing.completer.isCompleted) {
+      _activeBackupsByRunId[runId] = _BackupProgressState(
+        completer: existing.completer,
+        onProgress: onProgress,
+        runId: runId,
+      );
+      return;
+    }
+    _activeBackupsByRunId[runId] = _BackupProgressState(
+      completer: Completer<rd.Result<String>>(),
+      onProgress: onProgress,
+      runId: runId,
+    );
+  }
+
+  /// Aguarda conclusão após [attachRemoteBackupListener].
+  Future<rd.Result<String>> waitForRemoteBackupCompletion(String runId) async {
+    final state = _activeBackupsByRunId[runId];
+    if (state == null) {
+      return rd.Failure(
+        Exception('Nenhum acompanhamento ativo para runId: $runId'),
+      );
+    }
+    try {
+      return await state.completer.future.timeout(
+        SocketConfig.backupExecutionTimeout,
+      );
+    } on TimeoutException {
+      return rd.Failure(
+        TimeoutException(
+          'Tempo esgotado ao aguardar conclusão do backup remoto',
+        ),
+      );
+    } finally {
+      _activeBackupsByRunId.remove(runId);
+    }
+  }
+
+  Future<rd.Result<String>> _waitForRemoteBackupByRunId(
+    String runId, {
+    BackupProgressCallback? onProgress,
+  }) async {
+    final completer = Completer<rd.Result<String>>();
+    _activeBackupsByRunId[runId] = _BackupProgressState(
+      completer: completer,
+      onProgress: onProgress,
+      runId: runId,
+    );
+    try {
+      return await completer.future.timeout(
+        SocketConfig.backupExecutionTimeout,
+      );
+    } on TimeoutException {
+      return rd.Failure(
+        TimeoutException(
+          'Tempo esgotado ao aguardar conclusão do backup '
+          '(limite: ${SocketConfig.backupExecutionTimeout.inMinutes} minutos)',
+        ),
+      );
+    } finally {
+      _activeBackupsByRunId.remove(runId);
+    }
+  }
+
+  Future<rd.Result<ExecutionState>> _waitForQueuedRemoteBackup({
+    required String runId,
+    BackupProgressCallback? onProgress,
+  }) async {
+    final deadline = DateTime.now().add(SocketConfig.backupExecutionTimeout);
+
+    while (DateTime.now().isBefore(deadline)) {
+      if (!isConnected) {
+        return rd.Failure(Exception('Desconectado enquanto aguardava fila'));
+      }
+
+      final statusResult = await getExecutionStatus(runId);
+      final status = statusResult.getOrNull();
+      if (status == null) {
+        await Future<void>.delayed(_executionStatusPollInterval);
+        continue;
+      }
+
+      if (status.state == ExecutionState.running) {
+        return const rd.Success(ExecutionState.running);
+      }
+      if (status.state == ExecutionState.queued) {
+        onProgress?.call(
+          'Na fila',
+          status.queuedPosition != null
+              ? 'Posição ${status.queuedPosition} na fila do servidor'
+              : 'Aguardando slot no servidor',
+          0,
+        );
+        await Future<void>.delayed(_executionStatusPollInterval);
+        continue;
+      }
+      if (status.state.isTerminal) {
+        return rd.Success(status.state);
+      }
+      if (status.state == ExecutionState.notFound) {
+        return rd.Failure(
+          Exception(
+            'Execução não encontrada no servidor (runId pode ter expirado)',
+          ),
+        );
+      }
+      await Future<void>.delayed(_executionStatusPollInterval);
+    }
+
+    return rd.Failure(
+      TimeoutException('Tempo esgotado aguardando saída da fila remota'),
+    );
+  }
+
+  Future<rd.Result<String>> _resolveBackupPathForTerminal(
+    String runId,
+    ExecutionState state,
+  ) async {
+    switch (state) {
+      case ExecutionState.completed:
+        final metaResult = await getArtifactMetadata(runId: runId);
+        return metaResult.fold(
+          (meta) {
+            if (!meta.found || meta.stagingPath == null) {
+              return rd.Failure(
+                Exception('Artefato não encontrado no staging do servidor'),
+              );
+            }
+            if (meta.isExpired) {
+              return rd.Failure(
+                Exception('Artefato expirou no servidor; execute novo backup'),
+              );
+            }
+            return rd.Success(meta.stagingPath!);
+          },
+          rd.Failure.new,
+        );
+      case ExecutionState.failed:
+        final statusResult = await getExecutionStatus(runId);
+        final message = statusResult.fold(
+          (s) => s.message,
+          (_) => null,
+        );
+        return rd.Failure(
+          Exception(message ?? 'Backup remoto falhou no servidor'),
+        );
+      case ExecutionState.cancelled:
+        return rd.Failure(Exception('Backup remoto foi cancelado'));
+      case ExecutionState.running:
+      case ExecutionState.queued:
+      case ExecutionState.notFound:
+      case ExecutionState.unknown:
+        return rd.Failure(
+          Exception('Estado inesperado ao resolver artefato: ${state.name}'),
+        );
+    }
+  }
+
   /// `cancelBackup` (PR-2). Cliente envia `runId` (preferido) OU
   /// `scheduleId` (compat). Cancelamento e best-effort no servidor;
   /// estado final ainda chega via `backupFailed`/`Complete` event.
@@ -2021,6 +2312,7 @@ class _BackupProgressState {
   _BackupProgressState({
     required this.completer,
     this.onProgress,
+    this.runId,
   });
 
   final Completer<rd.Result<String>> completer;

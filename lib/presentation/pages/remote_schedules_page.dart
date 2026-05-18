@@ -48,9 +48,14 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
   void _onConnectionChanged() {
     if (_connectionProvider == null) return;
 
-    if (_connectionProvider!.isConnected && !_hasLoadedInitialSchedules) {
-      unawaited(context.read<RemoteSchedulesProvider>().loadSchedules());
-      _hasLoadedInitialSchedules = true;
+    if (_connectionProvider!.isConnected) {
+      if (!_hasLoadedInitialSchedules) {
+        unawaited(context.read<RemoteSchedulesProvider>().loadSchedules());
+        _hasLoadedInitialSchedules = true;
+      }
+      unawaited(
+        context.read<RemoteSchedulesProvider>().tryResumeExecutionAfterReconnect(),
+      );
     }
 
     if (!_connectionProvider!.isConnected) {

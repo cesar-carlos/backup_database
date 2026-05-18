@@ -28,6 +28,7 @@ part 'database.g.dart';
     LicensesTable,
     MachineSettingsTable,
     ExecutionQueueItemsTable,
+    IdempotencyEntriesTable,
     ServerCredentialsTable,
     ConnectionLogsTable,
     ServerConnectionsTable,
@@ -49,6 +50,7 @@ part 'database.g.dart';
     LicenseDao,
     MachineSettingsDao,
     ExecutionQueueDao,
+    IdempotencyDao,
     ServerCredentialDao,
     ConnectionLogDao,
     ServerConnectionDao,
@@ -65,7 +67,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 32;
+  int get schemaVersion => 33;
 
   @override
   MigrationStrategy get migration {
@@ -989,6 +991,21 @@ class AppDatabase extends _$AppDatabase {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v32 para firebird_configs_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 33) {
+          try {
+            await m.createTable(idempotencyEntriesTable);
+            LoggerService.info(
+              'Migração v33: idempotency_entries_table criada (F2.16).',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v33 para idempotency_entries_table',
               e,
               stackTrace,
             );

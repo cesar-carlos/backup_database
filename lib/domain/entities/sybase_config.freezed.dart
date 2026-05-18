@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$SybaseConfig {
 
- String get id; String get name; String get serverName; DatabaseName get databaseName; String get username; String get password; String get databaseFile; PortNumber get port; bool get enabled; bool get isReplicationEnvironment; DateTime get createdAt; DateTime get updatedAt;
+ String get id; String get name; String get serverName; DatabaseName get databaseName; String get username; String get password; PortNumber get port; DateTime get createdAt; DateTime get updatedAt; String get databaseFile; bool get enabled; bool get isReplicationEnvironment;
 /// Create a copy of SybaseConfig
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,7 +27,7 @@ $SybaseConfigCopyWith<SybaseConfig> get copyWith => _$SybaseConfigCopyWithImpl<S
 
 @override
 String toString() {
-  return 'SybaseConfig(id: $id, name: $name, serverName: $serverName, databaseName: $databaseName, username: $username, password: $password, databaseFile: $databaseFile, port: $port, enabled: $enabled, isReplicationEnvironment: $isReplicationEnvironment, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'SybaseConfig(id: $id, name: $name, serverName: $serverName, databaseName: $databaseName, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, databaseFile: $databaseFile, enabled: $enabled, isReplicationEnvironment: $isReplicationEnvironment)';
 }
 
 
@@ -38,7 +38,7 @@ abstract mixin class $SybaseConfigCopyWith<$Res>  {
   factory $SybaseConfigCopyWith(SybaseConfig value, $Res Function(SybaseConfig) _then) = _$SybaseConfigCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String serverName, DatabaseName databaseName, String username, String password, String databaseFile, PortNumber port, bool enabled, bool isReplicationEnvironment, DateTime createdAt, DateTime updatedAt
+ String id, String name, String serverName, DatabaseName databaseName, String username, String password, PortNumber port, DateTime createdAt, DateTime updatedAt, String databaseFile, bool enabled, bool isReplicationEnvironment
 });
 
 
@@ -55,7 +55,7 @@ class _$SybaseConfigCopyWithImpl<$Res>
 
 /// Create a copy of SybaseConfig
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? serverName = null,Object? databaseName = null,Object? username = null,Object? password = null,Object? databaseFile = null,Object? port = null,Object? enabled = null,Object? isReplicationEnvironment = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? serverName = null,Object? databaseName = null,Object? username = null,Object? password = null,Object? port = null,Object? createdAt = null,Object? updatedAt = null,Object? databaseFile = null,Object? enabled = null,Object? isReplicationEnvironment = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -63,13 +63,13 @@ as String,serverName: null == serverName ? _self.serverName : serverName // igno
 as String,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
 as DatabaseName,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
-as String,databaseFile: null == databaseFile ? _self.databaseFile : databaseFile // ignore: cast_nullable_to_non_nullable
 as String,port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
-as PortNumber,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,isReplicationEnvironment: null == isReplicationEnvironment ? _self.isReplicationEnvironment : isReplicationEnvironment // ignore: cast_nullable_to_non_nullable
-as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as PortNumber,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,databaseFile: null == databaseFile ? _self.databaseFile : databaseFile // ignore: cast_nullable_to_non_nullable
+as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,isReplicationEnvironment: null == isReplicationEnvironment ? _self.isReplicationEnvironment : isReplicationEnvironment // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -154,10 +154,10 @@ return raw(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String serverName,  DatabaseName databaseName,  String username,  String password,  String databaseFile,  PortNumber port,  bool enabled,  bool isReplicationEnvironment,  DateTime createdAt,  DateTime updatedAt)?  raw,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String serverName,  DatabaseName databaseName,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  String databaseFile,  bool enabled,  bool isReplicationEnvironment)?  raw,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SybaseConfig() when raw != null:
-return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.username,_that.password,_that.databaseFile,_that.port,_that.enabled,_that.isReplicationEnvironment,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.databaseFile,_that.enabled,_that.isReplicationEnvironment);case _:
   return orElse();
 
 }
@@ -175,10 +175,10 @@ return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.usernam
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String serverName,  DatabaseName databaseName,  String username,  String password,  String databaseFile,  PortNumber port,  bool enabled,  bool isReplicationEnvironment,  DateTime createdAt,  DateTime updatedAt)  raw,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String serverName,  DatabaseName databaseName,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  String databaseFile,  bool enabled,  bool isReplicationEnvironment)  raw,}) {final _that = this;
 switch (_that) {
 case _SybaseConfig():
-return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.username,_that.password,_that.databaseFile,_that.port,_that.enabled,_that.isReplicationEnvironment,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.databaseFile,_that.enabled,_that.isReplicationEnvironment);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -195,10 +195,10 @@ return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.usernam
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String serverName,  DatabaseName databaseName,  String username,  String password,  String databaseFile,  PortNumber port,  bool enabled,  bool isReplicationEnvironment,  DateTime createdAt,  DateTime updatedAt)?  raw,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String serverName,  DatabaseName databaseName,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  String databaseFile,  bool enabled,  bool isReplicationEnvironment)?  raw,}) {final _that = this;
 switch (_that) {
 case _SybaseConfig() when raw != null:
-return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.username,_that.password,_that.databaseFile,_that.port,_that.enabled,_that.isReplicationEnvironment,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.databaseFile,_that.enabled,_that.isReplicationEnvironment);case _:
   return null;
 
 }
@@ -210,7 +210,7 @@ return raw(_that.id,_that.name,_that.serverName,_that.databaseName,_that.usernam
 
 
 class _SybaseConfig extends SybaseConfig {
-  const _SybaseConfig({required this.id, required this.name, required this.serverName, required this.databaseName, required this.username, required this.password, this.databaseFile = '', required this.port, this.enabled = true, this.isReplicationEnvironment = false, required this.createdAt, required this.updatedAt}): super._();
+  const _SybaseConfig({required this.id, required this.name, required this.serverName, required this.databaseName, required this.username, required this.password, required this.port, required this.createdAt, required this.updatedAt, this.databaseFile = '', this.enabled = true, this.isReplicationEnvironment = false}): super._();
   
 
 @override final  String id;
@@ -219,12 +219,12 @@ class _SybaseConfig extends SybaseConfig {
 @override final  DatabaseName databaseName;
 @override final  String username;
 @override final  String password;
-@override@JsonKey() final  String databaseFile;
 @override final  PortNumber port;
-@override@JsonKey() final  bool enabled;
-@override@JsonKey() final  bool isReplicationEnvironment;
 @override final  DateTime createdAt;
 @override final  DateTime updatedAt;
+@override@JsonKey() final  String databaseFile;
+@override@JsonKey() final  bool enabled;
+@override@JsonKey() final  bool isReplicationEnvironment;
 
 /// Create a copy of SybaseConfig
 /// with the given fields replaced by the non-null parameter values.
@@ -238,7 +238,7 @@ _$SybaseConfigCopyWith<_SybaseConfig> get copyWith => __$SybaseConfigCopyWithImp
 
 @override
 String toString() {
-  return 'SybaseConfig.raw(id: $id, name: $name, serverName: $serverName, databaseName: $databaseName, username: $username, password: $password, databaseFile: $databaseFile, port: $port, enabled: $enabled, isReplicationEnvironment: $isReplicationEnvironment, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'SybaseConfig.raw(id: $id, name: $name, serverName: $serverName, databaseName: $databaseName, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, databaseFile: $databaseFile, enabled: $enabled, isReplicationEnvironment: $isReplicationEnvironment)';
 }
 
 
@@ -249,7 +249,7 @@ abstract mixin class _$SybaseConfigCopyWith<$Res> implements $SybaseConfigCopyWi
   factory _$SybaseConfigCopyWith(_SybaseConfig value, $Res Function(_SybaseConfig) _then) = __$SybaseConfigCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String serverName, DatabaseName databaseName, String username, String password, String databaseFile, PortNumber port, bool enabled, bool isReplicationEnvironment, DateTime createdAt, DateTime updatedAt
+ String id, String name, String serverName, DatabaseName databaseName, String username, String password, PortNumber port, DateTime createdAt, DateTime updatedAt, String databaseFile, bool enabled, bool isReplicationEnvironment
 });
 
 
@@ -266,7 +266,7 @@ class __$SybaseConfigCopyWithImpl<$Res>
 
 /// Create a copy of SybaseConfig
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? serverName = null,Object? databaseName = null,Object? username = null,Object? password = null,Object? databaseFile = null,Object? port = null,Object? enabled = null,Object? isReplicationEnvironment = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? serverName = null,Object? databaseName = null,Object? username = null,Object? password = null,Object? port = null,Object? createdAt = null,Object? updatedAt = null,Object? databaseFile = null,Object? enabled = null,Object? isReplicationEnvironment = null,}) {
   return _then(_SybaseConfig(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -274,13 +274,13 @@ as String,serverName: null == serverName ? _self.serverName : serverName // igno
 as String,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
 as DatabaseName,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
-as String,databaseFile: null == databaseFile ? _self.databaseFile : databaseFile // ignore: cast_nullable_to_non_nullable
 as String,port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
-as PortNumber,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,isReplicationEnvironment: null == isReplicationEnvironment ? _self.isReplicationEnvironment : isReplicationEnvironment // ignore: cast_nullable_to_non_nullable
-as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as PortNumber,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,databaseFile: null == databaseFile ? _self.databaseFile : databaseFile // ignore: cast_nullable_to_non_nullable
+as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,isReplicationEnvironment: null == isReplicationEnvironment ? _self.isReplicationEnvironment : isReplicationEnvironment // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

@@ -5,6 +5,7 @@ class MachineStorageLayout {
   static const String secrets = 'secrets';
   static const String staging = 'staging';
   static const String stagingBackups = 'backups';
+  static const String updates = 'updates';
   static const String config = 'config';
 
   static const String legacyAppdataMigrationMarker =

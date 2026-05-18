@@ -91,7 +91,7 @@ function Set-NssmCritical {
 Write-Host "Configurando parâmetros do aplicativo..." -ForegroundColor Green
 Set-NssmCritical -Key "AppParameters" -ExtraArgs @("--minimized --mode=server --run-as-service")
 
-# Configurar diretório de trabalho — CRÍTICO: necessário para resolução de .env e assets
+# Configurar diretório de trabalho — CRÍTICO: necessário para assets e arquivos auxiliares
 Write-Host "Configurando diretório de trabalho..." -ForegroundColor Green
 Set-NssmCritical -Key "AppDirectory" -ExtraArgs @($AppDirectory)
 
@@ -169,4 +169,3 @@ Write-Host ""
 Write-Host "Logs do serviço estão em: $logPath" -ForegroundColor Cyan
 Write-Host ""
 Read-Host "Pressione Enter para sair"
-

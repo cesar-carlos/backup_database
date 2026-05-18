@@ -130,6 +130,13 @@ void main() {
           StatusCodes.internalServerError,
         );
       });
+
+      test('rateLimitExceeded -> 429', () {
+        expect(
+          StatusCodes.forErrorCode(ErrorCode.rateLimitExceeded),
+          StatusCodes.tooManyRequests,
+        );
+      });
     });
 
     test('todos os ErrorCode tem entrada no mapping', () {

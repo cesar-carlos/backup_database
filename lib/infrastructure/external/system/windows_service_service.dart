@@ -96,7 +96,7 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _troubleshootingWithEnv =
       'Tente:\n'
       '1. Executar como Administrador\n'
-      '2. Verificar se existe .env na pasta do aplicativo (copie de .env.example)\n'
+      r'2. Verificar se existe C:\ProgramData\BackupDatabase\config\.env' '\n'
       '3. Verificar logs em $_logPath (service_stdout.log, service_stderr.log)\n'
       '4. Atualizar o status e tentar novamente';
   static const int _serviceNotInstalledWinError = 1060;
@@ -124,7 +124,9 @@ class WindowsServiceService implements IWindowsServiceService {
       }
     }
 
-    final envPath = '$appDir\\.env';
+    final envPath =
+        '${Platform.environment[_programDataEnv] ?? _defaultProgramData}'
+        r'\BackupDatabase\config\.env';
     if (!File(envPath).existsSync()) {
       LoggerService.warning(
         'Arquivo .env não encontrado em $appDir. '

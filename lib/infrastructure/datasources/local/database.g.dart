@@ -10401,6 +10401,358 @@ class ExecutionQueueItemsTableCompanion
   }
 }
 
+class $IdempotencyEntriesTableTable extends IdempotencyEntriesTable
+    with TableInfo<$IdempotencyEntriesTableTable, IdempotencyEntriesTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $IdempotencyEntriesTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idempotencyKeyMeta = const VerificationMeta(
+    'idempotencyKey',
+  );
+  @override
+  late final GeneratedColumn<String> idempotencyKey = GeneratedColumn<String>(
+    'idempotency_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _responseJsonMeta = const VerificationMeta(
+    'responseJson',
+  );
+  @override
+  late final GeneratedColumn<String> responseJson = GeneratedColumn<String>(
+    'response_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMicrosMeta = const VerificationMeta(
+    'createdAtMicros',
+  );
+  @override
+  late final GeneratedColumn<int> createdAtMicros = GeneratedColumn<int>(
+    'created_at_micros',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _expiresAtMicrosMeta = const VerificationMeta(
+    'expiresAtMicros',
+  );
+  @override
+  late final GeneratedColumn<int> expiresAtMicros = GeneratedColumn<int>(
+    'expires_at_micros',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    idempotencyKey,
+    responseJson,
+    createdAtMicros,
+    expiresAtMicros,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'idempotency_entries_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<IdempotencyEntriesTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('idempotency_key')) {
+      context.handle(
+        _idempotencyKeyMeta,
+        idempotencyKey.isAcceptableOrUnknown(
+          data['idempotency_key']!,
+          _idempotencyKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_idempotencyKeyMeta);
+    }
+    if (data.containsKey('response_json')) {
+      context.handle(
+        _responseJsonMeta,
+        responseJson.isAcceptableOrUnknown(
+          data['response_json']!,
+          _responseJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_responseJsonMeta);
+    }
+    if (data.containsKey('created_at_micros')) {
+      context.handle(
+        _createdAtMicrosMeta,
+        createdAtMicros.isAcceptableOrUnknown(
+          data['created_at_micros']!,
+          _createdAtMicrosMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMicrosMeta);
+    }
+    if (data.containsKey('expires_at_micros')) {
+      context.handle(
+        _expiresAtMicrosMeta,
+        expiresAtMicros.isAcceptableOrUnknown(
+          data['expires_at_micros']!,
+          _expiresAtMicrosMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_expiresAtMicrosMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {idempotencyKey};
+  @override
+  IdempotencyEntriesTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return IdempotencyEntriesTableData(
+      idempotencyKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}idempotency_key'],
+      )!,
+      responseJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}response_json'],
+      )!,
+      createdAtMicros: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at_micros'],
+      )!,
+      expiresAtMicros: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}expires_at_micros'],
+      )!,
+    );
+  }
+
+  @override
+  $IdempotencyEntriesTableTable createAlias(String alias) {
+    return $IdempotencyEntriesTableTable(attachedDatabase, alias);
+  }
+}
+
+class IdempotencyEntriesTableData extends DataClass
+    implements Insertable<IdempotencyEntriesTableData> {
+  final String idempotencyKey;
+  final String responseJson;
+  final int createdAtMicros;
+  final int expiresAtMicros;
+  const IdempotencyEntriesTableData({
+    required this.idempotencyKey,
+    required this.responseJson,
+    required this.createdAtMicros,
+    required this.expiresAtMicros,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['idempotency_key'] = Variable<String>(idempotencyKey);
+    map['response_json'] = Variable<String>(responseJson);
+    map['created_at_micros'] = Variable<int>(createdAtMicros);
+    map['expires_at_micros'] = Variable<int>(expiresAtMicros);
+    return map;
+  }
+
+  IdempotencyEntriesTableCompanion toCompanion(bool nullToAbsent) {
+    return IdempotencyEntriesTableCompanion(
+      idempotencyKey: Value(idempotencyKey),
+      responseJson: Value(responseJson),
+      createdAtMicros: Value(createdAtMicros),
+      expiresAtMicros: Value(expiresAtMicros),
+    );
+  }
+
+  factory IdempotencyEntriesTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return IdempotencyEntriesTableData(
+      idempotencyKey: serializer.fromJson<String>(json['idempotencyKey']),
+      responseJson: serializer.fromJson<String>(json['responseJson']),
+      createdAtMicros: serializer.fromJson<int>(json['createdAtMicros']),
+      expiresAtMicros: serializer.fromJson<int>(json['expiresAtMicros']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'idempotencyKey': serializer.toJson<String>(idempotencyKey),
+      'responseJson': serializer.toJson<String>(responseJson),
+      'createdAtMicros': serializer.toJson<int>(createdAtMicros),
+      'expiresAtMicros': serializer.toJson<int>(expiresAtMicros),
+    };
+  }
+
+  IdempotencyEntriesTableData copyWith({
+    String? idempotencyKey,
+    String? responseJson,
+    int? createdAtMicros,
+    int? expiresAtMicros,
+  }) => IdempotencyEntriesTableData(
+    idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+    responseJson: responseJson ?? this.responseJson,
+    createdAtMicros: createdAtMicros ?? this.createdAtMicros,
+    expiresAtMicros: expiresAtMicros ?? this.expiresAtMicros,
+  );
+  IdempotencyEntriesTableData copyWithCompanion(
+    IdempotencyEntriesTableCompanion data,
+  ) {
+    return IdempotencyEntriesTableData(
+      idempotencyKey: data.idempotencyKey.present
+          ? data.idempotencyKey.value
+          : this.idempotencyKey,
+      responseJson: data.responseJson.present
+          ? data.responseJson.value
+          : this.responseJson,
+      createdAtMicros: data.createdAtMicros.present
+          ? data.createdAtMicros.value
+          : this.createdAtMicros,
+      expiresAtMicros: data.expiresAtMicros.present
+          ? data.expiresAtMicros.value
+          : this.expiresAtMicros,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IdempotencyEntriesTableData(')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('responseJson: $responseJson, ')
+          ..write('createdAtMicros: $createdAtMicros, ')
+          ..write('expiresAtMicros: $expiresAtMicros')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    idempotencyKey,
+    responseJson,
+    createdAtMicros,
+    expiresAtMicros,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is IdempotencyEntriesTableData &&
+          other.idempotencyKey == this.idempotencyKey &&
+          other.responseJson == this.responseJson &&
+          other.createdAtMicros == this.createdAtMicros &&
+          other.expiresAtMicros == this.expiresAtMicros);
+}
+
+class IdempotencyEntriesTableCompanion
+    extends UpdateCompanion<IdempotencyEntriesTableData> {
+  final Value<String> idempotencyKey;
+  final Value<String> responseJson;
+  final Value<int> createdAtMicros;
+  final Value<int> expiresAtMicros;
+  final Value<int> rowid;
+  const IdempotencyEntriesTableCompanion({
+    this.idempotencyKey = const Value.absent(),
+    this.responseJson = const Value.absent(),
+    this.createdAtMicros = const Value.absent(),
+    this.expiresAtMicros = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  IdempotencyEntriesTableCompanion.insert({
+    required String idempotencyKey,
+    required String responseJson,
+    required int createdAtMicros,
+    required int expiresAtMicros,
+    this.rowid = const Value.absent(),
+  }) : idempotencyKey = Value(idempotencyKey),
+       responseJson = Value(responseJson),
+       createdAtMicros = Value(createdAtMicros),
+       expiresAtMicros = Value(expiresAtMicros);
+  static Insertable<IdempotencyEntriesTableData> custom({
+    Expression<String>? idempotencyKey,
+    Expression<String>? responseJson,
+    Expression<int>? createdAtMicros,
+    Expression<int>? expiresAtMicros,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      if (responseJson != null) 'response_json': responseJson,
+      if (createdAtMicros != null) 'created_at_micros': createdAtMicros,
+      if (expiresAtMicros != null) 'expires_at_micros': expiresAtMicros,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  IdempotencyEntriesTableCompanion copyWith({
+    Value<String>? idempotencyKey,
+    Value<String>? responseJson,
+    Value<int>? createdAtMicros,
+    Value<int>? expiresAtMicros,
+    Value<int>? rowid,
+  }) {
+    return IdempotencyEntriesTableCompanion(
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+      responseJson: responseJson ?? this.responseJson,
+      createdAtMicros: createdAtMicros ?? this.createdAtMicros,
+      expiresAtMicros: expiresAtMicros ?? this.expiresAtMicros,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (idempotencyKey.present) {
+      map['idempotency_key'] = Variable<String>(idempotencyKey.value);
+    }
+    if (responseJson.present) {
+      map['response_json'] = Variable<String>(responseJson.value);
+    }
+    if (createdAtMicros.present) {
+      map['created_at_micros'] = Variable<int>(createdAtMicros.value);
+    }
+    if (expiresAtMicros.present) {
+      map['expires_at_micros'] = Variable<int>(expiresAtMicros.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IdempotencyEntriesTableCompanion(')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('responseJson: $responseJson, ')
+          ..write('createdAtMicros: $createdAtMicros, ')
+          ..write('expiresAtMicros: $expiresAtMicros, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ServerCredentialsTableTable extends ServerCredentialsTable
     with TableInfo<$ServerCredentialsTableTable, ServerCredentialsTableData> {
   @override
@@ -12851,6 +13203,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $MachineSettingsTableTable(this);
   late final $ExecutionQueueItemsTableTable executionQueueItemsTable =
       $ExecutionQueueItemsTableTable(this);
+  late final $IdempotencyEntriesTableTable idempotencyEntriesTable =
+      $IdempotencyEntriesTableTable(this);
   late final $ServerCredentialsTableTable serverCredentialsTable =
       $ServerCredentialsTableTable(this);
   late final $ConnectionLogsTableTable connectionLogsTable =
@@ -12896,6 +13250,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final ExecutionQueueDao executionQueueDao = ExecutionQueueDao(
     this as AppDatabase,
   );
+  late final IdempotencyDao idempotencyDao = IdempotencyDao(
+    this as AppDatabase,
+  );
   late final ServerCredentialDao serverCredentialDao = ServerCredentialDao(
     this as AppDatabase,
   );
@@ -12928,6 +13285,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     licensesTable,
     machineSettingsTable,
     executionQueueItemsTable,
+    idempotencyEntriesTable,
     serverCredentialsTable,
     connectionLogsTable,
     serverConnectionsTable,
@@ -18800,6 +19158,214 @@ typedef $$ExecutionQueueItemsTableTableProcessedTableManager =
       ExecutionQueueItemsTableData,
       PrefetchHooks Function()
     >;
+typedef $$IdempotencyEntriesTableTableCreateCompanionBuilder =
+    IdempotencyEntriesTableCompanion Function({
+      required String idempotencyKey,
+      required String responseJson,
+      required int createdAtMicros,
+      required int expiresAtMicros,
+      Value<int> rowid,
+    });
+typedef $$IdempotencyEntriesTableTableUpdateCompanionBuilder =
+    IdempotencyEntriesTableCompanion Function({
+      Value<String> idempotencyKey,
+      Value<String> responseJson,
+      Value<int> createdAtMicros,
+      Value<int> expiresAtMicros,
+      Value<int> rowid,
+    });
+
+class $$IdempotencyEntriesTableTableFilterComposer
+    extends Composer<_$AppDatabase, $IdempotencyEntriesTableTable> {
+  $$IdempotencyEntriesTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get responseJson => $composableBuilder(
+    column: $table.responseJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAtMicros => $composableBuilder(
+    column: $table.createdAtMicros,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get expiresAtMicros => $composableBuilder(
+    column: $table.expiresAtMicros,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$IdempotencyEntriesTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $IdempotencyEntriesTableTable> {
+  $$IdempotencyEntriesTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get responseJson => $composableBuilder(
+    column: $table.responseJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAtMicros => $composableBuilder(
+    column: $table.createdAtMicros,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get expiresAtMicros => $composableBuilder(
+    column: $table.expiresAtMicros,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$IdempotencyEntriesTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $IdempotencyEntriesTableTable> {
+  $$IdempotencyEntriesTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get responseJson => $composableBuilder(
+    column: $table.responseJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAtMicros => $composableBuilder(
+    column: $table.createdAtMicros,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get expiresAtMicros => $composableBuilder(
+    column: $table.expiresAtMicros,
+    builder: (column) => column,
+  );
+}
+
+class $$IdempotencyEntriesTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $IdempotencyEntriesTableTable,
+          IdempotencyEntriesTableData,
+          $$IdempotencyEntriesTableTableFilterComposer,
+          $$IdempotencyEntriesTableTableOrderingComposer,
+          $$IdempotencyEntriesTableTableAnnotationComposer,
+          $$IdempotencyEntriesTableTableCreateCompanionBuilder,
+          $$IdempotencyEntriesTableTableUpdateCompanionBuilder,
+          (
+            IdempotencyEntriesTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $IdempotencyEntriesTableTable,
+              IdempotencyEntriesTableData
+            >,
+          ),
+          IdempotencyEntriesTableData,
+          PrefetchHooks Function()
+        > {
+  $$IdempotencyEntriesTableTableTableManager(
+    _$AppDatabase db,
+    $IdempotencyEntriesTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$IdempotencyEntriesTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$IdempotencyEntriesTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$IdempotencyEntriesTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> idempotencyKey = const Value.absent(),
+                Value<String> responseJson = const Value.absent(),
+                Value<int> createdAtMicros = const Value.absent(),
+                Value<int> expiresAtMicros = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => IdempotencyEntriesTableCompanion(
+                idempotencyKey: idempotencyKey,
+                responseJson: responseJson,
+                createdAtMicros: createdAtMicros,
+                expiresAtMicros: expiresAtMicros,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String idempotencyKey,
+                required String responseJson,
+                required int createdAtMicros,
+                required int expiresAtMicros,
+                Value<int> rowid = const Value.absent(),
+              }) => IdempotencyEntriesTableCompanion.insert(
+                idempotencyKey: idempotencyKey,
+                responseJson: responseJson,
+                createdAtMicros: createdAtMicros,
+                expiresAtMicros: expiresAtMicros,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$IdempotencyEntriesTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $IdempotencyEntriesTableTable,
+      IdempotencyEntriesTableData,
+      $$IdempotencyEntriesTableTableFilterComposer,
+      $$IdempotencyEntriesTableTableOrderingComposer,
+      $$IdempotencyEntriesTableTableAnnotationComposer,
+      $$IdempotencyEntriesTableTableCreateCompanionBuilder,
+      $$IdempotencyEntriesTableTableUpdateCompanionBuilder,
+      (
+        IdempotencyEntriesTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $IdempotencyEntriesTableTable,
+          IdempotencyEntriesTableData
+        >,
+      ),
+      IdempotencyEntriesTableData,
+      PrefetchHooks Function()
+    >;
 typedef $$ServerCredentialsTableTableCreateCompanionBuilder =
     ServerCredentialsTableCompanion Function({
       required String id,
@@ -20081,6 +20647,11 @@ class $AppDatabaseManager {
       $$ExecutionQueueItemsTableTableTableManager(
         _db,
         _db.executionQueueItemsTable,
+      );
+  $$IdempotencyEntriesTableTableTableManager get idempotencyEntriesTable =>
+      $$IdempotencyEntriesTableTableTableManager(
+        _db,
+        _db.idempotencyEntriesTable,
       );
   $$ServerCredentialsTableTableTableManager get serverCredentialsTable =>
       $$ServerCredentialsTableTableTableManager(

@@ -4,6 +4,7 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
+import 'package:backup_database/infrastructure/protocol/idempotency_policy.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
@@ -264,6 +265,15 @@ class DatabaseConfigMessageHandler {
         '`databaseType` nao suportado: $dbTypeRaw',
         ErrorCode.invalidRequest,
       );
+      return;
+    }
+
+    final keyError = IdempotencyPolicy.missingKeyErrorMessage(
+      message: message,
+      operationType: type,
+    );
+    if (keyError != null) {
+      await sendToClient(clientId, keyError);
       return;
     }
 

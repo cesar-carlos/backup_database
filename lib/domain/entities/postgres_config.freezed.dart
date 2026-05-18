@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PostgresConfig {
 
- String get id; String get name; String get host; DatabaseName get database; String get username; String get password; PortNumber get port; bool get enabled; DateTime get createdAt; DateTime get updatedAt;
+ String get id; String get name; String get host; DatabaseName get database; String get username; String get password; PortNumber get port; DateTime get createdAt; DateTime get updatedAt; bool get enabled;
 /// Create a copy of PostgresConfig
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,7 +27,7 @@ $PostgresConfigCopyWith<PostgresConfig> get copyWith => _$PostgresConfigCopyWith
 
 @override
 String toString() {
-  return 'PostgresConfig(id: $id, name: $name, host: $host, database: $database, username: $username, password: $password, port: $port, enabled: $enabled, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'PostgresConfig(id: $id, name: $name, host: $host, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled)';
 }
 
 
@@ -38,7 +38,7 @@ abstract mixin class $PostgresConfigCopyWith<$Res>  {
   factory $PostgresConfigCopyWith(PostgresConfig value, $Res Function(PostgresConfig) _then) = _$PostgresConfigCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String host, DatabaseName database, String username, String password, PortNumber port, bool enabled, DateTime createdAt, DateTime updatedAt
+ String id, String name, String host, DatabaseName database, String username, String password, PortNumber port, DateTime createdAt, DateTime updatedAt, bool enabled
 });
 
 
@@ -55,7 +55,7 @@ class _$PostgresConfigCopyWithImpl<$Res>
 
 /// Create a copy of PostgresConfig
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? host = null,Object? database = null,Object? username = null,Object? password = null,Object? port = null,Object? enabled = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? host = null,Object? database = null,Object? username = null,Object? password = null,Object? port = null,Object? createdAt = null,Object? updatedAt = null,Object? enabled = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -64,10 +64,10 @@ as String,database: null == database ? _self.database : database // ignore: cast
 as DatabaseName,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
 as String,port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
-as PortNumber,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as PortNumber,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -152,10 +152,10 @@ return raw(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String host,  DatabaseName database,  String username,  String password,  PortNumber port,  bool enabled,  DateTime createdAt,  DateTime updatedAt)?  raw,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String name,  String host,  DatabaseName database,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  bool enabled)?  raw,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PostgresConfig() when raw != null:
-return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.password,_that.port,_that.enabled,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.enabled);case _:
   return orElse();
 
 }
@@ -173,10 +173,10 @@ return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.pa
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String host,  DatabaseName database,  String username,  String password,  PortNumber port,  bool enabled,  DateTime createdAt,  DateTime updatedAt)  raw,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String name,  String host,  DatabaseName database,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  bool enabled)  raw,}) {final _that = this;
 switch (_that) {
 case _PostgresConfig():
-return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.password,_that.port,_that.enabled,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.enabled);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -193,10 +193,10 @@ return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.pa
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String host,  DatabaseName database,  String username,  String password,  PortNumber port,  bool enabled,  DateTime createdAt,  DateTime updatedAt)?  raw,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String name,  String host,  DatabaseName database,  String username,  String password,  PortNumber port,  DateTime createdAt,  DateTime updatedAt,  bool enabled)?  raw,}) {final _that = this;
 switch (_that) {
 case _PostgresConfig() when raw != null:
-return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.password,_that.port,_that.enabled,_that.createdAt,_that.updatedAt);case _:
+return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.password,_that.port,_that.createdAt,_that.updatedAt,_that.enabled);case _:
   return null;
 
 }
@@ -208,7 +208,7 @@ return raw(_that.id,_that.name,_that.host,_that.database,_that.username,_that.pa
 
 
 class _PostgresConfig extends PostgresConfig {
-  const _PostgresConfig({required this.id, required this.name, required this.host, required this.database, required this.username, required this.password, required this.port, this.enabled = true, required this.createdAt, required this.updatedAt}): super._();
+  const _PostgresConfig({required this.id, required this.name, required this.host, required this.database, required this.username, required this.password, required this.port, required this.createdAt, required this.updatedAt, this.enabled = true}): super._();
   
 
 @override final  String id;
@@ -218,9 +218,9 @@ class _PostgresConfig extends PostgresConfig {
 @override final  String username;
 @override final  String password;
 @override final  PortNumber port;
-@override@JsonKey() final  bool enabled;
 @override final  DateTime createdAt;
 @override final  DateTime updatedAt;
+@override@JsonKey() final  bool enabled;
 
 /// Create a copy of PostgresConfig
 /// with the given fields replaced by the non-null parameter values.
@@ -234,7 +234,7 @@ _$PostgresConfigCopyWith<_PostgresConfig> get copyWith => __$PostgresConfigCopyW
 
 @override
 String toString() {
-  return 'PostgresConfig.raw(id: $id, name: $name, host: $host, database: $database, username: $username, password: $password, port: $port, enabled: $enabled, createdAt: $createdAt, updatedAt: $updatedAt)';
+  return 'PostgresConfig.raw(id: $id, name: $name, host: $host, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled)';
 }
 
 
@@ -245,7 +245,7 @@ abstract mixin class _$PostgresConfigCopyWith<$Res> implements $PostgresConfigCo
   factory _$PostgresConfigCopyWith(_PostgresConfig value, $Res Function(_PostgresConfig) _then) = __$PostgresConfigCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String host, DatabaseName database, String username, String password, PortNumber port, bool enabled, DateTime createdAt, DateTime updatedAt
+ String id, String name, String host, DatabaseName database, String username, String password, PortNumber port, DateTime createdAt, DateTime updatedAt, bool enabled
 });
 
 
@@ -262,7 +262,7 @@ class __$PostgresConfigCopyWithImpl<$Res>
 
 /// Create a copy of PostgresConfig
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? host = null,Object? database = null,Object? username = null,Object? password = null,Object? port = null,Object? enabled = null,Object? createdAt = null,Object? updatedAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? host = null,Object? database = null,Object? username = null,Object? password = null,Object? port = null,Object? createdAt = null,Object? updatedAt = null,Object? enabled = null,}) {
   return _then(_PostgresConfig(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -271,10 +271,10 @@ as String,database: null == database ? _self.database : database // ignore: cast
 as DatabaseName,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,password: null == password ? _self.password : password // ignore: cast_nullable_to_non_nullable
 as String,port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
-as PortNumber,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
-as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as PortNumber,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

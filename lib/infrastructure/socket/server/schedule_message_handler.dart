@@ -13,6 +13,7 @@ import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 
 /// Handles remote schedule commands from the client. When the client sends
@@ -29,6 +30,7 @@ class ScheduleMessageHandler {
     required ExecuteScheduledBackup executeBackup,
     required IBackupProgressNotifier progressNotifier,
     RemoteExecutionRegistry? executionRegistry,
+    ExecutionEventSequencer? eventSequencer,
     bool supportsFirebird = true,
   }) : _scheduleRepository = scheduleRepository,
        _licensePolicyService = licensePolicyService,
@@ -37,6 +39,7 @@ class ScheduleMessageHandler {
        _executeBackup = executeBackup,
        _progressNotifier = progressNotifier,
        _executionRegistry = executionRegistry ?? RemoteExecutionRegistry(),
+       _eventSequencer = eventSequencer ?? ExecutionEventSequencer(),
        _supportsFirebird = supportsFirebird {
     _progressNotifier.addListener(_onProgressChanged);
   }
@@ -55,6 +58,7 @@ class ScheduleMessageHandler {
   /// no scheduler), mas a estrutura suporta a fila planejada para PR-3b
   /// sem reescrita do handler.
   final RemoteExecutionRegistry _executionRegistry;
+  final ExecutionEventSequencer _eventSequencer;
   final bool _supportsFirebird;
 
   void dispose() {
@@ -80,6 +84,7 @@ class ScheduleMessageHandler {
     final contexts = _executionRegistry.all.toList(growable: false);
 
     for (final context in contexts) {
+      final progressMeta = _eventSequencer.next();
       await context.sendToClient(
         context.clientId,
         createBackupProgressMessage(
@@ -89,6 +94,8 @@ class ScheduleMessageHandler {
           message: snapshot.message,
           progress: progressValue,
           runId: context.runId,
+          eventId: progressMeta.eventId,
+          sequence: progressMeta.sequence,
         ),
       );
 
@@ -98,6 +105,7 @@ class ScheduleMessageHandler {
           'backupPath=${snapshot.backupPath == null || snapshot.backupPath!.isEmpty ? "(empty)" : "(set)"}',
         );
 
+        final completeMeta = _eventSequencer.next();
         await context.sendToClient(
           context.clientId,
           createBackupCompleteMessage(
@@ -106,10 +114,13 @@ class ScheduleMessageHandler {
             message: snapshot.message,
             backupPath: snapshot.backupPath,
             runId: context.runId,
+            eventId: completeMeta.eventId,
+            sequence: completeMeta.sequence,
           ),
         );
         _executionRegistry.unregister(context.runId);
       } else if (snapshot.step == 'Erro') {
+        final failedMeta = _eventSequencer.next();
         await context.sendToClient(
           context.clientId,
           createBackupFailedMessage(
@@ -117,6 +128,8 @@ class ScheduleMessageHandler {
             scheduleId: context.scheduleId,
             error: snapshot.error ?? 'Erro desconhecido',
             runId: context.runId,
+            eventId: failedMeta.eventId,
+            sequence: failedMeta.sequence,
           ),
         );
         _executionRegistry.unregister(context.runId);
@@ -480,6 +493,7 @@ class ScheduleMessageHandler {
       if (progressSlotReserved) {
         _progressNotifier.failBackup(e.toString());
       }
+      final failedMeta = _eventSequencer.next();
       await sendToClient(
         clientId,
         createBackupFailedMessage(
@@ -487,6 +501,8 @@ class ScheduleMessageHandler {
           scheduleId: scheduleId,
           error: e.toString(),
           runId: executionContext?.runId,
+          eventId: failedMeta.eventId,
+          sequence: failedMeta.sequence,
         ),
       );
       if (executionContext != null) {

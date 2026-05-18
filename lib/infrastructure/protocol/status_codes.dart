@@ -93,6 +93,9 @@ class StatusCodes {
     ErrorCode.backupAlreadyRunning: conflict,
     ErrorCode.noActiveExecution: conflict,
 
+    // Rate limit
+    ErrorCode.rateLimitExceeded: tooManyRequests,
+
     // Servico / pre-requisito
     ErrorCode.unsupportedProtocolVersion: serviceUnavailable,
     ErrorCode.diskFull: serviceUnavailable,

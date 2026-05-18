@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/queue_events.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
-import 'package:uuid/uuid.dart';
 
 /// Bus de publicacao de eventos de fila (PR-3a).
 ///
@@ -19,21 +19,20 @@ import 'package:uuid/uuid.dart';
 class QueueEventBus {
   QueueEventBus({
     required Future<void> Function(String clientId, Message message) broadcast,
-    Uuid? uuid,
+    ExecutionEventSequencer? sequencer,
     DateTime Function()? clock,
-    int initialSequence = 0,
   }) : _broadcast = broadcast,
-       _uuid = uuid ?? const Uuid(),
-       _clock = clock ?? DateTime.now,
-       _sequence = initialSequence;
+       _sequencer = sequencer ?? ExecutionEventSequencer(),
+       _clock = clock ?? DateTime.now;
 
   final Future<void> Function(String clientId, Message) _broadcast;
-  final Uuid _uuid;
+  final ExecutionEventSequencer _sequencer;
   final DateTime Function() _clock;
-  int _sequence;
+
+  ExecutionEventSequencer get sequencer => _sequencer;
 
   /// `sequence` atual. Util para testes/observabilidade.
-  int get currentSequence => _sequence;
+  int get currentSequence => _sequencer.currentSequence;
 
   /// Publica `backupQueued` para o cliente que disparou.
   Future<void> publishQueued({
@@ -44,11 +43,12 @@ class QueueEventBus {
     String? requestedBy,
     String? message,
   }) async {
+    final meta = _sequencer.next();
     final event = createBackupQueuedEvent(
       runId: runId,
       scheduleId: scheduleId,
-      sequence: ++_sequence,
-      eventId: _uuid.v4(),
+      sequence: meta.sequence,
+      eventId: meta.eventId,
       serverTimeUtc: _clock(),
       queuePosition: queuePosition,
       requestedBy: requestedBy,
@@ -65,11 +65,12 @@ class QueueEventBus {
     String? reason,
     String? message,
   }) async {
+    final meta = _sequencer.next();
     final event = createBackupDequeuedEvent(
       runId: runId,
       scheduleId: scheduleId,
-      sequence: ++_sequence,
-      eventId: _uuid.v4(),
+      sequence: meta.sequence,
+      eventId: meta.eventId,
       serverTimeUtc: _clock(),
       reason: reason,
       message: message,
@@ -84,11 +85,12 @@ class QueueEventBus {
     required String scheduleId,
     String? message,
   }) async {
+    final meta = _sequencer.next();
     final event = createBackupStartedEvent(
       runId: runId,
       scheduleId: scheduleId,
-      sequence: ++_sequence,
-      eventId: _uuid.v4(),
+      sequence: meta.sequence,
+      eventId: meta.eventId,
       serverTimeUtc: _clock(),
       message: message,
     );

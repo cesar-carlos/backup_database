@@ -26,9 +26,10 @@ class ScheduleDialogFirebirdNbackupLevelSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Opcional: 0 a 9. Para niveis >1 e necessario ficheiros da cadeia '
-          'na pasta de backup (ver documentacao Firebird nbackup). '
-          'Full fisico so aceita 0; incrementais aceitam 1 a 9.',
+          'Opcional: 0 a 9. Full fisico so aceita 0; incrementais aceitam 1 a 9. '
+          'Em Firebird 2.5/3.0, niveis >1 exigem ficheiros da cadeia na pasta de '
+          'backup. Em Firebird 4.0, incrementais podem usar o GUID do motor '
+          r'(RDB$BACKUP_HISTORY) em vez da convencao de nomes na pasta.',
           style: FluentTheme.of(context).typography.caption,
         ),
       ],

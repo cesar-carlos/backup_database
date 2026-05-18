@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/application/services/service_health_checker.dart';
 import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
@@ -28,6 +29,8 @@ class ServiceModeInitializer {
     ServiceHealthChecker? healthChecker;
     WindowsEventLogService? eventLog;
     ISingleInstanceService? singleInstanceService;
+    ServiceShutdownHandler? shutdownHandler;
+    AutoUpdateService? autoUpdateService;
 
     try {
       await _appendBootstrapLog('initialize: begin');
@@ -36,7 +39,7 @@ class ServiceModeInitializer {
         '${SingleInstanceConfig.serviceMutexName.split(r'\').last} '
         'coexists_with_ui=independent_mutex',
       );
-      const totalSteps = 9;
+      const totalSteps = 10;
 
       await _bootstrapStep(
         step: 1,
@@ -74,7 +77,7 @@ class ServiceModeInitializer {
               .checkAndLock(isServiceMode: true);
           if (!isFirstServiceInstance) {
             LoggerService.warning(
-              '⚠️ Outra instância do SERVIÇO já está em execução. Encerrando.',
+              'Outra instancia do servico ja esta em execucao. Encerrando.',
             );
             await _appendBootstrapLog(
               'step 4/$totalSteps: existing service instance found, exiting 0',
@@ -87,18 +90,19 @@ class ServiceModeInitializer {
       await _bootstrapStep(
         step: 5,
         totalSteps: totalSteps,
-        label: 'Configurando dependências (DI)',
+        label: 'Configurando dependencias (DI)',
         action: service_locator.setupServiceLocatorForServiceMode,
       );
 
       await _bootstrapStep(
         step: 6,
         totalSteps: totalSteps,
-        label: 'Obtendo serviços do container DI',
+        label: 'Obtendo servicos do container DI',
         action: () async {
           schedulerService = service_locator.getIt<ISchedulerService>();
           healthChecker = service_locator.getIt<ServiceHealthChecker>();
           eventLog = service_locator.getIt<WindowsEventLogService>();
+          autoUpdateService = service_locator.getIt<AutoUpdateService>();
         },
       );
 
@@ -112,16 +116,15 @@ class ServiceModeInitializer {
         },
       );
 
-      // Inicializa graceful shutdown handler (passo 8)
       await _bootstrapStep(
         step: 8,
         totalSteps: totalSteps,
         label: 'Configurando shutdown handler',
         action: () async {
-          final shutdownHandler = ServiceShutdownHandler();
-          await shutdownHandler.initialize();
+          shutdownHandler = ServiceShutdownHandler();
+          await shutdownHandler!.initialize();
           _registerShutdownCallbacks(
-            shutdownHandler: shutdownHandler,
+            shutdownHandler: shutdownHandler!,
             shutdownCompleter: shutdownCompleter,
             schedulerServiceRef: () => schedulerService,
             healthCheckerRef: () => healthChecker,
@@ -143,14 +146,45 @@ class ServiceModeInitializer {
         },
       );
 
+      await _bootstrapStep(
+        step: 10,
+        totalSteps: totalSteps,
+        label: 'Inicializando auto update do servico',
+        action: () async {
+          final features = service_locator.getIt<FeatureAvailabilityService>();
+          if (!features.isAutoUpdateEnabled) {
+            LoggerService.info(
+              'AutoUpdateService omitido no servico (compatibilidade): '
+              '${features.autoUpdateDisabledReason?.diagnosticLabel ?? "unknown"}',
+            );
+            return;
+          }
+
+          autoUpdateService!.setBeforeInstallHook(() async {
+            await shutdownHandler?.shutdown();
+            await singleInstanceService?.releaseLock();
+          });
+          await autoUpdateService!.initialize();
+          if (!autoUpdateService!.isInitialized) {
+            LoggerService.info(
+              'AutoUpdateService em modo servico ficou desabilitado/sem feed',
+            );
+            return;
+          }
+          autoUpdateService!.startPeriodicChecks();
+          unawaited(
+            autoUpdateService!.checkNow(source: AppUpdateSource.startup),
+          );
+        },
+      );
+
       LoggerService.info(
-        '🎉 ✅ Aplicativo rodando como serviço do Windows - INICIALIZAÇÃO COMPLETA',
+        'Aplicativo rodando como servico do Windows - inicializacao completa',
       );
       await _appendBootstrapLog(
         'initialize: complete, waiting shutdown signal',
       );
 
-      // Aguarda indefinidamente (será interrompido por shutdown signal via Completer)
       await shutdownCompleter.future;
 
       await _appendBootstrapLog('initialize: shutdown signal received');
@@ -158,7 +192,7 @@ class ServiceModeInitializer {
       await _appendBootstrapLog('initialize: lock released, exiting');
     } on Object catch (e, stackTrace) {
       LoggerService.error(
-        'Erro fatal na inicialização do modo serviço',
+        'Erro fatal na inicializacao do modo servico',
         e,
         stackTrace,
       );
@@ -168,37 +202,38 @@ class ServiceModeInitializer {
         stackTrace,
       );
 
-      // Log erro crítico no Event Viewer
       try {
         await eventLog?.logCriticalError(
           error: e.toString(),
-          context: 'Erro fatal na inicialização do modo serviço',
+          context: 'Erro fatal na inicializacao do modo servico',
         );
       } on Object catch (_) {}
 
       try {
-        // Para health checker
         healthChecker?.stop();
-      } on Object catch (e, s) {
-        LoggerService.warning('Erro ao parar health checker', e, s);
+      } on Object catch (error, stack) {
+        LoggerService.warning('Erro ao parar health checker', error, stack);
       }
 
       try {
-        // Tenta parar o scheduler gracefulmente
         await schedulerService?.waitForRunningBackups(
           timeout: const Duration(seconds: 30),
         );
-      } on Object catch (e, s) {
-        LoggerService.warning('Erro ao aguardar backups terminarem', e, s);
+      } on Object catch (error, stack) {
+        LoggerService.warning(
+          'Erro ao aguardar backups terminarem',
+          error,
+          stack,
+        );
       }
 
       try {
         await singleInstanceService?.releaseLock();
-      } on Object catch (e, s) {
+      } on Object catch (error, stack) {
         LoggerService.warning(
-          'Erro ao liberar lock antes de encerrar modo serviço',
-          e,
-          s,
+          'Erro ao liberar lock antes de encerrar modo servico',
+          error,
+          stack,
         );
       }
 
@@ -235,10 +270,6 @@ class ServiceModeInitializer {
       buffer.write('\n');
       await file.writeAsString(buffer.toString(), mode: FileMode.append);
     } on Object catch (e) {
-      // Antes este catch ficava completamente silencioso, escondendo
-      // permission denied / disk full em produção. Agora ao menos
-      // emite no console de developer (não vai para o LoggerService
-      // para evitar loop caso o próprio LoggerService falhe na escrita).
       developer.log(
         '[ServiceModeInitializer] bootstrap log write failed: $e',
         name: 'service_bootstrap',
@@ -247,15 +278,6 @@ class ServiceModeInitializer {
     }
   }
 
-  /// Helper genérico para um passo da inicialização do serviço. Encapsula
-  /// o padrão repetido de:
-  ///  - log "[step/total] <label>"
-  ///  - escrever no bootstrap log file
-  ///  - executar a ação
-  ///  - log de sucesso (ou propagar exceção)
-  ///
-  /// Centralizar elimina ~60 linhas de código repetido e garante
-  /// numeração consistente dos passos.
   static Future<void> _bootstrapStep({
     required int step,
     required int totalSteps,
@@ -269,7 +291,7 @@ class ServiceModeInitializer {
     try {
       await action();
       final details = successDetails?.call();
-      LoggerService.info('>>> $tag ✅ $label');
+      LoggerService.info('>>> $tag OK $label');
       await _appendBootstrapLog(
         'step $step/$totalSteps: $label success'
         '${details != null ? ' ($details)' : ''}',
@@ -284,9 +306,6 @@ class ServiceModeInitializer {
     }
   }
 
-  /// Registra os callbacks de shutdown do `ServiceShutdownHandler`. Extraído
-  /// para fora do método principal para reduzir o tamanho do
-  /// `initialize()` e isolar a lógica do shutdown gracioso.
   static void _registerShutdownCallbacks({
     required ServiceShutdownHandler shutdownHandler,
     required Completer<void> shutdownCompleter,
@@ -295,7 +314,7 @@ class ServiceModeInitializer {
     required WindowsEventLogService? Function() eventLogRef,
   }) {
     shutdownHandler.registerCallback((timeout) async {
-      LoggerService.info('🛑 Shutdown callback: Parando serviços');
+      LoggerService.info('Shutdown callback: parando servicos');
       final scheduler = schedulerServiceRef();
       final health = healthCheckerRef();
       final eventLog = eventLogRef();
@@ -316,7 +335,6 @@ class ServiceModeInitializer {
       health?.stop();
       scheduler?.stop();
 
-      // Reserva 5s do orçamento total para fechar caches/EventLog/etc.
       final budgetForBackups = timeout > const Duration(seconds: 5)
           ? timeout - const Duration(seconds: 5)
           : timeout;
@@ -327,40 +345,37 @@ class ServiceModeInitializer {
 
       if (!allCompleted) {
         LoggerService.warning(
-          '⚠️ Alguns backups não terminaram a tempo, mas o serviço será '
-          'encerrado',
+          'Alguns backups nao terminaram a tempo, mas o servico sera encerrado',
         );
         await eventLog?.logShutdownBackupsIncomplete(
           timeout: budgetForBackups,
-          details: 'Backups em execução foram interrompidos pelo timeout.',
+          details: 'Backups em execucao foram interrompidos pelo timeout.',
         );
       }
 
       await eventLog?.logServiceStopped();
 
-      LoggerService.info('✅ Shutdown callback: Serviços parados');
+      LoggerService.info('Shutdown callback: servicos parados');
       await _appendBootstrapLog('shutdown callback: completed');
 
       _tryComplete(shutdownCompleter);
     });
   }
 
-  /// Completes [c] if it is not already completed.
-  /// Guards against double-complete StateErrors during concurrent signals.
-  static void _tryComplete(Completer<void> c) {
-    if (!c.isCompleted) {
+  static void _tryComplete(Completer<void> completer) {
+    if (!completer.isCompleted) {
       try {
-        c.complete();
+        completer.complete();
       } on Object catch (e) {
         LoggerService.warning('[ServiceModeInitializer] complete failed: $e');
       }
     }
   }
 
-  static void _tryCompleteError(Completer<void> c, Object e) {
-    if (!c.isCompleted) {
+  static void _tryCompleteError(Completer<void> completer, Object error) {
+    if (!completer.isCompleted) {
       try {
-        c.completeError(e);
+        completer.completeError(error);
       } on Object catch (err) {
         LoggerService.warning(
           '[ServiceModeInitializer] completeError failed: $err',

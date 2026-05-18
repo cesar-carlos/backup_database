@@ -44,6 +44,27 @@ Future<Directory> resolveMachineLocksDirectory() async {
   return Directory(p.join(root.path, MachineStorageLayout.locks));
 }
 
+Future<Directory> resolveMachineConfigDirectory() async {
+  final root = await resolveMachineRootDirectory();
+  return Directory(p.join(root.path, MachineStorageLayout.config));
+}
+
+Future<File> resolveMachineEnvironmentFile() async {
+  final configDir = await resolveMachineConfigDirectory();
+  return File(p.join(configDir.path, '.env'));
+}
+
+Future<Directory> resolveMachineUpdateDownloadsDirectory() async {
+  final root = await resolveMachineRootDirectory();
+  return Directory(
+    p.join(
+      root.path,
+      MachineStorageLayout.staging,
+      MachineStorageLayout.updates,
+    ),
+  );
+}
+
 Future<Directory> resolveMachineSecretsDirectory() async {
   final root = await resolveMachineRootDirectory();
   return Directory(p.join(root.path, MachineStorageLayout.secrets));

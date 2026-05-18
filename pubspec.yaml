@@ -9,7 +9,6 @@ description: Sistema de backup automático para SQL Server e Sybase ASA
 
 dependencies:
   archive: ^4.0.7
-  auto_updater: ^1.0.0
   brasil_fields: ^1.18.0
   cron: ^0.6.2
   crypto: ^3.0.7

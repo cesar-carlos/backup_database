@@ -6,6 +6,18 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('Backup messages with optional runId (M2.3)', () {
     group('createBackupProgressMessage', () {
+      test('includes eventId and sequence when provided (F2.17)', () {
+        final msg = createBackupProgressMessage(
+          requestId: 1,
+          scheduleId: 'schedule-1',
+          step: 'Executando',
+          message: 'ok',
+          eventId: 'evt-1',
+          sequence: 42,
+        );
+        expect(getEventIdFromBackupMessage(msg), 'evt-1');
+        expect(getSequenceFromBackupMessage(msg), 42);
+      });
       test(
         'omite runId quando nao fornecido (comportamento v1 preservado)',
         () {

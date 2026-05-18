@@ -87,7 +87,8 @@ python scripts/coverage.py --dart-mode --fail-under 70
 
 ### `sync_appcast_from_releases.py`
 
-Sincronizam `appcast.xml` com todos os releases publicos do GitHub.
+Reconstrui `appcast.xml` do zero a partir de todos os releases publicados
+do GitHub, deduplicando versoes e calculando `sha256` para cada instalador.
 
 ### `update_appcast_manual.py`
 

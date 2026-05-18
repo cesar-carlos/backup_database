@@ -36,10 +36,13 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"
 Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"
 
+[Dirs]
+Name: "{commonappdata}\BackupDatabase\config"
+
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\.env.example"; DestDir: "{app}"; Flags: ignoreversion; DestName: ".env.example"
+Source: "..\.env.example"; DestDir: "{commonappdata}\BackupDatabase\config"; Flags: ignoreversion; DestName: ".env.example"
 Source: "..\docs\install\installation_guide.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\path_setup.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\requirements.md"; DestDir: "{app}\docs"; Flags: ignoreversion
@@ -435,14 +438,14 @@ begin
   // Write .install_mode only after files are installed, when {app} is defined
   if CurStep = ssPostInstall then
   begin
-    EnvExamplePath := ExpandConstant('{app}\.env.example');
-    EnvPath := ExpandConstant('{app}\.env');
+    EnvExamplePath := ExpandConstant('{commonappdata}\BackupDatabase\config\.env.example');
+    EnvPath := ExpandConstant('{commonappdata}\BackupDatabase\config\.env');
     if FileExists(EnvExamplePath) and not FileExists(EnvPath) then
     begin
       if CopyFile(EnvExamplePath, EnvPath, False) then
-        Log('Copied .env.example to .env for service mode')
+        Log('Copied machine-scope .env.example to .env')
       else
-        Log('Warning: Failed to copy .env.example to .env');
+        Log('Warning: Failed to copy machine-scope .env.example to .env');
     end;
 
     if SelectedMode = '' then

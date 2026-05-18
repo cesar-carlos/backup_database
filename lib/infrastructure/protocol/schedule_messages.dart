@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
+import 'package:backup_database/infrastructure/protocol/backup_event_fields.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
@@ -390,6 +391,8 @@ Message createBackupProgressMessage({
   required String message,
   double progress = 0.0,
   String? runId,
+  String? eventId,
+  int? sequence,
 }) {
   final payload = <String, dynamic>{
     'scheduleId': scheduleId,
@@ -397,6 +400,7 @@ Message createBackupProgressMessage({
     'message': message,
     'progress': progress,
     ...?(runId != null ? {'runId': runId} : null),
+    ...backupEventCorrelationFields(eventId: eventId, sequence: sequence),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -417,12 +421,15 @@ Message createBackupCompleteMessage({
   String? message,
   String? backupPath,
   String? runId,
+  String? eventId,
+  int? sequence,
 }) {
   final payload = <String, dynamic>{
     'scheduleId': scheduleId,
     'message': message ?? 'Backup concluído',
     ...?(backupPath != null ? {'backupPath': backupPath} : null),
     ...?(runId != null ? {'runId': runId} : null),
+    ...backupEventCorrelationFields(eventId: eventId, sequence: sequence),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -442,11 +449,14 @@ Message createBackupFailedMessage({
   required String scheduleId,
   required String error,
   String? runId,
+  String? eventId,
+  int? sequence,
 }) {
   final payload = <String, dynamic>{
     'scheduleId': scheduleId,
     'error': error,
     ...?(runId != null ? {'runId': runId} : null),
+    ...backupEventCorrelationFields(eventId: eventId, sequence: sequence),
   };
   final payloadJson = jsonEncode(payload);
   final length = utf8.encode(payloadJson).length;
@@ -492,6 +502,12 @@ String? getErrorFromBackupFailed(Message message) {
 String? getRunIdFromBackupMessage(Message message) {
   return message.payload['runId'] as String?;
 }
+
+String? getEventIdFromBackupMessage(Message message) =>
+    getEventIdFromBackupPayload(message.payload);
+
+int? getSequenceFromBackupMessage(Message message) =>
+    getSequenceFromBackupPayload(message.payload);
 
 bool isBackupProgressMessage(Message message) =>
     message.header.type == MessageType.backupProgress;
