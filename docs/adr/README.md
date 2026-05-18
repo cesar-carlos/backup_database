@@ -81,11 +81,15 @@ Apontamentos pragmaticos para quem for implementar.
 | [ADR-003](003-versionamento-protocolo.md) | Versionamento formal do protocolo socket (`protocolVersion`) | accepted | 2026-04-19 |
 | [ADR-004](004-generic-hexagonal-ports-sgbds.md) | Ports genericos e template para SGBDs (config + backup + DI) | accepted | 2026-05-15 |
 | [ADR-005](005-layer-first-code-organization.md) | Manter organizacao do codigo por camada (layer-first) | accepted | 2026-05-15 |
+| [ADR-006](006-freezed-for-entities-and-dtos.md) | Adocao de freezed para entities e DTOs | accepted | 2026-05-18 |
+| [ADR-007](007-port-number-is-default-removal.md) | Remover `PortNumber.isDefault` (defaults por SGBD nas configs) | accepted | 2026-05-18 |
 | [ADR-009](009-design-system-themeextension-composition.md) | Design system: tokens semanticos via ThemeExtension + composition over inheritance | accepted | 2026-05-15 |
+| [ADR-010](010-atomic-design-widget-folders.md) | Pastas Atomic Design (`atoms/`, `molecules/`, `organisms/`) + barrel `common.dart` | accepted | 2026-05-18 |
+| [ADR-011](011-widgetbook-catalog-and-goldens.md) | Catálogo Widgetbook irmão e goldens por use case (`widgetbook_golden_test`) | accepted | 2026-05-18 |
+| [ADR-012](012-wcag-2-1-aa-accessibility-baseline.md) | Baseline de acessibilidade alinhado a WCAG 2.1 AA (desktop Fluent) | accepted | 2026-05-18 |
+| [ADR-013](013-windows-mica-and-system-accent.md) | Mica nativo no Windows e accent color do sistema (Fluent) | accepted | 2026-05-18 |
 
 ## Convencoes
-
-- **Numeracao**: sequencial, 3 digitos, `001`, `002`, ...
 - **Slug**: kebab-case curto (`001-runid-no-contrato`).
 - **Nao editar** ADRs aceitos. Em vez disso, criar novo ADR com status
   `superseded by ADR-XXX`.

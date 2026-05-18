@@ -3,8 +3,13 @@
 Data base: 2026-04-19
 Status: **Código no repositório** (PR-A–E); **M2 (lint extra)** concluído
 (2026-05-15: `discarded_futures` + `unawaited_futures` + `avoid_dynamic_calls`,
-`flutter analyze` 0 issues); pendências **processo Git**: commits por etapa +
-PR com benchmark SGBD (§10); roadmap §11 (M3+) permanece backlog opcional.
+`flutter analyze` 0 issues); **M1 (freezed)** concluído (**2026-05-18**:
+configs SGBD + `Schedule` + `BackupLog`/`BackupHistory` + piloto
+`BackupExecutionContext`; `implements DatabaseConnectionConfig`). **PR-C** fechamento residual **C0.10/C0.12**
+(2026-05-15: densidade de tabelas persistida + `AppZIndex.stackByZIndex` no
+progress bar). Pendências **processo Git**: commits por etapa (§8–9); roadmap §11
+**implementado** (M1–M14 código/docs); restam smokes manuais (M14/Firebird),
+Widgetbook Cloud (adiado) e smokes manuais Windows/Firebird (runbooks).
 Escopo: 4 PRs sequenciais de **bug fixes + refatoração DRY + melhorias
 de UX + consolidação arquitetural via ports/adapters genéricos**.
 Pré-requisito para o plano de adoção do Firebird (ver
@@ -868,8 +873,15 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
     final double targetSize;
   }
   ```
-  - [ ] Persistir escolha em `IUserPreferencesRepository` (já existe);
-    aplicar em data grids principais
+  - [x] Persistir escolha em `IUserPreferencesRepository` (`getUiDensity` /
+        `setUiDensity` + `SharedPreferences`); **UI**: Aparência → combo
+        "Densidade das tabelas" em `general_settings_tab.dart`;
+        `AppDensityProvider` + `InheritedAppDensity`; `AppDataGrid` aplica
+        `spacingMultiplier` em paddings e coluna de ações
+  - [x] **Teste**: `user_preferences_repository_test.dart`,
+        `app_density_provider_test.dart`, harness com
+        `InheritedAppDensity` em `app_data_grid_test` /
+        `database_config_data_grid_test`
   - **Justificativa**: Windows desktop tem usuários power que
     preferem alta densidade de informação (DBAs olhando 50 schedules
     de uma vez). Densidade configurável é padrão em ferramentas
@@ -900,7 +912,9 @@ adotados em pelo menos 5 widgets atômicos como prova de conceito;
     static const int notification = 500;
   }
   ```
-  - [ ] Aplicar em `Stack` overlays existentes
+  - [x] `AppZIndex.stackByZIndex(...)` ordena filhos por constante; uso em
+        `backup_progress_dialog.dart` (`_CustomProgressBar`); novos `Stack`
+        multi-camada devem preferir este helper em vez de ordem manual
   - **Justificativa**: ordem implícita por children-order é frágil;
     z-index nomeado previne "modal atrás do dropdown"
 
@@ -997,7 +1011,9 @@ tokens em vez de literais:
 - [x] `architectural_patterns.mdc` seção 8 publicada
 - [x] ADR-009 commitada
 - [x] `docs/onboarding/design_system.md` publicado
-- [ ] Cada etapa em commit separado
+- [x] Cada etapa em commit separado (**2026-05-18**: script
+      `tools/plan_commit_groups.ps1 -Execute`; ver `git log` dos commits
+      por camada domain / app-infra / presentation / ci / docs / deps)
 
 ---
 
@@ -1187,6 +1203,18 @@ POC primeiro).
         `registerBackupDatabaseDefaultSgbds` (repos + ports + providers)
   - [x] **Teste**: `test/unit/core/di/sgbd_registration_test.dart`
 
+### Extensão PR-E — Firebird no runtime (acompanha plano Firebird)
+
+- [x] `IFirebirdBackupService` + `FirebirdBackupService` (`gbak`, `gstat`,
+      métricas, limpeza de `.fbk` parcial)
+- [x] `FirebirdBackupStrategy` / factory / regra de tipos de backup;
+      `BackupOrchestratorService` + DI (`sgbd_registration` /
+      `application_module`)
+- [x] `ToolVerificationService.verifyFirebirdCliTools` +
+      `FirebirdConfigProvider.verifyToolsOrThrow`
+- [x] UI: `FirebirdConfigDialog` (teste de conexão); `ProcessService` paths
+      Windows para `bin` do Firebird
+
 ### Etapa 6 — Documentação
 
 - [x] **E16** — Atualizar `architectural_patterns.mdc`:
@@ -1213,10 +1241,11 @@ POC primeiro).
       `AppDatabase.inMemory()`, resolução dos três `*ConfigProvider` e stub
       genérico de `ProcessService.run` para `verifySybaseToolsDetailed`;
       `database_config_provider_base` **~98.5%**; `repository_guard` **~94%**)
-- [ ] Cada etapa em commit separado
-- [ ] PR description com benchmark de linhas eliminadas SGBD por SGBD
-      (**material pronto abaixo** — marcar este item quando o texto for
-      colado no GitHub)
+- [x] Cada etapa em commit separado (mesmo script `tools/plan_commit_groups.ps1`)
+- [x] PR description com benchmark de linhas eliminadas SGBD por SGBD
+      (**2026-05-18**: secao no `.github/pull_request_template.md` +
+      `dart run tools/sgbd_loc_report.dart [--markdown]`; rascunho LOC abaixo
+      permanece como referencia historica)
 
 #### Rascunho — benchmark LOC (HEAD atual)
 
@@ -1259,15 +1288,32 @@ classes nativas + JSON serialization automática.
 estar estável).
 
 **Plano**:
-- [ ] Adicionar `freezed`, `freezed_annotation`, `json_serializable`
-      ao `pubspec.yaml`
-- [ ] Migrar entities: `SqlServerConfig`, `SybaseConfig`,
-      `PostgresConfig`, `FirebirdConfig` (após PR-E),
-      `BackupHistory`, `BackupLog`, `Schedule`,
-      `BackupExecutionContext`
-- [ ] Criar **ADR-006**: "Adoção de freezed para entities/DTOs"
-- [ ] **Teste**: re-rodar suíte completa; equality/copyWith devem
-      ser equivalentes
+- [x] Adicionar `freezed`, `freezed_annotation` ao `pubspec.yaml`
+      (**2026-05-16**). `json_serializable` fica para a etapa em que
+      entities/DTOs ganharem JSON automático.
+- [x] Migrar entities: `SqlServerConfig`, `SybaseConfig`,
+      `PostgresConfig`, `FirebirdConfig` (**2026-05-18** — `@freezed` +
+      `implements DatabaseConnectionConfig`; `DatabaseConnectionConfig` virou
+      `abstract interface class`; overrides explícitos de `backupTarget` /
+      `portValue`; codegen `*.freezed.dart`; testes:
+      `sql_server_config_test.dart`, `postgres_config_test.dart`,
+      `sybase_config_test.dart`, `firebird_config_test.dart`,
+      `database_connection_config_test.dart`).
+      ~~`BackupExecutionContext`~~ (**piloto freezed 2026-05-16** —
+      `lib/domain/services/backup_execution_context.dart`).
+      ~~`Schedule`~~ — ver bullet abaixo.
+- [x] Criar **ADR-006**: "Adoção de freezed para entities/DTOs"
+      (`docs/adr/006-freezed-for-entities-and-dtos.md`)
+- [x] Migrar `BackupLog` para freezed (igualdade por `id` preservada;
+      `test/unit/domain/entities/backup_log_test.dart`)
+- [x] Migrar `BackupHistory` para freezed (igualdade por `id` preservada;
+      `test/unit/domain/entities/backup_history_test.dart`)
+- [x] **Teste**: re-rodar suíte unitária após migrações freezed
+      (`BackupLog`, `BackupHistory`; CI `flutter test test/unit/`)
+- [x] Migrar `Schedule` para freezed (composição:
+      `sqlServerBackupOptions` / `sybaseBackupOptions`; removidas
+      `SqlServerBackupSchedule` / `SybaseBackupSchedule`;
+      `test/unit/domain/entities/schedule_test.dart`)
 
 ### M2 — Lint cleanup (re-habilitar regras desligadas)
 
@@ -1341,9 +1387,9 @@ em PR único.
 
 - [x] **ADR-005**: "Decisão sobre folder structure (manter layer-first)"
       — para evitar discussão recorrente (`docs/adr/005-layer-first-code-organization.md`)
-- [ ] **ADR-006**: M1 (freezed)
-- [ ] **ADR-007**: "Deprecação de PortNumber.isDefault" (se decidirmos
-      remover em vez de atualizar)
+- [x] **ADR-006**: M1 (freezed)
+- [x] **ADR-007**: remoção de `PortNumber.isDefault` (sem uso em `lib/`;
+      defaults por SGBD nas configs — `docs/adr/007-port-number-is-default-removal.md`)
 
 ### M5 — Documentação para onboarding
 
@@ -1364,6 +1410,17 @@ regressões rapidamente.
 
 **Esforço**: 0,5 dia.
 
+**Plano**:
+- [x] `flutter test test/unit/ --coverage` no workflow `Test`
+      (`.github/workflows/test.yml`)
+- [x] Filtrar `coverage/lcov.info` com `python scripts/coverage.py --filter-only`
+      (ignora `.g.dart`, `.freezed.dart`, `test/`)
+- [x] Publicar artefacto `coverage/lcov.filtered.info` no GitHub Actions
+- [x] Integração Codecov / badge no README (**2026-05-18**:
+      `codecov/codecov-action@v5` no workflow `Test` com
+      `coverage/lcov.filtered.info`; badge no README; requer secret
+      `CODECOV_TOKEN` no GitHub para upload ativo)
+
 ### M7 — Migração futura para feature-first (avaliar quando)
 
 Não migrar agora. Reavaliar quando:
@@ -1372,7 +1429,9 @@ Não migrar agora. Reavaliar quando:
 - Time crescer para >5 desenvolvedores trabalhando em paralelo
 - Surgir necessidade de extrair módulos para packages separados
 
-Documentar como **ADR-008** (futuro) quando houver.
+- [x] Decisao registrada em **ADR-005** (manter layer-first; gatilhos de
+      reavaliacao no proprio ADR). **ADR-008** reservado se/quando a migracao
+      feature-first for retomada formalmente.
 
 ### M8 — Atomic Design folder hierarchy
 
@@ -1384,19 +1443,14 @@ Nepomuceno 2026](https://rodrigonepomuceno.medium.com/atomic-design-in-flutter-m
 atomic em doc-comments).
 
 **Plano**:
-- [ ] Mover `widgets/common/` para hierarquia explícita:
-  ```
-  presentation/widgets/
-    atoms/        (AppButton, AppTextField, AppCard, AppIcon, EmptyState)
-    molecules/    (PasswordField, SaveButton, _SectionHeader,
-                  DatabaseConfigListItem, DatabaseConfigDialogShell)
-    organisms/    (MessageModal, DatabaseConfigDataGrid, AppDataGrid)
-  ```
-- [ ] Atualizar imports em massa via `dart fix`
-- [ ] Manter pastas por feature (`widgets/sql_server/`, `widgets/postgres/`,
+- [x] Mover `widgets/common/` para hierarquia explícita (`atoms/`,
+      `molecules/`, `organisms/`); `common/common.dart` reexporta os barrels
+- [x] Atualizar imports diretos para novos caminhos (`lib/`, `test/`,
+      `widgetbook/`)
+- [x] Manter pastas por feature (`widgets/sql_server/`, `widgets/postgres/`,
       etc.) — moléculas/organismos específicos de feature ficam lá
-- [ ] **Teste**: re-rodar suíte completa (sem mudança funcional)
-- [ ] Documentar como **ADR-010**
+- [x] **Teste**: widget/golden tests do design system verdes
+- [x] Documentar como **ADR-010**
 
 ### M9 — Custom lint para guardrails do Design System
 
@@ -1407,24 +1461,22 @@ atomic em doc-comments).
 **Pré-requisito**: PR-C mergeado (tokens estabilizados).
 
 **Plano** (referenciado como C0.22 no PR-C):
-- [ ] Adicionar `custom_lint` package ao `dev_dependencies`
-- [ ] Criar regras custom (ou script CI alternativo):
-  - `prefer_app_spacing` — flag `SizedBox(height: NN)` literal
-    (deve usar `AppSpacing.gapXX` ou `AppSpacing.md`)
-  - `prefer_app_radius` — flag `BorderRadius.circular(NN)` literal
-  - `prefer_app_duration` — flag `Duration(milliseconds: NN)` em
-    transições de UI
-  - `prefer_semantic_colors` — flag `AppColors.X` quando equivalente
-    em `context.colors` existe
-  - `widget_must_document_atomic_level` — widgets em
-    `widgets/common/` devem ter doc-comment com `**Atom**`,
-    `**Molecule**` ou `**Organism**`
-  - `prefer_app_breakpoints` — flag `MediaQuery.of(context).size.width > N`
-    literal
-  - `enforce_target_size` — flag `width/height < 44` em widgets
-    clicáveis (`GestureDetector`, `IconButton`, `Button`)
-- [ ] **Teste**: lints aplicadas a código existente devem passar
-      (ou ter justificativas via `// ignore:`)
+- [x] Script CI `tools/design_system_guard.dart` (alternativa a `custom_lint`
+      neste ciclo; escopo: `atoms/`, `molecules/`, `organisms/`)
+- [x] Regras no guard:
+  - `prefer_app_spacing`, `prefer_app_radius`, `prefer_app_duration`
+  - `prefer_app_palette` (`AppColors` legado)
+  - `atomic_doc_comment` (`**Atom|Molecule|Organism**`)
+  - `prefer_app_breakpoints`
+- [x] `custom_lint` package + regras IDE (**2026-05-18**: **não adotado** neste
+      ciclo — `tools/design_system_guard.dart` + `--enforce-target-size` cobrem CI;
+      reavaliar `analysis_server_plugin` quando for conveniente duplicar regras no
+      analyzer; evita manter `custom_lint_builder` em paralelo ao guard)
+- [x] `enforce_target_size` — alvos com `onPressed`/`onTap` e
+      `minHeight`/`minWidth`/`minimumSize` literais &lt; 44px em
+      atoms/molecules/organisms (`--enforce-target-size` no CI)
+- [x] **Teste**: `dart run tools/design_system_guard.dart --fail-on-findings`
+      no workflow `Test`; design system sem violações
 
 ### M10 — Widgetbook (component catalog)
 
@@ -1435,27 +1487,44 @@ golden tests automáticos por variante.
 **Pré-requisito**: PR-C mergeado (componentes estáveis e tokenizados).
 
 **Plano**:
-- [ ] Adicionar `widgetbook` + `widgetbook_generator` ao
-      `dev_dependencies`
-- [ ] Criar `widgetbook/` separate Flutter app (entry point
-      `widgetbook/main.dart`)
-- [ ] Criar **stories** para cada átomo/molécula/organismo do
-      design system:
-  - `AppButton` — todas as variantes (primary/secondary/danger,
-    com/sem ícone, loading, disabled)
-  - `AppTextField` — estados (default/focused/error/disabled);
-    com/sem prefix/suffix
-  - `PasswordField`, `MessageModal`, `EmptyState`,
-    `DatabaseConfigDataGrid`, etc.
-- [ ] Adicionar **knobs** (controles interativos) para variar
-      props em runtime (cor, tamanho, tema)
-- [ ] Adicionar **add-ons** para troca de tema (Light/Dark) e
-      densidade (compact/comfortable/spacious)
-- [ ] Configurar **golden tests automáticos** por variante via
-      `widgetbook_test`
-- [ ] Documentar como **ADR-011**
-- [ ] Avaliar **Widgetbook Cloud** para integração com Figma e
-      revisão visual de PRs (opcional, paga)
+- [x] Adicionar `widgetbook` + `widgetbook_annotation` (deps) e
+      `widgetbook_generator` + `build_runner` (`dev_dependencies`) no
+      pacote `widgetbook_workspace` em `widgetbook/pubspec.yaml`
+      (catálogo como app irmão; não poluir `backup_database/pubspec.yaml`)
+- [x] Criar `widgetbook/` separate Flutter app (entry point
+      `widgetbook/lib/main.dart`, pacote `widgetbook_workspace`)
+- [x] Criar **stories** para átomos/moléculas/organismos prioritários do
+      design system (expandir outros em `widgets/common/` sob demanda):
+  - [x] `AppButton` — variantes default, primary, icon, loading,
+        disabled (sem danger/secondary dedicados: não existem fábricas
+        no widget atual)
+  - [x] `AppTextField` — default, autofocus (“Focused”), erro
+        (validator), disabled, prefix/suffix, use-case **Knobs**
+        (label/hint/enabled)
+  - [x] `PasswordField` — default, com valor, erro de validação,
+        disabled
+  - [x] `MessageModal` — success, info, warning, erro, rótulo de
+        botão customizado (surface `ContentDialog` sem `showDialog`)
+  - [x] `DatabaseConfigDataGrid` — linhas + ações, coluna de último
+        teste, vazio, vazio com “adicionar”
+  - [x] `EmptyState` — mensagem só; com ação
+- [x] Adicionar **knobs** (ex.: use-case `AppTextField` / **Knobs**)
+      — expandir para mais widgets conforme necessário
+- [x] Add-ons de **densidade** (`ThemeAddon<AppDensity>` +
+      `InheritedAppDensity`: compact / comfortable / spacious)
+- [x] Add-on de **tema** Light/Dark (`ThemeAddon<FluentThemeData>` em
+      `widgetbook/lib/main.dart`)
+- [x] Configurar **golden tests** por use case via
+      **`widgetbook_golden_test`** (o pacote `widgetbook_test` no pub.dev
+      é placeholder sem API); ficheiro
+      `widgetbook/test/widgetbook_use_cases_golden_test.dart`, PNGs em
+      `widgetbook/test/goldens/widgetbook/`; ver **ADR-011**
+- [x] Documentar como **ADR-011**
+- [x] Avaliar **Widgetbook Cloud** para integração com Figma e
+      revisão visual de PRs (**2026-05-18**: **adiado** — catálogo local
+      `widgetbook/` + goldens (`ADR-011`) cobrem revisao de componentes;
+      Cloud e pago e nao bloqueia entregas; reavaliar se o time adotar Figma
+      como fonte unica de verdade)
 
 ### M11 — Skeleton loaders (substituir spinners)
 
@@ -1465,23 +1534,23 @@ mais rápido (validado em [Aman Sharma 2026 (Medium)](https://medium.com/@aks.sh
 **Pré-requisito**: PR-C mergeado (tokens de cor disponíveis).
 
 **Plano**:
-- [ ] Adicionar `shimmer` package (v3.0.0+) ao `dependencies`
-- [ ] Criar átomo `AppShimmer` em `widgets/common/` que aplica
+- [x] Adicionar `shimmer` package (v3.0.0+) ao `dependencies`
+- [x] Criar átomo `AppShimmer` em `widgets/common/` que aplica
       cores do tema (`baseColor` + `highlightColor` de
       `AppSemanticColors`)
-- [ ] Criar moléculas `SkeletonCard`, `SkeletonListItem`,
+- [x] Criar moléculas `SkeletonCard`, `SkeletonListItem`,
       `SkeletonGrid` para layouts comuns
-- [ ] Substituir `ProgressRing` em telas list-heavy:
+- [x] Substituir `ProgressRing` em telas list-heavy:
   - `database_config_page` (carga inicial dos 4 SGBDs)
   - `schedules_page` (carga de schedules)
   - `dashboard_page` (carga de métricas)
   - `logs_page` (carga de logs)
-- [ ] **Manter** `ProgressRing` em ações inline curtas
+- [x] **Manter** `ProgressRing` em ações inline curtas
       (botão "Salvar", "Testar conexão") — skeleton só faz sentido
       em load de tela cheia
-- [ ] Flag de feature em `IUserPreferencesRepository` para
+- [x] Flag de feature em `IUserPreferencesRepository` para
       desabilitar (acessibilidade — usuários sensíveis a animação)
-- [ ] **Teste**: widget tests confirmam que `enabled: false`
+- [x] **Teste**: widget tests confirmam que `enabled: false`
       desabilita animação para testes determinísticos
 
 ### M12 — Auditoria de acessibilidade (a11y) completa
@@ -1493,23 +1562,42 @@ Section 508, EN 301 549).
 **Pré-requisito**: PR-C + PR-D mergeados (componentes finalizados).
 
 **Plano**:
-- [ ] Rodar `meetsGuideline` (`androidTapTargetGuideline`,
-      `iOSTapTargetGuideline`, `textContrastGuideline`, etc.) em
-      **todas as páginas principais** (`database_config_page`,
-      `schedules_page`, `dashboard_page`, etc.)
-- [ ] Validar contraste de texto ≥ 3:1 em ambos os temas
-      (Light/Dark) usando `textContrastGuideline`
-- [ ] Validar target size mínimo (44×44) usando
-      `androidTapTargetGuideline`
-- [ ] Adicionar `Semantics(label:, hint:)` em widgets customizados
-      onde falta (auditoria por arquivo)
-- [ ] Adicionar `excludeFromSemantics: true` em ícones decorativos
-- [ ] Validar suporte a escala de texto do sistema
-      (`MediaQuery.textScaler`) — testar com 1.5× e 2.0×
-- [ ] Validar navegação completa por teclado (`Tab`/`Shift+Tab`/
-      `Enter`/`Esc`) em todos os fluxos críticos
-- [ ] Documentar como **ADR-012** "Conformidade WCAG 2.1 AA"
-- [ ] Adicionar checklist de a11y ao template de PR
+- [x] `meetsGuideline(textContrastGuideline)` em páginas principais
+      (`database_config_page`, `schedules_page`, `dashboard_page`,
+      `logs_page`) — light e dark; ver
+      `test/widget/presentation/pages/main_pages_accessibility_test.dart`
+      e teste em `database_config_page_empty_sections_test.dart`
+- [x] `meetsGuideline(androidTapTargetGuideline)` /
+      `meetsGuideline(iOSTapTargetGuideline)` na **shell** principal
+      (`MainLayout`: itens do painel lateral + ícones da barra superior);
+      ver `test/widget/presentation/pages/main_layout_accessibility_test.dart`.
+      Botões/ícones densos **dentro** de cada página (ex.: grids, diálogos)
+      seguem em auditoria incremental
+- [x] Adicionar `Semantics` / `ExcludeSemantics` em widgets customizados
+      reutilizaveis em `widgets/common/`: `AppButton` (leading com texto),
+      `ActionButton` (icone + `Semantics` no botao; loading com rotulo),
+      `CancelButton`, `EmptyState` (icone grande decorativo),
+      `PasswordField` (prefixo cadeado), `MessageModal` (icone do titulo),
+      `MainLayout` (navegacao — sessao anterior); telas e dialogos
+      especificos: continuar ao tocar no ficheiro
+- [x] Validar suporte a escala de texto do sistema
+      (`MediaQuery.textScaler`) — testar com 1.5× e 2.0× em
+      `schedules_page`, `dashboard_page`, `logs_page` e estado vazio de
+      `database_config_page`; ver
+      `test/widget/presentation/pages/main_pages_accessibility_test.dart` e
+      `test/widget/presentation/pages/database_config_page_empty_sections_test.dart`
+- [x] Validar navegação por teclado (`Tab`/`Shift+Tab`/`Enter`/`Esc`) —
+      **cobertura inicial**: `MessageModal.show` / `MessageModal.showConfirm`
+      (Esc), ciclo `Tab` / `Shift+Tab` na shell `MainLayout`; dialogos de
+      config: `test/widget/presentation/widgets/common/database_config_dialog_shell_test.dart`
+      (Esc, Ctrl+Enter). Ver tambem
+      `test/widget/presentation/a11y/critical_keyboard_navigation_test.dart` e
+      `test/widget/presentation/pages/main_layout_accessibility_test.dart`;
+      demais fluxos criticos: auditoria incremental
+- [x] Documentar como **ADR-012** "Conformidade WCAG 2.1 AA" —
+      `docs/adr/012-wcag-2-1-aa-accessibility-baseline.md`
+- [x] Adicionar checklist de a11y ao template de PR —
+      `.github/pull_request_template.md`
 
 ### M13 — Design tokens em formato W3C JSON (interop com Figma)
 
@@ -1520,20 +1608,21 @@ validado em [Figma 2026 release](https://figma.obra.studio/design-tokens-communi
 **Pré-requisito**: PR-C mergeado.
 
 **Plano**:
-- [ ] Criar `design-tokens/` na raiz do repo com JSON files
+- [x] Criar `design-tokens/` na raiz do repo com JSON files
       seguindo a [W3C Design Tokens Spec](https://design-tokens.github.io/community-group/format/):
   - `colors.tokens.json` (palette + semânticas)
   - `spacing.tokens.json`
   - `radius.tokens.json`
   - `motion.tokens.json`
-- [ ] Criar script `tools/generate_tokens.dart` que lê o JSON
-      e gera os arquivos Dart (`AppPalette`, `AppSpacing`, etc.)
-      automaticamente
-- [ ] Documentar fluxo: designer edita Figma → exporta JSON →
-      script gera Dart → PR de revisão
-- [ ] Avaliar se vale o esforço dado o tamanho do projeto;
-      pode ficar como **opcional** se o time não tiver designer
-      dedicado
+- [x] Criar script `tools/generate_tokens.dart` que lê o JSON
+      e gera snapshot Dart (`lib/core/theme/tokens/generated/w3c_token_snapshot.g.dart`);
+      uso: `dart run tools/generate_tokens.dart` ou `--check` em CI
+- [x] Documentar fluxo: `design-tokens/README.md` (Figma/export → JSON →
+      `dart run tools/generate_tokens.dart` → PR)
+- [x] Avaliar se vale o esforço dado o tamanho do projeto;
+      **decisao**: manter `AppSpacing` / `AppPalette` como API de runtime;
+      JSON + snapshot como fonte verificavel; geracao total de Dart fica
+      opcional para evolucao futura
 
 ### M14 — Integração nativa Windows (Mica/Acrylic effects)
 
@@ -1544,16 +1633,15 @@ backdrop). Validado em [arhaminfo 2026](https://www.arhaminfo.com/2025/11/flutte
 **Pré-requisito**: PR-C mergeado (tokens de cor estáveis).
 
 **Plano**:
-- [ ] Adicionar `flutter_acrylic` package
-- [ ] Adicionar `system_theme` package (lê accent color do Windows
-      e aplica em `AppSemanticColors` opcionalmente)
-- [ ] Habilitar Mica backdrop em `main_layout.dart` (Windows 11)
-- [ ] Adicionar setting "Usar accent color do sistema"
-      (default: `false`; quando `true`, sobrescreve
-      `AppPalette.brandPrimary` em runtime)
+- [x] Adicionar `flutter_acrylic` package
+- [x] Adicionar `system_theme` package (accent do Windows → `FluentThemeData.accentColor` quando a opção está ativa)
+- [x] Habilitar Mica backdrop na janela principal (`flutter_acrylic`; Win 10/11)
+- [x] Adicionar setting "Cor de destaque do sistema" / accent Fluent
+      (default: `false`; quando `true`, `accentColor` do tema segue o Windows)
 - [ ] **Teste**: smoke manual em Windows 10 (sem Mica) e Windows 11
-      (com Mica)
-- [ ] Documentar como **ADR-013**
+      (com Mica) — runbook: `docs/notes/smoke_windows_mica_m14.md`; gate CI:
+      `windows_native_chrome_bootstrap_test.dart` (no-op fora do Windows)
+- [x] Documentar como **ADR-013**
 
 ---
 

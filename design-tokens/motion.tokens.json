@@ -1,0 +1,7 @@
+{
+  "duration": {
+    "fast": { "$type": "duration", "$value": "150ms" },
+    "normal": { "$type": "duration", "$value": "250ms" },
+    "slow": { "$type": "duration", "$value": "400ms" }
+  }
+}

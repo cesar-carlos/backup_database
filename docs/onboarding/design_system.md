@@ -13,7 +13,9 @@ e secao **8** de `.cursor/rules/architectural_patterns.mdc`.
 | Export agregado do tema | `lib/core/theme/theme.dart` |
 | Cores semanticas (tema) | `lib/core/theme/extensions/app_semantic_colors.dart` |
 | Paleta de marca / identidade | `lib/core/theme/tokens/app_palette.dart` |
-| Atomos de referencia | `lib/presentation/widgets/common/` (`AppCard`, `AppButton`, …) |
+| Atomos de referencia | `lib/presentation/widgets/atoms/` (`AppCard`, `AppButton`, …) |
+| Moléculas / organismos | `lib/presentation/widgets/molecules/`, `…/organisms/` |
+| Barrel legado (reexport) | `lib/presentation/widgets/common/common.dart` |
 
 ## Catalogo de tokens (referencia)
 
@@ -42,9 +44,15 @@ Valores exatos estao no codigo-fonte; aqui a intencao de uso.
 4. Cor de marca ou cor fixa de identidade (tipo de banco): `AppPalette`.
 5. Para janela estreita: `context.isCompactWindow` (e afins) em vez de
    `MediaQuery.sizeOf(context).width < 720` espalhado.
-6. No primeiro doc-comment do widget publico em `widgets/common/`,
-   indicar nivel **Atom** / **Molecule** / **Organism** quando fizer
-   sentido.
+6. No primeiro doc-comment do widget publico em `widgets/atoms/`,
+   `widgets/molecules/` ou `widgets/organisms/`, indicar nivel **Atom** /
+   **Molecule** / **Organism** quando fizer sentido.
+
+## CI guard (atoms / molecules / organisms)
+
+```bash
+dart run tools/design_system_guard.dart --fail-on-findings --enforce-target-size
+```
 
 ## Slot pattern (exemplo mental)
 

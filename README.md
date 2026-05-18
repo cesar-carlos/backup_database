@@ -1,6 +1,8 @@
 # Backup Database
 
-Sistema completo de backup automático para SQL Server, Sybase SQL Anywhere (ASA) e PostgreSQL no Windows.
+[![codecov](https://codecov.io/gh/cesar-carlos/backup_database/graph/badge.svg)](https://codecov.io/gh/cesar-carlos/backup_database)
+
+Sistema completo de backup automático para SQL Server, Sybase SQL Anywhere (ASA), PostgreSQL e Firebird no Windows.
 
 ## 🎯 Funcionalidades
 
@@ -9,6 +11,7 @@ Sistema completo de backup automático para SQL Server, Sybase SQL Anywhere (ASA
 - ✅ SQL Server (via `sqlcmd`)
 - ✅ Sybase SQL Anywhere 16 (via `dbbackup.exe`)
 - ✅ PostgreSQL (via `pg_basebackup` / `psql`)
+- ✅ Firebird (via `gbak` para backup lógico `.fbk` e `nbackup` para backup físico `.nbk`)
 - ✅ Compressão ZIP automática
 - ✅ Verificação de integridade
 - ✅ Verificação de espaço em disco
@@ -53,6 +56,7 @@ Sistema completo de backup automático para SQL Server, Sybase SQL Anywhere (ASA
 - **SQL Server**: Qualquer versão com `sqlcmd` instalado
 - **Sybase ASA**: Versão 16 com `dbbackup.exe`
 - **PostgreSQL (opcional)**: utilitários `pg_basebackup`, `psql` e `pg_verifybackup` no PATH (quando usar backups PostgreSQL)
+- **Firebird (opcional)**: Firebird 2.5 / 3.0 / 4.0 (cliente ou servidor) com `gbak`, `nbackup`, `gstat` e `isql` no **PATH** (ou pasta configurada na UI). Para confirmar binários e versão sem tocar numa base: `gbak -z`, `nbackup -?`, `gstat -z`, `isql -z`.
 - **Visual C++ Redistributable**: 2015-2022 (x64), instalado automaticamente pelo instalador quando necessário
 
 ## 📦 Instalação
@@ -282,7 +286,7 @@ nssm set BackupDatabaseService AppDirectory "C:\Program Files\Backup Database"
 nssm set BackupDatabaseService DisplayName "Backup Database Service"
 
 # 4. Configurar descrição
-nssm set BackupDatabaseService Description "Serviço de backup automático para SQL Server, Sybase e PostgreSQL"
+nssm set BackupDatabaseService Description "Serviço de backup automático para SQL Server, Sybase, PostgreSQL e Firebird"
 
 # 5. Configurar para iniciar automaticamente
 nssm set BackupDatabaseService Start SERVICE_AUTO_START
@@ -305,7 +309,7 @@ nssm start BackupDatabaseService
 - Verificação de agendamentos a cada minuto
 - Envio de notificações por e-mail
 - Geração de logs em `C:\ProgramData\BackupDatabase\logs\`
-- Acesso a bancos de dados SQL Server, Sybase e PostgreSQL
+- Acesso a bancos de dados SQL Server, Sybase, PostgreSQL e Firebird
 - Upload para FTP, Google Drive, Dropbox e Nextcloud
 
 ⚠️ **Limitações**:
@@ -420,6 +424,7 @@ python test/scripts/run_ftp_integration_tests.py
 No GitHub Actions:
 
 - O workflow `Test` executa análise estática + testes unitários.
+- Cobertura filtrada (`coverage/lcov.filtered.info`) é publicada como artefacto e enviada ao [Codecov](https://codecov.io/gh/cesar-carlos/backup_database) quando o secret `CODECOV_TOKEN` está configurado no repositório.
 - Testes de integração rodam separadamente no workflow manual `Integration Tests (Self-Hosted)`.
 
 Cobertura:
@@ -442,6 +447,13 @@ python scripts/coverage.py --test-targets "test\unit\application\services\schedu
 
 # cobertura Dart usando package:coverage (modo Dart puro)
 python scripts/coverage.py --dart-mode --fail-under 70
+```
+
+Benchmark de linhas por SGBD (snapshot de `lib/`, para descrição de PR):
+
+```bash
+dart run tools/sgbd_loc_report.dart
+dart run tools/sgbd_loc_report.dart --markdown
 ```
 
 ## 🏗️ Build

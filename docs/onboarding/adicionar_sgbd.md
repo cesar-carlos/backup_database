@@ -9,7 +9,7 @@ secao **9** de `.cursor/rules/architectural_patterns.mdc`.
 
 | # | Camada | O que fazer |
 | --- | --- | --- |
-| 1 | **Domain** | `XxxConfig extends DatabaseConnectionConfig`; `IXxxConfigRepository extends IDatabaseConfigRepository<XxxConfig>`; `IXxxBackupService extends IDatabaseBackupPort<XxxConfig>`; estender `DatabaseType` e metadados de UI se precisar. |
+| 1 | **Domain** | `XxxConfig` com `@freezed` + `implements DatabaseConnectionConfig`; `IXxxConfigRepository extends IDatabaseConfigRepository<XxxConfig>`; `IXxxBackupService extends IDatabaseBackupPort<XxxConfig>`; estender `DatabaseType` e metadados de UI se precisar. |
 | 2 | **Infrastructure** | Tabela Drift + DAO + bump de `schemaVersion`; `XxxConfigRepository` preferindo `BaseDatabaseConfigRepository<...>` + `RepositoryGuard` (secao 1 do mesmo `.mdc`); `XxxBackupService` implementando o port. |
 | 3 | **Application** | `XxxConfigProvider extends DatabaseConfigProviderBase<XxxConfig>` com `AsyncStateMixin` (secao 2); factory de estrategia + `BackupValidationRule` / `BackupResultEnricher` quando fizer sentido (secao 9.2). |
 | 4 | **DI** | Uma chamada `getIt.registerSgbd<...>(...)` em `registerBackupDatabaseDefaultSgbds` ou equivalente em `lib/core/di/infrastructure_module.dart` **depois** de `AppDatabase`, `ProcessService`, credenciais e demais deps do builder estarem no `GetIt`. Ver `lib/core/di/sgbd_registration.dart`. |
