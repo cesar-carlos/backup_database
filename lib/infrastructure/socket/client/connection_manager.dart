@@ -70,9 +70,11 @@ class ConnectionManager {
   final Map<int, _BackupProgressState> _activeBackups = {};
   final Map<String, _BackupProgressState> _activeBackupsByRunId = {};
   final Map<String, double> _lastProgressByRunId = <String, double>{};
+  final Map<String, List<Message>> _pendingBackupStreamByRunId = {};
   final BackupEventDeduplicator _backupEventDedup = BackupEventDeduplicator();
 
   static const Duration _executionStatusPollInterval = Duration(seconds: 2);
+  static const int _maxPendingBackupStreamEventsPerRunId = 64;
 
   /// Cache do snapshot de capabilities da conexao atual.
   ///
@@ -310,6 +312,7 @@ class ConnectionManager {
     }
     _activeBackupsByRunId.clear();
     _lastProgressByRunId.clear();
+    _pendingBackupStreamByRunId.clear();
     _backupEventDedup.clear();
     for (final state in _activeTransfers.values) {
       if (!state.completer.isCompleted) {
@@ -336,14 +339,15 @@ class ConnectionManager {
           _handleBackupProgressMessage(message, byRunId);
           return;
         }
+        _bufferBackupStreamUntilListener(runId: messageRunId, message: message);
+        return;
       }
       final backupState = _activeBackups[requestId];
       if (backupState != null) {
         _handleBackupProgressMessage(message, backupState);
         return;
       }
-      // Stream sem listener (ex.: progresso chegou antes do cliente
-      // registrar runId apos `startRemoteBackup`). Nao completar RPC
+      // Stream sem listener e sem runId (legado v1). Nao completar RPC
       // pendente com backupProgress/Complete — corrompe o Future de
       // startBackupResponse.
       return;
@@ -360,6 +364,28 @@ class ConnectionManager {
       type == MessageType.backupStep ||
       type == MessageType.backupComplete ||
       type == MessageType.backupFailed;
+
+  void _bufferBackupStreamUntilListener({
+    required String runId,
+    required Message message,
+  }) {
+    final pending =
+        _pendingBackupStreamByRunId.putIfAbsent(runId, () => <Message>[]);
+    if (pending.length >= _maxPendingBackupStreamEventsPerRunId) {
+      pending.removeAt(0);
+    }
+    pending.add(message);
+  }
+
+  void _replayPendingBackupStream(String runId, _BackupProgressState state) {
+    final pending = _pendingBackupStreamByRunId.remove(runId);
+    if (pending == null) {
+      return;
+    }
+    for (final message in pending) {
+      _handleBackupProgressMessage(message, state);
+    }
+  }
 
   Future<void> _handleFileTransferMessage(
     int requestId,
@@ -727,6 +753,7 @@ class ConnectionManager {
     }
     _activeBackupsByRunId.clear();
     _lastProgressByRunId.clear();
+    _pendingBackupStreamByRunId.clear();
     _backupEventDedup.clear();
     for (final completer in _pendingRequests.values) {
       if (!completer.isCompleted) {
@@ -1605,11 +1632,13 @@ class ConnectionManager {
       );
       return;
     }
-    _activeBackupsByRunId[runId] = _BackupProgressState(
+    final state = _BackupProgressState(
       completer: Completer<rd.Result<String>>(),
       onProgress: onProgress,
       runId: runId,
     );
+    _activeBackupsByRunId[runId] = state;
+    _replayPendingBackupStream(runId, state);
   }
 
   /// Reassina progresso/conclusão para um [runId] ativo (M8.4).
