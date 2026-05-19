@@ -5,6 +5,18 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.1.0</title>
+      <pubDate>Tue, 19 May 2026 15:03:08 +0000</pubDate>
+      <description>## What's Changed
+* feat(remote-execution): resume backups and release 3.1.0 by @cesar-carlos in https://github.com/cesar-carlos/backup_database/pull/1
+
+## New Contributors
+* @cesar-carlos made their first contribution in https://github.com/cesar-carlos/backup_database/pull/1
+
+**Full Changelog**: https://github.com/cesar-carlos/backup_database/compare/v3.0.1...v3.1.0</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.1.0/BackupDatabase-Setup-3.1.0.exe" sparkle:version="3.1.0" sparkle:os="windows" length="38182885" type="application/octet-stream" sha256="d3632678f6e1b73af1606caa43dbee970cc8243a9791111441ac686632f14c68" />
+    </item>
+    <item>
       <title>Version 3.0.1</title>
       <pubDate>Sun, 19 Apr 2026 17:07:40 +0000</pubDate>
       <description>**Full Changelog**: https://github.com/cesar-carlos/backup_database/compare/v3.0.1...v3.0.1</description>
