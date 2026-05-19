@@ -55,6 +55,7 @@ app.*.map.json
 # Testing scripts temporary files
 .env.backup
 .server.pid
+test_run_output.txt
 
 # FTP metrics parser output
 ftp_metrics_export.csv
