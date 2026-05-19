@@ -73,45 +73,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
-  auto_updater:
-    dependency: transitive
-    description:
-      name: auto_updater
-      sha256: "74fd008b021d15e4fc50fb5f1923870e6374ae831bb1168241c23bc35a4e898b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
-  auto_updater_macos:
-    dependency: transitive
-    description:
-      name: auto_updater_macos
-      sha256: ef9de0daf38d782d2243fe131503a9404d62df762f5386e5360020e43c01867f
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
-  auto_updater_platform_interface:
-    dependency: transitive
-    description:
-      name: auto_updater_platform_interface
-      sha256: ed5dff8cea18c58bc5ac787ff9122fedd1644272e02015d28c9b592f8078c5dc
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
-  auto_updater_windows:
-    dependency: transitive
-    description:
-      name: auto_updater_windows
-      sha256: "2bba20a71eee072f49b7267fedd5c4f1406c4b1b1e5b83932c634dbab75b80c9"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
   backup_database:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "3.0.1"
+    version: "3.1.0"
   boolean_selector:
     dependency: transitive
     description:
@@ -389,6 +357,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_acrylic:
+    dependency: transitive
+    description:
+      name: flutter_acrylic
+      sha256: b3996dbde5abf5823cc9ead4cf2e5267c3181f15585fe47ce4dc4472e7ec827a
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.4"
   flutter_dotenv:
     dependency: transitive
     description:
@@ -691,6 +667,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.0"
+  macos_window_utils:
+    dependency: transitive
+    description:
+      name: macos_window_utils
+      sha256: cb918e1ff0b31fdaa5cd8631eded7c24bd72e1025cf1f95c819e483f0057c652
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.9.1"
   mailer:
     dependency: transitive
     description:
@@ -1115,6 +1099,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.0"
+  shimmer:
+    dependency: transitive
+    description:
+      name: shimmer
+      sha256: "5f88c883a22e9f9f299e5ba0e4f7e6054857224976a5d9f839d4ebdc94a14ac9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.0"
   shortid:
     dependency: transitive
     description:
@@ -1200,6 +1192,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  system_theme:
+    dependency: transitive
+    description:
+      name: system_theme
+      sha256: "827cc5f94a6c3097a4c08d4f9eb11d345322f9deea5be1cb73611ff24bdf45bb"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.0"
+  system_theme_web:
+    dependency: transitive
+    description:
+      name: system_theme_web
+      sha256: a354b25ff0788ed802b48b632187d344a841b2034f16e4f6cdaa295e4a41a8aa
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.4"
   term_glyph:
     dependency: transitive
     description:

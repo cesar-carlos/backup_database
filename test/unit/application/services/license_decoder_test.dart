@@ -32,6 +32,20 @@ void main() {
       expect(result.isError(), isTrue);
     });
 
+    test('returns configuration failure when decoder is unavailable', () async {
+      final unavailableDecoder = LicenseDecoder.unavailable(
+        message: 'Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY.',
+      );
+
+      final result = await unavailableDecoder.decode('any-license-key');
+
+      expect(result.isError(), isTrue);
+      expect(
+        result.exceptionOrNull().toString(),
+        contains('BACKUP_DATABASE_LICENSE_PUBLIC_KEY'),
+      );
+    });
+
     test('decodes valid v2 license from generation service', () async {
       final genResult = await generationService.generateLicenseKey(
         deviceKey: 'device-v2',

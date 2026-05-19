@@ -1,6 +1,7 @@
 import 'package:backup_database/application/providers/database_connection_test_snapshot.dart';
 import 'package:backup_database/core/theme/tokens/app_density.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
@@ -65,6 +66,7 @@ void main() {
             content: DatabaseConfigDataGrid<SqlServerConfig>(
               configs: [cfg],
               rowOf: (c) => DatabaseConfigGridRow(
+                databaseType: DatabaseType.sqlServer,
                 name: c.name,
                 serverEndpoint: '${c.server}:${c.portValue}',
                 database: c.databaseValue,
@@ -83,6 +85,8 @@ void main() {
     expect(find.text('db1'), findsOneWidget);
     expect(find.text('u1'), findsOneWidget);
     expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Type'), findsOneWidget);
+    expect(find.text('SQL Server'), findsOneWidget);
   });
 
   testWidgets('DatabaseConfigDataGrid renders SybaseConfig row', (
@@ -109,6 +113,7 @@ void main() {
             content: DatabaseConfigDataGrid<SybaseConfig>(
               configs: [cfg],
               rowOf: (c) => DatabaseConfigGridRow(
+                databaseType: DatabaseType.sybase,
                 name: c.name,
                 serverEndpoint: '${c.serverName}:${c.portValue}',
                 database: c.databaseNameValue,
@@ -125,6 +130,7 @@ void main() {
     expect(find.text('Beta'), findsOneWidget);
     expect(find.text('syb1:2638'), findsOneWidget);
     expect(find.text('db2'), findsOneWidget);
+    expect(find.text('Sybase'), findsOneWidget);
   });
 
   testWidgets('DatabaseConfigDataGrid renders PostgresConfig row', (
@@ -151,6 +157,7 @@ void main() {
             content: DatabaseConfigDataGrid<PostgresConfig>(
               configs: [cfg],
               rowOf: (c) => DatabaseConfigGridRow(
+                databaseType: DatabaseType.postgresql,
                 name: c.name,
                 serverEndpoint: '${c.host}:${c.portValue}',
                 database: c.databaseValue,
@@ -167,6 +174,7 @@ void main() {
     expect(find.text('Gamma'), findsOneWidget);
     expect(find.text('pg1:5432'), findsOneWidget);
     expect(find.text('db3'), findsOneWidget);
+    expect(find.text('PostgreSQL'), findsOneWidget);
   });
 
   testWidgets(
@@ -203,6 +211,7 @@ void main() {
                 configs: [cfg],
                 connectionTestSnapshot: snapshotFor,
                 rowOf: (c) => DatabaseConfigGridRow(
+                  databaseType: DatabaseType.sqlServer,
                   name: c.name,
                   serverEndpoint: '${c.server}:${c.portValue}',
                   database: c.databaseValue,

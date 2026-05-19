@@ -15,6 +15,7 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
+import 'package:flutter/foundation.dart';
 
 class ServiceModeInitializer {
   ServiceModeInitializer._();
@@ -22,6 +23,8 @@ class ServiceModeInitializer {
   static const String _defaultProgramData = r'C:\ProgramData';
   static const String _bootstrapLogRelativePath =
       r'BackupDatabase\logs\service_bootstrap.log';
+  static const String _serviceName = 'BackupDatabaseService';
+  static const String _supportedServiceAccount = 'LocalSystem';
 
   static Future<void> initialize() async {
     final shutdownCompleter = Completer<void>();
@@ -160,6 +163,24 @@ class ServiceModeInitializer {
             return;
           }
 
+          autoUpdateService!.installContextProvider = (release) async {
+            return AppUpdateInstallContext(
+              origin: AppUpdateLaunchOrigin.service,
+              appMode: currentAppMode,
+              currentVersion:
+                  autoUpdateService!.snapshot.currentVersion ?? '0.0.0',
+              targetVersion: release.targetVersion,
+              relaunchArguments: List<String>.of(Platform.executableArguments),
+              executablePath: Platform.resolvedExecutable,
+              createdAt: DateTime.now(),
+            );
+          };
+          autoUpdateService!.installReadinessCheck = (release) async {
+            final serviceAccount = await _probeInstalledServiceAccount(
+              serviceName: _serviceName,
+            );
+            return buildUnsupportedServiceAccountMessage(serviceAccount);
+          };
           autoUpdateService!.beforeInstallHook = () async {
             await shutdownHandler?.shutdown();
             await singleInstanceService?.releaseLock();
@@ -248,6 +269,67 @@ class ServiceModeInitializer {
     final programData =
         Platform.environment['ProgramData'] ?? _defaultProgramData;
     return '$programData\\$_bootstrapLogRelativePath';
+  }
+
+  @visibleForTesting
+  static String? buildUnsupportedServiceAccountMessage(String? serviceAccount) {
+    final normalized = serviceAccount?.trim();
+    if (_isSupportedSilentUpdateServiceAccount(normalized)) {
+      return null;
+    }
+    if (normalized == null || normalized.isEmpty) {
+      return 'Atualizacao automatica silenciosa bloqueada: nao foi possivel '
+          'validar a conta do Windows Service. Reinstale o servico em '
+          'LocalSystem ou execute a atualizacao manualmente.';
+    }
+    return 'Atualizacao automatica silenciosa bloqueada: o Windows Service '
+        'esta configurado com a conta "$normalized". Nesta rodada o '
+        'auto update silencioso so e suportado para servicos em '
+        'LocalSystem. Atualize manualmente ou reinstale o servico '
+        'com LocalSystem.';
+  }
+
+  @visibleForTesting
+  static bool isSupportedSilentUpdateServiceAccount(String? serviceAccount) {
+    return _isSupportedSilentUpdateServiceAccount(serviceAccount);
+  }
+
+  static bool _isSupportedSilentUpdateServiceAccount(String? serviceAccount) {
+    final normalized = serviceAccount?.trim().toLowerCase();
+    return normalized != null &&
+        normalized.isNotEmpty &&
+        (normalized == _supportedServiceAccount.toLowerCase() ||
+            normalized == 'system' ||
+            normalized == r'nt authority\system');
+  }
+
+  static Future<String?> _probeInstalledServiceAccount({
+    required String serviceName,
+  }) async {
+    try {
+      final result = await Process.run('powershell.exe', <String>[
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "(Get-CimInstance Win32_Service -Filter \"Name='$serviceName'\").StartName",
+      ]);
+      if (result.exitCode != 0) {
+        LoggerService.warning(
+          'Falha ao consultar conta do Windows Service para auto update: '
+          '${result.stderr}',
+        );
+        return null;
+      }
+      final account = result.stdout.toString().trim();
+      return account.isEmpty ? null : account;
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Erro ao consultar conta do Windows Service para auto update',
+        e,
+        s,
+      );
+      return null;
+    }
   }
 
   static Future<void> _appendBootstrapLog(

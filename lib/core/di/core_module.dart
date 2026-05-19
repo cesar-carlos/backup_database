@@ -6,6 +6,7 @@ import 'package:backup_database/core/bootstrap/machine_scope_r1_legacy_paths_hin
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
@@ -459,19 +460,21 @@ Future<void> setupCoreModule(GetIt getIt) async {
 
   // License
   final licenseDecoderResult = LicenseDecoder.fromEnv();
-  if (licenseDecoderResult.isError()) {
-    final error = licenseDecoderResult.exceptionOrNull();
-    LoggerService.error(
-      'Failed to initialize license decoder: $error',
-    );
-    throw StateError(
-      'License decoder could not be initialized. '
-      'Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY with a valid base64-encoded '
-      'Ed25519 public key (32 bytes).',
-    );
-  }
-
-  final licenseDecoder = licenseDecoderResult.getOrNull()!;
+  final licenseDecoder = licenseDecoderResult.fold(
+    (decoder) => decoder,
+    (error) {
+      LoggerService.error('Failed to initialize license decoder: $error');
+      LoggerService.warning(
+        'License validation/generation bootstrap will run in degraded mode. '
+        'Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY to re-enable signed '
+        'license decoding without reinstalling the app.',
+      );
+      final message = error is Failure
+          ? error.message
+          : 'Chave publica de licenca indisponivel.';
+      return LicenseDecoder.unavailable(message: message);
+    },
+  );
   final revocationChecker = SignedRevocationListService.fromEnv();
   getIt.registerLazySingleton<LicenseDecoder>(() => licenseDecoder);
   getIt.registerLazySingleton<IRevocationChecker>(() => revocationChecker);

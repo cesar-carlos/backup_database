@@ -11,6 +11,7 @@ import sys
 import urllib.request
 import zipfile
 import hashlib
+import stat
 from pathlib import Path
 
 
@@ -98,6 +99,48 @@ def normalize_version(version: str | None) -> str | None:
     if not version:
         return None
     return version.split("+", 1)[0].strip()
+
+
+def newest_source_mtime(project_root: Path) -> float:
+    tracked_roots = (
+        project_root / "lib",
+        project_root / "windows",
+        project_root / "assets",
+        project_root / "pubspec.yaml",
+        project_root / "pubspec.lock",
+    )
+    ignore_dirs = {"build", ".dart_tool", ".git"}
+    latest = 0.0
+
+    for root in tracked_roots:
+        if not root.exists():
+            continue
+        if root.is_file():
+            latest = max(latest, root.stat().st_mtime)
+            continue
+
+        for path in root.rglob("*"):
+            if any(part in ignore_dirs for part in path.parts):
+                continue
+            if path.is_file():
+                latest = max(latest, path.stat().st_mtime)
+
+    return latest
+
+
+def clean_flutter_windows_outputs(project_root: Path) -> None:
+    def handle_remove_readonly(func, path, excinfo) -> None:  # type: ignore[no-untyped-def]
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+
+    generated_paths = (
+        project_root / "build" / "flutter_assets",
+        project_root / "build" / "windows" / "x64" / "flutter" / "ephemeral",
+    )
+    for path in generated_paths:
+        if path.exists():
+            shutil.rmtree(path, onexc=handle_remove_readonly)
+            print(f"  Limpando output gerado: {path}")
 
 
 def write_sha256_sidecar(file_path: Path) -> Path:
@@ -191,15 +234,27 @@ def main() -> int:
 
     step("Passo 2: Validando build do Flutter...")
     current_version = normalize_version(get_exe_product_version(exe_path))
-    if current_version != expected_product_version:
+    exe_mtime = exe_path.stat().st_mtime if exe_path.exists() else 0.0
+    source_mtime = newest_source_mtime(project_root)
+    build_is_stale = exe_mtime < source_mtime
+
+    if current_version != expected_product_version or build_is_stale:
         if current_version is None:
             print("Build ausente/invalido. Executando flutter build windows --release...")
+        elif build_is_stale:
+            print(
+                "Build desatualizado por codigo fonte mais recente: "
+                f"exe={exe_path}, exe_mtime={exe_mtime}, source_mtime={source_mtime}",
+            )
+            print("Executando rebuild para alinhar o binario ao codigo atual...")
         else:
             print(
                 "Build desatualizado: "
                 f"exe={current_version}, esperado={expected_product_version}",
             )
             print("Executando rebuild para alinhar versao...")
+
+        clean_flutter_windows_outputs(project_root)
 
         flutter_exe = find_flutter_executable()
         if flutter_exe is None:

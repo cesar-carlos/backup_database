@@ -12,6 +12,8 @@ import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/sybase_tools_status.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
+import 'package:backup_database/domain/value_objects/database_name.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/pages/database_config_page.dart';
 import 'package:backup_database/presentation/providers/skeleton_loading_preference_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -53,24 +55,28 @@ void main() {
     mockToolVerification = MockToolVerificationService();
   });
 
-  Future<void> pumpEmptyPage(
+  Future<void> pumpPage(
     WidgetTester tester, {
+    List<SqlServerConfig> sqlConfigs = const <SqlServerConfig>[],
+    List<SybaseConfig> sybaseConfigs = const <SybaseConfig>[],
+    List<PostgresConfig> postgresConfigs = const <PostgresConfig>[],
+    List<FirebirdConfig> firebirdConfigs = const <FirebirdConfig>[],
     ThemeMode themeMode = ThemeMode.light,
     SkeletonLoadingPreferenceProvider? skeletonLoadingPreference,
     MediaQueryData? mediaQuery,
   }) async {
     when(
       () => mockSqlRepo.getAll(),
-    ).thenAnswer((_) async => const rd.Success(<SqlServerConfig>[]));
+    ).thenAnswer((_) async => rd.Success(sqlConfigs));
     when(
       () => mockSybaseRepo.getAll(),
-    ).thenAnswer((_) async => const rd.Success(<SybaseConfig>[]));
+    ).thenAnswer((_) async => rd.Success(sybaseConfigs));
     when(
       () => mockPostgresRepo.getAll(),
-    ).thenAnswer((_) async => const rd.Success(<PostgresConfig>[]));
+    ).thenAnswer((_) async => rd.Success(postgresConfigs));
     when(
       () => mockFirebirdRepo.getAll(),
-    ).thenAnswer((_) async => const rd.Success(<FirebirdConfig>[]));
+    ).thenAnswer((_) async => rd.Success(firebirdConfigs));
     when(
       () => mockToolVerification.verifySqlCmd(),
     ).thenAnswer((_) async => const rd.Success(true));
@@ -120,7 +126,7 @@ void main() {
         themeMode: themeMode,
         locale: const Locale('en', 'US'),
         home: MediaQuery(
-          data: mediaQuery ?? const MediaQueryData(size: Size(1400, 3200)),
+          data: mediaQuery ?? const MediaQueryData(size: Size(1400, 1800)),
           child: MultiProvider(
             providers: [
               if (skeletonLoadingPreference != null)
@@ -148,112 +154,115 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> scrollDatabaseConfigListToTop(WidgetTester tester) async {
-    final scrollable = find.descendant(
-      of: find.byType(DatabaseConfigPage),
-      matching: find.byType(Scrollable),
-    );
-    expect(scrollable, findsWidgets);
-    for (var attempt = 0; attempt < 48; attempt++) {
-      if (find.text('Add configuration (SQL Server)').evaluate().isNotEmpty) {
-        return;
-      }
-      await tester.drag(scrollable.first, const Offset(0, 600));
-      await tester.pump();
-    }
-  }
-
-  Future<void> scrollUntilDatabaseConfigTargetVisible(
-    WidgetTester tester, {
-    required Finder target,
-  }) async {
-    final scrollable = find.descendant(
-      of: find.byType(DatabaseConfigPage),
-      matching: find.byType(Scrollable),
-    );
-    expect(scrollable, findsWidgets);
-    for (var attempt = 0; attempt < 32; attempt++) {
-      if (target.evaluate().isNotEmpty) {
-        return;
-      }
-      await tester.drag(scrollable.first, const Offset(0, -500));
-      await tester.pump();
-    }
-  }
-
   testWidgets(
-    'empty lists show U2 placeholder copy and add CTA for all four SGBDs',
+    'empty page shows single empty state and removes per-type section CTAs',
     (WidgetTester tester) async {
-      await pumpEmptyPage(tester);
+      await pumpPage(tester);
 
-      const addLabels = [
-        'Add configuration (SQL Server)',
-        'Add configuration (Sybase SQL Anywhere)',
-        'Add configuration (PostgreSQL)',
-        'Add configuration (Firebird)',
-      ];
-
-      await scrollDatabaseConfigListToTop(tester);
-      await tester.pumpAndSettle();
-
-      for (final label in addLabels) {
-        await scrollUntilDatabaseConfigTargetVisible(
-          tester,
-          target: find.text(label),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text(label), findsOneWidget);
-        expect(
-          find.text('No configuration registered for this type.'),
-          findsAtLeastNWidgets(1),
-        );
-      }
+      expect(find.text('All configurations'), findsOneWidget);
+      expect(find.text('No database configuration yet.'), findsOneWidget);
+      expect(find.text('New configuration'), findsNWidgets(2));
+      expect(find.text('Add configuration (SQL Server)'), findsNothing);
+      expect(
+        find.text('Add configuration (Sybase SQL Anywhere)'),
+        findsNothing,
+      );
+      expect(find.text('Add configuration (PostgreSQL)'), findsNothing);
+      expect(find.text('Add configuration (Firebird)'), findsNothing);
     },
   );
 
   testWidgets(
-    'empty page renders all four SGBD sections in light and dark Fluent theme',
+    'aggregated list renders mixed database types with chips and active-first ordering',
     (WidgetTester tester) async {
-      const addLabels = [
-        'Add configuration (SQL Server)',
-        'Add configuration (Sybase SQL Anywhere)',
-        'Add configuration (PostgreSQL)',
-        'Add configuration (Firebird)',
-      ];
+      await pumpPage(
+        tester,
+        sqlConfigs: [
+          SqlServerConfig(
+            id: 'sql-zeta',
+            name: 'Zeta',
+            server: 'sql-host',
+            database: DatabaseName('db_sql'),
+            username: 'sa',
+            password: 'p',
+            port: PortNumber(1433),
+          ).copyWith(enabled: false),
+        ],
+        sybaseConfigs: [
+          SybaseConfig(
+            id: 'syb-beta',
+            name: 'Beta',
+            serverName: 'syb-host',
+            databaseName: DatabaseName('db_syb'),
+            username: 'dba',
+            password: 'p',
+            port: PortNumber(2638),
+          ),
+        ],
+        postgresConfigs: [
+          PostgresConfig(
+            id: 'pg-alpha',
+            name: 'Alpha',
+            host: 'pg-host',
+            database: DatabaseName('db_pg'),
+            username: 'postgres',
+            password: 'p',
+            port: PortNumber(5432),
+          ),
+        ],
+        firebirdConfigs: [
+          FirebirdConfig(
+            id: 'fb-gamma',
+            name: 'Gamma',
+            host: 'fb-host',
+            databaseFile: 'C:/data/example.fdb',
+            username: 'sysdba',
+            password: 'p',
+            port: PortNumber(3050),
+          ),
+        ],
+      );
 
+      expect(find.text('Type'), findsOneWidget);
+      expect(find.text('SQL Server'), findsOneWidget);
+      expect(find.text('Sybase'), findsOneWidget);
+      expect(find.text('PostgreSQL'), findsOneWidget);
+      expect(find.text('Firebird'), findsOneWidget);
+
+      final alphaTopLeft = tester.getTopLeft(find.text('Alpha'));
+      final betaTopLeft = tester.getTopLeft(find.text('Beta'));
+      final gammaTopLeft = tester.getTopLeft(find.text('Gamma'));
+      final zetaTopLeft = tester.getTopLeft(find.text('Zeta'));
+
+      expect(alphaTopLeft.dy, lessThan(zetaTopLeft.dy));
+      expect(betaTopLeft.dy, lessThan(zetaTopLeft.dy));
+      expect(gammaTopLeft.dy, lessThan(zetaTopLeft.dy));
+      expect(alphaTopLeft.dy, lessThan(betaTopLeft.dy));
+      expect(betaTopLeft.dy, lessThan(gammaTopLeft.dy));
+    },
+  );
+
+  testWidgets(
+    'database config page renders aggregated layout in light and dark theme',
+    (WidgetTester tester) async {
       for (final mode in <ThemeMode>[
         ThemeMode.light,
         ThemeMode.dark,
       ]) {
-        await pumpEmptyPage(tester, themeMode: mode);
-        await tester.pumpAndSettle();
+        await pumpPage(tester, themeMode: mode);
 
-        final pageContext = tester.element(
-          find.byType(DatabaseConfigPage),
-        );
+        final pageContext = tester.element(find.byType(DatabaseConfigPage));
         expect(
           FluentTheme.of(pageContext).brightness,
           mode == ThemeMode.light ? Brightness.light : Brightness.dark,
         );
-
-        await scrollDatabaseConfigListToTop(tester);
-        await tester.pumpAndSettle();
-
-        for (final label in addLabels) {
-          await scrollUntilDatabaseConfigTargetVisible(
-            tester,
-            target: find.text(label),
-          );
-          await tester.pumpAndSettle();
-          expect(find.text(label), findsOneWidget);
-        }
+        expect(find.text('All configurations'), findsOneWidget);
       }
     },
   );
 
   testWidgets(
-    'empty database config page meets text contrast accessibility guideline '
-    '(light and dark)',
+    'aggregated database config page meets text contrast accessibility guideline',
     (WidgetTester tester) async {
       final prefs = _ShimmerOffUserPreferencesRepository();
       final skeletonPrefs = SkeletonLoadingPreferenceProvider(
@@ -268,7 +277,7 @@ void main() {
           ThemeMode.light,
           ThemeMode.dark,
         ]) {
-          await pumpEmptyPage(
+          await pumpPage(
             tester,
             themeMode: mode,
             skeletonLoadingPreference: skeletonPrefs,
@@ -285,8 +294,7 @@ void main() {
   );
 
   testWidgets(
-    'empty database config page builds without overflow at 1.5x and 2.0x '
-    'text scale (light)',
+    'aggregated database config page builds without overflow at 1.5x and 2.0x text scale',
     (WidgetTester tester) async {
       final prefs = _ShimmerOffUserPreferencesRepository();
       final skeletonPrefs = SkeletonLoadingPreferenceProvider(
@@ -296,11 +304,11 @@ void main() {
       addTearDown(skeletonPrefs.dispose);
 
       for (final scale in <double>[1.5, 2]) {
-        await pumpEmptyPage(
+        await pumpPage(
           tester,
           skeletonLoadingPreference: skeletonPrefs,
           mediaQuery: MediaQueryData(
-            size: const Size(1400, 3200),
+            size: const Size(1400, 1800),
             textScaler: TextScaler.linear(scale),
           ),
         );

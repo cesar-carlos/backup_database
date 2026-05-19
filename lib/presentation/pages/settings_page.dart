@@ -1,4 +1,5 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/general_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/license_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/service_settings_tab.dart';
@@ -16,50 +17,41 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldPage(
-      header: PageHeader(
-        title: Text(
-          appLocaleString(context, 'Configurações', 'Settings'),
-        ),
-      ),
-      content: Column(
-        children: [
-          Expanded(
-            child: TabView(
-              currentIndex: _selectedTabIndex,
-              onChanged: (index) {
-                setState(() {
-                  _selectedTabIndex = index;
-                });
-              },
-              tabs: [
-                Tab(
-                  icon: const Icon(FluentIcons.settings),
-                  text: Text(
-                    appLocaleString(context, 'Geral', 'General'),
-                  ),
-                  body: const GeneralSettingsTab(),
-                ),
-                Tab(
-                  icon: const Icon(FluentIcons.server),
-                  text: Text(
-                    appLocaleString(
-                      context,
-                      'Serviço Windows',
-                      'Windows service',
-                    ),
-                  ),
-                  body: const ServiceSettingsTab(),
-                ),
-                Tab(
-                  icon: const Icon(FluentIcons.lock),
-                  text: Text(
-                    appLocaleString(context, 'Licenciamento', 'Licensing'),
-                  ),
-                  body: const LicenseSettingsTab(),
-                ),
-              ],
+    return AppPageScaffold(
+      title: appLocaleString(context, 'Configurações', 'Settings'),
+      bodyPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      body: TabView(
+        currentIndex: _selectedTabIndex,
+        onChanged: (index) {
+          setState(() {
+            _selectedTabIndex = index;
+          });
+        },
+        tabs: [
+          Tab(
+            icon: const Icon(FluentIcons.settings),
+            text: Text(
+              appLocaleString(context, 'Geral', 'General'),
             ),
+            body: const GeneralSettingsTab(),
+          ),
+          Tab(
+            icon: const Icon(FluentIcons.server),
+            text: Text(
+              appLocaleString(
+                context,
+                'Serviço Windows',
+                'Windows service',
+              ),
+            ),
+            body: const ServiceSettingsTab(),
+          ),
+          Tab(
+            icon: const Icon(FluentIcons.lock),
+            text: Text(
+              appLocaleString(context, 'Licenciamento', 'Licensing'),
+            ),
+            body: const LicenseSettingsTab(),
           ),
         ],
       ),

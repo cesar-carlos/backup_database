@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/database_connection_test_snapshot.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/organisms/database_config_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -31,6 +32,7 @@ class PostgresConfigGrid extends StatelessWidget {
     return DatabaseConfigDataGrid<PostgresConfig>(
       configs: configs,
       rowOf: (c) => DatabaseConfigGridRow(
+        databaseType: DatabaseType.postgresql,
         name: c.name,
         serverEndpoint: '${c.host}:${c.portValue}',
         database: c.databaseValue,

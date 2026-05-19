@@ -243,36 +243,53 @@ class _MainLayoutState extends State<MainLayout> {
   Widget _buildNavigationPane() {
     final items = _navigationItems(context);
     return Container(
-      width: 200,
+      width: 216,
       color: FluentTheme.of(context).scaffoldBackgroundColor,
-      child: ListView(
-        children: items.asMap().entries.map(
-          (entry) {
-            final index = entry.key;
-            final item = entry.value;
-            final isSelected = index == _selectedIndex;
-            return ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: AppTargetSize.comfortable,
-              ),
-              child: ListTile(
-                semanticLabel: item.label,
-                leading: ExcludeSemantics(
-                  child: Icon(
-                    item.icon,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          child: ListView.separated(
+            itemCount: items.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 4),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final isSelected = index == _selectedIndex;
+              final iconColor = isSelected
+                  ? AppPalette.primary
+                  : FluentTheme.of(context).resources.textFillColorSecondary;
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppPalette.primary.withValues(alpha: 0.08)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
                     color: isSelected
-                        ? AppPalette.primary
-                        : FluentTheme.of(
-                            context,
-                          ).resources.textFillColorSecondary,
+                        ? AppPalette.primary.withValues(alpha: 0.18)
+                        : Colors.transparent,
                   ),
                 ),
-                title: Text(item.label),
-                onPressed: () => _onDestinationSelected(index),
-              ),
-            );
-          },
-        ).toList(),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: AppTargetSize.comfortable + 8,
+                  ),
+                  child: ListTile(
+                    semanticLabel: item.label,
+                    leading: ExcludeSemantics(
+                      child: Icon(item.icon, color: iconColor),
+                    ),
+                    title: Text(
+                      item.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onPressed: () => _onDestinationSelected(index),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -282,7 +299,7 @@ class _MainLayoutState extends State<MainLayout> {
     final items = _navigationItems(context);
 
     return Container(
-      height: 64,
+      constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
         color: FluentTheme.of(context).scaffoldBackgroundColor,
@@ -294,41 +311,55 @@ class _MainLayoutState extends State<MainLayout> {
       ),
       child: Row(
         children: [
-          Text(
-            items[_selectedIndex].label,
-            style: FluentTheme.of(context).typography.title,
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Text(
+                items[_selectedIndex].label,
+                style: FluentTheme.of(context).typography.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
-          const Spacer(),
-          _toolbarIconButton(
-            context: context,
-            semanticsLabel: appLocaleString(
-              context,
-              'Atualizar',
-              'Refresh',
+          const SizedBox(width: 16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _toolbarIconButton(
+                  context: context,
+                  semanticsLabel: appLocaleString(
+                    context,
+                    'Atualizar',
+                    'Refresh',
+                  ),
+                  tooltip: appLocaleString(context, 'Atualizar', 'Refresh'),
+                  icon: const Icon(FluentIcons.refresh),
+                  onPressed: _handleRefresh,
+                ),
+                const SizedBox(width: 8),
+                _toolbarIconButton(
+                  context: context,
+                  semanticsLabel: appLocaleString(
+                    context,
+                    'Alternar tema',
+                    'Toggle theme',
+                  ),
+                  tooltip: appLocaleString(
+                    context,
+                    'Alternar tema',
+                    'Toggle theme',
+                  ),
+                  icon: Icon(
+                    themeProvider.isDarkMode
+                        ? FluentIcons.clear_night
+                        : FluentIcons.brightness,
+                  ),
+                  onPressed: themeProvider.toggleTheme,
+                ),
+              ],
             ),
-            tooltip: appLocaleString(context, 'Atualizar', 'Refresh'),
-            icon: const Icon(FluentIcons.refresh),
-            onPressed: _handleRefresh,
-          ),
-          const SizedBox(width: 8),
-          _toolbarIconButton(
-            context: context,
-            semanticsLabel: appLocaleString(
-              context,
-              'Alternar tema',
-              'Toggle theme',
-            ),
-            tooltip: appLocaleString(
-              context,
-              'Alternar tema',
-              'Toggle theme',
-            ),
-            icon: Icon(
-              themeProvider.isDarkMode
-                  ? FluentIcons.brightness
-                  : FluentIcons.brightness,
-            ),
-            onPressed: themeProvider.toggleTheme,
           ),
         ],
       ),

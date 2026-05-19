@@ -20,6 +20,15 @@ O runtime faz este pipeline:
 /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ```
 
+Antes do handoff silencioso, o app grava `update_context.json` em:
+
+```text
+C:\ProgramData\BackupDatabase\staging\updates\update_context.json
+```
+
+Esse contexto e consumido pelo instalador para relancar a UI ou restaurar o
+Windows Service apos a troca de versao.
+
 ## Configuracao da maquina
 
 Em instalacoes Windows, a configuracao ativa fica em:
@@ -83,7 +92,7 @@ O fluxo oficial agora e:
 2. Publicar tambem o sidecar `BackupDatabase-Setup-<versao>.exe.sha256`
 3. O workflow `.github/workflows/update-appcast.yml` executa
 4. O script `scripts/sync_appcast_from_releases.py` reconstrui o `appcast.xml` do zero
-5. O script deduplica versoes, ordena por `published_at` e reaproveita o hash do sidecar quando existir
+5. O script deduplica versoes, ordena por `published_at` e exige o hash do sidecar
 6. O workflow faz commit do `appcast.xml` atualizado na `main`
 
 ## Rollback operacional
@@ -100,5 +109,6 @@ O workflow reconstrói o `appcast.xml` sem as versoes bloqueadas.
 
 - O updater e Windows-only.
 - UI e Windows Service usam o mesmo pipeline.
+- Em modo servico, auto update silencioso so e suportado quando o Windows Service esta em `LocalSystem`.
 - A instalacao e forcada e silenciosa.
 - Alterar `.env` dentro da pasta `{app}` nao muda o runtime da maquina instalada.

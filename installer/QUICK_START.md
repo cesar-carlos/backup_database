@@ -47,7 +47,7 @@ python installer\update_version.py
 ### 4. Distribuir
 
 1. Faça upload para GitHub Releases
-2. Atualize o appcast.xml (se usar auto-update)
+2. Publique tambem o sidecar `.sha256`; o workflow `update-appcast` atualiza o feed
 
 ---
 

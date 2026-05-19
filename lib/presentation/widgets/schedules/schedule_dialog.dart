@@ -359,12 +359,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return ContentDialog(
+    return AppDialogShell(
       constraints: const BoxConstraints(
         minWidth: 550,
         maxWidth: 650,
         maxHeight: 750,
       ),
+      scrollable: false,
       title: Row(
         children: [
           const Icon(FluentIcons.calendar, color: AppColors.primary),

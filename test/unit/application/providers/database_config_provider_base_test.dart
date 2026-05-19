@@ -3,6 +3,7 @@
 
 import 'package:backup_database/application/providers/database_config_provider_base.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/unit.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -91,8 +92,11 @@ void main() {
         (_) async => rd.Success(<PostgresConfig>[_samplePostgres()]),
       );
 
-      final provider = _TestPgProvider(repo, schedules);
-      await Future<void>.delayed(Duration.zero);
+      late final _TestPgProvider provider;
+      await LoggerService.runSilenced(() async {
+        provider = _TestPgProvider(repo, schedules);
+        await Future<void>.delayed(Duration.zero);
+      });
       await provider.loadConfigs();
 
       expect(provider.verifyToolsCallCount, 0);
@@ -144,7 +148,9 @@ void main() {
         final provider = _TestPgProvider(repo, schedules);
         await Future<void>.delayed(Duration.zero);
 
-        final ok = await provider.createConfig(_samplePostgres());
+        final ok = await LoggerService.runSilenced(
+          () => provider.createConfig(_samplePostgres()),
+        );
 
         expect(ok, isFalse);
         expect(provider.error, contains('Erro ao criar configuração'));
@@ -230,7 +236,9 @@ void main() {
       final provider = _TestPgProvider(repo, schedules);
       await Future<void>.delayed(Duration.zero);
 
-      final ok = await provider.deleteConfig('bad-del');
+      final ok = await LoggerService.runSilenced(
+        () => provider.deleteConfig('bad-del'),
+      );
 
       expect(ok, isFalse);
       expect(provider.error, isNotNull);
@@ -343,7 +351,9 @@ void main() {
       final provider = _TestPgProvider(repo, schedules);
       await Future<void>.delayed(Duration.zero);
 
-      final ok = await provider.createConfig(_samplePostgres());
+      final ok = await LoggerService.runSilenced(
+        () => provider.createConfig(_samplePostgres()),
+      );
 
       expect(ok, isFalse);
       expect(provider.error, isNotNull);
@@ -364,7 +374,9 @@ void main() {
       final provider = _TestPgProvider(repo, schedules);
       await Future<void>.delayed(Duration.zero);
 
-      final ok = await provider.updateConfig(cfg.copyWith(name: 'x'));
+      final ok = await LoggerService.runSilenced(
+        () => provider.updateConfig(cfg.copyWith(name: 'x')),
+      );
 
       expect(ok, isFalse);
       expect(provider.error, isNotNull);
@@ -392,7 +404,9 @@ void main() {
         final provider = _TestPgProvider(repo, schedules);
         await Future<void>.delayed(Duration.zero);
 
-        final ok = await provider.updateConfig(existing.copyWith(name: 'b'));
+        final ok = await LoggerService.runSilenced(
+          () => provider.updateConfig(existing.copyWith(name: 'b')),
+        );
 
         expect(ok, isFalse);
         expect(provider.error, contains('Erro ao atualizar configuração'));
@@ -408,8 +422,11 @@ void main() {
         (_) async => const rd.Success(<PostgresConfig>[]),
       );
 
-      final provider = _TestPgProvider(repo, schedules);
-      await Future<void>.delayed(Duration.zero);
+      late final _TestPgProvider provider;
+      await LoggerService.runSilenced(() async {
+        provider = _TestPgProvider(repo, schedules);
+        await Future<void>.delayed(Duration.zero);
+      });
 
       final ok = await provider.toggleEnabled('missing', false);
 
@@ -499,8 +516,11 @@ void main() {
         (_) async => rd.Failure(Exception('db off')),
       );
 
-      final provider = _TestPgProvider(repo, schedules);
-      await Future<void>.delayed(Duration.zero);
+      late final _TestPgProvider provider;
+      await LoggerService.runSilenced(() async {
+        provider = _TestPgProvider(repo, schedules);
+        await Future<void>.delayed(Duration.zero);
+      });
 
       expect(provider.error, isNotNull);
       expect(provider.error, contains('db off'));

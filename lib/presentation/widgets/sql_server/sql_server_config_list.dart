@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/database_connection_test_snapshot.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/presentation/widgets/organisms/database_config_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -30,6 +31,7 @@ class SqlServerConfigList extends StatelessWidget {
     return DatabaseConfigDataGrid<SqlServerConfig>(
       configs: configs,
       rowOf: (c) => DatabaseConfigGridRow(
+        databaseType: DatabaseType.sqlServer,
         name: c.name,
         serverEndpoint: '${c.server}:${c.portValue}',
         database: c.databaseValue,

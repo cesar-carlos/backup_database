@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
@@ -84,6 +85,29 @@ class AppInitializer {
         return;
       }
       final autoUpdateService = service_locator.getIt<AutoUpdateService>();
+      autoUpdateService.installContextProvider = (release) async {
+        return AppUpdateInstallContext(
+          origin: AppUpdateLaunchOrigin.ui,
+          appMode: currentAppMode,
+          currentVersion: autoUpdateService.snapshot.currentVersion ?? '0.0.0',
+          targetVersion: release.targetVersion,
+          relaunchArguments: List<String>.of(Platform.executableArguments),
+          executablePath: Platform.resolvedExecutable,
+          createdAt: DateTime.now(),
+        );
+      };
+      autoUpdateService.installReadinessCheck = (release) async {
+        final backupProgress = service_locator.getIt<BackupProgressProvider>();
+        if (!backupProgress.isRunning) {
+          return null;
+        }
+        final backupName = backupProgress.currentBackupName;
+        return backupName == null
+            ? 'Atualizacao bloqueada: existe um backup em andamento na UI. '
+                  'Aguarde a conclusao e tente novamente.'
+            : 'Atualizacao bloqueada: o backup "$backupName" ainda esta em '
+                  'execucao. Aguarde a conclusao e tente novamente.';
+      };
       autoUpdateService.beforeInstallHook = AppCleanup.cleanup;
       await autoUpdateService.initialize();
       if (!autoUpdateService.isInitialized) {

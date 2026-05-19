@@ -20,6 +20,7 @@ import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/sybase_tools_status.dart';
 import 'package:backup_database/domain/repositories/i_connection_log_repository.dart';
 import 'package:backup_database/domain/repositories/i_server_connection_repository.dart';
+import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/presentation/pages/database_config_page.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -94,27 +95,10 @@ void main() {
     setAppMode(AppMode.unified);
   });
 
-  Future<void> scrollUntilDatabaseConfigTargetVisible(
-    WidgetTester tester, {
-    required Finder target,
-  }) async {
-    final scrollable = find.descendant(
-      of: find.byType(DatabaseConfigPage),
-      matching: find.byType(Scrollable),
-    );
-    expect(scrollable, findsWidgets);
-    for (var attempt = 0; attempt < 40; attempt++) {
-      if (target.evaluate().isNotEmpty) {
-        return;
-      }
-      await tester.drag(scrollable.first, const Offset(0, -600));
-      await tester.pump();
-    }
-  }
-
   Future<void> pumpClientDatabaseConfigPage(
     WidgetTester tester, {
     required ConnectionManager connectionManager,
+    List<FirebirdConfig> firebirdConfigs = const <FirebirdConfig>[],
   }) async {
     when(
       () => mockSqlRepo.getAll(),
@@ -127,7 +111,7 @@ void main() {
     ).thenAnswer((_) async => const rd.Success(<PostgresConfig>[]));
     when(
       () => mockFirebirdRepo.getAll(),
-    ).thenAnswer((_) async => const rd.Success(<FirebirdConfig>[]));
+    ).thenAnswer((_) async => rd.Success(firebirdConfigs));
     when(
       () => mockToolVerification.verifySqlCmd(),
     ).thenAnswer((_) async => const rd.Success(true));
@@ -217,7 +201,7 @@ void main() {
   }
 
   testWidgets(
-    'client mode connected to legacy server hides Firebird section on '
+    'client mode connected to legacy server hides Firebird from list and dialog on '
     'database_config_page',
     (WidgetTester tester) async {
       setAppMode(AppMode.client);
@@ -228,16 +212,30 @@ void main() {
       await pumpClientDatabaseConfigPage(
         tester,
         connectionManager: connectionManager,
+        firebirdConfigs: [
+          FirebirdConfig(
+            id: 'fb-hidden',
+            name: 'Legacy Firebird',
+            host: 'legacy-host',
+            databaseFile: 'C:/legacy.fdb',
+            username: 'sysdba',
+            password: 'p',
+            port: PortNumber(3050),
+          ),
+        ],
       );
 
-      expect(find.text('Add configuration (SQL Server)'), findsOneWidget);
-      expect(find.text('Add configuration (Firebird)'), findsNothing);
+      expect(find.text('Legacy Firebird'), findsNothing);
+      expect(find.text('Firebird'), findsNothing);
+
+      await tester.tap(find.text('New configuration').first);
+      await tester.pumpAndSettle();
       expect(find.text('Firebird'), findsNothing);
     },
   );
 
   testWidgets(
-    'client mode connected to Firebird-capable server shows Firebird section '
+    'client mode connected to Firebird-capable server shows Firebird in list and dialog '
     'on database_config_page',
     (WidgetTester tester) async {
       setAppMode(AppMode.client);
@@ -249,15 +247,24 @@ void main() {
       await pumpClientDatabaseConfigPage(
         tester,
         connectionManager: connectionManager,
+        firebirdConfigs: [
+          FirebirdConfig(
+            id: 'fb-visible',
+            name: 'Visible Firebird',
+            host: 'fb-host',
+            databaseFile: 'C:/visible.fdb',
+            username: 'sysdba',
+            password: 'p',
+            port: PortNumber(3050),
+          ),
+        ],
       );
 
-      expect(find.text('Add configuration (SQL Server)'), findsOneWidget);
-      await scrollUntilDatabaseConfigTargetVisible(
-        tester,
-        target: find.text('Add configuration (Firebird)'),
-      );
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('Add configuration (Firebird)'), findsOneWidget);
+      expect(find.text('Visible Firebird'), findsOneWidget);
+      expect(find.text('Firebird'), findsWidgets);
+
+      await tester.tap(find.text('New configuration').first);
+      await tester.pumpAndSettle();
       expect(find.text('Firebird'), findsWidgets);
     },
   );

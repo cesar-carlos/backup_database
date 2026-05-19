@@ -200,7 +200,7 @@ Após criar o instalador:
 2. **Verifique o tamanho** do arquivo (deve ser ~50-100 MB)
 3. **Assine digitalmente** (opcional, mas recomendado)
 4. **Faça upload** para a página de releases
-5. **Atualize o appcast.xml** com a nova versão (se usar auto-update)
+5. **Confirme o workflow `update-appcast`** e o sidecar `.sha256` da release (o `appcast.xml` oficial é reconstruído automaticamente)
 
 ## Assinatura Digital (Opcional)
 

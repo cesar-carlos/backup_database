@@ -45,7 +45,7 @@ class ScheduleGrid extends StatelessWidget {
           AppDataGridColumn<Schedule>(
             label: texts.typeLabel,
             width: const FlexColumnWidth(0.95),
-            cellBuilder: (context, row) => _TagChip(
+            cellBuilder: (context, row) => AppStatusChip(
               label: texts.scheduleTypeName(
                 scheduleTypeFromString(row.scheduleType),
               ),
@@ -71,8 +71,10 @@ class ScheduleGrid extends StatelessWidget {
           AppDataGridColumn<Schedule>(
             label: texts.statusLabel,
             width: const FlexColumnWidth(1.2),
-            cellBuilder: (context, row) => Row(
-              mainAxisSize: MainAxisSize.min,
+            cellBuilder: (context, row) => Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 ToggleSwitch(
                   checked: row.enabled,
@@ -80,7 +82,6 @@ class ScheduleGrid extends StatelessWidget {
                       ? (enabled) => onToggleEnabled(row, enabled)
                       : null,
                 ),
-                const SizedBox(width: 8),
                 Text(row.enabled ? texts.active : texts.inactive),
               ],
             ),
@@ -129,32 +130,5 @@ class ScheduleGrid extends StatelessWidget {
       case ScheduleType.interval:
         return AppColors.scheduleInterval;
     }
-  }
-}
-
-class _TagChip extends StatelessWidget {
-  const _TagChip({
-    required this.label,
-    required this.color,
-  });
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: FluentTheme.of(context).typography.caption?.copyWith(
-          color: color,
-        ),
-      ),
-    );
   }
 }

@@ -68,7 +68,7 @@ class ScheduleMessageHandler {
 
   /// Itera o registry em vez de usar campos singleton. Hoje sempre
   /// processa 0 ou 1 contexto (mutex de 1 backup por vez), mas a
-  /// iteracao garante correcao caso a fila futura permita mais de uma
+  /// itera??o garante corre??o caso a fila futura permita mais de uma
   /// execucao ativa simultaneamente (ex.: priorizacao de manual sobre
   /// agendado, ou pool de workers).
   Future<void> _onProgressChanged() async {

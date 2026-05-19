@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/core/constants/route_names.dart';
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/destinations/destinations.dart';
@@ -16,97 +15,62 @@ class DestinationsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldPage(
-      header: PageHeader(
-        title: const Text('Destinos de Backup'),
-        commandBar: CommandBar(
-          mainAxisAlignment: MainAxisAlignment.end,
-          primaryItems: [
-            CommandBarButton(
-              icon: const Icon(FluentIcons.refresh),
-              onPressed: () {
-                unawaited(
-                  context.read<DestinationProvider>().loadDestinations(),
-                );
-              },
-            ),
-            CommandBarButton(
-              icon: const Icon(FluentIcons.add),
-              label: const Text('Novo Destino'),
-              onPressed: () => _showDestinationDialog(context, null),
-            ),
-          ],
+    return AppPageScaffold(
+      title: 'Destinos de Backup',
+      actions: [
+        AppPageAction(
+          label: 'Atualizar',
+          icon: FluentIcons.refresh,
+          onPressed: () {
+            unawaited(context.read<DestinationProvider>().loadDestinations());
+          },
         ),
-      ),
-      content: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Consumer<DestinationProvider>(
-                builder: (context, provider, child) {
-                  if (provider.isLoading) {
-                    return const Center(child: ProgressRing());
-                  }
-
-                  if (provider.error != null) {
-                    return AppCard(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              FluentIcons.error,
-                              size: 64,
-                              color: context.appSemanticColors.danger,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              provider.error!,
-                              style: FluentTheme.of(
-                                context,
-                              ).typography.bodyLarge,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            Button(
-                              onPressed: () => provider.loadDestinations(),
-                              child: const Text('Tentar Novamente'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  if (provider.destinations.isEmpty) {
-                    return AppCard(
-                      child: EmptyState(
-                        icon: FluentIcons.folder,
-                        message: 'Nenhum destino de backup configurado',
-                        actionLabel: 'Adicionar Destino',
-                        onAction: () => _showDestinationDialog(context, null),
-                      ),
-                    );
-                  }
-
-                  return DestinationGrid(
-                    destinations: provider.destinations,
-                    onEdit: (destination) =>
-                        _showDestinationDialog(context, destination),
-                    onDuplicate: (destination) =>
-                        _duplicateDestination(context, destination),
-                    onDelete: (id) => _confirmDelete(context, id),
-                    onToggleEnabled: (destination, enabled) =>
-                        provider.toggleEnabled(destination.id, enabled),
-                  );
-                },
-              ),
-            ),
-          ],
+        AppPageAction(
+          label: 'Novo Destino',
+          icon: FluentIcons.add,
+          isPrimary: true,
+          onPressed: () => _showDestinationDialog(context, null),
         ),
+      ],
+      body: Consumer<DestinationProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return AppPageState.loading(
+              title: 'Carregando destinos',
+              message: 'Buscando destinos configurados na aplicacao.',
+            );
+          }
+
+          if (provider.error != null) {
+            return AppPageState.error(
+              title: 'Falha ao carregar destinos',
+              message: provider.error,
+              actionLabel: 'Tentar novamente',
+              onAction: () => provider.loadDestinations(),
+            );
+          }
+
+          if (provider.destinations.isEmpty) {
+            return AppPageState.empty(
+              title: 'Nenhum destino de backup configurado',
+              message:
+                  'Organize os destinos usados pelos backups e transferencias.',
+              actionLabel: 'Adicionar Destino',
+              onAction: () => _showDestinationDialog(context, null),
+            );
+          }
+
+          return DestinationGrid(
+            destinations: provider.destinations,
+            onEdit: (destination) =>
+                _showDestinationDialog(context, destination),
+            onDuplicate: (destination) =>
+                _duplicateDestination(context, destination),
+            onDelete: (id) => _confirmDelete(context, id),
+            onToggleEnabled: (destination, enabled) =>
+                provider.toggleEnabled(destination.id, enabled),
+          );
+        },
       ),
     );
   }
@@ -146,25 +110,15 @@ class DestinationsPage extends StatelessWidget {
     BuildContext context,
     BackupDestination destination,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: const Text('Duplicar Destino'),
-        content: Text(
-          'Tem certeza que deseja duplicar "${destination.name}"?',
-        ),
-        actions: [
-          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
-          ActionButton(
-            label: 'Duplicar',
-            icon: FluentIcons.copy,
-            onPressed: () => Navigator.of(context).pop(true),
-          ),
-        ],
-      ),
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: 'Duplicar Destino',
+      message: 'Tem certeza que deseja duplicar "${destination.name}"?',
+      confirmLabel: 'Duplicar',
+      confirmIcon: FluentIcons.copy,
     );
 
-    if (!(confirmed ?? false) || !context.mounted) return;
+    if (!confirmed || !context.mounted) return;
 
     final provider = context.read<DestinationProvider>();
     final success = await provider.duplicateDestination(destination);

@@ -13,11 +13,19 @@ class LicenseDecoder {
           ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
           : throw ArgumentError(
               'Public key must be exactly $_ed25519PublicKeySize bytes',
-            );
+            ),
+      _availabilityFailure = null;
+
+  LicenseDecoder.unavailable({required String message})
+    : _verifier = null,
+      _availabilityFailure = core.ValidationFailure(message: message);
 
   static const _ed25519PublicKeySize = 32;
 
-  final Ed25519LicenseVerifier _verifier;
+  final Ed25519LicenseVerifier? _verifier;
+  final core.ValidationFailure? _availabilityFailure;
+
+  bool get isAvailable => _verifier != null;
 
   static rd.Result<List<int>> _publicKeyFromEnv() {
     final base64Key = dotenv.env[LicenseConstants.envLicensePublicKey];
@@ -63,6 +71,11 @@ class LicenseDecoder {
 
   Future<rd.Result<Map<String, dynamic>>> decode(String licenseKey) async {
     try {
+      final availabilityFailure = _availabilityFailure;
+      if (availabilityFailure != null) {
+        return rd.Failure(availabilityFailure);
+      }
+
       final trimmedKey = licenseKey.trim();
       if (trimmedKey.isEmpty) {
         return const rd.Failure(
@@ -175,7 +188,7 @@ class LicenseDecoder {
     final dataJson = jsonEncode(data);
     final messageBytes = utf8.encode(dataJson);
 
-    if (!_verifier.verify(
+    if (!_verifier!.verify(
       messageBytes: messageBytes,
       signatureBytes: signatureBytes,
     )) {

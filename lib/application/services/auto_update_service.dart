@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/machine_storage_layout.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -21,6 +24,9 @@ enum AppUpdateStatus {
   updateAvailable,
   downloading,
   installing,
+  blockedByOtherInstance,
+  blockedByActiveBackup,
+  handoffCompleted,
   upToDate,
   error,
   disabled,
@@ -28,6 +34,7 @@ enum AppUpdateStatus {
 
 enum AppUpdateStage {
   blockedByOtherInstance,
+  blockedByActiveBackup,
   fetchingFeed,
   evaluatingRelease,
   downloadingInstaller,
@@ -183,6 +190,84 @@ typedef ExitProcess = void Function(int code);
 typedef DetachedProcessStarter =
     Future<void> Function(String executable, List<String> arguments);
 typedef BeforeInstallHook = Future<void> Function();
+typedef InstallReadinessCheck =
+    Future<String?> Function(AppcastRelease release);
+typedef UpdateInstallContextProvider =
+    Future<AppUpdateInstallContext> Function(AppcastRelease release);
+
+enum AppUpdateLaunchOrigin { ui, service }
+
+@immutable
+class AppUpdateInstallContext {
+  AppUpdateInstallContext({
+    required this.origin,
+    required this.appMode,
+    required this.currentVersion,
+    required this.targetVersion,
+    required this.relaunchArguments,
+    required this.executablePath,
+    required this.createdAt,
+    int? schemaVersion,
+    DateTime? expiresAt,
+    String? contextId,
+    this.serviceName = 'BackupDatabaseService',
+    this.serviceExists,
+    this.serviceConfig,
+  }) : schemaVersion =
+           schemaVersion ?? AutoUpdateService.updateContextSchemaVersion,
+       expiresAt =
+           expiresAt ?? createdAt.add(AutoUpdateService.updateContextTtl),
+       contextId =
+           contextId ??
+           '${origin.name}-$targetVersion-${createdAt.toUtc().millisecondsSinceEpoch}';
+
+  final AppUpdateLaunchOrigin origin;
+  final AppMode appMode;
+  final String currentVersion;
+  final String targetVersion;
+  final List<String> relaunchArguments;
+  final String executablePath;
+  final DateTime createdAt;
+  final int schemaVersion;
+  final DateTime expiresAt;
+  final String contextId;
+  final String serviceName;
+  final bool? serviceExists;
+  final Map<String, Object?>? serviceConfig;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'schemaVersion': schemaVersion,
+      'contextId': contextId,
+      'origin': origin.name,
+      'appMode': appMode.name,
+      'currentVersion': currentVersion,
+      'targetVersion': targetVersion,
+      'relaunchArguments': relaunchArguments,
+      'executablePath': executablePath,
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      'expiresAt': expiresAt.toUtc().toIso8601String(),
+      'serviceName': serviceName,
+      'serviceExists': serviceExists,
+      'serviceConfig': serviceConfig,
+    };
+  }
+}
+
+class AppUpdateBlockedException implements Exception {
+  const AppUpdateBlockedException({
+    required this.message,
+    required this.status,
+    required this.stage,
+  });
+
+  final String message;
+  final AppUpdateStatus status;
+  final AppUpdateStage stage;
+
+  @override
+  String toString() => message;
+}
 
 class AppUpdateLockHandle {
   AppUpdateLockHandle(this._file, {Map<String, String>? metadata})
@@ -241,7 +326,9 @@ class AutoUpdateService {
            updatesDirectoryResolver ?? resolveMachineUpdateDownloadsDirectory,
        _detachedProcessStarter =
            detachedProcessStarter ?? _defaultDetachedProcessStarter,
-       _exitProcess = exitProcess ?? exit;
+       _exitProcess = exitProcess ?? exit {
+    _applyDefaultNetworkTimeouts(_dio);
+  }
 
   static const int defaultCheckIntervalSeconds = 3600;
   static const String _sparkleNamespace =
@@ -252,6 +339,19 @@ class AutoUpdateService {
     '/NORESTART',
   ];
   static const Duration defaultLockStaleAfter = Duration(hours: 2);
+  @visibleForTesting
+  static const int updateContextSchemaVersion = 2;
+  @visibleForTesting
+  static const Duration updateContextTtl = Duration(minutes: 45);
+  static const Duration _defaultNetworkTimeout = Duration(seconds: 30);
+  static const int _maxNetworkAttempts = 3;
+  static const Duration _initialRetryDelay = Duration(milliseconds: 500);
+  static const Duration _stagedInstallerRetention = Duration(days: 7);
+  static const Duration _diagnosticsRetention = Duration(days: 14);
+  static const int _maxDiagnosticsFileBytes = 256 * 1024;
+  static const String _updateContextFileName = 'update_context.json';
+  static const String _updateDiagnosticsFileName = 'auto_update_history.jsonl';
+  static const String _lockFileName = 'auto_update.lock';
   static final Version _fallbackVersion = Version(0, 0, 0);
 
   final Dio _dio;
@@ -271,6 +371,8 @@ class AutoUpdateService {
   bool _isInitialized = false;
   String? _feedUrl;
   BeforeInstallHook? beforeInstallHook;
+  InstallReadinessCheck? installReadinessCheck;
+  UpdateInstallContextProvider? installContextProvider;
   AppUpdateSnapshot _snapshot = const AppUpdateSnapshot(
     status: AppUpdateStatus.idle,
   );
@@ -280,6 +382,40 @@ class AutoUpdateService {
   bool get isInitialized =>
       _isInitialized && _snapshot.status != AppUpdateStatus.disabled;
   String? get feedUrl => _feedUrl;
+
+  static String machineRootSupportPath({
+    Map<String, String>? environment,
+  }) {
+    final env = environment ?? Platform.environment;
+    final programData = env['ProgramData'] ?? r'C:\ProgramData';
+    return p.join(programData, 'BackupDatabase');
+  }
+
+  static String updateContextSupportPath({Map<String, String>? environment}) {
+    return p.join(
+      machineRootSupportPath(environment: environment),
+      MachineStorageLayout.staging,
+      MachineStorageLayout.updates,
+      _updateContextFileName,
+    );
+  }
+
+  static String diagnosticsSupportPath({Map<String, String>? environment}) {
+    return p.join(
+      machineRootSupportPath(environment: environment),
+      MachineStorageLayout.staging,
+      MachineStorageLayout.updates,
+      _updateDiagnosticsFileName,
+    );
+  }
+
+  static String lockFileSupportPath({Map<String, String>? environment}) {
+    return p.join(
+      machineRootSupportPath(environment: environment),
+      MachineStorageLayout.locks,
+      _lockFileName,
+    );
+  }
 
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -335,6 +471,17 @@ class AutoUpdateService {
         message: 'Atualizador pronto para verificar novas versoes.',
       ),
     );
+
+    try {
+      await _cleanupStaleUpdateArtifacts();
+      await _cleanupStagedInstallers();
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Falha ao limpar artefatos de staging/diagnostico na inicializacao',
+        e,
+        s,
+      );
+    }
 
     LoggerService.info('AutoUpdateService pronto com feed $_feedUrl');
   }
@@ -532,6 +679,8 @@ class AutoUpdateService {
     var currentStage = AppUpdateStage.fetchingFeed;
     final now = DateTime.now();
     final currentVersion = await _resolveCurrentVersion();
+    String? targetVersion;
+    var lockReleased = false;
 
     final lockHandle = await _tryAcquireLock(
       source: source,
@@ -547,7 +696,7 @@ class AutoUpdateService {
       );
       _emitSnapshot(
         _snapshot.copyWith(
-          status: AppUpdateStatus.idle,
+          status: AppUpdateStatus.blockedByOtherInstance,
           stage: AppUpdateStage.blockedByOtherInstance,
           message:
               'Outra instancia da aplicacao ja esta processando a atualizacao.',
@@ -556,6 +705,15 @@ class AutoUpdateService {
           lastAttemptNumber: attemptNumber,
           lastCheckAt: now,
         ),
+      );
+      await _persistDiagnostics(
+        source: source,
+        attemptNumber: attemptNumber,
+        currentVersion: currentVersion.toString(),
+        stage: AppUpdateStage.blockedByOtherInstance,
+        status: AppUpdateStatus.blockedByOtherInstance,
+        startedAt: now,
+        duration: checkStopwatch.elapsed,
       );
       return;
     }
@@ -620,10 +778,20 @@ class AutoUpdateService {
             lastCheckDuration: checkStopwatch.elapsed,
           ),
         );
+        await _persistDiagnostics(
+          source: source,
+          attemptNumber: attemptNumber,
+          currentVersion: currentVersion.toString(),
+          stage: AppUpdateStage.completed,
+          status: AppUpdateStatus.upToDate,
+          startedAt: now,
+          duration: checkStopwatch.elapsed,
+        );
         return;
       }
 
       final release = decision.latestRelease!;
+      targetVersion = release.targetVersion;
       await lockHandle.updateMetadata({
         'stage': _stageToken(AppUpdateStage.evaluatingRelease),
         'targetVersion': release.targetVersion,
@@ -694,9 +862,23 @@ class AutoUpdateService {
         ),
       );
 
+      final blockReason = await installReadinessCheck?.call(release);
+      if (blockReason != null) {
+        throw AppUpdateBlockedException(
+          message: blockReason,
+          status: AppUpdateStatus.blockedByActiveBackup,
+          stage: AppUpdateStage.blockedByActiveBackup,
+        );
+      }
+
       if (beforeInstallHook != null) {
         await beforeInstallHook!.call();
       }
+
+      await _persistInstallContext(
+        release: release,
+        currentVersion: currentVersion.toString(),
+      );
 
       currentStage = AppUpdateStage.launchingInstaller;
       await lockHandle.updateMetadata({
@@ -718,7 +900,7 @@ class AutoUpdateService {
       );
       _emitSnapshot(
         _snapshot.copyWith(
-          status: AppUpdateStatus.installing,
+          status: AppUpdateStatus.handoffCompleted,
           release: release,
           stage: AppUpdateStage.completed,
           lastDownloadDuration: downloadDuration,
@@ -728,8 +910,55 @@ class AutoUpdateService {
         ),
       );
 
+      await _persistDiagnostics(
+        source: source,
+        attemptNumber: attemptNumber,
+        currentVersion: currentVersion.toString(),
+        targetVersion: release.targetVersion,
+        stage: AppUpdateStage.completed,
+        status: AppUpdateStatus.handoffCompleted,
+        startedAt: now,
+        duration: checkStopwatch.elapsed,
+      );
+      await lockHandle.release();
+      lockReleased = true;
       await Future<void>.delayed(const Duration(milliseconds: 250));
       _exitProcess(0);
+    } on AppUpdateBlockedException catch (e) {
+      if (checkStopwatch.isRunning) {
+        checkStopwatch.stop();
+      }
+      LoggerService.warning(
+        'Auto update bloqueado antes da instalacao: ${e.message}',
+      );
+      await lockHandle.updateMetadata({
+        'stage': _stageToken(e.stage),
+      });
+      _emitSnapshot(
+        _snapshot.copyWith(
+          status: e.status,
+          currentVersion: currentVersion.toString(),
+          stage: e.stage,
+          message: e.message,
+          errorMessage: null,
+          lastCheckAt: now,
+          lastSource: source,
+          lastFailureStage: e.stage,
+          lastAttemptNumber: attemptNumber,
+          lastDownloadDuration: downloadDuration,
+          lastCheckDuration: checkStopwatch.elapsed,
+        ),
+      );
+      await _persistDiagnostics(
+        source: source,
+        attemptNumber: attemptNumber,
+        currentVersion: currentVersion.toString(),
+        targetVersion: targetVersion,
+        stage: e.stage,
+        status: e.status,
+        startedAt: now,
+        duration: checkStopwatch.elapsed,
+      );
     } on Object catch (e, s) {
       if (checkStopwatch.isRunning) {
         checkStopwatch.stop();
@@ -756,15 +985,33 @@ class AutoUpdateService {
           lastCheckDuration: checkStopwatch.elapsed,
         ),
       );
+      await _persistDiagnostics(
+        source: source,
+        attemptNumber: attemptNumber,
+        currentVersion: currentVersion.toString(),
+        targetVersion: targetVersion,
+        stage: currentStage,
+        status: AppUpdateStatus.error,
+        startedAt: now,
+        duration: checkStopwatch.elapsed,
+        errorMessage: e.toString(),
+      );
     } finally {
-      await lockHandle.release();
+      if (!lockReleased) {
+        await lockHandle.release();
+      }
     }
   }
 
   Future<List<AppcastRelease>> _fetchReleases() async {
-    final response = await _dio.get<String>(
-      _feedUrl!,
-      options: Options(responseType: ResponseType.plain),
+    final response = await _runWithRetry<Response<String>>(
+      label: 'download do appcast',
+      action: () {
+        return _dio.get<String>(
+          _feedUrl!,
+          options: Options(responseType: ResponseType.plain),
+        );
+      },
     );
     final xmlContent = response.data;
     if (xmlContent == null || xmlContent.trim().isEmpty) {
@@ -784,19 +1031,27 @@ class AutoUpdateService {
   Future<File> _downloadInstaller(AppcastRelease release) async {
     final updatesDir = await _updatesDirectoryResolver();
     await updatesDir.create(recursive: true);
+    await _cleanupStagedInstallers(
+      preserveInstallerName: release.installerFileName,
+    );
 
     final targetFile = File(p.join(updatesDir.path, release.installerFileName));
     if (await targetFile.exists()) {
       await targetFile.delete();
     }
 
-    await _dio.download(
-      release.downloadUrl,
-      targetFile.path,
-      options: Options(
-        responseType: ResponseType.bytes,
-        followRedirects: true,
-      ),
+    await _runWithRetry<void>(
+      label: 'download do instalador',
+      action: () {
+        return _dio.download(
+          release.downloadUrl,
+          targetFile.path,
+          options: Options(
+            responseType: ResponseType.bytes,
+            followRedirects: true,
+          ),
+        );
+      },
     );
 
     return targetFile;
@@ -837,7 +1092,7 @@ class AutoUpdateService {
   }) async {
     await locksDir.create(recursive: true);
 
-    final lockFile = File(p.join(locksDir.path, 'auto_update.lock'));
+    final lockFile = File(p.join(locksDir.path, _lockFileName));
     final acquiredAt = (now ?? DateTime.now()).toUtc();
 
     for (var attempt = 0; attempt < 2; attempt++) {
@@ -929,6 +1184,327 @@ class AutoUpdateService {
     );
   }
 
+  Future<void> _persistInstallContext({
+    required AppcastRelease release,
+    required String currentVersion,
+  }) async {
+    final updatesDir = await _updatesDirectoryResolver();
+    await updatesDir.create(recursive: true);
+    await _cleanupUpdateContextIfExpired(
+      File(p.join(updatesDir.path, _updateContextFileName)),
+    );
+    final context =
+        await installContextProvider?.call(release) ??
+        AppUpdateInstallContext(
+          origin: AppUpdateLaunchOrigin.ui,
+          appMode: currentAppMode,
+          currentVersion: currentVersion,
+          targetVersion: release.targetVersion,
+          relaunchArguments: List<String>.of(Platform.executableArguments),
+          executablePath: Platform.resolvedExecutable,
+          createdAt: DateTime.now(),
+        );
+
+    final file = File(p.join(updatesDir.path, _updateContextFileName));
+    const encoder = JsonEncoder.withIndent('  ');
+    await file.writeAsString(
+      '${encoder.convert(context.toJson())}\n',
+      flush: true,
+    );
+  }
+
+  Future<void> _persistDiagnostics({
+    required AppUpdateSource source,
+    required int attemptNumber,
+    required String currentVersion,
+    required AppUpdateStage stage,
+    required AppUpdateStatus status,
+    required DateTime startedAt,
+    required Duration duration,
+    String? targetVersion,
+    String? errorMessage,
+  }) async {
+    try {
+      final updatesDir = await _updatesDirectoryResolver();
+      await updatesDir.create(recursive: true);
+      final file = File(p.join(updatesDir.path, _updateDiagnosticsFileName));
+      await _rotateDiagnosticsIfNeeded(file);
+      final record = <String, Object?>{
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'attemptNumber': attemptNumber,
+        'source': source.name,
+        'status': status.name,
+        'stage': _stageToken(stage),
+        'currentVersion': currentVersion,
+        'targetVersion': targetVersion,
+        'startedAt': startedAt.toUtc().toIso8601String(),
+        'durationMs': duration.inMilliseconds,
+        'error': errorMessage,
+      };
+      await file.writeAsString(
+        '${jsonEncode(record)}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Falha ao persistir diagnostico de auto update',
+        e,
+        s,
+      );
+    }
+  }
+
+  Future<void> _cleanupStaleUpdateArtifacts() async {
+    final updatesDir = await _updatesDirectoryResolver();
+    if (!await updatesDir.exists()) {
+      return;
+    }
+
+    final contextFile = File(p.join(updatesDir.path, _updateContextFileName));
+    await _cleanupUpdateContextIfExpired(contextFile);
+
+    final diagnosticsFile = File(
+      p.join(updatesDir.path, _updateDiagnosticsFileName),
+    );
+    await _rotateDiagnosticsIfNeeded(diagnosticsFile);
+  }
+
+  Future<void> _cleanupUpdateContextIfExpired(File file) async {
+    if (!await file.exists()) {
+      return;
+    }
+
+    if (!await _isUpdateContextExpired(file)) {
+      return;
+    }
+
+    try {
+      await file.delete();
+      LoggerService.info(
+        'AutoUpdateService: update_context.json expirado removido de '
+        '${file.path}',
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Falha ao remover update_context.json expirado',
+        e,
+        s,
+      );
+    }
+  }
+
+  @visibleForTesting
+  static Future<bool> isUpdateContextExpired(
+    File file, {
+    DateTime? now,
+  }) {
+    return _isUpdateContextExpired(file, now: now);
+  }
+
+  static Future<bool> _isUpdateContextExpired(
+    File file, {
+    DateTime? now,
+  }) async {
+    final reference = (now ?? DateTime.now()).toUtc();
+    try {
+      final raw = await file.readAsString();
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return true;
+      }
+      final expiresAt =
+          _tryParseIsoDateTime(decoded['expiresAt']) ??
+          _tryParseIsoDateTime(decoded['createdAt'])?.add(updateContextTtl);
+      if (expiresAt == null) {
+        final modified = (await file.stat()).modified.toUtc();
+        return reference.isAfter(modified.add(updateContextTtl));
+      }
+      return reference.isAfter(expiresAt.toUtc());
+    } on Object {
+      return true;
+    }
+  }
+
+  Future<void> _rotateDiagnosticsIfNeeded(File file) async {
+    if (!await file.exists()) {
+      return;
+    }
+
+    final stat = await file.stat();
+    final now = DateTime.now().toUtc();
+    if (stat.size <= _maxDiagnosticsFileBytes &&
+        now.difference(stat.modified.toUtc()) <= _diagnosticsRetention) {
+      return;
+    }
+
+    try {
+      final rotated = await compactDiagnosticsLines(
+        await file.readAsLines(),
+        now: now,
+      );
+      if (rotated.isEmpty) {
+        await file.delete();
+        return;
+      }
+      await file.writeAsString('${rotated.join('\n')}\n', flush: true);
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Falha ao rotacionar historico de auto update',
+        e,
+        s,
+      );
+    }
+  }
+
+  @visibleForTesting
+  static Future<List<String>> compactDiagnosticsLines(
+    List<String> lines, {
+    required DateTime now,
+    Duration retention = _diagnosticsRetention,
+    int maxBytes = _maxDiagnosticsFileBytes,
+  }) async {
+    final cutoff = now.toUtc().subtract(retention);
+    final kept = <String>[];
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is! Map<String, dynamic>) {
+          continue;
+        }
+        final timestamp = _tryParseIsoDateTime(decoded['timestamp']);
+        if (timestamp == null || timestamp.isBefore(cutoff)) {
+          continue;
+        }
+        kept.add(trimmed);
+      } on Object {
+        continue;
+      }
+    }
+
+    var estimatedBytes = kept.fold<int>(
+      0,
+      (total, line) => total + utf8.encode(line).length + 1,
+    );
+    while (kept.isNotEmpty && estimatedBytes > maxBytes) {
+      final removed = kept.removeAt(0);
+      estimatedBytes -= utf8.encode(removed).length + 1;
+    }
+    return kept;
+  }
+
+  Future<void> _cleanupStagedInstallers({String? preserveInstallerName}) async {
+    final updatesDir = await _updatesDirectoryResolver();
+    if (!await updatesDir.exists()) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final installers = <File>[];
+    await for (final entity in updatesDir.list()) {
+      if (entity is File && p.extension(entity.path).toLowerCase() == '.exe') {
+        installers.add(entity);
+      }
+    }
+
+    installers.sort((a, b) {
+      final aModified = a.statSync().modified;
+      final bModified = b.statSync().modified;
+      return bModified.compareTo(aModified);
+    });
+
+    var keptRecentCount = 0;
+    final maxRecentKeep = preserveInstallerName == null ? 2 : 1;
+    for (final installer in installers) {
+      final name = p.basename(installer.path);
+      final modified = (await installer.stat()).modified;
+      final isPreservedTarget =
+          preserveInstallerName != null && name == preserveInstallerName;
+      final canKeepAsPrevious =
+          !isPreservedTarget &&
+          keptRecentCount < maxRecentKeep &&
+          now.difference(modified) <= _stagedInstallerRetention;
+
+      if (isPreservedTarget) {
+        continue;
+      }
+      if (canKeepAsPrevious) {
+        keptRecentCount++;
+        continue;
+      }
+      try {
+        await installer.delete();
+      } on Object catch (e, s) {
+        LoggerService.warning(
+          'Falha ao remover instalador antigo de staging: ${installer.path}',
+          e,
+          s,
+        );
+      }
+    }
+  }
+
+  Future<T> _runWithRetry<T>({
+    required String label,
+    required Future<T> Function() action,
+  }) async {
+    var attempt = 0;
+    var delay = _initialRetryDelay;
+    while (true) {
+      attempt++;
+      try {
+        return await action();
+      } on Object catch (e, s) {
+        final shouldRetry =
+            attempt < _maxNetworkAttempts && _isRetryableNetworkError(e);
+        if (!shouldRetry) {
+          rethrow;
+        }
+        LoggerService.warning(
+          'Falha transitoria em $label; retentando '
+          '(${attempt + 1}/$_maxNetworkAttempts)',
+          e,
+          s,
+        );
+        await Future<void>.delayed(delay);
+        delay = Duration(milliseconds: delay.inMilliseconds * 2);
+      }
+    }
+  }
+
+  static bool _isRetryableNetworkError(Object error) {
+    if (error is! DioException) {
+      return false;
+    }
+
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+        return true;
+      case DioExceptionType.badResponse:
+        final statusCode = error.response?.statusCode ?? 0;
+        return statusCode >= 500;
+      case DioExceptionType.cancel:
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.unknown:
+        return false;
+    }
+  }
+
+  static void _applyDefaultNetworkTimeouts(Dio dio) {
+    dio.options = dio.options.copyWith(
+      connectTimeout: dio.options.connectTimeout ?? _defaultNetworkTimeout,
+      receiveTimeout: dio.options.receiveTimeout ?? _defaultNetworkTimeout,
+      sendTimeout: dio.options.sendTimeout ?? _defaultNetworkTimeout,
+    );
+  }
+
   static Version? _tryParseVersion(String? raw) {
     final normalized = raw?.trim();
     if (normalized == null || normalized.isEmpty) {
@@ -965,6 +1541,14 @@ class AutoUpdateService {
     }
   }
 
+  static DateTime? _tryParseIsoDateTime(Object? raw) {
+    final value = raw?.toString().trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value)?.toUtc();
+  }
+
   void _logTelemetry(
     String message, {
     required AppUpdateSource source,
@@ -988,6 +1572,7 @@ class AutoUpdateService {
   static String _stageToken(AppUpdateStage stage) {
     return switch (stage) {
       AppUpdateStage.blockedByOtherInstance => 'blocked_by_other_instance',
+      AppUpdateStage.blockedByActiveBackup => 'blocked_by_active_backup',
       AppUpdateStage.fetchingFeed => 'fetching_feed',
       AppUpdateStage.evaluatingRelease => 'evaluating_release',
       AppUpdateStage.downloadingInstaller => 'downloading_installer',

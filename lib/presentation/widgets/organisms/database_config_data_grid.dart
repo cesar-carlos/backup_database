@@ -2,13 +2,17 @@ import 'package:backup_database/application/providers/database_connection_test_s
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/app_spacing.dart';
+import 'package:backup_database/core/utils/database_type_metadata.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_status_chip.dart';
 import 'package:backup_database/presentation/widgets/organisms/app_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
 
 class DatabaseConfigGridRow {
   const DatabaseConfigGridRow({
+    required this.databaseType,
     required this.name,
     required this.serverEndpoint,
     required this.database,
@@ -18,6 +22,7 @@ class DatabaseConfigGridRow {
     this.lastConnectionTest,
   });
 
+  final DatabaseType databaseType;
   final String name;
   final String serverEndpoint;
   final String database;
@@ -27,7 +32,7 @@ class DatabaseConfigGridRow {
   final DatabaseConnectionTestSnapshot? lastConnectionTest;
 }
 
-/// **Organism** — shared data grid for database configuration lists.
+/// **Organism** - shared data grid for database configuration lists.
 class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
   const DatabaseConfigDataGrid({
     required this.configs,
@@ -40,6 +45,7 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
     this.minWidth = 1180,
     this.onAddWhenEmpty,
     this.addWhenEmptyButtonLabel,
+    this.emptyStateMessage,
     this.connectionTestSnapshot,
   });
 
@@ -52,6 +58,7 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
   final double minWidth;
   final VoidCallback? onAddWhenEmpty;
   final String? addWhenEmptyButtonLabel;
+  final String? emptyStateMessage;
   final DatabaseConnectionTestSnapshot? Function(String configId)?
   connectionTestSnapshot;
 
@@ -59,6 +66,14 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
   Widget build(BuildContext context) {
     if (configs.isEmpty) {
       final addLabel = addWhenEmptyButtonLabel;
+      final resolvedEmptyStateMessage =
+          emptyStateMessage ??
+          appLocaleString(
+            context,
+            'Nenhuma configuracao cadastrada para este tipo.',
+            'No configuration registered for this type.',
+          );
+
       if (onAddWhenEmpty != null &&
           addLabel != null &&
           addLabel.trim().isNotEmpty) {
@@ -70,11 +85,7 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    appLocaleString(
-                      context,
-                      'Nenhuma configuração cadastrada para este tipo.',
-                      'No configuration registered for this type.',
-                    ),
+                    resolvedEmptyStateMessage,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -88,13 +99,14 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
           ),
         );
       }
+
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Text(
             appLocaleString(
               context,
-              'Nenhuma configuração encontrada',
+              'Nenhuma configuracao encontrada',
               'No configuration found',
             ),
           ),
@@ -109,6 +121,7 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
         return base;
       }
       return DatabaseConfigGridRow(
+        databaseType: base.databaseType,
         name: base.name,
         serverEndpoint: base.serverEndpoint,
         database: base.database,
@@ -120,6 +133,13 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
     }
 
     final columns = <AppDataGridColumn<T>>[
+      AppDataGridColumn<T>(
+        label: appLocaleString(context, 'Tipo', 'Type'),
+        width: const FlexColumnWidth(1.15),
+        cellBuilder: (context, row) => _DatabaseTypeChip(
+          type: viewFor(row).databaseType,
+        ),
+      ),
       AppDataGridColumn<T>(
         label: appLocaleString(context, 'Nome', 'Name'),
         width: const FlexColumnWidth(1.8),
@@ -152,9 +172,7 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
           ),
           width: const FlexColumnWidth(1.6),
           cellBuilder: (context, row) {
-            final test = viewFor(
-              row,
-            ).lastConnectionTest;
+            final test = viewFor(row).lastConnectionTest;
             if (test == null) {
               return Text(
                 appLocaleString(context, 'Nunca', 'Never'),
@@ -261,6 +279,23 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
         ],
         rows: configs,
       ),
+    );
+  }
+}
+
+class _DatabaseTypeChip extends StatelessWidget {
+  const _DatabaseTypeChip({
+    required this.type,
+  });
+
+  final DatabaseType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final metadata = DatabaseTypeMetadata.of(type);
+    return AppStatusChip(
+      label: metadata.chipLabel,
+      color: metadata.accentColor,
     );
   }
 }

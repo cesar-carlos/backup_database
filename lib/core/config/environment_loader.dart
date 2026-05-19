@@ -87,8 +87,8 @@ class EnvironmentLoader {
     return true;
   }
 
-  /// Carrega o arquivo `.env` se ainda nÃ£o foi carregado. Captura erros
-  /// para nÃ£o interromper o boot â€” variÃ¡veis ausentes serÃ£o tratadas como
+  /// Carrega o arquivo `.env` se ainda nao foi carregado. Captura erros
+  /// para nao interromper o boot, e variaveis ausentes serao tratadas como
   /// `null` pelos consumidores.
   static Future<void> loadIfNeeded({String? logPrefix}) async {
     if (dotenv.isInitialized) {

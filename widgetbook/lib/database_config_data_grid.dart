@@ -1,3 +1,4 @@
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/organisms/database_config_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
@@ -49,6 +50,7 @@ List<_StoryConfig> get _sampleRows => const [
 
 DatabaseConfigGridRow _rowOf(_StoryConfig row) {
   return DatabaseConfigGridRow(
+    databaseType: DatabaseType.sqlServer,
     name: row.name,
     serverEndpoint: row.serverEndpoint,
     database: row.database,

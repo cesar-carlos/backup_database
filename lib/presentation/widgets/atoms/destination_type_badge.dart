@@ -1,5 +1,5 @@
-import 'package:backup_database/core/theme/tokens/app_radius.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_status_chip.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 /// **Atom** — compact badge for [DestinationType] identity.
@@ -41,23 +41,9 @@ class DestinationTypeBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: _color(theme).withValues(alpha: 0.15),
-        borderRadius: AppRadius.circularSm,
-        border: Border.all(
-          color: _color(theme),
-        ),
-      ),
-      child: Text(
-        _label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: _color(theme),
-        ),
-      ),
+    return AppStatusChip(
+      label: _label,
+      color: _color(theme),
     );
   }
 }

@@ -13,7 +13,7 @@ Este diretorio reune scripts de suporte para manutencao, metricas e release.
 | `run_parse_ftp_metrics.py` | Python | Wrapper para `parse_ftp_metrics.dart` |
 | `coverage.py` | Python | Executa testes com cobertura e filtro de lcov |
 | `sync_appcast_from_releases.py` | Python | Versao Python do sincronizador de appcast |
-| `update_appcast_manual.py` | Python | Atualiza `appcast.xml` manualmente para uma versao |
+| `update_appcast_manual.py` | Python | Utilitario legado para manutencao emergencial; o fluxo oficial usa `update-appcast` |
 
 ## Banco de Dados
 
@@ -89,11 +89,15 @@ python scripts/coverage.py --dart-mode --fail-under 70
 
 Reconstrui `appcast.xml` do zero a partir de todos os releases publicados
 do GitHub, deduplicando versoes, aplicando `scripts/appcast_policy.json` e
-reaproveitando o sidecar `.sha256` quando disponivel.
+exigindo o sidecar `.sha256` em cada release elegivel.
 
 ### `update_appcast_manual.py`
 
-Atualizacao manual para um release especifico:
+Utilitario legado para manutencao emergencial. O fluxo oficial continua sendo
+publicar a release com sidecar `.sha256` e deixar o workflow `update-appcast`
+reconstruir o feed.
+
+Uso:
 
 ```bash
 python scripts/update_appcast_manual.py <versao> <asset_url> <asset_size_bytes>

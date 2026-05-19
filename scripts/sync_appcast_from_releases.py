@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import fnmatch
-import hashlib
 import json
 import os
 import re
@@ -80,18 +79,6 @@ def fetch_releases(repo: str) -> list[dict]:
 
 def _normalize_version(tag_name: str) -> str:
     return tag_name[1:] if tag_name.startswith("v") else tag_name
-
-
-def _sha256_from_url(url: str) -> str:
-    request = urllib.request.Request(url, headers=_build_headers())
-    digest = hashlib.sha256()
-    with urllib.request.urlopen(request) as response:
-        while True:
-            chunk = response.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def load_policy(path: Path) -> AppcastPolicy:
@@ -189,16 +176,17 @@ def _select_installer_asset(release: dict) -> ReleaseAsset:
             f"{release.get('tag_name')}: more than one checksum sidecar found for {name}"
         )
 
-    if checksum_assets:
-        sha256 = _read_checksum_sidecar(checksum_assets[0], name)
-        if sha256 is None:
-            raise RuntimeError(
-                f"{release.get('tag_name')}: invalid checksum sidecar for {name}"
-            )
-        sha256_source = "release-sidecar"
-    else:
-        sha256 = _sha256_from_url(url)
-        sha256_source = "downloaded-installer"
+    if not checksum_assets:
+        raise RuntimeError(
+            f"{release.get('tag_name')}: missing required checksum sidecar for {name}"
+        )
+
+    sha256 = _read_checksum_sidecar(checksum_assets[0], name)
+    if sha256 is None:
+        raise RuntimeError(
+            f"{release.get('tag_name')}: invalid checksum sidecar for {name}"
+        )
+    sha256_source = "release-sidecar"
 
     return ReleaseAsset(
         name=name,

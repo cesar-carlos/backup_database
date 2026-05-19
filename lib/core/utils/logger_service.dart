@@ -7,6 +7,7 @@ import 'package:logger/logger.dart';
 class LoggerService {
   static Logger? _logger;
   static FileLoggerService? _fileLogger;
+  static int _silenceDepth = 0;
 
   static Logger get _instance {
     _logger ??= Logger(
@@ -45,6 +46,7 @@ class LoggerService {
 
   /// Retorna o FileLoggerService se disponível
   static FileLoggerService? get fileLogger => _fileLogger;
+  static bool get isSilenced => _silenceDepth > 0;
 
   static String _messageWithContext(String message) => LogContext.hasContext
       ? '${LogContext.buildStructuredPrefix()}$message'
@@ -56,7 +58,17 @@ class LoggerService {
     }
   }
 
+  static Future<T> runSilenced<T>(Future<T> Function() action) async {
+    _silenceDepth++;
+    try {
+      return await action();
+    } finally {
+      _silenceDepth--;
+    }
+  }
+
   static void debug(String message, [dynamic error, StackTrace? stackTrace]) {
+    if (isSilenced) return;
     _instance.d(message, error: error, stackTrace: stackTrace);
     _enqueueFileLog(
       _fileLogger?.log(_messageWithContext(message), level: LogLevel.debug),
@@ -64,11 +76,13 @@ class LoggerService {
   }
 
   static void info(String message, [dynamic error, StackTrace? stackTrace]) {
+    if (isSilenced) return;
     _instance.i(message, error: error, stackTrace: stackTrace);
     _enqueueFileLog(_fileLogger?.log(_messageWithContext(message)));
   }
 
   static void warning(String message, [dynamic error, StackTrace? stackTrace]) {
+    if (isSilenced) return;
     _instance.w(message, error: error, stackTrace: stackTrace);
     _enqueueFileLog(
       _fileLogger?.log(_messageWithContext(message), level: LogLevel.warning),
@@ -76,6 +90,7 @@ class LoggerService {
   }
 
   static void error(String message, [dynamic error, StackTrace? stackTrace]) {
+    if (isSilenced) return;
     _instance.e(message, error: error, stackTrace: stackTrace);
     _enqueueFileLog(
       _fileLogger?.log(_messageWithContext(message), level: LogLevel.error),
@@ -83,6 +98,7 @@ class LoggerService {
   }
 
   static void fatal(String message, [dynamic error, StackTrace? stackTrace]) {
+    if (isSilenced) return;
     _instance.f(message, error: error, stackTrace: stackTrace);
     _enqueueFileLog(
       _fileLogger?.log(_messageWithContext(message), level: LogLevel.error),
@@ -119,6 +135,7 @@ class LoggerService {
       clientId: clientId,
       scheduleId: scheduleId,
     );
+    if (isSilenced) return;
     _instance.i(prefix + message, error: error, stackTrace: stackTrace);
     _enqueueFileLog(_fileLogger?.log(prefix + message));
   }
@@ -138,6 +155,7 @@ class LoggerService {
       clientId: clientId,
       scheduleId: scheduleId,
     );
+    if (isSilenced) return;
     _instance.w(prefix + message, error: error, stackTrace: stackTrace);
     _enqueueFileLog(
       _fileLogger?.log(prefix + message, level: LogLevel.warning),
@@ -159,6 +177,7 @@ class LoggerService {
       clientId: clientId,
       scheduleId: scheduleId,
     );
+    if (isSilenced) return;
     _instance.e(prefix + message, error: error, stackTrace: stackTrace);
     _enqueueFileLog(
       _fileLogger?.log(prefix + message, level: LogLevel.error),

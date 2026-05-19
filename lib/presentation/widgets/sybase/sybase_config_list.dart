@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/database_connection_test_snapshot.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/presentation/widgets/organisms/database_config_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -30,6 +31,7 @@ class SybaseConfigList extends StatelessWidget {
     return DatabaseConfigDataGrid<SybaseConfig>(
       configs: configs,
       rowOf: (c) => DatabaseConfigGridRow(
+        databaseType: DatabaseType.sybase,
         name: c.name,
         serverEndpoint: '${c.serverName}:${c.portValue}',
         database: c.databaseNameValue,

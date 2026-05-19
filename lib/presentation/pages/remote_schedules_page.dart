@@ -4,7 +4,6 @@ import 'package:backup_database/application/providers/destination_provider.dart'
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
@@ -54,7 +53,9 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
         _hasLoadedInitialSchedules = true;
       }
       unawaited(
-        context.read<RemoteSchedulesProvider>().tryResumeExecutionAfterReconnect(),
+        context
+            .read<RemoteSchedulesProvider>()
+            .tryResumeExecutionAfterReconnect(),
       );
     }
 
@@ -66,9 +67,10 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldPage(
-      header: const PageHeader(title: Text('Agendamentos do Servidor')),
-      content: PageContentLayout(
+    return AppPageScaffold(
+      title: 'Agendamentos do Servidor',
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Consumer<RemoteSchedulesProvider>(
             builder: (context, provider, _) {
@@ -87,61 +89,43 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
               return const SizedBox.shrink();
             },
           ),
-          Consumer<ServerConnectionProvider>(
-            builder: (context, connectionProvider, _) {
-              if (!connectionProvider.isConnected) {
-                return _buildNotConnected(context);
-              }
-              return Consumer<RemoteSchedulesProvider>(
-                builder: (context, provider, _) {
-                  if (provider.isLoading && provider.schedules.isEmpty) {
-                    return const Center(child: ProgressRing());
-                  }
-                  if (provider.error != null && provider.schedules.isEmpty) {
-                    return AppCard(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              FluentIcons.error,
-                              size: 64,
-                              color: AppColors.error,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              provider.error!,
-                              style: FluentTheme.of(
-                                context,
-                              ).typography.bodyLarge,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            Button(
-                              onPressed: () =>
-                                  unawaited(provider.loadSchedules()),
-                              child: const Text('Tentar Novamente'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-                  if (provider.schedules.isEmpty) {
-                    return AppCard(
-                      child: EmptyState(
-                        icon: FluentIcons.calendar,
-                        message: 'Nenhum agendamento no servidor',
+          Expanded(
+            child: Consumer<ServerConnectionProvider>(
+              builder: (context, connectionProvider, _) {
+                if (!connectionProvider.isConnected) {
+                  return _buildNotConnected(context);
+                }
+                return Consumer<RemoteSchedulesProvider>(
+                  builder: (context, provider, _) {
+                    if (provider.isLoading && provider.schedules.isEmpty) {
+                      return AppPageState.loading(
+                        title: 'Carregando agendamentos remotos',
+                        message:
+                            'Sincronizando os agendamentos do servidor conectado.',
+                      );
+                    }
+                    if (provider.error != null && provider.schedules.isEmpty) {
+                      return AppPageState.error(
+                        title: 'Falha ao carregar agendamentos remotos',
+                        message: provider.error,
+                        actionLabel: 'Tentar novamente',
+                        onAction: () => unawaited(provider.loadSchedules()),
+                      );
+                    }
+                    if (provider.schedules.isEmpty) {
+                      return AppPageState.empty(
+                        title: 'Nenhum agendamento no servidor',
+                        message:
+                            'Veja e controle os agendamentos publicados pelo servidor conectado.',
                         actionLabel: 'Atualizar',
                         onAction: () => unawaited(provider.loadSchedules()),
-                      ),
-                    );
-                  }
-                  return _buildScheduleList(context, provider);
-                },
-              );
-            },
+                      );
+                    }
+                    return _buildScheduleList(context, provider);
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -151,40 +135,18 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
   bool _isDisconnectionError(String message) {
     final lower = message.toLowerCase();
     return lower.contains('desconectado') ||
+        lower.contains('conexao perdida') ||
         lower.contains('conexão perdida') ||
         lower.contains('reconecte-se');
   }
 
   Widget _buildNotConnected(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            FluentIcons.plug_disconnected,
-            size: 64,
-            color: FluentTheme.of(context).resources.textFillColorSecondary,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Conecte-se a um servidor',
-            style: FluentTheme.of(context).typography.titleLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Vá em Conectar para adicionar e conectar a um servidor, '
-            'depois volte aqui para ver e controlar os agendamentos.',
-            style: FluentTheme.of(context).typography.body,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: () => context.go('/server-login'),
-            child: const Text('Ir para Conectar'),
-          ),
-        ],
-      ),
+    return AppPageState.empty(
+      title: 'Conecte-se a um servidor',
+      message:
+          'Vá em Conectar para adicionar e conectar a um servidor, depois volte aqui para ver e controlar os agendamentos.',
+      actionLabel: 'Ir para Conectar',
+      onAction: () => context.go('/server-login'),
     );
   }
 

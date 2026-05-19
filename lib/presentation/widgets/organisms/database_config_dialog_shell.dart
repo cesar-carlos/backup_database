@@ -1,8 +1,5 @@
-import 'dart:async';
-
-import 'package:backup_database/core/theme/tokens/app_spacing.dart';
+import 'package:backup_database/presentation/widgets/organisms/app_dialog_shell.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/services.dart';
 
 /// **Organism** — shared [ContentDialog] layout for database configuration
 /// dialogs (title, scrollable body, actions, keyboard shortcuts).
@@ -26,34 +23,13 @@ class DatabaseConfigDialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bindings = <ShortcutActivator, VoidCallback>{
-      const SingleActivator(LogicalKeyboardKey.escape): () {
-        if (onDismiss != null) {
-          onDismiss!();
-        } else {
-          unawaited(Navigator.of(context).maybePop());
-        }
-      },
-    };
-    if (onSubmitIntent != null) {
-      bindings[const SingleActivator(LogicalKeyboardKey.enter, control: true)] =
-          onSubmitIntent!;
-    }
-
-    return CallbackShortcuts(
-      bindings: bindings,
-      child: Focus(
-        autofocus: true,
-        child: ContentDialog(
-          constraints: constraints,
-          title: title,
-          content: SingleChildScrollView(
-            padding: AppSpacing.paddingLg,
-            child: body,
-          ),
-          actions: dialogActions,
-        ),
-      ),
+    return AppDialogShell(
+      constraints: constraints,
+      title: title,
+      content: body,
+      actions: dialogActions,
+      onSubmitIntent: onSubmitIntent,
+      onDismiss: onDismiss,
     );
   }
 }

@@ -51,7 +51,7 @@ class DestinationGrid extends StatelessWidget {
           AppDataGridColumn<BackupDestination>(
             label: appLocaleString(context, 'Tipo', 'Type'),
             width: const FlexColumnWidth(0.95),
-            cellBuilder: (context, row) => _TypeChip(
+            cellBuilder: (context, row) => AppStatusChip(
               label: _getTypeName(context, row.type),
               color: _getTypeColor(row.type),
             ),
@@ -71,14 +71,15 @@ class DestinationGrid extends StatelessWidget {
           AppDataGridColumn<BackupDestination>(
             label: appLocaleString(context, 'Status', 'Status'),
             width: const FlexColumnWidth(1.2),
-            cellBuilder: (context, row) => Row(
-              mainAxisSize: MainAxisSize.min,
+            cellBuilder: (context, row) => Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 ToggleSwitch(
                   checked: row.enabled,
                   onChanged: (enabled) => onToggleEnabled(row, enabled),
                 ),
-                const SizedBox(width: 8),
                 Text(
                   row.enabled
                       ? appLocaleString(context, 'Ativo', 'Active')
@@ -230,32 +231,5 @@ class DestinationGrid extends StatelessWidget {
     } on Object {
       return '';
     }
-  }
-}
-
-class _TypeChip extends StatelessWidget {
-  const _TypeChip({
-    required this.label,
-    required this.color,
-  });
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: FluentTheme.of(context).typography.caption?.copyWith(
-          color: color,
-        ),
-      ),
-    );
   }
 }

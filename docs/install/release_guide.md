@@ -75,7 +75,7 @@ Depois da publicacao:
 1. O workflow `.github/workflows/update-appcast.yml` executa.
 2. O script `scripts/sync_appcast_from_releases.py` reconstrui o `appcast.xml`.
 3. O feed inclui `length` e `sha256`.
-4. Se o release tiver sidecar `.sha256`, o script reutiliza esse hash e evita baixar o `.exe` inteiro.
+4. O release precisa ter sidecar `.sha256`; sem ele o rebuild do feed falha.
 5. O workflow faz commit do `appcast.xml` atualizado.
 
 ## Rollback rapido do feed
@@ -94,3 +94,4 @@ Se precisar retirar uma release do auto update sem apagar a release do GitHub:
 - O updater usa o hash `sha256` do feed para validar o instalador antes da troca.
 - A configuracao ativa da maquina instalada fica em `C:\ProgramData\BackupDatabase\config\.env`.
 - Alterar `.env` dentro da pasta do aplicativo nao muda o runtime da maquina instalada.
+- Nesta rodada, auto update silencioso em modo servico so e suportado quando o Windows Service esta em `LocalSystem`.

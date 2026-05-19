@@ -21,11 +21,21 @@ FluentThemeData _goldenFluentDarkTheme() {
 
 bool _includeComponent(String componentName) {
   return const {
+    'AppDataGrid',
+    'AppDialogShell',
     'AppButton',
+    'AppStatusChip',
+    'AppPageScaffold',
+    'AppPageState',
+    'AppSectionCard',
+    'DestinationGrid',
     'AppTextField',
+    'DatabaseConfigDataGrid',
     'PasswordField',
+    'ScheduleGrid',
     'MessageModal',
     'EmptyState',
+    'SectionHeaderWithStatusBadges',
   }.contains(componentName);
 }
 

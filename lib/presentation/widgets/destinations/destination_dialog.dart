@@ -211,7 +211,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return ContentDialog(
+    return AppDialogShell(
       constraints: const BoxConstraints(
         minWidth: 600,
         maxWidth: 600,
@@ -239,87 +239,171 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildContent() {
-    return Container(
-      constraints: const BoxConstraints(),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildTypeSelector(),
-              const SizedBox(height: 16),
-              Consumer<LicenseProvider>(
-                builder: (context, licenseProvider, child) {
-                  final license = licenseProvider.currentLicense;
-                  final hasGoogleDrive =
-                      licenseProvider.hasValidLicense &&
-                      (license?.hasFeature(LicenseFeatures.googleDrive) ??
-                          false);
-                  final hasDropbox =
-                      licenseProvider.hasValidLicense &&
-                      (license?.hasFeature(LicenseFeatures.dropbox) ?? false);
-                  final hasNextcloud =
-                      licenseProvider.hasValidLicense &&
-                      (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
-
-                  final isGoogleDriveBlocked =
-                      _selectedType == DestinationType.googleDrive &&
-                      !hasGoogleDrive;
-                  final isDropboxBlocked =
-                      _selectedType == DestinationType.dropbox && !hasDropbox;
-                  final isNextcloudBlocked =
-                      _selectedType == DestinationType.nextcloud &&
-                      !hasNextcloud;
-
-                  if (isGoogleDriveBlocked ||
-                      isDropboxBlocked ||
-                      isNextcloudBlocked) {
-                    return InfoBar(
-                      severity: InfoBarSeverity.warning,
-                      title: Text(
-                        _dialogLabel('Recurso bloqueado', 'Feature blocked'),
-                      ),
-                      content: const Text(
-                        'Este destino requer uma licença válida. '
-                        'Acesse Configurações > Licenciamento para mais informações.',
-                      ),
-                      action: Button(
-                        child: Text(
-                          _dialogLabel('Ver licenciamento', 'View licensing'),
-                        ),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                      ),
-                    );
-                  }
-
-                  return const SizedBox.shrink();
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildNameField(),
-              const SizedBox(height: 16),
-              _buildTypeSpecificFields(),
-              const SizedBox(height: 16),
-              _buildRetentionSection(),
-              if (_selectedType == DestinationType.local) ...[
-                const SizedBox(height: 16),
-                _buildCreateSubfoldersSwitch(),
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox.shrink(),
+          AppSectionCard(
+            title: _dialogLabel('Identificacao', 'Identity'),
+            description: _dialogLabel(
+              'Defina o tipo e o nome usados para identificar este destino na operacao.',
+              'Define the type and display name used to identify this destination in operations.',
+            ),
+            trailing: DestinationTypeBadge(type: _selectedType),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildTypeSelector(),
               ],
-              if (_selectedType == DestinationType.ftp) ...[
-                const SizedBox(height: 16),
-                _buildFtpsSection(),
-              ],
-              const SizedBox(height: 16),
-              _buildEnabledSwitch(),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 16),
+          Consumer<LicenseProvider>(
+            builder: (context, licenseProvider, child) {
+              final license = licenseProvider.currentLicense;
+              final hasGoogleDrive =
+                  licenseProvider.hasValidLicense &&
+                  (license?.hasFeature(LicenseFeatures.googleDrive) ?? false);
+              final hasDropbox =
+                  licenseProvider.hasValidLicense &&
+                  (license?.hasFeature(LicenseFeatures.dropbox) ?? false);
+              final hasNextcloud =
+                  licenseProvider.hasValidLicense &&
+                  (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
+
+              final isGoogleDriveBlocked =
+                  _selectedType == DestinationType.googleDrive &&
+                  !hasGoogleDrive;
+              final isDropboxBlocked =
+                  _selectedType == DestinationType.dropbox && !hasDropbox;
+              final isNextcloudBlocked =
+                  _selectedType == DestinationType.nextcloud && !hasNextcloud;
+
+              if (isGoogleDriveBlocked ||
+                  isDropboxBlocked ||
+                  isNextcloudBlocked) {
+                return InfoBar(
+                  severity: InfoBarSeverity.warning,
+                  title: Text(
+                    _dialogLabel('Recurso bloqueado', 'Feature blocked'),
+                  ),
+                  content: const Text(
+                    'Este destino requer uma licença válida. '
+                    'Acesse Configurações > Licenciamento para mais informações.',
+                  ),
+                  action: Button(
+                    child: Text(
+                      _dialogLabel('Ver licenciamento', 'View licensing'),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                );
+              }
+
+              return const SizedBox.shrink();
+            },
+          ),
+          const SizedBox(height: 16),
+          AppSectionCard(
+            title: _getTypeSectionTitle(),
+            description: _getTypeSectionDescription(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildNameField(),
+                const SizedBox(height: 16),
+                _buildTypeSpecificFields(),
+                if (_selectedType == DestinationType.ftp) ...[
+                  const SizedBox(height: 16),
+                  _buildFtpsSection(),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          AppSectionCard(
+            title: _dialogLabel(
+              'Comportamento e retencao',
+              'Behavior and retention',
+            ),
+            description: _dialogLabel(
+              'Controle limpeza automatica, disponibilidade do destino e preferencias adicionais.',
+              'Control automatic cleanup, destination availability and additional preferences.',
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildRetentionSection(),
+                if (_selectedType == DestinationType.local) ...[
+                  const SizedBox(height: 16),
+                  _buildCreateSubfoldersSwitch(),
+                ],
+                const SizedBox(height: 16),
+                _buildEnabledSwitch(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  String _getTypeSectionTitle() {
+    switch (_selectedType) {
+      case DestinationType.local:
+        return _dialogLabel('Pasta local', 'Local folder');
+      case DestinationType.ftp:
+        return _dialogLabel('Configuracao FTP', 'FTP configuration');
+      case DestinationType.googleDrive:
+        return _dialogLabel(
+          'Configuracao do Google Drive',
+          'Google Drive configuration',
+        );
+      case DestinationType.dropbox:
+        return _dialogLabel(
+          'Configuracao do Dropbox',
+          'Dropbox configuration',
+        );
+      case DestinationType.nextcloud:
+        return _dialogLabel(
+          'Configuracao do Nextcloud',
+          'Nextcloud configuration',
+        );
+    }
+  }
+
+  String _getTypeSectionDescription() {
+    switch (_selectedType) {
+      case DestinationType.local:
+        return _dialogLabel(
+          'Escolha a pasta onde os backups serao gravados nesta maquina.',
+          'Choose the folder where backups will be stored on this machine.',
+        );
+      case DestinationType.ftp:
+        return _dialogLabel(
+          'Informe acesso, caminho remoto e preferencias de transferencia segura.',
+          'Provide access, remote path and secure transfer preferences.',
+        );
+      case DestinationType.googleDrive:
+        return _dialogLabel(
+          'Conecte a conta Google e defina a pasta que recebera os backups.',
+          'Connect a Google account and define which folder will receive backups.',
+        );
+      case DestinationType.dropbox:
+        return _dialogLabel(
+          'Conecte o Dropbox e configure a pasta de publicacao dos backups.',
+          'Connect Dropbox and configure the folder used to publish backups.',
+        );
+      case DestinationType.nextcloud:
+        return _dialogLabel(
+          'Configure URL, credenciais e pasta remota do seu servidor Nextcloud.',
+          'Configure URL, credentials and remote folder for your Nextcloud server.',
+        );
+    }
   }
 
   Widget _buildTypeSelector() {
@@ -475,164 +559,23 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildNextcloudFields() {
-    return Column(
-      children: [
-        AppTextField(
-          controller: _nextcloudServerUrlController,
-          label: _dialogLabel('URL do Nextcloud', 'Nextcloud URL'),
-          hint: 'https://cloud.exemplo.com',
-          prefixIcon: const Icon(FluentIcons.globe),
-          validator: (value) {
-            final text = value?.trim() ?? '';
-            if (text.isEmpty) {
-              return _dialogLabel('URL é obrigatória', 'URL is required');
-            }
-
-            final uri = Uri.tryParse(text);
-            if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-              return _dialogLabel('URL inválida', 'Invalid URL');
-            }
-            if (uri.scheme != 'https' && uri.scheme != 'http') {
-              return _dialogLabel('Use http ou https', 'Use http or https');
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _nextcloudUsernameController,
-          label: _dialogLabel('Usuario', 'Username'),
-          hint: 'usuario',
-          prefixIcon: const Icon(FluentIcons.contact),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return _dialogLabel(
-                'Usuário é obrigatório',
-                'Username is required',
-              );
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<NextcloudAuthMode>(
-          label: _dialogLabel('Tipo de credencial', 'Credential type'),
-          value: _nextcloudAuthMode,
-          placeholder: Text(
-            _dialogLabel('Tipo de credencial', 'Credential type'),
-          ),
-          items: NextcloudAuthMode.values.map((mode) {
-            final label = mode == NextcloudAuthMode.appPassword
-                ? _dialogLabel(
-                    'App Password (recomendado)',
-                    'App Password (recommended)',
-                  )
-                : _dialogLabel('Senha do usuario', 'User password');
-            return ComboBoxItem<NextcloudAuthMode>(
-              value: mode,
-              child: Text(label),
-            );
-          }).toList(),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() {
-              _nextcloudAuthMode = value;
-            });
-          },
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _nextcloudAppPasswordController,
-          label: _nextcloudAuthMode == NextcloudAuthMode.appPassword
-              ? _dialogLabel('App Password', 'App Password')
-              : _dialogLabel('Senha do usuario', 'User password'),
-          hint: _nextcloudAuthMode == NextcloudAuthMode.appPassword
-              ? _dialogLabel(
-                  'Senha de aplicativo do Nextcloud',
-                  'Nextcloud app password',
-                )
-              : _dialogLabel(
-                  'Senha do usuario do Nextcloud',
-                  'Nextcloud user password',
-                ),
-          prefixIcon: const Icon(FluentIcons.lock),
-          obscureText: true,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return _nextcloudAuthMode == NextcloudAuthMode.appPassword
-                  ? _dialogLabel(
-                      'App Password é obrigatório',
-                      'App Password is required',
-                    )
-                  : _dialogLabel(
-                      'Senha do usuário é obrigatória',
-                      'User password is required',
-                    );
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _nextcloudRemotePathController,
-          label: _dialogLabel(
-            'Caminho remoto (opcional)',
-            'Remote path (optional)',
-          ),
-          hint: '/ ou /Backups',
-          prefixIcon: const Icon(FluentIcons.folder),
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _nextcloudFolderNameController,
-          label: _dialogLabel('Nome da pasta', 'Folder name'),
-          hint: 'Backups',
-          prefixIcon: const Icon(FluentIcons.cloud),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return _dialogLabel(
-                'Nome da pasta é obrigatório',
-                'Folder name is required',
-              );
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InfoLabel(
-              label: _dialogLabel(
-                'Permitir certificado invalido (self-signed)',
-                'Allow invalid certificate (self-signed)',
-              ),
-              child: ToggleSwitch(
-                checked: _nextcloudAllowInvalidCertificates,
-                onChanged: _setNextcloudAllowInvalidCertificates,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _dialogLabel(
-                'Use apenas se seu Nextcloud usa certificado self-signed ou CA interna.',
-                'Use only if your Nextcloud uses self-signed cert or internal CA.',
-              ),
-              style: FluentTheme.of(context).typography.caption,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        ActionButton(
-          label: _dialogLabel(
-            'Testar conexão Nextcloud',
-            'Test Nextcloud connection',
-          ),
-          icon: FluentIcons.network_tower,
-          onPressed: _testNextcloudConnection,
-          isLoading: _isTestingNextcloudConnection,
-        ),
-      ],
+    return _NextcloudDestinationFields(
+      serverUrlController: _nextcloudServerUrlController,
+      usernameController: _nextcloudUsernameController,
+      appPasswordController: _nextcloudAppPasswordController,
+      remotePathController: _nextcloudRemotePathController,
+      folderNameController: _nextcloudFolderNameController,
+      authMode: _nextcloudAuthMode,
+      allowInvalidCertificates: _nextcloudAllowInvalidCertificates,
+      isTestingConnection: _isTestingNextcloudConnection,
+      labelBuilder: _dialogLabel,
+      onAuthModeChanged: (value) {
+        setState(() {
+          _nextcloudAuthMode = value;
+        });
+      },
+      onAllowInvalidCertificatesChanged: _setNextcloudAllowInvalidCertificates,
+      onTestConnection: _testNextcloudConnection,
     );
   }
 
@@ -876,288 +819,65 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildFtpAdvancedOptions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          _dialogLabel('Opções avançadas', 'Advanced options'),
-          style: FluentTheme.of(context).typography.bodyStrong,
-        ),
-        const SizedBox(height: 12),
-        AppDropdown<_FtpIntegrityPreset>(
-          label: _dialogLabel('Preset de integridade', 'Integrity preset'),
-          value: _ftpIntegrityPreset,
-          placeholder: Text(
-            _dialogLabel('Máxima integridade', 'Maximum integrity'),
-          ),
-          items: _FtpIntegrityPreset.values
-              .map(
-                (preset) => ComboBoxItem<_FtpIntegrityPreset>(
-                  value: preset,
-                  child: Text(
-                    switch (preset) {
-                      _FtpIntegrityPreset.quick => _dialogLabel(
-                        'Rápido',
-                        'Quick',
-                      ),
-                      _FtpIntegrityPreset.balanced => _dialogLabel(
-                        'Equilibrado',
-                        'Balanced',
-                      ),
-                      _FtpIntegrityPreset.maximum => _dialogLabel(
-                        'Máxima integridade',
-                        'Maximum integrity',
-                      ),
-                    },
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) {
+    return _FtpAdvancedOptionsSection(
+      integrityPreset: _ftpIntegrityPreset,
+      whenResumeNotSupported: _whenResumeNotSupportedFtp,
+      enableStrongIntegrityValidation: _enableStrongIntegrityValidationFtp,
+      enableReadBackValidation: _enableReadBackValidationFtp,
+      keepPartOnCancel: _keepPartOnCancelFtp,
+      enableVerboseLog: _enableVerboseLogFtp,
+      maxAttemptsController: _maxAttemptsFtpController,
+      connectionTimeoutSecondsController: _connectionTimeoutSecondsController,
+      uploadTimeoutMinutesController: _uploadTimeoutMinutesController,
+      impactColor: _getFtpIntegrityImpactColor(),
+      impactText: _getFtpIntegrityImpactText(),
+      labelBuilder: _dialogLabel,
+      onPresetChanged: (value) {
+        setState(() {
+          _ftpIntegrityPreset = value;
+          _applyFtpIntegrityPreset(value);
+        });
+      },
+      onEnableStrongIntegrityValidationChanged: (value) {
+        setState(() {
+          _enableStrongIntegrityValidationFtp = value;
+          if (!value) {
+            _enableReadBackValidationFtp = false;
+          }
+          _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
+            enableStrongIntegrityValidation:
+                _enableStrongIntegrityValidationFtp,
+            enableReadBackValidation: _enableReadBackValidationFtp,
+          );
+        });
+      },
+      onEnableReadBackValidationChanged: _enableStrongIntegrityValidationFtp
+          ? (value) {
               setState(() {
-                _ftpIntegrityPreset = value;
-                _applyFtpIntegrityPreset(value);
-              });
-            }
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Rápido: só tamanho. Equilibrado: hash remoto. '
-                'Máxima: hash remoto + read-back quando necessário.',
-            'Quick: size only. Balanced: remote hash. '
-                'Maximum: remote hash + read-back when needed.',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: _getFtpIntegrityImpactColor().withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: _getFtpIntegrityImpactColor().withValues(alpha: 0.45),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                FluentIcons.info,
-                size: 16,
-                color: _getFtpIntegrityImpactColor(),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _getFtpIntegrityImpactText(),
-                  style: FluentTheme.of(context).typography.caption?.copyWith(
-                    color: _getFtpIntegrityImpactColor(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: _dialogLabel(
-            'Validação forte de integridade',
-            'Strong integrity validation',
-          ),
-          child: ToggleSwitch(
-            checked: _enableStrongIntegrityValidationFtp,
-            onChanged: (value) {
-              setState(() {
-                _enableStrongIntegrityValidationFtp = value;
-                if (!value) {
-                  _enableReadBackValidationFtp = false;
-                }
+                _enableReadBackValidationFtp = value;
                 _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
                   enableStrongIntegrityValidation:
                       _enableStrongIntegrityValidationFtp,
                   enableReadBackValidation: _enableReadBackValidationFtp,
                 );
               });
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Além do tamanho, valida com hash do arquivo remoto para reduzir '
-                'falsos positivos.',
-            'In addition to file size, validates using remote file hash to '
-                'reduce false positives.',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: _dialogLabel(
-            'Read-back quando hash remoto indisponível',
-            'Read-back when remote hash unavailable',
-          ),
-          child: ToggleSwitch(
-            checked: _enableReadBackValidationFtp,
-            onChanged: _enableStrongIntegrityValidationFtp
-                ? (value) {
-                    setState(() {
-                      _enableReadBackValidationFtp = value;
-                      _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
-                        enableStrongIntegrityValidation:
-                            _enableStrongIntegrityValidationFtp,
-                        enableReadBackValidation: _enableReadBackValidationFtp,
-                      );
-                    });
-                  }
-                : null,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Baixa o arquivo do FTP e compara SHA-256 com o local. '
-                'Mais confiável, porém mais lento para arquivos grandes.',
-            'Downloads the file from FTP and compares SHA-256 with local. '
-                'More reliable, but slower for large files.',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: _dialogLabel(
-            'Manter parcial ao cancelar',
-            'Keep partial on cancel',
-          ),
-          child: ToggleSwitch(
-            checked: _keepPartOnCancelFtp,
-            onChanged: (value) {
-              setState(() {
-                _keepPartOnCancelFtp = value;
-              });
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Manter arquivo .part no servidor para retomar depois',
-            'Keep .part file on server to resume later',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<FtpWhenResumeNotSupported>(
-          label: _dialogLabel(
-            'Quando servidor não suporta retomada',
-            'When server does not support resume',
-          ),
-          value: _whenResumeNotSupportedFtp,
-          placeholder: Text(
-            _dialogLabel(
-              'Fallback (upload completo)',
-              'Fallback (full upload)',
-            ),
-          ),
-          items: FtpWhenResumeNotSupported.values
-              .map(
-                (e) => ComboBoxItem<FtpWhenResumeNotSupported>(
-                  value: e,
-                  child: Text(
-                    e == FtpWhenResumeNotSupported.fallback
-                        ? _dialogLabel(
-                            'Fallback (upload completo)',
-                            'Fallback (full upload)',
-                          )
-                        : _dialogLabel('Falhar', 'Fail'),
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) {
-              setState(() {
-                _whenResumeNotSupportedFtp = value;
-              });
             }
-          },
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          label: _dialogLabel('Máx. tentativas', 'Max attempts'),
-          controller: _maxAttemptsFtpController,
-          hint: _dialogLabel('Padrão: 3', 'Default: 3'),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Número máximo de tentativas por upload',
-            'Maximum number of attempts per upload',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: _dialogLabel('Log detalhado FTP', 'Verbose FTP log'),
-          child: ToggleSwitch(
-            checked: _enableVerboseLogFtp,
-            onChanged: (value) {
-              setState(() {
-                _enableVerboseLogFtp = value;
-              });
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Registrar comandos e respostas do protocolo FTP (útil para diagnóstico)',
-            'Log FTP protocol commands and responses (useful for troubleshooting)',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          label: _dialogLabel(
-            'Timeout de conexão (s)',
-            'Connection timeout (s)',
-          ),
-          controller: _connectionTimeoutSecondsController,
-          hint: _dialogLabel('Padrão: 15', 'Default: 15'),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Tempo limite para conectar e autenticar no servidor FTP',
-            'Time limit to connect and authenticate to FTP server',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          label: _dialogLabel(
-            'Timeout de upload (min)',
-            'Upload timeout (min)',
-          ),
-          controller: _uploadTimeoutMinutesController,
-          hint: _dialogLabel('Padrão: 60', 'Default: 60'),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Tempo limite para sessão de upload (arquivos grandes podem precisar de mais)',
-            'Time limit for upload session (large files may need more)',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-      ],
+          : null,
+      onKeepPartOnCancelChanged: (value) {
+        setState(() {
+          _keepPartOnCancelFtp = value;
+        });
+      },
+      onWhenResumeNotSupportedChanged: (value) {
+        setState(() {
+          _whenResumeNotSupportedFtp = value;
+        });
+      },
+      onEnableVerboseLogChanged: (value) {
+        setState(() {
+          _enableVerboseLogFtp = value;
+        });
+      },
     );
   }
 
@@ -1196,118 +916,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildLocalFields() {
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AppTextField(
-                controller: _localPathController,
-                label: _dialogLabel('Caminho da pasta', 'Folder path'),
-                hint: r'C:\Backups',
-                prefixIcon: const Icon(FluentIcons.folder),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return _dialogLabel(
-                      'Caminho é obrigatório',
-                      'Path is required',
-                    );
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Padding(
-              padding: const EdgeInsets.only(top: 24),
-              child: IconButton(
-                icon: const Icon(FluentIcons.folder_open),
-                onPressed: _selectLocalFolder,
-              ),
-            ),
-          ],
-        ),
-      ],
+    return _LocalDestinationFields(
+      pathController: _localPathController,
+      labelBuilder: _dialogLabel,
+      onSelectFolder: _selectLocalFolder,
     );
   }
 
   Widget _buildFtpFields() {
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: AppTextField(
-                controller: _ftpHostController,
-                label: _dialogLabel('Servidor FTP', 'FTP server'),
-                hint: 'ftp.exemplo.com',
-                prefixIcon: const Icon(FluentIcons.server),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return _dialogLabel(
-                      'Servidor é obrigatório',
-                      'Server is required',
-                    );
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: NumericField(
-                controller: _ftpPortController,
-                label: _dialogLabel('Porta', 'Port'),
-                hint: '21',
-                prefixIcon: FluentIcons.number_field,
-                minValue: 1,
-                maxValue: 65535,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _ftpUsernameController,
-          label: _dialogLabel('Usuario', 'Username'),
-          hint: 'usuario_ftp',
-          prefixIcon: const Icon(FluentIcons.contact),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return _dialogLabel(
-                'Usuário é obrigatório',
-                'Username is required',
-              );
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        PasswordField(
-          controller: _ftpPasswordController,
-          label: _dialogLabel('Senha FTP', 'FTP password'),
-          hint: _dialogLabel('Senha do FTP', 'FTP password'),
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _ftpRemotePathController,
-          label: _dialogLabel('Caminho remoto', 'Remote path'),
-          hint: '/backups',
-          prefixIcon: const Icon(FluentIcons.folder),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return _dialogLabel(
-                'Caminho remoto é obrigatório',
-                'Remote path is required',
-              );
-            }
-            return null;
-          },
-        ),
-      ],
+    return _FtpConnectionFields(
+      hostController: _ftpHostController,
+      portController: _ftpPortController,
+      usernameController: _ftpUsernameController,
+      passwordController: _ftpPasswordController,
+      remotePathController: _ftpRemotePathController,
+      labelBuilder: _dialogLabel,
     );
   }
 
@@ -1318,38 +941,32 @@ class _DestinationDialogState extends State<DestinationDialog> {
       listenable: googleAuth,
       builder: (context, _) {
         final features = getIt<FeatureAvailabilityService>();
-        return Column(
-          children: [
-            if (!features.isExternalBrowserOAuthEnabled) ...[
-              InfoBar(
-                title: Text(
-                  _dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in'),
-                ),
-                content: Text(
-                  localizeCompatibilityReason(
-                    context,
-                    reason: features.externalBrowserOAuthDisabledReason,
-                    fallbackPt: 'Nao disponivel nesta versao do Windows.',
-                    fallbackEn: 'Not available on this Windows version.',
+        return _GoogleDriveDestinationFields(
+          oauthAvailabilityWarning: !features.isExternalBrowserOAuthEnabled
+              ? InfoBar(
+                  title: Text(
+                    _dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in'),
                   ),
-                ),
-                severity: InfoBarSeverity.warning,
-                isLong: true,
-              ),
-              const SizedBox(height: 12),
-            ],
-            _buildGoogleAuthStatus(googleAuth),
-            const SizedBox(height: 16),
-            if (!googleAuth.isConfigured) ...[
-              _buildOAuthConfigSection(googleAuth),
-              const SizedBox(height: 16),
-            ],
-            _buildGoogleFolderField(googleAuth),
-            if (!googleAuth.isSignedIn) ...[
-              const SizedBox(height: 16),
-              _buildGoogleNotSignedInWarning(),
-            ],
-          ],
+                  content: Text(
+                    localizeCompatibilityReason(
+                      context,
+                      reason: features.externalBrowserOAuthDisabledReason,
+                      fallbackPt: 'Nao disponivel nesta versao do Windows.',
+                      fallbackEn: 'Not available on this Windows version.',
+                    ),
+                  ),
+                  severity: InfoBarSeverity.warning,
+                  isLong: true,
+                )
+              : null,
+          authStatus: _buildGoogleAuthStatus(googleAuth),
+          oauthConfigSection: !googleAuth.isConfigured
+              ? _buildOAuthConfigSection(googleAuth)
+              : null,
+          folderField: _buildGoogleFolderField(googleAuth),
+          notSignedInWarning: !googleAuth.isSignedIn
+              ? _buildGoogleNotSignedInWarning()
+              : null,
         );
       },
     );
@@ -1411,171 +1028,44 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final isSignedIn = googleAuth.isSignedIn;
     final isLoading = googleAuth.isLoading;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isSignedIn
-            ? AppColors.googleDriveSignedInBackground
-            : FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isSignedIn
-              ? AppColors.googleDriveSignedInBorder
-              : FluentTheme.of(
-                  context,
-                ).resources.controlStrokeColorDefault.withValues(alpha: 0.3),
-        ),
+    return _OAuthStatusCard(
+      isSignedIn: isSignedIn,
+      isLoading: isLoading,
+      isConfigured: googleAuth.isConfigured,
+      signedInBackgroundColor: AppColors.googleDriveSignedInBackground,
+      signedInBorderColor: AppColors.googleDriveSignedInBorder,
+      signedInIconColor: AppColors.googleDriveSignedIn,
+      signedInLabel: _dialogLabel(
+        'Conectado como ${googleAuth.currentEmail ?? 'usuario'}',
+        'Connected as ${googleAuth.currentEmail ?? 'user'}',
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isSignedIn
-                    ? FluentIcons.check_mark
-                    : FluentIcons.cloud_download,
-                color: isSignedIn
-                    ? AppColors.googleDriveSignedIn
-                    : FluentTheme.of(
-                        context,
-                      ).resources.controlStrokeColorDefault,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  isSignedIn
-                      ? _dialogLabel(
-                          'Conectado como ${googleAuth.currentEmail ?? 'usuario'}',
-                          'Connected as ${googleAuth.currentEmail ?? 'user'}',
-                        )
-                      : _dialogLabel(
-                          'Nao conectado ao Google',
-                          'Not connected to Google',
-                        ),
-                  style: FluentTheme.of(
-                    context,
-                  ).typography.body?.copyWith(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (isSignedIn)
-                Button(
-                  onPressed: isLoading ? null : () => googleAuth.signOut(),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(FluentIcons.sign_out, size: 18),
-                      const SizedBox(width: 8),
-                      Text(_dialogLabel('Desconectar', 'Disconnect')),
-                    ],
-                  ),
-                )
-              else if (googleAuth.isConfigured)
-                Button(
-                  onPressed: (!oauthOk || isLoading)
-                      ? null
-                      : () => _connectToGoogle(googleAuth),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isLoading)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: ProgressRing(strokeWidth: 2),
-                        )
-                      else
-                        const Icon(FluentIcons.signin, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        isLoading
-                            ? _dialogLabel('Conectando...', 'Connecting...')
-                            : _dialogLabel(
-                                'Conectar ao Google',
-                                'Connect to Google',
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          if (googleAuth.error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              googleAuth.error!,
-              style: FluentTheme.of(
-                context,
-              ).typography.caption?.copyWith(color: AppColors.error),
-            ),
-          ],
-        ],
+      signedOutLabel: _dialogLabel(
+        'Nao conectado ao Google',
+        'Not connected to Google',
       ),
+      disconnectLabel: _dialogLabel('Desconectar', 'Disconnect'),
+      connectLabel: _dialogLabel('Conectar ao Google', 'Connect to Google'),
+      connectingLabel: _dialogLabel('Conectando...', 'Connecting...'),
+      errorMessage: googleAuth.error,
+      onDisconnect: () => googleAuth.signOut(),
+      onConnect: (!oauthOk || isLoading)
+          ? null
+          : () => _connectToGoogle(googleAuth),
     );
   }
 
   Widget _buildOAuthConfigSection(GoogleAuthProvider googleAuth) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(
-          context,
-        ).resources.cardBackgroundFillColorDefault.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+    return _OAuthCredentialsSectionCard(
+      title: _dialogLabel('Configuracao OAuth', 'OAuth configuration'),
+      description: _dialogLabel(
+        'Para usar o Google Drive, configure as credenciais OAuth do Google Cloud Console.',
+        'To use Google Drive, configure OAuth credentials in Google Cloud Console.',
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                FluentIcons.settings,
-                color: AppColors.primary,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _dialogLabel('Configuração OAuth', 'OAuth configuration'),
-                style: FluentTheme.of(
-                  context,
-                ).typography.subtitle?.copyWith(color: AppColors.primary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _dialogLabel(
-              'Para usar o Google Drive, configure as credenciais OAuth do Google Cloud Console.',
-              'To use Google Drive, configure OAuth credentials in Google Cloud Console.',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 12),
-          Button(
-            onPressed: () => _showOAuthConfigDialog(googleAuth),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(FluentIcons.lock, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  _dialogLabel(
-                    'Configurar credenciais',
-                    'Configure credentials',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      actionLabel: _dialogLabel(
+        'Configurar credenciais',
+        'Configure credentials',
       ),
+      onPressed: () => _showOAuthConfigDialog(googleAuth),
     );
   }
 
@@ -1621,38 +1111,32 @@ class _DestinationDialogState extends State<DestinationDialog> {
       listenable: dropboxAuth,
       builder: (context, _) {
         final features = getIt<FeatureAvailabilityService>();
-        return Column(
-          children: [
-            if (!features.isExternalBrowserOAuthEnabled) ...[
-              InfoBar(
-                title: Text(
-                  _dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in'),
-                ),
-                content: Text(
-                  localizeCompatibilityReason(
-                    context,
-                    reason: features.externalBrowserOAuthDisabledReason,
-                    fallbackPt: 'Nao disponivel nesta versao do Windows.',
-                    fallbackEn: 'Not available on this Windows version.',
+        return _DropboxDestinationFields(
+          oauthAvailabilityWarning: !features.isExternalBrowserOAuthEnabled
+              ? InfoBar(
+                  title: Text(
+                    _dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in'),
                   ),
-                ),
-                severity: InfoBarSeverity.warning,
-                isLong: true,
-              ),
-              const SizedBox(height: 12),
-            ],
-            _buildDropboxAuthStatus(dropboxAuth),
-            const SizedBox(height: 16),
-            if (!dropboxAuth.isSignedIn) ...[
-              _buildDropboxOAuthConfigSection(dropboxAuth),
-              const SizedBox(height: 16),
-            ],
-            _buildDropboxFolderFields(dropboxAuth),
-            if (!dropboxAuth.isSignedIn) ...[
-              const SizedBox(height: 16),
-              _buildDropboxNotSignedInWarning(),
-            ],
-          ],
+                  content: Text(
+                    localizeCompatibilityReason(
+                      context,
+                      reason: features.externalBrowserOAuthDisabledReason,
+                      fallbackPt: 'Nao disponivel nesta versao do Windows.',
+                      fallbackEn: 'Not available on this Windows version.',
+                    ),
+                  ),
+                  severity: InfoBarSeverity.warning,
+                  isLong: true,
+                )
+              : null,
+          authStatus: _buildDropboxAuthStatus(dropboxAuth),
+          oauthConfigSection: !dropboxAuth.isSignedIn
+              ? _buildDropboxOAuthConfigSection(dropboxAuth)
+              : null,
+          folderFields: _buildDropboxFolderFields(dropboxAuth),
+          notSignedInWarning: !dropboxAuth.isSignedIn
+              ? _buildDropboxNotSignedInWarning()
+              : null,
         );
       },
     );
@@ -1732,112 +1216,31 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final isSignedIn = dropboxAuth.isSignedIn;
     final isLoading = dropboxAuth.isLoading;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isSignedIn
-            ? AppColors.destinationDropbox.withValues(alpha: 0.1)
-            : FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isSignedIn
-              ? AppColors.destinationDropbox.withValues(alpha: 0.3)
-              : FluentTheme.of(
-                  context,
-                ).resources.controlStrokeColorDefault.withValues(alpha: 0.3),
-        ),
+    return _OAuthStatusCard(
+      isSignedIn: isSignedIn,
+      isLoading: isLoading,
+      isConfigured: dropboxAuth.isConfigured,
+      signedInBackgroundColor: AppColors.destinationDropbox.withValues(
+        alpha: 0.1,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isSignedIn
-                    ? FluentIcons.check_mark
-                    : FluentIcons.cloud_download,
-                color: isSignedIn
-                    ? AppColors.destinationDropbox
-                    : FluentTheme.of(
-                        context,
-                      ).resources.controlStrokeColorDefault,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  isSignedIn
-                      ? _dialogLabel(
-                          'Conectado como ${dropboxAuth.currentEmail ?? 'usuario'}',
-                          'Connected as ${dropboxAuth.currentEmail ?? 'user'}',
-                        )
-                      : _dialogLabel(
-                          'Nao conectado ao Dropbox',
-                          'Not connected to Dropbox',
-                        ),
-                  style: FluentTheme.of(
-                    context,
-                  ).typography.body?.copyWith(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (isSignedIn)
-                Button(
-                  onPressed: isLoading ? null : () => dropboxAuth.signOut(),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(FluentIcons.sign_out, size: 18),
-                      const SizedBox(width: 8),
-                      Text(_dialogLabel('Desconectar', 'Disconnect')),
-                    ],
-                  ),
-                )
-              else if (dropboxAuth.isConfigured)
-                Button(
-                  onPressed: (!oauthOk || isLoading)
-                      ? null
-                      : () => _connectToDropbox(dropboxAuth),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isLoading)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: ProgressRing(strokeWidth: 2),
-                        )
-                      else
-                        const Icon(FluentIcons.signin, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        isLoading
-                            ? _dialogLabel('Conectando...', 'Connecting...')
-                            : _dialogLabel(
-                                'Conectar ao Dropbox',
-                                'Connect to Dropbox',
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          if (dropboxAuth.error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              dropboxAuth.error!,
-              style: FluentTheme.of(
-                context,
-              ).typography.caption?.copyWith(color: AppColors.error),
-            ),
-          ],
-        ],
+      signedInBorderColor: AppColors.destinationDropbox.withValues(alpha: 0.3),
+      signedInIconColor: AppColors.destinationDropbox,
+      signedInLabel: _dialogLabel(
+        'Conectado como ${dropboxAuth.currentEmail ?? 'usuario'}',
+        'Connected as ${dropboxAuth.currentEmail ?? 'user'}',
       ),
+      signedOutLabel: _dialogLabel(
+        'Nao conectado ao Dropbox',
+        'Not connected to Dropbox',
+      ),
+      disconnectLabel: _dialogLabel('Desconectar', 'Disconnect'),
+      connectLabel: _dialogLabel('Conectar ao Dropbox', 'Connect to Dropbox'),
+      connectingLabel: _dialogLabel('Conectando...', 'Connecting...'),
+      errorMessage: dropboxAuth.error,
+      onDisconnect: () => dropboxAuth.signOut(),
+      onConnect: (!oauthOk || isLoading)
+          ? null
+          : () => _connectToDropbox(dropboxAuth),
     );
   }
 
@@ -1845,71 +1248,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final isConfigured = dropboxAuth.isConfigured;
     final hasClientId = dropboxAuth.oauthConfig?.clientId.isNotEmpty ?? false;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(
-          context,
-        ).resources.cardBackgroundFillColorDefault.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                FluentIcons.settings,
-                color: AppColors.primary,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _dialogLabel('Configuração OAuth', 'OAuth configuration'),
-                style: FluentTheme.of(
-                  context,
-                ).typography.subtitle?.copyWith(color: AppColors.primary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            isConfigured && hasClientId
-                ? _dialogLabel(
-                    'Credenciais OAuth configuradas. Clique em "Alterar credenciais" para modificar.',
-                    'OAuth credentials configured. Click "Change credentials" to modify.',
-                  )
-                : _dialogLabel(
-                    'Para usar o Dropbox, configure as credenciais OAuth do Dropbox App Console.',
-                    'To use Dropbox, configure OAuth credentials in Dropbox App Console.',
-                  ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 12),
-          Button(
-            onPressed: () => _showDropboxOAuthConfigDialog(dropboxAuth),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(FluentIcons.lock, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  isConfigured && hasClientId
-                      ? _dialogLabel(
-                          'Alterar credenciais',
-                          'Change credentials',
-                        )
-                      : _dialogLabel(
-                          'Configurar credenciais',
-                          'Configure credentials',
-                        ),
-                ),
-              ],
+    return _OAuthCredentialsSectionCard(
+      title: _dialogLabel('Configuracao OAuth', 'OAuth configuration'),
+      description: isConfigured && hasClientId
+          ? _dialogLabel(
+              'Credenciais OAuth configuradas. Clique em "Alterar credenciais" para modificar.',
+              'OAuth credentials configured. Click "Change credentials" to modify.',
+            )
+          : _dialogLabel(
+              'Para usar o Dropbox, configure as credenciais OAuth do Dropbox App Console.',
+              'To use Dropbox, configure OAuth credentials in Dropbox App Console.',
             ),
-          ),
-        ],
-      ),
+      actionLabel: isConfigured && hasClientId
+          ? _dialogLabel('Alterar credenciais', 'Change credentials')
+          : _dialogLabel('Configurar credenciais', 'Configure credentials'),
+      onPressed: () => _showDropboxOAuthConfigDialog(dropboxAuth),
     );
   }
 
@@ -2383,6 +1736,874 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 }
 
+typedef _DialogLabelBuilder = String Function(String ptBr, String enUs);
+
+class _LocalDestinationFields extends StatelessWidget {
+  const _LocalDestinationFields({
+    required this.pathController,
+    required this.labelBuilder,
+    required this.onSelectFolder,
+  });
+
+  final TextEditingController pathController;
+  final _DialogLabelBuilder labelBuilder;
+  final VoidCallback onSelectFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: AppTextField(
+            controller: pathController,
+            label: labelBuilder('Caminho da pasta', 'Folder path'),
+            hint: r'C:\Backups',
+            prefixIcon: const Icon(FluentIcons.folder),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return labelBuilder(
+                  'Caminho e obrigatorio',
+                  'Path is required',
+                );
+              }
+              return null;
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: IconButton(
+            icon: const Icon(FluentIcons.folder_open),
+            onPressed: onSelectFolder,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FtpConnectionFields extends StatelessWidget {
+  const _FtpConnectionFields({
+    required this.hostController,
+    required this.portController,
+    required this.usernameController,
+    required this.passwordController,
+    required this.remotePathController,
+    required this.labelBuilder,
+  });
+
+  final TextEditingController hostController;
+  final TextEditingController portController;
+  final TextEditingController usernameController;
+  final TextEditingController passwordController;
+  final TextEditingController remotePathController;
+  final _DialogLabelBuilder labelBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: AppTextField(
+                controller: hostController,
+                label: labelBuilder('Servidor FTP', 'FTP server'),
+                hint: 'ftp.exemplo.com',
+                prefixIcon: const Icon(FluentIcons.server),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return labelBuilder(
+                      'Servidor e obrigatorio',
+                      'Server is required',
+                    );
+                  }
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: NumericField(
+                controller: portController,
+                label: labelBuilder('Porta', 'Port'),
+                hint: '21',
+                prefixIcon: FluentIcons.number_field,
+                minValue: 1,
+                maxValue: 65535,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: usernameController,
+          label: labelBuilder('Usuario', 'Username'),
+          hint: 'usuario_ftp',
+          prefixIcon: const Icon(FluentIcons.contact),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return labelBuilder(
+                'Usuario e obrigatorio',
+                'Username is required',
+              );
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        PasswordField(
+          controller: passwordController,
+          label: labelBuilder('Senha FTP', 'FTP password'),
+          hint: labelBuilder('Senha do FTP', 'FTP password'),
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: remotePathController,
+          label: labelBuilder('Caminho remoto', 'Remote path'),
+          hint: '/backups',
+          prefixIcon: const Icon(FluentIcons.folder),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return labelBuilder(
+                'Caminho remoto e obrigatorio',
+                'Remote path is required',
+              );
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _GoogleDriveDestinationFields extends StatelessWidget {
+  const _GoogleDriveDestinationFields({
+    required this.authStatus,
+    required this.folderField,
+    this.oauthAvailabilityWarning,
+    this.oauthConfigSection,
+    this.notSignedInWarning,
+  });
+
+  final Widget? oauthAvailabilityWarning;
+  final Widget authStatus;
+  final Widget? oauthConfigSection;
+  final Widget folderField;
+  final Widget? notSignedInWarning;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (oauthAvailabilityWarning != null) ...[
+          oauthAvailabilityWarning!,
+          const SizedBox(height: 12),
+        ],
+        authStatus,
+        if (oauthConfigSection != null) ...[
+          const SizedBox(height: 16),
+          oauthConfigSection!,
+        ],
+        const SizedBox(height: 16),
+        folderField,
+        if (notSignedInWarning != null) ...[
+          const SizedBox(height: 16),
+          notSignedInWarning!,
+        ],
+      ],
+    );
+  }
+}
+
+class _DropboxDestinationFields extends StatelessWidget {
+  const _DropboxDestinationFields({
+    required this.authStatus,
+    required this.folderFields,
+    this.oauthAvailabilityWarning,
+    this.oauthConfigSection,
+    this.notSignedInWarning,
+  });
+
+  final Widget? oauthAvailabilityWarning;
+  final Widget authStatus;
+  final Widget? oauthConfigSection;
+  final Widget folderFields;
+  final Widget? notSignedInWarning;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (oauthAvailabilityWarning != null) ...[
+          oauthAvailabilityWarning!,
+          const SizedBox(height: 12),
+        ],
+        authStatus,
+        if (oauthConfigSection != null) ...[
+          const SizedBox(height: 16),
+          oauthConfigSection!,
+        ],
+        const SizedBox(height: 16),
+        folderFields,
+        if (notSignedInWarning != null) ...[
+          const SizedBox(height: 16),
+          notSignedInWarning!,
+        ],
+      ],
+    );
+  }
+}
+
+class _OAuthStatusCard extends StatelessWidget {
+  const _OAuthStatusCard({
+    required this.isSignedIn,
+    required this.isLoading,
+    required this.isConfigured,
+    required this.signedInBackgroundColor,
+    required this.signedInBorderColor,
+    required this.signedInIconColor,
+    required this.signedInLabel,
+    required this.signedOutLabel,
+    required this.disconnectLabel,
+    required this.connectLabel,
+    required this.connectingLabel,
+    required this.onDisconnect,
+    this.errorMessage,
+    this.onConnect,
+  });
+
+  final bool isSignedIn;
+  final bool isLoading;
+  final bool isConfigured;
+  final Color signedInBackgroundColor;
+  final Color signedInBorderColor;
+  final Color signedInIconColor;
+  final String signedInLabel;
+  final String signedOutLabel;
+  final String disconnectLabel;
+  final String connectLabel;
+  final String connectingLabel;
+  final String? errorMessage;
+  final VoidCallback onDisconnect;
+  final VoidCallback? onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final neutralColor = FluentTheme.of(
+      context,
+    ).resources.controlStrokeColorDefault;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isSignedIn
+            ? signedInBackgroundColor
+            : FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isSignedIn
+              ? signedInBorderColor
+              : neutralColor.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isSignedIn
+                    ? FluentIcons.check_mark
+                    : FluentIcons.cloud_download,
+                color: isSignedIn ? signedInIconColor : neutralColor,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isSignedIn ? signedInLabel : signedOutLabel,
+                  style: FluentTheme.of(
+                    context,
+                  ).typography.body?.copyWith(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (isSignedIn)
+            AppButton.icon(
+              icon: FluentIcons.sign_out,
+              label: disconnectLabel,
+              onPressed: isLoading ? null : onDisconnect,
+            )
+          else if (isConfigured)
+            AppButton(
+              label: isLoading ? connectingLabel : connectLabel,
+              onPressed: isLoading ? null : onConnect,
+              leading: isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: ProgressRing(strokeWidth: 2),
+                    )
+                  : const Icon(FluentIcons.signin, size: 18),
+            ),
+          if (errorMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              errorMessage!,
+              style: FluentTheme.of(
+                context,
+              ).typography.caption?.copyWith(color: AppColors.error),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OAuthCredentialsSectionCard extends StatelessWidget {
+  const _OAuthCredentialsSectionCard({
+    required this.title,
+    required this.description,
+    required this.actionLabel,
+    required this.onPressed,
+  });
+
+  final String title;
+  final String description;
+  final String actionLabel;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: FluentTheme.of(
+          context,
+        ).resources.cardBackgroundFillColorDefault.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                FluentIcons.settings,
+                color: AppColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: FluentTheme.of(
+                  context,
+                ).typography.subtitle?.copyWith(color: AppColors.primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(description, style: FluentTheme.of(context).typography.caption),
+          const SizedBox(height: 12),
+          AppButton.icon(
+            icon: FluentIcons.lock,
+            label: actionLabel,
+            onPressed: onPressed,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FtpAdvancedOptionsSection extends StatelessWidget {
+  const _FtpAdvancedOptionsSection({
+    required this.integrityPreset,
+    required this.whenResumeNotSupported,
+    required this.enableStrongIntegrityValidation,
+    required this.enableReadBackValidation,
+    required this.keepPartOnCancel,
+    required this.enableVerboseLog,
+    required this.maxAttemptsController,
+    required this.connectionTimeoutSecondsController,
+    required this.uploadTimeoutMinutesController,
+    required this.impactColor,
+    required this.impactText,
+    required this.labelBuilder,
+    required this.onPresetChanged,
+    required this.onEnableStrongIntegrityValidationChanged,
+    required this.onKeepPartOnCancelChanged,
+    required this.onWhenResumeNotSupportedChanged,
+    required this.onEnableVerboseLogChanged,
+    this.onEnableReadBackValidationChanged,
+  });
+
+  final _FtpIntegrityPreset integrityPreset;
+  final FtpWhenResumeNotSupported whenResumeNotSupported;
+  final bool enableStrongIntegrityValidation;
+  final bool enableReadBackValidation;
+  final bool keepPartOnCancel;
+  final bool enableVerboseLog;
+  final TextEditingController maxAttemptsController;
+  final TextEditingController connectionTimeoutSecondsController;
+  final TextEditingController uploadTimeoutMinutesController;
+  final Color impactColor;
+  final String impactText;
+  final _DialogLabelBuilder labelBuilder;
+  final ValueChanged<_FtpIntegrityPreset> onPresetChanged;
+  final ValueChanged<bool> onEnableStrongIntegrityValidationChanged;
+  final ValueChanged<bool>? onEnableReadBackValidationChanged;
+  final ValueChanged<bool> onKeepPartOnCancelChanged;
+  final ValueChanged<FtpWhenResumeNotSupported> onWhenResumeNotSupportedChanged;
+  final ValueChanged<bool> onEnableVerboseLogChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          labelBuilder('Opcoes avancadas', 'Advanced options'),
+          style: FluentTheme.of(context).typography.bodyStrong,
+        ),
+        const SizedBox(height: 12),
+        AppDropdown<_FtpIntegrityPreset>(
+          label: labelBuilder('Preset de integridade', 'Integrity preset'),
+          value: integrityPreset,
+          placeholder: Text(
+            labelBuilder('Maxima integridade', 'Maximum integrity'),
+          ),
+          items: _FtpIntegrityPreset.values
+              .map(
+                (preset) => ComboBoxItem<_FtpIntegrityPreset>(
+                  value: preset,
+                  child: Text(
+                    switch (preset) {
+                      _FtpIntegrityPreset.quick => labelBuilder(
+                        'Rapido',
+                        'Quick',
+                      ),
+                      _FtpIntegrityPreset.balanced => labelBuilder(
+                        'Equilibrado',
+                        'Balanced',
+                      ),
+                      _FtpIntegrityPreset.maximum => labelBuilder(
+                        'Maxima integridade',
+                        'Maximum integrity',
+                      ),
+                    },
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) {
+              onPresetChanged(value);
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labelBuilder(
+            'Rapido: so tamanho. Equilibrado: hash remoto. Maxima: hash remoto + read-back quando necessario.',
+            'Quick: size only. Balanced: remote hash. Maximum: remote hash + read-back when needed.',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: impactColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: impactColor.withValues(alpha: 0.45)),
+          ),
+          child: Row(
+            children: [
+              Icon(FluentIcons.info, size: 16, color: impactColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  impactText,
+                  style: FluentTheme.of(context).typography.caption?.copyWith(
+                    color: impactColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: labelBuilder(
+            'Validacao forte de integridade',
+            'Strong integrity validation',
+          ),
+          child: ToggleSwitch(
+            checked: enableStrongIntegrityValidation,
+            onChanged: onEnableStrongIntegrityValidationChanged,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labelBuilder(
+            'Alem do tamanho, valida com hash do arquivo remoto para reduzir falsos positivos.',
+            'In addition to file size, validates using remote file hash to reduce false positives.',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: labelBuilder(
+            'Read-back quando hash remoto indisponivel',
+            'Read-back when remote hash unavailable',
+          ),
+          child: ToggleSwitch(
+            checked: enableReadBackValidation,
+            onChanged: onEnableReadBackValidationChanged,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labelBuilder(
+            'Baixa o arquivo do FTP e compara SHA-256 com o local. Mais confiavel, porem mais lento para arquivos grandes.',
+            'Downloads the file from FTP and compares SHA-256 with local. More reliable, but slower for large files.',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: labelBuilder(
+            'Manter parcial ao cancelar',
+            'Keep partial on cancel',
+          ),
+          child: ToggleSwitch(
+            checked: keepPartOnCancel,
+            onChanged: onKeepPartOnCancelChanged,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labelBuilder(
+            'Manter arquivo .part no servidor para retomar depois',
+            'Keep .part file on server to resume later',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<FtpWhenResumeNotSupported>(
+          label: labelBuilder(
+            'Quando servidor nao suporta retomada',
+            'When server does not support resume',
+          ),
+          value: whenResumeNotSupported,
+          placeholder: Text(
+            labelBuilder(
+              'Fallback (upload completo)',
+              'Fallback (full upload)',
+            ),
+          ),
+          items: FtpWhenResumeNotSupported.values
+              .map(
+                (e) => ComboBoxItem<FtpWhenResumeNotSupported>(
+                  value: e,
+                  child: Text(
+                    e == FtpWhenResumeNotSupported.fallback
+                        ? labelBuilder(
+                            'Fallback (upload completo)',
+                            'Fallback (full upload)',
+                          )
+                        : labelBuilder('Falhar', 'Fail'),
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) {
+              onWhenResumeNotSupportedChanged(value);
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          label: labelBuilder('Max. tentativas', 'Max attempts'),
+          controller: maxAttemptsController,
+          hint: labelBuilder('Padrao: 3', 'Default: 3'),
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labelBuilder(
+            'Numero maximo de tentativas por upload',
+            'Maximum number of attempts per upload',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        InfoLabel(
+          label: labelBuilder('Log detalhado FTP', 'Verbose FTP log'),
+          child: ToggleSwitch(
+            checked: enableVerboseLog,
+            onChanged: onEnableVerboseLogChanged,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labelBuilder(
+            'Registrar comandos e respostas do protocolo FTP (util para diagnostico)',
+            'Log FTP protocol commands and responses (useful for troubleshooting)',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          label: labelBuilder(
+            'Timeout de conexao (s)',
+            'Connection timeout (s)',
+          ),
+          controller: connectionTimeoutSecondsController,
+          hint: labelBuilder('Padrao: 15', 'Default: 15'),
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labelBuilder(
+            'Tempo limite para conectar e autenticar no servidor FTP',
+            'Time limit to connect and authenticate to FTP server',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          label: labelBuilder(
+            'Timeout de upload (min)',
+            'Upload timeout (min)',
+          ),
+          controller: uploadTimeoutMinutesController,
+          hint: labelBuilder('Padrao: 60', 'Default: 60'),
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labelBuilder(
+            'Tempo limite para sessao de upload (arquivos grandes podem precisar de mais)',
+            'Time limit for upload session (large files may need more)',
+          ),
+          style: FluentTheme.of(context).typography.caption,
+        ),
+      ],
+    );
+  }
+}
+
+class _NextcloudDestinationFields extends StatelessWidget {
+  const _NextcloudDestinationFields({
+    required this.serverUrlController,
+    required this.usernameController,
+    required this.appPasswordController,
+    required this.remotePathController,
+    required this.folderNameController,
+    required this.authMode,
+    required this.allowInvalidCertificates,
+    required this.isTestingConnection,
+    required this.labelBuilder,
+    required this.onAuthModeChanged,
+    required this.onAllowInvalidCertificatesChanged,
+    required this.onTestConnection,
+  });
+
+  final TextEditingController serverUrlController;
+  final TextEditingController usernameController;
+  final TextEditingController appPasswordController;
+  final TextEditingController remotePathController;
+  final TextEditingController folderNameController;
+  final NextcloudAuthMode authMode;
+  final bool allowInvalidCertificates;
+  final bool isTestingConnection;
+  final _DialogLabelBuilder labelBuilder;
+  final ValueChanged<NextcloudAuthMode> onAuthModeChanged;
+  final ValueChanged<bool> onAllowInvalidCertificatesChanged;
+  final VoidCallback onTestConnection;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        AppTextField(
+          controller: serverUrlController,
+          label: labelBuilder('URL do Nextcloud', 'Nextcloud URL'),
+          hint: 'https://cloud.exemplo.com',
+          prefixIcon: const Icon(FluentIcons.globe),
+          validator: _validateServerUrl,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: usernameController,
+          label: labelBuilder('Usuario', 'Username'),
+          hint: 'usuario',
+          prefixIcon: const Icon(FluentIcons.contact),
+          validator: _validateUsername,
+        ),
+        const SizedBox(height: 16),
+        AppDropdown<NextcloudAuthMode>(
+          label: labelBuilder('Tipo de credencial', 'Credential type'),
+          value: authMode,
+          placeholder: Text(
+            labelBuilder('Tipo de credencial', 'Credential type'),
+          ),
+          items: NextcloudAuthMode.values.map((mode) {
+            final label = mode == NextcloudAuthMode.appPassword
+                ? labelBuilder(
+                    'App Password (recomendado)',
+                    'App Password (recommended)',
+                  )
+                : labelBuilder('Senha do usuario', 'User password');
+            return ComboBoxItem<NextcloudAuthMode>(
+              value: mode,
+              child: Text(label),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) {
+              onAuthModeChanged(value);
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: appPasswordController,
+          label: authMode == NextcloudAuthMode.appPassword
+              ? labelBuilder('App Password', 'App Password')
+              : labelBuilder('Senha do usuario', 'User password'),
+          hint: authMode == NextcloudAuthMode.appPassword
+              ? labelBuilder(
+                  'Senha de aplicativo do Nextcloud',
+                  'Nextcloud app password',
+                )
+              : labelBuilder(
+                  'Senha do usuario do Nextcloud',
+                  'Nextcloud user password',
+                ),
+          prefixIcon: const Icon(FluentIcons.lock),
+          obscureText: true,
+          validator: _validatePassword,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: remotePathController,
+          label: labelBuilder(
+            'Caminho remoto (opcional)',
+            'Remote path (optional)',
+          ),
+          hint: '/ ou /Backups',
+          prefixIcon: const Icon(FluentIcons.folder),
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: folderNameController,
+          label: labelBuilder('Nome da pasta', 'Folder name'),
+          hint: 'Backups',
+          prefixIcon: const Icon(FluentIcons.cloud),
+          validator: _validateFolderName,
+        ),
+        const SizedBox(height: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InfoLabel(
+              label: labelBuilder(
+                'Permitir certificado invalido (self-signed)',
+                'Allow invalid certificate (self-signed)',
+              ),
+              child: ToggleSwitch(
+                checked: allowInvalidCertificates,
+                onChanged: onAllowInvalidCertificatesChanged,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              labelBuilder(
+                'Use apenas se seu Nextcloud usa certificado self-signed ou CA interna.',
+                'Use only if your Nextcloud uses self-signed cert or internal CA.',
+              ),
+              style: FluentTheme.of(context).typography.caption,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ActionButton(
+          label: labelBuilder(
+            'Testar conexao Nextcloud',
+            'Test Nextcloud connection',
+          ),
+          icon: FluentIcons.network_tower,
+          onPressed: onTestConnection,
+          isLoading: isTestingConnection,
+        ),
+      ],
+    );
+  }
+
+  String? _validateServerUrl(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return labelBuilder('URL e obrigatoria', 'URL is required');
+    }
+
+    final uri = Uri.tryParse(text);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return labelBuilder('URL invalida', 'Invalid URL');
+    }
+    if (uri.scheme != 'https' && uri.scheme != 'http') {
+      return labelBuilder('Use http ou https', 'Use http or https');
+    }
+    return null;
+  }
+
+  String? _validateUsername(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return labelBuilder('Usuario e obrigatorio', 'Username is required');
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return authMode == NextcloudAuthMode.appPassword
+          ? labelBuilder(
+              'App Password e obrigatorio',
+              'App Password is required',
+            )
+          : labelBuilder(
+              'Senha do usuario e obrigatoria',
+              'User password is required',
+            );
+    }
+    return null;
+  }
+
+  String? _validateFolderName(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return labelBuilder(
+        'Nome da pasta e obrigatorio',
+        'Folder name is required',
+      );
+    }
+    return null;
+  }
+}
+
 class _OAuthConfigDialog extends StatefulWidget {
   const _OAuthConfigDialog({
     required this.googleAuth,
@@ -2453,7 +2674,8 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return ContentDialog(
+    return AppDialogShell(
+      constraints: const BoxConstraints(maxWidth: 800, maxHeight: 760),
       title: Row(
         children: [
           const Icon(FluentIcons.cloud),
@@ -2467,49 +2689,46 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           ),
         ],
       ),
-      content: SizedBox(
-        width: 800,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              appLocaleString(
-                context,
-                'Obtenha as credenciais no Google Cloud Console:',
-                'Get credentials from Google Cloud Console:',
-              ),
-              style: FluentTheme.of(context).typography.caption,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            appLocaleString(
+              context,
+              'Obtenha as credenciais no Google Cloud Console:',
+              'Get credentials from Google Cloud Console:',
             ),
-            const SizedBox(height: 8),
-            _buildInstructions(),
-            const SizedBox(height: 16),
-            AppTextField(
-              controller: _clientIdController,
-              label: 'Client ID',
-              hint: 'xxx.apps.googleusercontent.com',
-              prefixIcon: const Icon(FluentIcons.lock),
-              enabled: !_isLoading,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return appLocaleString(
-                    context,
-                    'Client ID é obrigatório',
-                    'Client ID is required',
-                  );
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            PasswordField(
-              controller: _clientSecretController,
-              label: 'Client Secret',
-              hint: 'GOCSPX-xxx',
-              enabled: !_isLoading,
-            ),
-          ],
-        ),
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          const SizedBox(height: 8),
+          _buildInstructions(),
+          const SizedBox(height: 16),
+          AppTextField(
+            controller: _clientIdController,
+            label: 'Client ID',
+            hint: 'xxx.apps.googleusercontent.com',
+            prefixIcon: const Icon(FluentIcons.lock),
+            enabled: !_isLoading,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return appLocaleString(
+                  context,
+                  'Client ID é obrigatório',
+                  'Client ID is required',
+                );
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          PasswordField(
+            controller: _clientSecretController,
+            label: 'Client Secret',
+            hint: 'GOCSPX-xxx',
+            enabled: !_isLoading,
+          ),
+        ],
       ),
       actions: [
         CancelButton(
@@ -2675,7 +2894,8 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return ContentDialog(
+    return AppDialogShell(
+      constraints: const BoxConstraints(maxWidth: 800, maxHeight: 760),
       title: Row(
         children: [
           const Icon(FluentIcons.cloud),
@@ -2689,49 +2909,46 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           ),
         ],
       ),
-      content: SizedBox(
-        width: 800,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              appLocaleString(
-                context,
-                'Obtenha as credenciais no Dropbox App Console:',
-                'Get credentials from Dropbox App Console:',
-              ),
-              style: FluentTheme.of(context).typography.caption,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            appLocaleString(
+              context,
+              'Obtenha as credenciais no Dropbox App Console:',
+              'Get credentials from Dropbox App Console:',
             ),
-            const SizedBox(height: 8),
-            _buildInstructions(),
-            const SizedBox(height: 16),
-            AppTextField(
-              controller: _clientIdController,
-              label: 'App Key',
-              hint: 'xxxxx',
-              prefixIcon: const Icon(FluentIcons.lock),
-              enabled: !_isLoading,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return appLocaleString(
-                    context,
-                    'App Key é obrigatório',
-                    'App Key is required',
-                  );
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            PasswordField(
-              controller: _clientSecretController,
-              label: 'App Secret',
-              hint: 'xxxxx',
-              enabled: !_isLoading,
-            ),
-          ],
-        ),
+            style: FluentTheme.of(context).typography.caption,
+          ),
+          const SizedBox(height: 8),
+          _buildInstructions(),
+          const SizedBox(height: 16),
+          AppTextField(
+            controller: _clientIdController,
+            label: 'App Key',
+            hint: 'xxxxx',
+            prefixIcon: const Icon(FluentIcons.lock),
+            enabled: !_isLoading,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return appLocaleString(
+                  context,
+                  'App Key é obrigatório',
+                  'App Key is required',
+                );
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          PasswordField(
+            controller: _clientSecretController,
+            label: 'App Secret',
+            hint: 'xxxxx',
+            enabled: !_isLoading,
+          ),
+        ],
       ),
       actions: [
         CancelButton(

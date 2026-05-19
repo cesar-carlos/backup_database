@@ -40,6 +40,9 @@ class AutoUpdateProvider extends ChangeNotifier {
   int? get lastAttemptNumber => _snapshot.lastAttemptNumber;
   Duration? get lastDownloadDuration => _snapshot.lastDownloadDuration;
   Duration? get lastCheckDuration => _snapshot.lastCheckDuration;
+  String get updateContextPath => AutoUpdateService.updateContextSupportPath();
+  String get diagnosticsPath => AutoUpdateService.diagnosticsSupportPath();
+  String get lockFilePath => AutoUpdateService.lockFileSupportPath();
 
   Future<void> checkForUpdates() {
     return _autoUpdateService.checkNow(source: AppUpdateSource.manual);

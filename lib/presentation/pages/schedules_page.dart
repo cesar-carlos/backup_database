@@ -4,7 +4,6 @@ import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/constants/integrity_ui_strings.dart';
 import 'package:backup_database/core/di/service_locator.dart';
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
@@ -33,126 +32,85 @@ class _SchedulesPageState extends State<SchedulesPage> {
   Widget build(BuildContext context) {
     final features = getIt<FeatureAvailabilityService>();
     final schedulerOk = features.isTaskSchedulerEnabled;
-    return ScaffoldPage(
-      header: PageHeader(
-        title: const Text('Agendamentos'),
-        commandBar: CommandBar(
-          mainAxisAlignment: MainAxisAlignment.end,
-          primaryItems: [
-            CommandBarButton(
-              icon: const Icon(FluentIcons.refresh),
-              onPressed: () {
-                unawaited(
-                  context.read<SchedulerProvider>().loadSchedules(),
-                );
-              },
-            ),
-            CommandBarButton(
-              icon: const Icon(FluentIcons.add),
-              label: const Text('Novo Agendamento'),
-              onPressed: schedulerOk
-                  ? () => _showScheduleDialog(context, null)
-                  : null,
-            ),
-          ],
+
+    return AppPageScaffold(
+      title: 'Agendamentos',
+      actions: [
+        AppPageAction(
+          label: 'Atualizar',
+          icon: FluentIcons.refresh,
+          onPressed: () {
+            unawaited(context.read<SchedulerProvider>().loadSchedules());
+          },
         ),
-      ),
-      content: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!schedulerOk) ...[
-              InfoBar(
-                title: const Text('Agendamentos'),
-                content: Text(
-                  localizeCompatibilityReason(
-                    context,
-                    reason: features.taskSchedulerDisabledReason,
-                    fallbackPt:
-                        'Task Scheduler não está disponível nesta versão do '
-                        'Windows.',
-                    fallbackEn:
-                        'Task Scheduler is not available on this Windows '
-                        'version.',
-                  ),
+        AppPageAction(
+          label: 'Novo Agendamento',
+          icon: FluentIcons.add,
+          isPrimary: true,
+          onPressed: schedulerOk
+              ? () => _showScheduleDialog(context, null)
+              : null,
+        ),
+      ],
+      headerBottom: !schedulerOk
+          ? InfoBar(
+              title: const Text('Agendamentos'),
+              content: Text(
+                localizeCompatibilityReason(
+                  context,
+                  reason: features.taskSchedulerDisabledReason,
+                  fallbackPt:
+                      'Task Scheduler não está disponível nesta versão do Windows.',
+                  fallbackEn:
+                      'Task Scheduler is not available on this Windows version.',
                 ),
-                severity: InfoBarSeverity.warning,
-                isLong: true,
               ),
-              const SizedBox(height: 12),
-            ],
-            Expanded(
-              child: Consumer<SchedulerProvider>(
-                builder: (context, provider, child) {
-                  if (provider.isLoading) {
-                    return const SkeletonGrid(rowCount: 8);
-                  }
+              severity: InfoBarSeverity.warning,
+              isLong: true,
+            )
+          : null,
+      body: Consumer<SchedulerProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return const SkeletonGrid(rowCount: 8);
+          }
 
-                  if (provider.error != null) {
-                    return AppCard(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                FluentIcons.error,
-                                size: 64,
-                                color: context.appSemanticColors.danger,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                provider.error!,
-                                style: FluentTheme.of(
-                                  context,
-                                ).typography.bodyLarge,
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              Button(
-                                onPressed: () => provider.loadSchedules(),
-                                child: const Text('Tentar Novamente'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  if (provider.schedules.isEmpty) {
-                    return AppCard(
-                      child: EmptyState(
-                        icon: FluentIcons.calendar,
-                        message: 'Nenhum agendamento configurado',
-                        actionLabel: schedulerOk ? 'Criar Agendamento' : null,
-                        onAction: schedulerOk
-                            ? () => _showScheduleDialog(context, null)
-                            : null,
-                      ),
-                    );
-                  }
-
-                  return ScheduleGrid(
-                    schedules: provider.schedules,
-                    scheduleActionsEnabled: schedulerOk,
-                    onEdit: (schedule) =>
-                        _showScheduleDialog(context, schedule),
-                    onDuplicate: (schedule) =>
-                        _duplicateSchedule(context, schedule),
-                    onDelete: (id) => _confirmDelete(context, id),
-                    onRunNow: (id) => _runNow(context, id),
-                    onToggleEnabled: (schedule, enabled) =>
-                        provider.toggleSchedule(schedule.id, enabled),
-                  );
-                },
+          if (provider.error != null) {
+            return SingleChildScrollView(
+              child: AppPageState.error(
+                title: 'Falha ao carregar agendamentos',
+                message: provider.error,
+                actionLabel: 'Tentar novamente',
+                onAction: () => provider.loadSchedules(),
               ),
-            ),
-          ],
-        ),
+            );
+          }
+
+          if (provider.schedules.isEmpty) {
+            return SingleChildScrollView(
+              child: AppPageState.empty(
+                title: 'Nenhum agendamento configurado',
+                message:
+                    'Automatize backups, verificacoes e scripts com um fluxo unico.',
+                actionLabel: schedulerOk ? 'Criar Agendamento' : null,
+                onAction: schedulerOk
+                    ? () => _showScheduleDialog(context, null)
+                    : null,
+              ),
+            );
+          }
+
+          return ScheduleGrid(
+            schedules: provider.schedules,
+            scheduleActionsEnabled: schedulerOk,
+            onEdit: (schedule) => _showScheduleDialog(context, schedule),
+            onDuplicate: (schedule) => _duplicateSchedule(context, schedule),
+            onDelete: (id) => _confirmDelete(context, id),
+            onRunNow: (id) => _runNow(context, id),
+            onToggleEnabled: (schedule, enabled) =>
+                provider.toggleSchedule(schedule.id, enabled),
+          );
+        },
       ),
     );
   }
@@ -196,23 +154,15 @@ class _SchedulesPageState extends State<SchedulesPage> {
     if (!getIt<FeatureAvailabilityService>().isTaskSchedulerEnabled) {
       return;
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: const Text('Tem certeza que deseja excluir este agendamento?'),
-        actions: [
-          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
-          ActionButton(
-            label: 'Excluir',
-            icon: FluentIcons.delete,
-            onPressed: () => Navigator.of(context).pop(true),
-          ),
-        ],
-      ),
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: 'Confirmar Exclusão',
+      message: 'Tem certeza que deseja excluir este agendamento?',
+      confirmLabel: 'Excluir',
+      confirmIcon: FluentIcons.delete,
     );
 
-    if ((confirmed ?? false) && context.mounted) {
+    if (confirmed && context.mounted) {
       final provider = context.read<SchedulerProvider>();
       final success = await provider.deleteSchedule(id);
 
@@ -238,23 +188,15 @@ class _SchedulesPageState extends State<SchedulesPage> {
     if (!getIt<FeatureAvailabilityService>().isTaskSchedulerEnabled) {
       return;
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: const Text('Executar Backup'),
-        content: const Text('Deseja executar este backup agora?'),
-        actions: [
-          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
-          ActionButton(
-            label: 'Executar',
-            icon: FluentIcons.play,
-            onPressed: () => Navigator.of(context).pop(true),
-          ),
-        ],
-      ),
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: 'Executar Backup',
+      message: 'Deseja executar este backup agora?',
+      confirmLabel: 'Executar',
+      confirmIcon: FluentIcons.play,
     );
 
-    if ((confirmed ?? false) && context.mounted) {
+    if (confirmed && context.mounted) {
       final schedulerProvider = context.read<SchedulerProvider>();
       final success = await schedulerProvider.executeNow(id);
 
@@ -278,25 +220,15 @@ class _SchedulesPageState extends State<SchedulesPage> {
     if (!getIt<FeatureAvailabilityService>().isTaskSchedulerEnabled) {
       return;
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: const Text('Duplicar Agendamento'),
-        content: Text(
-          'Deseja duplicar o agendamento "${schedule.name}"?',
-        ),
-        actions: [
-          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
-          ActionButton(
-            label: 'Duplicar',
-            icon: FluentIcons.copy,
-            onPressed: () => Navigator.of(context).pop(true),
-          ),
-        ],
-      ),
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: 'Duplicar Agendamento',
+      message: 'Deseja duplicar o agendamento "${schedule.name}"?',
+      confirmLabel: 'Duplicar',
+      confirmIcon: FluentIcons.copy,
     );
 
-    if (!(confirmed ?? false) || !context.mounted) {
+    if (!confirmed || !context.mounted) {
       return;
     }
 

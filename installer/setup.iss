@@ -51,6 +51,9 @@ Source: "dependencies\nssm-2.24\win64\nssm.exe"; DestDir: "{app}\tools"; Flags: 
 Source: "dependencies\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "install_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "uninstall_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "capture_update_context.ps1"; Flags: dontcopy
+Source: "restore_update_state.ps1"; Flags: dontcopy
+Source: "merge_env.ps1"; Flags: dontcopy
 
 [Icons]
 ; Main icons for each mode (all will be created)
@@ -84,6 +87,28 @@ var
 
 function IsServiceInstalled(const ServiceName: String): Boolean; forward;
 function StopService(const ServiceName: String): Boolean; forward;
+
+function GetUpdateContextPath(): String;
+begin
+  Result := ExpandConstant('{commonappdata}\BackupDatabase\staging\updates\update_context.json');
+end;
+
+function RunTempPowerShellScript(const ScriptName, Parameters: String): Boolean;
+var
+  ResultCode: Integer;
+  ScriptPath: String;
+begin
+  ExtractTemporaryFile(ScriptName);
+  ScriptPath := ExpandConstant('{tmp}\') + ScriptName;
+  Result := Exec(
+    'powershell.exe',
+    '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" ' + Parameters,
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) and (ResultCode = 0);
+end;
 
 // Função auxiliar para encontrar o desinstalador em múltiplos caminhos
 function FindUninstaller(): String;
@@ -196,16 +221,29 @@ var
   WaitCount: Integer;
   UninstallExe: String;
   UninstallPath: String;
+  UpdateContextPath: String;
   ResultCode: Integer;
 begin
   Result := True;
   VCRedistNeeded := False;
+  UpdateContextPath := GetUpdateContextPath();
 
   // Parar o serviço do Windows primeiro para liberar nssm.exe e a pasta de instalação
   if IsServiceInstalled('BackupDatabaseService') then
   begin
     StopService('BackupDatabaseService');
     Sleep(2000);
+  end;
+
+  if WizardSilent() and FileExists(UpdateContextPath) then
+  begin
+    if RunTempPowerShellScript(
+      'capture_update_context.ps1',
+      '-ContextPath "' + UpdateContextPath + '" -ServiceName "BackupDatabaseService"'
+    ) then
+      Log('Captured update_context.json before uninstall')
+    else
+      Log('Warning: Failed to capture update_context.json before uninstall');
   end;
 
   // Fechar nssm.exe se estiver em uso (ex.: script "Instalar como Serviço" ainda aberto)
@@ -436,6 +474,9 @@ var
   EnvPath: String;
   LegacyEnvPath: String;
   MigratedBackupPath: String;
+  UpdateContextPath: String;
+  AppExePath: String;
+  NssmPath: String;
 begin
   // Write .install_mode only after files are installed, when {app} is defined
   if CurStep = ssPostInstall then
@@ -444,31 +485,20 @@ begin
     EnvPath := ExpandConstant('{commonappdata}\BackupDatabase\config\.env');
     LegacyEnvPath := ExpandConstant('{app}\.env');
     MigratedBackupPath := ExpandConstant('{commonappdata}\BackupDatabase\config\.env.migrated-from-appdir.bak');
+    UpdateContextPath := GetUpdateContextPath();
+    AppExePath := ExpandConstant('{app}\{#MyAppExeName}');
+    NssmPath := ExpandConstant('{app}\tools\nssm.exe');
 
-    if not FileExists(EnvPath) and FileExists(LegacyEnvPath) then
-    begin
-      if CopyFile(LegacyEnvPath, EnvPath, False) then
-      begin
-        Log('Migrated legacy {app}\.env to machine-scope ProgramData\.env');
-        if not FileExists(MigratedBackupPath) then
-        begin
-          if CopyFile(LegacyEnvPath, MigratedBackupPath, False) then
-            Log('Created ProgramData backup of legacy {app}\.env')
-          else
-            Log('Warning: Failed to create ProgramData backup of legacy {app}\.env');
-        end;
-      end
-      else
-        Log('Warning: Failed to migrate legacy {app}\.env to machine-scope .env');
-    end;
-
-    if FileExists(EnvExamplePath) and not FileExists(EnvPath) then
-    begin
-      if CopyFile(EnvExamplePath, EnvPath, False) then
-        Log('Copied machine-scope .env.example to .env')
-      else
-        Log('Warning: Failed to copy machine-scope .env.example to .env');
-    end;
+    if RunTempPowerShellScript(
+      'merge_env.ps1',
+      '-ExamplePath "' + EnvExamplePath + '" ' +
+      '-TargetPath "' + EnvPath + '" ' +
+      '-LegacyPath "' + LegacyEnvPath + '" ' +
+      '-BackupPath "' + MigratedBackupPath + '"'
+    ) then
+      Log('Merged machine-scope .env with .env.example')
+    else
+      Log('Warning: Failed to merge machine-scope .env with .env.example');
 
     if SelectedMode = '' then
       SelectedMode := 'server';
@@ -479,6 +509,21 @@ begin
       ModeFile.SaveToFile(ModeFilePath);
     finally
       ModeFile.Free;
+    end;
+
+    if WizardSilent() and FileExists(UpdateContextPath) then
+    begin
+      if RunTempPowerShellScript(
+        'restore_update_state.ps1',
+        '-ContextPath "' + UpdateContextPath + '" ' +
+        '-AppPath "' + AppExePath + '" ' +
+        '-AppDirectory "' + ExpandConstant('{app}') + '" ' +
+        '-NssmPath "' + NssmPath + '" ' +
+        '-ServiceName "BackupDatabaseService"'
+      ) then
+        Log('Restored update operational state from update_context.json')
+      else
+        Log('Warning: Failed to restore update operational state from update_context.json');
     end;
   end;
 end;
@@ -635,4 +680,3 @@ begin
     end;
   end;
 end;
-
