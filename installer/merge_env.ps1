@@ -13,11 +13,7 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "encoding_utils.ps1")
 
-function Parse-KeyMap {
-    param(
-        [string]$Path
-    )
-
+function Parse-KeyMap([string]$Path) {
     $map = @{}
     if (-not (Test-Path $Path)) {
         return $map

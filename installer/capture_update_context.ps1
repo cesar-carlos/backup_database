@@ -10,20 +10,14 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "encoding_utils.ps1")
 
-function Get-StringValue {
-    param(
-        [string]$Value
-    )
+function Get-StringValue([string]$Value) {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         return $null
     }
     return $Value.Trim()
 }
 
-function Get-ServiceRegistryImagePath {
-    param(
-        [string]$Name
-    )
+function Get-ServiceRegistryImagePath([string]$Name) {
     try {
         $serviceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$Name"
         return (Get-ItemProperty -Path $serviceKey -ErrorAction Stop).ImagePath
@@ -32,10 +26,7 @@ function Get-ServiceRegistryImagePath {
     }
 }
 
-function Resolve-ExecutableFromImagePath {
-    param(
-        [string]$ImagePath
-    )
+function Resolve-ExecutableFromImagePath([string]$ImagePath) {
     if ([string]::IsNullOrWhiteSpace($ImagePath)) {
         return $null
     }
@@ -57,12 +48,11 @@ function Resolve-ExecutableFromImagePath {
     return Get-StringValue -Value $token
 }
 
-function Get-NssmValue {
-    param(
-        [string]$NssmPath,
-        [string]$Name,
-        [string[]]$Arguments
-    )
+function Get-NssmValue(
+    [string]$NssmPath,
+    [string]$Name,
+    [string[]]$Arguments
+) {
     if ([string]::IsNullOrWhiteSpace($NssmPath) -or -not (Test-Path $NssmPath)) {
         return $null
     }
@@ -79,7 +69,7 @@ if (-not (Test-Path $ContextPath)) {
     exit 0
 }
 
-$context = Get-Content -Path $ContextPath -Raw | ConvertFrom-Json
+$context = Read-Utf8NoBomFile -Path $ContextPath | ConvertFrom-Json
 $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 $serviceExists = $null -ne $service
 

@@ -1,4 +1,11 @@
 {
+  "[powershell]": {
+    "files.encoding": "utf8"
+  },
+  "files.associations": {
+    "*.ps1": "powershell"
+  },
+
   // Dart & Flutter settings
   "dart.lineLength": 80,
   "dart.flutterSdkPath": null,
