@@ -608,13 +608,21 @@ void main() {
 
       await manager.connect(host: '127.0.0.1', port: port);
 
+      final sessionResult = await manager.getServerSession();
+      final session = sessionResult.getOrNull();
+      expect(session, isNotNull);
+
       final result = await manager.getExecutionStatus(runId);
       final status = result.getOrNull();
       expect(status, isNotNull);
       expect(status!.state, ExecutionState.running);
       expect(status.isActive, isTrue);
       expect(status.scheduleId, 'sched-prod');
-      expect(status.clientId, 'client-A');
+      expect(
+        status.clientId,
+        session!.clientId,
+        reason: 'status deve refletir a sessao atual apos rebind do runId',
+      );
     });
 
     test('falha quando runId vazio (validacao client-side)', () async {

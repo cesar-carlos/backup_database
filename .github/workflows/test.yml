@@ -23,6 +23,11 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Install widgetbook dependencies
+        if: ${{ hashFiles('widgetbook/pubspec.yaml') != '' }}
+        working-directory: widgetbook
+        run: flutter pub get
+
       - name: Verify W3C design token snapshot is in sync
         run: dart run tools/generate_tokens.dart --check
 
@@ -65,7 +70,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
-        if: always()
+        if: ${{ always() && hashFiles('coverage/lcov.filtered.info') != '' }}
         with:
           files: coverage/lcov.filtered.info
           token: ${{ secrets.CODECOV_TOKEN }}
