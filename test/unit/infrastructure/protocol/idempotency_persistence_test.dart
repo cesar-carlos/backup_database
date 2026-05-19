@@ -23,46 +23,48 @@ void main() {
       await database.close();
     });
 
-    test('should return cached response after registry restart simulation',
-        () async {
-      var calls = 0;
-      final response = createStartBackupResponse(
-        requestId: 1,
-        runId: 'run-1',
-        state: ExecutionState.running,
-        scheduleId: 'sch-1',
-        serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
-      );
+    test(
+      'should return cached response after registry restart simulation',
+      () async {
+        var calls = 0;
+        final response = createStartBackupResponse(
+          requestId: 1,
+          runId: 'run-1',
+          state: ExecutionState.running,
+          scheduleId: 'sch-1',
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+        );
 
-      await registry.runIdempotent<Message>(
-        key: 'key-a',
-        compute: () async {
-          calls++;
-          return response;
-        },
-      );
+        await registry.runIdempotent<Message>(
+          key: 'key-a',
+          compute: () async {
+            calls++;
+            return response;
+          },
+        );
 
-      final registryAfterRestart = IdempotencyRegistry(
-        store: DriftIdempotencyStore(database.idempotencyDao),
-      );
+        final registryAfterRestart = IdempotencyRegistry(
+          store: DriftIdempotencyStore(database.idempotencyDao),
+        );
 
-      final cached = await registryAfterRestart.runIdempotent<Message>(
-        key: 'key-a',
-        compute: () async {
-          calls++;
-          return createStartBackupResponse(
-            requestId: 2,
-            runId: 'run-2',
-            state: ExecutionState.running,
-            scheduleId: 'sch-2',
-            serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
-          );
-        },
-      );
+        final cached = await registryAfterRestart.runIdempotent<Message>(
+          key: 'key-a',
+          compute: () async {
+            calls++;
+            return createStartBackupResponse(
+              requestId: 2,
+              runId: 'run-2',
+              state: ExecutionState.running,
+              scheduleId: 'sch-2',
+              serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+            );
+          },
+        );
 
-      expect(calls, 1);
-      expect(cached.header.type, MessageType.startBackupResponse);
-      expect(cached.payload['runId'], 'run-1');
-    });
+        expect(calls, 1);
+        expect(cached.header.type, MessageType.startBackupResponse);
+        expect(cached.payload['runId'], 'run-1');
+      },
+    );
   });
 }

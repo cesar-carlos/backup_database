@@ -1,4 +1,4 @@
-﻿# Guia Rápido - Criar Instalador
+# Guia Rápido - Criar Instalador
 
 ## Passos Rápidos
 

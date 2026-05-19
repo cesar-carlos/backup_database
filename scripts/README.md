@@ -1,4 +1,4 @@
-﻿# Scripts Operacionais
+# Scripts Operacionais
 
 Este diretorio reune scripts de suporte para manutencao, metricas e release.
 

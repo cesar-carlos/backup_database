@@ -32,8 +32,7 @@ class SybaseBackupStrategyFactory {
             required BackupType backupType,
             required String cancelTag,
           }) {
-            final sybaseOptions =
-                schedule.sybaseBackupOptions;
+            final sybaseOptions = schedule.sybaseBackupOptions;
             return BackupExecutionContext(
               outputDirectory: outputDirectory,
               scheduleId: schedule.id,

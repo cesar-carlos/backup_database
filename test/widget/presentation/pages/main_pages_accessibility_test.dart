@@ -152,10 +152,9 @@ void main() {
 
   Future<SkeletonLoadingPreferenceProvider>
   createShimmerOffSkeletonPreference() async {
-    final provider =
-        SkeletonLoadingPreferenceProvider(
-          userPreferencesRepository: _ShimmerOffUserPreferencesRepository(),
-        );
+    final provider = SkeletonLoadingPreferenceProvider(
+      userPreferencesRepository: _ShimmerOffUserPreferencesRepository(),
+    );
     await provider.initialize();
     return provider;
   }
@@ -187,8 +186,7 @@ void main() {
       );
       addTearDown(schedulerProvider.dispose);
 
-      final skeletonPrefs =
-          await createShimmerOffSkeletonPreference();
+      final skeletonPrefs = await createShimmerOffSkeletonPreference();
       addTearDown(skeletonPrefs.dispose);
 
       for (final mode in <ThemeMode>[
@@ -228,8 +226,7 @@ void main() {
   testWidgets(
     'DashboardPage meets text contrast accessibility guideline (light and dark)',
     (WidgetTester tester) async {
-      final historyRepo =
-          _MockBackupHistoryRepository();
+      final historyRepo = _MockBackupHistoryRepository();
       final scheduleRepo = _MockScheduleRepository();
 
       when(
@@ -251,8 +248,7 @@ void main() {
       );
       addTearDown(dashboardProvider.dispose);
 
-      final skeletonPrefs =
-          await createShimmerOffSkeletonPreference();
+      final skeletonPrefs = await createShimmerOffSkeletonPreference();
       addTearDown(skeletonPrefs.dispose);
 
       for (final mode in <ThemeMode>[
@@ -303,8 +299,7 @@ void main() {
       final logProvider = LogProvider(LogService(logRepo));
       addTearDown(logProvider.dispose);
 
-      final skeletonPrefs =
-          await createShimmerOffSkeletonPreference();
+      final skeletonPrefs = await createShimmerOffSkeletonPreference();
       addTearDown(skeletonPrefs.dispose);
 
       for (final mode in <ThemeMode>[

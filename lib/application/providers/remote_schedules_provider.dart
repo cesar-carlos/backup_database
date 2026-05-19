@@ -290,7 +290,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _backupMessage = 'Verificando permissões para download...';
     notifyListeners();
 
-    final hasPermission = await _tempDirectoryService.validateDownloadsDirectory();
+    final hasPermission = await _tempDirectoryService
+        .validateDownloadsDirectory();
     if (!hasPermission) {
       final downloadsDir = await _tempDirectoryService.getDownloadsDirectory();
       _resetExecutionState(
@@ -358,9 +359,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           );
           _backupMessage = 'Backup em andamento no servidor';
           notifyListeners();
-          final pathResult = await _connectionManager.waitForRemoteBackupCompletion(
-            runId,
-          );
+          final pathResult = await _connectionManager
+              .waitForRemoteBackupCompletion(
+                runId,
+              );
           await pathResult.fold(
             (path) => _finishBackupAndDownload(
               scheduleId: scheduleId,
@@ -387,8 +389,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
                   runId: runId,
                   onProgress: _onBackupProgress,
                 );
-                final pathResult =
-                    await _connectionManager.waitForRemoteBackupCompletion(runId);
+                final pathResult = await _connectionManager
+                    .waitForRemoteBackupCompletion(runId);
                 await pathResult.fold(
                   (path) => _finishBackupAndDownload(
                     scheduleId: scheduleId,
@@ -422,7 +424,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
                     );
                   },
                   (exception) async {
-                    _resetExecutionState(error: mapExceptionToMessage(exception));
+                    _resetExecutionState(
+                      error: mapExceptionToMessage(exception),
+                    );
                   },
                 );
                 return;
@@ -441,7 +445,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         }
 
         if (status.state == ExecutionState.notFound) {
-          final meta = await _connectionManager.getArtifactMetadata(runId: runId);
+          final meta = await _connectionManager.getArtifactMetadata(
+            runId: runId,
+          );
           await meta.fold(
             (artifact) async {
               if (artifact.found && artifact.stagingPath != null) {
@@ -467,12 +473,15 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
         if (status.state == ExecutionState.completed) {
           _disconnectedDuringRun = false;
-          final meta = await _connectionManager.getArtifactMetadata(runId: runId);
+          final meta = await _connectionManager.getArtifactMetadata(
+            runId: runId,
+          );
           await meta.fold(
             (artifact) async {
               if (!artifact.found || artifact.stagingPath == null) {
                 _resetExecutionState(
-                  error: 'Backup concluído, mas artefato não encontrado no servidor',
+                  error:
+                      'Backup concluído, mas artefato não encontrado no servidor',
                 );
                 return;
               }
@@ -492,7 +501,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         if (status.state == ExecutionState.failed ||
             status.state == ExecutionState.cancelled) {
           _resetExecutionState(
-            error: status.message ??
+            error:
+                status.message ??
                 (status.state == ExecutionState.cancelled
                     ? 'Backup cancelado no servidor'
                     : 'Backup falhou no servidor'),
@@ -526,8 +536,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         await Future<void>.delayed(const Duration(seconds: 2));
         continue;
       }
-      if (status.state == ExecutionState.running ||
-          status.state.isTerminal) {
+      if (status.state == ExecutionState.running || status.state.isTerminal) {
         return rd.Success(status.state);
       }
       if (status.state == ExecutionState.queued) {
@@ -538,7 +547,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       }
       await Future<void>.delayed(const Duration(seconds: 2));
     }
-    return rd.Failure(TimeoutException('Tempo esgotado aguardando fila remota'));
+    return rd.Failure(
+      TimeoutException('Tempo esgotado aguardando fila remota'),
+    );
   }
 
   void _resetExecutionState({String? error, String? errorCode}) {

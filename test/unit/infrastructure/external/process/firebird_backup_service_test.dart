@@ -1580,8 +1580,7 @@ void main() {
             tag: any(named: 'tag'),
           ),
         ).thenAnswer((invocation) async {
-          final args =
-              invocation.namedArguments[#arguments]! as List<String>;
+          final args = invocation.namedArguments[#arguments]! as List<String>;
           final iIndex = args.indexOf('-i');
           if (iIndex >= 0 && iIndex + 1 < args.length) {
             final scriptPath = args[iIndex + 1];
@@ -1617,8 +1616,7 @@ void main() {
             tag: any(named: 'tag'),
           ),
         ).thenAnswer((invocation) async {
-          final args =
-              invocation.namedArguments[#arguments]! as List<String>;
+          final args = invocation.namedArguments[#arguments]! as List<String>;
           final bIndex = args.indexOf('-B');
           expect(bIndex, greaterThanOrEqualTo(0));
           expect(args[bIndex + 1], parentGuid);
@@ -1675,8 +1673,7 @@ void main() {
             tag: any(named: 'tag'),
           ),
         ).thenAnswer((invocation) async {
-          final args =
-              invocation.namedArguments[#arguments]! as List<String>;
+          final args = invocation.namedArguments[#arguments]! as List<String>;
           final iIndex = args.indexOf('-i');
           if (iIndex >= 0 && iIndex + 1 < args.length) {
             final scriptPath = args[iIndex + 1];

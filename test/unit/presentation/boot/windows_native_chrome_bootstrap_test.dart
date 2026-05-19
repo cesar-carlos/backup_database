@@ -20,13 +20,18 @@ void main() {
       );
     });
 
-    test('syncMicaDarkAppearanceIfActive completes without throw when not on Windows', () async {
-      if (Platform.isWindows) {
-        return;
-      }
+    test(
+      'syncMicaDarkAppearanceIfActive completes without throw when not on Windows',
+      () async {
+        if (Platform.isWindows) {
+          return;
+        }
 
-      await WindowsNativeChromeBootstrap.syncMicaDarkAppearanceIfActive(true);
-      await WindowsNativeChromeBootstrap.syncMicaDarkAppearanceIfActive(false);
-    });
+        await WindowsNativeChromeBootstrap.syncMicaDarkAppearanceIfActive(true);
+        await WindowsNativeChromeBootstrap.syncMicaDarkAppearanceIfActive(
+          false,
+        );
+      },
+    );
   });
 }

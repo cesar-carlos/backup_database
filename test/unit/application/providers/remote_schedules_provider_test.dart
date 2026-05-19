@@ -111,7 +111,8 @@ void main() {
     test(
       'should preserve activeRunId when executeRemoteBackup fails on disconnect',
       () async {
-        connectionManager.remoteBackupCompleter = Completer<rd.Result<String>>();
+        connectionManager.remoteBackupCompleter =
+            Completer<rd.Result<String>>();
         final executionFuture = provider.executeSchedule(scheduleId);
         await Future<void>.delayed(Duration.zero);
 

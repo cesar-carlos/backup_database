@@ -35,8 +35,7 @@ abstract class FirebirdConfig
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
-    final normalizedHost =
-        host.trim().isEmpty ? 'localhost' : host.trim();
+    final normalizedHost = host.trim().isEmpty ? 'localhost' : host.trim();
     return FirebirdConfig.raw(
       id: id ?? const Uuid().v4(),
       name: name,
@@ -65,7 +64,9 @@ abstract class FirebirdConfig
     required String username,
     required String password,
     required PortNumber port,
-    required DateTime createdAt, required DateTime updatedAt, String? aliasName,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    String? aliasName,
     @Default(false) bool useEmbedded,
     String? clientLibraryPath,
     @Default(FirebirdServerVersionHint.auto)
@@ -81,11 +82,11 @@ abstract class FirebirdConfig
 
   @override
   DatabaseName get primaryDatabase => DatabaseName(
-        firebirdPrimaryLabel(
-          aliasName: aliasName,
-          databaseFile: databaseFile,
-        ),
-      );
+    firebirdPrimaryLabel(
+      aliasName: aliasName,
+      databaseFile: databaseFile,
+    ),
+  );
 
   @override
   String? get backupTarget => databaseFile;

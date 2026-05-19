@@ -8,6 +8,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "encoding_utils.ps1")
+
 function Get-StringValue {
     param(
         [string]$Value
@@ -120,4 +122,4 @@ $updated = [ordered]@{
 }
 
 $json = $updated | ConvertTo-Json -Depth 8
-Set-Content -Path $ContextPath -Value $json -Encoding UTF8
+Write-Utf8NoBomFile -Path $ContextPath -Value $json

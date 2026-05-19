@@ -1,4 +1,4 @@
-﻿import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/services.dart';
 
 class ClipboardService {

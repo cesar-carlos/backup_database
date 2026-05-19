@@ -46,7 +46,13 @@ abstract class BackupHistory with _$BackupHistory {
 
   const factory BackupHistory.raw({
     required String id,
-    required String databaseName, required String databaseType, required String backupPath, required int fileSize, required BackupStatus status, required DateTime startedAt, String? runId,
+    required String databaseName,
+    required String databaseType,
+    required String backupPath,
+    required int fileSize,
+    required BackupStatus status,
+    required DateTime startedAt,
+    String? runId,
     String? scheduleId,
     @Default('full') String backupType,
     String? errorMessage,

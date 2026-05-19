@@ -120,10 +120,10 @@ void main() {
         ).thenAnswer((_) async => rd.Success(s));
 
         final req = createCreateScheduleMessage(
-        requestId: 1,
-        schedule: s,
-        idempotencyKey: 'idem-create',
-      );
+          requestId: 1,
+          schedule: s,
+          idempotencyKey: 'idem-create',
+        );
         await handler.handle('c1', req, sendToClient);
 
         verifyNever(() => repo.create(any()));
@@ -142,10 +142,10 @@ void main() {
         when(() => repo.create(any())).thenAnswer((_) async => rd.Success(s));
 
         final req = createCreateScheduleMessage(
-        requestId: 1,
-        schedule: s,
-        idempotencyKey: 'idem-create',
-      );
+          requestId: 1,
+          schedule: s,
+          idempotencyKey: 'idem-create',
+        );
         await handler.handle('c1', req, sendToClient);
 
         verify(() => repo.create(any())).called(1);

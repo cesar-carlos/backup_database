@@ -122,8 +122,7 @@ void main() {
             onProgress: any(named: 'onProgress'),
           ),
         ).thenAnswer((invocation) async {
-          final outputPath =
-              invocation.namedArguments[#outputPath] as String;
+          final outputPath = invocation.namedArguments[#outputPath] as String;
           await File(outputPath).writeAsString('backup-bytes');
           return const rd.Success(());
         });

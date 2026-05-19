@@ -791,8 +791,10 @@ void main() {
         final completeMsg = sentMessages.firstWhere(isBackupCompleteMessage);
         expect(getRunIdFromBackupMessage(completeMsg), runId);
         expect(completeMsg.payload['backupPath'], '/tmp/x.zip');
-        expect(getSequenceFromBackupMessage(completeMsg),
-            greaterThan(getSequenceFromBackupMessage(progressMsg)!));
+        expect(
+          getSequenceFromBackupMessage(completeMsg),
+          greaterThan(getSequenceFromBackupMessage(progressMsg)!),
+        );
         // Apos enviar Concluído o registry desregistra (limpeza)
         expect(localRegistry.hasActiveForSchedule('schedule-Y'), isFalse);
 

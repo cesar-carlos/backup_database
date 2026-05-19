@@ -1,4 +1,4 @@
-﻿import 'dart:ffi';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';

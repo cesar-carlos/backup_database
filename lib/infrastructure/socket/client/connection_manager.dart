@@ -369,8 +369,10 @@ class ConnectionManager {
     required String runId,
     required Message message,
   }) {
-    final pending =
-        _pendingBackupStreamByRunId.putIfAbsent(runId, () => <Message>[]);
+    final pending = _pendingBackupStreamByRunId.putIfAbsent(
+      runId,
+      () => <Message>[],
+    );
     if (pending.length >= _maxPendingBackupStreamEventsPerRunId) {
       pending.removeAt(0);
     }

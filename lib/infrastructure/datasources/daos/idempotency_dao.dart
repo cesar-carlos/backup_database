@@ -10,9 +10,9 @@ class IdempotencyDao extends DatabaseAccessor<AppDatabase>
   IdempotencyDao(super.db);
 
   Future<IdempotencyEntriesTableData?> getByKey(String key) {
-    return (select(idempotencyEntriesTable)
-          ..where((t) => t.idempotencyKey.equals(key)))
-        .getSingleOrNull();
+    return (select(
+      idempotencyEntriesTable,
+    )..where((t) => t.idempotencyKey.equals(key))).getSingleOrNull();
   }
 
   Future<void> upsert({
@@ -32,14 +32,15 @@ class IdempotencyDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<int> deleteByKey(String key) {
-    return (delete(idempotencyEntriesTable)
-          ..where((t) => t.idempotencyKey.equals(key)))
-        .go();
+    return (delete(
+      idempotencyEntriesTable,
+    )..where((t) => t.idempotencyKey.equals(key))).go();
   }
 
   Future<int> deleteExpiredBefore(int expiresBeforeMicros) {
-    return (delete(idempotencyEntriesTable)
-          ..where((t) => t.expiresAtMicros.isSmallerThanValue(expiresBeforeMicros)))
+    return (delete(idempotencyEntriesTable)..where(
+          (t) => t.expiresAtMicros.isSmallerThanValue(expiresBeforeMicros),
+        ))
         .go();
   }
 }

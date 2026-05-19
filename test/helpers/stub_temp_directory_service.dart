@@ -13,8 +13,7 @@ class StubTempDirectoryService extends TempDirectoryService {
     IMachineSettingsRepository? machineSettings,
     this.allowWrite = true,
   }) : super(
-         machineSettings:
-             machineSettings ?? MockMachineSettingsRepository(),
+         machineSettings: machineSettings ?? MockMachineSettingsRepository(),
        );
 
   final bool allowWrite;

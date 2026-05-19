@@ -68,8 +68,7 @@ class _MockFileTransferLockService implements IFileTransferLockService {
     String owner = 'unknown',
     String? runId,
     Duration leaseTtl = kDefaultTransferLeaseTtl,
-  }) async =>
-      true;
+  }) async => true;
 
   @override
   Future<void> releaseLock(String filePath) async {}
@@ -598,7 +597,9 @@ Future<_RemoteE2eSocket> _connectRemoteExecutionE2eSocket() async {
     await server.stop();
     await manager.disconnect();
     await serverDir.delete(recursive: true);
-    throw StateError('getServerSession failed: ${sessionResult.exceptionOrNull()}');
+    throw StateError(
+      'getServerSession failed: ${sessionResult.exceptionOrNull()}',
+    );
   }
   final clientId = sessionResult.getOrNull()!.clientId;
   if (clientId.isEmpty) {
@@ -725,7 +726,12 @@ void main() {
         expect(queueSeq, 1);
         expect(progressSeq, greaterThan(queueSeq));
         expect(getEventIdFromBackupMessage(progressMsg), isNotEmpty);
-        expect(Uuid.isValidUUID(fromString: getEventIdFromBackupMessage(progressMsg)!), isTrue);
+        expect(
+          Uuid.isValidUUID(
+            fromString: getEventIdFromBackupMessage(progressMsg)!,
+          ),
+          isTrue,
+        );
 
         handler.dispose();
       },
@@ -952,98 +958,102 @@ void main() {
       },
     );
 
-    test('startRemoteBackup returns 202 runId before backup completes', () async {
-      final blockBackup = Completer<rd.Result<bool>>();
-      final serverDir = await Directory.systemTemp.createTemp('re_exec_blk_');
-      addTearDown(() => serverDir.delete(recursive: true));
+    test(
+      'startRemoteBackup returns 202 runId before backup completes',
+      () async {
+        final blockBackup = Completer<rd.Result<bool>>();
+        final serverDir = await Directory.systemTemp.createTemp('re_exec_blk_');
+        addTearDown(() => serverDir.delete(recursive: true));
 
-      final scheduleRepository = _MockScheduleRepository();
-      when(
-        () => scheduleRepository.getById(_e2eScheduleId),
-      ).thenAnswer((_) async => rd.Success(_e2eSchedule));
+        final scheduleRepository = _MockScheduleRepository();
+        when(
+          () => scheduleRepository.getById(_e2eScheduleId),
+        ).thenAnswer((_) async => rd.Success(_e2eSchedule));
 
-      final licensePolicyService = _MockLicensePolicyService();
-      when(
-        () => licensePolicyService.validateExecutionCapabilities(any(), any()),
-      ).thenAnswer((_) async => const rd.Success(true));
+        final licensePolicyService = _MockLicensePolicyService();
+        when(
+          () =>
+              licensePolicyService.validateExecutionCapabilities(any(), any()),
+        ).thenAnswer((_) async => const rd.Success(true));
 
-      final schedulerService = _MockSchedulerService();
-      when(() => schedulerService.isExecutingBackup).thenReturn(false);
+        final schedulerService = _MockSchedulerService();
+        when(() => schedulerService.isExecutingBackup).thenReturn(false);
 
-      final executeBackup = _MockExecuteBackup();
-      final progressNotifier = BackupProgressProvider();
-      final registry = RemoteExecutionRegistry();
-      final sequencer = ExecutionEventSequencer();
+        final executeBackup = _MockExecuteBackup();
+        final progressNotifier = BackupProgressProvider();
+        final registry = RemoteExecutionRegistry();
+        final sequencer = ExecutionEventSequencer();
 
-      when(
-        () => executeBackup(
-          _e2eScheduleId,
-          executionOrigin: ExecutionOrigin.remoteCommand,
-        ),
-      ).thenAnswer((_) => blockBackup.future);
+        when(
+          () => executeBackup(
+            _e2eScheduleId,
+            executionOrigin: ExecutionOrigin.remoteCommand,
+          ),
+        ).thenAnswer((_) => blockBackup.future);
 
-      final scheduleHandler = ScheduleMessageHandler(
-        scheduleRepository: scheduleRepository,
-        licensePolicyService: licensePolicyService,
-        schedulerService: schedulerService,
-        updateSchedule: _MockUpdateSchedule(),
-        executeBackup: executeBackup,
-        progressNotifier: progressNotifier,
-        executionRegistry: registry,
-        eventSequencer: sequencer,
-      );
+        final scheduleHandler = ScheduleMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          updateSchedule: _MockUpdateSchedule(),
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: registry,
+          eventSequencer: sequencer,
+        );
 
-      final executionHandler = ExecutionMessageHandler(
-        scheduleRepository: scheduleRepository,
-        licensePolicyService: licensePolicyService,
-        schedulerService: schedulerService,
-        executeBackup: executeBackup,
-        progressNotifier: progressNotifier,
-        executionRegistry: registry,
-        eventSequencer: sequencer,
-        stagingUsageBytesProvider: () async => 0,
-      );
+        final executionHandler = ExecutionMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: registry,
+          eventSequencer: sequencer,
+          stagingUsageBytesProvider: () async => 0,
+        );
 
-      final server = TcpSocketServer(
-        scheduleHandler: scheduleHandler,
-        executionHandler: executionHandler,
-        fileTransferHandler: FileTransferMessageHandler(
-          allowedBasePath: serverDir.path,
-          lockService: _MockFileTransferLockService(),
-        ),
-      );
-      executionHandler.eventBus = QueueEventBus(
-        broadcast: server.sendToClient,
-        sequencer: sequencer,
-      );
+        final server = TcpSocketServer(
+          scheduleHandler: scheduleHandler,
+          executionHandler: executionHandler,
+          fileTransferHandler: FileTransferMessageHandler(
+            allowedBasePath: serverDir.path,
+            lockService: _MockFileTransferLockService(),
+          ),
+        );
+        executionHandler.eventBus = QueueEventBus(
+          broadcast: server.sendToClient,
+          sequencer: sequencer,
+        );
 
-      final port = _e2ePort();
-      await server.start(port: port);
-      addTearDown(server.stop);
-      addTearDown(scheduleHandler.dispose);
-      addTearDown(
-        () => Future<void>.delayed(const Duration(milliseconds: 200)),
-      );
+        final port = _e2ePort();
+        await server.start(port: port);
+        addTearDown(server.stop);
+        addTearDown(scheduleHandler.dispose);
+        addTearDown(
+          () => Future<void>.delayed(const Duration(milliseconds: 200)),
+        );
 
-      final manager = ConnectionManager();
-      addTearDown(manager.disconnect);
-      await manager.connect(host: '127.0.0.1', port: port);
+        final manager = ConnectionManager();
+        addTearDown(manager.disconnect);
+        await manager.connect(host: '127.0.0.1', port: port);
 
-      final startResult = await manager.startRemoteBackup(
-        scheduleId: _e2eScheduleId,
-        idempotencyKey: 'idem-e2e-immediate',
-      );
-      expect(startResult.isSuccess(), isTrue);
-      expect(registry.activeCount, 1);
-      final start = startResult.getOrNull()!;
-      expect(start.runId, isNotEmpty);
-      expect(start.runId, startsWith('${_e2eScheduleId}_'));
-      expect(start.isRunning, isTrue);
+        final startResult = await manager.startRemoteBackup(
+          scheduleId: _e2eScheduleId,
+          idempotencyKey: 'idem-e2e-immediate',
+        );
+        expect(startResult.isSuccess(), isTrue);
+        expect(registry.activeCount, 1);
+        final start = startResult.getOrNull()!;
+        expect(start.runId, isNotEmpty);
+        expect(start.runId, startsWith('${_e2eScheduleId}_'));
+        expect(start.isRunning, isTrue);
 
-      blockBackup.complete(const rd.Success(true));
-      progressNotifier.completeBackup(backupPath: r'C:\noop');
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    });
+        blockBackup.complete(const rd.Success(true));
+        progressNotifier.completeBackup(backupPath: r'C:\noop');
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      },
+    );
 
     test(
       'startRemoteBackup with queueIfBusy enqueues when scheduler is busy',
@@ -1157,7 +1167,10 @@ void main() {
         final queuedRunId = queuedStart.getOrNull()!.runId;
         expect(queuedStart.getOrNull()!.isQueued, isTrue);
 
-        manager.attachRemoteBackupListener(runId: queuedRunId, onProgress: null);
+        manager.attachRemoteBackupListener(
+          runId: queuedRunId,
+          onProgress: null,
+        );
         final queuedCompletion = manager.waitForRemoteBackupCompletion(
           queuedRunId,
         );

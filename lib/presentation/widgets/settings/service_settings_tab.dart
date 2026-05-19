@@ -425,7 +425,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             appLocaleString(
               context,
               'Quando desativado, o servidor não verifica agendamentos vencidos por timer. Execuções manuais, comandos remotos do cliente e “Executar agora” continuam funcionando.',
-              'When off, the server does not poll for due schedules on a timer. Manual runs, remote client commands, and â€œRun nowâ€ still work.',
+              'When off, the server does not poll for due schedules on a timer. Manual runs, remote client commands, and “Run now” still work.',
             ),
             style: FluentTheme.of(context).typography.caption,
           ),

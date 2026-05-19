@@ -33,12 +33,14 @@ final List<_Rule> _rules = <_Rule>[
     pattern: RegExp(
       r'MediaQuery\.of\s*\(\s*context\s*\)\.size\.width\s*>\s*\d',
     ),
-    message: 'Use context.isCompactWindow / AppBreakpoints instead of width literals.',
+    message:
+        'Use context.isCompactWindow / AppBreakpoints instead of width literals.',
   ),
   _Rule(
     id: 'atomic_doc_comment',
     pattern: RegExp(r'\*\*(Atom|Molecule|Organism)\*\*'),
-    message: 'Document atomic level with /// **Atom|Molecule|Organism** in the file.',
+    message:
+        'Document atomic level with /// **Atom|Molecule|Organism** in the file.',
     matchRequired: true,
   ),
 ];
@@ -83,13 +85,17 @@ void main(List<String> args) {
             name == 'organisms.dart') {
           continue;
         }
-        findings.addAll(_scanFile(entity, enforceTargetSize: enforceTargetSize));
+        findings.addAll(
+          _scanFile(entity, enforceTargetSize: enforceTargetSize),
+        );
       }
     }
   }
 
   if (findings.isEmpty) {
-    stdout.writeln('OK: design system guard — no findings in atoms/molecules/organisms.');
+    stdout.writeln(
+      'OK: design system guard — no findings in atoms/molecules/organisms.',
+    );
     return;
   }
 
@@ -108,8 +114,7 @@ List<_Finding> _scanFile(
   File file, {
   required bool enforceTargetSize,
 }) {
-  final String relative =
-      file.path.replaceAll(r'\', '/').split('lib/').last;
+  final String relative = file.path.replaceAll(r'\', '/').split('lib/').last;
   final String path = 'lib/$relative';
   final List<String> lines = file.readAsLinesSync();
   final String content = lines.join('\n');
@@ -197,9 +202,7 @@ List<_Finding> _scanTargetSize(
     final RegExpMatch? size = _minimumSizePattern.firstMatch(line);
     if (size != null) {
       final double w = double.parse(size.group(1)!);
-      final double h = size.group(2) != null
-          ? double.parse(size.group(2)!)
-          : w;
+      final double h = size.group(2) != null ? double.parse(size.group(2)!) : w;
       if (w < _minInteractiveTarget || h < _minInteractiveTarget) {
         out.add(
           _Finding(

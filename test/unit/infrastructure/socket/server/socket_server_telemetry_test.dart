@@ -80,7 +80,10 @@ void main() {
         )],
         1,
       );
-      expect(telemetry.recentMutableAudits().single.result, 'error:rateLimitExceeded');
+      expect(
+        telemetry.recentMutableAudits().single.result,
+        'error:rateLimitExceeded',
+      );
     });
 
     test('clearClient drops pending requests', () {

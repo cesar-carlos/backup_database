@@ -88,13 +88,15 @@ class SocketServerTelemetry {
     if (_skipDurationTypes.contains(type)) {
       return;
     }
-    _pendingByKey[_pendingKey(clientId, message.header.requestId)] =
-        _PendingSocketRequest(
-          messageType: type,
-          receivedAt: _clock(),
-          idempotencyKey: getIdempotencyKey(message),
-          runIdHint: _runIdHintFromPayload(message),
-        );
+    _pendingByKey[_pendingKey(
+      clientId,
+      message.header.requestId,
+    )] = _PendingSocketRequest(
+      messageType: type,
+      receivedAt: _clock(),
+      idempotencyKey: getIdempotencyKey(message),
+      runIdHint: _runIdHintFromPayload(message),
+    );
   }
 
   void onResponseSent(String clientId, Message message) {
@@ -168,7 +170,8 @@ class SocketServerTelemetry {
       durationMs: durationMs,
     );
     _recentMutableAudits.add(entry);
-    if (_recentMutableAudits.length > SocketTelemetryLimits.maxRecentMutableAudits) {
+    if (_recentMutableAudits.length >
+        SocketTelemetryLimits.maxRecentMutableAudits) {
       _recentMutableAudits.removeAt(0);
     }
     LoggerService.infoWithContext(
@@ -182,7 +185,9 @@ class SocketServerTelemetry {
 
   void _pruneStalePending() {
     final cutoff = _clock().subtract(SocketTelemetryLimits.pendingRequestTtl);
-    _pendingByKey.removeWhere((_, pending) => pending.receivedAt.isBefore(cutoff));
+    _pendingByKey.removeWhere(
+      (_, pending) => pending.receivedAt.isBefore(cutoff),
+    );
   }
 
   String _pendingKey(String clientId, int requestId) => '$clientId:$requestId';

@@ -80,7 +80,9 @@ void main(List<String> args) {
     '${prECore.fileCount} files, ${prECore.lineCount} lines',
   );
   stdout.writeln('');
-  stdout.writeln('Markdown table: dart run tools/sgbd_loc_report.dart --markdown');
+  stdout.writeln(
+    'Markdown table: dart run tools/sgbd_loc_report.dart --markdown',
+  );
   stdout.writeln('');
   stdout.writeln('Diff vs base branch (example):');
   stdout.writeln(

@@ -19,7 +19,8 @@ class IdempotencyPolicy {
     MessageType.deleteDatabaseConfigRequest,
   };
 
-  static bool isKeyRequired(MessageType type) => keyRequiredTypes.contains(type);
+  static bool isKeyRequired(MessageType type) =>
+      keyRequiredTypes.contains(type);
 
   static bool hasValidKey(Message message) {
     final key = getIdempotencyKey(message);

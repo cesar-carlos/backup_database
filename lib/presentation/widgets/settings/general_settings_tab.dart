@@ -841,8 +841,8 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   appLocaleString(context, 'Ultimo ciclo', 'Last cycle'),
                 ),
                 subtitle: Text(
-                  '#${autoUpdateProvider.lastAttemptNumber} â€¢ '
-                  '${_buildAutoUpdateSourceText(autoUpdateProvider.lastSource)} â€¢ '
+                  '#${autoUpdateProvider.lastAttemptNumber} • '
+                  '${_buildAutoUpdateSourceText(autoUpdateProvider.lastSource)} • '
                   '${_buildAutoUpdateStageText(autoUpdateProvider.currentStage)}',
                 ),
                 trailing: const Icon(FluentIcons.timeline),
@@ -860,9 +860,9 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 subtitle: Text(
                   appLocaleString(
                     context,
-                    'Ciclo: ${_formatAutoUpdateDuration(autoUpdateProvider.lastCheckDuration)} â€¢ '
+                    'Ciclo: ${_formatAutoUpdateDuration(autoUpdateProvider.lastCheckDuration)} • '
                         'Download: ${_formatAutoUpdateDuration(autoUpdateProvider.lastDownloadDuration)}',
-                    'Cycle: ${_formatAutoUpdateDuration(autoUpdateProvider.lastCheckDuration)} â€¢ '
+                    'Cycle: ${_formatAutoUpdateDuration(autoUpdateProvider.lastCheckDuration)} • '
                         'Download: ${_formatAutoUpdateDuration(autoUpdateProvider.lastDownloadDuration)}',
                   ),
                 ),

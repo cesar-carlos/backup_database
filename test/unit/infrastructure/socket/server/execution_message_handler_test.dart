@@ -224,9 +224,9 @@ void main() {
       ).thenAnswer((_) => blockBackup.future);
 
       final req = createStartBackupRequest(
-          scheduleId: scheduleId,
-          idempotencyKey: 'idem-default',
-        );
+        scheduleId: scheduleId,
+        idempotencyKey: 'idem-default',
+      );
       await handler.handle('c1', req, sendToClient);
 
       // Resposta ja deve estar no `sent` MESMO sem ter resolvido o backup
@@ -341,9 +341,9 @@ void main() {
     test('rejeita quando ja existe backup em execucao', () async {
       when(() => schedulerService.isExecutingBackup).thenReturn(true);
       final req = createStartBackupRequest(
-          scheduleId: scheduleId,
-          idempotencyKey: 'idem-default',
-        );
+        scheduleId: scheduleId,
+        idempotencyKey: 'idem-default',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.header.type, MessageType.error);
@@ -358,9 +358,9 @@ void main() {
         () => scheduleRepository.getById(scheduleId),
       ).thenAnswer((_) async => rd.Failure(Exception('not found')));
       final req = createStartBackupRequest(
-          scheduleId: scheduleId,
-          idempotencyKey: 'idem-default',
-        );
+        scheduleId: scheduleId,
+        idempotencyKey: 'idem-default',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.header.type, MessageType.error);
@@ -372,9 +372,9 @@ void main() {
         () => licensePolicyService.validateExecutionCapabilities(any(), any()),
       ).thenAnswer((_) async => rd.Failure(Exception('license denied')));
       final req = createStartBackupRequest(
-          scheduleId: scheduleId,
-          idempotencyKey: 'idem-default',
-        );
+        scheduleId: scheduleId,
+        idempotencyKey: 'idem-default',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.header.type, MessageType.error);

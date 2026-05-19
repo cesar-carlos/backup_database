@@ -63,7 +63,9 @@ void main() {
         isTrue,
       );
       expect(
-        SocketRateLimiter.isMutatingMessageType(MessageType.cancelBackupRequest),
+        SocketRateLimiter.isMutatingMessageType(
+          MessageType.cancelBackupRequest,
+        ),
         isTrue,
       );
       expect(

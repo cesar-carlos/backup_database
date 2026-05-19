@@ -25,8 +25,7 @@ class SqlServerBackupStrategyFactory {
             required BackupType backupType,
             required String cancelTag,
           }) {
-            final backupOptions =
-                schedule.sqlServerBackupOptions;
+            final backupOptions = schedule.sqlServerBackupOptions;
             if (backupOptions == null) {
               LoggerService.warning(
                 'Schedule "${schedule.name}" do tipo SQL Server foi carregado '

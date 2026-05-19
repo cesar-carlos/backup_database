@@ -11,6 +11,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "encoding_utils.ps1")
+
 function Parse-KeyMap {
     param(
         [string]$Path
@@ -67,11 +69,16 @@ if ($missingLines.Count -eq 0) {
     exit 0
 }
 
-$content = Get-Content -Path $TargetPath -Raw
-if ($content.Length -gt 0 -and -not $content.EndsWith([Environment]::NewLine)) {
-    Add-Content -Path $TargetPath -Value ""
+$content = Read-Utf8NoBomFile -Path $TargetPath
+$merged = New-Object System.Text.StringBuilder
+if ($content.Length -gt 0) {
+    [void]$merged.Append($content)
+    if (-not $content.EndsWith([Environment]::NewLine)) {
+        [void]$merged.AppendLine()
+    }
 }
-Add-Content -Path $TargetPath -Value "# Added by installer merge"
+[void]$merged.AppendLine("# Added by installer merge")
 foreach ($line in $missingLines) {
-    Add-Content -Path $TargetPath -Value $line
+    [void]$merged.AppendLine($line)
 }
+Write-Utf8NoBomFile -Path $TargetPath -Value $merged.ToString()

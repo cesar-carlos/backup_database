@@ -50,7 +50,9 @@ abstract class SqlServerConfig
     required String username,
     required String password,
     required PortNumber port,
-    required DateTime createdAt, required DateTime updatedAt, @Default(true) bool enabled,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    @Default(true) bool enabled,
     @Default(false) bool useWindowsAuth,
   }) = _SqlServerConfig;
 

@@ -1,4 +1,4 @@
-﻿# Test Scripts
+# Test Scripts
 
 Scripts Python para automacao de testes do servidor e cliente.
 

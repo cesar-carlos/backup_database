@@ -161,10 +161,14 @@ void main() {
     test(
       'com run ativo e staging: publica artifactExpiresAt',
       () async {
-        final stagingBase = await Directory.systemTemp.createTemp('metrics_ttl_');
+        final stagingBase = await Directory.systemTemp.createTemp(
+          'metrics_ttl_',
+        );
         addTearDown(() => stagingBase.delete(recursive: true));
         final runId = registry.generateRunId('schedule-X');
-        final artifactDir = Directory(p.join(stagingBase.path, 'remote', runId));
+        final artifactDir = Directory(
+          p.join(stagingBase.path, 'remote', runId),
+        );
         await artifactDir.create(recursive: true);
         final artifact = File(p.join(artifactDir.path, 'a.bak'));
         final mtime = DateTime.utc(2026, 5, 1, 8);

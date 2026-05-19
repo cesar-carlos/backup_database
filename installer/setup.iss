@@ -51,6 +51,7 @@ Source: "dependencies\nssm-2.24\win64\nssm.exe"; DestDir: "{app}\tools"; Flags: 
 Source: "dependencies\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "install_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "uninstall_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "encoding_utils.ps1"; Flags: dontcopy
 Source: "capture_update_context.ps1"; Flags: dontcopy
 Source: "restore_update_state.ps1"; Flags: dontcopy
 Source: "merge_env.ps1"; Flags: dontcopy
@@ -98,6 +99,7 @@ var
   ResultCode: Integer;
   ScriptPath: String;
 begin
+  ExtractTemporaryFile('encoding_utils.ps1');
   ExtractTemporaryFile(ScriptName);
   ScriptPath := ExpandConstant('{tmp}\') + ScriptName;
   Result := Exec(

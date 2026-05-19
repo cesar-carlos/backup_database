@@ -19,8 +19,7 @@ class RateLimitDenied extends RateLimitDecision {
 /// Janela deslizante por cliente: req/s global + mutacoes/minuto.
 class SocketRateLimiter {
   SocketRateLimiter({
-    int maxRequestsPerSecond =
-        SocketRateLimit.maxRequestsPerSecondPerClient,
+    int maxRequestsPerSecond = SocketRateLimit.maxRequestsPerSecondPerClient,
     int maxMutatingPerMinute =
         SocketRateLimit.maxMutatingCommandsPerMinutePerClient,
     DateTime Function()? clock,
@@ -73,7 +72,10 @@ class SocketRateLimiter {
     }
 
     final now = _clock();
-    _pruneOlderThan(_requestTimestamps, now.subtract(const Duration(seconds: 1)));
+    _pruneOlderThan(
+      _requestTimestamps,
+      now.subtract(const Duration(seconds: 1)),
+    );
 
     if (_requestTimestamps.length >= _maxRequestsPerSecond) {
       return const RateLimitDenied(retryAfterSeconds: 1);
