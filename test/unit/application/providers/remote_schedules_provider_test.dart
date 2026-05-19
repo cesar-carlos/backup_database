@@ -108,6 +108,28 @@ void main() {
   });
 
   group('RemoteSchedulesProvider.disconnect and resume', () {
+    test(
+      'should preserve activeRunId when executeRemoteBackup fails on disconnect',
+      () async {
+        connectionManager.remoteBackupCompleter = Completer<rd.Result<String>>();
+        final executionFuture = provider.executeSchedule(scheduleId);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(provider.activeRunId, '${scheduleId}_run-test');
+
+        connectionManager.remoteBackupCompleter!.complete(
+          rd.Failure(Exception('Disconnected during backup')),
+        );
+
+        final ok = await executionFuture;
+
+        expect(ok, isFalse);
+        expect(provider.activeRunId, '${scheduleId}_run-test');
+        expect(provider.executingScheduleId, scheduleId);
+        expect(provider.error, contains('reconectar'));
+      },
+    );
+
     test('should preserve runId on disconnect for M8.4', () async {
       connectionManager.remoteBackupCompleter = Completer<rd.Result<String>>();
       unawaited(provider.executeSchedule(scheduleId));

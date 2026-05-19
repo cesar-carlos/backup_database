@@ -384,6 +384,37 @@ bool isExecuteScheduleMessage(Message message) =>
 /// que ignoram o campo. Servidor `v2+` passa a popular sempre, viabilizando
 /// correlacao end-to-end por execucao (ver M2.3 do plano e
 /// `RemoteExecutionRegistry`).
+Message createBackupStepMessage({
+  required int requestId,
+  required String scheduleId,
+  required String step,
+  required String message,
+  double? progress,
+  String? runId,
+  String? eventId,
+  int? sequence,
+}) {
+  final payload = <String, dynamic>{
+    'scheduleId': scheduleId,
+    'step': step,
+    'message': message,
+    ...?(progress != null ? {'progress': progress} : null),
+    ...?(runId != null ? {'runId': runId} : null),
+    ...backupEventCorrelationFields(eventId: eventId, sequence: sequence),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.backupStep,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
 Message createBackupProgressMessage({
   required int requestId,
   required String scheduleId,
@@ -495,8 +526,23 @@ String? getErrorFromBackupFailed(Message message) {
   return message.payload['error'] as String?;
 }
 
+String? getStepFromBackupStep(Message message) {
+  return message.payload['step'] as String?;
+}
+
+String? getMessageFromBackupStep(Message message) {
+  return message.payload['message'] as String?;
+}
+
+double? getProgressFromBackupStep(Message message) {
+  final raw = message.payload['progress'];
+  if (raw is double) return raw;
+  if (raw is num) return raw.toDouble();
+  return null;
+}
+
 /// Extrai o `runId` quando presente no payload de backup
-/// (`backupProgress`, `backupComplete`, `backupFailed`). Retorna `null`
+/// (`backupStep`, `backupProgress`, `backupComplete`, `backupFailed`). Retorna `null`
 /// quando o servidor e anterior a M2.3 (`v1`) ou quando o cliente
 /// processa mensagens legadas, garantindo backward compat.
 String? getRunIdFromBackupMessage(Message message) {
@@ -508,6 +554,9 @@ String? getEventIdFromBackupMessage(Message message) =>
 
 int? getSequenceFromBackupMessage(Message message) =>
     getSequenceFromBackupPayload(message.payload);
+
+bool isBackupStepMessage(Message message) =>
+    message.header.type == MessageType.backupStep;
 
 bool isBackupProgressMessage(Message message) =>
     message.header.type == MessageType.backupProgress;

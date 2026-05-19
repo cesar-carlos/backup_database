@@ -132,6 +132,39 @@ void main() {
       );
     });
 
+    test('rebindClient updates delivery target for M8.4 reconnect', () {
+      final runId = registry.generateRunId('schedule-1');
+      registry.register(
+        runId: runId,
+        scheduleId: 'schedule-1',
+        clientId: 'client-old',
+        requestId: 10,
+        sendToClient: _noopSend,
+      );
+
+      final rebound = registry.rebindClient(
+        runId: runId,
+        clientId: 'client-new',
+        requestId: 77,
+      );
+
+      expect(rebound, isTrue);
+      final ctx = registry.getByRunId(runId);
+      expect(ctx!.clientId, 'client-new');
+      expect(ctx.requestId, 77);
+    });
+
+    test('rebindClient returns false when runId is unknown', () {
+      expect(
+        registry.rebindClient(
+          runId: 'missing',
+          clientId: 'client-new',
+          requestId: 1,
+        ),
+        isFalse,
+      );
+    });
+
     test('unregister removes both indexes (runId and scheduleId)', () {
       final runId = registry.generateRunId('schedule-1');
       registry.register(

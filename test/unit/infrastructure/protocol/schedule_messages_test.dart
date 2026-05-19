@@ -5,6 +5,29 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Backup messages with optional runId (M2.3)', () {
+    group('createBackupStepMessage', () {
+      test('includes runId eventId and sequence when provided (F2.17)', () {
+        const runId = 'schedule-1_uuid-step';
+        final msg = createBackupStepMessage(
+          requestId: 2,
+          scheduleId: 'schedule-1',
+          step: 'Compactando',
+          message: 'zip',
+          progress: 0.3,
+          runId: runId,
+          eventId: 'evt-step',
+          sequence: 7,
+        );
+
+        expect(msg.header.type, MessageType.backupStep);
+        expect(getRunIdFromBackupMessage(msg), runId);
+        expect(getEventIdFromBackupMessage(msg), 'evt-step');
+        expect(getSequenceFromBackupMessage(msg), 7);
+        expect(getStepFromBackupStep(msg), 'Compactando');
+        expect(getProgressFromBackupStep(msg), 0.3);
+      });
+    });
+
     group('createBackupProgressMessage', () {
       test('includes eventId and sequence when provided (F2.17)', () {
         final msg = createBackupProgressMessage(

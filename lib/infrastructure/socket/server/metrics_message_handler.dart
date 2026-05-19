@@ -6,6 +6,7 @@ import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
     show RemoteExecutionRegistry, SendToClient;
 import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
@@ -18,7 +19,9 @@ class MetricsMessageHandler {
     required IBackupRunningState backupRunningState,
     IMetricsCollector? metricsCollector,
     RemoteExecutionRegistry? executionRegistry,
+    ExecutionQueueService? queueService,
     Future<int> Function()? stagingUsageBytesProvider,
+    Future<DateTime?> Function(String runId)? artifactExpiresAtForRunId,
     SocketServerTelemetry? socketTelemetry,
     DateTime Function()? clock,
   }) : _backupHistoryRepository = backupHistoryRepository,
@@ -26,7 +29,9 @@ class MetricsMessageHandler {
        _backupRunningState = backupRunningState,
        _metricsCollector = metricsCollector,
        _executionRegistry = executionRegistry,
+       _queueService = queueService,
        _stagingUsageBytesProvider = stagingUsageBytesProvider,
+       _artifactExpiresAtForRunId = artifactExpiresAtForRunId,
        _socketTelemetry = socketTelemetry,
        _clock = clock ?? DateTime.now;
 
@@ -40,12 +45,19 @@ class MetricsMessageHandler {
   /// Optional para preservar compat com testes/wiring antigos.
   final RemoteExecutionRegistry? _executionRegistry;
 
+  /// Fila remota (PR-3b). Quando injetado, publica `queueDepth` e
+  /// `maxQueueSize` no payload (PR-5 / M7.1).
+  final ExecutionQueueService? _queueService;
+
   /// Provider assincrono que retorna o uso atual em bytes do diretorio
   /// de staging. Quando ausente, o campo nao e publicado (null-safe).
   /// Use `StagingUsageMeasurer.measure` (em
   /// `lib/infrastructure/utils/staging_usage_measurer.dart`) como
   /// implementacao padrao.
   final Future<int> Function()? _stagingUsageBytesProvider;
+
+  /// Resolve `artifactExpiresAt` para o `runId` ativo (PR-5).
+  final Future<DateTime?> Function(String runId)? _artifactExpiresAtForRunId;
   final SocketServerTelemetry? _socketTelemetry;
 
   /// Relogio injetavel para `serverTimeUtc`. Em producao usa
@@ -162,6 +174,21 @@ class MetricsMessageHandler {
       // (`getExecutionQueue`, PR-3b).
       if (_executionRegistry.activeCount == 1) {
         payload['activeRunId'] = _executionRegistry.all.first.runId;
+      }
+    }
+
+    if (_queueService != null) {
+      payload['queueDepth'] = _queueService.queueSize;
+      payload['maxQueueSize'] = _queueService.maxQueueSize;
+    }
+
+    final activeRunId = payload['activeRunId'] as String?;
+    if (activeRunId != null &&
+        activeRunId.isNotEmpty &&
+        _artifactExpiresAtForRunId != null) {
+      final expiresAt = await _artifactExpiresAtForRunId(activeRunId);
+      if (expiresAt != null) {
+        payload['artifactExpiresAt'] = expiresAt.toUtc().toIso8601String();
       }
     }
 

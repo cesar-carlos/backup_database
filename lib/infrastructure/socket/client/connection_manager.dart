@@ -69,6 +69,7 @@ class ConnectionManager {
   final Map<int, _FileTransferState> _activeTransfers = {};
   final Map<int, _BackupProgressState> _activeBackups = {};
   final Map<String, _BackupProgressState> _activeBackupsByRunId = {};
+  final Map<String, double> _lastProgressByRunId = <String, double>{};
   final BackupEventDeduplicator _backupEventDedup = BackupEventDeduplicator();
 
   static const Duration _executionStatusPollInterval = Duration(seconds: 2);
@@ -308,6 +309,7 @@ class ConnectionManager {
       }
     }
     _activeBackupsByRunId.clear();
+    _lastProgressByRunId.clear();
     _backupEventDedup.clear();
     for (final state in _activeTransfers.values) {
       if (!state.completer.isCompleted) {
@@ -625,10 +627,24 @@ class ConnectionManager {
       );
     }
 
+    if (isBackupStepMessage(message)) {
+      final step = getStepFromBackupStep(message) ?? '';
+      final progressMessage = getMessageFromBackupStep(message) ?? '';
+      final progress = getProgressFromBackupStep(message);
+      state.onProgress?.call(
+        step,
+        progressMessage,
+        progress ?? _lastProgressByRunId[state.runId] ?? 0.0,
+      );
+      return;
+    }
     if (isBackupProgressMessage(message)) {
       final step = getStepFromBackupProgress(message) ?? '';
       final progressMessage = getMessageFromBackupProgress(message) ?? '';
       final progress = getProgressFromBackupProgress(message) ?? 0.0;
+      if (state.runId != null && state.runId!.isNotEmpty) {
+        _lastProgressByRunId[state.runId!] = progress;
+      }
       state.onProgress?.call(step, progressMessage, progress);
       return;
     }
@@ -662,8 +678,10 @@ class ConnectionManager {
     _activeBackups.remove(message.header.requestId);
     final runId = state.runId ?? getRunIdFromBackupMessage(message);
     if (runId != null && runId.isNotEmpty) {
-      _activeBackupsByRunId.remove(runId);
+      // Mantem `_activeBackupsByRunId` ate `_awaitRegisteredRemoteBackup`
+      // consumir o completer (evita perder path apos backupComplete).
       _backupEventDedup.forgetRun(runId);
+      _lastProgressByRunId.remove(runId);
     }
   }
 
@@ -708,6 +726,7 @@ class ConnectionManager {
       }
     }
     _activeBackupsByRunId.clear();
+    _lastProgressByRunId.clear();
     _backupEventDedup.clear();
     for (final completer in _pendingRequests.values) {
       if (!completer.isCompleted) {
@@ -1527,6 +1546,13 @@ class ConnectionManager {
         }
         onRunIdKnown?.call(runId);
 
+        if (start.state == ExecutionState.queued ||
+            start.state == ExecutionState.running) {
+          // Registra antes do poll da fila para nao perder
+          // `backupComplete` se o drain terminar entre polls (2s).
+          _ensureRemoteBackupListener(runId: runId, onProgress: onProgress);
+        }
+
         if (start.state == ExecutionState.queued) {
           final waitResult = await _waitForQueuedRemoteBackup(
             runId: runId,
@@ -1534,11 +1560,12 @@ class ConnectionManager {
           );
           return waitResult.fold(
             (terminal) async {
-              if (terminal == ExecutionState.running) {
-                return _waitForRemoteBackupByRunId(
-                  runId,
-                  onProgress: onProgress,
-                );
+              if (terminal == ExecutionState.running ||
+                  terminal == ExecutionState.completed) {
+                return _awaitRegisteredRemoteBackup(runId);
+              }
+              if (terminal == ExecutionState.failed) {
+                return _awaitRegisteredRemoteBackup(runId);
               }
               return _resolveBackupPathForTerminal(runId, terminal);
             },
@@ -1547,10 +1574,7 @@ class ConnectionManager {
         }
 
         if (start.state == ExecutionState.running) {
-          return _waitForRemoteBackupByRunId(
-            runId,
-            onProgress: onProgress,
-          );
+          return _awaitRegisteredRemoteBackup(runId);
         }
 
         if (start.state.isTerminal) {
@@ -1567,8 +1591,8 @@ class ConnectionManager {
     );
   }
 
-  /// Reassina progresso/conclusão para um [runId] ativo (M8.4).
-  void attachRemoteBackupListener({
+  /// Registra listener de stream por [runId] (idempotente enquanto pendente).
+  void _ensureRemoteBackupListener({
     required String runId,
     required BackupProgressCallback? onProgress,
   }) {
@@ -1588,8 +1612,20 @@ class ConnectionManager {
     );
   }
 
+  /// Reassina progresso/conclusão para um [runId] ativo (M8.4).
+  void attachRemoteBackupListener({
+    required String runId,
+    required BackupProgressCallback? onProgress,
+  }) {
+    _ensureRemoteBackupListener(runId: runId, onProgress: onProgress);
+  }
+
   /// Aguarda conclusão após [attachRemoteBackupListener].
   Future<rd.Result<String>> waitForRemoteBackupCompletion(String runId) async {
+    return _awaitRegisteredRemoteBackup(runId);
+  }
+
+  Future<rd.Result<String>> _awaitRegisteredRemoteBackup(String runId) async {
     final state = _activeBackupsByRunId[runId];
     if (state == null) {
       return rd.Failure(
@@ -1611,30 +1647,15 @@ class ConnectionManager {
     }
   }
 
-  Future<rd.Result<String>> _waitForRemoteBackupByRunId(
-    String runId, {
-    BackupProgressCallback? onProgress,
-  }) async {
-    final completer = Completer<rd.Result<String>>();
-    _activeBackupsByRunId[runId] = _BackupProgressState(
-      completer: completer,
-      onProgress: onProgress,
-      runId: runId,
-    );
-    try {
-      return await completer.future.timeout(
-        SocketConfig.backupExecutionTimeout,
-      );
-    } on TimeoutException {
-      return rd.Failure(
-        TimeoutException(
-          'Tempo esgotado ao aguardar conclusão do backup '
-          '(limite: ${SocketConfig.backupExecutionTimeout.inMinutes} minutos)',
-        ),
-      );
-    } finally {
-      _activeBackupsByRunId.remove(runId);
+  Future<rd.Result<ExecutionState>?> _queuedPollShortcutIfBackupSettled(
+    String runId,
+  ) async {
+    final active = _activeBackupsByRunId[runId];
+    if (active == null || !active.completer.isCompleted) {
+      return null;
     }
+    // Nao aguarda aqui: `_awaitRegisteredRemoteBackup` le o resultado.
+    return const rd.Success(ExecutionState.completed);
   }
 
   Future<rd.Result<ExecutionState>> _waitForQueuedRemoteBackup({
@@ -1646,6 +1667,11 @@ class ConnectionManager {
     while (DateTime.now().isBefore(deadline)) {
       if (!isConnected) {
         return rd.Failure(Exception('Desconectado enquanto aguardava fila'));
+      }
+
+      final settled = await _queuedPollShortcutIfBackupSettled(runId);
+      if (settled != null) {
+        return settled;
       }
 
       final statusResult = await getExecutionStatus(runId);
@@ -1673,6 +1699,10 @@ class ConnectionManager {
         return rd.Success(status.state);
       }
       if (status.state == ExecutionState.notFound) {
+        final afterNotFound = await _queuedPollShortcutIfBackupSettled(runId);
+        if (afterNotFound != null) {
+          return afterNotFound;
+        }
         return rd.Failure(
           Exception(
             'Execução não encontrada no servidor (runId pode ter expirado)',

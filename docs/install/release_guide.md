@@ -5,7 +5,7 @@
 Edite `pubspec.yaml`:
 
 ```yaml
-version: 3.0.2
+version: 3.1.0
 ```
 
 ## 2. Sincronizar instalador e arquivos de ambiente
@@ -19,6 +19,8 @@ Esse script sincroniza:
 - `installer/setup.iss`
 - `.env`
 - `.env.example`
+- `.env.client`
+- `.env.server`
 
 ## 3. Gerar build e instalador
 
@@ -30,8 +32,8 @@ python installer\build_installer.py
 Artefatos esperados:
 
 ```text
-installer\dist\BackupDatabase-Setup-3.0.2.exe
-installer\dist\BackupDatabase-Setup-3.0.2.exe.sha256
+installer\dist\BackupDatabase-Setup-3.1.0.exe
+installer\dist\BackupDatabase-Setup-3.1.0.exe.sha256
 ```
 
 ## 4. Publicar codigo
@@ -39,10 +41,10 @@ installer\dist\BackupDatabase-Setup-3.0.2.exe.sha256
 Use branch curta e PR. Evite push direto em `main`.
 
 ```powershell
-git checkout -b codex/release-3.0.2
-git add pubspec.yaml installer/setup.iss .env .env.example docs\install\release_guide.md
-git commit -m "chore: bump version to 3.0.2"
-git push origin codex/release-3.0.2
+git checkout -b codex/release-3.1.0
+git add pubspec.yaml installer/setup.iss .env .env.example .env.client .env.server docs\install\release_guide.md
+git commit -m "chore: bump version to 3.1.0"
+git push origin codex/release-3.1.0
 ```
 
 ## 5. Criar tag
@@ -52,17 +54,17 @@ Depois do merge:
 ```powershell
 git checkout main
 git pull
-git tag v3.0.2
-git push origin v3.0.2
+git tag v3.1.0
+git push origin v3.1.0
 ```
 
 ## 6. Criar release no GitHub
 
 1. Abra a pagina de releases.
-2. Selecione a tag `v3.0.2`.
+2. Selecione a tag `v3.1.0`.
 3. Anexe exatamente um instalador `.exe`.
 4. Anexe tambem o sidecar `.sha256` do mesmo instalador.
-5. Use preferencialmente o nome `BackupDatabase-Setup-3.0.2.exe`.
+5. Use preferencialmente o nome `BackupDatabase-Setup-3.1.0.exe`.
 6. Nao marque como draft ou prerelease.
 7. Publique a release.
 

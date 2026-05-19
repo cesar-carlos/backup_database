@@ -147,6 +147,32 @@ class RemoteExecutionRegistry {
   bool hasActiveForSchedule(String scheduleId) =>
       _scheduleToRunId.containsKey(scheduleId);
 
+  /// Atualiza o destino de eventos de progresso/conclusao (M8.4).
+  ///
+  /// Chamado quando o cliente reconecta e consulta `getExecutionStatus`
+  /// para um [runId] ainda ativo no registry — evita enviar
+  /// `backupComplete` ao `clientId` da sessao TCP anterior.
+  bool rebindClient({
+    required String runId,
+    required String clientId,
+    required int requestId,
+    SendToClient? sendToClient,
+  }) {
+    final existing = _byRunId[runId];
+    if (existing == null) {
+      return false;
+    }
+    _byRunId[runId] = RemoteExecutionContext(
+      runId: existing.runId,
+      scheduleId: existing.scheduleId,
+      clientId: clientId,
+      requestId: requestId,
+      sendToClient: sendToClient ?? existing.sendToClient,
+      startedAt: existing.startedAt,
+    );
+    return true;
+  }
+
   /// Remove a execucao identificada por `runId` (e seu indice secundario).
   /// Idempotente: nao falha se ja foi removido.
   void unregister(String runId) {

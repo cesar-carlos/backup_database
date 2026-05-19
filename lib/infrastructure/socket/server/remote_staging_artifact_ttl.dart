@@ -36,6 +36,53 @@ class RemoteStagingArtifactTtl {
 
   DateTime expiresAtForMtime(DateTime mtime) => mtime.add(retention);
 
+  /// `expiresAt` do artefato mais recente em `remote/<runId>/` ou, em
+  /// layout legado, `remote/<scheduleId>/` derivado do [runId].
+  Future<DateTime?> expiresAtForRunInStaging(
+    String stagingBase,
+    String runId,
+  ) async {
+    if (runId.isEmpty) {
+      return null;
+    }
+    final perRunDir = Directory(p.join(stagingBase, 'remote', runId));
+    if (await perRunDir.exists()) {
+      final newest = await newestFileInTree(perRunDir);
+      if (newest != null) {
+        return expiresAtForMtime(await newest.lastModified());
+      }
+    }
+    final scheduleId = scheduleIdFromRunId(runId);
+    if (scheduleId == null) {
+      return null;
+    }
+    final scheduleDir = Directory(p.join(stagingBase, 'remote', scheduleId));
+    if (!await scheduleDir.exists()) {
+      return null;
+    }
+    final newest = await newestFileInTree(scheduleDir);
+    if (newest == null) {
+      return null;
+    }
+    return expiresAtForMtime(await newest.lastModified());
+  }
+
+  /// Extrai `scheduleId` de `runId` no formato `<scheduleId>_<uuid>`.
+  static String? scheduleIdFromRunId(String runId) {
+    if (runId.isEmpty) {
+      return null;
+    }
+    final lastUnderscore = runId.lastIndexOf('_');
+    if (lastUnderscore < 1) {
+      return null;
+    }
+    final suffix = runId.substring(lastUnderscore + 1);
+    if (suffix.length < 32) {
+      return null;
+    }
+    return runId.substring(0, lastUnderscore);
+  }
+
   /// Arquivo mais recente por `lastModified` (desempate por path).
   static Future<File?> newestFileInTree(Directory root) async {
     File? newest;

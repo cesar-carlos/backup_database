@@ -719,6 +719,11 @@ void main() {
         await Future.delayed(Duration.zero);
 
         expect(sentMessages, isNotEmpty);
+        final stepMsg = sentMessages.firstWhere(isBackupStepMessage);
+        expect(getRunIdFromBackupMessage(stepMsg), runId);
+        expect(getEventIdFromBackupMessage(stepMsg), isNotEmpty);
+        expect(getSequenceFromBackupMessage(stepMsg), greaterThan(0));
+
         final progressMsg = sentMessages.firstWhere(
           isBackupProgressMessage,
         );
@@ -727,6 +732,10 @@ void main() {
         expect(progressMsg.header.requestId, 555);
         expect(getEventIdFromBackupMessage(progressMsg), isNotEmpty);
         expect(getSequenceFromBackupMessage(progressMsg), greaterThan(0));
+        expect(
+          getSequenceFromBackupMessage(progressMsg),
+          greaterThan(getSequenceFromBackupMessage(stepMsg)!),
+        );
 
         localHandler.dispose();
       },

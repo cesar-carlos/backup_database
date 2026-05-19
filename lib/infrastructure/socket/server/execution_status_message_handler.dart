@@ -69,6 +69,12 @@ class ExecutionStatusMessageHandler {
 
     final snapshot = _executionRegistry.getSnapshotByRunId(runId);
     if (snapshot != null) {
+      _executionRegistry.rebindClient(
+        runId: runId,
+        clientId: clientId,
+        requestId: requestId,
+        sendToClient: sendToClient,
+      );
       await sendToClient(
         clientId,
         createExecutionStatusResponseMessage(
@@ -77,7 +83,7 @@ class ExecutionStatusMessageHandler {
           state: ExecutionState.running,
           serverTimeUtc: _clock(),
           scheduleId: snapshot.scheduleId,
-          clientId: snapshot.clientId,
+          clientId: clientId,
           startedAt: snapshot.startedAt,
         ),
       );

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:backup_database/application/services/metrics_collector.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -9,13 +11,16 @@ import 'package:backup_database/infrastructure/protocol/execution_status_message
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/metrics_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_staging_artifact_ttl.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_telemetry_constants.dart';
 import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 class _MockBackupHistoryRepository extends Mock
@@ -111,6 +116,81 @@ void main() {
         final payload = await captureMetricsPayload(handler);
         expect(payload['activeRunCount'], 0);
         expect(payload.containsKey('activeRunId'), isFalse);
+      },
+    );
+
+    test(
+      'com ExecutionQueueService: publica queueDepth e maxQueueSize',
+      () async {
+        final queue = ExecutionQueueService(maxQueueSize: 25);
+        await queue.tryEnqueue(
+          scheduleId: 'sch-q',
+          clientId: 'client-1',
+          requestId: 1,
+          requestedBy: 'manual',
+        );
+
+        final handler = MetricsMessageHandler(
+          backupHistoryRepository: historyRepo,
+          scheduleRepository: scheduleRepo,
+          backupRunningState: runningState,
+          queueService: queue,
+        );
+
+        final payload = await captureMetricsPayload(handler);
+        expect(payload['queueDepth'], 1);
+        expect(payload['maxQueueSize'], 25);
+      },
+    );
+
+    test(
+      'sem ExecutionQueueService: nao publica queueDepth',
+      () async {
+        final handler = MetricsMessageHandler(
+          backupHistoryRepository: historyRepo,
+          scheduleRepository: scheduleRepo,
+          backupRunningState: runningState,
+        );
+
+        final payload = await captureMetricsPayload(handler);
+        expect(payload.containsKey('queueDepth'), isFalse);
+        expect(payload.containsKey('maxQueueSize'), isFalse);
+      },
+    );
+
+    test(
+      'com run ativo e staging: publica artifactExpiresAt',
+      () async {
+        final stagingBase = await Directory.systemTemp.createTemp('metrics_ttl_');
+        addTearDown(() => stagingBase.delete(recursive: true));
+        final runId = registry.generateRunId('schedule-X');
+        final artifactDir = Directory(p.join(stagingBase.path, 'remote', runId));
+        await artifactDir.create(recursive: true);
+        final artifact = File(p.join(artifactDir.path, 'a.bak'));
+        final mtime = DateTime.utc(2026, 5, 1, 8);
+        await artifact.writeAsString('data');
+        await artifact.setLastModified(mtime);
+
+        registry.register(
+          runId: runId,
+          scheduleId: 'schedule-X',
+          clientId: 'client-A',
+          requestId: 1,
+          sendToClient: (clientId, msg) async {},
+        );
+
+        final ttl = RemoteStagingArtifactTtl();
+        final handler = MetricsMessageHandler(
+          backupHistoryRepository: historyRepo,
+          scheduleRepository: scheduleRepo,
+          backupRunningState: runningState,
+          executionRegistry: registry,
+          artifactExpiresAtForRunId: (id) =>
+              ttl.expiresAtForRunInStaging(stagingBase.path, id),
+        );
+
+        final payload = await captureMetricsPayload(handler);
+        expect(payload['artifactExpiresAt'], '2026-05-02T08:00:00.000Z');
       },
     );
 
