@@ -33,7 +33,7 @@ class UiSchedulerPolicy {
         (status) => status.isInstalled && status.isRunning,
         (failure) {
           _onWarning?.call(
-            'Nao foi possivel consultar status do servico para decisao de '
+            'Não foi possível consultar status do serviço para decisão de '
             'scheduler: $failure',
           );
           return _shouldSkipOnFailure();
@@ -41,7 +41,7 @@ class UiSchedulerPolicy {
       );
     } on Object catch (e) {
       _onWarning?.call(
-        'Falha ao verificar servico do Windows para decisao de scheduler: $e',
+        'Falha ao verificar serviço do Windows para decisão de scheduler: $e',
       );
       return _shouldSkipOnFailure();
     }

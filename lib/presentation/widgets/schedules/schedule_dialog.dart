@@ -1473,7 +1473,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               context,
               message:
                   'Nivel nbackup: use um inteiro de 0 a 9 ou deixe vazio '
-                  '(automatico).',
+                  '(automático).',
             ),
           );
           return;

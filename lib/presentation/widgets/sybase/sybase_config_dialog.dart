@@ -332,7 +332,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                     ),
                     hint: appLocaleString(
                       context,
-                      'Ex: VL (nome do servico Sybase)',
+                      'Ex: VL (nome do serviço Sybase)',
                       'Ex: VL (Sybase service name)',
                     ),
                     validator: (value) {
@@ -426,7 +426,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                     child: Text(
                       appLocaleString(
                         context,
-                        'O Engine Name e DBN geralmente sao iguais ao nome do servico Sybase (ex: VL)',
+                        'O Engine Name e DBN geralmente são iguais ao nome do serviço Sybase (ex: VL)',
                         'Engine Name and DBN are usually equal to Sybase service name (ex: VL)',
                       ),
                       style: FluentTheme.of(context).typography.caption,
@@ -438,7 +438,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
             const SizedBox(height: 16),
             AppTextField(
               controller: _usernameController,
-              label: appLocaleString(context, 'Usuario', 'Username'),
+              label: appLocaleString(context, 'Usuário', 'Username'),
               hint: appLocaleString(
                 context,
                 'DBA ou usuario do Sybase',

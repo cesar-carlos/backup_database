@@ -54,7 +54,7 @@ class AppDataGrid<T> extends StatefulWidget {
     required this.rows,
     super.key,
     this.actions = const [],
-    this.actionsLabel = 'Acoes',
+    this.actionsLabel = 'Ações',
     this.minWidth,
   });
 
@@ -70,27 +70,32 @@ class AppDataGrid<T> extends StatefulWidget {
 
 class _AppDataGridState<T> extends State<AppDataGrid<T>> {
   late final ScrollController _horizontalScrollController;
+  late final ScrollController _verticalScrollController;
   bool _hasHorizontalOverflow = false;
+  bool _hasVerticalOverflow = false;
 
   @override
   void initState() {
     super.initState();
     _horizontalScrollController = ScrollController();
+    _verticalScrollController = ScrollController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      _syncOverflowFromController();
+      _syncHorizontalOverflowFromController();
+      _syncVerticalOverflowFromController();
     });
   }
 
   @override
   void dispose() {
     _horizontalScrollController.dispose();
+    _verticalScrollController.dispose();
     super.dispose();
   }
 
-  void _syncOverflowFromController() {
+  void _syncHorizontalOverflowFromController() {
     if (!_horizontalScrollController.hasClients) {
       return;
     }
@@ -106,12 +111,34 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
     });
   }
 
+  void _syncVerticalOverflowFromController() {
+    if (!_verticalScrollController.hasClients) {
+      return;
+    }
+
+    final hasOverflow = _verticalScrollController.position.maxScrollExtent > 0;
+    if (_hasVerticalOverflow == hasOverflow) {
+      return;
+    }
+
+    setState(() {
+      _hasVerticalOverflow = hasOverflow;
+    });
+  }
+
   bool _onScrollMetricsNotification(ScrollMetricsNotification notification) {
     if (notification.metrics.axis == Axis.horizontal) {
       final hasOverflow = notification.metrics.maxScrollExtent > 0;
       if (_hasHorizontalOverflow != hasOverflow) {
         setState(() {
           _hasHorizontalOverflow = hasOverflow;
+        });
+      }
+    } else if (notification.metrics.axis == Axis.vertical) {
+      final hasOverflow = notification.metrics.maxScrollExtent > 0;
+      if (_hasVerticalOverflow != hasOverflow) {
+        setState(() {
+          _hasVerticalOverflow = hasOverflow;
         });
       }
     }
@@ -169,15 +196,19 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
           viewportWidth,
         );
 
+        final viewportHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 0.0;
+
         return NotificationListener<ScrollMetricsNotification>(
           onNotification: _onScrollMetricsNotification,
           child: ClipRRect(
             borderRadius: AppRadius.circularMd,
             child: RawScrollbar(
-              controller: _horizontalScrollController,
-              thumbVisibility: _hasHorizontalOverflow,
-              trackVisibility: _hasHorizontalOverflow,
-              scrollbarOrientation: ScrollbarOrientation.bottom,
+              controller: _verticalScrollController,
+              thumbVisibility: _hasVerticalOverflow,
+              trackVisibility: _hasVerticalOverflow,
+              scrollbarOrientation: ScrollbarOrientation.right,
               radius: const Radius.circular(4),
               thickness: 9,
               minThumbLength: 48,
@@ -189,70 +220,100 @@ class _AppDataGridState<T> extends State<AppDataGrid<T>> {
                 alpha: 0.45,
               ),
               child: SingleChildScrollView(
-                controller: _horizontalScrollController,
-                scrollDirection: Axis.horizontal,
+                controller: _verticalScrollController,
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: resolvedMinWidth),
-                  child: Table(
-                    border: TableBorder.all(
-                      color: resources.cardStrokeColorDefault,
+                  constraints: BoxConstraints(
+                    minHeight: viewportHeight > 0 ? viewportHeight : 0,
+                  ),
+                  child: RawScrollbar(
+                    controller: _horizontalScrollController,
+                    thumbVisibility: _hasHorizontalOverflow,
+                    trackVisibility: _hasHorizontalOverflow,
+                    scrollbarOrientation: ScrollbarOrientation.bottom,
+                    radius: const Radius.circular(4),
+                    thickness: 9,
+                    minThumbLength: 48,
+                    thumbColor: theme.accentColor.withValues(alpha: 0.9),
+                    trackColor: resources.controlStrokeColorDefault.withValues(
+                      alpha: 0.25,
                     ),
-                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                    columnWidths: columnWidths,
-                    children: [
-                      TableRow(
-                        decoration: BoxDecoration(
-                          color: resources.cardStrokeColorDefault.withValues(
-                            alpha: 0.2,
-                          ),
+                    trackBorderColor: resources.cardStrokeColorDefault
+                        .withValues(
+                          alpha: 0.45,
                         ),
-                        children: [
-                          for (final column in widget.columns)
-                            _GridCell(
-                              alignment: column.headerAlignment,
-                              padding: _scaledColumnPadding(
-                                context,
-                                column,
-                                densityMultiplier,
-                              ),
-                              child: Text(column.label, style: headerStyle),
-                            ),
-                          if (hasActions)
-                            _GridCell(
-                              alignment: Alignment.center,
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 12 * densityMultiplier,
-                                vertical: 10 * densityMultiplier,
-                              ),
-                              child: Text(
-                                widget.actionsLabel,
-                                style: headerStyle,
-                              ),
-                            ),
-                        ],
-                      ),
-                      for (final row in widget.rows)
-                        TableRow(
+                    child: SingleChildScrollView(
+                      controller: _horizontalScrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: resolvedMinWidth),
+                        child: Table(
+                          border: TableBorder.all(
+                            color: resources.cardStrokeColorDefault,
+                          ),
+                          defaultVerticalAlignment:
+                              TableCellVerticalAlignment.middle,
+                          columnWidths: columnWidths,
                           children: [
-                            for (final column in widget.columns)
-                              _GridCell(
-                                alignment: column.cellAlignment,
-                                padding: _scaledColumnPadding(
-                                  context,
-                                  column,
-                                  densityMultiplier,
-                                ),
-                                child: column.cellBuilder(context, row),
+                            TableRow(
+                              decoration: BoxDecoration(
+                                color: resources.cardStrokeColorDefault
+                                    .withValues(
+                                      alpha: 0.2,
+                                    ),
                               ),
-                            if (hasActions)
-                              _buildActionsCell(
-                                context,
-                                row,
-                                densityMultiplier,
+                              children: [
+                                for (final column in widget.columns)
+                                  _GridCell(
+                                    alignment: column.headerAlignment,
+                                    padding: _scaledColumnPadding(
+                                      context,
+                                      column,
+                                      densityMultiplier,
+                                    ),
+                                    child: Text(
+                                      column.label,
+                                      style: headerStyle,
+                                    ),
+                                  ),
+                                if (hasActions)
+                                  _GridCell(
+                                    alignment: Alignment.center,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 12 * densityMultiplier,
+                                      vertical: 10 * densityMultiplier,
+                                    ),
+                                    child: Text(
+                                      widget.actionsLabel,
+                                      style: headerStyle,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            for (final row in widget.rows)
+                              TableRow(
+                                children: [
+                                  for (final column in widget.columns)
+                                    _GridCell(
+                                      alignment: column.cellAlignment,
+                                      padding: _scaledColumnPadding(
+                                        context,
+                                        column,
+                                        densityMultiplier,
+                                      ),
+                                      child: column.cellBuilder(context, row),
+                                    ),
+                                  if (hasActions)
+                                    _buildActionsCell(
+                                      context,
+                                      row,
+                                      densityMultiplier,
+                                    ),
+                                ],
                               ),
                           ],
                         ),
-                    ],
+                      ),
+                    ),
                   ),
                 ),
               ),

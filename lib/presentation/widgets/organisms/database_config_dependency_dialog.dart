@@ -60,7 +60,7 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
           children: [
             Text(
               'A configuração "$configName" ($databaseLabel) não pode ser '
-              'excluida porque possui agendamentos vinculados.',
+              'excluída porque possui agendamentos vinculados.',
               style: FluentTheme.of(context).typography.body,
             ),
             const SizedBox(height: AppSpacing.sm),

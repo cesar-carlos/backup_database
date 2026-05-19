@@ -21,7 +21,7 @@ class ScheduleDialogFirebirdNbackupLevelSection extends StatelessWidget {
         AppTextField(
           controller: levelController,
           label: 'Nivel fisico nbackup (-B)',
-          hint: 'Vazio = automatico (Full 0; incremental 1)',
+          hint: 'Vazio = automático (Full 0; incremental 1)',
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 8),

@@ -49,7 +49,7 @@ SKIP_EXT = {
     ".lib",
     ".pdb",
 }
-SKIP_FILES = {".env", ".env.client", ".env.server", "scan_encoding.py"}
+SKIP_FILES = {".env", ".env.client", ".env.server", "scan_encoding.py", "flutter_01.log"}
 
 # UTF-8 bytes interpreted as Latin-1/CP1252 (common in PT-BR repos).
 MOJIBAKE_PATTERNS: list[tuple[str, str]] = [

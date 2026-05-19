@@ -47,7 +47,7 @@ class SqlServerConfigListItem extends StatelessWidget {
         ),
         const SizedBox(height: databaseConfigListSubtitleTightGap),
         Text(
-          '${appLocaleString(context, 'Usuario', 'User')}: ${c.username}',
+          '${appLocaleString(context, 'Usuário', 'User')}: ${c.username}',
         ),
       ],
     );

@@ -253,6 +253,67 @@ void main() {
       },
       skip: !Platform.isWindows,
     );
+
+    test(
+      'capture_update_context enriches JSON, writes UTF-8 without BOM',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'capture_update_context_test',
+        );
+        final contextPath = p.join(tempDir.path, 'update_context.json');
+
+        await File(contextPath).writeAsString(
+          jsonEncode(<String, Object?>{
+            'schemaVersion': 2,
+            'contextId': 'capture-test',
+            'origin': 'ui',
+            'appMode': 'client',
+            'currentVersion': '1.0.0',
+            'targetVersion': '1.0.1',
+            'relaunchArguments': <String>[],
+            'executablePath': r'C:\fake\backup_database.exe',
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
+            'expiresAt': DateTime.now()
+                .add(const Duration(minutes: 30))
+                .toUtc()
+                .toIso8601String(),
+          }),
+        );
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join(
+            'installer',
+            'capture_update_context.ps1',
+          ),
+          arguments: <String>['-ContextPath', contextPath],
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+
+        final bytes = await File(contextPath).readAsBytes();
+        expect(
+          bytes.length >= 3 &&
+              bytes[0] == 0xEF &&
+              bytes[1] == 0xBB &&
+              bytes[2] == 0xBF,
+          isFalse,
+          reason: 'Output must be UTF-8 without BOM',
+        );
+
+        final decoded =
+            jsonDecode(await File(contextPath).readAsString())
+                as Map<String, Object?>;
+        expect(decoded['serviceExists'], isA<bool>());
+        expect(decoded['capturedAt'], isA<String>());
+        expect((decoded['capturedAt']! as String).isNotEmpty, isTrue);
+        if (decoded['serviceExists'] == false) {
+          expect(decoded['serviceConfig'], isNull);
+        }
+
+        await tempDir.delete(recursive: true);
+      },
+      skip: !Platform.isWindows,
+    );
   });
 }
 

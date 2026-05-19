@@ -66,27 +66,27 @@ class ScheduleDialogLabels {
     if (databaseType == DatabaseType.firebird) {
       switch (type) {
         case BackupType.full:
-          return 'Backup fisico nivel 0 com nbackup (-B 0), ficheiro .nbk. '
-              'Nao e um dump logico; chave AES na configuracao aplica-se apenas '
-              'a Full Single (gbak). Firebird nao tem verify nativo; modo '
-              'Strict pode usar restore temporario.';
+          return 'Backup físico nível 0 com nbackup (-B 0), ficheiro .nbk. '
+              'Não é um dump lógico; chave AES na configuração aplica-se apenas '
+              'a Full Single (gbak). Firebird não tem verify nativo; modo '
+              'Strict pode usar restore temporário.';
         case BackupType.fullSingle:
         case BackupType.convertedFullSingle:
           return 'Backup logico completo com gbak (-b), ficheiro .fbk. '
-              'Use este tipo para criptografia AES (-key) na configuracao '
+              'Use este tipo para criptografia AES (-key) na configuração '
               'Firebird.';
         case BackupType.log:
         case BackupType.convertedLog:
-          return 'Firebird nao tem arquivamento de segmentos de log exportavel '
-              'para PITR no estilo PostgreSQL. Na execucao, tipo Log e tratado '
-              'como nbackup incremental (-B 1); o historico pode ser gravado '
-              'como Diferencial. Requer cadeia nbackup nivel 0 previa. Para '
-              'dump logico use Full Single (gbak).';
+          return 'Firebird não tem arquivamento de segmentos de log exportável '
+              'para PITR no estilo PostgreSQL. Na execução, tipo Log é tratado '
+              'como nbackup incremental (-B 1); o histórico pode ser gravado '
+              'como Diferencial. Requer cadeia nbackup nível 0 prévia. Para '
+              'dump lógico use Full Single (gbak).';
         case BackupType.differential:
         case BackupType.convertedDifferential:
-          return 'Backup fisico incremental com nbackup (-B 1), ficheiro .nbk. '
-              'Requer backup nivel 0 (-B 0) previo na mesma base; nao e um dump '
-              'logico (use Full Single / gbak para .fbk).';
+          return 'Backup físico incremental com nbackup (-B 1), ficheiro .nbk. '
+              'Requer backup nível 0 (-B 0) prévio na mesma base; não é um dump '
+              'lógico (use Full Single / gbak para .fbk).';
       }
     }
     switch (type) {

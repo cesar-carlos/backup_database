@@ -149,7 +149,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
             const SizedBox(height: 16),
             AppTextField(
               controller: _usernameController,
-              label: appLocaleString(context, 'Usuario', 'Username'),
+              label: appLocaleString(context, 'Usuário', 'Username'),
               hint: appLocaleString(
                 context,
                 'postgres ou usuário do PostgreSQL',

@@ -175,7 +175,7 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             const SizedBox(height: 16),
             AppTextField(
               controller: _usernameController,
-              label: appLocaleString(context, 'Usuario', 'Username'),
+              label: appLocaleString(context, 'Usuário', 'Username'),
               hint: 'sa ou usuário do SQL Server',
               validator: (String? value) {
                 if (value == null || value.trim().isEmpty) {

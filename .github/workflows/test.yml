@@ -43,6 +43,12 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
+      - name: Encoding scan (UTF-8 / mojibake)
+        run: python scripts/scan_encoding.py
+
+      - name: Verify dart format
+        run: dart format --set-exit-if-changed --output=none lib test tools
+
       - name: Design system guard (atoms/molecules/organisms)
         run: dart run tools/design_system_guard.dart --fail-on-findings --enforce-target-size
 

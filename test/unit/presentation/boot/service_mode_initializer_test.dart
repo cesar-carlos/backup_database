@@ -31,7 +31,7 @@ void main() {
       );
       expect(
         ServiceModeInitializer.buildUnsupportedServiceAccountMessage(null),
-        contains('nao foi possivel validar'),
+        contains('não foi possível validar'),
       );
     });
   });

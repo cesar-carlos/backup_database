@@ -91,7 +91,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
               child: AppPageState.empty(
                 title: 'Nenhum agendamento configurado',
                 message:
-                    'Automatize backups, verificacoes e scripts com um fluxo unico.',
+                    'Automatize backups, verificações e scripts com um fluxo único.',
                 actionLabel: schedulerOk ? 'Criar Agendamento' : null,
                 onAction: schedulerOk
                     ? () => _showScheduleDialog(context, null)

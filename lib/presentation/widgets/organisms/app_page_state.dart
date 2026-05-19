@@ -83,10 +83,15 @@ class AppPageState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _resolveColor(context);
+    final accentOrSemantic = _resolveColor(context);
+    final useOnSurfaceForCopy =
+        !isLoading && tone == AppPageStateTone.neutral;
+    final titleIconColor = useOnSurfaceForCopy
+        ? context.colors.onSurface
+        : accentOrSemantic;
     final titleStyle = FluentTheme.of(
       context,
-    ).typography.subtitle?.copyWith(color: color);
+    ).typography.subtitle?.copyWith(color: titleIconColor);
 
     return Center(
       child: Padding(
@@ -101,12 +106,12 @@ class AppPageState extends StatelessWidget {
                   width: 40,
                   height: 40,
                   child: ProgressRing(
-                    activeColor: color,
+                    activeColor: accentOrSemantic,
                     strokeWidth: 3,
                   ),
                 )
               else
-                Icon(icon, size: 40, color: color),
+                Icon(icon, size: 40, color: titleIconColor),
               const SizedBox(height: AppSpacing.md),
               Text(
                 title,
@@ -118,7 +123,11 @@ class AppPageState extends StatelessWidget {
                 Text(
                   message!,
                   textAlign: TextAlign.center,
-                  style: FluentTheme.of(context).typography.body,
+                  style: FluentTheme.of(context).typography.body?.copyWith(
+                    color: useOnSurfaceForCopy
+                        ? context.colors.onSurface
+                        : null,
+                  ),
                 ),
               ],
               if (actionLabel != null && onAction != null) ...[

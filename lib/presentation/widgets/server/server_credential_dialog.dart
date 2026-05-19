@@ -293,7 +293,7 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
                                 context,
                                 message: appLocaleString(
                                   context,
-                                  'Server ID copiado para a area de transferencia.',
+                                  'Server ID copiado para a área de transferência.',
                                   'Server ID copied to clipboard.',
                                 ),
                                 title: appLocaleString(
@@ -346,7 +346,7 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
                     Tooltip(
                       message: appLocaleString(
                         context,
-                        'Copiar senha para a area de transferencia',
+                        'Copiar senha para a área de transferência',
                         'Copy password to clipboard',
                       ),
                       child: Button(
@@ -361,7 +361,7 @@ class _ServerCredentialDialogState extends State<ServerCredentialDialog> {
                                 context,
                                 message: appLocaleString(
                                   context,
-                                  'Senha copiada para a area de transferencia.',
+                                  'Senha copiada para a área de transferência.',
                                   'Password copied to clipboard.',
                                 ),
                                 title: appLocaleString(

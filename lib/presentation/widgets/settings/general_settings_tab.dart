@@ -178,7 +178,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
       case AppUpdateStatus.updateAvailable:
         return appLocaleString(
           context,
-          'Nova versao encontrada. O download silencioso sera iniciado.',
+          'Nova versão encontrada. O download silencioso será iniciado.',
           'New version found. Silent download will start.',
         );
       case AppUpdateStatus.downloading:
@@ -196,31 +196,31 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
       case AppUpdateStatus.blockedByOtherInstance:
         return appLocaleString(
           context,
-          'Outra instancia ja esta processando o auto update.',
+          'Outra instância já está processando o auto update.',
           'Another instance is already processing the auto update.',
         );
       case AppUpdateStatus.blockedByActiveBackup:
         return appLocaleString(
           context,
-          'Ha um backup ativo. Aguarde a conclusao antes de atualizar.',
+          'Há um backup ativo. Aguarde a conclusão antes de atualizar.',
           'There is an active backup. Wait for it to finish before updating.',
         );
       case AppUpdateStatus.handoffCompleted:
         return appLocaleString(
           context,
-          'Handoff concluido. O instalador silencioso assumiu a troca.',
+          'Handoff concluído. O instalador silencioso assumiu a troca.',
           'Handoff completed. The silent installer took over the update.',
         );
       case AppUpdateStatus.upToDate:
         return appLocaleString(
           context,
-          'A aplicacao ja esta na versao mais recente.',
+          'A aplicação já está na versão mais recente.',
           'The application is already up to date.',
         );
       case AppUpdateStatus.error:
         return appLocaleString(
           context,
-          'A ultima tentativa falhou. Revise o erro abaixo.',
+          'A última tentativa falhou. Revise o erro abaixo.',
           'The last attempt failed. Review the error below.',
         );
       case AppUpdateStatus.disabled:
@@ -245,7 +245,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
       case AppUpdateStage.blockedByOtherInstance:
         return appLocaleString(
           context,
-          'Bloqueado por outra instancia',
+          'Bloqueado por outra instância',
           'Blocked by another instance',
         );
       case AppUpdateStage.blockedByActiveBackup:
@@ -281,7 +281,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
       case AppUpdateStage.preparingInstall:
         return appLocaleString(
           context,
-          'Preparando instalacao',
+          'Preparando instalação',
           'Preparing installation',
         );
       case AppUpdateStage.launchingInstaller:
@@ -291,7 +291,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
           'Launching silent installer',
         );
       case AppUpdateStage.completed:
-        return appLocaleString(context, 'Ciclo concluido', 'Cycle completed');
+        return appLocaleString(context, 'Ciclo concluído', 'Cycle completed');
     }
   }
 
@@ -302,7 +302,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
       case AppUpdateSource.manual:
         return appLocaleString(context, 'Manual', 'Manual');
       case AppUpdateSource.periodic:
-        return appLocaleString(context, 'Periodico', 'Periodic');
+        return appLocaleString(context, 'Periódico', 'Periodic');
       case null:
         return appLocaleString(context, 'Desconhecida', 'Unknown');
     }
@@ -310,7 +310,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
 
   String _formatAutoUpdateDuration(Duration? duration) {
     if (duration == null) {
-      return appLocaleString(context, 'Nao disponivel', 'Not available');
+      return appLocaleString(context, 'Não disponível', 'Not available');
     }
     return '${duration.inMilliseconds} ms';
   }
@@ -718,7 +718,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
               title: Text(
                 appLocaleString(
                   context,
-                  'Atualizacoes automaticas indisponiveis',
+                  'Atualizações automáticas indisponíveis',
                   'Automatic updates unavailable',
                 ),
               ),
@@ -742,7 +742,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
               title: Text(
                 appLocaleString(
                   context,
-                  'Atualizacoes automaticas',
+                  'Atualizações automáticas',
                   'Automatic updates',
                 ),
               ),
@@ -754,7 +754,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
               title: Text(
                 appLocaleString(
                   context,
-                  'Atualizacoes automaticas',
+                  'Atualizações automáticas',
                   'Automatic updates',
                 ),
               ),
@@ -828,7 +828,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
             if (autoUpdateProvider.lastErrorDate != null)
               ListTile(
                 title: Text(
-                  appLocaleString(context, 'Ultima falha', 'Last failure'),
+                  appLocaleString(context, 'Última falha', 'Last failure'),
                 ),
                 subtitle: Text(
                   autoUpdateProvider.lastErrorDate!.toLocal().toString(),
@@ -873,7 +873,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 title: Text(
                   appLocaleString(
                     context,
-                    'Etapa da ultima falha',
+                    'Etapa da última falha',
                     'Last failure stage',
                   ),
                 ),
@@ -903,14 +903,14 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 title: Text(
                   appLocaleString(
                     context,
-                    'Atualizacao disponivel',
+                    'Atualização disponível',
                     'Update available',
                   ),
                 ),
                 subtitle: Text(
                   appLocaleString(
                     context,
-                    'Uma nova versao esta disponivel para download',
+                    'Uma nova versão está disponível para download',
                     'A new version is available for download',
                   ),
                 ),

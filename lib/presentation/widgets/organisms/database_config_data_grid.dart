@@ -70,7 +70,7 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
           emptyStateMessage ??
           appLocaleString(
             context,
-            'Nenhuma configuracao cadastrada para este tipo.',
+            'Nenhuma configuração cadastrada para este tipo.',
             'No configuration registered for this type.',
           );
 
@@ -78,36 +78,43 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
           addLabel != null &&
           addLabel.trim().isNotEmpty) {
         return AppCard(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    resolvedEmptyStateMessage,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  FilledButton(
-                    onPressed: onAddWhenEmpty,
-                    child: Text(addLabel),
-                  ),
-                ],
+          child: SizedBox.expand(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      resolvedEmptyStateMessage,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    FilledButton(
+                      onPressed: onAddWhenEmpty,
+                      child: Text(addLabel),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         );
       }
 
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Text(
-            appLocaleString(
-              context,
-              'Nenhuma configuracao encontrada',
-              'No configuration found',
+      return AppCard(
+        child: SizedBox.expand(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Text(
+                appLocaleString(
+                  context,
+                  'Nenhuma configuração encontrada',
+                  'No configuration found',
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ),
@@ -156,7 +163,7 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
         cellBuilder: (context, row) => Text(viewFor(row).database),
       ),
       AppDataGridColumn<T>(
-        label: appLocaleString(context, 'Usuario', 'User'),
+        label: appLocaleString(context, 'Usuário', 'User'),
         width: const FlexColumnWidth(1.5),
         cellBuilder: (context, row) => Text(viewFor(row).username),
       ),
@@ -167,7 +174,7 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
         AppDataGridColumn<T>(
           label: appLocaleString(
             context,
-            'Ultima verificacao',
+            'Última verificação',
             'Last check',
           ),
           width: const FlexColumnWidth(1.6),
@@ -189,12 +196,12 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
               message: test.success
                   ? appLocaleString(
                       context,
-                      'Ultimo teste de conexao: OK ($when)',
+                      'Último teste de conexão: OK ($when)',
                       'Last connection test: OK ($when)',
                     )
                   : appLocaleString(
                       context,
-                      'Ultimo teste de conexao: falhou ($when)',
+                      'Último teste de conexão: falhou ($when)',
                       'Last connection test: failed ($when)',
                     ),
               child: Row(
@@ -253,31 +260,33 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
     );
 
     return AppCard(
-      child: AppDataGrid<T>(
-        minWidth: minWidth,
-        columns: columns,
-        actions: [
-          AppDataGridAction<T>(
-            icon: FluentIcons.edit,
-            tooltip: appLocaleString(context, 'Editar', 'Edit'),
-            onPressed: (row) => onEdit?.call(row),
-            isEnabled: (_) => onEdit != null,
-          ),
-          AppDataGridAction<T>(
-            icon: FluentIcons.copy,
-            tooltip: appLocaleString(context, 'Duplicar', 'Duplicate'),
-            onPressed: (row) => onDuplicate?.call(row),
-            isEnabled: (_) => onDuplicate != null,
-          ),
-          AppDataGridAction<T>(
-            icon: FluentIcons.delete,
-            iconColor: context.colors.danger,
-            tooltip: appLocaleString(context, 'Excluir', 'Delete'),
-            onPressed: (row) => onDelete?.call(viewFor(row).id),
-            isEnabled: (_) => onDelete != null,
-          ),
-        ],
-        rows: configs,
+      child: SizedBox.expand(
+        child: AppDataGrid<T>(
+          minWidth: minWidth,
+          columns: columns,
+          actions: [
+            AppDataGridAction<T>(
+              icon: FluentIcons.edit,
+              tooltip: appLocaleString(context, 'Editar', 'Edit'),
+              onPressed: (row) => onEdit?.call(row),
+              isEnabled: (_) => onEdit != null,
+            ),
+            AppDataGridAction<T>(
+              icon: FluentIcons.copy,
+              tooltip: appLocaleString(context, 'Duplicar', 'Duplicate'),
+              onPressed: (row) => onDuplicate?.call(row),
+              isEnabled: (_) => onDuplicate != null,
+            ),
+            AppDataGridAction<T>(
+              icon: FluentIcons.delete,
+              iconColor: context.colors.danger,
+              tooltip: appLocaleString(context, 'Excluir', 'Delete'),
+              onPressed: (row) => onDelete?.call(viewFor(row).id),
+              isEnabled: (_) => onDelete != null,
+            ),
+          ],
+          rows: configs,
+        ),
       ),
     );
   }

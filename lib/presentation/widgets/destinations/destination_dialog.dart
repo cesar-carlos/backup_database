@@ -246,9 +246,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
         children: [
           const SizedBox.shrink(),
           AppSectionCard(
-            title: _dialogLabel('Identificacao', 'Identity'),
+            title: _dialogLabel('Identificação', 'Identity'),
             description: _dialogLabel(
-              'Defina o tipo e o nome usados para identificar este destino na operacao.',
+              'Defina o tipo e o nome usados para identificar este destino na operação.',
               'Define the type and display name used to identify this destination in operations.',
             ),
             trailing: DestinationTypeBadge(type: _selectedType),
@@ -327,11 +327,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(height: 16),
           AppSectionCard(
             title: _dialogLabel(
-              'Comportamento e retencao',
+              'Comportamento e retenção',
               'Behavior and retention',
             ),
             description: _dialogLabel(
-              'Controle limpeza automatica, disponibilidade do destino e preferencias adicionais.',
+              'Controle limpeza automática, disponibilidade do destino e preferências adicionais.',
               'Control automatic cleanup, destination availability and additional preferences.',
             ),
             child: Column(
@@ -385,7 +385,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         );
       case DestinationType.ftp:
         return _dialogLabel(
-          'Informe acesso, caminho remoto e preferencias de transferencia segura.',
+          'Informe acesso, caminho remoto e preferências de transferência segura.',
           'Provide access, remote path and secure transfer preferences.',
         );
       case DestinationType.googleDrive:
@@ -619,7 +619,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       children: [
         NumericField(
           controller: _retentionDaysController,
-          label: _dialogLabel('Dias de retencao', 'Retention days'),
+          label: _dialogLabel('Dias de retenção', 'Retention days'),
           hint: _dialogLabel(
             'Ex: 7 (mantem backups por 7 dias)',
             'Ex: 7 (keeps backups for 7 days)',
@@ -657,7 +657,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _dialogLabel('Limpeza automatica', 'Automatic cleanup'),
+                      _dialogLabel('Limpeza automática', 'Automatic cleanup'),
                       style: FluentTheme.of(context).typography.caption
                           ?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -667,7 +667,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     const SizedBox(height: 4),
                     Text(
                       _dialogLabel(
-                        'Backups anteriores a ${_formatDate(cutoffDate)} serao excluidos automaticamente apos cada backup executado.',
+                        'Backups anteriores a ${_formatDate(cutoffDate)} serão excluídos automaticamente após cada backup executado.',
                         'Backups older than ${_formatDate(cutoffDate)} will be automatically removed after each backup run.',
                       ),
                       style: FluentTheme.of(context).typography.caption,
@@ -951,7 +951,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     localizeCompatibilityReason(
                       context,
                       reason: features.externalBrowserOAuthDisabledReason,
-                      fallbackPt: 'Nao disponivel nesta versao do Windows.',
+                      fallbackPt: 'Não disponível nesta versão do Windows.',
                       fallbackEn: 'Not available on this Windows version.',
                     ),
                   ),
@@ -1040,7 +1040,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         'Connected as ${googleAuth.currentEmail ?? 'user'}',
       ),
       signedOutLabel: _dialogLabel(
-        'Nao conectado ao Google',
+        'Não conectado ao Google',
         'Not connected to Google',
       ),
       disconnectLabel: _dialogLabel('Desconectar', 'Disconnect'),
@@ -1121,7 +1121,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                     localizeCompatibilityReason(
                       context,
                       reason: features.externalBrowserOAuthDisabledReason,
-                      fallbackPt: 'Nao disponivel nesta versao do Windows.',
+                      fallbackPt: 'Não disponível nesta versão do Windows.',
                       fallbackEn: 'Not available on this Windows version.',
                     ),
                   ),
@@ -1230,7 +1230,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         'Connected as ${dropboxAuth.currentEmail ?? 'user'}',
       ),
       signedOutLabel: _dialogLabel(
-        'Nao conectado ao Dropbox',
+        'Não conectado ao Dropbox',
         'Not connected to Dropbox',
       ),
       disconnectLabel: _dialogLabel('Desconectar', 'Disconnect'),
@@ -1763,7 +1763,7 @@ class _LocalDestinationFields extends StatelessWidget {
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return labelBuilder(
-                  'Caminho e obrigatorio',
+                  'Caminho é obrigatório',
                   'Path is required',
                 );
               }
@@ -1818,7 +1818,7 @@ class _FtpConnectionFields extends StatelessWidget {
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return labelBuilder(
-                      'Servidor e obrigatorio',
+                      'Servidor é obrigatório',
                       'Server is required',
                     );
                   }
@@ -1842,13 +1842,13 @@ class _FtpConnectionFields extends StatelessWidget {
         const SizedBox(height: 16),
         AppTextField(
           controller: usernameController,
-          label: labelBuilder('Usuario', 'Username'),
+          label: labelBuilder('Usuário', 'Username'),
           hint: 'usuario_ftp',
           prefixIcon: const Icon(FluentIcons.contact),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return labelBuilder(
-                'Usuario e obrigatorio',
+                'Usuário é obrigatório',
                 'Username is required',
               );
             }
@@ -1870,7 +1870,7 @@ class _FtpConnectionFields extends StatelessWidget {
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return labelBuilder(
-                'Caminho remoto e obrigatorio',
+                'Caminho remoto é obrigatório',
                 'Remote path is required',
               );
             }
@@ -2173,7 +2173,7 @@ class _FtpAdvancedOptionsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          labelBuilder('Opcoes avancadas', 'Advanced options'),
+          labelBuilder('Opções avançadas', 'Advanced options'),
           style: FluentTheme.of(context).typography.bodyStrong,
         ),
         const SizedBox(height: 12),
@@ -2266,7 +2266,7 @@ class _FtpAdvancedOptionsSection extends StatelessWidget {
         const SizedBox(height: 16),
         InfoLabel(
           label: labelBuilder(
-            'Read-back quando hash remoto indisponivel',
+            'Read-back quando hash remoto indisponível',
             'Read-back when remote hash unavailable',
           ),
           child: ToggleSwitch(
@@ -2304,7 +2304,7 @@ class _FtpAdvancedOptionsSection extends StatelessWidget {
         const SizedBox(height: 16),
         AppDropdown<FtpWhenResumeNotSupported>(
           label: labelBuilder(
-            'Quando servidor nao suporta retomada',
+            'Quando servidor não suporta retomada',
             'When server does not support resume',
           ),
           value: whenResumeNotSupported,
@@ -2450,7 +2450,7 @@ class _NextcloudDestinationFields extends StatelessWidget {
         const SizedBox(height: 16),
         AppTextField(
           controller: usernameController,
-          label: labelBuilder('Usuario', 'Username'),
+          label: labelBuilder('Usuário', 'Username'),
           hint: 'usuario',
           prefixIcon: const Icon(FluentIcons.contact),
           validator: _validateUsername,
@@ -2573,7 +2573,7 @@ class _NextcloudDestinationFields extends StatelessWidget {
 
   String? _validateUsername(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return labelBuilder('Usuario e obrigatorio', 'Username is required');
+      return labelBuilder('Usuário é obrigatório', 'Username is required');
     }
     return null;
   }
@@ -2582,7 +2582,7 @@ class _NextcloudDestinationFields extends StatelessWidget {
     if (value == null || value.isEmpty) {
       return authMode == NextcloudAuthMode.appPassword
           ? labelBuilder(
-              'App Password e obrigatorio',
+              'App Password é obrigatório',
               'App Password is required',
             )
           : labelBuilder(
@@ -2596,7 +2596,7 @@ class _NextcloudDestinationFields extends StatelessWidget {
   String? _validateFolderName(String? value) {
     if (value == null || value.trim().isEmpty) {
       return labelBuilder(
-        'Nome da pasta e obrigatorio',
+        'Nome da pasta é obrigatório',
         'Folder name is required',
       );
     }
@@ -3005,7 +3005,7 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           Text(
             appLocaleString(
               context,
-              '5. Na secao "OAuth 2", adicione em "Redirect URIs":',
+              '5. Na seção "OAuth 2", adicione em "Redirect URIs":',
               '5. In section "OAuth 2", add this in "Redirect URIs":',
             ),
             style: FluentTheme.of(context).typography.caption,

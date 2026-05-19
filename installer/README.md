@@ -5,12 +5,18 @@ Este diretório contém os arquivos necessários para criar o instalador do Back
 ## Arquivos
 
 - `setup.iss` - Script principal do Inno Setup para criar o instalador
-- `update_version.py` - Sincroniza versao do `pubspec.yaml` com `setup.iss` e `.env`
+- `update_version.py` - Sincroniza versão do `pubspec.yaml` com `setup.iss` e `.env`
 - `build_installer.py` - Fluxo automatizado para gerar instalador
+- `encoding_utils.ps1` - Leitura/gravação de texto em UTF-8 sem BOM (reutilizado pelos outros scripts)
+- `merge_env.ps1` - Mescla variáveis de ambiente a partir de `.env.example`
+- `capture_update_context.ps1` - Enriquece o JSON de contexto de auto-update com estado do serviço Windows
+- `restore_update_state.ps1` - Restaura estado após update (UI ou serviço)
 - `check_dependencies.ps1` - Script PowerShell para verificar dependências do sistema
 - `install_service.ps1` - Instala o aplicativo como serviço do Windows (cliente)
 - `uninstall_service.ps1` - Remove o serviço do Windows (cliente)
 - `README.md` - Este arquivo
+
+Os scripts `.ps1` deste diretório que gravam ou leem ficheiros de texto usam **UTF-8 sem BOM** via `encoding_utils.ps1`, para evitar problemas de encoding e BOM em JSON e ficheiros `.env`.
 
 ## Pré-requisitos para Criar o Instalador
 

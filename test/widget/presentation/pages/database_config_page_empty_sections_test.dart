@@ -159,8 +159,11 @@ void main() {
     (WidgetTester tester) async {
       await pumpPage(tester);
 
-      expect(find.text('All configurations'), findsOneWidget);
-      expect(find.text('No database configuration yet.'), findsOneWidget);
+      expect(find.text('No database configuration yet'), findsOneWidget);
+      expect(
+        find.text('Add connections to use in backups and schedules.'),
+        findsOneWidget,
+      );
       expect(find.text('New configuration'), findsNWidgets(2));
       expect(find.text('Add configuration (SQL Server)'), findsNothing);
       expect(
@@ -249,7 +252,21 @@ void main() {
         ThemeMode.light,
         ThemeMode.dark,
       ]) {
-        await pumpPage(tester, themeMode: mode);
+        await pumpPage(
+          tester,
+          themeMode: mode,
+          sqlConfigs: [
+            SqlServerConfig(
+              id: 'sql-theme',
+              name: 'ThemeCfg',
+              server: 'sql-host',
+              database: DatabaseName('db_theme'),
+              username: 'sa',
+              password: 'p',
+              port: PortNumber(1433),
+            ),
+          ],
+        );
 
         final pageContext = tester.element(find.byType(DatabaseConfigPage));
         expect(
@@ -290,6 +307,45 @@ void main() {
       } finally {
         semanticsHandle.dispose();
       }
+    },
+  );
+
+  testWidgets(
+    'aggregated grid uses Expanded so list fills height below header',
+    (WidgetTester tester) async {
+      await pumpPage(
+        tester,
+        sqlConfigs: [
+          SqlServerConfig(
+            id: 'sql-one',
+            name: 'One',
+            server: 'sql-host',
+            database: DatabaseName('db_one'),
+            username: 'sa',
+            password: 'p',
+            port: PortNumber(1433),
+          ),
+        ],
+        mediaQuery: const MediaQueryData(size: Size(1400, 900)),
+      );
+
+      final pageFinder = find.byType(DatabaseConfigPage);
+      expect(pageFinder, findsOneWidget);
+      expect(
+        find.descendant(of: pageFinder, matching: find.byType(Expanded)),
+        findsWidgets,
+      );
+      expect(
+        find.descendant(
+          of: pageFinder,
+          matching: find.byWidgetPredicate(
+            (Widget w) =>
+                w.runtimeType.toString().startsWith('DatabaseConfigDataGrid'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('One'), findsOneWidget);
     },
   );
 

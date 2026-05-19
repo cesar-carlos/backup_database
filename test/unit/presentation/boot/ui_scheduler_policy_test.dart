@@ -101,7 +101,7 @@ void main() {
         expect(warnings, hasLength(1));
         expect(
           warnings.first,
-          contains('Nao foi possivel consultar status do servico'),
+          contains('Não foi possível consultar status do serviço'),
         );
       },
     );
@@ -148,7 +148,7 @@ void main() {
         expect(warnings, hasLength(1));
         expect(
           warnings.first,
-          contains('Falha ao verificar servico do Windows'),
+          contains('Falha ao verificar serviço do Windows'),
         );
       },
     );

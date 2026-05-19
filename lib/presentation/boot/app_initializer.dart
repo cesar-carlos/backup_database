@@ -103,10 +103,10 @@ class AppInitializer {
         }
         final backupName = backupProgress.currentBackupName;
         return backupName == null
-            ? 'Atualizacao bloqueada: existe um backup em andamento na UI. '
-                  'Aguarde a conclusao e tente novamente.'
-            : 'Atualizacao bloqueada: o backup "$backupName" ainda esta em '
-                  'execucao. Aguarde a conclusao e tente novamente.';
+            ? 'Atualização bloqueada: existe um backup em andamento na UI. '
+                  'Aguarde a conclusão e tente novamente.'
+            : 'Atualização bloqueada: o backup "$backupName" ainda está em '
+                  'execução. Aguarde a conclusão e tente novamente.';
       };
       autoUpdateService.beforeInstallHook = AppCleanup.cleanup;
       await autoUpdateService.initialize();

@@ -278,14 +278,14 @@ class ServiceModeInitializer {
       return null;
     }
     if (normalized == null || normalized.isEmpty) {
-      return 'Atualizacao automatica silenciosa bloqueada: nao foi possivel '
-          'validar a conta do Windows Service. Reinstale o servico em '
-          'LocalSystem ou execute a atualizacao manualmente.';
+      return 'Atualização automática silenciosa bloqueada: não foi possível '
+          'validar a conta do Windows Service. Reinstale o serviço em '
+          'LocalSystem ou execute a atualização manualmente.';
     }
-    return 'Atualizacao automatica silenciosa bloqueada: o Windows Service '
-        'esta configurado com a conta "$normalized". Nesta rodada o '
-        'auto update silencioso so e suportado para servicos em '
-        'LocalSystem. Atualize manualmente ou reinstale o servico '
+    return 'Atualização automática silenciosa bloqueada: o Windows Service '
+        'está configurado com a conta "$normalized". Nesta rodada o '
+        'auto update silencioso só é suportado para serviços em '
+        'LocalSystem. Atualize manualmente ou reinstale o serviço '
         'com LocalSystem.';
   }
 

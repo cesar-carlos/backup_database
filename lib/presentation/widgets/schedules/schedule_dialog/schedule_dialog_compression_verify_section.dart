@@ -161,13 +161,13 @@ class ScheduleDialogIntegritySection extends StatelessWidget {
         if (databaseType == DatabaseType.firebird &&
             backupType != BackupType.fullSingle) ...[
           const InfoBar(
-            title: Text('Firebird (backup fisico)'),
+            title: Text('Firebird (backup físico)'),
             content: Text(
-              'Verify after backup nao restaura ficheiros .nbk; a verificacao '
+              'Verify after backup não restaura ficheiros .nbk; a verificação '
               'por `gbak -c` aplica-se apenas a Full Single (.fbk). Com esta '
-              'opcao activa, o servico regista aviso e ignora o passo em '
-              'backups fisicos (nbackup). Politica estrita com nbackup e '
-              'rejeitada na execucao.',
+              'opção ativa, o serviço regista aviso e ignora o passo em '
+              'backups físicos (nbackup). Política estrita com nbackup é '
+              'rejeitada na execução.',
             ),
             severity: InfoBarSeverity.warning,
           ),

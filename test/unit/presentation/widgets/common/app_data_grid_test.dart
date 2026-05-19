@@ -92,8 +92,14 @@ void main() {
       expect(horizontalScrollViews, findsOneWidget);
 
       await tester.pumpAndSettle();
-      final scrollbar = tester.widget<RawScrollbar>(find.byType(RawScrollbar));
-      expect(scrollbar.thumbVisibility, isTrue);
+      final horizontalScrollbar = tester.widget<RawScrollbar>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is RawScrollbar &&
+              widget.scrollbarOrientation == ScrollbarOrientation.bottom,
+        ),
+      );
+      expect(horizontalScrollbar.thumbVisibility, isTrue);
     });
 
     testWidgets('fills available width when viewport is wider than minWidth', (
@@ -194,6 +200,55 @@ void main() {
 
       final button = tester.widget<IconButton>(find.byType(IconButton));
       expect(button.onPressed, isNull);
+    });
+
+    testWidgets('supports vertical scroll when rows exceed viewport height', (
+      tester,
+    ) async {
+      final rows = List<_RowData>.generate(
+        24,
+        (int i) => _RowData(name: 'Row $i', status: 'Ativo'),
+      );
+
+      await tester.pumpWidget(
+        buildHarness(
+          SizedBox(
+            width: 400,
+            height: 160,
+            child: AppDataGrid<_RowData>(
+              minWidth: 300,
+              columns: [
+                AppDataGridColumn<_RowData>(
+                  label: 'Nome',
+                  cellBuilder: (BuildContext context, _RowData row) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(row.name),
+                  ),
+                ),
+              ],
+              rows: rows,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final verticalScrollViews = find.byWidgetPredicate(
+        (widget) =>
+            widget is SingleChildScrollView &&
+            widget.scrollDirection == Axis.vertical,
+      );
+      expect(verticalScrollViews, findsOneWidget);
+
+      final verticalScrollbar = tester.widget<RawScrollbar>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is RawScrollbar &&
+              widget.scrollbarOrientation == ScrollbarOrientation.right,
+        ),
+      );
+      expect(verticalScrollbar.thumbVisibility, isTrue);
     });
   });
 }

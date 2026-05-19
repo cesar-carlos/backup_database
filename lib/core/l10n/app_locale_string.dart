@@ -10,6 +10,19 @@ String appLocaleStringForLocale(Locale locale, String ptBr, String enUs) =>
     appLocaleIsPortuguese(locale) ? ptBr : enUs;
 
 String appLocaleString(BuildContext context, String ptBr, String enUs) {
+  assert(
+    () {
+      if (ptBr.isEmpty || enUs.isEmpty) {
+        return false;
+      }
+      final hint = String.fromCharCodes(const <int>[0xC3, 0xA7]);
+      if (ptBr.contains(hint) || enUs.contains(hint)) {
+        return false;
+      }
+      return true;
+    }(),
+    'appLocaleString: empty or mojibake-suspect localized arguments.',
+  );
   return appLocaleStringForLocale(
     Localizations.localeOf(context),
     ptBr,

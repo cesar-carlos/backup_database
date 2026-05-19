@@ -55,8 +55,8 @@ class DestinationDependencyDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'O destino "$destinationName" nao pode ser excluido porque '
-              'esta vinculado a um ou mais agendamentos.',
+              'O destino "$destinationName" não pode ser excluído porque '
+              'está vinculado a um ou mais agendamentos.',
               style: FluentTheme.of(context).typography.body,
             ),
             const SizedBox(height: AppSpacing.sm),

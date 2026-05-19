@@ -100,7 +100,7 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
             Text(
               appLocaleString(
                 context,
-                'Servidor nao esta em execucao',
+                'Servidor não está em execução',
                 'Server is not running',
               ),
               style: FluentTheme.of(context).typography.titleLarge,
@@ -285,7 +285,7 @@ class _ConnectedClientRow extends StatelessWidget {
       child: Text(
         client.isAuthenticated
             ? appLocaleString(context, 'Autenticado', 'Authenticated')
-            : appLocaleString(context, 'Nao autenticado', 'Not authenticated'),
+            : appLocaleString(context, 'Não autenticado', 'Not authenticated'),
         style: FluentTheme.of(context).typography.caption?.copyWith(
           color: color,
         ),

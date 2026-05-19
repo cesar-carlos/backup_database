@@ -37,7 +37,7 @@ class DestinationsPage extends StatelessWidget {
           if (provider.isLoading) {
             return AppPageState.loading(
               title: 'Carregando destinos',
-              message: 'Buscando destinos configurados na aplicacao.',
+              message: 'Buscando destinos configurados na aplicação.',
             );
           }
 
@@ -54,7 +54,7 @@ class DestinationsPage extends StatelessWidget {
             return AppPageState.empty(
               title: 'Nenhum destino de backup configurado',
               message:
-                  'Organize os destinos usados pelos backups e transferencias.',
+                  'Organize os destinos usados pelos backups e transferências.',
               actionLabel: 'Adicionar Destino',
               onAction: () => _showDestinationDialog(context, null),
             );
@@ -196,7 +196,7 @@ class DestinationsPage extends StatelessWidget {
       if (success) {
         await FluentInfoBarFeedback.showSuccess(
           context,
-          message: 'Destino excluido com sucesso!',
+          message: 'Destino excluído com sucesso!',
         );
       } else {
         await MessageModal.showError(
