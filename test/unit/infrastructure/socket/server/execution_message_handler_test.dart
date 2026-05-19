@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/entities/backup_progress_snapshot.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -243,6 +244,69 @@ void main() {
       blockBackup.complete(const rd.Success(true));
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
+
+    test(
+      'mantem registry apos executeBackup ate progresso terminal ou defer',
+      () async {
+        final blockBackup = Completer<rd.Result<bool>>();
+        when(
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        ).thenAnswer((_) => blockBackup.future);
+        when(() => progressNotifier.currentSnapshot).thenReturn(
+          const BackupProgressSnapshot(
+            step: 'Executando backup',
+            message: 'running',
+          ),
+        );
+
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-defer-registry',
+        );
+        await handler.handle('c1', req, sendToClient);
+        expect(executionRegistry.activeCount, 1);
+
+        blockBackup.complete(const rd.Success(true));
+        await Future<void>.delayed(Duration.zero);
+        expect(executionRegistry.activeCount, 1);
+
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        expect(executionRegistry.activeCount, 0);
+      },
+    );
+
+    test(
+      'remove registry imediatamente quando progresso ja esta terminal',
+      () async {
+        final blockBackup = Completer<rd.Result<bool>>();
+        when(
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        ).thenAnswer((_) => blockBackup.future);
+        when(() => progressNotifier.currentSnapshot).thenReturn(
+          const BackupProgressSnapshot(
+            step: 'Concluído',
+            message: 'done',
+          ),
+        );
+
+        final req = createStartBackupRequest(
+          scheduleId: scheduleId,
+          idempotencyKey: 'idem-terminal-registry',
+        );
+        await handler.handle('c1', req, sendToClient);
+        expect(executionRegistry.activeCount, 1);
+
+        blockBackup.complete(const rd.Success(true));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(executionRegistry.activeCount, 0);
+      },
+    );
 
     test('rejeita startBackup sem idempotencyKey (F2.14)', () async {
       final req = createStartBackupRequest(scheduleId: scheduleId);
@@ -645,6 +709,58 @@ void main() {
       },
     );
 
+    test(
+      'M6.2: enfileira 20 schedules distintos com FIFO e posicoes 1..20',
+      () async {
+        when(() => schedulerService.isExecutingBackup).thenReturn(true);
+        when(
+          () => scheduleRepository.getById(any()),
+        ).thenAnswer((invocation) async {
+          final id = invocation.positionalArguments[0] as String;
+          return rd.Success(schedule.copyWith(id: id, name: id));
+        });
+
+        final queue = ExecutionQueueService();
+        handler = ExecutionMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          queueService: queue,
+          clock: () => DateTime.utc(2026, 4, 19, 12),
+        );
+
+        const depth = 20;
+        for (var i = 0; i < depth; i++) {
+          final sid = 'sch-load-$i';
+          final req = createStartBackupRequest(
+            scheduleId: sid,
+            queueIfBusy: true,
+            idempotencyKey: 'idem-load-$i',
+            requestId: 1000 + i,
+          );
+          await handler.handle('c1', req, sendToClient);
+          final resp = sent.last.message;
+          expect(resp.payload['state'], 'queued');
+          expect(resp.payload['queuePosition'], i + 1);
+        }
+
+        expect(queue.queueSize, depth);
+        final snap = queue.snapshot();
+        expect(snap.map((e) => e.scheduleId).toList(), [
+          for (var i = 0; i < depth; i++) 'sch-load-$i',
+        ]);
+        verifyNever(
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+          ),
+        );
+      },
+    );
+
     test('queueIfBusy=true e fila cheia: rejeita com erro', () async {
       when(() => schedulerService.isExecutingBackup).thenReturn(true);
       final queue = ExecutionQueueService(maxQueueSize: 1);
@@ -725,7 +841,7 @@ void main() {
 
         expect(sent.first.message.header.type, MessageType.startBackupResponse);
 
-        await Future<void>.delayed(const Duration(milliseconds: 80));
+        await Future<void>.delayed(const Duration(milliseconds: 350));
 
         final failedForQueue = sent.where((s) {
           final m = s.message;

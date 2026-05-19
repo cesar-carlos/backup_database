@@ -42,6 +42,11 @@ import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 /// clientes devem usar `startBackup` quando o servidor anunciar
 /// suporte via `capabilities.supportsAsyncStart` (futura flag).
 class ExecutionMessageHandler {
+  static const Set<String> _terminalProgressSteps = {'Concluído', 'Erro'};
+
+  static const Duration _registryCleanupDeferShort = Duration(milliseconds: 50);
+  static const Duration _registryCleanupDeferLong = Duration(milliseconds: 200);
+
   ExecutionMessageHandler({
     required IScheduleRepository scheduleRepository,
     required ILicensePolicyService licensePolicyService,
@@ -431,9 +436,7 @@ class ExecutionMessageHandler {
         scheduleId: scheduleId,
       );
 
-      // backupComplete e enviado pelo SchedulerService via
-      // progressNotifier; aqui apenas garantimos o cleanup do
-      // registry. unregister e idempotente.
+      // backupComplete e enviado pelo SchedulerService via progressNotifier.
     } on Object catch (e, st) {
       LoggerService.warningWithContext(
         'startBackup async: unexpected error',
@@ -461,11 +464,47 @@ class ExecutionMessageHandler {
         // ignore: client may have disconnected
       }
     } finally {
-      _executionRegistry.unregister(runId);
-      // Drena proximo da fila (se houver). Sem await — cada drain e
-      // independente e roda em zona propria via unawaited.
-      unawaited(_drainNextFromQueue());
+      _finalizeRegistryAfterBackup(runId);
     }
+  }
+
+  bool _isTerminalProgressStep(String? step) =>
+      step != null && _terminalProgressSteps.contains(step);
+
+  void _finalizeRegistryAfterBackup(String runId) {
+    if (_executionRegistry.getByRunId(runId) == null) {
+      unawaited(_drainNextFromQueue());
+      return;
+    }
+    final step = _progressNotifier.currentSnapshot?.step;
+    if (_isTerminalProgressStep(step)) {
+      _executionRegistry.unregister(runId);
+      unawaited(_drainNextFromQueue());
+      return;
+    }
+    unawaited(_deferredRegistryCleanup(runId));
+  }
+
+  Future<void> _deferredRegistryCleanup(String runId) async {
+    for (final delay in [
+      Duration.zero,
+      _registryCleanupDeferShort,
+      _registryCleanupDeferLong,
+    ]) {
+      await Future<void>.delayed(delay);
+      if (_executionRegistry.getByRunId(runId) == null) {
+        await _drainNextFromQueue();
+        return;
+      }
+      final step = _progressNotifier.currentSnapshot?.step;
+      if (_isTerminalProgressStep(step)) {
+        break;
+      }
+    }
+    if (_executionRegistry.getByRunId(runId) != null) {
+      _executionRegistry.unregister(runId);
+    }
+    await _drainNextFromQueue();
   }
 
   /// Tenta iniciar o proximo item da fila. Chamado quando um backup

@@ -84,6 +84,21 @@ class ScheduleMessageHandler {
     final contexts = _executionRegistry.all.toList(growable: false);
 
     for (final context in contexts) {
+      final stepMeta = _eventSequencer.next();
+      await context.sendToClient(
+        context.clientId,
+        createBackupStepMessage(
+          requestId: context.requestId,
+          scheduleId: context.scheduleId,
+          step: snapshot.step,
+          message: snapshot.message,
+          progress: progressValue,
+          runId: context.runId,
+          eventId: stepMeta.eventId,
+          sequence: stepMeta.sequence,
+        ),
+      );
+
       final progressMeta = _eventSequencer.next();
       await context.sendToClient(
         context.clientId,

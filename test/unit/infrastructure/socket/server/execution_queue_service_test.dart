@@ -202,6 +202,46 @@ void main() {
       expect(svc.hasActive, isTrue);
     });
 
+    test('M6.2: FIFO com 20 schedules distintos sem leak apos drain', () async {
+      const depth = 20;
+      final svc = ExecutionQueueService();
+      final enqueuedScheduleIds = <String>[];
+
+      for (var i = 0; i < depth; i++) {
+        final scheduleId = 's-load-$i';
+        enqueuedScheduleIds.add(scheduleId);
+        final item = await svc.tryEnqueue(
+          scheduleId: scheduleId,
+          clientId: 'c1',
+          requestId: i,
+          requestedBy: 'c1',
+        );
+        expect(item, isNotNull);
+      }
+
+      expect(svc.queueSize, depth);
+      expect(svc.isFull, isFalse);
+
+      final snap = svc.snapshot();
+      expect(snap, hasLength(depth));
+      for (var i = 0; i < depth; i++) {
+        expect(snap[i].scheduleId, enqueuedScheduleIds[i]);
+        expect(snap[i].queuedPosition, i + 1);
+      }
+
+      for (var i = 0; i < depth; i++) {
+        final item = await svc.dequeue();
+        expect(item!.scheduleId, enqueuedScheduleIds[i]);
+        expect(svc.isScheduleQueued(enqueuedScheduleIds[i]), isFalse);
+      }
+
+      expect(svc.isEmpty, isTrue);
+      expect(await svc.dequeue(), isNull);
+      for (final scheduleId in enqueuedScheduleIds) {
+        expect(svc.isScheduleQueued(scheduleId), isFalse);
+      }
+    });
+
     test('findQueuedByRunId retorna item e posicao 1-based', () async {
       final svc = ExecutionQueueService();
       final first = await svc.tryEnqueue(

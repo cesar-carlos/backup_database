@@ -39,6 +39,55 @@ void main() {
     });
   });
 
+  group('expiresAtForRunInStaging', () {
+    test('resolve por pasta remote/<runId>', () async {
+      final base = await Directory.systemTemp.createTemp('ttl_run_');
+      addTearDown(() => base.delete(recursive: true));
+      const runId = 'sch-1_00000000-0000-4000-8000-000000000001';
+      final artifactDir = Directory(p.join(base.path, 'remote', runId));
+      await artifactDir.create(recursive: true);
+      final artifact = File(p.join(artifactDir.path, 'backup.bak'));
+      final mtime = DateTime.utc(2026, 4, 19, 10);
+      await artifact.writeAsString('x');
+      await artifact.setLastModified(mtime);
+
+      final ttl = RemoteStagingArtifactTtl();
+      final expiresAt = await ttl.expiresAtForRunInStaging(base.path, runId);
+
+      expect(
+        expiresAt?.toUtc(),
+        mtime.toUtc().add(const Duration(hours: 24)),
+      );
+    });
+
+    test('retorna null quando staging nao existe', () async {
+      final base = await Directory.systemTemp.createTemp('ttl_miss_');
+      addTearDown(() => base.delete(recursive: true));
+      final ttl = RemoteStagingArtifactTtl();
+      final expiresAt = await ttl.expiresAtForRunInStaging(
+        base.path,
+        'sch-1_00000000-0000-4000-8000-000000000001',
+      );
+      expect(expiresAt, isNull);
+    });
+  });
+
+  group('scheduleIdFromRunId', () {
+    test('extrai scheduleId de runId valido', () {
+      expect(
+        RemoteStagingArtifactTtl.scheduleIdFromRunId(
+          'sch-abc_00000000-0000-4000-8000-000000000001',
+        ),
+        'sch-abc',
+      );
+    });
+
+    test('retorna null para formato invalido', () {
+      expect(RemoteStagingArtifactTtl.scheduleIdFromRunId(''), isNull);
+      expect(RemoteStagingArtifactTtl.scheduleIdFromRunId('short'), isNull);
+    });
+  });
+
   group('newestFileInTree', () {
     test('retorna o arquivo com lastModified mais recente', () async {
       final dir = await Directory.systemTemp.createTemp('ttl_tree_');

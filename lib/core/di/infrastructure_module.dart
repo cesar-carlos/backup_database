@@ -38,6 +38,7 @@ import 'package:backup_database/infrastructure/socket/server/real_database_confi
 import 'package:backup_database/infrastructure/socket/server/real_database_connection_prober.dart';
 import 'package:backup_database/infrastructure/socket/server/real_diagnostics_provider.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/remote_staging_artifact_ttl.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_crud_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/server_preflight_checks.dart';
@@ -284,11 +285,14 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       // Compartilhado com ScheduleMessageHandler — registra do lado de
       // quem dispara, le do lado de quem reporta metricas (M5.3/M7.1).
       executionRegistry: getIt<RemoteExecutionRegistry>(),
+      queueService: getIt<ExecutionQueueService>(),
       // Mede o uso atual do diretorio de staging (defensivo — falhas
       // de I/O viram 0/parcial, nao crash). Usa o mesmo `transferBasePath`
       // que `TransferStagingService` ja usa para escrita.
       stagingUsageBytesProvider: () =>
           StagingUsageMeasurer.measure(transferBasePath),
+      artifactExpiresAtForRunId: (runId) => RemoteStagingArtifactTtl()
+          .expiresAtForRunInStaging(transferBasePath, runId),
       socketTelemetry: getIt<SocketServerTelemetry>(),
     ),
   );

@@ -178,6 +178,14 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         runId: _activeRunId,
       ),
       (exception) {
+        if (_shouldPreserveStateAfterDisconnectFailure(exception)) {
+          _isExecuting = false;
+          _disconnectedDuringRun = true;
+          _error = _connectionLostMessage;
+          _lastErrorCode = null;
+          notifyListeners();
+          return false;
+        }
         _resetExecutionState(
           error: mapExceptionToMessage(exception),
           errorCode: exception is Failure ? exception.code : null,
@@ -185,6 +193,25 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         return false;
       },
     );
+  }
+
+  bool _shouldPreserveStateAfterDisconnectFailure(Object failure) {
+    if (_activeRunId == null) return false;
+    if (_disconnectedDuringRun) return true;
+    if (failure is StateError && failure.message == 'Disconnected') {
+      return true;
+    }
+    final message = mapExceptionToMessage(failure);
+    if (message.contains('Disconnected during backup') ||
+        message.contains('Conexão encerrada') ||
+        message.contains('durante o backup') ||
+        message.contains('desconectado do servidor')) {
+      return true;
+    }
+    final raw = failure.toString();
+    return raw.contains('Disconnected during backup') ||
+        raw.contains('Conexão encerrada') ||
+        (raw.contains('Disconnected') && raw.contains('backup'));
   }
 
   void _beginExecution(String scheduleId) {
@@ -404,6 +431,31 @@ class RemoteSchedulesProvider extends ChangeNotifier {
                 error: next == ExecutionState.cancelled
                     ? 'Backup cancelado no servidor'
                     : 'Backup falhou no servidor',
+              );
+            },
+            (exception) async {
+              _resetExecutionState(error: mapExceptionToMessage(exception));
+            },
+          );
+          return;
+        }
+
+        if (status.state == ExecutionState.notFound) {
+          final meta = await _connectionManager.getArtifactMetadata(runId: runId);
+          await meta.fold(
+            (artifact) async {
+              if (artifact.found && artifact.stagingPath != null) {
+                await _finishBackupAndDownload(
+                  scheduleId: scheduleId,
+                  backupPath: artifact.stagingPath!,
+                  runId: runId,
+                );
+                return;
+              }
+              _resetExecutionState(
+                error:
+                    'Execução não encontrada no servidor após reconexão. '
+                    'Dispare o backup novamente.',
               );
             },
             (exception) async {

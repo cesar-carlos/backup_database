@@ -56,9 +56,11 @@ void main() {
         expect(result.runId, runId);
         expect(result.state, ExecutionState.running);
         expect(result.scheduleId, 'sched-X');
-        expect(result.clientId, 'client-A');
+        expect(result.clientId, 'client-X');
         expect(result.startedAt, isNotNull);
         expect(result.serverTimeUtc, fixedNow);
+        expect(registry.getByRunId(runId)!.clientId, 'client-X');
+        expect(registry.getByRunId(runId)!.requestId, 1);
       },
     );
 
