@@ -1,10 +1,10 @@
 import 'package:backup_database/application/providers/notification_provider.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 class EmailTestHistoryPanel extends StatelessWidget {
@@ -38,11 +38,46 @@ class EmailTestHistoryPanel extends StatelessWidget {
     return DateFormat('M/d/yyyy h:mm:ss a', 'en_US').format(date);
   }
 
+  static String _pluralizedAttemptLabel(BuildContext context, int count) {
+    if (appLocaleIsPortuguese(Localizations.localeOf(context))) {
+      return count == 1 ? '1 tentativa' : '$count tentativas';
+    }
+    return count == 1 ? '1 attempt' : '$count attempts';
+  }
+
+  static String _mostTestedRecipient(
+    BuildContext context,
+    List<EmailTestAudit> history,
+  ) {
+    if (history.isEmpty) {
+      return appLocaleString(context, 'Não disponível', 'Unavailable');
+    }
+
+    final counters = <String, int>{};
+    for (final entry in history) {
+      counters.update(
+        entry.recipientEmail,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
+    }
+
+    final winner = counters.entries.reduce(
+      (best, current) => current.value > best.value ? current : best,
+    );
+    return winner.key;
+  }
+
   @override
   Widget build(BuildContext context) {
     final configNameById = <String, String>{
       for (final config in configs) config.id: config.configName,
     };
+    final sortedHistory = [...history]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final latestEntry = sortedHistory.isEmpty ? null : sortedHistory.first;
+    final failureCount = sortedHistory.where((entry) => !entry.isSuccess).length;
+    final successCount = sortedHistory.length - failureCount;
     final theme = FluentTheme.of(context);
 
     return AppCard(
@@ -69,13 +104,70 @@ class EmailTestHistoryPanel extends StatelessWidget {
             style: theme.typography.caption,
           ),
           const SizedBox(height: 16),
+          _ResponsiveMetricGrid(
+            children: [
+              _HistoryMetricTile(
+                label: appLocaleString(
+                  context,
+                  'Último teste',
+                  'Latest test',
+                ),
+                value: latestEntry == null
+                    ? appLocaleString(context, 'Sem dados', 'No data')
+                    : _formatCreatedAt(context, latestEntry.createdAt),
+                caption: latestEntry == null
+                    ? appLocaleString(
+                        context,
+                        'Nenhuma execução registrada no filtro atual.',
+                        'No executions recorded for the current filter.',
+                      )
+                    : appLocaleString(
+                        context,
+                        'Última tentativa observada no histórico filtrado.',
+                        'Latest attempt observed in the filtered history.',
+                      ),
+              ),
+              _HistoryMetricTile(
+                label: appLocaleString(context, 'Falhas', 'Failures'),
+                value: '$failureCount',
+                caption: appLocaleString(
+                  context,
+                  'Quantidade de testes com erro no período atual.',
+                  'Number of failed tests in the current period.',
+                ),
+              ),
+              _HistoryMetricTile(
+                label: appLocaleString(context, 'Sucessos', 'Successes'),
+                value: '$successCount',
+                caption: appLocaleString(
+                  context,
+                  'Tentativas concluídas sem erro.',
+                  'Attempts completed without errors.',
+                ),
+              ),
+              _HistoryMetricTile(
+                label: appLocaleString(
+                  context,
+                  'Destinatário mais testado',
+                  'Most-tested recipient',
+                ),
+                value: _mostTestedRecipient(context, sortedHistory),
+                caption: appLocaleString(
+                  context,
+                  'Ajuda a identificar o alvo operacional mais recorrente.',
+                  'Helps identify the most common operational target.',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
-                width: 220,
+                width: 240,
                 child: SizedBox(
                   height: 34,
                   child: AppDropdown<String?>(
@@ -213,7 +305,7 @@ class EmailTestHistoryPanel extends StatelessWidget {
               ),
               content: Text(error!),
             )
-          else if (history.isEmpty)
+          else if (sortedHistory.isEmpty)
             EmptyState(
               icon: FluentIcons.history,
               message: appLocaleString(
@@ -223,101 +315,28 @@ class EmailTestHistoryPanel extends StatelessWidget {
               ),
             )
           else
-            AppDataGrid<EmailTestAudit>(
-              minWidth: 1300,
-              columns: [
-                AppDataGridColumn<EmailTestAudit>(
-                  label: appLocaleString(
-                    context,
-                    'Data/hora',
-                    'Date/time',
-                  ),
-                  width: const FlexColumnWidth(1.2),
-                  cellBuilder: (ctx, row) => Text(
-                    _formatCreatedAt(ctx, row.createdAt),
-                  ),
+            Expander(
+              header: Text(
+                appLocaleString(
+                  context,
+                  'Ver histórico detalhado',
+                  'View detailed history',
                 ),
-                AppDataGridColumn<EmailTestAudit>(
-                  label: appLocaleString(
-                    context,
-                    'Configuração',
-                    'Configuration',
-                  ),
-                  width: const FlexColumnWidth(1.4),
-                  cellBuilder: (context, row) => Text(
-                    configNameById[row.configId] ?? row.configId,
-                  ),
-                ),
-                AppDataGridColumn<EmailTestAudit>(
-                  label: appLocaleString(
-                    context,
-                    'Destinatário',
-                    'Recipient',
-                  ),
-                  width: const FlexColumnWidth(1.5),
-                  cellBuilder: (context, row) => Text(row.recipientEmail),
-                ),
-                AppDataGridColumn<EmailTestAudit>(
-                  label: appLocaleString(context, 'Status', 'Status'),
-                  width: const FlexColumnWidth(0.9),
-                  cellBuilder: (context, row) =>
-                      _StatusBadge(success: row.isSuccess),
-                ),
-                AppDataGridColumn<EmailTestAudit>(
-                  label: appLocaleString(
-                    context,
-                    'Tipo de erro',
-                    'Error type',
-                  ),
-                  cellBuilder: (context, row) => Text(row.errorType ?? '-'),
-                ),
-                AppDataGridColumn<EmailTestAudit>(
-                  label: appLocaleString(
-                    context,
-                    'Tentativas',
-                    'Attempts',
-                  ),
-                  width: const FixedColumnWidth(90),
-                  cellAlignment: Alignment.center,
-                  headerAlignment: Alignment.center,
-                  cellBuilder: (context, row) => Text('${row.attempts}'),
-                ),
-                AppDataGridColumn<EmailTestAudit>(
-                  label: appLocaleString(
-                    context,
-                    'ID de correlação',
-                    'Correlation ID',
-                  ),
-                  width: const FlexColumnWidth(1.6),
-                  cellBuilder: (context, row) => SelectableText(
-                    row.correlationId,
-                    maxLines: 1,
-                  ),
-                ),
-                AppDataGridColumn<EmailTestAudit>(
-                  label: appLocaleString(
-                    context,
-                    'Mensagem',
-                    'Message',
-                  ),
-                  width: const FlexColumnWidth(2.2),
-                  cellBuilder: (context, row) {
-                    final message = row.errorMessage?.trim();
-                    if (message == null || message.isEmpty) {
-                      return const Text('-');
-                    }
-                    return Tooltip(
-                      message: message,
-                      child: Text(
-                        message,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  },
-                ),
-              ],
-              rows: history,
+              ),
+              content: Column(
+                children: [
+                  for (var index = 0; index < sortedHistory.length; index++) ...[
+                    _HistoryEntryCard(
+                      audit: sortedHistory[index],
+                      configName:
+                          configNameById[sortedHistory[index].configId] ??
+                          sortedHistory[index].configId,
+                    ),
+                    if (index < sortedHistory.length - 1)
+                      const SizedBox(height: 12),
+                  ],
+                ],
+              ),
             ),
         ],
       ),
@@ -325,27 +344,365 @@ class EmailTestHistoryPanel extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.success});
+class _ResponsiveMetricGrid extends StatelessWidget {
+  const _ResponsiveMetricGrid({required this.children});
 
-  final bool success;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final color = success ? AppColors.success : AppColors.error;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = switch (constraints.maxWidth) {
+          >= 1180 => 4,
+          >= 720 => 2,
+          _ => 1,
+        };
+
+        if (columns == 1) {
+          return Column(
+            children: [
+              for (var index = 0; index < children.length; index++) ...[
+                children[index],
+                if (index < children.length - 1) const SizedBox(height: 12),
+              ],
+            ],
+          );
+        }
+
+        final rows = <Widget>[];
+        for (var start = 0; start < children.length; start += columns) {
+          final end = (start + columns) > children.length
+              ? children.length
+              : start + columns;
+          final rowChildren = children.sublist(start, end);
+
+          rows.add(
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var index = 0; index < rowChildren.length; index++) ...[
+                    Expanded(child: rowChildren[index]),
+                    if (index < rowChildren.length - 1) const SizedBox(width: 12),
+                  ],
+                  for (var filler = rowChildren.length; filler < columns; filler++) ...[
+                    if (filler > 0) const SizedBox(width: 12),
+                    const Expanded(child: SizedBox.shrink()),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            for (var index = 0; index < rows.length; index++) ...[
+              rows[index],
+              if (index < rows.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HistoryMetricTile extends StatelessWidget {
+  const _HistoryMetricTile({
+    required this.label,
+    required this.value,
+    required this.caption,
+  });
+
+  final String label;
+  final String value;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    final borderColor = const Color(0xFF8A8A8A).withValues(alpha: 0.22);
+    final backgroundColor = const Color(0xFF8A8A8A).withValues(alpha: 0.08);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor),
       ),
-      child: Text(
-        success
-            ? appLocaleString(context, 'Sucesso', 'Success')
-            : appLocaleString(context, 'Falha', 'Failure'),
-        style: FluentTheme.of(context).typography.caption?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: theme.typography.caption),
+          const SizedBox(height: 4),
+          Text(value, style: theme.typography.subtitle),
+          const SizedBox(height: 4),
+          Text(caption, style: theme.typography.caption),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoryEntryCard extends StatelessWidget {
+  const _HistoryEntryCard({
+    required this.audit,
+    required this.configName,
+  });
+
+  final EmailTestAudit audit;
+  final String configName;
+
+  Future<void> _copyValue(BuildContext context, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!context.mounted) {
+      return;
+    }
+    await FluentInfoBarFeedback.showSuccess(
+      context,
+      message: appLocaleString(
+        context,
+        'Valor copiado para a área de transferência.',
+        'Value copied to the clipboard.',
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    final resources = theme.resources;
+    final summaryText = audit.isSuccess
+        ? appLocaleString(
+            context,
+            'Envio validado com sucesso para o destinatário.',
+            'Delivery validated successfully for the recipient.',
+          )
+        : (audit.errorType ??
+            appLocaleString(
+              context,
+              'Falha sem tipo informado.',
+              'Failure without a reported type.',
+            ));
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: resources.cardStrokeColorDefault.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: resources.cardStrokeColorDefault.withValues(alpha: 0.85),
+        ),
+      ),
+      child: Expander(
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final trailing = Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    AppStatusChip(
+                      label: audit.isSuccess
+                          ? appLocaleString(context, 'Sucesso', 'Success')
+                          : appLocaleString(context, 'Falha', 'Failure'),
+                      tone: audit.isSuccess
+                          ? AppStatusChipTone.success
+                          : AppStatusChipTone.danger,
+                    ),
+                    AppStatusChip(
+                      label: EmailTestHistoryPanel._pluralizedAttemptLabel(
+                        context,
+                        audit.attempts,
+                      ),
+                    ),
+                  ],
+                );
+
+                final leading = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      audit.recipientEmail,
+                      style: theme.typography.bodyStrong,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$configName | ${EmailTestHistoryPanel._formatCreatedAt(context, audit.createdAt)}',
+                      style: theme.typography.caption,
+                    ),
+                  ],
+                );
+
+                if (constraints.maxWidth >= 760) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: leading),
+                      const SizedBox(width: 12),
+                      trailing,
+                    ],
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    leading,
+                    const SizedBox(height: 8),
+                    trailing,
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              summaryText,
+              style: theme.typography.caption,
+            ),
+          ],
+        ),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ResponsiveMetricGrid(
+              children: [
+                _HistoryMetricTile(
+                  label: appLocaleString(
+                    context,
+                    'Configuração',
+                    'Configuration',
+                  ),
+                  value: configName,
+                  caption: appLocaleString(
+                    context,
+                    'Origem lógica usada no teste.',
+                    'Logical source used in the test.',
+                  ),
+                ),
+                _HistoryMetricTile(
+                  label: appLocaleString(
+                    context,
+                    'Remetente',
+                    'Sender',
+                  ),
+                  value: audit.senderEmail,
+                  caption: appLocaleString(
+                    context,
+                    'Conta usada no envio.',
+                    'Account used for delivery.',
+                  ),
+                ),
+                _HistoryMetricTile(
+                  label: appLocaleString(
+                    context,
+                    'Endpoint SMTP',
+                    'SMTP endpoint',
+                  ),
+                  value: '${audit.smtpServer}:${audit.smtpPort}',
+                  caption: appLocaleString(
+                    context,
+                    'Servidor e porta observados na auditoria.',
+                    'Server and port observed in the audit.',
+                  ),
+                ),
+                _HistoryMetricTile(
+                  label: appLocaleString(
+                    context,
+                    'Duração',
+                    'Duration',
+                  ),
+                  value: audit.durationMs == null
+                      ? appLocaleString(context, 'Não informada', 'Not available')
+                      : '${audit.durationMs} ms',
+                  caption: appLocaleString(
+                    context,
+                    'Tempo registrado para a tentativa.',
+                    'Recorded time for the attempt.',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  appLocaleString(
+                    context,
+                    'ID de correlação',
+                    'Correlation ID',
+                  ),
+                  style: theme.typography.caption,
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(FluentIcons.copy, size: 14),
+                  onPressed: () => _copyValue(context, audit.correlationId),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              audit.correlationId,
+              style: theme.typography.body,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  appLocaleString(
+                    context,
+                    'Destinatário',
+                    'Recipient',
+                  ),
+                  style: theme.typography.caption,
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(FluentIcons.copy, size: 14),
+                  onPressed: () => _copyValue(context, audit.recipientEmail),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              audit.recipientEmail,
+              style: theme.typography.body,
+            ),
+            if (audit.errorMessage != null &&
+                audit.errorMessage!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text(
+                    appLocaleString(
+                      context,
+                      'Mensagem técnica',
+                      'Technical message',
+                    ),
+                    style: theme.typography.caption,
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(FluentIcons.copy, size: 14),
+                    onPressed: () =>
+                        _copyValue(context, audit.errorMessage!.trim()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                audit.errorMessage!.trim(),
+                style: theme.typography.body,
+              ),
+            ],
+          ],
         ),
       ),
     );

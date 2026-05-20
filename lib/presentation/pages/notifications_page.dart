@@ -433,8 +433,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         title: Text(
           appLocaleString(
             context,
-            'Configurações de notificações por e-mail',
-            'E-mail notification settings',
+            'Notificações por e-mail',
+            'E-mail notifications',
           ),
         ),
         commandBar: Consumer<LicenseProvider>(
@@ -675,7 +675,7 @@ class _NotificationsContentSection extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 360, child: content[0]),
+              SizedBox(width: 380, child: content[0]),
               const SizedBox(width: 16),
               Expanded(child: content[1]),
             ],

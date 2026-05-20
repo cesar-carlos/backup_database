@@ -6,6 +6,7 @@ import 'package:backup_database/domain/entities/email_test_audit.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/notifications/email_test_history_panel.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:intl/intl.dart';
 
 class NotificationDetailPanel extends StatelessWidget {
   const NotificationDetailPanel({
@@ -65,7 +66,7 @@ class NotificationDetailPanel extends StatelessWidget {
           icon: FluentIcons.mail,
           message: appLocaleString(
             context,
-            'Selecione uma configuracao SMTP para visualizar os detalhes.',
+            'Selecione uma configuração SMTP para visualizar os detalhes.',
             'Select an SMTP configuration to view details.',
           ),
         ),
@@ -77,11 +78,12 @@ class NotificationDetailPanel extends StatelessWidget {
       children: [
         _NotificationSummaryCard(
           config: config,
+          targets: targets,
+          testHistory: testHistory,
           canManage: canManage,
           isTesting: isTestingSelectedConfig,
           onEdit: () => onEditConfig(config),
           onDelete: () => onDeleteConfig(config),
-          onAddTarget: onAddTarget,
           onToggleEnabled: (value) => onToggleConfigEnabled(config, value),
           onTest: onTestConfig,
         ),
@@ -115,21 +117,23 @@ class NotificationDetailPanel extends StatelessWidget {
 class _NotificationSummaryCard extends StatelessWidget {
   const _NotificationSummaryCard({
     required this.config,
+    required this.targets,
+    required this.testHistory,
     required this.canManage,
     required this.isTesting,
     required this.onEdit,
     required this.onDelete,
-    required this.onAddTarget,
     required this.onToggleEnabled,
     required this.onTest,
   });
 
   final EmailConfig config;
+  final List<EmailNotificationTarget> targets;
+  final List<EmailTestAudit> testHistory;
   final bool canManage;
   final bool isTesting;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  final VoidCallback onAddTarget;
   final ValueChanged<bool> onToggleEnabled;
   final VoidCallback onTest;
 
@@ -144,12 +148,29 @@ class _NotificationSummaryCard extends StatelessWidget {
     }
   }
 
+  String _formatDateTime(BuildContext context, DateTime date) {
+    if (appLocaleIsPortuguese(Localizations.localeOf(context))) {
+      return DateFormat('dd/MM/yyyy HH:mm', 'pt_BR').format(date);
+    }
+    return DateFormat('M/d/yyyy h:mm a', 'en_US').format(date);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
     final defaultRecipient = config.recipients.isEmpty
-        ? appLocaleString(context, 'Nao definido', 'Not set')
+        ? appLocaleString(context, 'Não definido', 'Not set')
         : config.recipients.first;
+    final latestTest = testHistory.isEmpty
+        ? null
+        : ([...testHistory]..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+            .first;
+    final latestFailure = testHistory
+        .where((entry) => !entry.isSuccess)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final activeRecipients = targets.where((target) => target.enabled).length;
+    final lastFailure = latestFailure.isEmpty ? null : latestFailure.first;
 
     return AppCard(
       child: Column(
@@ -165,7 +186,7 @@ class _NotificationSummaryCard extends StatelessWidget {
                     Text(
                       appLocaleString(
                         context,
-                        'Resumo da configuracao',
+                        'Resumo da configuração',
                         'Configuration summary',
                       ),
                       style: theme.typography.subtitle?.copyWith(
@@ -176,7 +197,7 @@ class _NotificationSummaryCard extends StatelessWidget {
                     Text(config.configName, style: theme.typography.title),
                     const SizedBox(height: 4),
                     Text(
-                      '${config.username} • ${config.smtpServer}:${config.smtpPort}',
+                      '${config.username} | ${config.smtpServer}:${config.smtpPort}',
                       style: theme.typography.caption,
                     ),
                   ],
@@ -208,36 +229,137 @@ class _NotificationSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          if (latestTest != null)
+            InfoBar(
+              severity: latestTest.isSuccess
+                  ? InfoBarSeverity.success
+                  : InfoBarSeverity.error,
+              title: Text(
+                latestTest.isSuccess
+                    ? appLocaleString(
+                        context,
+                        'Último teste concluído com sucesso',
+                        'Latest test completed successfully',
+                      )
+                    : appLocaleString(
+                        context,
+                        'Último teste registrou falha',
+                        'Latest test failed',
+                      ),
+              ),
+              content: Text(
+                latestTest.isSuccess
+                    ? appLocaleString(
+                        context,
+                        'Tentativa em ${_formatDateTime(context, latestTest.createdAt)} para ${latestTest.recipientEmail}.',
+                        'Attempt at ${_formatDateTime(context, latestTest.createdAt)} for ${latestTest.recipientEmail}.',
+                      )
+                    : (latestTest.errorMessage?.trim().isNotEmpty ?? false)
+                        ? latestTest.errorMessage!.trim()
+                        : appLocaleString(
+                            context,
+                            'Revise o histórico para detalhes técnicos.',
+                            'Review the history for technical details.',
+                          ),
+              ),
+              isLong: true,
+            ),
+          if (latestTest != null) const SizedBox(height: 16),
+          _ResponsiveFactGrid(
             children: [
               _SummaryFactTile(
-                label: appLocaleString(context, 'Servidor', 'Server'),
+                label: appLocaleString(context, 'Servidor SMTP', 'SMTP server'),
                 value: config.smtpServer,
-                caption: '${appLocaleString(context, 'Porta', 'Port')}: ${config.smtpPort}',
+                caption:
+                    '${appLocaleString(context, 'Porta', 'Port')}: ${config.smtpPort}',
               ),
               _SummaryFactTile(
                 label: appLocaleString(context, 'Conta SMTP', 'SMTP account'),
                 value: config.username,
                 caption: appLocaleString(
                   context,
-                  'Usada para autenticacao e envio.',
+                  'Usada para autenticação e envio.',
                   'Used for authentication and delivery.',
                 ),
               ),
               _SummaryFactTile(
                 label: appLocaleString(
                   context,
-                  'Destinatario padrao de teste',
+                  'Último teste',
+                  'Latest test',
+                ),
+                value: latestTest == null
+                    ? appLocaleString(context, 'Sem histórico', 'No history')
+                    : _formatDateTime(context, latestTest.createdAt),
+                caption: latestTest == null
+                    ? appLocaleString(
+                        context,
+                        'Ainda não há auditoria para esta configuração.',
+                        'There is no audit for this configuration yet.',
+                      )
+                    : latestTest.isSuccess
+                        ? appLocaleString(
+                            context,
+                            'Última tentativa concluída sem erro.',
+                            'Latest attempt completed without errors.',
+                          )
+                        : appLocaleString(
+                            context,
+                            'Última tentativa terminou com falha.',
+                            'Latest attempt ended in failure.',
+                          ),
+              ),
+              _SummaryFactTile(
+                label: appLocaleString(
+                  context,
+                  'Destinatários ativos',
+                  'Active recipients',
+                ),
+                value: '$activeRecipients',
+                caption: appLocaleString(
+                  context,
+                  'Recebem notificações no estado atual.',
+                  'Receive notifications in the current state.',
+                ),
+              ),
+              _SummaryFactTile(
+                label: appLocaleString(
+                  context,
+                  'Destinatário padrão de teste',
                   'Default test recipient',
                 ),
                 value: defaultRecipient,
                 caption: appLocaleString(
                   context,
-                  'Preenchido no dialog para testes rapidos.',
-                  'Pre-filled in the dialog for quick tests.',
+                  'Preenchido automaticamente nos testes rápidos.',
+                  'Pre-filled automatically in quick tests.',
                 ),
+              ),
+              _SummaryFactTile(
+                label: appLocaleString(
+                  context,
+                  'Última falha',
+                  'Latest failure',
+                ),
+                value: lastFailure == null
+                    ? appLocaleString(
+                        context,
+                        'Nenhuma falha recente',
+                        'No recent failure',
+                      )
+                    : _formatDateTime(context, lastFailure.createdAt),
+                caption: lastFailure == null
+                    ? appLocaleString(
+                        context,
+                        'Nenhum erro foi encontrado no filtro atual.',
+                        'No error was found in the current filter.',
+                      )
+                    : (lastFailure.errorType ??
+                        appLocaleString(
+                          context,
+                          'Falha sem tipo informado.',
+                          'Failure without a reported type.',
+                        )),
               ),
               _SummaryFactTile(
                 label: appLocaleString(context, 'Anexos', 'Attachments'),
@@ -253,67 +375,208 @@ class _NotificationSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton(
-                onPressed: onTest,
-                child: isTesting
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: ProgressRing(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(appLocaleString(context, 'Testando...', 'Testing...')),
-                        ],
-                      )
-                    : Text(
-                        appLocaleString(
-                          context,
-                          'Testar SMTP',
-                          'Test SMTP',
-                        ),
-                      ),
-              ),
-              Button(
-                onPressed: canManage ? onAddTarget : null,
-                child: Text(
-                  appLocaleString(
-                    context,
-                    'Novo destinatario',
-                    'New recipient',
-                  ),
-                ),
-              ),
-              Button(
-                onPressed: canManage ? onEdit : null,
-                child: Text(appLocaleString(context, 'Editar', 'Edit')),
-              ),
-              Button(
-                onPressed: canManage ? onDelete : null,
-                child: Text(appLocaleString(context, 'Excluir', 'Delete')),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(appLocaleString(context, 'Ativa', 'Active')),
-                  const SizedBox(width: 8),
-                  ToggleSwitch(
-                    checked: config.enabled,
-                    onChanged: canManage ? onToggleEnabled : null,
-                  ),
-                ],
-              ),
-            ],
+          _SummaryActionsRow(
+            canManage: canManage,
+            isTesting: isTesting,
+            isEnabled: config.enabled,
+            onTest: onTest,
+            onEdit: onEdit,
+            onDelete: onDelete,
+            onToggleEnabled: onToggleEnabled,
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SummaryActionsRow extends StatelessWidget {
+  const _SummaryActionsRow({
+    required this.canManage,
+    required this.isTesting,
+    required this.isEnabled,
+    required this.onTest,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggleEnabled,
+  });
+
+  final bool canManage;
+  final bool isTesting;
+  final bool isEnabled;
+  final VoidCallback onTest;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final ValueChanged<bool> onToggleEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final statusBlock = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isEnabled
+                  ? appLocaleString(
+                      context,
+                      'Configuração ativa',
+                      'Configuration active',
+                    )
+                  : appLocaleString(
+                      context,
+                      'Configuração inativa',
+                      'Configuration inactive',
+                    ),
+              style: theme.typography.caption,
+            ),
+            const SizedBox(width: 8),
+            ToggleSwitch(
+              checked: isEnabled,
+              onChanged: canManage ? onToggleEnabled : null,
+            ),
+            const SizedBox(width: 4),
+            DropDownButton(
+              disabled: !canManage,
+              leading: const Icon(FluentIcons.more, size: 14),
+              title: Text(appLocaleString(context, 'Mais', 'More')),
+              items: [
+                MenuFlyoutItem(
+                  leading: const Icon(FluentIcons.delete),
+                  text: Text(appLocaleString(context, 'Excluir', 'Delete')),
+                  onPressed: onDelete,
+                ),
+              ],
+            ),
+          ],
+        );
+
+        final actionButtons = Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton(
+              onPressed: onTest,
+              child: isTesting
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: ProgressRing(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          appLocaleString(
+                            context,
+                            'Testando...',
+                            'Testing...',
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      appLocaleString(
+                        context,
+                        'Testar SMTP',
+                        'Test SMTP',
+                      ),
+                    ),
+            ),
+            Button(
+              onPressed: canManage ? onEdit : null,
+              child: Text(appLocaleString(context, 'Editar', 'Edit')),
+            ),
+          ],
+        );
+
+        if (constraints.maxWidth >= 760) {
+          return Row(
+            children: [
+              Expanded(child: actionButtons),
+              const SizedBox(width: 12),
+              statusBlock,
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            actionButtons,
+            const SizedBox(height: 12),
+            statusBlock,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ResponsiveFactGrid extends StatelessWidget {
+  const _ResponsiveFactGrid({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = switch (constraints.maxWidth) {
+          >= 1180 => 4,
+          >= 720 => 2,
+          _ => 1,
+        };
+
+        if (columns == 1) {
+          return Column(
+            children: [
+              for (var index = 0; index < children.length; index++) ...[
+                children[index],
+                if (index < children.length - 1) const SizedBox(height: 12),
+              ],
+            ],
+          );
+        }
+
+        final rows = <Widget>[];
+        for (var start = 0; start < children.length; start += columns) {
+          final end = (start + columns) > children.length
+              ? children.length
+              : start + columns;
+          final rowChildren = children.sublist(start, end);
+
+          rows.add(
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var index = 0; index < rowChildren.length; index++) ...[
+                    Expanded(child: rowChildren[index]),
+                    if (index < rowChildren.length - 1) const SizedBox(width: 12),
+                  ],
+                  for (var filler = rowChildren.length; filler < columns; filler++) ...[
+                    if (filler > 0) const SizedBox(width: 12),
+                    const Expanded(child: SizedBox.shrink()),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            for (var index = 0; index < rows.length; index++) ...[
+              rows[index],
+              if (index < rows.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -336,7 +599,7 @@ class _RecipientsSection extends StatelessWidget {
   final ValueChanged<EmailNotificationTarget> onEditTarget;
   final ValueChanged<EmailNotificationTarget> onDeleteTarget;
   final void Function(EmailNotificationTarget target, bool enabled)
-  onToggleTargetEnabled;
+      onToggleTargetEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -355,7 +618,7 @@ class _RecipientsSection extends StatelessWidget {
                     Text(
                       appLocaleString(
                         context,
-                        'Destinatarios',
+                        'Destinatários',
                         'Recipients',
                       ),
                       style: theme.typography.subtitle?.copyWith(
@@ -366,7 +629,7 @@ class _RecipientsSection extends StatelessWidget {
                     Text(
                       appLocaleString(
                         context,
-                        'Defina quem recebe notificacoes de sucesso, erro e aviso para esta configuracao.',
+                        'Defina quem recebe notificações de sucesso, erro e aviso para esta configuração.',
                         'Choose who receives success, error, and warning notifications for this configuration.',
                       ),
                       style: theme.typography.caption,
@@ -380,7 +643,7 @@ class _RecipientsSection extends StatelessWidget {
                 child: Text(
                   appLocaleString(
                     context,
-                    'Novo destinatario',
+                    'Novo destinatário',
                     'New recipient',
                   ),
                 ),
@@ -393,12 +656,12 @@ class _RecipientsSection extends StatelessWidget {
               icon: FluentIcons.group,
               message: appLocaleString(
                 context,
-                'Nenhum destinatario cadastrado para ${config.configName}.',
+                'Nenhum destinatário cadastrado para ${config.configName}.',
                 'No recipients registered for ${config.configName}.',
               ),
               actionLabel: appLocaleString(
                 context,
-                'Novo destinatario',
+                'Novo destinatário',
                 'New recipient',
               ),
               onAction: canManage ? onAddTarget : null,
@@ -446,9 +709,13 @@ class _RecipientListItem extends StatelessWidget {
     required bool enabled,
     required AppStatusChipTone tone,
   }) {
-    return AppStatusChip(
-      label: label,
-      tone: enabled ? tone : AppStatusChipTone.neutral,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: canManage ? onEdit : null,
+      child: AppStatusChip(
+        label: label,
+        tone: enabled ? tone : AppStatusChipTone.neutral,
+      ),
     );
   }
 
@@ -457,72 +724,60 @@ class _RecipientListItem extends StatelessWidget {
     final theme = FluentTheme.of(context);
     final resources = theme.resources;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: resources.cardStrokeColorDefault.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: resources.cardStrokeColorDefault.withValues(alpha: 0.85),
+    final statusText = target.enabled
+        ? appLocaleString(context, 'Ativo', 'Active')
+        : appLocaleString(context, 'Inativo', 'Inactive');
+
+    final leftContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          target.recipientEmail,
+          style: theme.typography.bodyStrong,
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _eventChip(
+              context,
+              label: appLocaleString(context, 'Sucesso', 'Success'),
+              enabled: target.notifyOnSuccess,
+              tone: AppStatusChipTone.success,
+            ),
+            _eventChip(
+              context,
+              label: appLocaleString(context, 'Erro', 'Error'),
+              enabled: target.notifyOnError,
+              tone: AppStatusChipTone.danger,
+            ),
+            _eventChip(
+              context,
+              label: appLocaleString(context, 'Aviso', 'Warning'),
+              enabled: target.notifyOnWarning,
+              tone: AppStatusChipTone.warning,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    Widget managementColumn(bool alignEnd) {
+      return Column(
+        crossAxisAlignment:
+            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
+          Text(statusText, style: theme.typography.caption),
+          const SizedBox(height: 8),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  target.recipientEmail,
-                  style: theme.typography.bodyStrong,
-                ),
-              ),
-              const SizedBox(width: 12),
-              AppStatusChip(
-                label: target.enabled
-                    ? appLocaleString(context, 'Ativo', 'Active')
-                    : appLocaleString(context, 'Inativo', 'Inactive'),
-                tone: target.enabled
-                    ? AppStatusChipTone.success
-                    : AppStatusChipTone.neutral,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _eventChip(
-                context,
-                label: appLocaleString(context, 'Sucesso', 'Success'),
-                enabled: target.notifyOnSuccess,
-                tone: AppStatusChipTone.success,
-              ),
-              _eventChip(
-                context,
-                label: appLocaleString(context, 'Erro', 'Error'),
-                enabled: target.notifyOnError,
-                tone: AppStatusChipTone.danger,
-              ),
-              _eventChip(
-                context,
-                label: appLocaleString(context, 'Aviso', 'Warning'),
-                enabled: target.notifyOnWarning,
-                tone: AppStatusChipTone.warning,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               ToggleSwitch(
                 checked: target.enabled,
                 onChanged: canManage ? onToggleEnabled : null,
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Tooltip(
                 message: appLocaleString(context, 'Editar', 'Edit'),
                 child: IconButton(
@@ -540,6 +795,44 @@ class _RecipientListItem extends StatelessWidget {
             ],
           ),
         ],
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: resources.cardStrokeColorDefault.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: resources.cardStrokeColorDefault.withValues(alpha: 0.85),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= 720) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: leftContent),
+                const SizedBox(width: 16),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 200),
+                  child: managementColumn(true),
+                ),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              leftContent,
+              const SizedBox(height: 12),
+              managementColumn(false),
+            ],
+          );
+        },
       ),
     );
   }
@@ -563,7 +856,7 @@ class _SummaryFactTile extends StatelessWidget {
     final backgroundColor = const Color(0xFF8A8A8A).withValues(alpha: 0.08);
 
     return Container(
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: backgroundColor,
