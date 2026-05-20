@@ -1,254 +1,166 @@
-# Configuração do PATH do Sistema
+# Configuracao do PATH no Windows
 
-Este guia explica como configurar o PATH do Windows para que as ferramentas de linha de comando (`sqlcmd` e `dbbackup`) sejam encontradas pelo Backup Database.
+Este guia explica como adicionar ao PATH as ferramentas externas usadas pelo
+Backup Database. Sem isso, a aplicacao nao consegue localizar CLIs como
+`sqlcmd`, `pg_basebackup`, `dbbackup` ou `gbak`.
 
-## O que é o PATH?
+## Quando voce precisa deste guia
 
-O PATH é uma variável de ambiente do Windows que contém uma lista de diretórios onde o sistema procura por executáveis quando você digita um comando. Quando você executa `sqlcmd` ou `dbbackup`, o Windows procura esses executáveis nos diretórios listados no PATH.
+Consulte este documento quando:
 
-## Por que configurar o PATH?
+- o app informar que uma ferramenta nao foi encontrada no PATH
+- o teste de conexao falhar por ausencia de executavel
+- o script `check_dependencies.ps1` apontar ferramenta ausente
 
-O Backup Database precisa executar comandos externos:
+## Como editar o PATH
 
-- **sqlcmd** - Para backups do SQL Server
-- **dbbackup** - Para backups do Sybase SQL Anywhere
+### Metodo 1: interface grafica
 
-Se essas ferramentas não estiverem no PATH, o Backup Database não conseguirá encontrá-las e os backups falharão.
+1. Abra `Sistema`.
+2. Entre em `Configuracoes avancadas do sistema`.
+3. Na aba `Avancado`, clique em `Variaveis de Ambiente`.
+4. Em `Variaveis do sistema`, edite `Path`.
+5. Adicione a pasta da ferramenta, nao o executavel individual.
+6. Confirme as janelas e reabra o terminal ou o aplicativo.
 
-## Como Configurar o PATH
-
-### Método 1: Via Interface Gráfica (Recomendado)
-
-#### Para Windows 10/11:
-
-1. **Abra as Configurações do Sistema**
-   - Pressione `Win + X` e selecione **Sistema**
-   - Ou clique com o botão direito em **Este Computador** → **Propriedades**
-
-2. **Acesse Variáveis de Ambiente**
-   - Clique em **Configurações avançadas do sistema**
-   - Na aba **Avançado**, clique em **Variáveis de Ambiente**
-
-3. **Edite o PATH do Sistema**
-   - Na seção **Variáveis do sistema**, encontre a variável `Path`
-   - Selecione `Path` e clique em **Editar**
-   - Clique em **Novo** para adicionar um novo caminho
-   - Adicione o caminho da ferramenta (veja exemplos abaixo)
-   - Clique em **OK** em todas as janelas
-
-4. **Reinicie o Terminal**
-   - Feche e reabra qualquer terminal (CMD, PowerShell, etc.)
-   - Ou reinicie o Backup Database se estiver rodando
-
-### Método 2: Via PowerShell (Administrador)
+### Metodo 2: PowerShell (administrador)
 
 ```powershell
-# Adicionar ao PATH do Sistema (requer privilégios de administrador)
 [Environment]::SetEnvironmentVariable(
     "Path",
-    [Environment]::GetEnvironmentVariable("Path", "Machine") + ";C:\Caminho\Para\Ferramenta",
+    [Environment]::GetEnvironmentVariable("Path", "Machine") +
+        ";C:\Caminho\Da\Ferramenta",
     "Machine"
 )
 ```
 
-### Método 3: Via CMD (Administrador)
+### Metodo 3: CMD (administrador)
 
 ```cmd
-setx /M PATH "%PATH%;C:\Caminho\Para\Ferramenta"
+setx /M PATH "%PATH%;C:\Caminho\Da\Ferramenta"
 ```
 
-## Caminhos Comuns
+## Caminhos comuns por banco
 
-### SQL Server (sqlcmd.exe)
+### SQL Server
 
-#### SQL Server 2019+ (SQL Server Management Studio):
+Ferramenta minima: `sqlcmd`
 
-```
+Caminhos comuns:
+
+```text
 C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn
-```
-
-#### SQL Server 2017:
-
-```
 C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\130\Tools\Binn
-```
-
-#### SQL Server 2016:
-
-```
-C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\130\Tools\Binn
-```
-
-#### SQL Server Command Line Utilities (instalação standalone):
-
-```
 C:\Program Files\Microsoft SQL Server Client SDK\ODBC\170\Tools\Binn
 ```
 
-#### Para encontrar o caminho exato:
+### Sybase SQL Anywhere
 
-1. Abra o **Explorador de Arquivos**
-2. Navegue até `C:\Program Files\Microsoft SQL Server\`
-3. Procure por `sqlcmd.exe` usando a busca do Windows
-4. Copie o caminho completo da pasta onde `sqlcmd.exe` está localizado
+Ferramentas principais: `dbisql`, `dbbackup`
 
-### Sybase SQL Anywhere (dbbackup.exe)
+Caminhos comuns:
 
-#### Sybase SQL Anywhere 17:
-
-```
+```text
 C:\Program Files\SAP\SQL Anywhere 17\Bin64
-```
-
-#### Sybase SQL Anywhere 16:
-
-```
 C:\Program Files\SAP\SQL Anywhere 16\Bin64
-```
-
-#### Sybase SQL Anywhere 12:
-
-```
 C:\Program Files\SQL Anywhere 12\Bin64
-```
-
-#### Sybase SQL Anywhere 11:
-
-```
 C:\Program Files\SQL Anywhere 11\Bin64
 ```
 
-#### Para encontrar o caminho exato:
+### PostgreSQL
 
-1. Abra o **Explorador de Arquivos**
-2. Navegue até `C:\Program Files\` (ou `C:\Program Files (x86)\`)
-3. Procure por pastas que contenham "SQL Anywhere" ou "SAP"
-4. Entre na pasta e navegue até `Bin64` ou `Bin32`
-5. Verifique se `dbbackup.exe` está presente
-6. Copie o caminho completo da pasta
+Ferramentas principais: `psql`, `pg_basebackup`, `pg_verifybackup`
 
-## Verificar se Está Configurado Corretamente
+Caminhos comuns:
 
-### Via Prompt de Comando ou PowerShell:
-
-```cmd
-REM Verificar sqlcmd
-sqlcmd -?
-
-REM Verificar dbbackup
-dbbackup -?
+```text
+C:\Program Files\PostgreSQL\16\bin
+C:\Program Files\PostgreSQL\15\bin
+C:\Program Files\PostgreSQL\14\bin
 ```
 
-### Se aparecer erro "não é reconhecido como comando":
+### Firebird
 
-1. Verifique se o caminho foi adicionado corretamente ao PATH
-2. Certifique-se de que fechou e reabriu o terminal após adicionar ao PATH
-3. Verifique se o executável realmente existe no caminho especificado
-4. Tente usar o caminho completo para testar:
-   ```cmd
-   "C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\sqlcmd.exe" -?
-   ```
+Ferramentas principais: `gbak`, `nbackup`, `gstat`, `isql`
 
-## Configuração por Usuário vs Sistema
+Caminhos comuns:
 
-### PATH do Sistema (Recomendado)
+```text
+C:\Program Files\Firebird\Firebird_5_0
+C:\Program Files\Firebird\Firebird_4_0
+C:\Program Files\Firebird\Firebird_3_0
+C:\Program Files\Firebird\Firebird_2_5\bin
+```
 
-- **Localização**: Variáveis do sistema → `Path`
-- **Acesso**: Todos os usuários do computador
-- **Requer**: Privilégios de administrador
-- **Uso**: Quando múltiplos usuários precisam usar as ferramentas
+Observacao: em algumas instalacoes o executavel fica na raiz da pasta do
+produto; em outras, dentro de `bin`. Adicione exatamente a pasta onde os
+executaveis estao.
 
-### PATH do Usuário
+## Como localizar a pasta certa
 
-- **Localização**: Variáveis do usuário → `Path`
-- **Acesso**: Apenas o usuário atual
-- **Requer**: Privilégios de usuário normal
-- **Uso**: Quando apenas um usuário específico precisa usar as ferramentas
+1. Abra o Explorador de Arquivos.
+2. Procure pelo executavel que o app esta reclamando, por exemplo
+   `pg_basebackup.exe` ou `gbak.exe`.
+3. Copie o caminho da pasta que contem esse arquivo.
+4. Adicione essa pasta ao PATH.
 
-## Solução de Problemas
+## Verificacao apos a mudanca
 
-### Problema: "sqlcmd não é reconhecido"
+Feche e reabra o terminal. Em seguida rode o comando correspondente:
 
-**Soluções:**
+```powershell
+sqlcmd -?
+dbisql -?
+dbbackup -?
+psql --version
+pg_basebackup --version
+pg_verifybackup --version
+gbak -?
+nbackup -?
+gstat -?
+isql -?
+```
 
-1. Verifique se o SQL Server está instalado
-2. Verifique se o caminho está correto no PATH
-3. Reinicie o terminal após adicionar ao PATH
-4. Baixe e instale o SQL Server Command Line Utilities se necessário
+Se o comando responder com ajuda ou versao, o PATH esta correto.
 
-### Problema: "dbbackup não é reconhecido"
+## Problemas comuns
 
-**Soluções:**
+### O terminal ainda nao reconhece a ferramenta
 
-1. Verifique se o Sybase SQL Anywhere está instalado
-2. Verifique se está usando o caminho `Bin64` (não apenas `Bin`)
-3. Reinicie o terminal após adicionar ao PATH
-4. Verifique se está usando a versão correta (64-bit vs 32-bit)
+- Reabra o terminal por completo.
+- Reabra o Backup Database.
+- Confirme que voce adicionou a pasta, nao o arquivo `.exe`.
+- Verifique se o executavel realmente existe naquele diretorio.
 
-### Problema: "Acesso negado" ao editar PATH
+### Acesso negado ao editar o PATH
 
-**Solução:**
+- Rode PowerShell ou CMD como administrador.
+- Ou use a interface grafica com uma conta que tenha privilegios.
 
-- Execute o PowerShell ou CMD como **Administrador**
-- Ou use o Método 1 (Interface Gráfica) com privilégios de administrador
+### Mais de uma versao instalada
 
-### Problema: PATH foi adicionado mas ainda não funciona
+- Prefira manter no PATH a versao que corresponde ao ambiente em uso.
+- Se necessario, teste o executavel pelo caminho completo antes de alterar o
+  PATH global.
 
-**Soluções:**
+## Variaveis de ambiente do aplicativo
 
-1. **Feche completamente** todos os terminais e aplicações
-2. **Reinicie o Backup Database** se estiver rodando
-3. Verifique se não há espaços extras ou caracteres inválidos no caminho
-4. Verifique se o caminho termina com `\` (não é necessário, mas pode ajudar)
-5. Tente adicionar o caminho novamente usando o caminho completo
+O PATH resolve a descoberta das ferramentas CLI. Alem disso, o aplicativo le
+variaveis opcionais do proprio processo ou do arquivo `.env`.
 
-## Exemplo Completo
+Exemplos:
 
-### Adicionando sqlcmd ao PATH:
+- `BACKUP_DATABASE_MAX_PARALLEL_UPLOADS`
+- `BACKUP_DATABASE_PG_LOG_USE_SLOT`
+- `BACKUP_DATABASE_PG_LOG_TIMEOUT_SECONDS`
+- `AUTO_UPDATE_FEED_URL`
 
-1. Localize `sqlcmd.exe` (exemplo: `C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\sqlcmd.exe`)
-2. Copie o caminho da pasta: `C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn`
-3. Adicione ao PATH do sistema usando o Método 1
-4. Feche e reabra o terminal
-5. Teste com `sqlcmd -?`
+Para detalhes de comportamento PostgreSQL, consulte
+[`analise_implementacao_postgresql.md`](analise_implementacao_postgresql.md).
 
-### Adicionando dbbackup ao PATH:
+## Referencias rapidas
 
-1. Localize `dbbackup.exe` (exemplo: `C:\Program Files\SAP\SQL Anywhere 17\Bin64\dbbackup.exe`)
-2. Copie o caminho da pasta: `C:\Program Files\SAP\SQL Anywhere 17\Bin64`
-3. Adicione ao PATH do sistema usando o Método 1
-4. Feche e reabra o terminal
-5. Teste com `dbbackup -?`
-
-## Notas Importantes
-
-- ⚠️ **Sempre reinicie o terminal** após modificar o PATH
-- ⚠️ **Use caminhos absolutos** (não relativos) ao adicionar ao PATH
-- ⚠️ **Não adicione o arquivo executável** ao PATH, apenas a pasta que o contém
-- ✅ **Prefira o PATH do sistema** se múltiplos usuários usarão o Backup Database
-- ✅ **Teste sempre** após adicionar ao PATH usando `sqlcmd -?` ou `dbbackup -?`
-
-## Variáveis de ambiente opcionais (aplicativo)
-
-Além do PATH do Windows, o Backup Database pode ler variáveis **opcionais** do
-ambiente do processo (por exemplo variáveis de sistema ou de utilizador, ou
-definidas no atalho do executável).
-
-### Upload paralelo para destinos
-
-- **`BACKUP_DATABASE_MAX_PARALLEL_UPLOADS`**
-  - Número inteiro **≥ 1** de envios simultâneos ao processar vários destinos.
-  - Se ausente ou inválido, usa o valor por defeito **3**.
-  - Valores acima de **16** são limitados a **16**.
-
-### PostgreSQL (WAL / slots / timeouts)
-
-Variáveis como `BACKUP_DATABASE_PG_LOG_USE_SLOT`,
-`BACKUP_DATABASE_PG_LOG_TIMEOUT_SECONDS`, etc., são descritas em
-`docs/analise_implementacao_postgresql.md`.
-
-## Referências
-
-- [Microsoft: Como adicionar ao PATH](https://docs.microsoft.com/en-us/windows/win32/procthread/environment-variables)
-- [SQL Server Command Line Utilities](https://docs.microsoft.com/en-us/sql/tools/sqlcmd-utility)
-- [Sybase SQL Anywhere Documentation](https://help.sap.com/docs/SAP_SQL_Anywhere)
+- [`requirements.md`](requirements.md)
+- [`install/installation_guide.md`](install/installation_guide.md)
+- [`analise_implementacao_postgresql.md`](analise_implementacao_postgresql.md)
+- [`analise_implementacao_sybase.md`](analise_implementacao_sybase.md)

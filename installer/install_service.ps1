@@ -7,7 +7,7 @@ param(
     [string]$AppDirectory = "",
     [string]$NssmPath = "",
     [string]$DisplayName = "Backup Database Service",
-    [string]$Description = "Servico de backup automatico para SQL Server e Sybase",
+    [string]$Description = "Servico de backup automatico para SQL Server, Sybase, PostgreSQL e Firebird",
     [string]$ServiceUser = "",
     [SecureString]$ServicePassword
 )
@@ -130,6 +130,7 @@ if (-not [string]::IsNullOrEmpty($ServiceUser) -and $null -ne $ServicePassword) 
     } else {
         Write-Host "Configurando usuário do serviço..." -ForegroundColor Green
         & $NssmPath set $ServiceName ObjectName $ServiceUser $plainPassword
+        Write-Host "AVISO: conta customizada desabilita a restauracao automatica do update silencioso do servico." -ForegroundColor Yellow
     }
 } else {
     Write-Host "Configurando para rodar como LocalSystem..." -ForegroundColor Green

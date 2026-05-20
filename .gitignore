@@ -3,6 +3,7 @@
 *.class
 *.log
 *.pyc
+**/__pycache__/
 *.swp
 .DS_Store
 .atom/
@@ -74,3 +75,4 @@ installer/dist/*.exe
 
 # Installer dependencies (baixados automaticamente pelo build_installer.ps1)
 installer/dependencies/vc_redist.x64.exe
+installer/dependencies/nssm-2.24/

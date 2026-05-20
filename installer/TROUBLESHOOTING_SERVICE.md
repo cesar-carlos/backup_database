@@ -125,6 +125,10 @@ O `.env` ativo da maquina nao vem mais da pasta do app; ele mora em:
 C:\ProgramData\BackupDatabase\config\.env
 ```
 
+Se o servico usar conta customizada, a execucao pode continuar normal, mas o
+update silencioso nao sera restaurado automaticamente. Esse fluxo segue
+restrito a `LocalSystem`.
+
 ## Reinstalar servico
 
 ```powershell

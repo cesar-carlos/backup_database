@@ -5,7 +5,7 @@ publish_to: none
 environment:
   sdk: ^3.10.1
 
-description: Sistema de backup automático para SQL Server e Sybase ASA
+description: Sistema de backup automatico para SQL Server, Sybase, PostgreSQL e Firebird
 
 dependencies:
   archive: ^4.0.7

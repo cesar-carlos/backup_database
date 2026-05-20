@@ -68,12 +68,12 @@ Exemplo:
 
 ```xml
 <item>
-  <title>Version 3.0.1</title>
+  <title>Version X.Y.Z</title>
   <pubDate>Sun, 19 Apr 2026 17:07:49 +0000</pubDate>
   <description>Automatic update via GitHub Release.</description>
   <enclosure
-    url="https://github.com/cesar-carlos/backup_database/releases/download/v3.0.1/BackupDatabase-Setup-3.0.1.exe"
-    sparkle:version="3.0.1"
+    url="https://github.com/cesar-carlos/backup_database/releases/download/vX.Y.Z/BackupDatabase-Setup-X.Y.Z.exe"
+    sparkle:version="X.Y.Z"
     sparkle:os="windows"
     length="39020908"
     type="application/octet-stream"

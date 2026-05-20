@@ -2,101 +2,96 @@
 
 [![codecov](https://codecov.io/gh/cesar-carlos/backup_database/graph/badge.svg)](https://codecov.io/gh/cesar-carlos/backup_database)
 
-Sistema completo de backup automático para SQL Server, Sybase SQL Anywhere (ASA), PostgreSQL e Firebird no Windows.
+Sistema de backup automatico para Windows com suporte a SQL Server, Sybase SQL
+Anywhere, PostgreSQL e Firebird.
 
-## 🎯 Funcionalidades
+## Visao geral
 
-### Backup de Bancos de Dados
+O produto cobre:
 
-- ✅ SQL Server (via `sqlcmd`)
-- ✅ Sybase SQL Anywhere 16 (via `dbbackup.exe`)
-- ✅ PostgreSQL (via `pg_basebackup` / `psql`)
-- ✅ Firebird (via `gbak` para backup lógico `.fbk` e `nbackup` para backup físico `.nbk`)
-- ✅ Compressão ZIP automática
-- ✅ Verificação de integridade
-- ✅ Verificação de espaço em disco
+- execucao local ou remota em modo `server` e `client`
+- backups agendados com compressao, verificacao e retencao
+- destinos locais e remotos
+- notificacoes por e-mail
+- instalacao opcional como servico do Windows
 
-### Destinos de Backup
+## Bancos suportados
 
-- ✅ Local (diretório do sistema)
-- ✅ FTP/FTPS
-- ✅ Google Drive (via OAuth2)
-- ✅ Dropbox
-- ✅ Nextcloud (WebDAV)
-- ✅ Limpeza automática de backups antigos
+- SQL Server via `sqlcmd`
+- Sybase SQL Anywhere via `dbisql` e `dbbackup`
+- PostgreSQL via `psql`, `pg_basebackup`, `pg_verifybackup`, `pg_dump` e `pg_restore`
+- Firebird via `gbak`, `nbackup`, `gstat` e `isql`
 
-### Agendamento
+Observacao: o suporte por banco nao depende apenas da UI; o codigo atual inclui
+camadas de configuracao, repositorio, estrategia e execucao para os quatro
+SGBDs.
 
-- ✅ Agendamento diário, semanal, mensal
-- ✅ Agendamento por intervalo (horas)
-- ✅ Execução em background
-- ✅ Integração com Windows Task Scheduler
+## Destinos suportados
 
-### Notificações
+- pasta local
+- FTP/FTPS
+- Google Drive
+- Dropbox
+- Nextcloud/WebDAV
 
-- ✅ E-mail (SMTP)
-- ✅ Notificação de sucesso, erro e avisos
-- ✅ Anexo automático de logs
-- ✅ Templates personalizados
+## Requisitos do sistema
 
-### Interface
+- Windows 8 ou superior
+- Windows Server 2012 ou superior
+- arquitetura x64
+- permissao de administrador para instalacao e configuracao do ambiente
+- Visual C++ Redistributable 2015-2022 (x64), instalado automaticamente quando necessario
 
-- ✅ Dashboard com estatísticas
-- ✅ Configuração de bancos de dados
-- ✅ Configuração de destinos
-- ✅ Gerenciamento de agendamentos
-- ✅ Visualização e exportação de logs
-- ✅ Tema claro/escuro
-- ✅ System tray com menu de contexto
+Dependencias por banco:
 
-## 🖥️ Requisitos do Sistema
+- SQL Server: `sqlcmd` no PATH
+- Sybase SQL Anywhere: `dbisql` e `dbbackup` no PATH; `dbvalid` e `dbverify`
+  sao recomendados
+- PostgreSQL: `psql` e `pg_basebackup` no PATH; `pg_verifybackup` e
+  recomendado para fluxos com verificacao
+- Firebird: `gbak`, `nbackup`, `gstat` e `isql` no PATH
 
-- **Windows**: 10 ou superior / Windows Server 2012 R2 ou superior
-- **Arquitetura**: 64 bits apenas
-- **SQL Server**: Qualquer versão com `sqlcmd` instalado
-- **Sybase ASA**: Versão 16 com `dbbackup.exe`
-- **PostgreSQL (opcional)**: utilitários `pg_basebackup`, `psql` e `pg_verifybackup` no PATH (quando usar backups PostgreSQL)
-- **Firebird (opcional)**: Firebird 2.5 / 3.0 / 4.0 (cliente ou servidor) com `gbak`, `nbackup`, `gstat` e `isql` no **PATH** (ou pasta configurada na UI). Para confirmar binários e versão sem tocar numa base: `gbak -z`, `nbackup -?`, `gstat -z`, `isql -z`.
-- **Visual C++ Redistributable**: 2015-2022 (x64), instalado automaticamente pelo instalador quando necessário
+Alguns recursos dependem tambem da versao do Windows detectada em runtime,
+como auto update, OAuth externo e integracoes visuais nativas.
 
-## 📦 Instalação
+## Instalacao
 
-### 1. Download
+Baixe o instalador na pagina de releases:
 
-Baixe o instalador da [página de releases](https://github.com/cesar-carlos/backup_database/releases).
+- [Releases](https://github.com/cesar-carlos/backup_database/releases)
 
-### 2. Instalação
+O instalador oferece dois modos:
 
-Execute o instalador e siga as instruções na tela.
+- `Server Mode`: esta maquina executa backups e pode aceitar clientes remotos
+- `Client Mode`: esta maquina conecta a um servidor remoto existente
 
-### 3. Configuração Inicial
+Guias relacionados:
 
-1. Execute o aplicativo
-2. Configure as conexões com os bancos de dados
-3. Configure os destinos de backup
-4. Crie agendamentos de backup
-5. (Opcional) Configure notificações por e-mail
+- [Guia de instalacao](docs/install/installation_guide.md)
+- [Requisitos](docs/requirements.md)
+- [Configuracao do PATH](docs/path_setup.md)
 
-## ⚙️ Configuração
+## Configuracao
 
-### Variáveis de Ambiente
+### Ambiente de desenvolvimento
 
-Crie um arquivo `.env` na raiz do aplicativo (ou use `.env.example` como base):
+Para rodar o projeto com `flutter run`, use o `.env` na raiz do repositorio e
+o `.env.example` como base.
+
+Arquivos auxiliares:
+
+- `.env`
+- `.env.example`
+- `.env.server`
+- `.env.client`
+
+Exemplos de variaveis uteis em desenvolvimento:
 
 ```env
-APP_NAME=Backup Database
-APP_VERSION=2.4.1
 SINGLE_INSTANCE_ENABLED=true
 SINGLE_INSTANCE_LOCK_FALLBACK_MODE=fail_safe
-
-# UI scheduler: fail_open inicia scheduler local se consulta ao serviço Windows falhar (padrão)
-# fail_safe não inicia scheduler local nesse caso
 UI_SCHEDULER_FALLBACK_MODE=fail_open
-
-# Override de modo (debug/desenvolvimento): server | client
 DEBUG_APP_MODE=server
-
-# FTP de integração (opcional, para testes com servidor real)
 FTP_IT_HOST=
 FTP_IT_PORT=21
 FTP_IT_USER=
@@ -104,487 +99,164 @@ FTP_IT_PASS=
 FTP_IT_REMOTE_PATH=
 ```
 
-Para cenários de integração server/client em desenvolvimento, também existem os arquivos `.env.server` e `.env.client`.
+### Maquina instalada
 
-Sobre `SINGLE_INSTANCE_LOCK_FALLBACK_MODE`:
-- `fail_safe` (padrão quando a variável está ausente ou definida assim): se o `CreateMutexW` falhar, o app bloqueia a inicialização para preservar instância única.
-- `fail_open`: se o mutex falhar, o app continua sem garantia de exclusividade (apenas para diagnóstico).
+Na instalacao Windows, a configuracao ativa fica em:
 
-### SQL Server
+```text
+C:\ProgramData\BackupDatabase\config\.env
+```
 
-1. Acesse **Configurações > SQL Server**
-2. Clique em **Nova Configuração**
-3. Preencha:
-   - Nome da configuração
-   - Servidor
-   - Porta (padrão: 1433)
-   - Nome do banco
-   - Usuário e senha
-4. Teste a conexão
-5. Salve
+Esse arquivo tem precedencia sobre o `.env` empacotado no aplicativo.
 
-### Sybase SQL Anywhere
+Para auto update, a variavel principal e:
 
-1. Acesse **Configurações > Sybase**
-2. Clique em **Nova Configuração**
-3. Preencha:
-   - Nome da configuração
-   - Caminho do `dbbackup.exe`
-   - Nome do banco
-   - Parâmetros adicionais
-4. Teste a conexão
-5. Salve
+```env
+AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_database/main/appcast.xml
+```
 
-### Destinos de Backup
+Guias relacionados:
 
-#### Local
+- [Auto update](docs/install/auto_update_setup.md)
+- [Teste do auto update](docs/install/testing_auto_update.md)
+- [Notificacoes por e-mail](docs/email/guia_funcionamento_notificacoes_email_smtp_oauth.md)
 
-1. Acesse **Destinos > Novo Destino**
-2. Tipo: **Local**
-3. Informe o caminho do diretório
-4. Configure retenção (dias)
+## Uso rapido
 
-#### FTP
+Fluxo minimo:
 
-1. Acesse **Destinos > Novo Destino**
-2. Tipo: **FTP**
-3. Preencha:
-   - Servidor
-   - Porta
-   - Usuário e senha
-   - Diretório remoto
-   - SSL/TLS (se necessário)
+1. instalar a aplicacao
+2. verificar dependencias externas
+3. configurar uma conexao de banco
+4. configurar um destino
+5. criar um agendamento
+6. executar um backup manual antes de confiar no agendamento
 
-#### Google Drive
+Para validar o ambiente apos a instalacao, use o atalho `Verificar
+Dependencias` no menu Iniciar ou rode:
 
-1. Acesse **Destinos > Novo Destino**
-2. Tipo: **Google Drive**
-3. Clique em **Autenticar com Google**
-4. Autorize o aplicativo
-5. Escolha a pasta de destino
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Program Files\Backup Database\tools\check_dependencies.ps1"
+```
 
-#### Dropbox
-
-1. Acesse **Destinos > Novo Destino**
-2. Tipo: **Dropbox**
-3. Configure OAuth (Client ID / Client Secret)
-4. Conecte a conta e escolha a pasta de destino
-
-#### Nextcloud
-
-1. Acesse **Destinos > Novo Destino**
-2. Tipo: **Nextcloud**
-3. Informe URL do servidor, usuário e App Password
-4. Configure pasta remota e teste a conexão
-
-### Agendamentos
-
-1. Acesse **Agendamentos > Novo Agendamento**
-2. Preencha:
-   - Nome
-   - Banco de dados (previamente configurado)
-   - Tipo de agendamento (diário, semanal, mensal, intervalo)
-   - Horário/dias
-   - Destinos (um ou mais)
-   - Opções (compressão, retenção, etc.)
-3. Salve
-
-### E-mail (Notificações)
-
-1. Acesse **Configurações > E-mail**
-2. Preencha:
-   - Servidor SMTP
-   - Porta
-   - Usuário e senha
-   - Remetente
-   - Destinatários
-3. Configure quando enviar (sucesso, erro, avisos)
-4. Teste a configuração
-5. Salve
-
-## 🚀 Uso
-
-### Executar Backup Manual
-
-1. Acesse **Agendamentos**
-2. Selecione o agendamento
-3. Clique em **Executar Agora**
-
-Ou via System Tray:
-
-1. Clique com botão direito no ícone na bandeja
-2. Selecione **Executar Backup Agora**
-
-### Visualizar Logs
-
-1. Acesse **Logs**
-2. Use filtros (nível, categoria, data, busca)
-3. Exporte logs (TXT, JSON, CSV)
-
-### Histórico de Backups
-
-1. Acesse **Histórico**
-2. Visualize todos os backups realizados
-3. Filtre por status, banco, data
-4. Exporte relatórios
-
-## 🔧 Linha de Comando
-
-### Executar Backup Específico
+## Linha de comando
 
 ```bash
 backup_database.exe --schedule-id=<schedule_id>
-```
-
-### Iniciar Minimizado
-
-```bash
 backup_database.exe --minimized
-```
-
-### Definir Modo de Execução
-
-```bash
-# modo servidor
 backup_database.exe --mode=server
-
-# modo cliente
 backup_database.exe --mode=client
 ```
 
-## 🪟 Windows Service
+## Windows Service
 
-O Backup Database pode ser instalado como serviço do Windows usando o **NSSM (Non-Sucking Service Manager)**. Isso permite que o aplicativo execute automaticamente em background, mesmo sem usuário logado.
+O produto pode rodar como servico do Windows.
 
-### Pré-requisitos
+Fluxo recomendado:
 
-1. **Instalar o aplicativo** normalmente (via instalador)
-2. **Configurar backups** antes de instalar como serviço:
-   - Configurar conexões com bancos de dados
-   - Configurar destinos de backup
-   - Criar agendamentos de backup
-   - (Opcional) Configurar notificações por e-mail
+1. instale o aplicativo
+2. configure bancos, destinos e agendamentos
+3. use o atalho `Instalar como Servico do Windows` criado pelo instalador
+4. valide os logs em `C:\ProgramData\BackupDatabase\logs\`
 
-### Instalação do NSSM
+Se precisar do fluxo manual, use como referencia os scripts em `installer/`,
+principalmente `installer/install_service.ps1`. Ele configura parametros e
+variaveis que nao aparecem em um `nssm install` minimo.
 
-1. Baixe o NSSM: https://nssm.cc/download
-2. Extraia o arquivo ZIP
-3. Copie `nssm.exe` (versão 64-bit) para uma pasta no PATH ou use o caminho completo
+Observacoes importantes:
 
-### Instalação do Serviço
+- o servico e configurado para `LocalSystem` por padrao
+- nesta rodada, auto update silencioso em modo servico so e suportado para
+  servicos em `LocalSystem`
+- se voce trocar a conta do servico, o produto continua podendo operar, mas o
+  auto update silencioso passa a exigir acao manual
 
-Execute os seguintes comandos no **PowerShell como Administrador**:
+## Estrutura de dados em ProgramData
 
-```bash
-# 1. Instalar o serviço (com --minimized recomendado)
-nssm install BackupDatabaseService "C:\Program Files\Backup Database\backup_database.exe" --minimized
-
-# 2. Configurar diretório de trabalho
-nssm set BackupDatabaseService AppDirectory "C:\Program Files\Backup Database"
-
-# 3. Configurar nome de exibição
-nssm set BackupDatabaseService DisplayName "Backup Database Service"
-
-# 4. Configurar descrição
-nssm set BackupDatabaseService Description "Serviço de backup automático para SQL Server, Sybase, PostgreSQL e Firebird"
-
-# 5. Configurar para iniciar automaticamente
-nssm set BackupDatabaseService Start SERVICE_AUTO_START
-
-# 6. (Opcional) Configurar usuário do serviço
-# Use uma conta de usuário com permissões adequadas para acessar bancos de dados
-nssm set BackupDatabaseService ObjectName ".\UsuarioLocal" "SenhaDoUsuario"
-
-# 7. Iniciar o serviço
-nssm start BackupDatabaseService
-```
-
-**Nota**: Ajuste o caminho `"C:\Program Files\Backup Database"` se você instalou em outro local.
-
-### O que Funciona como Serviço
-
-✅ **Funciona perfeitamente**:
-
-- Execução automática de backups agendados
-- Verificação de agendamentos a cada minuto
-- Envio de notificações por e-mail
-- Geração de logs em `C:\ProgramData\BackupDatabase\logs\`
-- Acesso a bancos de dados SQL Server, Sybase, PostgreSQL e Firebird
-- Upload para FTP, Google Drive, Dropbox e Nextcloud
-
-⚠️ **Limitações**:
-
-- Interface gráfica pode não ser acessível (mas não é necessária)
-- System tray pode não funcionar corretamente
-- Para acessar a interface, execute o aplicativo normalmente (ele detectará o serviço rodando)
-
-### Gerenciamento do Serviço
-
-```bash
-# Verificar status
-nssm status BackupDatabaseService
-
-# Parar o serviço
-nssm stop BackupDatabaseService
-
-# Iniciar o serviço
-nssm start BackupDatabaseService
-
-# Reiniciar o serviço
-nssm restart BackupDatabaseService
-
-# Ver logs do serviço
-nssm get BackupDatabaseService AppStdout
-nssm get BackupDatabaseService AppStderr
-
-# Remover o serviço
-nssm remove BackupDatabaseService confirm
-```
-
-### Verificação
-
-Após instalar o serviço, verifique:
-
-1. **Status do serviço**:
-
-   ```bash
-   nssm status BackupDatabaseService
-   ```
-
-   Deve retornar: `SERVICE_RUNNING`
-
-2. **Logs do aplicativo**:
-   - Verifique os logs em: `C:\ProgramData\BackupDatabase\logs\`
-   - Procure por: `"Serviço de agendamento iniciado"`
-
-3. **Teste um backup**:
-   - Aguarde o próximo horário agendado ou
-   - Execute manualmente via interface gráfica
-
-### Solução de Problemas
-
-**Serviço não inicia**:
-
-- Verifique se o caminho do executável está correto
-- Verifique permissões do usuário do serviço
-- Verifique logs em `C:\ProgramData\BackupDatabase\logs\`
-
-**Backups não executam**:
-
-- Verifique se os agendamentos estão habilitados
-- Verifique se o serviço está rodando: `nssm status BackupDatabaseService`
-- Verifique os logs do aplicativo
-
-**Erro de permissões**:
-
-- Configure o serviço para rodar com uma conta de usuário que tenha acesso aos bancos de dados
-- Use: `nssm set BackupDatabaseService ObjectName ".\Usuario" "Senha"`
-
-### Desinstalação
-
-Para remover o serviço:
-
-```bash
-# Parar o serviço
-nssm stop BackupDatabaseService
-
-# Remover o serviço
-nssm remove BackupDatabaseService confirm
-```
-
-**Importante**: Remover o serviço não desinstala o aplicativo. Use o desinstalador normal para remover o aplicativo completamente.
-
-## 📁 Estrutura de Diretórios
-
-```
+```text
 C:\ProgramData\BackupDatabase\
-├── logs/              # Logs do aplicativo
-├── temp/              # Arquivos temporários
-└── database.db        # Banco de dados local (SQLite)
+  config\
+    .env
+  logs\
+  staging\
+    updates\
+  database.db
 ```
 
-## 🧪 Testes
+## Documentacao
 
-Para executar os testes unitários/localmente:
+- [Indice da pasta docs](docs/README.md)
+- [ADRs](docs/adr/README.md)
+- [Visao geral da arquitetura](docs/onboarding/architecture_overview.md)
+- [Adicionar um novo SGBD](docs/onboarding/adicionar_sgbd.md)
+- [Design system](docs/onboarding/design_system.md)
+
+## Testes
+
+Unitarios:
 
 ```bash
 flutter test test/unit/ --reporter compact
 ```
 
-Para executar testes de integração no ambiente de desenvolvimento:
+Cobertura:
 
 ```bash
-# socket + file transfer
-python test/scripts/run_integration_tests.py
+flutter test --coverage
+python scripts/coverage.py
+python scripts/coverage.py --fail-under 70
+```
 
-# FTP (modo local e, se configurado, servidor real)
+Integracao local:
+
+```bash
+python test/scripts/run_integration_tests.py
 python test/scripts/run_ftp_integration_tests.py
 ```
 
 No GitHub Actions:
 
-- O workflow `Test` executa análise estática + testes unitários.
-- Cobertura filtrada (`coverage/lcov.filtered.info`) é publicada como artefacto e enviada ao [Codecov](https://codecov.io/gh/cesar-carlos/backup_database) quando o secret `CODECOV_TOKEN` está configurado no repositório.
-- Testes de integração rodam separadamente no workflow manual `Integration Tests (Self-Hosted)`.
+- `Test` executa analise estatica e testes unitarios
+- `Integration Tests (Self-Hosted)` cobre cenarios de integracao manual/workflow
 
-Cobertura:
-
-```bash
-flutter test --coverage
-```
-
-Com script padronizado (inclui filtro de arquivos gerados e threshold opcional):
-
-```bash
-# cobertura Flutter (padrão)
-python scripts/coverage.py
-
-# cobertura Flutter com mínimo de 70%
-python scripts/coverage.py --fail-under 70
-
-# cobertura Flutter só para um arquivo/pasta de teste
-python scripts/coverage.py --test-targets "test\unit\application\services\scheduler_service_test.dart,test\unit\infrastructure\external\scheduler\schedule_calculator_test.dart"
-
-# cobertura Dart usando package:coverage (modo Dart puro)
-python scripts/coverage.py --dart-mode --fail-under 70
-```
-
-Benchmark de linhas por SGBD (snapshot de `lib/`, para descrição de PR):
-
-```bash
-dart run tools/sgbd_loc_report.dart
-dart run tools/sgbd_loc_report.dart --markdown
-```
-
-## 🏗️ Build
-
-Para gerar o executável Windows:
+## Build
 
 ```bash
 flutter build windows --release
+python installer/build_installer.py
 ```
 
-O executável estará em: `build/windows/x64/runner/Release/backup_database.exe`
+Artefatos principais:
 
-## 📝 Logs
+- `build/windows/x64/runner/Release/backup_database.exe`
+- `installer/dist/BackupDatabase-Setup-<versao>.exe`
+- `installer/dist/BackupDatabase-Setup-<versao>.exe.sha256`
 
-Logs são armazenados em:
+Para publicar uma release:
 
-- **Windows**: `C:\ProgramData\BackupDatabase\logs\`
-- **Retenção**: 90 dias (configurável)
-- **Níveis**: DEBUG, INFO, WARNING, ERROR
-- **Categorias**: EXECUTION, SYSTEM, DATABASE, NETWORK
+- [Guia de release](docs/install/release_guide.md)
 
-## 🛟 Suporte
+## Arquitetura
 
-Para reportar bugs ou solicitar funcionalidades, abra uma [issue](https://github.com/cesar-carlos/backup_database/issues).
+O projeto segue Clean Architecture com organizacao por camada.
 
-## 📄 Licença
+Camadas principais:
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+- `domain`
+- `application`
+- `infrastructure`
+- `presentation`
+- `core`
 
-## 🏛️ Arquitetura
+Referencias:
 
-O projeto segue **Clean Architecture** com **Domain-Driven Design (DDD)**:
+- [ADR-004: ports genericos por SGBD](docs/adr/004-generic-hexagonal-ports-sgbds.md)
+- [ADR-005: organizacao layer-first](docs/adr/005-layer-first-code-organization.md)
 
-```
-lib/
-├── domain/              # Domain Layer (regras de negócio puras)
-│   ├── entities/        # Entidades de domínio
-│   ├── value_objects/   # Value Objects (self-validating)
-│   ├── repositories/    # Interfaces de repositórios
-│   ├── services/        # Interfaces de serviços de domínio
-│   └── use_cases/       # Use cases (lógica de aplicação)
-│
-├── application/         # Application Layer (orquestração)
-│   ├── services/        # Serviços de aplicação
-│   ├── providers/       # State management (Provider)
-│   └── dto/             # Data Transfer Objects
-│
-├── infrastructure/      # Infrastructure Layer (implementações)
-│   ├── datasources/     # Fontes de dados (Drift, APIs)
-│   ├── repositories/    # Implementações de repositórios
-│   ├── external/        # Serviços externos
-│   └── cache/           # Cache de queries
-│
-├── presentation/        # Presentation Layer (UI)
-│   ├── pages/          # Páginas/telas
-│   ├── widgets/        # Widgets reutilizáveis
-│   └── providers/      # Providers de UI
-│
-└── core/               # Componentes compartilhados
-    ├── constants/      # Constantes da aplicação
-    ├── utils/          # Utilitários
-    ├── health/         # Health checks
-    ├── encryption/     # Criptografia
-    └── di/             # Dependency Injection
-```
+## Suporte
 
-Decisões arquiteturais: [Architecture Decision Records](docs/adr/README.md).
-Onboarding: [visão geral da arquitetura](docs/onboarding/architecture_overview.md),
-[adicionar SGBD](docs/onboarding/adicionar_sgbd.md), [design system](docs/onboarding/design_system.md).
+- [Issues](https://github.com/cesar-carlos/backup_database/issues)
 
-### Princípios Arquiteturais
+## Licenca
 
-- **Dependency Inversion**: Domain Layer independe de outras camadas
-- **Single Responsibility**: Cada classe tem uma única responsabilidade
-- **Interface Segregation**: Interfaces pequenas e focadas
-- **Open/Closed**: Aberto para extensão, fechado para modificação
-
-### Padrões Utilizados
-
-- **Repository Pattern**: Abstração de acesso a dados
-- **Factory Pattern**: Criação de objetos complexos
-- **Strategy Pattern**: Algoritmos de backup intercambiáveis
-- **Observer Pattern**: Reactividade com Provider
-- **Result Pattern**: Tratamento funcional de erros
-
-### Funcionalidades Recentes
-
-- ✅ **Value Objects**: Validações de domínio self-validating
-- ✅ **Query Cache**: Cache de queries com TTL para performance
-- ✅ **Health Checks**: Verificação proativa de saúde do sistema
-- ✅ **Métricas**: Monitoramento de performance de backups
-- ✅ **Alertas Proativos**: Detecção automática de problemas
-
-### Tecnologias Utilizadas
-
-- **Flutter**: Framework UI
-- **Drift**: ORM SQLite
-- **Dio**: HTTP client
-- **Get It**: Dependency injection
-- **Provider**: State management
-- **Go Router**: Navegação
-- **Mailer**: E-mail
-- **FTPConnect**: FTP
-- **Google APIs**: Google Drive
-- **Result Dart**: Error handling
-- **Window Manager**: Gerenciamento de janelas
-- **Tray Manager**: System tray
-- **Cron**: Agendamento
-
-## 👥 Contribuindo
-
-Contribuições são bem-vindas! Por favor:
-
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/MinhaFeature`)
-3. Commit suas mudanças (`git commit -m 'Adiciona MinhaFeature'`)
-4. Push para a branch (`git push origin feature/MinhaFeature`)
-5. Abra um Pull Request
-
-## 📸 Screenshots
-
-(Adicionar screenshots aqui)
-
-## ⚠️ Notas Importantes
-
-- Sempre teste backups em ambiente de teste antes de usar em produção
-- Mantenha backups em múltiplos destinos
-- Verifique regularmente a integridade dos backups
-- Configure notificações para ser alertado sobre falhas
-- Mantenha o aplicativo atualizado
-
----
-
-**Desenvolvido para facilitar backups no Windows**
+Licenca MIT. Veja [LICENSE](LICENSE).

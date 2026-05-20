@@ -144,7 +144,7 @@ if ($serviceExists) {
         "set",
         $ServiceName,
         "Description",
-        (Get-ConfigValue -Config $serviceConfig -Name "Description" -Default "Servico de backup automatico para SQL Server e Sybase")
+        (Get-ConfigValue -Config $serviceConfig -Name "Description" -Default "Servico de backup automatico para SQL Server, Sybase, PostgreSQL e Firebird")
     )
     Set-NssmValue -Arguments @(
         "set",

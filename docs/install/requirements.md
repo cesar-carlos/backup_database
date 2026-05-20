@@ -1,3 +1,6 @@
 # Requisitos do Sistema
 
-Consulte [../requirements.md](../requirements.md) para a documentação completa de requisitos.
+Atalho de navegacao para manter os links do guia de instalacao dentro do
+repositorio.
+
+Consulte `../requirements.md` para a versao completa e atualizada.

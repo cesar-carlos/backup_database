@@ -1,3 +1,6 @@
-# Configuração do PATH
+# Configuracao do PATH
 
-Consulte [../path_setup.md](../path_setup.md) para o guia completo de configuração do PATH.
+Atalho de navegacao para manter os links do guia de instalacao dentro do
+repositorio.
+
+Consulte `../path_setup.md` para o guia operacional completo.

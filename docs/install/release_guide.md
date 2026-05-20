@@ -2,10 +2,10 @@
 
 ## 1. Atualizar a versao
 
-Edite `pubspec.yaml`:
+Edite `pubspec.yaml` com a proxima versao:
 
 ```yaml
-version: 3.1.0
+version: <versao>
 ```
 
 ## 2. Sincronizar instalador e arquivos de ambiente
@@ -32,8 +32,8 @@ python installer\build_installer.py
 Artefatos esperados:
 
 ```text
-installer\dist\BackupDatabase-Setup-3.1.0.exe
-installer\dist\BackupDatabase-Setup-3.1.0.exe.sha256
+installer\dist\BackupDatabase-Setup-<versao>.exe
+installer\dist\BackupDatabase-Setup-<versao>.exe.sha256
 ```
 
 ## 4. Publicar codigo
@@ -41,10 +41,10 @@ installer\dist\BackupDatabase-Setup-3.1.0.exe.sha256
 Use branch curta e PR. Evite push direto em `main`.
 
 ```powershell
-git checkout -b codex/release-3.1.0
+git checkout -b codex/release-<versao>
 git add pubspec.yaml installer/setup.iss .env .env.example .env.client .env.server docs\install\release_guide.md
-git commit -m "chore: bump version to 3.1.0"
-git push origin codex/release-3.1.0
+git commit -m "chore: bump version to <versao>"
+git push origin codex/release-<versao>
 ```
 
 ## 5. Criar tag
@@ -54,17 +54,17 @@ Depois do merge:
 ```powershell
 git checkout main
 git pull
-git tag v3.1.0
-git push origin v3.1.0
+git tag v<versao>
+git push origin v<versao>
 ```
 
 ## 6. Criar release no GitHub
 
 1. Abra a pagina de releases.
-2. Selecione a tag `v3.1.0`.
+2. Selecione a tag `v<versao>`.
 3. Anexe exatamente um instalador `.exe`.
 4. Anexe tambem o sidecar `.sha256` do mesmo instalador.
-5. Use preferencialmente o nome `BackupDatabase-Setup-3.1.0.exe`.
+5. Use preferencialmente o nome `BackupDatabase-Setup-<versao>.exe`.
 6. Nao marque como draft ou prerelease.
 7. Publique a release.
 
@@ -95,3 +95,4 @@ Se precisar retirar uma release do auto update sem apagar a release do GitHub:
 - A configuracao ativa da maquina instalada fica em `C:\ProgramData\BackupDatabase\config\.env`.
 - Alterar `.env` dentro da pasta do aplicativo nao muda o runtime da maquina instalada.
 - Nesta rodada, auto update silencioso em modo servico so e suportado quando o Windows Service esta em `LocalSystem`.
+- Antes de abrir o PR, confirme a versao real em `pubspec.yaml` e reaproveite esse mesmo valor em branch, tag e nome do instalador.

@@ -1,237 +1,144 @@
-# Instalador - Backup Database
+# Installer
 
-Este diretório contém os arquivos necessários para criar o instalador do Backup Database.
+Esta pasta concentra o empacotamento Windows do Backup Database. O fluxo
+principal hoje e `python installer\build_installer.py`; o restante da pasta
+existe para suportar esse caminho ou a manutencao do `setup.iss`.
 
-## Arquivos
+## Fluxo oficial
 
-- `setup.iss` - Script principal do Inno Setup para criar o instalador
-- `update_version.py` - Sincroniza versão do `pubspec.yaml` com `setup.iss` e `.env`
-- `build_installer.py` - Fluxo automatizado para gerar instalador
-- `encoding_utils.ps1` - Leitura/gravação de texto em UTF-8 sem BOM (reutilizado pelos outros scripts)
-- `merge_env.ps1` - Mescla variáveis de ambiente a partir de `.env.example`
-- `capture_update_context.ps1` - Enriquece o JSON de contexto de auto-update com estado do serviço Windows
-- `restore_update_state.ps1` - Restaura estado após update (UI ou serviço)
-- `check_dependencies.ps1` - Script PowerShell para verificar dependências do sistema
-- `install_service.ps1` - Instala o aplicativo como serviço do Windows (cliente)
-- `uninstall_service.ps1` - Remove o serviço do Windows (cliente)
-- `README.md` - Este arquivo
-
-Os scripts `.ps1` deste diretório que gravam ou leem ficheiros de texto usam **UTF-8 sem BOM** via `encoding_utils.ps1`, para evitar problemas de encoding e BOM em JSON e ficheiros `.env`.
-
-## Pré-requisitos para Criar o Instalador
-
-### 1. Inno Setup
-
-Baixe e instale o **Inno Setup** (versão 6.0 ou superior):
-
-- Download: https://jrsoftware.org/isdl.php
-- Versão recomendada: Inno Setup 6.2.2 ou superior
-
-### 2. Compilação do Projeto
-
-Antes de criar o instalador, você precisa compilar o projeto Flutter:
-
-```bash
-# Compilar para Windows (Release)
-flutter build windows --release
-```
-
-Isso criará os arquivos em: `build\windows\x64\runner\Release\`
-
-### 3. Arquivos Necessários
-
-Certifique-se de que os seguintes arquivos existem:
-
-- `build\windows\x64\runner\Release\backup_database.exe` - Executável principal
-- `build\windows\x64\runner\Release\*` - Todos os arquivos necessários
-- `LICENSE` - Arquivo de licença
-- `.env.example` - Arquivo de exemplo de variáveis de ambiente
-- `assets\image\new\database_512px.png` - Fonte do ícone do aplicativo (launcher)
-- `docs\install\installation_guide.md` - Guia de instalação
-- `docs\requirements.md` - Requisitos do sistema
-- `docs\path_setup.md` - Guia de configuração do PATH
-
-## Como Criar o Instalador
-
-### Passo 1: Sincronizar Versão (Obrigatório)
-
-Antes de compilar o instalador, **sempre** sincronize a versão do `pubspec.yaml` com o `setup.iss`:
+Execute na raiz do projeto:
 
 ```powershell
-# Execute na raiz do projeto
-python installer\update_version.py
-```
-
-Este script:
-
-- Lê a versão do `pubspec.yaml`
-- Atualiza automaticamente o `#define MyAppVersion` no `setup.iss` (versão completa: `1.0.1+2`)
-- Atualiza automaticamente o `APP_VERSION` no `.env` (versão sem build: `1.0.1`)
-- Garante que todas as versões estejam sempre sincronizadas
-
-### Passo 2: Compilar o Instalador
-
-#### Método 1: Via Interface do Inno Setup
-
-1. Abra o **Inno Setup Compiler**
-2. Abra o arquivo `installer\setup.iss`
-3. Clique em **Build > Compile** (ou pressione `Ctrl+F9`)
-4. O instalador será criado em: `installer\dist\BackupDatabase-Setup-{versão}.exe`
-
-#### Método 2: Via Linha de Comando
-
-```bash
-# Navegue até a pasta do Inno Setup
-cd "C:\Program Files (x86)\Inno Setup 6"
-
-# Compile o script
-ISCC.exe "D:\Developer\Flutter\backup_database\installer\setup.iss"
-```
-
-O instalador será criado em: `installer\dist\BackupDatabase-Setup-{versão}.exe`
-
-### Método 3: Script Automatizado (Recomendado)
-
-Use o script `build_installer.py` que faz tudo automaticamente:
-
-```powershell
-# Execute na raiz do projeto
 python installer\build_installer.py
 ```
 
-Este script:
+O script faz o necessario para uma release local:
 
-1. Sincroniza a versão do `pubspec.yaml` com o `setup.iss`
-2. Verifica o build do Flutter (`backup_database.exe`)
-3. Baixa `vc_redist.x64.exe` automaticamente se ausente
-4. Garante `nssm.exe` (win64) em `dependencies\nssm-2.24\win64\`, baixando o zip oficial se necessário
-5. Compila o instalador usando Inno Setup
-6. Gera o sidecar `BackupDatabase-Setup-<versao>.exe.sha256`
-7. Informa onde o instalador foi criado
+1. sincroniza a versao do `pubspec.yaml` com `installer\setup.iss` e `.env`
+2. valida ou recompila `flutter build windows --release`
+3. baixa dependencias locais quando faltarem
+4. compila o instalador com o Inno Setup
+5. gera `installer\dist\BackupDatabase-Setup-<versao>.exe`
+6. gera `installer\dist\BackupDatabase-Setup-<versao>.exe.sha256`
 
-## Estrutura do Instalador
+Use `python installer\update_version.py` sozinho apenas quando precisar
+sincronizar versao sem compilar o instalador.
 
-O instalador criado inclui:
+## Pre-requisitos
 
-- **Aplicativo**: Todos os arquivos necessários do Flutter
-- **Documentação**: Guias de instalação e requisitos
-- **Script de Verificação**: Inclui script PowerShell para verificar dependências manualmente (opcional)
-- **Instalação de Dependências**: Tenta instalar Visual C++ Redistributables automaticamente
-- **Atalhos**: Cria atalhos no menu Iniciar e área de trabalho (opcional)
-- **Inicialização Automática**: Opção para iniciar com o Windows (opcional)
+- Windows com Flutter configurado para `flutter build windows`
+- Inno Setup 6 instalado
+  Download: [jrsoftware.org/isdl.php](https://jrsoftware.org/isdl.php)
+- artefatos do app e docs esperados pelo `setup.iss`
 
-## Personalização
+O `build_installer.py` ja encontra `ISCC.exe` nos caminhos padrao do Inno
+Setup 6. Se o compilador nao estiver instalado, o script falha com instrucao
+objetiva.
 
-### Alterar Versão
+## Arquivos relevantes
 
-**IMPORTANTE**: A versão é sincronizada automaticamente do `pubspec.yaml`.
+- `setup.iss`: definicao do instalador, atalhos, tasks e migracao pos-update
+- `build_installer.py`: pipeline local de build do instalador
+- `update_version.py`: sincroniza versao entre `pubspec.yaml`, `setup.iss` e `.env`
+- `check_dependencies.ps1`: utilitario opcional distribuido com o app para validar CLIs dos bancos suportados
+- `install_service.ps1`: instala o app como Windows Service via NSSM
+- `uninstall_service.ps1`: remove o Windows Service
+- `capture_update_context.ps1`: captura contexto operacional antes do update silencioso
+- `restore_update_state.ps1`: restaura UI ou Windows Service depois do update
+- `merge_env.ps1`: mescla `.env.example` com a configuracao persistida da maquina
+- `encoding_utils.ps1`: helper UTF-8 sem BOM usado pelos scripts PowerShell
+- `TROUBLESHOOTING_SERVICE.md`: diagnostico operacional do modo servico
 
-Para alterar a versão:
+## Padrao de linguagem
 
-1. Edite o `pubspec.yaml` na raiz do projeto:
+Nesta pasta o padrao passa a ser:
 
-   ```yaml
-   version: 1.0.2
-   ```
+- scripts de manutencao local, build e release: Python
+- scripts executados pelo instalador ou pela maquina Windows final: PowerShell
 
-2. Execute o script de sincronização:
+Hoje ja nao existe `.ps1` sobrando para migrar com seguranca. Todos os
+PowerShell restantes pertencem ao runtime operacional do instalador ou da
+maquina instalada:
 
-   ```powershell
-   python installer\update_version.py
-   ```
+- `check_dependencies.ps1`: distribuido em `{app}\tools` para a maquina final
+- `install_service.ps1`: distribuido em `{app}\tools` para instalar o Windows Service
+- `uninstall_service.ps1`: distribuido em `{app}\tools` para remover o Windows Service
+- `capture_update_context.ps1`: executado pelo `setup.iss` durante update silencioso
+- `restore_update_state.ps1`: executado pelo `setup.iss` apos update silencioso
+- `merge_env.ps1`: executado pelo `setup.iss` no pos-install
+- `encoding_utils.ps1`: dependencia compartilhada pelos scripts acima
 
-3. Ou use o script automatizado que faz tudo:
-   ```powershell
-   python installer\build_installer.py
-   ```
+Motivo: a maquina Windows de destino pode nao ter Python instalado, enquanto
+PowerShell faz parte do baseline suportado pelo instalador.
 
-**NÃO edite manualmente** o `#define MyAppVersion` no `setup.iss`, pois será sobrescrito pelo script.
+Se surgir novo utilitario que rode apenas na maquina de desenvolvimento ou CI,
+ele deve nascer em Python, nao em PowerShell.
 
-### Alterar Nome do Aplicativo
+## O que nao deve ser tratado como fonte
 
-Edite `setup.iss` e altere:
+Estes caminhos sao artefatos locais, nao documentacao nem codigo-fonte:
 
-```iss
-#define MyAppName "Backup Database"
+- `installer\dist\`
+- `installer\dependencies\`
+- `installer\__pycache__\`
+
+`build_installer.py` recria dependencias locais quando necessario:
+
+- `installer\dependencies\vc_redist.x64.exe`
+- `installer\dependencies\nssm-2.24\win64\nssm.exe`
+
+Se voce precisar compilar o `setup.iss` manualmente, execute antes o
+`build_installer.py` ou providencie esses arquivos por conta propria.
+
+## Manual fallback
+
+O caminho manual ainda existe para depuracao do `setup.iss`, mas nao e o fluxo
+recomendado:
+
+```powershell
+python installer\update_version.py
+flutter build windows --release
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "D:\Developer\Flutter\backup_database\installer\setup.iss"
 ```
 
-### Alterar Localização de Instalação
+## Conteudo do instalador
 
-Edite `setup.iss` e altere:
+O `setup.iss` empacota:
 
-```iss
-DefaultDirName={autopf}\{#MyAppName}
+- binarios do app Flutter para Windows
+- `.env.example` em `C:\ProgramData\BackupDatabase\config`
+- guias operacionais basicos em `{app}\docs`
+- `check_dependencies.ps1`
+- `nssm.exe` e scripts de servico em `{app}\tools`
+
+O instalador oferece dois modos:
+
+- `Server Mode`
+- `Client Mode`
+
+## Servico Windows
+
+O servico continua baseado em NSSM e inicia o app com:
+
+```text
+--mode=server --minimized --run-as-service
 ```
 
-### Adicionar/Remover Tarefas
+Referencias operacionais:
 
-Edite a seção `[Tasks]` em `setup.iss`:
+- troubleshooting: `installer\TROUBLESHOOTING_SERVICE.md`
+- comportamento do update: `docs\install\auto_update_setup.md`
 
-```iss
-[Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"; Flags: unchecked
-```
+Importante: update silencioso do servico so e restaurado automaticamente
+quando a conta do Windows Service e `LocalSystem`.
 
-## Visual C++ Redistributables
+## Distribuicao
 
-O `build_installer.py` baixa automaticamente o `vc_redist.x64.exe` se não existir em `installer\dependencies\`. O instalador inclui e executa o VC++ Redistributables quando necessário no sistema de destino.
+Antes de publicar uma release:
 
-Se o download automático falhar (ex.: sem internet), baixe manualmente de https://aka.ms/vs/17/release/vc_redist.x64.exe e salve em `installer\dependencies\vc_redist.x64.exe`.
+1. teste o `.exe` em uma VM limpa
+2. valide instalacao, execucao, uninstall e logs
+3. publique o `.exe` e o `.sha256` na release
+4. confirme o workflow `update-appcast`
 
-## NSSM (instalação como serviço Windows)
-
-O `setup.iss` empacota o **NSSM** em `{app}\tools\nssm.exe` para os scripts `install_service.ps1` / `uninstall_service.ps1`.
-
-- O `build_installer.py` baixa o zip oficial [nssm 2.24](https://nssm.cc/release/nssm-2.24.zip) se `installer\dependencies\nssm-2.24\win64\nssm.exe` não existir e extrai só o binário **win64**.
-- Se o download falhar, baixe o zip manualmente, extraia `win64\nssm.exe` e coloque em `installer\dependencies\nssm-2.24\win64\nssm.exe` (caminho exato usado pelo Inno Setup).
-
-Em ambientes Windows 10 **Creators Update** ou mais novos, a página do NSSM recomenda builds mais recentes para um edge case de serviço; o **2.24** permanece o padrão do instalador por ser estável e reproduzível. Para trocar de versão, substitua o `nssm.exe` nessa pasta e ajuste o caminho em `setup.iss` se mudar a árvore de pastas.
-
-## Testando o Instalador
-
-Antes de distribuir:
-
-1. **Teste em uma máquina limpa** (VM recomendada)
-2. **Verifique todas as dependências** após instalação
-3. **Teste a execução** do aplicativo
-4. **Teste a desinstalação**
-5. **Verifique os logs** em `C:\ProgramData\BackupDatabase\logs\`
-
-## Distribuição
-
-Após criar o instalador:
-
-1. **Teste o instalador** em uma máquina limpa
-2. **Verifique o tamanho** do arquivo (deve ser ~50-100 MB)
-3. **Assine digitalmente** (opcional, mas recomendado)
-4. **Faça upload** para a página de releases
-5. **Confirme o workflow `update-appcast`** e o sidecar `.sha256` da release (o `appcast.xml` oficial é reconstruído automaticamente)
-
-## Assinatura Digital (Opcional)
-
-Para assinar o instalador digitalmente:
-
-1. Obtenha um certificado de código (Code Signing Certificate)
-2. Configure no Inno Setup:
-   - **Tools > Configure Sign Tools**
-   - Adicione o caminho para `signtool.exe`
-3. Adicione no `setup.iss`:
-
-```iss
-[Setup]
-SignTool=signtool
-SignedUninstaller=yes
-```
-
-## Suporte
-
-Para problemas ou dúvidas:
-
-1. Consulte a documentação do Inno Setup: https://jrsoftware.org/ishelp/
-2. Verifique os logs de compilação
-3. Teste em uma VM limpa
-
----
-
-**Última atualização**: fluxo de build com NSSM automático (alinhado ao `pubspec` 3.x)
+O guia operacional de release fica em `docs\install\release_guide.md`.
