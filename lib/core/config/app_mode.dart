@@ -34,41 +34,86 @@ String getDatabaseNameForMode(AppMode mode) {
   };
 }
 
-AppMode getAppMode(List<String> args) {
+AppMode? parseAppModeValue(String? raw) {
+  final normalized = raw?.trim().toLowerCase();
+  return switch (normalized) {
+    'server' => AppMode.server,
+    'client' => AppMode.client,
+    'unified' => AppMode.unified,
+    _ => null,
+  };
+}
+
+AppMode resolveAppMode({
+  required List<String> args,
+  required bool isDebugMode,
+  String? debugAppMode,
+  String? appModeEnv,
+  String? installModeContent,
+  String? legacyModeContent,
+}) {
   // 1. Command line arguments
   for (final arg in args) {
     if (arg == '--mode=server') return AppMode.server;
     if (arg == '--mode=client') return AppMode.client;
   }
 
-  // 2. Debug/development only: DEBUG_APP_MODE in .env (ignored in release)
-  if (kDebugMode) {
-    final debugMode = dotenv.env['DEBUG_APP_MODE']?.trim().toLowerCase();
-    if (debugMode == 'server') return AppMode.server;
-    if (debugMode == 'client') return AppMode.client;
+  // 2. Debug/development only: DEBUG_APP_MODE
+  if (isDebugMode) {
+    final debugResolved = parseAppModeValue(debugAppMode);
+    if (debugResolved != null) {
+      return debugResolved;
+    }
   }
 
-  // 3. Environment variable (any build)
-  final modeFromEnv = dotenv.env['APP_MODE']?.toLowerCase();
-  if (modeFromEnv == 'server') return AppMode.server;
-  if (modeFromEnv == 'client') return AppMode.client;
+  // 3. Environment variable
+  final envResolved = parseAppModeValue(appModeEnv);
+  if (envResolved != null) {
+    return envResolved;
+  }
 
   // 4. .install_mode file created by installer
+  final installModeResolved = parseAppModeValue(installModeContent);
+  if (installModeResolved != null) {
+    return installModeResolved;
+  }
+
+  // 5. Legacy config/mode.ini file
+  final modeIni = legacyModeContent;
+  if (modeIni != null) {
+    if (RegExp(
+      r'mode\s*=\s*server',
+      caseSensitive: false,
+    ).hasMatch(modeIni)) {
+      return AppMode.server;
+    }
+    if (RegExp(
+      r'mode\s*=\s*client',
+      caseSensitive: false,
+    ).hasMatch(modeIni)) {
+      return AppMode.client;
+    }
+  }
+
+  // 6. Default to server mode
+  return AppMode.server;
+}
+
+AppMode getAppMode(List<String> args) {
+  String? installModeContent;
   try {
     final exeDir = File(Platform.resolvedExecutable).parent;
     final installModeFile = File(
       '${exeDir.path}${Platform.pathSeparator}.install_mode',
     );
     if (installModeFile.existsSync()) {
-      final content = installModeFile.readAsStringSync().trim().toLowerCase();
-      if (content == 'server') return AppMode.server;
-      if (content == 'client') return AppMode.client;
+      installModeContent = installModeFile.readAsStringSync();
     }
   } on Object catch (_) {
     // ignore; continue to next check
   }
 
-  // 5. Legacy config/mode.ini file
+  String? legacyModeContent;
   try {
     final exeDir = File(Platform.resolvedExecutable).parent;
     final modeFile = File(
@@ -76,24 +121,18 @@ AppMode getAppMode(List<String> args) {
       '${Platform.pathSeparator}mode.ini',
     );
     if (modeFile.existsSync()) {
-      final content = modeFile.readAsStringSync();
-      if (RegExp(
-        r'mode\s*=\s*server',
-        caseSensitive: false,
-      ).hasMatch(content)) {
-        return AppMode.server;
-      }
-      if (RegExp(
-        r'mode\s*=\s*client',
-        caseSensitive: false,
-      ).hasMatch(content)) {
-        return AppMode.client;
-      }
+      legacyModeContent = modeFile.readAsStringSync();
     }
   } on Object catch (_) {
     // ignore; fall back to server
   }
 
-  // 6. Default to server mode
-  return AppMode.server;
+  return resolveAppMode(
+    args: args,
+    isDebugMode: kDebugMode,
+    debugAppMode: dotenv.env['DEBUG_APP_MODE'],
+    appModeEnv: dotenv.env['APP_MODE'],
+    installModeContent: installModeContent,
+    legacyModeContent: legacyModeContent,
+  );
 }

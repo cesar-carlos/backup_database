@@ -12,13 +12,7 @@ enum SingleInstanceLockFallbackMode {
 class SingleInstanceConfig {
   SingleInstanceConfig._();
 
-  /// Whether single instance enforcement is enabled.
-  ///
-  /// Priority:
-  /// 1. Environment variable `SINGLE_INSTANCE_ENABLED` (true/false)
-  /// 2. Default: true (enabled)
-  static bool get isEnabled {
-    final envValue = dotenv.env['SINGLE_INSTANCE_ENABLED'];
+  static bool isEnabledFromEnvValue(String? envValue) {
     if (envValue != null) {
       final normalizedValue = envValue.trim().toLowerCase();
       if (normalizedValue == 'true') {
@@ -27,13 +21,13 @@ class SingleInstanceConfig {
       if (normalizedValue == 'false') {
         return false;
       }
-      return true;
     }
     return true;
   }
 
-  static SingleInstanceLockFallbackMode get lockFallbackMode {
-    final envValue = dotenv.env['SINGLE_INSTANCE_LOCK_FALLBACK_MODE'];
+  static SingleInstanceLockFallbackMode lockFallbackModeFromEnvValue(
+    String? envValue,
+  ) {
     if (envValue != null) {
       final normalizedValue = envValue.trim().toLowerCase();
       if (normalizedValue == 'fail_open') {
@@ -44,6 +38,21 @@ class SingleInstanceConfig {
       }
     }
     return SingleInstanceLockFallbackMode.failSafe;
+  }
+
+  /// Whether single instance enforcement is enabled.
+  ///
+  /// Priority:
+  /// 1. Environment variable `SINGLE_INSTANCE_ENABLED` (true/false)
+  /// 2. Default: true (enabled)
+  static bool get isEnabled {
+    return isEnabledFromEnvValue(dotenv.env['SINGLE_INSTANCE_ENABLED']);
+  }
+
+  static SingleInstanceLockFallbackMode get lockFallbackMode {
+    return lockFallbackModeFromEnvValue(
+      dotenv.env['SINGLE_INSTANCE_LOCK_FALLBACK_MODE'],
+    );
   }
 
   static SingleInstanceLockFallbackMode lockFallbackModeFor({

@@ -3,6 +3,7 @@ import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/general_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/license_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/service_settings_tab.dart';
+import 'package:backup_database/presentation/widgets/settings/system_settings_tab.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -34,6 +35,13 @@ class _SettingsPageState extends State<SettingsPage> {
               appLocaleString(context, 'Geral', 'General'),
             ),
             body: const GeneralSettingsTab(),
+          ),
+          Tab(
+            icon: const Icon(FluentIcons.system),
+            text: Text(
+              appLocaleString(context, 'Sistema', 'System'),
+            ),
+            body: const SystemSettingsTab(),
           ),
           Tab(
             icon: const Icon(FluentIcons.server),

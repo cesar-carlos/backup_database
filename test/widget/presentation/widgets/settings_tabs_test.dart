@@ -1,6 +1,9 @@
 import 'package:backup_database/application/providers/auto_update_provider.dart';
 import 'package:backup_database/application/providers/windows_service_provider.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
+import 'package:backup_database/core/compatibility/feature_availability_service.dart';
+import 'package:backup_database/core/compatibility/feature_availability_snapshot.dart';
+import 'package:backup_database/core/compatibility/feature_disable_reason.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
@@ -11,6 +14,7 @@ import 'package:backup_database/domain/repositories/i_user_preferences_repositor
 import 'package:backup_database/domain/services/i_windows_machine_startup_service.dart';
 import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
+import 'package:backup_database/presentation/pages/settings_page.dart';
 import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:backup_database/presentation/providers/skeleton_loading_preference_provider.dart';
 import 'package:backup_database/presentation/providers/system_settings_provider.dart';
@@ -19,6 +23,7 @@ import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/general_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/machine_storage_settings_section.dart';
 import 'package:backup_database/presentation/widgets/settings/service_settings_tab.dart';
+import 'package:backup_database/presentation/widgets/settings/system_settings_tab.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -219,8 +224,22 @@ class _FakeWindowsServiceEventLogger implements IWindowsServiceEventLogger {
   Future<void> logUninstallSucceeded() async {}
 }
 
-Future<void> _registerSettingsDependencies() async {
-  await registerTestFeatureAvailability();
+Future<void> _registerFeatureAvailability(
+  FeatureAvailabilitySnapshot snapshot,
+) async {
+  if (getIt.isRegistered<FeatureAvailabilityService>()) {
+    await getIt.unregister<FeatureAvailabilityService>();
+  }
+  getIt.registerSingleton<FeatureAvailabilityService>(
+    FeatureAvailabilityService(snapshot),
+  );
+}
+
+Future<void> _registerSettingsDependencies({
+  FeatureAvailabilitySnapshot featureSnapshot =
+      kTestFeatureAvailabilityAllEnabled,
+}) async {
+  await _registerFeatureAvailability(featureSnapshot);
   final prefs = _FakeUserPreferencesRepository();
   getIt.registerSingleton<IUserPreferencesRepository>(prefs);
   getIt.registerSingleton<TempDirectoryService>(StubTempDirectoryService());
@@ -237,13 +256,16 @@ Future<void> _cleanupSettingsDependencies() async {
   if (getIt.isRegistered<IUserPreferencesRepository>()) {
     await getIt.unregister<IUserPreferencesRepository>();
   }
-  await unregisterTestFeatureAvailability();
+  if (getIt.isRegistered<FeatureAvailabilityService>()) {
+    await getIt.unregister<FeatureAvailabilityService>();
+  }
 }
 
 Future<void> _pumpSettingsHarness(
   WidgetTester tester,
-  Widget child,
-) async {
+  Widget child, {
+  bool wrapWithScaffold = true,
+}) async {
   final prefs = getIt<IUserPreferencesRepository>();
   final themeProvider = ThemeProvider(userPreferencesRepository: prefs);
   final densityProvider = AppDensityProvider(userPreferencesRepository: prefs);
@@ -263,6 +285,11 @@ Future<void> _pumpSettingsHarness(
     _FakeWindowsServiceService(),
     _FakeWindowsServiceEventLogger(),
   );
+
+  final home = wrapWithScaffold
+      ? ScaffoldPage(content: SingleChildScrollView(child: child))
+      : child;
+
   await tester.pumpWidget(
     MultiProvider(
       providers: [
@@ -275,9 +302,7 @@ Future<void> _pumpSettingsHarness(
       ],
       child: FluentApp(
         theme: AppTheme.lightFluentTheme,
-        home: ScaffoldPage(
-          content: SingleChildScrollView(child: child),
-        ),
+        home: home,
       ),
     ),
   );
@@ -295,22 +320,101 @@ void main() {
     setAppMode(AppMode.unified);
   });
 
-  testWidgets('GeneralSettingsTab renders section cards', (
+  testWidgets('SettingsPage renders four settings tabs including system', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettingsHarness(
+      tester,
+      const SettingsPage(),
+      wrapWithScaffold: false,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('General'), findsOneWidget);
+    expect(find.text('System'), findsOneWidget);
+    expect(find.text('Windows service'), findsOneWidget);
+    expect(find.text('Licensing'), findsOneWidget);
+  });
+
+  testWidgets('GeneralSettingsTab renders user preference sections', (
     WidgetTester tester,
   ) async {
     await _pumpSettingsHarness(tester, const GeneralSettingsTab());
 
-    expect(find.byType(AppSectionCard), findsAtLeastNWidgets(4));
+    expect(find.byType(AppSectionCard), findsAtLeastNWidgets(2));
     expect(find.byType(MachineStorageSettingsSection), findsOneWidget);
+    expect(find.text('Appearance'), findsOneWidget);
   });
 
-  testWidgets('ServiceSettingsTab renders operational sections', (
-    WidgetTester tester,
-  ) async {
-    await _pumpSettingsHarness(tester, const ServiceSettingsTab());
-    await tester.pump();
+  testWidgets(
+    'SystemSettingsTab starts with technical updater details collapsed',
+    (
+      WidgetTester tester,
+    ) async {
+      await _pumpSettingsHarness(tester, const SystemSettingsTab());
 
-    expect(find.byType(AppSectionCard), findsAtLeastNWidgets(4));
-    expect(find.byType(AppStatusChip), findsWidgets);
-  });
+      expect(find.text('Updater technical details'), findsOneWidget);
+      final expander = tester.widget<Expander>(find.byType(Expander).first);
+      expect(expander.initiallyExpanded, isFalse);
+    },
+  );
+
+  testWidgets(
+    'SystemSettingsTab shows inline compatibility message for disabled tray',
+    (
+      WidgetTester tester,
+    ) async {
+      await _cleanupSettingsDependencies();
+      await _registerSettingsDependencies(
+        featureSnapshot: const FeatureAvailabilitySnapshot(
+          isWindows: true,
+          majorVersion: 10,
+          minorVersion: 0,
+          isServerLikely: false,
+          serverDetectionReliable: true,
+          isInteractiveSessionLikely: false,
+          interactiveDetectionReliable: true,
+          osVersionParseFailed: false,
+          webviewRuntimeAvailable: true,
+          webviewProbeTimedOut: false,
+          autoUpdateEnabled: true,
+          windowManagementEnabled: true,
+          trayEnabled: false,
+          taskSchedulerEnabled: true,
+          windowsServiceManagementEnabled: true,
+          startupAtLogonTaskEnabled: true,
+          externalBrowserOAuthEnabled: true,
+          embeddedWebviewOAuthEnabled: true,
+          trayDisabledReason:
+              FeatureDisableReason.trayRequiresInteractiveSession,
+        ),
+      );
+
+      await _pumpSettingsHarness(tester, const SystemSettingsTab());
+
+      expect(
+        find.text('System tray requires an interactive session (Desktop/RDP).'),
+        findsNWidgets(2),
+      );
+    },
+  );
+
+  testWidgets(
+    'ServiceSettingsTab prioritizes status, actions and collapsed diagnostics',
+    (
+      WidgetTester tester,
+    ) async {
+      await _pumpSettingsHarness(tester, const ServiceSettingsTab());
+      await tester.pump();
+
+      expect(find.text('Service status'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Restart'), findsOneWidget);
+      expect(find.text('View detailed diagnostics'), findsOneWidget);
+      final expanders = tester
+          .widgetList<Expander>(find.byType(Expander))
+          .toList();
+      expect(expanders, isNotEmpty);
+      expect(expanders.last.initiallyExpanded, isFalse);
+    },
+  );
 }

@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/application/services/initial_setup_service.dart';
-import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
@@ -14,15 +13,14 @@ import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
 
 class AppInitializer {
-  static Future<void> initialize() async {
-    await EnvironmentLoader.loadIfNeeded(logPrefix: '[app_init]');
+  static Future<void> initialize({required AppMode appMode}) async {
     await _initializeDefaultCredential();
     // Auth providers e auto-update são independentes — paralelizar reduz
     // latência percebida no boot, especialmente em redes lentas onde o
     // initialize de OAuth providers pode ter round-trip não-trivial.
     await Future.wait([
       _initializeAuthProviders(),
-      _initializeAutoUpdate(),
+      _initializeAutoUpdate(appMode: appMode),
     ]);
   }
 
@@ -74,7 +72,7 @@ class AppInitializer {
     }
   }
 
-  static Future<void> _initializeAutoUpdate() async {
+  static Future<void> _initializeAutoUpdate({required AppMode appMode}) async {
     try {
       final features = service_locator.getIt<FeatureAvailabilityService>();
       if (!features.isAutoUpdateEnabled) {
@@ -88,7 +86,7 @@ class AppInitializer {
       autoUpdateService.installContextProvider = (release) async {
         return AppUpdateInstallContext(
           origin: AppUpdateLaunchOrigin.ui,
-          appMode: currentAppMode,
+          appMode: appMode,
           currentVersion: autoUpdateService.snapshot.currentVersion ?? '0.0.0',
           targetVersion: release.targetVersion,
           relaunchArguments: List<String>.of(Platform.executableArguments),

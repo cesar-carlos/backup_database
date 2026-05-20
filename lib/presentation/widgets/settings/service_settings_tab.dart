@@ -1,19 +1,24 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:backup_database/application/providers/windows_service_provider.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/settings/settings_ui.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ServiceSettingsTab extends StatefulWidget {
   const ServiceSettingsTab({super.key});
@@ -80,26 +85,68 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       return;
     }
     if (copied) {
-      unawaited(
-        FluentInfoBarFeedback.showSuccess(
+      await FluentInfoBarFeedback.showSuccess(
+        context,
+        message: appLocaleString(
           context,
-          message: appLocaleString(
-            context,
-            'Diagnóstico de compatibilidade copiado para a área de transferência.',
-            'Compatibility diagnostics copied to clipboard.',
-          ),
+          'Diagnóstico de compatibilidade copiado para a área de transferência.',
+          'Compatibility diagnostics copied to clipboard.',
         ),
       );
       return;
     }
-    unawaited(
-      MessageModal.showError(
+    await MessageModal.showError(
+      context,
+      message: appLocaleString(
+        context,
+        'Não foi possível copiar o diagnóstico de compatibilidade.',
+        'Could not copy compatibility diagnostics.',
+      ),
+    );
+  }
+
+  Future<void> _copyPath(String path) async {
+    final copied = await _clipboardService.copyToClipboard(path);
+    if (!mounted) {
+      return;
+    }
+    if (copied) {
+      await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
-          'Não foi possível copiar o diagnóstico de compatibilidade.',
-          'Could not copy compatibility diagnostics.',
+          'Caminho copiado para a área de transferência.',
+          'Path copied to the clipboard.',
         ),
+      );
+      return;
+    }
+    await MessageModal.showError(
+      context,
+      message: appLocaleString(
+        context,
+        'Não foi possível copiar o caminho.',
+        'Could not copy the path.',
+      ),
+    );
+  }
+
+  Future<void> _openParentDirectory(String filePath) async {
+    final directoryPath = p.dirname(filePath);
+    final uri = Uri.directory(directoryPath, windows: Platform.isWindows);
+    final opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!mounted || opened) {
+      return;
+    }
+    await FluentInfoBarFeedback.showWarning(
+      context,
+      message: appLocaleString(
+        context,
+        'Não foi possível abrir a pasta.',
+        'Could not open the folder.',
       ),
     );
   }
@@ -159,8 +206,6 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                 ),
                 const SizedBox(height: 24),
               ],
-              _buildCompatibilitySection(context, features),
-              const SizedBox(height: 24),
               _buildStatusSection(context, provider),
               if (provider.error != null) ...[
                 const SizedBox(height: 24),
@@ -172,6 +217,8 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               _buildLocalScheduleTimerSection(context),
               const SizedBox(height: 24),
               _buildInfoSection(context),
+              const SizedBox(height: 24),
+              _buildCompatibilitySection(context, features),
             ],
           ),
         );
@@ -183,6 +230,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     BuildContext context,
     FeatureAvailabilityService features,
   ) {
+    final diagnostics = features.diagnosticSummary();
     return AppSectionCard(
       title: appLocaleString(
         context,
@@ -191,33 +239,37 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       ),
       description: appLocaleString(
         context,
-        'Resumo do ambiente Windows usado para suporte e troubleshooting do serviço.',
-        'Windows environment summary used for support and service troubleshooting.',
+        'Snapshot técnico do ambiente Windows para suporte.',
+        'Technical Windows environment snapshot for support.',
       ),
-      footer: Align(
-        alignment: Alignment.centerLeft,
-        child: AppButton.icon(
-          icon: FluentIcons.copy,
-          label: appLocaleString(
-            context,
-            'Copiar diagnóstico',
-            'Copy diagnostics',
-          ),
-          onPressed: () => unawaited(
-            _copyCompatibilityDiagnostics(features.diagnosticSummary()),
-          ),
-        ),
-      ),
-      child: InfoBar(
-        title: Text(
+      child: Expander(
+        header: Text(
           appLocaleString(
             context,
-            'Snapshot atual',
-            'Current snapshot',
+            'Ver diagnóstico detalhado',
+            'View detailed diagnostics',
           ),
         ),
-        content: SelectableText(features.diagnosticSummary()),
-        isLong: true,
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SettingsTechnicalItem(
+              title: appLocaleString(
+                context,
+                'Snapshot atual',
+                'Current snapshot',
+              ),
+              value: diagnostics,
+              description: appLocaleString(
+                context,
+                'Resumo técnico usado em troubleshooting.',
+                'Technical summary used in troubleshooting.',
+              ),
+              onCopy: () =>
+                  unawaited(_copyCompatibilityDiagnostics(diagnostics)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -230,8 +282,8 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       title: appLocaleString(context, 'Status do serviço', 'Service status'),
       description: appLocaleString(
         context,
-        'Acompanhe o estado do serviço e valide se o processo de background está operacional.',
-        'Track service state and confirm the background process is operational.',
+        'Estado atual do processo em background e da instalação do serviço.',
+        'Current background process state and service installation state.',
       ),
       banner: _shouldShowUacInfoBar(provider)
           ? InfoBar(
@@ -250,27 +302,49 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InfoLabel(
-            label: appLocaleString(context, 'Estado', 'State'),
-            child: AppStatusChip(
-              label: _getStatusText(provider),
-              color: _getStatusColor(provider),
-              icon: provider.isLoading
-                  ? FluentIcons.sync
-                  : provider.isRunning
-                  ? FluentIcons.play
-                  : provider.isInstalled
-                  ? FluentIcons.pause
-                  : FluentIcons.circle_ring,
-            ),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              SettingsFactTile(
+                label: appLocaleString(context, 'Estado', 'State'),
+                value: _getStatusText(provider),
+                caption: appLocaleString(
+                  context,
+                  'Situação observada pelo provedor neste instante.',
+                  'State observed by the provider right now.',
+                ),
+              ),
+              if (provider.status?.serviceName != null)
+                SettingsFactTile(
+                  label: appLocaleString(context, 'Serviço', 'Service'),
+                  value: provider.status!.serviceName!,
+                  caption: appLocaleString(
+                    context,
+                    'Nome registrado no Windows Service Manager.',
+                    'Name registered in the Windows Service Manager.',
+                  ),
+                ),
+            ],
           ),
-          if (provider.status?.serviceName != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              '${appLocaleString(context, 'Nome', 'Name')}: ${provider.status!.serviceName}',
-              style: FluentTheme.of(context).typography.body,
-            ),
-          ],
+          const SizedBox(height: AppSpacing.md),
+          AppStatusChip(
+            label: _getStatusText(provider),
+            tone: provider.isLoading
+                ? AppStatusChipTone.info
+                : provider.isRunning
+                ? AppStatusChipTone.success
+                : provider.isInstalled
+                ? AppStatusChipTone.warning
+                : AppStatusChipTone.neutral,
+            icon: provider.isLoading
+                ? FluentIcons.sync
+                : provider.isRunning
+                ? FluentIcons.play
+                : provider.isInstalled
+                ? FluentIcons.pause
+                : FluentIcons.circle_ring,
+          ),
         ],
       ),
     );
@@ -284,29 +358,14 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       title: appLocaleString(context, 'Falha recente', 'Recent failure'),
       description: appLocaleString(
         context,
-        'O provedor detectou um erro ao consultar ou operar o serviço.',
-        'The provider detected an error while querying or operating the service.',
+        'Último erro retornado ao consultar ou operar o serviço.',
+        'Latest error returned while querying or operating the service.',
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InfoBar(
-            title: Text(appLocaleString(context, 'Erro', 'Error')),
-            content: SelectableText(provider.error!),
-            severity: InfoBarSeverity.error,
-            isLong: true,
-          ),
-          const SizedBox(height: 12),
-          AppButton.icon(
-            icon: FluentIcons.refresh,
-            label: appLocaleString(
-              context,
-              'Atualizar status',
-              'Refresh status',
-            ),
-            onPressed: provider.isLoading ? null : () => provider.checkStatus(),
-          ),
-        ],
+      child: InfoBar(
+        title: Text(appLocaleString(context, 'Erro', 'Error')),
+        content: SelectableText(provider.error!),
+        severity: InfoBarSeverity.error,
+        isLong: true,
       ),
     );
   }
@@ -317,76 +376,101 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     bool serviceActionsEnabled,
   ) {
     final actionsDisabled = !serviceActionsEnabled || provider.isLoading;
+    final primaryAction = _buildPrimaryAction(
+      context,
+      provider,
+      actionsDisabled,
+      serviceActionsEnabled,
+    );
+
     return AppSectionCard(
       title: appLocaleString(context, 'Ações', 'Actions'),
       description: appLocaleString(
         context,
-        'Instale, inicie, pare ou reinspecione o serviço do Windows sem sair da aplicação.',
-        'Install, start, stop or re-check the Windows service without leaving the app.',
+        'Ações operacionais do serviço com prioridade para o fluxo principal.',
+        'Operational service actions with emphasis on the primary flow.',
       ),
       child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
         children: [
-          if (!provider.isInstalled)
-            AppButton.icon(
-              icon: FluentIcons.download,
-              label: appLocaleString(
-                context,
-                'Instalar serviço',
-                'Install service',
-              ),
-              onPressed: actionsDisabled
-                  ? null
-                  : () => _installService(context, provider),
-            ),
-          if (provider.isInstalled) ...[
-            AppButton.icon(
-              icon: FluentIcons.delete,
-              label: appLocaleString(
-                context,
-                'Remover serviço',
-                'Remove service',
-              ),
-              onPressed: actionsDisabled
-                  ? null
-                  : () => _uninstallService(context, provider),
-            ),
-            if (provider.isRunning) ...[
-              AppButton.icon(
-                icon: FluentIcons.stop,
-                label: appLocaleString(context, 'Parar', 'Stop'),
-                onPressed: actionsDisabled
-                    ? null
-                    : () => _stopService(context, provider),
-              ),
-              AppButton.icon(
-                icon: FluentIcons.sync,
-                label: appLocaleString(context, 'Reiniciar', 'Restart'),
-                onPressed: actionsDisabled
-                    ? null
-                    : () => _restartService(context, provider),
-              ),
-            ] else
-              AppButton.icon(
-                icon: FluentIcons.play,
-                label: appLocaleString(context, 'Iniciar', 'Start'),
-                onPressed: actionsDisabled
-                    ? null
-                    : () => _startService(context, provider),
-              ),
-          ],
-          AppButton.icon(
-            icon: FluentIcons.refresh,
-            label: appLocaleString(
-              context,
-              'Atualizar status',
-              'Refresh status',
-            ),
+          primaryAction,
+          Button(
             onPressed: provider.isLoading ? null : () => provider.checkStatus(),
+            child: Text(
+              appLocaleString(context, 'Atualizar status', 'Refresh status'),
+            ),
           ),
+          if (provider.isInstalled && !provider.isRunning)
+            Button(
+              onPressed: actionsDisabled
+                  ? null
+                  : () => unawaited(_uninstallService(context, provider)),
+              child: Text(
+                appLocaleString(context, 'Remover serviço', 'Remove service'),
+              ),
+            ),
+          if (provider.isRunning)
+            Button(
+              onPressed: actionsDisabled
+                  ? null
+                  : () => unawaited(_stopService(context, provider)),
+              child: Text(appLocaleString(context, 'Parar', 'Stop')),
+            ),
+          if (provider.isInstalled && provider.isRunning)
+            Button(
+              onPressed: actionsDisabled
+                  ? null
+                  : () => unawaited(_uninstallService(context, provider)),
+              child: Text(
+                appLocaleString(context, 'Remover serviço', 'Remove service'),
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPrimaryAction(
+    BuildContext context,
+    WindowsServiceProvider provider,
+    bool actionsDisabled,
+    bool serviceActionsEnabled,
+  ) {
+    if (!serviceActionsEnabled) {
+      return FilledButton(
+        onPressed: provider.isLoading ? null : () => provider.checkStatus(),
+        child: Text(
+          appLocaleString(context, 'Atualizar status', 'Refresh status'),
+        ),
+      );
+    }
+
+    if (!provider.isInstalled) {
+      return FilledButton(
+        onPressed: actionsDisabled
+            ? null
+            : () => unawaited(_installService(context, provider)),
+        child: Text(
+          appLocaleString(context, 'Instalar serviço', 'Install service'),
+        ),
+      );
+    }
+
+    if (!provider.isRunning) {
+      return FilledButton(
+        onPressed: actionsDisabled
+            ? null
+            : () => unawaited(_startService(context, provider)),
+        child: Text(appLocaleString(context, 'Iniciar', 'Start')),
+      );
+    }
+
+    return FilledButton(
+      onPressed: actionsDisabled
+          ? null
+          : () => unawaited(_restartService(context, provider)),
+      child: Text(appLocaleString(context, 'Reiniciar', 'Restart')),
     );
   }
 
@@ -399,51 +483,46 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       ),
       description: appLocaleString(
         context,
-        'Controla o timer local que verifica agendamentos vencidos enquanto o servidor está em execução.',
-        'Controls the local timer that polls for due schedules while the server is running.',
+        'Controla o timer local que verifica agendamentos vencidos.',
+        'Controls the local timer that checks for due schedules.',
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InfoLabel(
-            label: appLocaleString(
-              context,
-              'Timer de verificação de agendamentos',
-              'Schedule check timer',
+          if (_isLoadingScheduleTimerPref)
+            const ProgressRing()
+          else
+            SettingsToggleRow(
+              title: appLocaleString(
+                context,
+                'Timer de verificação de agendamentos',
+                'Schedule check timer',
+              ),
+              description: appLocaleString(
+                context,
+                'Quando desativado, apenas execuções manuais e comandos remotos continuam ativos.',
+                'When off, only manual runs and remote commands continue to work.',
+              ),
+              value: _localScheduleTimerEnabled,
+              onChanged: (bool enabled) {
+                unawaited(_setLocalScheduleTimerEnabled(enabled));
+              },
             ),
-            child: _isLoadingScheduleTimerPref
-                ? const ProgressRing()
-                : ToggleSwitch(
-                    checked: _localScheduleTimerEnabled,
-                    onChanged: (bool enabled) {
-                      unawaited(_setLocalScheduleTimerEnabled(enabled));
-                    },
-                  ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            appLocaleString(
-              context,
-              'Quando desativado, o servidor não verifica agendamentos vencidos por timer. Execuções manuais, comandos remotos do cliente e “Executar agora” continuam funcionando.',
-              'When off, the server does not poll for due schedules on a timer. Manual runs, remote client commands, and “Run now” still work.',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          if (!_localScheduleTimerEnabled) ...[
-            const SizedBox(height: 12),
+          if (!_isLoadingScheduleTimerPref && !_localScheduleTimerEnabled) ...[
+            const SizedBox(height: AppSpacing.md),
             InfoBar(
               title: Text(
                 appLocaleString(
                   context,
-                  'Implantação controlada pelo cliente',
-                  'Client-driven deployment',
+                  'Reinício recomendado',
+                  'Restart recommended',
                 ),
               ),
               content: Text(
                 appLocaleString(
                   context,
-                  'Reinicie o serviço do Windows (ou o app em modo servidor) para garantir que o processo em segundo plano aplique a preferência.',
-                  'Restart the Windows service (or the app in server mode) so the background process applies the preference.',
+                  'Reinicie o serviço do Windows ou o app em modo servidor para aplicar a preferência ao processo em background.',
+                  'Restart the Windows service or the app in server mode so the background process applies this preference.',
                 ),
               ),
               isLong: true,
@@ -459,83 +538,74 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       title: appLocaleString(context, 'Informações', 'Information'),
       description: appLocaleString(
         context,
-        'Referências operacionais do modo serviço para instalação e suporte.',
-        'Operational service-mode references for installation and support.',
+        'Referências operacionais do modo serviço em formato compacto.',
+        'Operational service-mode references in a compact layout.',
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildInfoItem(
-            context,
-            appLocaleString(
-              context,
-              'Funciona sem usuário logado',
-              'Works without logged-in user',
-            ),
-            appLocaleString(
-              context,
-              'O serviço executará backups mesmo quando nenhum usuário estiver conectado.',
-              'The service will run backups even when no user is logged in.',
-            ),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              SettingsFactTile(
+                label: appLocaleString(
+                  context,
+                  'Execução',
+                  'Execution',
+                ),
+                value: appLocaleString(
+                  context,
+                  'Sem usuário logado',
+                  'Without logged-in user',
+                ),
+                caption: appLocaleString(
+                  context,
+                  'Backups continuam mesmo sem sessão aberta.',
+                  'Backups keep running without an open session.',
+                ),
+              ),
+              SettingsFactTile(
+                label: appLocaleString(
+                  context,
+                  'Inicialização',
+                  'Startup',
+                ),
+                value: appLocaleString(
+                  context,
+                  'Automática com o Windows',
+                  'Automatic with Windows',
+                ),
+                caption: appLocaleString(
+                  context,
+                  'Quando o serviço está instalado e habilitado.',
+                  'When the service is installed and enabled.',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          _buildInfoItem(
-            context,
-            appLocaleString(
+          const SizedBox(height: AppSpacing.md),
+          SettingsTechnicalItem(
+            title: appLocaleString(context, 'Logs do serviço', 'Service logs'),
+            value: '${AppConstants.windowsServiceLogPath}\\',
+            description: appLocaleString(
               context,
-              'Inicialização automática',
-              'Automatic startup',
+              'Diretório padrão de logs do Windows Service.',
+              'Default Windows Service log directory.',
             ),
-            appLocaleString(
-              context,
-              'O serviço iniciará automaticamente com o Windows.',
-              'The service will start automatically with Windows.',
+            onCopy: () => unawaited(
+              _copyPath('${AppConstants.windowsServiceLogPath}\\'),
             ),
-          ),
-          const SizedBox(height: 8),
-          _buildInfoItem(
-            context,
-            appLocaleString(context, 'Logs', 'Logs'),
-            '${appLocaleString(context, 'Os logs são salvos em', 'Logs are saved at')}: '
-            '${AppConstants.windowsServiceLogPath}\\',
+            onOpen: () => unawaited(
+              _openParentDirectory(
+                '${AppConstants.windowsServiceLogPath}\\app.log',
+              ),
+            ),
+            openTooltip: appLocaleString(context, 'Abrir pasta', 'Open folder'),
           ),
         ],
       ),
     );
-  }
-
-  Widget _buildInfoItem(
-    BuildContext context,
-    String title,
-    String description,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Icon(FluentIcons.info, size: 16),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Text(description, style: const TextStyle(fontSize: 13)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Color _getStatusColor(WindowsServiceProvider provider) {
-    if (provider.isLoading) return Colors.grey;
-    if (provider.isInstalled) {
-      return provider.isRunning ? Colors.green : Colors.orange;
-    }
-    return Colors.grey;
   }
 
   String _getStatusText(WindowsServiceProvider provider) {

@@ -15,6 +15,7 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
+import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:flutter/foundation.dart';
 
 class ServiceModeInitializer {
@@ -63,7 +64,10 @@ class ServiceModeInitializer {
         totalSteps: totalSteps,
         label: 'Detectando modo do aplicativo',
         action: () async {
-          setAppMode(getAppMode(Platform.executableArguments));
+          final config = BootstrapConfigResolver(
+            onWarning: LoggerService.warning,
+          ).resolve(rawArgs: Platform.executableArguments);
+          setAppMode(config.appMode);
         },
         successDetails: () =>
             'app mode=${currentAppMode.name}, '
