@@ -42,28 +42,26 @@ class _NotificationsPageState extends State<NotificationsPage> {
         context,
         message: appLocaleString(
           context,
-          'Este recurso exige licença com notificação por e-mail',
-          'This feature requires a license with e-mail notification',
+          'Este recurso exige licença com notificação por e-mail.',
+          'This feature requires a license with e-mail notification.',
         ),
       );
       return;
     }
 
     final provider = context.read<NotificationProvider>();
-    final initialConfig = initial;
-
     if (!mounted) {
       return;
     }
 
     final result = await NotificationConfigDialog.show(
       context,
-      initialConfig: initialConfig,
+      initialConfig: initial,
       onTestConfiguration: (config) async {
         final smtpTestFailedMessage = appLocaleString(
           context,
-          'Falha ao testar configuração SMTP',
-          'Failed to test SMTP configuration',
+          'Falha ao testar configuração SMTP.',
+          'Failed to test SMTP configuration.',
         );
         final success = await provider.testDraftConfiguration(config);
         if (success) {
@@ -91,30 +89,32 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     final success = await provider.saveConfig(result);
-
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     if (success) {
       await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
-          'Configuração salva com sucesso',
-          'Configuration saved successfully',
+          'Configuração salva com sucesso.',
+          'Configuration saved successfully.',
         ),
       );
-    } else {
-      await MessageModal.showError(
-        context,
-        message:
-            provider.error ??
-            appLocaleString(
-              context,
-              'Erro ao salvar configuração',
-              'Error saving configuration',
-            ),
-      );
+      return;
     }
+
+    await MessageModal.showError(
+      context,
+      message:
+          provider.error ??
+          appLocaleString(
+            context,
+            'Erro ao salvar configuração.',
+            'Error saving configuration.',
+          ),
+    );
   }
 
   Future<void> _createTarget() async {
@@ -125,8 +125,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         context,
         message: appLocaleString(
           context,
-          'Selecione uma configuração SMTP antes de adicionar destinatários',
-          'Select an SMTP configuration before adding recipients',
+          'Selecione uma configuração SMTP antes de adicionar destinatários.',
+          'Select an SMTP configuration before adding recipients.',
         ),
       );
       return;
@@ -153,8 +153,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         context,
         message: appLocaleString(
           context,
-          'Destinatário adicionado com sucesso',
-          'Recipient added successfully',
+          'Destinatário adicionado com sucesso.',
+          'Recipient added successfully.',
         ),
       );
       return;
@@ -166,8 +166,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           provider.error ??
           appLocaleString(
             context,
-            'Erro ao adicionar destinatário',
-            'Error adding recipient',
+            'Erro ao adicionar destinatário.',
+            'Error adding recipient.',
           ),
     );
   }
@@ -201,8 +201,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         context,
         message: appLocaleString(
           context,
-          'Destinatário atualizado com sucesso',
-          'Recipient updated successfully',
+          'Destinatário atualizado com sucesso.',
+          'Recipient updated successfully.',
         ),
       );
       return;
@@ -214,8 +214,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           provider.error ??
           appLocaleString(
             context,
-            'Erro ao atualizar destinatário',
-            'Error updating recipient',
+            'Erro ao atualizar destinatário.',
+            'Error updating recipient.',
           ),
     );
   }
@@ -248,8 +248,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         context,
         message: appLocaleString(
           context,
-          'Destinatário removido com sucesso',
-          'Recipient removed successfully',
+          'Destinatário removido com sucesso.',
+          'Recipient removed successfully.',
         ),
       );
       return;
@@ -261,8 +261,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           provider.error ??
           appLocaleString(
             context,
-            'Erro ao remover destinatário',
-            'Error removing recipient',
+            'Erro ao remover destinatário.',
+            'Error removing recipient.',
           ),
     );
   }
@@ -283,8 +283,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           provider.error ??
           appLocaleString(
             context,
-            'Erro ao atualizar status do destinatário',
-            'Error updating recipient status',
+            'Erro ao atualizar o status do destinatário.',
+            'Error updating recipient status.',
           ),
     );
   }
@@ -309,30 +309,95 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     final provider = context.read<NotificationProvider>();
     final success = await provider.deleteConfigById(config.id);
-
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     if (success) {
       await FluentInfoBarFeedback.showSuccess(
         context,
         message: appLocaleString(
           context,
-          'Configuração removida com sucesso',
-          'Configuration removed successfully',
+          'Configuração removida com sucesso.',
+          'Configuration removed successfully.',
         ),
       );
-    } else {
-      await MessageModal.showError(
-        context,
-        message:
-            provider.error ??
-            appLocaleString(
-              context,
-              'Erro ao remover configuração',
-              'Error removing configuration',
-            ),
-      );
+      return;
     }
+
+    await MessageModal.showError(
+      context,
+      message:
+          provider.error ??
+          appLocaleString(
+            context,
+            'Erro ao remover configuração.',
+            'Error removing configuration.',
+          ),
+    );
+  }
+
+  Future<void> _toggleConfigEnabled(EmailConfig config, bool enabled) async {
+    final provider = context.read<NotificationProvider>();
+    final success = await provider.toggleConfigEnabled(config.id, enabled);
+    if (success || !mounted) {
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message:
+          provider.error ??
+          appLocaleString(
+            context,
+            'Erro ao atualizar o status da configuração.',
+            'Error updating configuration status.',
+          ),
+    );
+  }
+
+  Future<void> _testSelectedConfig() async {
+    final provider = context.read<NotificationProvider>();
+    final selectedConfig = provider.selectedConfig;
+    if (selectedConfig == null) {
+      await FluentInfoBarFeedback.showWarning(
+        context,
+        message: appLocaleString(
+          context,
+          'Selecione uma configuração antes de testar o SMTP.',
+          'Select a configuration before testing SMTP.',
+        ),
+      );
+      return;
+    }
+
+    final success = await provider.testConfiguration(selectedConfig.id);
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      await FluentInfoBarFeedback.showSuccess(
+        context,
+        message: appLocaleString(
+          context,
+          'Teste SMTP concluído com sucesso.',
+          'SMTP test completed successfully.',
+        ),
+      );
+      return;
+    }
+
+    await MessageModal.showError(
+      context,
+      message:
+          provider.error ??
+          appLocaleString(
+            context,
+            'Falha ao testar a configuração SMTP.',
+            'Failed to test the SMTP configuration.',
+          ),
+    );
   }
 
   Future<void> _refresh() async {
@@ -352,9 +417,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           const CancelButton(),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              appLocaleString(context, 'Confirmar', 'Confirm'),
-            ),
+            child: Text(appLocaleString(context, 'Confirmar', 'Confirm')),
           ),
         ],
       ),
@@ -408,14 +471,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   hasEmailNotification: _hasEmailNotificationFeature(
                     licenseProvider,
                   ),
-                  onRefresh: _refresh,
                   onCreateConfig: _openConfigModal,
                   onEditConfig: (config) => _openConfigModal(initial: config),
                   onDeleteConfig: _deleteConfig,
                   onCreateTarget: _createTarget,
                   onEditTarget: _editTarget,
                   onDeleteTarget: _deleteTarget,
+                  onToggleConfigEnabled: _toggleConfigEnabled,
                   onToggleTargetEnabled: _toggleTargetEnabled,
+                  onTestSelectedConfig: _testSelectedConfig,
                 );
               },
             ),
@@ -449,7 +513,11 @@ class _NotificationsCommandBar extends StatelessWidget {
         CommandBarButton(
           icon: const Icon(FluentIcons.add),
           label: Text(
-            appLocaleString(context, 'Nova configuração', 'New configuration'),
+            appLocaleString(
+              context,
+              'Nova configuração',
+              'New configuration',
+            ),
           ),
           onPressed: hasEmailNotification ? onCreateConfig : null,
         ),
@@ -487,10 +555,8 @@ class _LicenseRequirementInfoCard extends StatelessWidget {
           content: Text(
             appLocaleString(
               context,
-              'As notificações por e-mail são um recurso premium. '
-                  'É necessária uma licença válida com permissão para este recurso.',
-              'E-mail notifications are a premium feature. '
-                  'A valid license with permission for this feature is required.',
+              'As notificações por e-mail são um recurso premium. É necessária uma licença válida com permissão para este recurso.',
+              'E-mail notifications are a premium feature. A valid license with permission for this feature is required.',
             ),
           ),
           action: Button(
@@ -511,27 +577,29 @@ class _NotificationsContentSection extends StatelessWidget {
   const _NotificationsContentSection({
     required this.provider,
     required this.hasEmailNotification,
-    required this.onRefresh,
     required this.onCreateConfig,
     required this.onEditConfig,
     required this.onDeleteConfig,
     required this.onCreateTarget,
     required this.onEditTarget,
     required this.onDeleteTarget,
+    required this.onToggleConfigEnabled,
     required this.onToggleTargetEnabled,
+    required this.onTestSelectedConfig,
   });
 
   final NotificationProvider provider;
   final bool hasEmailNotification;
-  final VoidCallback onRefresh;
   final VoidCallback onCreateConfig;
   final ValueChanged<EmailConfig> onEditConfig;
   final ValueChanged<EmailConfig> onDeleteConfig;
   final VoidCallback onCreateTarget;
   final ValueChanged<EmailNotificationTarget> onEditTarget;
   final ValueChanged<EmailNotificationTarget> onDeleteTarget;
+  final void Function(EmailConfig config, bool enabled) onToggleConfigEnabled;
   final void Function(EmailNotificationTarget target, bool enabled)
   onToggleTargetEnabled;
+  final VoidCallback onTestSelectedConfig;
 
   @override
   Widget build(BuildContext context) {
@@ -542,13 +610,13 @@ class _NotificationsContentSection extends StatelessWidget {
           title: Text(
             appLocaleString(
               context,
-              'Erro ao carregar configuração',
-              'Error loading configuration',
+              'Erro ao carregar configurações',
+              'Error loading configurations',
             ),
           ),
           content: Text(provider.error!),
           action: Button(
-            onPressed: onRefresh,
+            onPressed: provider.loadConfigs,
             child: Text(
               appLocaleString(context, 'Tentar novamente', 'Try again'),
             ),
@@ -557,197 +625,72 @@ class _NotificationsContentSection extends StatelessWidget {
       );
     }
 
-    return Column(
-      children: [
-        EmailConfigGrid(
-          configs: provider.configs,
-          selectedConfigId: provider.selectedConfigId,
-          canManage: hasEmailNotification,
-          isLoading: provider.isLoading,
-          updatingConfigIds: provider.updatingConfigIds,
-          onCreate: onCreateConfig,
-          onEdit: onEditConfig,
-          onDelete: onDeleteConfig,
-          onSelect: (config) => unawaited(provider.selectConfig(config.id)),
-          onToggleEnabled: (config, enabled) {
-            unawaited(
-              provider.toggleConfigEnabled(config.id, enabled),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        _EmailTargetsPanel(
-          selectedConfig: provider.selectedConfig,
-          targets: provider.targets,
-          canManage: hasEmailNotification,
-          onCreate: onCreateTarget,
-          onEdit: onEditTarget,
-          onDelete: onDeleteTarget,
-          onToggleEnabled: onToggleTargetEnabled,
-        ),
-      ],
-    );
-  }
-}
-
-class _EmailTargetsPanel extends StatelessWidget {
-  const _EmailTargetsPanel({
-    required this.selectedConfig,
-    required this.targets,
-    required this.canManage,
-    required this.onCreate,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onToggleEnabled,
-  });
-
-  final EmailConfig? selectedConfig;
-  final List<EmailNotificationTarget> targets;
-  final bool canManage;
-  final VoidCallback onCreate;
-  final ValueChanged<EmailNotificationTarget> onEdit;
-  final ValueChanged<EmailNotificationTarget> onDelete;
-  final void Function(EmailNotificationTarget target, bool enabled)
-  onToggleEnabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final yes = appLocaleString(context, 'Sim', 'Yes');
-    final no = appLocaleString(context, 'Não', 'No');
-
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            appLocaleString(
-              context,
-              'Destinatários da configuração selecionada',
-              'Recipients for selected configuration',
-            ),
-            style: FluentTheme.of(context).typography.subtitle?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final content = <Widget>[
+          EmailConfigList(
+            configs: provider.configs,
+            selectedConfigId: provider.selectedConfigId,
+            canManage: hasEmailNotification,
+            isLoading: provider.isLoading,
+            updatingConfigIds: provider.updatingConfigIds,
+            onCreate: onCreateConfig,
+            onEdit: onEditConfig,
+            onDelete: onDeleteConfig,
+            onSelect: (config) => unawaited(provider.selectConfig(config.id)),
+            onToggleEnabled: onToggleConfigEnabled,
           ),
-          const SizedBox(height: 8),
-          Text(
-            appLocaleString(
-              context,
-              'Configure quais destinatários receberão as notificações e '
-                  'quais tipos de evento (sucesso, erro ou aviso) cada um deve receber.',
-              'Configure which recipients receive notifications and which '
-                  'event types (success, error, or warning) each one gets.',
-            ),
+          NotificationDetailPanel(
+            selectedConfig: provider.selectedConfig,
+            configs: provider.configs,
+            targets: provider.targets,
+            testHistory: provider.testHistory,
+            historyError: provider.historyError,
+            isHistoryLoading: provider.isHistoryLoading,
+            historyPeriod: provider.historyPeriod,
+            historyConfigIdFilter: provider.historyConfigIdFilter,
+            canManage: hasEmailNotification,
+            isTestingSelectedConfig:
+                provider.selectedConfig != null &&
+                provider.isConfigUnderTest(provider.selectedConfig!.id),
+            onEditConfig: onEditConfig,
+            onDeleteConfig: onDeleteConfig,
+            onAddTarget: onCreateTarget,
+            onEditTarget: onEditTarget,
+            onDeleteTarget: onDeleteTarget,
+            onToggleConfigEnabled: onToggleConfigEnabled,
+            onToggleTargetEnabled: onToggleTargetEnabled,
+            onTestConfig: onTestSelectedConfig,
+            onHistoryConfigChanged: (value) {
+              unawaited(provider.setHistoryConfigFilter(value));
+            },
+            onHistoryPeriodChanged: (value) {
+              unawaited(provider.setHistoryPeriod(value));
+            },
+            onRefreshHistory: provider.refreshTestHistory,
           ),
-          const SizedBox(height: 16),
-          if (selectedConfig == null)
-            EmptyState(
-              icon: FluentIcons.group,
-              message: appLocaleString(
-                context,
-                'Selecione uma configuração SMTP para gerenciar destinatários',
-                'Select an SMTP configuration to manage recipients',
-              ),
-            )
-          else if (targets.isEmpty)
-            EmptyState(
-              icon: FluentIcons.group,
-              message: appLocaleString(
-                context,
-                'Nenhum destinatário cadastrado para esta configuração',
-                'No recipients registered for this configuration',
-              ),
-              actionLabel: appLocaleString(
-                context,
-                'Novo destinatário',
-                'New recipient',
-              ),
-              onAction: canManage ? onCreate : null,
-            )
-          else
-            AppDataGrid<EmailNotificationTarget>(
-              minWidth: 980,
-              columns: [
-                AppDataGridColumn<EmailNotificationTarget>(
-                  label: appLocaleString(context, 'Destinatário', 'Recipient'),
-                  width: const FlexColumnWidth(2.2),
-                  cellBuilder: (context, row) => Text(row.recipientEmail),
-                ),
-                AppDataGridColumn<EmailNotificationTarget>(
-                  label: appLocaleString(context, 'Sucesso', 'Success'),
-                  width: const FlexColumnWidth(0.8),
-                  cellAlignment: Alignment.center,
-                  headerAlignment: Alignment.center,
-                  cellBuilder: (context, row) => Text(
-                    row.notifyOnSuccess ? yes : no,
-                  ),
-                ),
-                AppDataGridColumn<EmailNotificationTarget>(
-                  label: appLocaleString(context, 'Erro', 'Error'),
-                  width: const FlexColumnWidth(0.8),
-                  cellAlignment: Alignment.center,
-                  headerAlignment: Alignment.center,
-                  cellBuilder: (context, row) => Text(
-                    row.notifyOnError ? yes : no,
-                  ),
-                ),
-                AppDataGridColumn<EmailNotificationTarget>(
-                  label: appLocaleString(context, 'Aviso', 'Warning'),
-                  width: const FlexColumnWidth(0.8),
-                  cellAlignment: Alignment.center,
-                  headerAlignment: Alignment.center,
-                  cellBuilder: (context, row) => Text(
-                    row.notifyOnWarning ? yes : no,
-                  ),
-                ),
-                AppDataGridColumn<EmailNotificationTarget>(
-                  label: appLocaleString(context, 'Status', 'Status'),
-                  cellBuilder: (context, row) => Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ToggleSwitch(
-                        checked: row.enabled,
-                        onChanged: canManage
-                            ? (value) => onToggleEnabled(row, value)
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        row.enabled
-                            ? appLocaleString(context, 'Ativo', 'Active')
-                            : appLocaleString(context, 'Inativo', 'Inactive'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              actions: [
-                AppDataGridAction<EmailNotificationTarget>(
-                  icon: FluentIcons.edit,
-                  tooltip: appLocaleString(context, 'Editar', 'Edit'),
-                  onPressed: onEdit,
-                  isEnabled: (_) => canManage,
-                ),
-                AppDataGridAction<EmailNotificationTarget>(
-                  icon: FluentIcons.delete,
-                  tooltip: appLocaleString(context, 'Excluir', 'Delete'),
-                  onPressed: onDelete,
-                  isEnabled: (_) => canManage,
-                ),
-              ],
-              rows: targets,
-            ),
-          if (selectedConfig != null && targets.isNotEmpty && canManage) ...[
-            const SizedBox(height: 12),
-            Button(
-              onPressed: onCreate,
-              child: Text(
-                appLocaleString(context, 'Novo destinatário', 'New recipient'),
-              ),
-            ),
+        ];
+
+        if (constraints.maxWidth >= 1120) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 360, child: content[0]),
+              const SizedBox(width: 16),
+              Expanded(child: content[1]),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            content[0],
+            const SizedBox(height: 16),
+            content[1],
           ],
-        ],
-      ),
+        );
+      },
     );
   }
 }

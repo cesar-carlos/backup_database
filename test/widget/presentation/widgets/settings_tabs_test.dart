@@ -19,7 +19,6 @@ import 'package:backup_database/presentation/providers/app_density_provider.dart
 import 'package:backup_database/presentation/providers/skeleton_loading_preference_provider.dart';
 import 'package:backup_database/presentation/providers/system_settings_provider.dart';
 import 'package:backup_database/presentation/providers/theme_provider.dart';
-import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/general_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/machine_storage_settings_section.dart';
 import 'package:backup_database/presentation/widgets/settings/service_settings_tab.dart';
@@ -330,34 +329,48 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('General'), findsOneWidget);
+    expect(find.text('Updates'), findsOneWidget);
     expect(find.text('System'), findsOneWidget);
     expect(find.text('Windows service'), findsOneWidget);
     expect(find.text('Licensing'), findsOneWidget);
-  });
 
-  testWidgets('GeneralSettingsTab renders user preference sections', (
-    WidgetTester tester,
-  ) async {
-    await _pumpSettingsHarness(tester, const GeneralSettingsTab());
-
-    expect(find.byType(AppSectionCard), findsAtLeastNWidgets(2));
-    expect(find.byType(MachineStorageSettingsSection), findsOneWidget);
-    expect(find.text('Appearance'), findsOneWidget);
+    final systemLeft = tester.getTopLeft(find.text('System')).dx;
+    final updatesLeft = tester.getTopLeft(find.text('Updates')).dx;
+    expect(systemLeft, lessThan(updatesLeft));
   });
 
   testWidgets(
-    'SystemSettingsTab starts with technical updater details collapsed',
+    'GeneralSettingsTab renders updates first and keeps updater details collapsed',
     (
       WidgetTester tester,
     ) async {
-      await _pumpSettingsHarness(tester, const SystemSettingsTab());
+      await _pumpSettingsHarness(tester, const GeneralSettingsTab());
 
+      expect(find.text('Updates'), findsOneWidget);
       expect(find.text('Updater technical details'), findsOneWidget);
+      expect(find.text('Temporary downloads folder'), findsOneWidget);
+      expect(find.byType(MachineStorageSettingsSection), findsOneWidget);
+
+      final updatesTop = tester.getTopLeft(find.text('Updates')).dy;
+      final downloadsTop = tester
+          .getTopLeft(find.text('Temporary downloads folder'))
+          .dy;
+      expect(updatesTop, lessThan(downloadsTop));
+
       final expander = tester.widget<Expander>(find.byType(Expander).first);
       expect(expander.initiallyExpanded, isFalse);
     },
   );
+
+  testWidgets('SystemSettingsTab renders appearance without updater section', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettingsHarness(tester, const SystemSettingsTab());
+
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Dark theme'), findsOneWidget);
+    expect(find.text('Updater technical details'), findsNothing);
+  });
 
   testWidgets(
     'SystemSettingsTab shows inline compatibility message for disabled tray',

@@ -94,6 +94,7 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.initialTarget != null;
+    final theme = FluentTheme.of(context);
 
     return ContentDialog(
       constraints: const BoxConstraints(
@@ -119,18 +120,39 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
           ),
         ],
       ),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+            Text(
+              appLocaleString(
+                context,
+                'Identificação',
+                'Identification',
+              ),
+              style: theme.typography.subtitle?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              appLocaleString(
+                context,
+                'Defina o e-mail e os tipos de evento que esse contato receberá.',
+                'Define the e-mail address and the event types this contact should receive.',
+              ),
+              style: theme.typography.caption,
+            ),
+            const SizedBox(height: 16),
             AppTextField(
               controller: _recipientController,
               label: appLocaleString(
                 context,
                 'E-mail do destinatário',
-                'Recipient email',
+                'Recipient e-mail',
               ),
               keyboardType: TextInputType.emailAddress,
               hint: appLocaleString(
@@ -142,48 +164,125 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
                 if (value == null || value.trim().isEmpty) {
                   return appLocaleString(
                     context,
-                    'E-mail é obrigatório',
-                    'Email is required',
+                    'E-mail é obrigatório.',
+                    'E-mail is required.',
                   );
                 }
                 if (!value.contains('@')) {
                   return appLocaleString(
                     context,
-                    'E-mail inválido',
-                    'Invalid email',
+                    'E-mail inválido.',
+                    'Invalid e-mail.',
                   );
                 }
                 return null;
               },
             ),
             const SizedBox(height: 20),
-            _TargetStatusSection(
-              enabled: _enabled,
-              notifyOnSuccess: _notifyOnSuccess,
-              notifyOnError: _notifyOnError,
-              notifyOnWarning: _notifyOnWarning,
-              onEnabledChanged: (value) {
-                setState(() {
-                  _enabled = value;
-                });
-              },
-              onNotifyOnSuccessChanged: (value) {
+            Text(
+              appLocaleString(
+                context,
+                'Eventos',
+                'Events',
+              ),
+              style: theme.typography.subtitle?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              appLocaleString(
+                context,
+                'Ative somente os eventos que devem gerar notificações para este destinatário.',
+                'Enable only the events that should notify this recipient.',
+              ),
+              style: theme.typography.caption,
+            ),
+            const SizedBox(height: 16),
+            _TargetToggleField(
+              label: appLocaleString(
+                context,
+                'Receber notificações de sucesso',
+                'Notify on success',
+              ),
+              description: appLocaleString(
+                context,
+                'Usado para confirmar execuções concluídas sem erro.',
+                'Used to confirm executions that finished successfully.',
+              ),
+              value: _notifyOnSuccess,
+              onChanged: (value) {
                 setState(() {
                   _notifyOnSuccess = value;
                 });
               },
-              onNotifyOnErrorChanged: (value) {
+            ),
+            const SizedBox(height: 12),
+            _TargetToggleField(
+              label: appLocaleString(
+                context,
+                'Receber notificações de erro',
+                'Notify on error',
+              ),
+              description: appLocaleString(
+                context,
+                'Priorize para contatos de suporte ou operação.',
+                'Prioritize for support or operations contacts.',
+              ),
+              value: _notifyOnError,
+              onChanged: (value) {
                 setState(() {
                   _notifyOnError = value;
                 });
               },
-              onNotifyOnWarningChanged: (value) {
+            ),
+            const SizedBox(height: 12),
+            _TargetToggleField(
+              label: appLocaleString(
+                context,
+                'Receber notificações de aviso',
+                'Notify on warning',
+              ),
+              description: appLocaleString(
+                context,
+                'Inclui eventos intermediários ou pendências operacionais.',
+                'Includes intermediate events or operational warnings.',
+              ),
+              value: _notifyOnWarning,
+              onChanged: (value) {
                 setState(() {
                   _notifyOnWarning = value;
                 });
               },
             ),
-          ],
+            const SizedBox(height: 20),
+            Text(
+              appLocaleString(context, 'Status', 'Status'),
+              style: theme.typography.subtitle?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _TargetToggleField(
+              label: appLocaleString(
+                context,
+                'Destinatário ativo',
+                'Recipient active',
+              ),
+              description: appLocaleString(
+                context,
+                'Destinatários inativos permanecem cadastrados, mas não recebem notificações.',
+                'Inactive recipients remain registered, but do not receive notifications.',
+              ),
+              value: _enabled,
+              onChanged: (value) {
+                setState(() {
+                  _enabled = value;
+                });
+              },
+            ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -194,106 +293,52 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
   }
 }
 
-class _TargetStatusSection extends StatelessWidget {
-  const _TargetStatusSection({
-    required this.enabled,
-    required this.notifyOnSuccess,
-    required this.notifyOnError,
-    required this.notifyOnWarning,
-    required this.onEnabledChanged,
-    required this.onNotifyOnSuccessChanged,
-    required this.onNotifyOnErrorChanged,
-    required this.onNotifyOnWarningChanged,
-  });
-
-  final bool enabled;
-  final bool notifyOnSuccess;
-  final bool notifyOnError;
-  final bool notifyOnWarning;
-  final ValueChanged<bool> onEnabledChanged;
-  final ValueChanged<bool> onNotifyOnSuccessChanged;
-  final ValueChanged<bool> onNotifyOnErrorChanged;
-  final ValueChanged<bool> onNotifyOnWarningChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          appLocaleString(
-            context,
-            'Defina quais tipos de evento este destinatário receberá. '
-                'Cada destinatário pode ter configurações diferentes de '
-                'notificação.',
-            'Choose which event types this recipient will receive. '
-                'Each recipient can have different notification settings.',
-          ),
-        ),
-        const SizedBox(height: 10),
-        _TargetToggleField(
-          label: appLocaleString(
-            context,
-            'Receber notificação de sucesso',
-            'Notify on success',
-          ),
-          value: notifyOnSuccess,
-          onChanged: onNotifyOnSuccessChanged,
-        ),
-        const SizedBox(height: 10),
-        _TargetToggleField(
-          label: appLocaleString(
-            context,
-            'Receber notificação de erro',
-            'Notify on error',
-          ),
-          value: notifyOnError,
-          onChanged: onNotifyOnErrorChanged,
-        ),
-        const SizedBox(height: 10),
-        _TargetToggleField(
-          label: appLocaleString(
-            context,
-            'Receber notificação de aviso',
-            'Notify on warning',
-          ),
-          value: notifyOnWarning,
-          onChanged: onNotifyOnWarningChanged,
-        ),
-        const SizedBox(height: 10),
-        _TargetToggleField(
-          label: appLocaleString(
-            context,
-            'Destinatário ativo',
-            'Recipient active',
-          ),
-          value: enabled,
-          onChanged: onEnabledChanged,
-        ),
-      ],
-    );
-  }
-}
-
 class _TargetToggleField extends StatelessWidget {
   const _TargetToggleField({
     required this.label,
+    required this.description,
     required this.value,
     required this.onChanged,
   });
 
   final String label;
+  final String description;
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return InfoLabel(
-      label: label,
-      child: ToggleSwitch(
-        checked: value,
-        onChanged: onChanged,
+    final captionStyle = FluentTheme.of(context).typography.caption;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF8A8A8A).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: const Color(0xFF8A8A8A).withValues(alpha: 0.22),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(description, style: captionStyle),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          ToggleSwitch(
+            checked: value,
+            onChanged: onChanged,
+          ),
+        ],
       ),
     );
   }

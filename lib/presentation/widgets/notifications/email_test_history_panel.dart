@@ -43,26 +43,39 @@ class EmailTestHistoryPanel extends StatelessWidget {
     final configNameById = <String, String>{
       for (final config in configs) config.id: config.configName,
     };
+    final theme = FluentTheme.of(context);
 
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Text(
+            appLocaleString(
+              context,
+              'Histórico de testes SMTP',
+              'SMTP test history',
+            ),
+            style: theme.typography.subtitle?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            appLocaleString(
+              context,
+              'Use os filtros para revisar tentativas recentes, falhas e destinatários mais testados.',
+              'Use the filters to inspect recent attempts, failures, and most-tested recipients.',
+            ),
+            style: theme.typography.caption,
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(
-                appLocaleString(
-                  context,
-                  'Histórico de testes SMTP',
-                  'SMTP test history',
-                ),
-                style: FluentTheme.of(context).typography.subtitle?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
               SizedBox(
-                width: 200,
+                width: 220,
                 child: SizedBox(
                   height: 34,
                   child: AppDropdown<String?>(
@@ -101,17 +114,12 @@ class EmailTestHistoryPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
               SizedBox(
-                width: 170,
+                width: 180,
                 child: SizedBox(
                   height: 34,
                   child: AppDropdown<NotificationHistoryPeriod>(
-                    label: appLocaleString(
-                      context,
-                      'Período',
-                      'Period',
-                    ),
+                    label: appLocaleString(context, 'Período', 'Period'),
                     compact: true,
                     value: period,
                     items: [
@@ -171,7 +179,6 @@ class EmailTestHistoryPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
               SizedBox(
                 height: 32,
                 child: Button(
@@ -181,9 +188,7 @@ class EmailTestHistoryPanel extends StatelessWidget {
                     children: [
                       const Icon(FluentIcons.refresh, size: 16),
                       const SizedBox(width: 6),
-                      Text(
-                        appLocaleString(context, 'Atualizar', 'Refresh'),
-                      ),
+                      Text(appLocaleString(context, 'Atualizar', 'Refresh')),
                     ],
                   ),
                 ),
@@ -213,8 +218,8 @@ class EmailTestHistoryPanel extends StatelessWidget {
               icon: FluentIcons.history,
               message: appLocaleString(
                 context,
-                'Nenhum teste SMTP encontrado para o filtro atual',
-                'No SMTP tests found for the current filter',
+                'Nenhum teste SMTP encontrado para o filtro atual.',
+                'No SMTP tests found for the current filter.',
               ),
             )
           else
@@ -253,7 +258,7 @@ class EmailTestHistoryPanel extends StatelessWidget {
                   cellBuilder: (context, row) => Text(row.recipientEmail),
                 ),
                 AppDataGridColumn<EmailTestAudit>(
-                  label: 'Status',
+                  label: appLocaleString(context, 'Status', 'Status'),
                   width: const FlexColumnWidth(0.9),
                   cellBuilder: (context, row) =>
                       _StatusBadge(success: row.isSuccess),
@@ -338,13 +343,10 @@ class _StatusBadge extends StatelessWidget {
         success
             ? appLocaleString(context, 'Sucesso', 'Success')
             : appLocaleString(context, 'Falha', 'Failure'),
-        style:
-            FluentTheme.of(
-              context,
-            ).typography.caption?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
+        style: FluentTheme.of(context).typography.caption?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

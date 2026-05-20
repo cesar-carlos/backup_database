@@ -1,23 +1,21 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:backup_database/application/providers/auto_update_provider.dart';
-import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
-import 'package:backup_database/core/utils/clipboard_service.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
+import 'package:backup_database/presentation/boot/windows_native_chrome_bootstrap.dart';
 import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/settings_ui.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class SystemSettingsTab extends StatefulWidget {
   const SystemSettingsTab({super.key});
@@ -29,13 +27,28 @@ class SystemSettingsTab extends StatefulWidget {
 class _SystemSettingsTabState extends State<SystemSettingsTab> {
   PackageInfo? _packageInfo;
   bool _isLoadingVersion = true;
-  late final ClipboardService _clipboardService;
+  bool _useWindowsMicaBackdrop = true;
 
   @override
   void initState() {
     super.initState();
-    _clipboardService = getIt<ClipboardService>();
     unawaited(_loadPackageInfo());
+    unawaited(_loadWindowsChromePrefs());
+  }
+
+  Future<void> _loadWindowsChromePrefs() async {
+    if (!Platform.isWindows) {
+      return;
+    }
+    try {
+      final repo = getIt<IUserPreferencesRepository>();
+      final value = await repo.getUseWindowsMicaBackdrop();
+      if (mounted) {
+        setState(() => _useWindowsMicaBackdrop = value);
+      }
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao carregar preferencia Mica', e, s);
+    }
   }
 
   Future<void> _loadPackageInfo() async {
@@ -53,246 +66,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           _isLoadingVersion = false;
         });
       }
-    }
-  }
-
-  Future<void> _copyValue(
-    String value, {
-    required String successMessage,
-    required String errorMessage,
-  }) async {
-    final success = await _clipboardService.copyToClipboard(value);
-    if (!mounted) {
-      return;
-    }
-    if (success) {
-      await FluentInfoBarFeedback.showSuccess(
-        context,
-        message: successMessage,
-      );
-      return;
-    }
-    await MessageModal.showError(context, message: errorMessage);
-  }
-
-  Future<void> _openUrl(String value) async {
-    final uri = Uri.tryParse(value);
-    if (uri == null) {
-      await MessageModal.showError(
-        context,
-        message: appLocaleString(
-          context,
-          'URL inválida para abertura externa.',
-          'Invalid URL for external launch.',
-        ),
-      );
-      return;
-    }
-    final opened = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!mounted || opened) {
-      return;
-    }
-    await FluentInfoBarFeedback.showWarning(
-      context,
-      message: appLocaleString(
-        context,
-        'Não foi possível abrir o link.',
-        'Could not open the link.',
-      ),
-    );
-  }
-
-  Future<void> _openParentDirectory(String filePath) async {
-    final directoryPath = p.dirname(filePath);
-    final uri = Uri.directory(directoryPath, windows: Platform.isWindows);
-    final opened = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!mounted || opened) {
-      return;
-    }
-    await FluentInfoBarFeedback.showWarning(
-      context,
-      message: appLocaleString(
-        context,
-        'Não foi possível abrir a pasta.',
-        'Could not open the folder.',
-      ),
-    );
-  }
-
-  String _buildAutoUpdateStatusText(AutoUpdateProvider provider) {
-    switch (provider.status) {
-      case AppUpdateStatus.idle:
-        return appLocaleString(
-          context,
-          'Pronto para verificar novas versões.',
-          'Ready to check for new versions.',
-        );
-      case AppUpdateStatus.checking:
-        return appLocaleString(
-          context,
-          'Verificando feed e comparando versões.',
-          'Checking feed and comparing versions.',
-        );
-      case AppUpdateStatus.updateAvailable:
-        return appLocaleString(
-          context,
-          'Nova versão encontrada para download silencioso.',
-          'New version found for silent download.',
-        );
-      case AppUpdateStatus.downloading:
-        return appLocaleString(
-          context,
-          'Baixando instalador para staging local.',
-          'Downloading installer to local staging.',
-        );
-      case AppUpdateStatus.installing:
-        return appLocaleString(
-          context,
-          'Instalador silencioso em andamento.',
-          'Silent installer is running.',
-        );
-      case AppUpdateStatus.blockedByOtherInstance:
-        return appLocaleString(
-          context,
-          'Outra instância já está processando o auto update.',
-          'Another instance is already processing the auto update.',
-        );
-      case AppUpdateStatus.blockedByActiveBackup:
-        return appLocaleString(
-          context,
-          'Há um backup ativo. Aguarde a conclusão antes de atualizar.',
-          'There is an active backup. Wait for it to finish before updating.',
-        );
-      case AppUpdateStatus.handoffCompleted:
-        return appLocaleString(
-          context,
-          'Handoff concluído para o instalador silencioso.',
-          'Handoff completed to the silent installer.',
-        );
-      case AppUpdateStatus.upToDate:
-        return appLocaleString(
-          context,
-          'A aplicação já está na versão mais recente.',
-          'The application is already up to date.',
-        );
-      case AppUpdateStatus.error:
-        return appLocaleString(
-          context,
-          'A última tentativa falhou. Revise o erro abaixo.',
-          'The last attempt failed. Review the error below.',
-        );
-      case AppUpdateStatus.disabled:
-        return appLocaleString(
-          context,
-          'Atualizações automáticas indisponíveis neste ambiente.',
-          'Automatic updates are unavailable in this environment.',
-        );
-    }
-  }
-
-  String _buildAutoUpdateStageText(AppUpdateStage? stage) {
-    if (stage == null) {
-      return appLocaleString(
-        context,
-        'Sem etapa registrada',
-        'No stage recorded',
-      );
-    }
-
-    switch (stage) {
-      case AppUpdateStage.blockedByOtherInstance:
-        return appLocaleString(
-          context,
-          'Bloqueado por outra instância',
-          'Blocked by another instance',
-        );
-      case AppUpdateStage.blockedByActiveBackup:
-        return appLocaleString(
-          context,
-          'Bloqueado por backup ativo',
-          'Blocked by active backup',
-        );
-      case AppUpdateStage.fetchingFeed:
-        return appLocaleString(context, 'Baixando feed', 'Downloading feed');
-      case AppUpdateStage.evaluatingRelease:
-        return appLocaleString(
-          context,
-          'Avaliando release',
-          'Evaluating release',
-        );
-      case AppUpdateStage.downloadingInstaller:
-        return appLocaleString(
-          context,
-          'Baixando instalador',
-          'Downloading installer',
-        );
-      case AppUpdateStage.validatingInstaller:
-        return appLocaleString(
-          context,
-          'Validando instalador',
-          'Validating installer',
-        );
-      case AppUpdateStage.preparingInstall:
-        return appLocaleString(
-          context,
-          'Preparando instalação',
-          'Preparing installation',
-        );
-      case AppUpdateStage.launchingInstaller:
-        return appLocaleString(
-          context,
-          'Disparando instalador',
-          'Launching installer',
-        );
-      case AppUpdateStage.completed:
-        return appLocaleString(context, 'Ciclo concluído', 'Cycle completed');
-    }
-  }
-
-  String _buildAutoUpdateSourceText(AppUpdateSource? source) {
-    switch (source) {
-      case AppUpdateSource.startup:
-        return appLocaleString(context, 'Startup', 'Startup');
-      case AppUpdateSource.manual:
-        return appLocaleString(context, 'Manual', 'Manual');
-      case AppUpdateSource.periodic:
-        return appLocaleString(context, 'Periódico', 'Periodic');
-      case null:
-        return appLocaleString(context, 'Desconhecida', 'Unknown');
-    }
-  }
-
-  String _formatAutoUpdateDuration(Duration? duration) {
-    if (duration == null) {
-      return appLocaleString(context, 'Não disponível', 'Not available');
-    }
-    return '${duration.inMilliseconds} ms';
-  }
-
-  AppStatusChipTone _statusTone(AutoUpdateProvider provider) {
-    switch (provider.status) {
-      case AppUpdateStatus.updateAvailable:
-      case AppUpdateStatus.upToDate:
-      case AppUpdateStatus.handoffCompleted:
-        return AppStatusChipTone.success;
-      case AppUpdateStatus.checking:
-      case AppUpdateStatus.downloading:
-      case AppUpdateStatus.installing:
-        return AppStatusChipTone.info;
-      case AppUpdateStatus.blockedByActiveBackup:
-      case AppUpdateStatus.blockedByOtherInstance:
-      case AppUpdateStatus.disabled:
-        return AppStatusChipTone.warning;
-      case AppUpdateStatus.error:
-        return AppStatusChipTone.danger;
-      case AppUpdateStatus.idle:
-        return AppStatusChipTone.neutral;
     }
   }
 
@@ -320,7 +93,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
   @override
   Widget build(BuildContext context) {
     final systemSettings = Provider.of<SystemSettingsProvider>(context);
-    final autoUpdateProvider = Provider.of<AutoUpdateProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final features = getIt<FeatureAvailabilityService>();
 
     return SingleChildScrollView(
@@ -328,15 +101,170 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildAppearanceSection(context, themeProvider),
+          const SizedBox(height: 24),
           _buildStartupSection(context, systemSettings, features),
           const SizedBox(height: 24),
           _buildTraySection(context, systemSettings, features),
           const SizedBox(height: 24),
-          _buildUpdatesSection(context, autoUpdateProvider, features),
-          const SizedBox(height: 24),
           _buildAboutSection(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildAppearanceSection(
+    BuildContext context,
+    ThemeProvider themeProvider,
+  ) {
+    return AppSectionCard(
+      title: appLocaleString(context, 'Aparencia', 'Appearance'),
+      description: appLocaleString(
+        context,
+        'Preferencias visuais e de uso da interface.',
+        'Visual and interaction preferences for the interface.',
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SettingsToggleRow(
+            title: appLocaleString(context, 'Tema escuro', 'Dark theme'),
+            description: appLocaleString(
+              context,
+              'Alterna o tema principal da aplicacao.',
+              'Switches the main application theme.',
+            ),
+            value: themeProvider.isDarkMode,
+            onChanged: themeProvider.setDarkMode,
+          ),
+          if (Platform.isWindows) ...[
+            const SizedBox(height: AppSpacing.lg),
+            SettingsToggleRow(
+              title: appLocaleString(
+                context,
+                'Backdrop Mica (Windows 11)',
+                'Mica backdrop (Windows 11)',
+              ),
+              description: appLocaleString(
+                context,
+                'Aplica o efeito de superficie do Windows na janela.',
+                'Applies the Windows surface effect to the window.',
+              ),
+              value: _useWindowsMicaBackdrop,
+              onChanged: (bool enabled) async {
+                setState(() => _useWindowsMicaBackdrop = enabled);
+                await getIt<IUserPreferencesRepository>()
+                    .setUseWindowsMicaBackdrop(enabled);
+                await WindowsNativeChromeBootstrap.setBackdrop(
+                  micaEnabled: enabled,
+                  isDark: themeProvider.isDarkMode,
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            SettingsToggleRow(
+              title: appLocaleString(
+                context,
+                'Cor de destaque do sistema',
+                'System accent color',
+              ),
+              description: appLocaleString(
+                context,
+                'Usa a cor de destaque do Windows em vez da cor da marca.',
+                'Uses the Windows accent color instead of the brand color.',
+              ),
+              value: themeProvider.useSystemAccentColor,
+              onChanged: themeProvider.setUseSystemAccentColor,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          _buildDensityRow(context),
+          const SizedBox(height: AppSpacing.lg),
+          Consumer<SkeletonLoadingPreferenceProvider>(
+            builder: (context, skeletonPrefs, _) {
+              return SettingsToggleRow(
+                title: appLocaleString(
+                  context,
+                  'Animacoes de carregamento',
+                  'Loading animations',
+                ),
+                description: appLocaleString(
+                  context,
+                  'Desative para reduzir movimento na tela.',
+                  'Turn off to reduce on-screen motion.',
+                ),
+                value: skeletonPrefs.shimmerLoadingEffectsEnabled,
+                onChanged: (bool enabled) {
+                  unawaited(
+                    skeletonPrefs.setShimmerLoadingEffectsEnabled(enabled),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDensityRow(BuildContext context) {
+    return Consumer<AppDensityProvider>(
+      builder: (context, densityProvider, _) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              appLocaleString(
+                context,
+                'Densidade das tabelas',
+                'Table density',
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              appLocaleString(
+                context,
+                'Controla o espacamento visual de listas e grades.',
+                'Controls the visual spacing of lists and data grids.',
+              ),
+              style: FluentTheme.of(context).typography.caption,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              width: 220,
+              child: ComboBox<AppDensity>(
+                value: densityProvider.density,
+                items: [
+                  ComboBoxItem(
+                    value: AppDensity.compact,
+                    child: Text(
+                      appLocaleString(context, 'Compacta', 'Compact'),
+                    ),
+                  ),
+                  ComboBoxItem(
+                    value: AppDensity.comfortable,
+                    child: Text(
+                      appLocaleString(context, 'Confortavel', 'Comfortable'),
+                    ),
+                  ),
+                  ComboBoxItem(
+                    value: AppDensity.spacious,
+                    child: Text(
+                      appLocaleString(context, 'Espacosa', 'Spacious'),
+                    ),
+                  ),
+                ],
+                onChanged: (AppDensity? value) {
+                  if (value != null) {
+                    unawaited(densityProvider.setDensity(value));
+                  }
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -350,17 +278,17 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             context,
             reason: features.startupAtLogonTaskDisabledReason,
             fallbackPt:
-                'A tarefa de início no logon não está disponível nesta versão do Windows.',
+                'A tarefa de inicio no logon nao esta disponivel nesta versao do Windows.',
             fallbackEn:
                 'Logon startup task is not available on this Windows version.',
           )
         : null;
 
     return AppSectionCard(
-      title: appLocaleString(context, 'Inicialização', 'Startup'),
+      title: appLocaleString(context, 'Inicializacao', 'Startup'),
       description: appLocaleString(
         context,
-        'Preferências de arranque da aplicação na máquina atual.',
+        'Preferencias de arranque da aplicacao na maquina atual.',
         'Startup preferences for the current machine.',
       ),
       child: Column(
@@ -375,12 +303,12 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             description: currentAppMode == AppMode.server
                 ? appLocaleString(
                     context,
-                    'No modo servidor, o arranque automático real é controlado pela aba Serviço Windows.',
+                    'No modo servidor, o arranque automatico real e controlado pela aba Servico Windows.',
                     'In server mode, real automatic startup is controlled from the Windows Service tab.',
                   )
                 : appLocaleString(
                     context,
-                    'Cria ou remove a tarefa de arranque para esta instalação.',
+                    'Cria ou remove a tarefa de arranque para esta instalacao.',
                     'Creates or removes the startup task for this installation.',
                   ),
             value: systemSettings.startWithWindows,
@@ -398,7 +326,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             ),
             description: appLocaleString(
               context,
-              'Abre a aplicação já minimizada na próxima inicialização.',
+              'Abre a aplicacao ja minimizada na proxima inicializacao.',
               'Opens the application minimized on the next startup.',
             ),
             value: systemSettings.startMinimized,
@@ -419,7 +347,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             context,
             reason: features.trayDisabledReason,
             fallbackPt:
-                'A bandeja do sistema não está disponível nesta versão do Windows.',
+                'A bandeja do sistema nao esta disponivel nesta versao do Windows.',
             fallbackEn: 'System tray is not available on this Windows version.',
           )
         : null;
@@ -442,7 +370,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             ),
             description: appLocaleString(
               context,
-              'Mantém o app em segundo plano ao minimizar a janela.',
+              'Mantem o app em segundo plano ao minimizar a janela.',
               'Keeps the app running in the background when the window is minimized.',
             ),
             value: systemSettings.minimizeToTray,
@@ -460,7 +388,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             ),
             description: appLocaleString(
               context,
-              'Fecha a janela principal, mas mantém o processo na bandeja.',
+              'Fecha a janela principal, mas mantem o processo na bandeja.',
               'Closes the main window while keeping the process in the system tray.',
             ),
             value: systemSettings.closeToTray,
@@ -474,440 +402,70 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     );
   }
 
-  Widget _buildUpdatesSection(
-    BuildContext context,
-    AutoUpdateProvider autoUpdateProvider,
-    FeatureAvailabilityService features,
-  ) {
-    final lastCheckLabel = autoUpdateProvider.lastCheckDate != null
-        ? appLocaleLastUpdateCheckSubtitle(
-            context,
-            autoUpdateProvider.lastCheckDate!,
-          )
-        : appLocaleString(context, 'Nunca verificado', 'Never checked');
-
-    return AppSectionCard(
-      title: appLocaleString(context, 'Atualizações', 'Updates'),
-      description: appLocaleString(
-        context,
-        'Resumo do updater, ações rápidas e diagnósticos técnicos.',
-        'Updater summary, quick actions and technical diagnostics.',
-      ),
-      banner: !features.isAutoUpdateEnabled
-          ? InfoBar(
-              title: Text(
-                appLocaleString(
-                  context,
-                  'Atualizações automáticas indisponíveis',
-                  'Automatic updates unavailable',
-                ),
-              ),
-              content: Text(
-                localizeCompatibilityReason(
-                  context,
-                  reason: features.autoUpdateDisabledReason,
-                  fallbackPt: 'Não suportado nesta versão do Windows.',
-                  fallbackEn: 'Not supported on this Windows version.',
-                ),
-              ),
-              severity: InfoBarSeverity.warning,
-              isLong: true,
-            )
-          : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildUpdateSummarySurface(
-            context,
-            autoUpdateProvider,
-            lastCheckLabel,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              FilledButton(
-                onPressed: autoUpdateProvider.isChecking
-                    ? null
-                    : autoUpdateProvider.checkForUpdates,
-                child: autoUpdateProvider.isChecking
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: ProgressRing(strokeWidth: 2),
-                      )
-                    : Text(
-                        appLocaleString(
-                          context,
-                          'Verificar atualizações',
-                          'Check for updates',
-                        ),
-                      ),
-              ),
-              if (autoUpdateProvider.feedUrl != null)
-                Button(
-                  onPressed: () => unawaited(
-                    _copyValue(
-                      autoUpdateProvider.feedUrl!,
-                      successMessage: appLocaleString(
-                        context,
-                        'Feed copiado para a área de transferência.',
-                        'Feed copied to the clipboard.',
-                      ),
-                      errorMessage: appLocaleString(
-                        context,
-                        'Não foi possível copiar o feed.',
-                        'Could not copy the feed.',
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    appLocaleString(context, 'Copiar feed', 'Copy feed'),
-                  ),
-                ),
-              if (autoUpdateProvider.feedUrl != null)
-                Button(
-                  onPressed: () =>
-                      unawaited(_openUrl(autoUpdateProvider.feedUrl!)),
-                  child: Text(
-                    appLocaleString(context, 'Abrir feed', 'Open feed'),
-                  ),
-                ),
-            ],
-          ),
-          if (autoUpdateProvider.error != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            InfoBar(
-              title: Text(
-                appLocaleString(context, 'Falha recente', 'Recent failure'),
-              ),
-              content: Text(autoUpdateProvider.error!),
-              severity: InfoBarSeverity.error,
-              isLong: true,
-            ),
-          ],
-          if (autoUpdateProvider.updateAvailable) ...[
-            const SizedBox(height: AppSpacing.md),
-            InfoBar(
-              title: Text(
-                appLocaleString(
-                  context,
-                  'Atualização disponível',
-                  'Update available',
-                ),
-              ),
-              content: Text(
-                appLocaleString(
-                  context,
-                  'Uma nova versão está pronta para o ciclo automático.',
-                  'A new version is ready for the automatic cycle.',
-                ),
-              ),
-              severity: InfoBarSeverity.success,
-              isLong: true,
-            ),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Expander(
-            header: Text(
-              appLocaleString(
-                context,
-                'Detalhes técnicos do updater',
-                'Updater technical details',
-              ),
-            ),
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (autoUpdateProvider.feedUrl != null)
-                  SettingsTechnicalItem(
-                    title: appLocaleString(
-                      context,
-                      'Feed configurado',
-                      'Configured feed',
-                    ),
-                    value: autoUpdateProvider.feedUrl!,
-                    description: appLocaleString(
-                      context,
-                      'Origem consultada para novas versões.',
-                      'Source consulted for new versions.',
-                    ),
-                    onCopy: () => unawaited(
-                      _copyValue(
-                        autoUpdateProvider.feedUrl!,
-                        successMessage: appLocaleString(
-                          context,
-                          'Feed copiado para a área de transferência.',
-                          'Feed copied to the clipboard.',
-                        ),
-                        errorMessage: appLocaleString(
-                          context,
-                          'Não foi possível copiar o feed.',
-                          'Could not copy the feed.',
-                        ),
-                      ),
-                    ),
-                    onOpen: () =>
-                        unawaited(_openUrl(autoUpdateProvider.feedUrl!)),
-                    openTooltip: appLocaleString(
-                      context,
-                      'Abrir feed',
-                      'Open feed',
-                    ),
-                  ),
-                if (autoUpdateProvider.feedUrl != null)
-                  const SizedBox(height: AppSpacing.lg),
-                SettingsTechnicalItem(
-                  title: appLocaleString(context, 'Último ciclo', 'Last cycle'),
-                  value: autoUpdateProvider.lastAttemptNumber != null
-                      ? '#${autoUpdateProvider.lastAttemptNumber} • '
-                            '${_buildAutoUpdateSourceText(autoUpdateProvider.lastSource)} • '
-                            '${_buildAutoUpdateStageText(autoUpdateProvider.currentStage)}'
-                      : appLocaleString(
-                          context,
-                          'Nenhuma execução registrada.',
-                          'No execution recorded.',
-                        ),
-                  description: appLocaleString(
-                    context,
-                    'Resumo do último fluxo observado pelo provider.',
-                    'Summary of the latest flow observed by the provider.',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                SettingsTechnicalItem(
-                  title: appLocaleString(
-                    context,
-                    'Telemetria do updater',
-                    'Updater telemetry',
-                  ),
-                  value:
-                      'Ciclo: ${_formatAutoUpdateDuration(autoUpdateProvider.lastCheckDuration)}\n'
-                      'Download: ${_formatAutoUpdateDuration(autoUpdateProvider.lastDownloadDuration)}\n'
-                      'Última falha: ${_buildAutoUpdateStageText(autoUpdateProvider.lastFailureStage)}',
-                  description: appLocaleString(
-                    context,
-                    'Durações e última etapa de falha conhecida.',
-                    'Durations and latest known failure stage.',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                SettingsTechnicalItem(
-                  title: appLocaleString(
-                    context,
-                    'Contexto do updater',
-                    'Updater context',
-                  ),
-                  value: autoUpdateProvider.updateContextPath,
-                  description: appLocaleString(
-                    context,
-                    'Arquivo de suporte com contexto operacional do updater.',
-                    'Support file with updater operational context.',
-                  ),
-                  onCopy: () => unawaited(
-                    _copyValue(
-                      autoUpdateProvider.updateContextPath,
-                      successMessage: appLocaleString(
-                        context,
-                        'Caminho copiado para a área de transferência.',
-                        'Path copied to the clipboard.',
-                      ),
-                      errorMessage: appLocaleString(
-                        context,
-                        'Não foi possível copiar o caminho.',
-                        'Could not copy the path.',
-                      ),
-                    ),
-                  ),
-                  onOpen: () => unawaited(
-                    _openParentDirectory(autoUpdateProvider.updateContextPath),
-                  ),
-                  openTooltip: appLocaleString(
-                    context,
-                    'Abrir pasta',
-                    'Open folder',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                SettingsTechnicalItem(
-                  title: appLocaleString(
-                    context,
-                    'Histórico operacional',
-                    'Operational history',
-                  ),
-                  value: autoUpdateProvider.diagnosticsPath,
-                  description: appLocaleString(
-                    context,
-                    'Histórico persistido de tentativas e diagnósticos.',
-                    'Persisted history of attempts and diagnostics.',
-                  ),
-                  onCopy: () => unawaited(
-                    _copyValue(
-                      autoUpdateProvider.diagnosticsPath,
-                      successMessage: appLocaleString(
-                        context,
-                        'Caminho copiado para a área de transferência.',
-                        'Path copied to the clipboard.',
-                      ),
-                      errorMessage: appLocaleString(
-                        context,
-                        'Não foi possível copiar o caminho.',
-                        'Could not copy the path.',
-                      ),
-                    ),
-                  ),
-                  onOpen: () => unawaited(
-                    _openParentDirectory(autoUpdateProvider.diagnosticsPath),
-                  ),
-                  openTooltip: appLocaleString(
-                    context,
-                    'Abrir pasta',
-                    'Open folder',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                SettingsTechnicalItem(
-                  title: appLocaleString(
-                    context,
-                    'Lock global do updater',
-                    'Updater global lock',
-                  ),
-                  value: autoUpdateProvider.lockFilePath,
-                  description: appLocaleString(
-                    context,
-                    'Arquivo de coordenação entre instâncias.',
-                    'Coordination file shared between instances.',
-                  ),
-                  onCopy: () => unawaited(
-                    _copyValue(
-                      autoUpdateProvider.lockFilePath,
-                      successMessage: appLocaleString(
-                        context,
-                        'Caminho copiado para a área de transferência.',
-                        'Path copied to the clipboard.',
-                      ),
-                      errorMessage: appLocaleString(
-                        context,
-                        'Não foi possível copiar o caminho.',
-                        'Could not copy the path.',
-                      ),
-                    ),
-                  ),
-                  onOpen: () => unawaited(
-                    _openParentDirectory(autoUpdateProvider.lockFilePath),
-                  ),
-                  openTooltip: appLocaleString(
-                    context,
-                    'Abrir pasta',
-                    'Open folder',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUpdateSummarySurface(
-    BuildContext context,
-    AutoUpdateProvider autoUpdateProvider,
-    String lastCheckLabel,
-  ) {
-    return Container(
-      width: double.infinity,
-      padding: AppSpacing.paddingMd,
-      decoration: BoxDecoration(
-        color: const Color(0xFF8A8A8A).withValues(alpha: 0.08),
-        borderRadius: AppRadius.circularMd,
-        border: Border.all(
-          color: const Color(0xFF8A8A8A).withValues(alpha: 0.22),
+  Widget _buildAboutSection(BuildContext context) {
+    final cards = [
+      SettingsFactTile(
+        label: appLocaleString(context, 'Versao', 'Version'),
+        value: _versionLabel(),
+        expandToFit: true,
+        caption: appLocaleString(
+          context,
+          'Versao instalada nesta maquina.',
+          'Version installed on this machine.',
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              AppStatusChip(
-                label: _buildAutoUpdateStageText(
-                  autoUpdateProvider.currentStage,
-                ),
-                tone: _statusTone(autoUpdateProvider),
-                icon: FluentIcons.update_restore,
-              ),
-              if (autoUpdateProvider.targetVersion != null)
-                AppStatusChip(
-                  label: 'v${autoUpdateProvider.targetVersion}',
-                  tone: AppStatusChipTone.info,
-                ),
-              if (autoUpdateProvider.currentVersion != null)
-                AppStatusChip(
-                  label:
-                      '${appLocaleString(context, 'Atual', 'Current')}: v${autoUpdateProvider.currentVersion}',
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            _buildAutoUpdateStatusText(autoUpdateProvider),
-            style: FluentTheme.of(context).typography.body,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            '${appLocaleString(context, 'Última verificação', 'Last check')}: $lastCheckLabel',
-            style: FluentTheme.of(context).typography.caption,
-          ),
-        ],
+      SettingsFactTile(
+        label: appLocaleString(context, 'Modo atual', 'Current mode'),
+        value: _modeLabel(),
+        expandToFit: true,
+        caption: appLocaleString(
+          context,
+          'Contexto de operacao ativo na inicializacao.',
+          'Operation context active at startup.',
+        ),
       ),
-    );
-  }
+      SettingsFactTile(
+        label: appLocaleString(context, 'Licenca', 'License'),
+        value: 'MIT License',
+        expandToFit: true,
+        caption: appLocaleString(
+          context,
+          'Termo de distribuicao do aplicativo.',
+          'Application distribution terms.',
+        ),
+      ),
+    ];
 
-  Widget _buildAboutSection(BuildContext context) {
     return AppSectionCard(
       title: appLocaleString(context, 'Sobre', 'About'),
       description: appLocaleString(
         context,
-        'Metadados principais da instalação local.',
+        'Metadados principais da instalacao local.',
         'Main metadata for the local installation.',
       ),
-      child: Wrap(
-        spacing: AppSpacing.md,
-        runSpacing: AppSpacing.md,
-        children: [
-          SettingsFactTile(
-            label: appLocaleString(context, 'Versão', 'Version'),
-            value: _versionLabel(),
-            caption: appLocaleString(
-              context,
-              'Versão instalada nesta máquina.',
-              'Version installed on this machine.',
-            ),
-          ),
-          SettingsFactTile(
-            label: appLocaleString(context, 'Modo atual', 'Current mode'),
-            value: _modeLabel(),
-            caption: appLocaleString(
-              context,
-              'Contexto de operação ativo na inicialização.',
-              'Operation context active at startup.',
-            ),
-          ),
-          SettingsFactTile(
-            label: appLocaleString(context, 'Licença', 'License'),
-            value: 'MIT License',
-            caption: appLocaleString(
-              context,
-              'Termo de distribuição do aplicativo.',
-              'Application distribution terms.',
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= 860) {
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: cards[0]),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: cards[1]),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: cards[2]),
+                ],
+              ),
+            );
+          }
+
+          return Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: cards,
+          );
+        },
       ),
     );
   }

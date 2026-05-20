@@ -30,18 +30,18 @@ class _SettingsPageState extends State<SettingsPage> {
         },
         tabs: [
           Tab(
-            icon: const Icon(FluentIcons.settings),
-            text: Text(
-              appLocaleString(context, 'Geral', 'General'),
-            ),
-            body: const GeneralSettingsTab(),
-          ),
-          Tab(
             icon: const Icon(FluentIcons.system),
             text: Text(
               appLocaleString(context, 'Sistema', 'System'),
             ),
             body: const SystemSettingsTab(),
+          ),
+          Tab(
+            icon: const Icon(FluentIcons.settings),
+            text: Text(
+              appLocaleString(context, 'Atualizacoes', 'Updates'),
+            ),
+            body: const GeneralSettingsTab(),
           ),
           Tab(
             icon: const Icon(FluentIcons.server),

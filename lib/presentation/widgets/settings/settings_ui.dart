@@ -1,6 +1,5 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
-import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class SettingsToggleRow extends StatelessWidget {
@@ -11,8 +10,6 @@ class SettingsToggleRow extends StatelessWidget {
     this.description,
     this.onChanged,
     this.disabledReason,
-    this.onLabel,
-    this.offLabel,
   });
 
   final String title;
@@ -20,15 +17,10 @@ class SettingsToggleRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
   final String? disabledReason;
-  final String? onLabel;
-  final String? offLabel;
 
   @override
   Widget build(BuildContext context) {
     final captionStyle = FluentTheme.of(context).typography.caption;
-    final stateLabel = value
-        ? (onLabel ?? appLocaleString(context, 'Ativado', 'On'))
-        : (offLabel ?? appLocaleString(context, 'Desativado', 'Off'));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,21 +53,9 @@ class SettingsToggleRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.md),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                AppStatusChip(
-                  label: stateLabel,
-                  tone: value
-                      ? AppStatusChipTone.success
-                      : AppStatusChipTone.neutral,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                ToggleSwitch(
-                  checked: value,
-                  onChanged: onChanged,
-                ),
-              ],
+            ToggleSwitch(
+              checked: value,
+              onChanged: onChanged,
             ),
           ],
         ),
@@ -174,11 +154,13 @@ class SettingsFactTile extends StatelessWidget {
     required this.value,
     super.key,
     this.caption,
+    this.expandToFit = false,
   });
 
   final String label;
   final String value;
   final String? caption;
+  final bool expandToFit;
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +169,10 @@ class SettingsFactTile extends StatelessWidget {
     final backgroundColor = const Color(0xFF8A8A8A).withValues(alpha: 0.08);
 
     return Container(
-      constraints: const BoxConstraints(minWidth: 180, maxWidth: 280),
+      width: expandToFit ? double.infinity : null,
+      constraints: expandToFit
+          ? const BoxConstraints(minWidth: 180)
+          : const BoxConstraints(minWidth: 180, maxWidth: 280),
       padding: AppSpacing.paddingMd,
       decoration: BoxDecoration(
         color: backgroundColor,
