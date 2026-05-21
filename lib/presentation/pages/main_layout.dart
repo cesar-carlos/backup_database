@@ -9,6 +9,7 @@ import 'package:backup_database/application/providers/server_connection_provider
 import 'package:backup_database/application/providers/server_credential_provider.dart';
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
@@ -18,6 +19,39 @@ import 'package:backup_database/presentation/widgets/navigation/navigation_item.
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
+class _NavigationBrandHeader extends StatelessWidget {
+  const _NavigationBrandHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Backup Database',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [
+            Image.asset(
+              AppImageAssets.database128,
+              width: 32,
+              height: 32,
+              cacheWidth: 64,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Backup Database',
+                style: FluentTheme.of(context).typography.bodyStrong,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class MainLayout extends StatefulWidget {
   const MainLayout({required this.child, super.key});
@@ -248,46 +282,57 @@ class _MainLayoutState extends State<MainLayout> {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-          child: ListView.separated(
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 4),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final isSelected = index == _selectedIndex;
-              final iconColor = isSelected
-                  ? AppPalette.primary
-                  : FluentTheme.of(context).resources.textFillColorSecondary;
-              return DecoratedBox(
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppPalette.primary.withValues(alpha: 0.08)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppPalette.primary.withValues(alpha: 0.18)
-                        : Colors.transparent,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _NavigationBrandHeader(),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 4),
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    final isSelected = index == _selectedIndex;
+                    final iconColor = isSelected
+                        ? AppPalette.primary
+                        : FluentTheme.of(
+                            context,
+                          ).resources.textFillColorSecondary;
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppPalette.primary.withValues(alpha: 0.08)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppPalette.primary.withValues(alpha: 0.18)
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minHeight: AppTargetSize.comfortable + 8,
+                        ),
+                        child: ListTile(
+                          semanticLabel: item.label,
+                          leading: ExcludeSemantics(
+                            child: Icon(item.icon, color: iconColor),
+                          ),
+                          title: Text(
+                            item.label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onPressed: () => _onDestinationSelected(index),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    minHeight: AppTargetSize.comfortable + 8,
-                  ),
-                  child: ListTile(
-                    semanticLabel: item.label,
-                    leading: ExcludeSemantics(
-                      child: Icon(item.icon, color: iconColor),
-                    ),
-                    title: Text(
-                      item.label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onPressed: () => _onDestinationSelected(index),
-                  ),
-                ),
-              );
-            },
+              ),
+            ],
           ),
         ),
       ),

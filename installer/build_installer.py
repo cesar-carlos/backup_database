@@ -19,10 +19,122 @@ VC_REDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
 # Binario oficial 2.24 (win64) — mesmo layout esperado por setup.iss
 NSSM_ZIP_URL = "https://nssm.cc/release/nssm-2.24.zip"
 NSSM_ZIP_MEMBER = "nssm-2.24/win64/nssm.exe"
+TRAY_ICON_CUSTOM_MARKER = ".tray_icon_custom"
 
 
 def step(message: str) -> None:
     print(message)
+
+
+def find_dart_executable() -> str | None:
+    for name in ("dart", "dart.bat"):
+        found = shutil.which(name)
+        if found:
+            return found
+    flutter_exe = find_flutter_executable()
+    if flutter_exe:
+        dart_bat = Path(flutter_exe).resolve().parent / "dart.bat"
+        if dart_bat.is_file():
+            return str(dart_bat)
+    return None
+
+
+def ensure_windows_launcher_icons(project_root: Path) -> tuple[bool, bool]:
+    """Sync windows/runner/resources/app_icon.ico from pubspec flutter_launcher_icons.
+
+    Returns (success, regenerated).
+    """
+    icon_source = project_root / "assets" / "image" / "new" / "database_512px.png"
+    app_icon = project_root / "windows" / "runner" / "resources" / "app_icon.ico"
+    pubspec_path = project_root / "pubspec.yaml"
+
+    if not icon_source.is_file():
+        print(f"AVISO: fonte de icone ausente: {icon_source}")
+        return True, False
+
+    needs_regen = (
+        not app_icon.is_file()
+        or icon_source.stat().st_mtime > app_icon.stat().st_mtime
+        or pubspec_path.stat().st_mtime > app_icon.stat().st_mtime
+    )
+    if not needs_regen:
+        print("OK: app_icon.ico sincronizado com assets/image/new")
+        if app_icon.is_file():
+            _sync_widgetbook_app_icon(project_root, app_icon)
+            _write_app_icon_source_hash(project_root, icon_source)
+        return True, False
+
+    dart_exe = find_dart_executable()
+    if dart_exe is None:
+        print("ERRO: dart nao encontrado para flutter_launcher_icons")
+        return False, False
+
+    print("  Gerando app_icon.ico (dart run flutter_launcher_icons)...")
+    code = run_command([dart_exe, "run", "flutter_launcher_icons"], cwd=project_root)
+    if code != 0:
+        print("ERRO: falha ao gerar icones Windows")
+        return False, False
+
+    if not app_icon.is_file():
+        print(f"ERRO: {app_icon} nao foi gerado")
+        return False, False
+
+    print(f"OK: {app_icon.name} atualizado")
+    _sync_widgetbook_app_icon(project_root, app_icon)
+    _write_app_icon_source_hash(project_root, icon_source)
+    return True, True
+
+
+def _write_app_icon_source_hash(project_root: Path, icon_source: Path) -> None:
+    hash_path = project_root / "windows" / "runner" / "resources" / ".app_icon_source_sha256"
+    digest = hashlib.sha256(icon_source.read_bytes()).hexdigest()
+    hash_path.write_text(f"{digest}\n", encoding="utf-8")
+
+
+def _sync_widgetbook_app_icon(project_root: Path, app_icon: Path) -> None:
+    widgetbook_icon = (
+        project_root / "widgetbook" / "windows" / "runner" / "resources" / "app_icon.ico"
+    )
+    if not widgetbook_icon.parent.is_dir():
+        return
+    shutil.copy2(app_icon, widgetbook_icon)
+    print("OK: icone do Widgetbook sincronizado com app_icon.ico")
+
+
+def ensure_tray_icon(project_root: Path) -> tuple[bool, bool]:
+    """Copy app_icon.ico into assets/image/new/app_tray.ico for the system tray.
+
+    Returns (success, updated).
+    """
+    icon_source = project_root / "assets" / "image" / "new" / "database_512px.png"
+    tray_icon = project_root / "assets" / "image" / "new" / "app_tray.ico"
+    app_icon = project_root / "windows" / "runner" / "resources" / "app_icon.ico"
+    custom_marker = (
+        project_root / "assets" / "image" / "new" / TRAY_ICON_CUSTOM_MARKER
+    )
+
+    if custom_marker.is_file():
+        print(
+            f"OK: app_tray.ico preservado ({TRAY_ICON_CUSTOM_MARKER} presente)",
+        )
+        return True, False
+
+    if not app_icon.is_file():
+        print("AVISO: app_icon.ico ausente; app_tray.ico nao sincronizado")
+        return True, False
+
+    needs_sync = not tray_icon.is_file() or tray_icon.stat().st_mtime < app_icon.stat().st_mtime
+    if icon_source.is_file() and tray_icon.is_file():
+        needs_sync = needs_sync or tray_icon.stat().st_mtime < icon_source.stat().st_mtime
+
+    if not needs_sync:
+        print("OK: app_tray.ico sincronizado com app_icon.ico")
+        return True, False
+
+    tray_icon.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(app_icon, tray_icon)
+    print("OK: app_tray.ico atualizado a partir de app_icon.ico")
+    return True, True
 
 
 def find_flutter_executable() -> str | None:
@@ -232,11 +344,30 @@ def main() -> int:
         print("AVISO: script update_version.py nao encontrado. Pulando sincronizacao.")
     print()
 
-    step("Passo 2: Validando build do Flutter...")
+    step("Passo 2: Sincronizando icones Windows (exe e bandeja)...")
+    icons_ok, icons_regenerated = ensure_windows_launcher_icons(project_root)
+    if not icons_ok:
+        return 1
+    tray_ok, tray_updated = ensure_tray_icon(project_root)
+    if not tray_ok:
+        return 1
+    print()
+
+    step("Passo 3: Validando build do Flutter...")
     current_version = normalize_version(get_exe_product_version(exe_path))
     exe_mtime = exe_path.stat().st_mtime if exe_path.exists() else 0.0
     source_mtime = newest_source_mtime(project_root)
-    build_is_stale = exe_mtime < source_mtime
+    app_icon_path = project_root / "windows" / "runner" / "resources" / "app_icon.ico"
+    app_icon_mtime = app_icon_path.stat().st_mtime if app_icon_path.exists() else 0.0
+    tray_icon_path = project_root / "assets" / "image" / "new" / "app_tray.ico"
+    tray_mtime = tray_icon_path.stat().st_mtime if tray_icon_path.exists() else 0.0
+    build_is_stale = (
+        exe_mtime < source_mtime
+        or icons_regenerated
+        or tray_updated
+        or exe_mtime < app_icon_mtime
+        or exe_mtime < tray_mtime
+    )
 
     if current_version != expected_product_version or build_is_stale:
         if current_version is None:
@@ -285,7 +416,7 @@ def main() -> int:
     print(f"OK: executavel valido ({current_version})")
     print()
 
-    step("Passo 3: Verificando Visual C++ Redistributables...")
+    step("Passo 4: Verificando Visual C++ Redistributables...")
     vc_redist_path = script_root / "dependencies" / "vc_redist.x64.exe"
     if not vc_redist_path.exists():
         vc_redist_path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,12 +433,12 @@ def main() -> int:
         print("OK: vc_redist.x64.exe encontrado")
     print()
 
-    step("Passo 4: Verificando NSSM (servico Windows)...")
+    step("Passo 5: Verificando NSSM (servico Windows)...")
     if not ensure_nssm_exe(script_root):
         return 1
     print()
 
-    step("Passo 5: Localizando Inno Setup Compiler...")
+    step("Passo 6: Localizando Inno Setup Compiler...")
     iscc_path = find_iscc()
     if iscc_path is None:
         print("ERRO: Inno Setup Compiler nao encontrado.")
@@ -316,7 +447,7 @@ def main() -> int:
     print(f"OK: Inno Setup encontrado: {iscc_path}")
     print()
 
-    step("Passo 6: Compilando instalador...")
+    step("Passo 7: Compilando instalador...")
     print("Aguarde, isso pode levar alguns minutos...")
 
     code = run_command([str(iscc_path), str(setup_iss_path.resolve())], cwd=script_root)

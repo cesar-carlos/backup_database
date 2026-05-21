@@ -15,11 +15,12 @@ python installer\build_installer.py
 O script faz o necessario para uma release local:
 
 1. sincroniza a versao do `pubspec.yaml` com `installer\setup.iss` e `.env`
-2. valida ou recompila `flutter build windows --release`
-3. baixa dependencias locais quando faltarem
-4. compila o instalador com o Inno Setup
-5. gera `installer\dist\BackupDatabase-Setup-<versao>.exe`
-6. gera `installer\dist\BackupDatabase-Setup-<versao>.exe.sha256`
+2. sincroniza `app_icon.ico` (`flutter_launcher_icons`) e `assets\image\new\app_tray.ico` (copia do mesmo ICO para a bandeja)
+3. valida ou recompila `flutter build windows --release`
+4. baixa dependencias locais quando faltarem
+5. compila o instalador com o Inno Setup
+6. gera `installer\dist\BackupDatabase-Setup-<versao>.exe`
+7. gera `installer\dist\BackupDatabase-Setup-<versao>.exe.sha256`
 
 Use `python installer\update_version.py` sozinho apenas quando precisar
 sincronizar versao sem compilar o instalador.
@@ -97,9 +98,14 @@ recomendado:
 
 ```powershell
 python installer\update_version.py
+dart run flutter_launcher_icons
 flutter build windows --release
 "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "D:\Developer\Flutter\backup_database\installer\setup.iss"
 ```
+
+Ao trocar `database_512px.png`, o passo 2 regera `app_icon.ico` e copia para `app_tray.ico` automaticamente.
+
+Icone de bandeja customizado: copie `assets\image\new\.tray_icon_custom.example` para `.tray_icon_custom` na mesma pasta; enquanto o marcador existir, o build nao sobrescreve `app_tray.ico`.
 
 ## Conteudo do instalador
 

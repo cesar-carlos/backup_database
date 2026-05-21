@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
@@ -23,8 +24,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   static const double _dashboardStatsCardWidth = 280;
 
-  static const String _dashboardStatIconAsset =
-      'assets/image/new/database_128px.png';
+  static const String _dashboardStatIconAsset = AppImageAssets.database128;
 
   String? _selectedConnectionId;
 

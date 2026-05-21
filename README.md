@@ -221,7 +221,16 @@ No GitHub Actions:
 
 ## Build
 
+Recomendado (sincroniza icones do exe/bandeja, versao e instalador):
+
 ```bash
+python installer/build_installer.py
+```
+
+Manual:
+
+```bash
+dart run flutter_launcher_icons
 flutter build windows --release
 python installer/build_installer.py
 ```

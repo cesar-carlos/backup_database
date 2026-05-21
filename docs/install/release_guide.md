@@ -25,9 +25,12 @@ Esse script sincroniza:
 ## 3. Gerar build e instalador
 
 ```powershell
-flutter build windows --release
 python installer\build_installer.py
 ```
+
+O script sincroniza `app_icon.ico` (exe, atalho, barra de tarefas) e recompila o app quando necessario. Se compilar so com Flutter, rode antes `dart run flutter_launcher_icons` e `flutter build windows --release`.
+
+Icones: `database_512px.png` alimenta o `.exe` (`flutter_launcher_icons`); `app_tray.ico` e copiado do mesmo ICO para a bandeja pelo `build_installer.py` (salvo marcador `.tray_icon_custom`). O CI valida com `python scripts/verify_windows_icons.py`.
 
 Artefatos esperados:
 

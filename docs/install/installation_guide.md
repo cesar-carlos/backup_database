@@ -60,6 +60,16 @@ Ao final:
 2. finalize o assistente
 3. abra `Backup Database` pelo menu Iniciar se nao tiver iniciado automaticamente
 
+## Icone antigo no atalho ou na barra de tarefas
+
+Se, apos atualizar o app, o atalho ou a barra ainda mostrarem o icone antigo:
+
+1. remova o atalho da area de trabalho e crie outro pelo menu Iniciar, ou
+2. reinstale com o instalador mais recente, ou
+3. reinicie o Explorer (`taskkill /f /im explorer.exe` e `start explorer`) ou execute `ie4uinit.exe -show` em um prompt elevado.
+
+O Windows mantem cache de icones por caminho do executavel; isso e normal apos trocar a arte do `.exe`.
+
 ## Configuracao inicial recomendada
 
 ### 1. Verificar dependencias

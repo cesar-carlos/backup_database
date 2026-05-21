@@ -35,6 +35,7 @@ class StatsCard extends StatelessWidget {
                   iconAsset,
                   width: 28,
                   height: 28,
+                  cacheWidth: 56,
                   color: cardColor,
                   colorBlendMode: BlendMode.srcIn,
                 ),

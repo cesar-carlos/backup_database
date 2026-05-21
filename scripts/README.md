@@ -14,6 +14,19 @@ Este diretorio reune scripts de suporte para manutencao, metricas e release.
 | `coverage.py` | Python | Executa testes com cobertura e filtro de lcov |
 | `sync_appcast_from_releases.py` | Python | Versao Python do sincronizador de appcast |
 | `update_appcast_manual.py` | Python | Utilitario legado para manutencao emergencial; o fluxo oficial usa `update-appcast` |
+| `verify_windows_icons.py` | Python | Valida `app_icon.ico`, `app_tray.ico` e hash da fonte PNG (CI / pre-release) |
+
+## Icones Windows
+
+### `verify_windows_icons.py`
+
+Confere artefatos de icone antes de merge ou release:
+
+```bash
+python scripts/verify_windows_icons.py
+```
+
+Falha se `app_tray.ico` divergir de `app_icon.ico` (sem `.tray_icon_custom`) ou se o hash em `windows/runner/resources/.app_icon_source_sha256` nao bater com `database_512px.png`.
 
 ## Banco de Dados
 

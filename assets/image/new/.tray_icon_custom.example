@@ -1,0 +1,2 @@
+# Copy to .tray_icon_custom (same folder) to keep a custom app_tray.ico.
+# While the marker exists, installer/build_installer.py will not overwrite app_tray.ico.

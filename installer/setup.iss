@@ -15,10 +15,11 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
+UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=..\LICENSE
 OutputDir=dist
 OutputBaseFilename=BackupDatabase-Setup-{#MyAppVersion}
-SetupIconFile=..\assets\image\new\app_tray.ico
+SetupIconFile=..\windows\runner\resources\app_icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -58,8 +59,8 @@ Source: "merge_env.ps1"; Flags: dontcopy
 
 [Icons]
 ; Main icons for each mode (all will be created)
-Name: "{group}\{#MyAppName} - Server Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Comment: "Run Backup Database as Server"
-Name: "{group}\{#MyAppName} - Client Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"; Comment: "Run Backup Database as Client"
+Name: "{group}\{#MyAppName} - Server Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Comment: "Run Backup Database as Server"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName} - Client Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"; Comment: "Run Backup Database as Client"; IconFilename: "{app}\{#MyAppExeName}"
 ; Utility icons
 Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
 ; Service icons (ONLY for Server mode)
@@ -68,7 +69,7 @@ Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Paramet
 Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 ; Desktop icon (default launch, mode resolved by app config/.install_mode)
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent

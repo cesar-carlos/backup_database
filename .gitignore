@@ -1,3 +1,6 @@
+# Optional custom tray icon marker (see assets/image/new/.tray_icon_custom.example)
+assets/image/new/.tray_icon_custom
+
 # Miscellaneous
 .git-release-notes.tmp
 *.class

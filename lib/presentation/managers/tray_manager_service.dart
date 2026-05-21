@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -26,6 +29,7 @@ class TrayManagerService with TrayListener {
   bool _isSchedulerPaused = false;
   bool _isInitialized = false;
   String? _cachedIconPath;
+  String? _cachedTrayKey;
 
   Future<void> initialize({Function(TrayMenuAction)? onMenuAction}) async {
     if (_isInitialized) return;
@@ -63,9 +67,18 @@ class TrayManagerService with TrayListener {
     LoggerService.info('TrayManager inicializado');
   }
 
+  Future<String> _trayCacheKey() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final data = await rootBundle.load(AppImageAssets.trayIco);
+    final digest = sha256.convert(data.buffer.asUint8List());
+    final hashPrefix = digest.toString().substring(0, 16);
+    return '${packageInfo.version}_${packageInfo.buildNumber}_$hashPrefix';
+  }
+
   Future<String> _getTrayIconPath() async {
     if (Platform.isWindows) {
-      if (_cachedIconPath != null) {
+      final cacheKey = await _trayCacheKey();
+      if (_cachedIconPath != null && _cachedTrayKey == cacheKey) {
         final cachedFile = File(_cachedIconPath!);
         if (cachedFile.existsSync()) {
           return _cachedIconPath!;
@@ -74,12 +87,13 @@ class TrayManagerService with TrayListener {
 
       try {
         final tempDir = await getTemporaryDirectory();
-        final iconFile = File('${tempDir.path}\\tray_icon.ico');
-        final data = await rootBundle.load('assets/image/new/app_tray.ico');
+        final iconFile = File('${tempDir.path}\\tray_icon_$cacheKey.ico');
+        final data = await rootBundle.load(AppImageAssets.trayIco);
         final bytes = data.buffer.asUint8List();
 
         await iconFile.writeAsBytes(bytes);
         _cachedIconPath = iconFile.absolute.path;
+        _cachedTrayKey = cacheKey;
         return _cachedIconPath!;
       } on Object catch (e) {
         LoggerService.warning('Não foi possível copiar ícone dos assets: $e');
@@ -88,10 +102,11 @@ class TrayManagerService with TrayListener {
       final executablePath = Platform.resolvedExecutable;
       final executableDir = Directory(executablePath).parent.path;
 
+      final trayIco = AppImageAssets.trayIco.replaceAll('/', r'\');
       final paths = [
-        '$executableDir\\data\\flutter_assets\\assets\\image\\new\\app_tray.ico',
-        '${Directory(executablePath).parent.parent.path}\\data\\flutter_assets\\assets\\image\\new\\app_tray.ico',
-        '$executableDir\\assets\\image\\new\\app_tray.ico',
+        '$executableDir\\data\\flutter_assets\\$trayIco',
+        '${Directory(executablePath).parent.parent.path}\\data\\flutter_assets\\$trayIco',
+        '$executableDir\\$trayIco',
         '$executableDir\\resources\\app_icon.ico',
       ];
 
@@ -104,7 +119,7 @@ class TrayManagerService with TrayListener {
 
       var currentDir = Directory(executablePath).parent;
       for (var i = 0; i < 6; i++) {
-        final iconPath = '${currentDir.path}\\assets\\image\\new\\app_tray.ico';
+        final iconPath = '${currentDir.path}\\$trayIco';
         final iconFile = File(iconPath);
         if (iconFile.existsSync()) {
           return iconFile.absolute.path;
@@ -116,7 +131,7 @@ class TrayManagerService with TrayListener {
 
       return executablePath;
     }
-    return 'assets/image/new/app_tray.ico';
+    return AppImageAssets.trayIco;
   }
 
   Future<void> _updateMenu() async {
