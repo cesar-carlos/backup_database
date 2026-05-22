@@ -5,6 +5,22 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.2.0</title>
+      <pubDate>Fri, 22 May 2026 21:04:25 +0000</pubDate>
+      <description>## Backup Database 3.2.0
+
+### Destaques
+- FTP mais robusto para backups grandes, com validacao por tamanho remoto e sidecar SHA-256.
+- Limpeza de temporarios orfaos de uploads com falha apos 24h.
+- Ajustes FTPS, cancelamento real de uploads e melhor tratamento de timeout.
+- Melhorias no instalador, auto-update, UI, bootstrap e execucao remota.
+
+### Artefatos
+- BackupDatabase-Setup-3.2.0.exe
+- BackupDatabase-Setup-3.2.0.exe.sha256</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.2.0/BackupDatabase-Setup-3.2.0.exe" sparkle:version="3.2.0" sparkle:os="windows" length="38249065" type="application/octet-stream" sha256="099d07f3b2c6cd74e07c95d509d3286099fbd9116cda7f0f4125efa6f4f23433" />
+    </item>
+    <item>
       <title>Version 3.1.0</title>
       <pubDate>Tue, 19 May 2026 15:03:08 +0000</pubDate>
       <description>## What's Changed
