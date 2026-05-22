@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:flutter/widgets.dart';
 
 /// **Molecule** — block placeholder resembling a compact card body.
@@ -12,16 +12,15 @@ class SkeletonCard extends StatelessWidget {
   final int lineCount;
   final double minHeight;
 
-  static const Color _fill = Color(0xFFBDBDBD);
-
   @override
   Widget build(BuildContext context) {
+    final fill = context.colors.outline;
     return ConstrainedBox(
       constraints: BoxConstraints(minHeight: minHeight),
       child: ClipRRect(
         borderRadius: AppRadius.circularLg,
         child: ColoredBox(
-          color: _fill.withValues(alpha: 0.35),
+          color: fill.withValues(alpha: 0.35),
           child: Padding(
             padding: AppSpacing.paddingMd,
             child: Column(
@@ -34,7 +33,7 @@ class SkeletonCard extends StatelessWidget {
                     child: SizedBox(
                       height: i == 0 ? 14 : 10,
                       width: i == lineCount - 1 ? 120 : double.infinity,
-                      child: const ColoredBox(color: _fill),
+                      child: ColoredBox(color: fill),
                     ),
                   ),
                 ],

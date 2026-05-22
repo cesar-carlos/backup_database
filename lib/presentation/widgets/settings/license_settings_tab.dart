@@ -4,6 +4,7 @@ import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -231,7 +232,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                         child: Text(
                           licenseProvider.error!,
                           style: FluentTheme.of(context).typography.body
-                              ?.copyWith(color: const Color(0xFFF44336)),
+                              ?.copyWith(color: context.colors.danger),
                         ),
                       ),
                     ],
@@ -269,7 +270,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
   Widget _buildLicenseStatus(License? license) {
     if (license == null) {
       return ListTile(
-        leading: const Icon(FluentIcons.cancel, color: Color(0xFFF44336)),
+        leading: Icon(FluentIcons.cancel, color: context.colors.danger),
         title: Text(appLocaleString(context, 'Sem licença', 'No license')),
         subtitle: Text(
           appLocaleString(
@@ -283,7 +284,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
 
     if (license.isExpired) {
       return ListTile(
-        leading: const Icon(FluentIcons.warning, color: Color(0xFFFF9800)),
+        leading: Icon(FluentIcons.warning, color: context.colors.warning),
         title: Text(
           appLocaleString(context, 'Licença expirada', 'Expired license'),
         ),
@@ -298,7 +299,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
     }
 
     return ListTile(
-      leading: const Icon(FluentIcons.accept, color: Color(0xFF4CAF50)),
+      leading: Icon(FluentIcons.accept, color: context.colors.success),
       title: Text(appLocaleString(context, 'Licença válida', 'Valid license')),
       subtitle: Text(
         license.expiresAt != null
@@ -333,7 +334,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                 const Icon(
                   FluentIcons.accept,
                   size: 16,
-                  color: Color(0xFF4CAF50),
+                  color: AppPalette.success,
                 ),
                 const SizedBox(width: 8),
                 Text(feature),
@@ -355,7 +356,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
         children: [
           Row(
             children: [
-              const Icon(FluentIcons.warning, color: Color(0xFFFF9800)),
+              Icon(FluentIcons.warning, color: context.colors.warning),
               const SizedBox(width: 8),
               Text(
                 appLocaleString(

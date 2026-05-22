@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:backup_database/application/providers/firebird_config_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
@@ -112,8 +113,8 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
       ),
       title: Row(
         children: [
-          const Icon(FluentIcons.server, color: AppColors.primary),
-          const SizedBox(width: 12),
+          const Icon(FluentIcons.server, color: AppPalette.databaseFirebird),
+          const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
           Expanded(
             child: Text(
               _isEditing
@@ -157,7 +158,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               },
               prefixIcon: const Icon(FluentIcons.tag),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -185,7 +186,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                     prefixIcon: const Icon(FluentIcons.server),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: NumericField(
                     controller: _portController,
@@ -198,7 +199,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _databaseFileController,
               label: appLocaleString(
@@ -221,7 +222,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               },
               prefixIcon: const Icon(FluentIcons.open_file),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _aliasController,
               label: appLocaleString(
@@ -236,7 +237,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               ),
               prefixIcon: const Icon(FluentIcons.link),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _usernameController,
               label: appLocaleString(context, 'Usuário', 'Username'),
@@ -253,7 +254,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               },
               prefixIcon: const Icon(FluentIcons.contact),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             PasswordField(
               controller: _passwordController,
               hint: appLocaleString(
@@ -262,7 +263,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                 'User password',
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             InfoLabel(
               label: appLocaleString(
                 context,
@@ -278,7 +279,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                 },
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _clientLibController,
               label: appLocaleString(
@@ -293,7 +294,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               ),
               prefixIcon: const Icon(FluentIcons.folder),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             AppDropdown<FirebirdServerVersionHint>(
               label: appLocaleString(
                 context,
@@ -318,7 +319,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                 }
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             AppDropdown<FirebirdServiceManagerMode>(
               label: appLocaleString(
                 context,
@@ -343,7 +344,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                 }
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _cryptKeyController,
               label: appLocaleString(
@@ -358,7 +359,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               ),
               prefixIcon: const Icon(FluentIcons.lock),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             InfoLabel(
               label: appLocaleString(context, 'Habilitado', 'Enabled'),
               child: ToggleSwitch(
@@ -370,7 +371,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
                 },
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               appLocaleString(
                 context,
@@ -379,7 +380,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               ),
               style: FluentTheme.of(context).typography.caption,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             InfoLabel(
               label: appLocaleString(
                 context,

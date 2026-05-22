@@ -1,3 +1,4 @@
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
@@ -248,6 +249,9 @@ class ScheduleDialogSybaseAdvancedPerformanceSection extends StatelessWidget {
   }
 }
 
+/// **Organism** — read-only summary of the selected Firebird connection
+/// (embedded, service manager, version hint, encryption key) in
+/// ScheduleDialog.
 class ScheduleDialogFirebirdAdvancedSummarySection extends StatelessWidget {
   const ScheduleDialogFirebirdAdvancedSummarySection({
     required this.config,
@@ -280,7 +284,7 @@ class ScheduleDialogFirebirdAdvancedSummarySection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const ScheduleDialogSectionTitle('Firebird'),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
         if (c == null) ...[
           const InfoBar(
             title: Text('Nenhuma configuração selecionada'),
@@ -296,24 +300,24 @@ class ScheduleDialogFirebirdAdvancedSummarySection extends StatelessWidget {
             'diálogo de configuração Firebird.',
             style: FluentTheme.of(context).typography.caption,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
           InfoLabel(
             label: 'Modo embedded',
             child: Text(c.useEmbedded ? 'Sim' : 'Não'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           InfoLabel(
-            label: 'Service manager (gbak)',
+            label: 'Service manager (gbak / nbackup)',
             child: Text(_serviceManagerLabel(c.serviceManagerMode)),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           InfoLabel(
             label: 'Versão do servidor (sugestão)',
             child: Text(_serverVersionHintLabel(c.serverVersionHint)),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           InfoLabel(
-            label: 'Chave de descriptografia',
+            label: 'Chave de criptografia',
             child: Text(
               c.cryptKey.trim().isEmpty ? 'Não definida' : 'Definida',
             ),

@@ -1,3 +1,4 @@
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
@@ -299,9 +300,7 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
     }
   }
 
-  /// Classifica exception do repository em ErrorCode publico. Mensagens
-  /// que contenham "nao encontrado" / "not found" mapeiam para
-  /// fileNotFound; demais para unknown.
+  /// Classifica exception do repository em ErrorCode publico.
   DatabaseConfigOutcome _failureFromException(Object? exception) {
     if (exception == null) {
       return DatabaseConfigOutcome.failure(
@@ -309,11 +308,24 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
         errorCode: ErrorCode.unknown,
       );
     }
+    if (exception is Failure) {
+      final errorCode = switch (exception) {
+        NotFoundFailure() => ErrorCode.fileNotFound,
+        ValidationFailure() => ErrorCode.invalidRequest,
+        _ => ErrorCode.unknown,
+      };
+      final message = exception.message;
+      return DatabaseConfigOutcome.failure(
+        error: message.isEmpty ? exception.toString() : message,
+        errorCode: errorCode,
+      );
+    }
     final msg = exception.toString();
     final lower = msg.toLowerCase();
     final notFound =
         lower.contains('not found') ||
         lower.contains('nao encontrad') ||
+        lower.contains('não encontrad') ||
         lower.contains('inexistente');
     return DatabaseConfigOutcome.failure(
       error: msg,

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/application/services/alert_service.dart';
 import 'package:backup_database/application/services/log_service.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
@@ -444,7 +445,7 @@ class ServiceHealthChecker {
         (failure) {
           LoggerService.warning('Erro ao executar fsutil: $failure');
           metrics['disk_check_performed'] = false;
-          metrics['disk_check_error'] = failure.toString();
+          metrics['disk_check_error'] = failureUserMessage(failure);
         },
       );
     } on Object catch (e, s) {
@@ -678,7 +679,7 @@ class ServiceHealthChecker {
 
         return rd.Success(snapshots);
       },
-      (failure) => rd.Failure(Exception(failure.toString())),
+      (failure) => rd.Failure(Exception(failureUserMessage(failure))),
     );
   }
 

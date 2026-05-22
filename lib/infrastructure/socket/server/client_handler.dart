@@ -210,7 +210,8 @@ class ClientHandler {
           _socketLogger?.logReceived(message) ?? Future<void>.value(),
         );
 
-        if (isAuthRequestMessage(message) && !_authHandled) {
+        if (isAuthRequestMessage(message) &&
+            (!_authHandled || !isAuthenticated)) {
           _authHandled = true;
           if (_authentication != null) {
             // Pausa o subscription enquanto a validação async roda; sem
@@ -226,7 +227,8 @@ class ClientHandler {
                 try {
                   final valid = validationResult.isValid;
                   isAuthenticated = valid;
-                  final serverId = message.payload['serverId'] as String?;
+                  final rawServerId = message.payload['serverId'];
+                  final serverId = rawServerId is String ? rawServerId : null;
                   if (valid && serverId != null && serverId.isNotEmpty) {
                     // Persiste para que SessionMessageHandler possa
                     // reportar a sessao corrente sem depender do payload
@@ -256,6 +258,7 @@ class ClientHandler {
                     ),
                   );
                   if (!valid) {
+                    _authHandled = false;
                     disconnect();
                     return;
                   }

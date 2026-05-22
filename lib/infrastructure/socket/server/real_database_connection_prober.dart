@@ -32,6 +32,8 @@ import 'package:result_dart/result_dart.dart' as rd;
 /// - config nao encontrada (id invalido) -> errorCode.fileNotFound
 /// - payload ad-hoc invalido            -> errorCode.invalidRequest
 class RealDatabaseConnectionProber implements DatabaseConnectionProber {
+  static const Duration defaultProbeTimeout = Duration(seconds: 30);
+
   RealDatabaseConnectionProber({
     required this.sybaseService,
     required this.sqlServerService,
@@ -61,32 +63,56 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
     Duration? timeout,
   }) async {
     final stopwatch = _stopwatchFactory()..start();
+    final bound = timeout ?? defaultProbeTimeout;
     try {
-      switch (databaseType) {
-        case RemoteDatabaseType.sybase:
-          return await _probeSybase(configRef, stopwatch);
-        case RemoteDatabaseType.sqlServer:
-          return await _probeSqlServer(configRef, stopwatch);
-        case RemoteDatabaseType.postgres:
-          return await _probePostgres(configRef, stopwatch);
-        case RemoteDatabaseType.firebird:
-          return await _probeFirebird(configRef, stopwatch);
-      }
+      return await _dispatchProbe(
+        databaseType,
+        configRef,
+        stopwatch,
+      ).timeout(
+        bound,
+        onTimeout: () {
+          if (stopwatch.isRunning) {
+            stopwatch.stop();
+          }
+          return DatabaseProbeOutcome.failure(
+            latencyMs: stopwatch.elapsedMilliseconds,
+            error: 'Sondagem expirou apos ${bound.inMilliseconds}ms',
+            errorCode: ErrorCode.timeout,
+          );
+        },
+      );
     } on Object catch (e, st) {
-      // Defesa final: qualquer excecao nao prevista vira failure
-      // unknown — handler ja faz fail-closed mas duplicar aqui
-      // garante medicao de latencia mesmo em path de erro inesperado.
       LoggerService.warning(
         'RealDatabaseConnectionProber: unexpected error: $e',
         e,
         st,
       );
-      stopwatch.stop();
+      if (stopwatch.isRunning) {
+        stopwatch.stop();
+      }
       return DatabaseProbeOutcome.failure(
         latencyMs: stopwatch.elapsedMilliseconds,
         error: 'Erro inesperado: $e',
         errorCode: ErrorCode.unknown,
       );
+    }
+  }
+
+  Future<DatabaseProbeOutcome> _dispatchProbe(
+    RemoteDatabaseType databaseType,
+    DatabaseConfigRef configRef,
+    Stopwatch stopwatch,
+  ) {
+    switch (databaseType) {
+      case RemoteDatabaseType.sybase:
+        return _probeSybase(configRef, stopwatch);
+      case RemoteDatabaseType.sqlServer:
+        return _probeSqlServer(configRef, stopwatch);
+      case RemoteDatabaseType.postgres:
+        return _probePostgres(configRef, stopwatch);
+      case RemoteDatabaseType.firebird:
+        return _probeFirebird(configRef, stopwatch);
     }
   }
 

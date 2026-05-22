@@ -280,6 +280,46 @@ void main() {
         );
       },
     );
+
+    test(
+      'updateSchedule rejects Firebird when supportsFirebird is false',
+      () async {
+        final firebirdSchedule = schedule.copyWith(
+          databaseType: DatabaseType.firebird,
+        );
+
+        handler.dispose();
+        handler = ScheduleMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          updateSchedule: updateSchedule,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          supportsFirebird: false,
+        );
+
+        Message? sentMessage;
+        Future<void> sendToClient(String clientId, Message msg) async {
+          sentMessage = msg;
+        }
+
+        final message = createUpdateScheduleMessage(
+          requestId: 2,
+          schedule: firebirdSchedule,
+        );
+
+        await handler.handle('client-1', message, sendToClient);
+
+        expect(sentMessage, isNotNull);
+        expect(
+          getErrorCodeFromMessage(sentMessage!),
+          ErrorCode.unsupportedDatabaseType,
+        );
+        verifyNever(() => updateSchedule(any()));
+      },
+    );
   });
 
   group('ScheduleMessageHandler execution registry integration', () {

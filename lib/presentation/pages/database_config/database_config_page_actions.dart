@@ -36,7 +36,7 @@ mixin _DatabaseConfigPageActions on State<DatabaseConfigPage> {
                     DatabaseType.sqlServer,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
                 FilledButton(
                   child: Text(
                     DatabaseTypeMetadata.of(DatabaseType.sybase).titleLabel,
@@ -45,7 +45,7 @@ mixin _DatabaseConfigPageActions on State<DatabaseConfigPage> {
                     DatabaseType.sybase,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
                 FilledButton(
                   child: Text(
                     DatabaseTypeMetadata.of(DatabaseType.postgresql).titleLabel,
@@ -54,7 +54,7 @@ mixin _DatabaseConfigPageActions on State<DatabaseConfigPage> {
                     DatabaseType.postgresql,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
                 if (!hideFirebirdOption) ...[
                   FilledButton(
                     child: Text(

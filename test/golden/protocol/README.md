@@ -74,6 +74,26 @@ Adicionar fixture sempre que:
   (`createAuthRequest` tem `ts` baseado em `DateTime.now()` - golden
   exigiria refatoracao para injetar relogio).
 
+## Cobertura vs `MessageType` (R-11)
+
+O enum em `lib/infrastructure/protocol/message_types.dart` tem **113**
+valores. Os goldens cobrem **38 tipos** via factories testadas (58 casos
+incluindo variantes v1/v2 e envelopes de erro).
+
+| Area | Coberto nos goldens | Fora do escopo (P2+) |
+| --- | --- | --- |
+| Auth | `authResponse` | `authRequest` (`ts` dinamico), `authChallenge` |
+| Schedule legado | `listSchedules`, `scheduleList`, `updateSchedule`, `scheduleUpdated`, `executeSchedule`, `cancelSchedule`, `scheduleCancelled` | — |
+| Schedule CRUD PR-2 | `createSchedule`, `deleteSchedule`, `pauseSchedule`, `resumeSchedule`, `scheduleMutationResponse` | — |
+| Backup stream | `backupProgress`, `backupStep`, `backupComplete`, `backupFailed` | `backupQueued`, `backupDequeued`, `backupStarted` |
+| Execucao remota | `startBackup*`, `cancelBackup*`, `executionStatus*`, `executionQueue*` | `cancelQueuedBackup*`, diagnostico (`getRun*`, `cleanupStaging*`) |
+| Ops / sessao | `metrics*`, `health*`, `session*`, `preflight*`, `capabilities*`, `testDatabaseConnection*` | `heartbeat`, `disconnect` |
+| Arquivos | — | `listFiles`, `fileList`, `fileTransfer*`, `fileAck` |
+| DB config remoto | `listDatabaseConfigs*`, `create/deleteDatabaseConfig*`, `databaseConfigMutationResponse` | `updateDatabaseConfigRequest` (shape igual ao create) |
+
+Novos goldens P1 (R-11): `schedule_list_one_item`, `update_schedule_request`,
+`schedule_updated`, `schedule_mutation_response_created`, `backup_step_v2_with_run_id`.
+
 ## Relacao com o plano
 
 - **M6.1**: este arquivo e a entrega inicial.

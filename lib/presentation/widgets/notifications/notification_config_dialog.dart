@@ -4,6 +4,7 @@ import 'package:backup_database/core/compatibility/feature_availability_service.
 import 'package:backup_database/core/compatibility/feature_disable_reason.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -944,6 +945,7 @@ class _SmtpAuthenticationSection extends StatelessWidget {
     final isConnected = oauthAccountEmail?.trim().isNotEmpty ?? false;
     final connectedAt = oauthConnectedAt?.toLocal();
     final captionStyle = FluentTheme.of(context).typography.caption;
+    final outline = context.colors.outline;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1010,11 +1012,9 @@ class _SmtpAuthenticationSection extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF8A8A8A).withValues(alpha: 0.08),
+              color: outline.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: const Color(0xFF8A8A8A).withValues(alpha: 0.22),
-              ),
+              border: Border.all(color: outline.withValues(alpha: 0.22)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1095,16 +1095,15 @@ class _AttachLogSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final captionStyle = FluentTheme.of(context).typography.caption;
+    final outline = context.colors.outline;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF8A8A8A).withValues(alpha: 0.08),
+        color: outline.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: const Color(0xFF8A8A8A).withValues(alpha: 0.22),
-        ),
+        border: Border.all(color: outline.withValues(alpha: 0.22)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

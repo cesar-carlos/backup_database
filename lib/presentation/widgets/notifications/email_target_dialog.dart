@@ -1,4 +1,5 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -310,15 +311,14 @@ class _TargetToggleField extends StatelessWidget {
   Widget build(BuildContext context) {
     final captionStyle = FluentTheme.of(context).typography.caption;
 
+    final outline = context.colors.outline;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF8A8A8A).withValues(alpha: 0.08),
+        color: outline.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: const Color(0xFF8A8A8A).withValues(alpha: 0.22),
-        ),
+        border: Border.all(color: outline.withValues(alpha: 0.22)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

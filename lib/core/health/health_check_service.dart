@@ -1,7 +1,7 @@
 import 'dart:io';
 
+import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
-import 'package:path/path.dart' as p;
 
 class HealthCheckService {
   Future<HealthCheckResult> checkDiskSpace({
@@ -54,21 +54,18 @@ class HealthCheckService {
         );
       }
 
-      final testFile = File(
-        p.join(path, '.health_check_${DateTime.now().millisecondsSinceEpoch}'),
-      );
-
-      await testFile.writeAsString('test');
-      await testFile.delete();
+      final hasPermission =
+          await DirectoryPermissionCheck.hasWritePermission(directory);
+      if (!hasPermission) {
+        return HealthCheckResult(
+          status: HealthStatus.unhealthy,
+          message: 'Sem permissão de escrita: $path',
+        );
+      }
 
       return HealthCheckResult(
         status: HealthStatus.healthy,
         message: 'Permissão de escrita OK',
-      );
-    } on FileSystemException catch (e) {
-      return HealthCheckResult(
-        status: HealthStatus.unhealthy,
-        message: 'Sem permissão de escrita: ${e.message}',
       );
     } on Object catch (e) {
       return HealthCheckResult(

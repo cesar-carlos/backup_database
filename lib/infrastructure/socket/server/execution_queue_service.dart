@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_persistence.dart';
 import 'package:backup_database/infrastructure/socket/server/queued_execution_item.dart';
@@ -27,7 +28,7 @@ export 'queued_execution_item.dart';
 /// Com persistencia configurada, chame `initialize` antes do primeiro
 /// uso (ex.: no bootstrap do socket server) para reidratar a fila
 /// apos reinicio do processo.
-class ExecutionQueueService {
+class ExecutionQueueService implements IExecutionQueueBootstrap {
   ExecutionQueueService({
     int maxQueueSize = 50,
     Uuid? uuid,
@@ -50,6 +51,7 @@ class ExecutionQueueService {
 
   /// Reidrata a fila a partir do armazenamento (no-op se sem
   /// persistencia ou ja inicializado).
+  @override
   Future<void> initialize() async {
     final persistence = _persistence;
     if (persistence == null || _initialized) return;
@@ -126,13 +128,14 @@ class ExecutionQueueService {
     required String clientId,
     required int requestId,
     required String requestedBy,
+    String? runId,
   }) async {
     if (isFull) return null;
     if (isScheduleQueued(scheduleId)) return null;
 
-    final runId = '${scheduleId}_${_uuid.v4()}';
+    final effectiveRunId = runId ?? '${scheduleId}_${_uuid.v4()}';
     final item = QueuedExecutionItem(
-      runId: runId,
+      runId: effectiveRunId,
       scheduleId: scheduleId,
       clientId: clientId,
       requestId: requestId,
@@ -179,22 +182,31 @@ class ExecutionQueueService {
   /// `cancelQueuedBackup`. Retorna `true` se removido, `false` se
   /// nao encontrado.
   Future<bool> removeByRunId(String runId) async {
-    final exists = _queue.any((it) => it.runId == runId);
-    if (!exists) return false;
-
+    final inMemory = _queue.any((it) => it.runId == runId);
     final persistence = _persistence;
-    if (persistence != null) {
-      await persistence.deleteByRunId(runId);
+
+    if (inMemory) {
+      if (persistence != null) {
+        await persistence.deleteByRunId(runId);
+      }
+      _queue.removeWhere((it) {
+        if (it.runId == runId) {
+          _scheduleIdsInQueue.remove(it.scheduleId);
+          return true;
+        }
+        return false;
+      });
+      return true;
     }
 
-    _queue.removeWhere((it) {
-      if (it.runId == runId) {
-        _scheduleIdsInQueue.remove(it.scheduleId);
+    if (persistence != null) {
+      final deleted = await persistence.deleteByRunId(runId);
+      if (deleted > 0) {
+        await _reloadFromPersistence();
         return true;
       }
-      return false;
-    });
-    return true;
+    }
+    return false;
   }
 
   /// Remove todos os itens (shutdown / testes).

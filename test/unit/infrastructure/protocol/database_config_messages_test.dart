@@ -174,8 +174,6 @@ void main() {
     });
 
     test('payload v1 (sem alguns campos): defaults seguros', () {
-      // Simula resposta de servidor antigo que so emite connected.
-      // Cliente nao pode crashar.
       final partial = createTestDatabaseConnectionResponse(
         requestId: 1,
         connected: true,
@@ -188,6 +186,95 @@ void main() {
       expect(parsed.connected, isTrue);
       expect(parsed.latencyMs, 0);
       expect(parsed.serverTimeUtc.year, 1970);
+    });
+  });
+
+  group('listDatabaseConfigs messages', () {
+    test('request contem databaseType wire', () {
+      final msg = createListDatabaseConfigsRequest(
+        databaseType: RemoteDatabaseType.firebird,
+        requestId: 3,
+      );
+      expect(msg.header.type, MessageType.listDatabaseConfigsRequest);
+      expect(msg.payload['databaseType'], 'firebird');
+    });
+
+    test('response com envelope e configs', () {
+      final msg = createListDatabaseConfigsResponse(
+        requestId: 2,
+        databaseType: RemoteDatabaseType.sqlServer,
+        configs: const [
+          {'id': 'a'},
+        ],
+        serverTimeUtc: DateTime.utc(2026, 5),
+      );
+      expect(msg.header.type, MessageType.listDatabaseConfigsResponse);
+      expect(msg.payload['success'], isTrue);
+      expect(msg.payload['statusCode'], StatusCodes.ok);
+      expect(msg.payload['configs'], hasLength(1));
+    });
+
+    test('readDatabaseConfigListResponse round-trip', () {
+      final created = createListDatabaseConfigsResponse(
+        requestId: 1,
+        databaseType: RemoteDatabaseType.postgres,
+        configs: const [
+          {'id': 'pg-1', 'name': 'db'},
+        ],
+        serverTimeUtc: DateTime.utc(2026, 5, 1, 12),
+      );
+      final parsed = readDatabaseConfigListResponse(created);
+      expect(parsed.databaseType, RemoteDatabaseType.postgres);
+      expect(parsed.count, 1);
+      expect(parsed.configs.first['id'], 'pg-1');
+    });
+  });
+
+  group('database config mutation messages', () {
+    test('create request inclui config e idempotencyKey', () {
+      final msg = createCreateDatabaseConfigRequest(
+        databaseType: RemoteDatabaseType.sybase,
+        config: const {'name': 'n'},
+        idempotencyKey: 'key-1',
+        requestId: 9,
+      );
+      expect(msg.header.type, MessageType.createDatabaseConfigRequest);
+      expect(msg.payload['config'], const {'name': 'n'});
+      expect(msg.payload['idempotencyKey'], 'key-1');
+    });
+
+    test('update request inclui config', () {
+      final msg = createUpdateDatabaseConfigRequest(
+        databaseType: RemoteDatabaseType.sybase,
+        config: const {'id': 'sb-1', 'name': 'n'},
+      );
+      expect(msg.header.type, MessageType.updateDatabaseConfigRequest);
+      expect(msg.payload['config'], const {'id': 'sb-1', 'name': 'n'});
+    });
+
+    test('delete request inclui configId', () {
+      final msg = createDeleteDatabaseConfigRequest(
+        databaseType: RemoteDatabaseType.sybase,
+        configId: 'sb-1',
+      );
+      expect(msg.header.type, MessageType.deleteDatabaseConfigRequest);
+      expect(msg.payload['configId'], 'sb-1');
+    });
+
+    test('mutation response e readDatabaseConfigMutationResponse', () {
+      final msg = createDatabaseConfigMutationResponse(
+        requestId: 4,
+        operation: 'updated',
+        databaseType: RemoteDatabaseType.sybase,
+        configId: 'sb-1',
+        config: const {'id': 'sb-1', 'name': 'x'},
+      );
+      expect(msg.header.type, MessageType.databaseConfigMutationResponse);
+      expect(msg.payload['success'], isTrue);
+      final parsed = readDatabaseConfigMutationResponse(msg);
+      expect(parsed.isUpdated, isTrue);
+      expect(parsed.configId, 'sb-1');
+      expect(parsed.config?['name'], 'x');
     });
   });
 }

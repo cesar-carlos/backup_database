@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 /// **Atom** — card surface using design-system padding, radius, and depth.
@@ -16,10 +16,9 @@ class AppCard extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final VoidCallback? onTap;
 
-  static const Color _cardShadowColor = Color(0x14000000);
-
   @override
   Widget build(BuildContext context) {
+    final shadowColor = context.colors.onSurface.withValues(alpha: 0.08);
     final Widget card = Card(
       padding: padding ?? AppSpacing.paddingMd,
       margin: EdgeInsets.zero,
@@ -29,13 +28,13 @@ class AppCard extends StatelessWidget {
 
     final elevated = Container(
       margin: margin,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         borderRadius: AppRadius.circularLg,
         boxShadow: [
           BoxShadow(
-            color: _cardShadowColor,
+            color: shadowColor,
             blurRadius: AppElevation.low * 2,
-            offset: Offset(0, AppElevation.low),
+            offset: const Offset(0, AppElevation.low),
           ),
         ],
       ),

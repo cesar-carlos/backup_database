@@ -1,14 +1,9 @@
 import 'dart:async';
 
+import 'package:backup_database/domain/entities/connection_status.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 
-enum ConnectionStatus {
-  disconnected,
-  connecting,
-  connected,
-  authenticationFailed,
-  error,
-}
+export 'package:backup_database/domain/entities/connection_status.dart';
 
 abstract class SocketClientService {
   Future<void> connect({

@@ -1,0 +1,8 @@
+{
+  "type": "deleteDatabaseConfigRequest",
+  "payload": {
+    "databaseType": "sqlServer",
+    "configId": "mssql-7",
+    "idempotencyKey": "idem-db-delete"
+  }
+}

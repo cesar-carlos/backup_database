@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/notification_provider.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
@@ -722,7 +723,7 @@ class _RecipientListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    final resources = theme.resources;
+    final outline = context.colors.outline;
 
     final statusText = target.enabled
         ? appLocaleString(context, 'Ativo', 'Active')
@@ -802,11 +803,9 @@ class _RecipientListItem extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: resources.cardStrokeColorDefault.withValues(alpha: 0.08),
+        color: outline.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: resources.cardStrokeColorDefault.withValues(alpha: 0.85),
-        ),
+        border: Border.all(color: outline.withValues(alpha: 0.22)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -852,16 +851,15 @@ class _SummaryFactTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final captionStyle = FluentTheme.of(context).typography.caption;
-    final borderColor = const Color(0xFF8A8A8A).withValues(alpha: 0.22);
-    final backgroundColor = const Color(0xFF8A8A8A).withValues(alpha: 0.08);
+    final outline = context.colors.outline;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: outline.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: outline.withValues(alpha: 0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

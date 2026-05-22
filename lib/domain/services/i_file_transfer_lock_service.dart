@@ -17,9 +17,9 @@ abstract class IFileTransferLockService {
     Duration leaseTtl = kDefaultTransferLeaseTtl,
   });
 
-  /// Libera o lock do arquivo.
-  /// Deve ser chamado após a transferência completar (sucesso ou falha).
-  Future<void> releaseLock(String filePath);
+  /// Libera o lease somente se [owner] for o titular atual (evita sessão
+  /// antiga remover lease após reconexão com outro clientId).
+  Future<void> releaseLock(String filePath, {String? owner});
 
   /// Verifica se um arquivo está atualmente locked.
   Future<bool> isLocked(String filePath);

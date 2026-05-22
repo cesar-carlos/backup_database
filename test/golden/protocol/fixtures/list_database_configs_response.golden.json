@@ -1,0 +1,15 @@
+{
+  "type": "listDatabaseConfigsResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 200,
+    "databaseType": "sybase",
+    "configs": [
+      {
+        "id": "cfg-1",
+        "name": "Prod"
+      }
+    ],
+    "serverTimeUtc": "2026-04-19T12:00:00.000Z"
+  }
+}

@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/file_transfer_lock_service.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_store.dart';
+import 'package:backup_database/infrastructure/repositories/repositories.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
@@ -54,9 +55,69 @@ import 'package:get_it/get_it.dart';
 
 /// Sets up infrastructure layer dependencies.
 ///
-/// This module registers external services, process services,
-/// backup services, destination services, and socket server components.
+/// This module registers repository implementations, external services,
+/// process services, backup services, destination services, and socket
+/// server components.
 Future<void> setupInfrastructureModule(GetIt getIt) async {
+  // ========================================================================
+  // REPOSITORY IMPLEMENTATIONS
+  // ========================================================================
+
+  // Config repositories (SQL Server, Sybase, PostgreSQL, Firebird) are
+  // registered via [registerBackupDatabaseDefaultSgbds] below.
+
+  getIt.registerLazySingleton<IBackupDestinationRepository>(
+    () => BackupDestinationRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IScheduleRepository>(
+    () => ScheduleRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IBackupLogRepository>(
+    () => BackupLogRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IBackupHistoryRepository>(
+    () => CachedBackupHistoryRepository(
+      repository: BackupHistoryRepository(
+        getIt<AppDatabase>(),
+        getIt<IBackupLogRepository>() as BackupLogRepository,
+      ),
+    ),
+  );
+
+  getIt.registerLazySingleton<IEmailConfigRepository>(
+    () => EmailConfigRepository(
+      getIt<AppDatabase>(),
+      getIt<ISecureCredentialService>(),
+    ),
+  );
+  getIt.registerLazySingleton<IEmailNotificationTargetRepository>(
+    () => EmailNotificationTargetRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IEmailTestAuditRepository>(
+    () => EmailTestAuditRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<ILicenseRepository>(
+    () => LicenseRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IServerCredentialRepository>(
+    () => ServerCredentialRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IConnectionLogRepository>(
+    () => ConnectionLogRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IServerConnectionRepository>(
+    () => ServerConnectionRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IMachineSettingsRepository>(
+    () => MachineSettingsRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerLazySingleton<IUserPreferencesRepository>(
+    UserPreferencesRepository.new,
+  );
+
+  getIt.registerLazySingleton<IScheduleCalculator>(ScheduleCalculator.new);
+  getIt.registerLazySingleton<IFileValidator>(FileValidator.new);
+
   // ========================================================================
   // PROCESS & EXTERNAL SERVICES
   // ========================================================================
@@ -286,6 +347,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<RemoteStagingCleanupScheduler>(
     () => RemoteStagingCleanupScheduler(getIt<ITransferStagingService>()),
   );
+  getIt.registerLazySingleton<IRemoteStagingCleanupScheduler>(
+    getIt.get<RemoteStagingCleanupScheduler>,
+  );
 
   getIt.registerLazySingleton<SocketServerTelemetry>(
     () => SocketServerTelemetry(metricsCollector: getIt<IMetricsCollector>()),
@@ -364,6 +428,9 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       ),
     ),
   );
+  getIt.registerLazySingleton<IExecutionQueueBootstrap>(
+    getIt.get<ExecutionQueueService>,
+  );
 
   // PR-3c: `getExecutionStatus` reaproveita registry, fila e historico
   // (runId em backup_history apos v31).
@@ -389,8 +456,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       eventSequencer: getIt<ExecutionEventSequencer>(),
       stagingUsageBytesProvider: () =>
           StagingUsageMeasurer.measure(transferBasePath),
-      // QueueEventBus injetado mais abaixo apos TcpSocketServer existir
-      // (precisa do `sendToClient` para broadcast).
+      // QueueEventBus injetado mais abaixo apos TcpS para broadcast).
     ),
   );
 
@@ -403,8 +469,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   );
 
   // RealDatabaseConnectionProber: despacha por tipo aos 3 backup
-  // services existentes (que ja tem `testConnection`). Reaproveita
-  // toda a infra de probe sem reescrever.
+  // services existentes (quea de probe sem reescrever.
   getIt.registerLazySingleton<DatabaseConnectionProber>(
     () => RealDatabaseConnectionProber(
       sybaseService: getIt<ISybaseBackupService>(),
@@ -512,4 +577,7 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
 
   // SocketServerService aliasing
   getIt.registerLazySingleton<SocketServerService>(getIt.get<TcpSocketServer>);
+  getIt.registerLazySingleton<ISocketServerLifecycle>(
+    getIt.get<SocketServerService>,
+  );
 }

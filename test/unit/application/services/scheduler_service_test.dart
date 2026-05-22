@@ -10,6 +10,7 @@ import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/disk_space_info.dart';
+import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
@@ -461,6 +462,81 @@ void main() {
             isCancelled: any(named: 'isCancelled'),
             backupId: any(named: 'backupId'),
             onProgress: any(named: 'onProgress'),
+          ),
+        );
+      },
+    );
+  });
+
+  group('SchedulerService remoteCommand (ADR-001)', () {
+    test(
+      'executeNow skips upload, server email, and cleanup when remoteCommand',
+      () async {
+        final destination = BackupDestination(
+          id: 'dest-1',
+          name: 'Local',
+          type: DestinationType.local,
+          config: '{"path":"D:/dest"}',
+        );
+        final schedule = buildSchedule().copyWith(
+          destinationIds: [destination.id],
+        );
+        final backupPath = '${tempDir.path}${Platform.pathSeparator}remote.bak';
+        final backupFile = File(backupPath)..writeAsStringSync('backup');
+        final history = BackupHistory(
+          id: 'history-remote',
+          scheduleId: schedule.id,
+          databaseName: schedule.name,
+          databaseType: schedule.databaseType.name,
+          backupPath: backupFile.path,
+          fileSize: 1024,
+          status: BackupStatus.success,
+          startedAt: DateTime.now().subtract(const Duration(seconds: 3)),
+        );
+
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+            notifyOnComplete: false,
+          ),
+        ).thenAnswer((_) async => rd.Success(history));
+        when(
+          () => scheduleCalculator.getNextRunTime(any()),
+        ).thenReturn(DateTime.now().add(const Duration(days: 1)));
+        when(
+          () => scheduleRepository.update(any()),
+        ).thenAnswer((_) async => rd.Success(schedule));
+
+        final result = await service.executeNow(
+          scheduleId,
+          executionOrigin: ExecutionOrigin.remoteCommand,
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verifyNever(
+          () => destinationRepository.getByIds(any()),
+        );
+        verifyNever(
+          () => destinationOrchestrator.uploadToAllDestinations(
+            sourceFilePath: any(named: 'sourceFilePath'),
+            destinations: any(named: 'destinations'),
+            isCancelled: any(named: 'isCancelled'),
+            backupId: any(named: 'backupId'),
+            onProgress: any(named: 'onProgress'),
+          ),
+        );
+        verifyNever(
+          () => notificationService.notifyBackupComplete(any()),
+        );
+        verifyNever(
+          () => cleanupService.cleanOldBackups(
+            destinations: any(named: 'destinations'),
+            backupHistoryId: any(named: 'backupHistoryId'),
+            schedule: any(named: 'schedule'),
           ),
         );
       },

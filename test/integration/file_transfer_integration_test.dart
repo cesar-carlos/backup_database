@@ -23,7 +23,7 @@ class MockFileTransferLockService implements IFileTransferLockService {
   }) async => true;
 
   @override
-  Future<void> releaseLock(String filePath) async {}
+  Future<void> releaseLock(String filePath, {String? owner}) async {}
 
   @override
   Future<bool> isLocked(String filePath) async => false;

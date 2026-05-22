@@ -461,7 +461,19 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
           _isLoadingDatabases = false;
           _isTestingConnection = false;
         });
-        unawaited(MessageModal.showError(context, message: e.toString()));
+        unawaited(
+          MessageModal.showError(
+            context,
+            message: testConnectionUserMessage(
+              e,
+              fallback: appLocaleString(
+                context,
+                'Erro ao testar conexão',
+                'Error testing connection',
+              ),
+            ),
+          ),
+        );
       }
     }
   }

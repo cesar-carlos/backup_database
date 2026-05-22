@@ -1,4 +1,15 @@
 abstract class IWindowsServiceEventLogger {
+  Future<void> initialize();
+  Future<void> logServiceStarted();
+  Future<void> logServiceStopped();
+  Future<void> logShutdownBackupsIncomplete({
+    required Duration timeout,
+    String? details,
+  });
+  Future<void> logCriticalError({
+    required String error,
+    String? context,
+  });
   Future<void> logInstallStarted();
   Future<void> logInstallSucceeded();
   Future<void> logInstallFailed({required String error});

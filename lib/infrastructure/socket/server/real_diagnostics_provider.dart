@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
@@ -15,12 +16,9 @@ import 'package:path/path.dart' as p;
 /// `BackupHistoryRepository`, `BackupLogRepository` e o filesystem
 /// de staging existente.
 ///
-/// **Best-effort v1**: hoje BackupHistory ainda usa `scheduleId` (nao
-/// tem coluna `runId` formal — pendente F2.18). O resolver extrai
-/// `scheduleId` do formato `runId = <scheduleId>_<uuid>` e busca o
-/// historico mais recente dessa schedule. Em PR-3 commit 5
-/// (persistencia da fila + runId formal), substituir lookup por
-/// query direta `getByRunId(runId)`.
+/// **Best-effort v1**: `getRunLogs` / `getRunErrorDetails` usam
+/// `getByRunId` com fallback `getLastBySchedule` para historico
+/// anterior a migracao v31 sem `runId` persistido.
 ///
 /// Limitacoes documentadas:
 /// - Se houver multiplas execucoes concorrentes do mesmo `scheduleId`
@@ -45,20 +43,6 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
   final String _stagingBase;
   final String _hashAlgorithm;
   final RemoteStagingArtifactTtl _artifactTtl;
-
-  /// Extrai `scheduleId` do `runId` no formato `<scheduleId>_<uuid>`.
-  /// Retorna `null` para formatos nao reconhecidos. Defensivo: NAO
-  /// confia no `runId` recebido sem validar.
-  String? _scheduleIdFromRunId(String runId) {
-    if (runId.isEmpty) return null;
-    final lastUnderscore = runId.lastIndexOf('_');
-    // UUID v4 tem 36 chars; aceita qualquer suffix com pelo menos
-    // 32 chars (alguns geradores omitem hyphens) para flexibilidade.
-    if (lastUnderscore < 1) return null;
-    final suffix = runId.substring(lastUnderscore + 1);
-    if (suffix.length < 32) return null;
-    return runId.substring(0, lastUnderscore);
-  }
 
   @override
   Future<DiagnosticsOutcome<RunLogsData>> getRunLogs(
@@ -183,7 +167,7 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
       }
 
       // Legado: `remote/<scheduleId>/` (pasta unica por agendamento)
-      final scheduleId = _scheduleIdFromRunId(runId);
+      final scheduleId = RemoteStagingArtifactTtl.scheduleIdFromRunId(runId);
       if (scheduleId == null) {
         return DiagnosticsOutcome<ArtifactMetadataData>.notFound();
       }
@@ -231,7 +215,7 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
       }
 
       // Legado: `remote/<scheduleId>/` extraido do runId
-      final scheduleId = _scheduleIdFromRunId(runId);
+      final scheduleId = RemoteStagingArtifactTtl.scheduleIdFromRunId(runId);
       if (scheduleId == null) {
         return DiagnosticsOutcome<CleanupStagingData>.found(
           const CleanupStagingData(
@@ -313,16 +297,27 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
     );
   }
 
-  /// Resolve o `BackupHistory` correspondente ao `runId`. Em v1 faz
-  /// match por `scheduleId` extraido do formato `<scheduleId>_<uuid>`
-  /// e pega o historico mais recente. Em v2 substituir por query
-  /// direta quando coluna `runId` for adicionada.
   Future<BackupHistory?> _findHistory(String runId) async {
-    final scheduleId = _scheduleIdFromRunId(runId);
-    if (scheduleId == null) return null;
-    final result = await historyRepository.getLastBySchedule(scheduleId);
-    if (result.isError()) return null;
-    return result.getOrNull();
+    if (runId.isEmpty) {
+      return null;
+    }
+    final byRun = await historyRepository.getByRunId(runId);
+    if (byRun.isSuccess()) {
+      return byRun.getOrNull();
+    }
+    final failure = byRun.exceptionOrNull();
+    if (failure != null && failure is! NotFoundFailure) {
+      return null;
+    }
+    final scheduleId = RemoteStagingArtifactTtl.scheduleIdFromRunId(runId);
+    if (scheduleId == null) {
+      return null;
+    }
+    final legacy = await historyRepository.getLastBySchedule(scheduleId);
+    if (legacy.isError()) {
+      return null;
+    }
+    return legacy.getOrNull();
   }
 
   /// Calcula hash do arquivo de forma incremental (streaming via

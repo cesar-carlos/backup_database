@@ -242,6 +242,17 @@ class ScheduleMessageHandler {
   ) async {
     try {
       final schedule = getScheduleFromUpdatePayload(message);
+      if (schedule.databaseType == DatabaseType.firebird &&
+          !_supportsFirebird) {
+        await _sendError(
+          clientId,
+          requestId,
+          ErrorCode.unsupportedDatabaseType.defaultMessage,
+          sendToClient,
+          errorCode: ErrorCode.unsupportedDatabaseType,
+        );
+        return;
+      }
       final result = await _updateSchedule(schedule);
       // Antes: `result.fold((upd) async {...}, (f) async {...})` sem await
       // — bug que poderia perder erros de envio. Agora extrai e usa await.

@@ -130,15 +130,20 @@ class ExecutionStatusMessageHandler {
           return;
         }
         if (h.status == BackupStatus.running) {
+          // Registry vazio + historico `running` = estado zumbi apos restart
+          // (F2.16: registry nao persiste). M8.4: cliente deve tratar como
+          // execucao perdida (notFound), nao reassinar stream indefinidamente.
           await sendToClient(
             clientId,
             createExecutionStatusResponseMessage(
               requestId: requestId,
               runId: runId,
-              state: ExecutionState.running,
+              state: ExecutionState.notFound,
               serverTimeUtc: _clock(),
               scheduleId: h.scheduleId,
-              startedAt: h.startedAt,
+              message:
+                  'Execucao nao ativa no servidor (historico running sem registry; '
+                  'possivel restart durante backup)',
             ),
           );
           return;

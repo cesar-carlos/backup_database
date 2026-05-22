@@ -10,6 +10,7 @@ import 'package:backup_database/application/providers/sybase_config_provider.dar
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/core/utils/database_type_metadata.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
@@ -28,20 +29,6 @@ import 'package:provider/provider.dart';
 
 part 'database_config_page_actions.dart';
 part 'database_config_page_content.dart';
-
-// Retained temporarily while the shared database config CTA copy is unified.
-// ignore: unused_element
-String _addDatabaseConfigSectionLabel(
-  BuildContext context,
-  DatabaseType type,
-) {
-  final title = DatabaseTypeMetadata.of(type).titleLabel;
-  return appLocaleString(
-    context,
-    'Adicionar configuração ($title)',
-    'Add configuration ($title)',
-  );
-}
 
 class DatabaseConfigPage extends StatefulWidget {
   const DatabaseConfigPage({super.key});

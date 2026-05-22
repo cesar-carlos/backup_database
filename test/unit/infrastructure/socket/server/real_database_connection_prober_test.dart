@@ -363,6 +363,28 @@ void main() {
     });
   });
 
+  group('timeout', () {
+    test('probe lento respeita timeoutMs do cliente', () async {
+      when(
+        () => sybaseRepo.getById(any()),
+      ).thenAnswer((_) async => rd.Success(sybaseCfg));
+      when(() => sybaseSvc.testConnection(any())).thenAnswer((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return const rd.Success(true);
+      });
+
+      final outcome = await prober.probe(
+        databaseType: RemoteDatabaseType.sybase,
+        configRef: const DatabaseConfigById('sb-1'),
+        timeout: const Duration(milliseconds: 50),
+      );
+
+      expect(outcome.connected, isFalse);
+      expect(outcome.errorCode, ErrorCode.timeout);
+      expect(outcome.error, contains('50ms'));
+    });
+  });
+
   group('Latencia', () {
     test('latencyMs e nao-negativo em todos os paths', () async {
       // sucesso

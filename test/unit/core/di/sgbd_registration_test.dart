@@ -67,6 +67,28 @@ void main() {
     expect(sl<_TestUiProvider>(), isA<_TestUiProvider>());
   });
 
+  test('registerSgbd keeps repository and port as lazy singletons', () {
+    sl.registerSgbd<
+      PostgresConfig,
+      void,
+      IPostgresConfigRepository,
+      IPostgresBackupService,
+      _TestUiProvider
+    >(
+      repositoryBuilder: _MockPostgresRepo.new,
+      portBuilder: _MockPostgresPort.new,
+      providerBuilder: _TestUiProvider.new,
+    );
+
+    final repoFirst = sl<IPostgresConfigRepository>();
+    final repoSecond = sl<IPostgresConfigRepository>();
+    final portFirst = sl<IPostgresBackupService>();
+    final portSecond = sl<IPostgresBackupService>();
+
+    expect(identical(repoFirst, repoSecond), isTrue);
+    expect(identical(portFirst, portSecond), isTrue);
+  });
+
   test('registerSgbd provider factory creates new instance each resolve', () {
     sl.registerSgbd<
       PostgresConfig,
@@ -156,10 +178,18 @@ void main() {
         expect(sl<PostgresConfigProvider>(), isA<PostgresConfigProvider>());
         expect(sl<FirebirdConfigProvider>(), isA<FirebirdConfigProvider>());
 
-        expect(
-          sl<IFirebirdBackupService>(),
-          isA<FirebirdBackupService>(),
-        );
+        expect(sl<IFirebirdBackupService>(), isA<FirebirdBackupService>());
+
+        final firebirdRepoFirst = sl<IFirebirdConfigRepository>();
+        final firebirdRepoSecond = sl<IFirebirdConfigRepository>();
+        final firebirdPortFirst = sl<IFirebirdBackupService>();
+        final firebirdPortSecond = sl<IFirebirdBackupService>();
+        expect(identical(firebirdRepoFirst, firebirdRepoSecond), isTrue);
+        expect(identical(firebirdPortFirst, firebirdPortSecond), isTrue);
+
+        final firebirdProviderFirst = sl<FirebirdConfigProvider>();
+        final firebirdProviderSecond = sl<FirebirdConfigProvider>();
+        expect(identical(firebirdProviderFirst, firebirdProviderSecond), isFalse);
       } finally {
         await appDatabase.close();
       }

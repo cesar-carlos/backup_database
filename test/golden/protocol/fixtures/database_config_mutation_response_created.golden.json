@@ -1,0 +1,14 @@
+{
+  "type": "databaseConfigMutationResponse",
+  "payload": {
+    "success": true,
+    "statusCode": 200,
+    "operation": "created",
+    "databaseType": "postgres",
+    "configId": "pg-new",
+    "config": {
+      "id": "pg-new",
+      "name": "App DB"
+    }
+  }
+}

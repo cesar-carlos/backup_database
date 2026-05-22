@@ -119,6 +119,43 @@ void main() {
     });
 
     test(
+      'apos unregister com historico terminal responde completed',
+      () async {
+        const runId = 'hist-post-unreg';
+        final historyRepo = _MockBackupHistoryRepository();
+        when(() => historyRepo.getByRunId(runId)).thenAnswer(
+          (_) async => rd.Success(
+            BackupHistory(
+              databaseName: 'd',
+              databaseType: 'sybase',
+              backupPath: '/b',
+              fileSize: 0,
+              status: BackupStatus.success,
+              startedAt: DateTime.utc(2026),
+              runId: runId,
+              scheduleId: 'sched-post',
+            ),
+          ),
+        );
+        final handlerWithHistory = ExecutionStatusMessageHandler(
+          executionRegistry: registry,
+          backupHistoryRepository: historyRepo,
+          clock: () => fixedNow,
+        );
+
+        Message? sent;
+        await handlerWithHistory.handle(
+          'c1',
+          createExecutionStatusRequestMessage(requestId: 2, runId: runId),
+          (a, m) async => sent = m,
+        );
+        final result = readExecutionStatusFromResponse(sent!);
+        expect(result.state, ExecutionState.completed);
+        expect(result.scheduleId, 'sched-post');
+      },
+    );
+
+    test(
       'apos unregister, runId previamente conhecido vira notFound',
       () async {
         final runId = registry.generateRunId('sched-Y');
@@ -312,7 +349,7 @@ void main() {
     });
 
     test(
-      'historico: running (sem registry) -> running com startedAt do DB',
+      'historico: running sem registry -> notFound (M8.4 pos-restart)',
       () async {
         const runId = 'hist-run-1';
         final started = DateTime.utc(2026, 3, 15, 8);
@@ -330,8 +367,8 @@ void main() {
           (a, m) async => sent = m,
         );
         final r = readExecutionStatusFromResponse(sent!);
-        expect(r.state, ExecutionState.running);
-        expect(r.startedAt, started);
+        expect(r.state, ExecutionState.notFound);
+        expect(r.message, contains('registry'));
       },
     );
 

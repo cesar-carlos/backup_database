@@ -208,7 +208,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         message.contains('desconectado do servidor')) {
       return true;
     }
-    final raw = failure.toString();
+    final raw = failureUserMessage(failure, fallback: '');
     return raw.contains('Disconnected during backup') ||
         raw.contains('Conexão encerrada') ||
         (raw.contains('Disconnected') && raw.contains('backup'));
@@ -323,8 +323,23 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       },
     );
 
+    if (!downloadSuccess) {
+      _resetExecutionState(
+        error:
+            transfer.error ??
+            transfer.uploadError ??
+            'Falha ao baixar backup do servidor',
+      );
+      return false;
+    }
+
+    if (transfer.uploadError != null) {
+      _resetExecutionState(error: transfer.uploadError);
+      return false;
+    }
+
     _resetExecutionState();
-    return downloadSuccess;
+    return true;
   }
 
   /// M8.4: após reconectar, reidrata status e reassina progresso se ainda ativo.

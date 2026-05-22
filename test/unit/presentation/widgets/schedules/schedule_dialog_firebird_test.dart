@@ -456,7 +456,7 @@ void main() {
         await tester.tap(find.text(ScheduleDialogStrings.tabSettings));
         await tester.pumpAndSettle();
 
-        expect(find.text('Firebird (backup fisico)'), findsOneWidget);
+        expect(find.text('Firebird (backup físico)'), findsOneWidget);
       },
     );
 

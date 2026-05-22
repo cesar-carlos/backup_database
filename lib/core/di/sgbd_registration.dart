@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/domain/entities/database_connection_config.dart';
+import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
@@ -89,21 +90,22 @@ void registerBackupDatabaseDefaultSgbds(GetIt getIt) {
     ),
   );
 
-  getIt.registerLazySingleton<IFirebirdConfigRepository>(
-    () => FirebirdConfigRepository(
+  getIt.registerSgbd<
+    FirebirdConfig,
+    FirebirdConfigsTableData,
+    IFirebirdConfigRepository,
+    IFirebirdBackupService,
+    FirebirdConfigProvider
+  >(
+    repositoryBuilder: () => FirebirdConfigRepository(
       getIt<AppDatabase>(),
       getIt<ISecureCredentialService>(),
     ),
-  );
-  getIt.registerFactory<FirebirdConfigProvider>(
-    () => FirebirdConfigProvider(
+    portBuilder: () => FirebirdBackupService(getIt<ProcessService>()),
+    providerBuilder: () => FirebirdConfigProvider(
       getIt<IFirebirdConfigRepository>(),
       getIt<IScheduleRepository>(),
       getIt<ToolVerificationService>(),
     ),
-  );
-
-  getIt.registerLazySingleton<IFirebirdBackupService>(
-    () => FirebirdBackupService(getIt<ProcessService>()),
   );
 }

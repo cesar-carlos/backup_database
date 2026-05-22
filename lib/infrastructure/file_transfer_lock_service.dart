@@ -135,16 +135,25 @@ class FileTransferLockService implements IFileTransferLockService {
   }
 
   @override
-  Future<void> releaseLock(String filePath) async {
+  Future<void> releaseLock(String filePath, {String? owner}) async {
     final lockFile = _getLockFile(filePath);
 
     try {
-      if (await lockFile.exists()) {
-        await lockFile.delete();
-        LoggerService.debug(
-          'FileTransferLock: released lock for $filePath',
-        );
+      if (!await lockFile.exists()) {
+        return;
       }
+      final text = (await lockFile.readAsString()).trim();
+      final v1 = FileTransferLeaseV1.tryParse(text);
+      if (v1 != null && owner != null && v1.owner != owner) {
+        LoggerService.debug(
+          'FileTransferLock: skip release (outro titular) para $filePath',
+        );
+        return;
+      }
+      await lockFile.delete();
+      LoggerService.debug(
+        'FileTransferLock: released lock for $filePath',
+      );
     } on Object catch (e, st) {
       LoggerService.warning(
         'FileTransferLock: failed to release lock for $filePath',

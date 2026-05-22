@@ -60,7 +60,14 @@ class GenericDatabaseBackupStrategy<T extends DatabaseConnectionConfig>
         backupType: backupType,
       );
       if (step.isError()) {
-        return rd.Failure(step.exceptionOrNull()!);
+        return step.fold(
+          (_) {
+            throw StateError(
+              'BackupValidationRule returned success after isError',
+            );
+          },
+          rd.Failure.new,
+        );
       }
     }
     final execContext = _buildContext(

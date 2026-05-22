@@ -398,6 +398,7 @@ class SchedulerService implements ISchedulerService {
       final backupResult = await _backupOrchestratorService.executeBackup(
         schedule: schedule,
         outputDirectory: outputDirectory,
+        notifyOnComplete: !isRemoteCommand,
       );
 
       if (backupResult.isError()) {

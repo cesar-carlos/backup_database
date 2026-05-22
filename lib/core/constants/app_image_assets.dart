@@ -14,5 +14,5 @@ abstract final class AppImageAssets {
   static const String trayIconCustomMarkerFile = '.tray_icon_custom';
 
   /// Empty marker file: when present, `build_installer.py` does not overwrite [trayIco].
-  static const String trayIconCustomMarker = '${root}$trayIconCustomMarkerFile';
+  static const String trayIconCustomMarker = '$root$trayIconCustomMarkerFile';
 }

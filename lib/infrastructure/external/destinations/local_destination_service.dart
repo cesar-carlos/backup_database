@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
@@ -126,7 +127,10 @@ class LocalDestinationService implements ILocalDestinationService {
         );
       }
 
-      final canWrite = await _checkWritePermission(destinationDir);
+      final canWrite =
+          await DirectoryPermissionCheck.hasWritePermissionForPath(
+        destinationDir,
+      );
       if (!canWrite) {
         stopwatch.stop();
         return rd.Failure(
@@ -390,24 +394,6 @@ class LocalDestinationService implements ILocalDestinationService {
     }
   }
 
-  Future<bool> _checkWritePermission(String path) async {
-    try {
-      final testFile = File(
-        p.join(path, '.write_test_${DateTime.now().millisecondsSinceEpoch}'),
-      );
-      await testFile.writeAsString('test');
-      await testFile.delete();
-      return true;
-    } on Object catch (e, stackTrace) {
-      LoggerService.debug(
-        'Falha ao verificar permissão de escrita em: $path',
-        e,
-        stackTrace,
-      );
-      return false;
-    }
-  }
-
   Future<rd.Result<int>> _validateSourceFileWithRetry(File sourceFile) async {
     const maxAttempts = 10;
     const initialDelayMs = 100;
@@ -501,7 +487,10 @@ class LocalDestinationService implements ILocalDestinationService {
       if (!await directory.exists()) {
         await directory.create(recursive: true);
       }
-      final canWrite = await _checkWritePermission(config.path);
+      final canWrite =
+          await DirectoryPermissionCheck.hasWritePermissionForPath(
+        config.path,
+      );
       if (!canWrite) {
         return rd.Failure(
           FileSystemFailure(

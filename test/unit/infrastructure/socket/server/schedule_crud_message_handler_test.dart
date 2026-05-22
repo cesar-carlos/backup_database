@@ -214,7 +214,11 @@ void main() {
         (inv) async => rd.Success(inv.positionalArguments[0] as Schedule),
       );
 
-      final req = createPauseScheduleMessage(requestId: 1, scheduleId: s.id);
+      final req = createPauseScheduleMessage(
+        requestId: 1,
+        scheduleId: s.id,
+        idempotencyKey: 'idem-pause',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single;
       expect(resp.payload['operation'], 'paused');
@@ -229,7 +233,11 @@ void main() {
         (inv) async => rd.Success(inv.positionalArguments[0] as Schedule),
       );
 
-      final req = createResumeScheduleMessage(requestId: 1, scheduleId: s.id);
+      final req = createResumeScheduleMessage(
+        requestId: 1,
+        scheduleId: s.id,
+        idempotencyKey: 'idem-resume',
+      );
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single;
       expect(resp.payload['operation'], 'resumed');
@@ -243,10 +251,31 @@ void main() {
         final s = _schedule(enabled: false);
         when(() => repo.getById(s.id)).thenAnswer((_) async => rd.Success(s));
 
-        final req = createPauseScheduleMessage(requestId: 1, scheduleId: s.id);
+        final req = createPauseScheduleMessage(
+          requestId: 1,
+          scheduleId: s.id,
+          idempotencyKey: 'idem-pause-idem',
+        );
         await handler.handle('c1', req, sendToClient);
         verifyNever(() => repo.update(any()));
         expect(sent.single.payload['operation'], 'paused');
+      },
+    );
+
+    test(
+      'resume em schedule ja habilitado: idempotente, NAO chama update',
+      () async {
+        final s = _schedule();
+        when(() => repo.getById(s.id)).thenAnswer((_) async => rd.Success(s));
+
+        final req = createResumeScheduleMessage(
+          requestId: 1,
+          scheduleId: s.id,
+          idempotencyKey: 'idem-resume-idem',
+        );
+        await handler.handle('c1', req, sendToClient);
+        verifyNever(() => repo.update(any()));
+        expect(sent.single.payload['operation'], 'resumed');
       },
     );
 
@@ -254,13 +283,28 @@ void main() {
       when(() => repo.getById('x')).thenAnswer(
         (_) async => rd.Failure(Exception('not found')),
       );
-      final req = createPauseScheduleMessage(requestId: 1, scheduleId: 'x');
+      final req = createPauseScheduleMessage(
+        requestId: 1,
+        scheduleId: 'x',
+        idempotencyKey: 'idem-pause-x',
+      );
       await handler.handle('c1', req, sendToClient);
       expect(getErrorCodeFromMessage(sent.single), ErrorCode.scheduleNotFound);
     });
   });
 
   group('idempotencyKey', () {
+    test('create sem idempotencyKey retorna invalidRequest', () async {
+      final req = createCreateScheduleMessage(
+        requestId: 1,
+        schedule: _schedule(),
+      );
+      await handler.handle('c1', req, sendToClient);
+      expect(sent.single.header.type, MessageType.error);
+      expect(getErrorCodeFromMessage(sent.single), ErrorCode.invalidRequest);
+      verifyNever(() => repo.create(any()));
+    });
+
     test(
       'create com mesma chave: 2a chamada NAO chama repo.create de novo',
       () async {

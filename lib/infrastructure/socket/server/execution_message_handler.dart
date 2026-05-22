@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -180,6 +181,19 @@ class ExecutionMessageHandler {
         requestId,
         f.message,
         f.errorCode,
+        sendToClient,
+      );
+    } on Object catch (e, st) {
+      LoggerService.warning(
+        'ExecutionMessageHandler: startBackup threw: $e',
+        e,
+        st,
+      );
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        failureUserMessage(e, fallback: 'Erro interno ao iniciar backup'),
+        ErrorCode.unknown,
         sendToClient,
       );
     }
@@ -405,7 +419,10 @@ class ExecutionMessageHandler {
 
       if (result.isError()) {
         final failure = result.exceptionOrNull();
-        final errorMessage = failure?.toString() ?? 'Falha desconhecida';
+        final errorMessage = failureUserMessage(
+          failure,
+          fallback: 'Falha desconhecida',
+        );
         LoggerService.warningWithContext(
           'startBackup async: backup failed',
           clientId: clientId,
@@ -413,17 +430,13 @@ class ExecutionMessageHandler {
           scheduleId: scheduleId,
           error: failure,
         );
-        final failedMeta = _events.next();
-        await sendToClient(
-          clientId,
-          createBackupFailedMessage(
-            requestId: requestId,
-            scheduleId: scheduleId,
-            error: errorMessage,
-            runId: runId,
-            eventId: failedMeta.eventId,
-            sequence: failedMeta.sequence,
-          ),
+        await _sendBackupFailedForRun(
+          runId: runId,
+          fallbackClientId: clientId,
+          fallbackRequestId: requestId,
+          scheduleId: scheduleId,
+          error: errorMessage,
+          fallbackSendToClient: sendToClient,
         );
         _progressNotifier.failBackup(errorMessage);
         return;
@@ -447,19 +460,19 @@ class ExecutionMessageHandler {
         stackTrace: st,
       );
       try {
-        final failedMeta = _events.next();
-        await sendToClient(
-          clientId,
-          createBackupFailedMessage(
-            requestId: requestId,
-            scheduleId: scheduleId,
-            error: e.toString(),
-            runId: runId,
-            eventId: failedMeta.eventId,
-            sequence: failedMeta.sequence,
-          ),
+        final errorMessage = failureUserMessage(
+          e,
+          fallback: 'Erro inesperado durante backup remoto',
         );
-        _progressNotifier.failBackup(e.toString());
+        await _sendBackupFailedForRun(
+          runId: runId,
+          fallbackClientId: clientId,
+          fallbackRequestId: requestId,
+          scheduleId: scheduleId,
+          error: errorMessage,
+          fallbackSendToClient: sendToClient,
+        );
+        _progressNotifier.failBackup(errorMessage);
       } on Object {
         // ignore: client may have disconnected
       }
@@ -470,6 +483,34 @@ class ExecutionMessageHandler {
 
   bool _isTerminalProgressStep(String? step) =>
       step != null && _terminalProgressSteps.contains(step);
+
+  /// Entrega `backupFailed` ao destino atual do registry (M8.4 rebind)
+  /// ou aos parametros da request original se o contexto sumiu.
+  Future<void> _sendBackupFailedForRun({
+    required String runId,
+    required String fallbackClientId,
+    required int fallbackRequestId,
+    required String scheduleId,
+    required String error,
+    required SendToClient fallbackSendToClient,
+  }) async {
+    final ctx = _executionRegistry.getByRunId(runId);
+    final targetClientId = ctx?.clientId ?? fallbackClientId;
+    final targetRequestId = ctx?.requestId ?? fallbackRequestId;
+    final deliver = ctx?.sendToClient ?? fallbackSendToClient;
+    final failedMeta = _events.next();
+    await deliver(
+      targetClientId,
+      createBackupFailedMessage(
+        requestId: targetRequestId,
+        scheduleId: scheduleId,
+        error: error,
+        runId: runId,
+        eventId: failedMeta.eventId,
+        sequence: failedMeta.sequence,
+      ),
+    );
+  }
 
   void _finalizeRegistryAfterBackup(String runId) {
     if (_executionRegistry.getByRunId(runId) == null) {
@@ -590,6 +631,7 @@ class ExecutionMessageHandler {
         clientId: next.clientId,
         requestId: next.requestId,
         requestedBy: next.requestedBy,
+        runId: next.runId,
       );
       return;
     }
@@ -675,6 +717,19 @@ class ExecutionMessageHandler {
         requestId,
         f.message,
         f.errorCode,
+        sendToClient,
+      );
+    } on Object catch (e, st) {
+      LoggerService.warning(
+        'ExecutionMessageHandler: cancelQueuedBackup threw: $e',
+        e,
+        st,
+      );
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        failureUserMessage(e, fallback: 'Erro interno ao cancelar fila'),
+        ErrorCode.unknown,
         sendToClient,
       );
     }
@@ -810,6 +865,19 @@ class ExecutionMessageHandler {
         f.errorCode,
         sendToClient,
       );
+    } on Object catch (e, st) {
+      LoggerService.warning(
+        'ExecutionMessageHandler: cancelBackup threw: $e',
+        e,
+        st,
+      );
+      await _sendErrorMsg(
+        clientId,
+        requestId,
+        failureUserMessage(e, fallback: 'Erro interno ao cancelar backup'),
+        ErrorCode.unknown,
+        sendToClient,
+      );
     }
   }
 
@@ -883,7 +951,7 @@ class ExecutionMessageHandler {
         serverTimeUtc: _clock(),
         runId: ctx.runId,
         scheduleId: scheduleId,
-        message: 'Falha ao cancelar: ${err ?? "desconhecido"}',
+        message: 'Falha ao cancelar: ${failureUserMessage(err, fallback: "desconhecido")}',
         errorCode: ErrorCode.unknown,
       );
     }

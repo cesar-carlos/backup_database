@@ -1,0 +1,6 @@
+{
+  "type": "listDatabaseConfigsRequest",
+  "payload": {
+    "databaseType": "sybase"
+  }
+}

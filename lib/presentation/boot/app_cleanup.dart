@@ -1,12 +1,12 @@
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/domain/services/i_app_database_lifecycle.dart';
 import 'package:backup_database/domain/services/i_backup_cancellation_service.dart';
+import 'package:backup_database/domain/services/i_remote_staging_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
-import 'package:backup_database/infrastructure/datasources/local/database.dart';
-import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 
 class AppCleanup {
@@ -40,8 +40,9 @@ class AppCleanup {
     });
 
     await _runStep('parar limpeza periodica de staging remoto', () async {
-      if (service_locator.getIt.isRegistered<RemoteStagingCleanupScheduler>()) {
-        service_locator.getIt<RemoteStagingCleanupScheduler>().stop();
+      if (service_locator.getIt
+          .isRegistered<IRemoteStagingCleanupScheduler>()) {
+        service_locator.getIt<IRemoteStagingCleanupScheduler>().stop();
       }
     });
 
@@ -53,8 +54,8 @@ class AppCleanup {
     });
 
     await _runStep('fechar banco de dados', () async {
-      if (service_locator.getIt.isRegistered<AppDatabase>()) {
-        await service_locator.getIt<AppDatabase>().close();
+      if (service_locator.getIt.isRegistered<IAppDatabaseLifecycle>()) {
+        await service_locator.getIt<IAppDatabaseLifecycle>().close();
       }
     });
 

@@ -1,5 +1,6 @@
 import 'package:backup_database/application/providers/notification_provider.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -423,8 +424,8 @@ class _HistoryMetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    final borderColor = const Color(0xFF8A8A8A).withValues(alpha: 0.22);
-    final backgroundColor = const Color(0xFF8A8A8A).withValues(alpha: 0.08);
+    final borderColor = context.colors.outline.withValues(alpha: 0.22);
+    final backgroundColor = context.colors.outline.withValues(alpha: 0.08);
 
     return Container(
       width: double.infinity,

@@ -192,6 +192,27 @@ void main() {
     );
 
     test(
+      'XOR violado (nem id nem config) -> error 400 invalidRequest',
+      () async {
+        final req = Message(
+          header: MessageHeader(
+            type: MessageType.testDatabaseConnectionRequest,
+            length: 0,
+            requestId: 1,
+          ),
+          payload: const <String, dynamic>{
+            'databaseType': 'sybase',
+          },
+          checksum: 0,
+        );
+        await handler.handle('c1', req, send);
+        final resp = sentMessages.single;
+        expect(resp.header.type, MessageType.error);
+        expect(getErrorCodeFromMessage(resp), ErrorCode.invalidRequest);
+      },
+    );
+
+    test(
       'XOR violado (id + config simultaneos) -> error 400 invalidRequest',
       () async {
         final req = Message(

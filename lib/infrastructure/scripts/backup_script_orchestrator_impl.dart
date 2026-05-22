@@ -1,3 +1,4 @@
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
@@ -103,7 +104,7 @@ class BackupScriptOrchestratorImpl implements IBackupScriptOrchestrator {
           return const Success(unit);
         },
         (failure) async {
-          final errorMessage = failure.toString();
+          final errorMessage = failureUserMessage(failure);
           LoggerService.warning(
             'Erro ao executar script SQL pós-backup: $errorMessage',
             failure,

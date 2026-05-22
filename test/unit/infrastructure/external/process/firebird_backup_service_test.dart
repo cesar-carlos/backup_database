@@ -690,6 +690,79 @@ void main() {
       },
     );
 
+    test(
+      'executeBackup fullSingle verify gbak -c passes -SE when hint v30',
+      () async {
+        final cfg = FirebirdConfig(
+          name: 'fb-verify-se',
+          host: 'srv.example',
+          databaseFile: '/data/app.fdb',
+          username: 'sysdba',
+          password: 'masterkey',
+          port: PortNumber(3050),
+          serverVersionHint: FirebirdServerVersionHint.v30,
+        );
+        when(
+          () => processService.run(
+            executable: 'gbak',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).thenAnswer((invocation) async {
+          final args = invocation.namedArguments[#arguments]! as List<String>;
+          if (args.contains('-b')) {
+            await File(args.last).writeAsBytes(List<int>.filled(14, 4));
+            return const rd.Success(
+              ProcessResult(
+                exitCode: 0,
+                stdout: '',
+                stderr: '',
+                duration: Duration(milliseconds: 2),
+              ),
+            );
+          }
+          if (args.contains('-c')) {
+            expect(args.indexOf('-c'), lessThan(args.indexOf('-SE')));
+            expect(args, contains('srv.example/3050:service_mgr'));
+            return const rd.Success(
+              ProcessResult(
+                exitCode: 0,
+                stdout: '',
+                stderr: '',
+                duration: Duration(milliseconds: 2),
+              ),
+            );
+          }
+          fail('unexpected gbak arguments: $args');
+        });
+
+        final result = await service.executeBackup(
+          config: cfg,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sched-verify-se',
+            backupType: BackupType.fullSingle,
+            verifyAfterBackup: true,
+          ),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => processService.run(
+            executable: 'gbak',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).called(2);
+      },
+    );
+
     test('executeBackup fails when embedded database path empty', () async {
       final embedded = FirebirdConfig(
         name: 'emb',

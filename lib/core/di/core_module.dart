@@ -432,6 +432,7 @@ Future<void> setupCoreModule(GetIt getIt) async {
   getIt.registerLazySingleton<AppDatabase>(
     () => AppDatabase(databaseName: databaseName),
   );
+  getIt.registerLazySingleton<IAppDatabaseLifecycle>(getIt.get<AppDatabase>);
 
   if (exportData224 != null) {
     final db = getIt<AppDatabase>();

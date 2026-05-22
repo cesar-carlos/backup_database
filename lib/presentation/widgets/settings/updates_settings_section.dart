@@ -6,7 +6,7 @@ import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -617,10 +617,10 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
       width: double.infinity,
       padding: AppSpacing.paddingMd,
       decoration: BoxDecoration(
-        color: const Color(0xFF8A8A8A).withValues(alpha: 0.08),
+        color: context.colors.outline.withValues(alpha: 0.08),
         borderRadius: AppRadius.circularMd,
         border: Border.all(
-          color: const Color(0xFF8A8A8A).withValues(alpha: 0.22),
+          color: context.colors.outline.withValues(alpha: 0.22),
         ),
       ),
       child: Column(

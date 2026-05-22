@@ -7,7 +7,7 @@ import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
+import 'package:backup_database/domain/entities/schedule_config.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/dashboard/dashboard.dart';
 import 'package:fluent_ui/fluent_ui.dart';

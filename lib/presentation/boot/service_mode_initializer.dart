@@ -10,12 +10,12 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/service/service_shutdown_handler.dart';
+import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart';
+import 'package:backup_database/domain/services/i_remote_staging_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
-import 'package:backup_database/infrastructure/external/system/system.dart';
-import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
-import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
+import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:flutter/foundation.dart';
 
@@ -32,7 +32,7 @@ class ServiceModeInitializer {
     final shutdownCompleter = Completer<void>();
     ISchedulerService? schedulerService;
     ServiceHealthChecker? healthChecker;
-    WindowsEventLogService? eventLog;
+    IWindowsServiceEventLogger? eventLog;
     ISingleInstanceService? singleInstanceService;
     ServiceShutdownHandler? shutdownHandler;
     AutoUpdateService? autoUpdateService;
@@ -78,9 +78,17 @@ class ServiceModeInitializer {
       await _bootstrapStep(
         step: 4,
         totalSteps: totalSteps,
+        label: 'Configurando dependencias (DI)',
+        action: service_locator.setupServiceLocatorForServiceMode,
+      );
+
+      await _bootstrapStep(
+        step: 5,
+        totalSteps: totalSteps,
         label: 'Verificando single instance',
         action: () async {
-          singleInstanceService = SingleInstanceService();
+          singleInstanceService = service_locator
+              .getIt<ISingleInstanceService>();
           final isFirstServiceInstance = await singleInstanceService!
               .checkAndLock(isServiceMode: true);
           if (!isFirstServiceInstance) {
@@ -88,18 +96,11 @@ class ServiceModeInitializer {
               'Outra instancia do servico ja esta em execucao. Encerrando.',
             );
             await _appendBootstrapLog(
-              'step 4/$totalSteps: existing service instance found, exiting 0',
+              'step 5/$totalSteps: existing service instance found, exiting 0',
             );
             exit(0);
           }
         },
-      );
-
-      await _bootstrapStep(
-        step: 5,
-        totalSteps: totalSteps,
-        label: 'Configurando dependencias (DI)',
-        action: service_locator.setupServiceLocatorForServiceMode,
       );
 
       await _bootstrapStep(
@@ -109,7 +110,7 @@ class ServiceModeInitializer {
         action: () async {
           schedulerService = service_locator.getIt<ISchedulerService>();
           healthChecker = service_locator.getIt<ServiceHealthChecker>();
-          eventLog = service_locator.getIt<WindowsEventLogService>();
+          eventLog = service_locator.getIt<IWindowsServiceEventLogger>();
           autoUpdateService = service_locator.getIt<AutoUpdateService>();
         },
       );
@@ -149,8 +150,8 @@ class ServiceModeInitializer {
         action: () async {
           await schedulerService!.start();
           await healthChecker!.start();
-          await service_locator.getIt<ExecutionQueueService>().initialize();
-          service_locator.getIt<RemoteStagingCleanupScheduler>().start();
+          await service_locator.getIt<IExecutionQueueBootstrap>().initialize();
+          service_locator.getIt<IRemoteStagingCleanupScheduler>().start();
           service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
         },
       );
@@ -399,7 +400,7 @@ class ServiceModeInitializer {
     required Completer<void> shutdownCompleter,
     required ISchedulerService? Function() schedulerServiceRef,
     required ServiceHealthChecker? Function() healthCheckerRef,
-    required WindowsEventLogService? Function() eventLogRef,
+    required IWindowsServiceEventLogger? Function() eventLogRef,
   }) {
     shutdownHandler.registerCallback((timeout) async {
       LoggerService.info('Shutdown callback: parando servicos');
@@ -422,8 +423,8 @@ class ServiceModeInitializer {
 
       try {
         if (service_locator.getIt
-            .isRegistered<RemoteStagingCleanupScheduler>()) {
-          service_locator.getIt<RemoteStagingCleanupScheduler>().stop();
+            .isRegistered<IRemoteStagingCleanupScheduler>()) {
+          service_locator.getIt<IRemoteStagingCleanupScheduler>().stop();
         }
       } on Object catch (e, s) {
         LoggerService.warning(

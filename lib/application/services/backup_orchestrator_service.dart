@@ -134,6 +134,7 @@ class BackupOrchestratorService {
   Future<rd.Result<BackupHistory>> executeBackup({
     required Schedule schedule,
     required String outputDirectory,
+    bool notifyOnComplete = true,
   }) async {
     LoggerService.info('Iniciando backup para schedule: ${schedule.name}');
 
@@ -246,14 +247,19 @@ class BackupOrchestratorService {
           'Failed to get database configuration: $errorMessage',
           failure,
         );
-        return rd.Failure(
-          ConfigNotFoundFailure(
-            message:
-                'Configuration not found for ${schedule.databaseType.name} '
-                '(id: ${schedule.databaseConfigId})',
-            code: FailureCodes.configNotFound,
-            originalError: failure,
-          ),
+        final configFailure = ConfigNotFoundFailure(
+          message:
+              'Configuration not found for ${schedule.databaseType.name} '
+              '(id: ${schedule.databaseConfigId})',
+          code: FailureCodes.configNotFound,
+          originalError: failure,
+        );
+        return _failRunningHistory(
+          history: history,
+          errorMessage: configFailure.message,
+          logStep: LogStepConstants.backupError,
+          failure: configFailure,
+          notifyOnComplete: notifyOnComplete,
         );
       }
 
@@ -263,10 +269,17 @@ class BackupOrchestratorService {
       // (Open/Closed Principle).
       final strategy = _strategies[schedule.databaseType];
       if (strategy == null) {
-        return rd.Failure(
-          ValidationFailure(
-            message: 'Unsupported database type: ${schedule.databaseType}',
+        const errorMessage = 'Unsupported database type';
+        return _failRunningHistory(
+          history: history,
+          errorMessage:
+              '$errorMessage: ${schedule.databaseType}',
+          logStep: LogStepConstants.backupError,
+          failure: ValidationFailure(
+            message:
+                '$errorMessage: ${schedule.databaseType}',
           ),
+          notifyOnComplete: notifyOnComplete,
         );
       }
 
@@ -280,7 +293,14 @@ class BackupOrchestratorService {
       );
       if (strategyResult.isError()) {
         final failure = strategyResult.exceptionOrNull()!;
-        return rd.Failure(_asFailure(failure));
+        final failureMessage = _failureMessage(failure);
+        return _failRunningHistory(
+          history: history,
+          errorMessage: failureMessage,
+          logStep: LogStepConstants.backupError,
+          failure: _asFailure(failure),
+          notifyOnComplete: notifyOnComplete,
+        );
       }
       backupExecutionResult = strategyResult.getOrNull()!;
       // O preflight Sybase vive em `SybaseLogBackupPreflightRule` e o
@@ -365,7 +385,7 @@ class BackupOrchestratorService {
           );
         } else {
           final failure = compressionResult.exceptionOrNull()!;
-          final failureMessage = failure.toString();
+          final failureMessage = _failureMessage(failure);
 
           LoggerService.error('Falha na compressão: $failureMessage', failure);
           await _log(
@@ -375,34 +395,13 @@ class BackupOrchestratorService {
             step: LogStepConstants.compressionFailed,
           );
 
-          // Bug histórico: este ramo retornava `rd.Failure(failure)` sem
-          // atualizar o histórico para `error`. O registro ficava
-          // permanentemente em `running` até a próxima reconciliação,
-          // confundindo a UI (backup "rodando" há horas que na verdade
-          // já tinha falhado). Agora atualizamos antes de retornar.
-          final finishedAt = DateTime.now();
-          history = history.copyWith(
-            status: BackupStatus.error,
+          return _failRunningHistory(
+            history: history,
             errorMessage: 'Falha na compressão: $failureMessage',
-            finishedAt: finishedAt,
-            durationSeconds: finishedAt.difference(history.startedAt).inSeconds,
+            logStep: LogStepConstants.compressionFailed,
+            failure: _asFailure(failure),
+            notifyOnComplete: notifyOnComplete,
           );
-          final updateResult = await _backupHistoryRepository
-              .updateHistoryAndLogIfRunning(
-                history: history,
-                logStep: LogStepConstants.compressionFailed,
-                logLevel: LogLevel.error,
-                logMessage: 'Falha na compressão: $failureMessage',
-              );
-          updateResult.fold(
-            (_) {},
-            (e) => LoggerService.warning(
-              'Erro ao atualizar histórico após falha de compressão: $e',
-            ),
-          );
-          await _safeNotifyComplete(history);
-
-          return rd.Failure(_asFailure(failure));
         }
       }
 
@@ -478,9 +477,9 @@ class BackupOrchestratorService {
         (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
       );
 
-      // Notificação de conclusão (success ou warning) — antes essa
-      // notificação só era enviada no caminho de erro.
-      await _safeNotifyComplete(history);
+      if (notifyOnComplete) {
+        await _safeNotifyComplete(history);
+      }
 
       LoggerService.info('Backup concluído: ${history.backupPath}');
       return rd.Success(history);
@@ -508,7 +507,9 @@ class BackupOrchestratorService {
             LoggerService.warning('Erro ao atualizar histórico e log: $err'),
       );
 
-      await _safeNotifyComplete(history);
+      if (notifyOnComplete) {
+        await _safeNotifyComplete(history);
+      }
 
       return rd.Failure(
         BackupFailure(
@@ -727,6 +728,42 @@ class BackupOrchestratorService {
     }
   }
 
+  Future<rd.Result<BackupHistory>> _failRunningHistory({
+    required BackupHistory history,
+    required String errorMessage,
+    required String logStep,
+    required Failure failure,
+    bool notifyOnComplete = true,
+  }) async {
+    final finishedAt = DateTime.now();
+    final failedHistory = history.copyWith(
+      status: BackupStatus.error,
+      errorMessage: errorMessage,
+      finishedAt: finishedAt,
+      durationSeconds: finishedAt.difference(history.startedAt).inSeconds,
+    );
+    final updateResult = await _backupHistoryRepository
+        .updateHistoryAndLogIfRunning(
+          history: failedHistory,
+          logStep: logStep,
+          logLevel: LogLevel.error,
+          logMessage: errorMessage,
+        );
+    updateResult.fold(
+      (_) {},
+      (e) => LoggerService.warning(
+        'Erro ao atualizar histórico após falha intermediária: $e',
+      ),
+    );
+    if (notifyOnComplete) {
+      await _safeNotifyComplete(failedHistory);
+    }
+    return rd.Failure(failure);
+  }
+
+  String _failureMessage(Object? failure, {String fallback = 'Erro'}) =>
+      failureUserMessage(failure, fallback: fallback);
+
   /// Converte `Object` (que sai de `Result.exceptionOrNull()`) em
   /// `Failure` de forma segura. Antes a strategy result usava
   /// `failure is Failure ? failure : BackupFailure(message: '$failure')`
@@ -735,7 +772,7 @@ class BackupOrchestratorService {
   Failure _asFailure(Object failure) {
     if (failure is Failure) return failure;
     return BackupFailure(
-      message: failure.toString(),
+      message: _failureMessage(failure),
       originalError: failure,
     );
   }

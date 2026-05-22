@@ -22,7 +22,7 @@ class _FakeLockService implements IFileTransferLockService {
   Future<bool> isLocked(String filePath) async => false;
 
   @override
-  Future<void> releaseLock(String filePath) async {}
+  Future<void> releaseLock(String filePath, {String? owner}) async {}
 
   @override
   Future<bool> tryAcquireLock(

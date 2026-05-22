@@ -38,7 +38,7 @@ void main() {
         expect(merged, contains('D=4'));
         expect(RegExp(r'^B=2$', multiLine: true).hasMatch(merged), isFalse);
 
-        await tempDir.delete(recursive: true);
+        await _deleteTempDirBestEffort(tempDir);
       },
       skip: !Platform.isWindows,
     );
@@ -104,7 +104,7 @@ void main() {
         expect(await File(contextPath).exists(), isFalse);
         expect(await File(markerPath).exists(), isFalse);
 
-        await tempDir.delete(recursive: true);
+        await _deleteTempDirBestEffort(tempDir);
       },
       skip: !Platform.isWindows,
     );
@@ -172,7 +172,7 @@ void main() {
         expect(relaunchedArgs, contains('--schedule-id=42'));
         expect(await File(contextPath).exists(), isFalse);
 
-        await tempDir.delete(recursive: true);
+        await _deleteTempDirBestEffort(tempDir);
       },
       skip: !Platform.isWindows,
     );
@@ -249,7 +249,7 @@ void main() {
         expect(nssmLog, contains('start BackupDatabaseService'));
         expect(await File(contextPath).exists(), isFalse);
 
-        await tempDir.delete(recursive: true);
+        await _deleteTempDirBestEffort(tempDir);
       },
       skip: !Platform.isWindows,
     );
@@ -310,13 +310,31 @@ void main() {
           expect(decoded['serviceConfig'], isNull);
         }
 
-        await tempDir.delete(recursive: true);
+        await _deleteTempDirBestEffort(tempDir);
       },
       skip: !Platform.isWindows,
     );
   });
 }
 
+
+Future<void> _deleteTempDirBestEffort(Directory directory) async {
+  const maxAttempts = 8;
+  const delay = Duration(milliseconds: 150);
+  for (var attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+      return;
+    } on PathAccessException {
+      if (attempt == maxAttempts - 1) {
+        rethrow;
+      }
+      await Future<void>.delayed(delay);
+    }
+  }
+}
 Future<ProcessResult> _runPowerShellScript({
   required String scriptRelativePath,
   required List<String> arguments,

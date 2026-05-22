@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/services/i_metrics_analysis_service.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -136,14 +137,14 @@ class MetricsPercentilesCard extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Text(
-            _formatSize(p.p50SizeBytes),
+            ByteFormat.format(p.p50SizeBytes),
             style: FluentTheme.of(context).typography.body,
           ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Text(
-            _formatSize(p.p95SizeBytes),
+            ByteFormat.format(p.p95SizeBytes),
             style: FluentTheme.of(context).typography.body,
           ),
         ),
@@ -175,17 +176,6 @@ class MetricsPercentilesCard extends StatelessWidget {
     final s = seconds % 60;
     if (s == 0) return '${m}min';
     return '${m}min ${s}s';
-  }
-
-  String _formatSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(2)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
   String _formatSpeed(double mbPerSec) {

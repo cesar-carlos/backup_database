@@ -99,7 +99,17 @@ void main() {
     test('releaseLock remove o arquivo', () async {
       final s = svc();
       await s.tryAcquireLock(fp, owner: 'a');
-      await s.releaseLock(fp);
+      await s.releaseLock(fp, owner: 'a');
+      expect(await s.isLocked(fp), isFalse);
+    });
+
+    test('releaseLock nao remove lease de outro titular', () async {
+      final s = svc();
+      expect(await s.tryAcquireLock(fp, owner: 'a', runId: 'r1'), isTrue);
+      expect(await s.tryAcquireLock(fp, owner: 'b', runId: 'r1'), isTrue);
+      await s.releaseLock(fp, owner: 'a');
+      expect(await s.isLocked(fp), isTrue);
+      await s.releaseLock(fp, owner: 'b');
       expect(await s.isLocked(fp), isFalse);
     });
 

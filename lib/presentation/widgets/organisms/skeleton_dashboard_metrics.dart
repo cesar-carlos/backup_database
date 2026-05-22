@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_shimmer.dart';
 import 'package:flutter/widgets.dart';
 
@@ -6,22 +6,21 @@ import 'package:flutter/widgets.dart';
 class SkeletonDashboardMetrics extends StatelessWidget {
   const SkeletonDashboardMetrics({super.key});
 
-  static const Color _fill = Color(0xFFBDBDBD);
-
   @override
   Widget build(BuildContext context) {
+    final fill = context.colors.outline.withValues(alpha: 0.35);
     return AppShimmer(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: List<Widget>.generate(3, (_) {
-          return const Expanded(
+          return Expanded(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
               child: ClipRRect(
                 borderRadius: AppRadius.circularLg,
                 child: SizedBox(
                   height: 112,
-                  child: ColoredBox(color: _fill),
+                  child: ColoredBox(color: fill),
                 ),
               ),
             ),

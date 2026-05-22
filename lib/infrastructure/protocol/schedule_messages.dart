@@ -98,8 +98,8 @@ Message createExecuteScheduleMessage({
   );
 }
 
-/// CRUD remoto de schedule (PR-2). Operacoes mutaveis aceitam
-/// `idempotencyKey` opcional para protecao contra retransmissao.
+/// CRUD remoto de schedule (PR-2). Operacoes mutaveis exigem
+/// `idempotencyKey` (ver `IdempotencyPolicy` / F2.14).
 ///
 /// `create`: payload contem schedule serializado completo. Servidor
 /// responde com `scheduleMutationResponse` carregando o schedule

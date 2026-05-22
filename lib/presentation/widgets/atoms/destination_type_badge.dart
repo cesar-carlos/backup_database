@@ -1,3 +1,4 @@
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_status_chip.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -23,27 +24,26 @@ class DestinationTypeBadge extends StatelessWidget {
     }
   }
 
-  Color _color(FluentThemeData theme) {
+  Color get _color {
     switch (type) {
       case DestinationType.local:
-        return theme.resources.systemFillColorSuccessBackground;
+        return AppPalette.destinationLocal;
       case DestinationType.ftp:
-        return const Color(0xFF0066CC);
+        return AppPalette.destinationFtp;
       case DestinationType.googleDrive:
-        return const Color(0xFF4285F4);
+        return AppPalette.destinationGoogleDrive;
       case DestinationType.dropbox:
-        return const Color(0xFF0061FF);
+        return AppPalette.destinationDropbox;
       case DestinationType.nextcloud:
-        return const Color(0xFF0082C9);
+        return AppPalette.destinationNextcloud;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
     return AppStatusChip(
       label: _label,
-      color: _color(theme),
+      color: _color,
     );
   }
 }

@@ -345,7 +345,7 @@ void main() {
         expect(find.text('Performance Avançada (SQL Server)'), findsNothing);
         expect(find.text('Performance Avançada (Sybase)'), findsNothing);
         expect(find.text('Modo embedded'), findsOneWidget);
-        expect(find.text('Service manager (gbak)'), findsOneWidget);
+        expect(find.text('Service manager (gbak / nbackup)'), findsOneWidget);
       },
     );
 

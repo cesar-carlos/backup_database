@@ -121,12 +121,7 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
         (failure) {
           if (mounted) {
             setState(() {
-              // Antes era `failure.toString()` — para `Failure` instances
-              // gerava "Failure(message: ..., code: ...)" exibido ao
-              // usuário. Extrai `.message` quando é `Failure`.
-              _error = failure is Failure
-                  ? failure.message
-                  : failure.toString();
+              _error = failureUserMessage(failure);
               _isLoading = false;
             });
           }

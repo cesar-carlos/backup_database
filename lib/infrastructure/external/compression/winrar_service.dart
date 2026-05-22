@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/winrar_install_probe.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
 
@@ -11,32 +10,11 @@ class WinRarService {
   String? _winRarPath;
   bool? _isAvailable;
 
-  /// Caminhos padrão onde o WinRAR é instalado em Windows (32 e 64 bit).
-  /// Centralizado para que outros componentes (ex.: ScheduleDialog) não
-  /// precisem reimplementar a detecção.
-  static const List<String> _knownInstallPaths = [
-    r'C:\Program Files\WinRAR\WinRAR.exe',
-    r'C:\Program Files (x86)\WinRAR\WinRAR.exe',
-  ];
+  static Future<String?> findInstalledPath() =>
+      WinrarInstallProbe.findInstalledPath();
 
-  /// Helper estático que devolve o caminho do `WinRAR.exe` quando existe
-  /// no sistema, ou `null`. Antes a UI (`ScheduleDialog._checkWinRarAvailable`)
-  /// reimplementava esta lógica inline — agora ambos consomem o mesmo
-  /// helper, garantindo que a lista de caminhos suportados fique numa
-  /// única fonte da verdade.
-  static Future<String?> findInstalledPath() async {
-    for (final path in _knownInstallPaths) {
-      if (await File(path).exists()) {
-        return path;
-      }
-    }
-    return null;
-  }
-
-  /// Variante boolean para callers que só precisam saber "tem WinRAR?"
-  /// sem cuidar do caminho.
-  static Future<bool> isInstalledInSystem() async =>
-      (await findInstalledPath()) != null;
+  static Future<bool> isInstalledInSystem() =>
+      WinrarInstallProbe.isInstalledInSystem();
 
   Future<bool> isAvailable() async {
     if (_isAvailable != null) {

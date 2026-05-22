@@ -68,6 +68,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
   ///
   /// Usa `eventcreate /?` para detectar disponibilidade sem criar nenhum
   /// evento real, evitando poluição no Event Viewer a cada inicialização.
+  @override
   Future<void> initialize() async {
     if (!Platform.isWindows) {
       LoggerService.debug(
@@ -235,6 +236,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
   }
 
   /// Escreve um evento de serviço iniciado.
+  @override
   Future<void> logServiceStarted() async {
     await writeEvent(
       type: EventLogEntryType.information,
@@ -244,6 +246,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
   }
 
   /// Escreve um evento de serviço parado.
+  @override
   Future<void> logServiceStopped() async {
     await writeEvent(
       type: EventLogEntryType.information,
@@ -254,6 +257,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
 
   /// Escreve um evento quando o shutdown ocorreu com backups em execução
   /// que não concluíram antes do timeout.
+  @override
   Future<void> logShutdownBackupsIncomplete({
     required Duration timeout,
     String? details,
@@ -418,6 +422,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
   }
 
   /// Escreve um evento crítico do sistema.
+  @override
   Future<void> logCriticalError({
     required String error,
     String? context,

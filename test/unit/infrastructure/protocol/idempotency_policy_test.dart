@@ -37,13 +37,23 @@ void main() {
       );
     });
 
-    test('pauseSchedule does not require idempotencyKey', () {
+    test('pauseSchedule requires idempotencyKey', () {
       expect(
-        IdempotencyPolicy.missingKeyErrorMessage(
-          message: _message(MessageType.pauseSchedule),
-          operationType: MessageType.pauseSchedule,
-        ),
-        isNull,
+        IdempotencyPolicy.isKeyRequired(MessageType.pauseSchedule),
+        isTrue,
+      );
+      final error = IdempotencyPolicy.missingKeyErrorMessage(
+        message: _message(MessageType.pauseSchedule),
+        operationType: MessageType.pauseSchedule,
+      );
+      expect(error, isNotNull);
+      expect(error!.payload['errorCode'], ErrorCode.invalidRequest.code);
+    });
+
+    test('resumeSchedule requires idempotencyKey', () {
+      expect(
+        IdempotencyPolicy.isKeyRequired(MessageType.resumeSchedule),
+        isTrue,
       );
     });
 

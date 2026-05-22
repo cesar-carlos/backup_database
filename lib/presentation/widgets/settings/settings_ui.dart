@@ -1,5 +1,5 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class SettingsToggleRow extends StatelessWidget {
@@ -45,7 +45,7 @@ class SettingsToggleRow extends StatelessWidget {
                     Text(
                       disabledReason!,
                       style: captionStyle?.copyWith(
-                        color: const Color(0xFFD97706),
+                        color: context.colors.warning,
                       ),
                     ),
                   ],
@@ -89,8 +89,8 @@ class SettingsTechnicalItem extends StatelessWidget {
       fontFamily: 'Consolas',
       height: 1.35,
     );
-    final borderColor = const Color(0xFF8A8A8A).withValues(alpha: 0.24);
-    final backgroundColor = const Color(0xFF8A8A8A).withValues(alpha: 0.08);
+    final borderColor = context.colors.outline.withValues(alpha: 0.24);
+    final backgroundColor = context.colors.outline.withValues(alpha: 0.08);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,8 +165,8 @@ class SettingsFactTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final captionStyle = FluentTheme.of(context).typography.caption;
-    final borderColor = const Color(0xFF8A8A8A).withValues(alpha: 0.22);
-    final backgroundColor = const Color(0xFF8A8A8A).withValues(alpha: 0.08);
+    final borderColor = context.colors.outline.withValues(alpha: 0.22);
+    final backgroundColor = context.colors.outline.withValues(alpha: 0.08);
 
     return Container(
       width: expandToFit ? double.infinity : null,

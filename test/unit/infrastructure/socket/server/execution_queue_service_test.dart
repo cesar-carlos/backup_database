@@ -242,6 +242,20 @@ void main() {
       }
     });
 
+    test('tryEnqueue com runId preservado reutiliza o mesmo id', () async {
+      final svc = ExecutionQueueService();
+      const stableRunId = 'sched-keep_11111111-2222-3333-4444-555555555555';
+      final item = await svc.tryEnqueue(
+        scheduleId: 'sched-keep',
+        clientId: 'c',
+        requestId: 1,
+        requestedBy: 'c',
+        runId: stableRunId,
+      );
+      expect(item?.runId, stableRunId);
+      expect(svc.findQueuedByRunId(stableRunId)?.item.runId, stableRunId);
+    });
+
     test('findQueuedByRunId retorna item e posicao 1-based', () async {
       final svc = ExecutionQueueService();
       final first = await svc.tryEnqueue(

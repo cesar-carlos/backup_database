@@ -6,18 +6,18 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/core/platform/os_version_checker.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
+import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
+import 'package:backup_database/domain/services/i_remote_staging_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/domain/services/i_socket_server_lifecycle.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
-import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
-import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
-import 'package:backup_database/infrastructure/socket/server/socket_server_service.dart';
-import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
@@ -283,13 +283,15 @@ class AppBootstrapDependencies {
         ),
         socketServerStartupTask: SocketServerStartupTask(
           initializeExecutionQueue: () async {
-            await service_locator.getIt<ExecutionQueueService>().initialize();
+            await service_locator
+                .getIt<IExecutionQueueBootstrap>()
+                .initialize();
           },
           isSocketServerRunning: () {
-            return service_locator.getIt<SocketServerService>().isRunning;
+            return service_locator.getIt<ISocketServerLifecycle>().isRunning;
           },
           socketServerPort: () {
-            return service_locator.getIt<SocketServerService>().port;
+            return service_locator.getIt<ISocketServerLifecycle>().port;
           },
           cleanupExpiredFileTransferLocks: () async {
             await service_locator
@@ -297,10 +299,10 @@ class AppBootstrapDependencies {
                 .cleanupExpiredLocks();
           },
           startSocketServer: () async {
-            await service_locator.getIt<SocketServerService>().start();
+            await service_locator.getIt<ISocketServerLifecycle>().start();
           },
           startRemoteStagingCleanup: () async {
-            service_locator.getIt<RemoteStagingCleanupScheduler>().start();
+            service_locator.getIt<IRemoteStagingCleanupScheduler>().start();
           },
           logInfo: LoggerService.info,
           logError: LoggerService.error,

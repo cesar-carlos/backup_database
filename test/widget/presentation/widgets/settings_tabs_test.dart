@@ -181,6 +181,27 @@ class _FakeWindowsServiceService implements IWindowsServiceService {
 
 class _FakeWindowsServiceEventLogger implements IWindowsServiceEventLogger {
   @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> logServiceStarted() async {}
+
+  @override
+  Future<void> logServiceStopped() async {}
+
+  @override
+  Future<void> logShutdownBackupsIncomplete({
+    required Duration timeout,
+    String? details,
+  }) async {}
+
+  @override
+  Future<void> logCriticalError({
+    required String error,
+    String? context,
+  }) async {}
+
+  @override
   Future<void> logInstallFailed({required String error}) async {}
 
   @override

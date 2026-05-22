@@ -845,7 +845,7 @@ Data/Hora do teste: ${DateTime.now()}
       smtpPort: config.smtpPort,
       status: failure == null ? 'success' : 'failure',
       errorType: _classifyTestFailureType(failure),
-      errorMessage: failure?.toString(),
+      errorMessage: failure == null ? null : failureUserMessage(failure),
     );
 
     final result = await _emailTestAuditRepository.create(audit);
@@ -862,7 +862,7 @@ Data/Hora do teste: ${DateTime.now()}
       return null;
     }
 
-    final text = failure.toString().toLowerCase();
+    final text = failureUserMessage(failure).toLowerCase();
     if (text.contains('autenticacao') ||
         text.contains('authentication') ||
         text.contains('535')) {

@@ -13,8 +13,7 @@ import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/app_colors.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
-import 'package:backup_database/infrastructure/external/nextcloud/nextcloud.dart'
-    as nextcloud;
+import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
@@ -1504,9 +1503,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
           }
         },
         (failure) {
-          final message = failure is Failure
-              ? failure.message
-              : failure.toString();
+          final message = failureUserMessage(
+            failure,
+            fallback: _dialogLabel('Erro desconhecido', 'Unknown error'),
+          );
           _showError(
             _dialogLabel(
               'Erro ao testar conexão FTP:\n$message',
@@ -1574,7 +1574,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         allowInvalidCertificates: _nextcloudAllowInvalidCertificates,
       );
 
-      final nextcloudService = getIt<nextcloud.NextcloudDestinationService>();
+      final nextcloudService = getIt<INextcloudDestinationService>();
       final result = await nextcloudService.testConnection(config);
 
       if (!mounted) return;
@@ -1598,9 +1598,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
           }
         },
         (failure) {
-          final message = failure is Failure
-              ? failure.message
-              : failure.toString();
+          final message = failureUserMessage(
+            failure,
+            fallback: _dialogLabel('Erro desconhecido', 'Unknown error'),
+          );
           _showError(
             _dialogLabel(
               'Erro ao testar conexão Nextcloud:\n$message',

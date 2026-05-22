@@ -32,6 +32,40 @@ void main() {
       expect(q2.snapshot().single.runId, item!.runId);
     });
 
+    test(
+      'removeByRunId remove linha só no SQLite quando memoria vazia',
+      () async {
+        final db = AppDatabase.inMemory();
+        addTearDown(() async {
+          await db.close();
+        });
+
+        const runId = 'sch-rm_only-db_run';
+        final dao = db.executionQueueDao;
+        final inserted = await dao.tryInsert(
+          item: QueuedExecutionItem(
+            runId: runId,
+            scheduleId: 'sch-rm',
+            clientId: 'c1',
+            requestId: 1,
+            requestedBy: 'c1',
+            queuedAt: DateTime.utc(2026),
+          ),
+          maxQueueSize: 10,
+        );
+        expect(inserted, isTrue);
+
+        final q = ExecutionQueueService(
+          persistence: DriftExecutionQueuePersistence(dao),
+        );
+        expect(q.queueSize, 0);
+
+        final removed = await q.removeByRunId(runId);
+        expect(removed, isTrue);
+        expect(await dao.countRows(), 0);
+      },
+    );
+
     test('trimToMaxSize remove entradas mais antigas', () async {
       final db = AppDatabase.inMemory();
       addTearDown(() async {

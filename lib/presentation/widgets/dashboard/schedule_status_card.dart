@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
@@ -14,7 +14,9 @@ class ScheduleStatusCard extends StatelessWidget {
       child: ListTile(
         leading: Icon(
           schedule.enabled ? FluentIcons.clock : FluentIcons.cancel,
-          color: schedule.enabled ? AppColors.success : AppColors.grey600,
+          color: schedule.enabled
+              ? context.colors.success
+              : context.colors.disabled,
         ),
         title: Text(schedule.name),
         subtitle: Text(

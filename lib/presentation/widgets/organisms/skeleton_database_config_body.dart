@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_shimmer.dart';
 import 'package:backup_database/presentation/widgets/molecules/skeleton_card.dart';
 import 'package:flutter/widgets.dart';
@@ -12,10 +12,9 @@ class SkeletonDatabaseConfigBody extends StatelessWidget {
 
   final int sectionCount;
 
-  static const Color _titleFill = Color(0xFFBDBDBD);
-
   @override
   Widget build(BuildContext context) {
+    final titleFill = context.colors.outline;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: AppShimmer(
@@ -24,12 +23,12 @@ class SkeletonDatabaseConfigBody extends StatelessWidget {
           children: [
             for (int i = 0; i < sectionCount; i++) ...[
               if (i > 0) const SizedBox(height: AppSpacing.lg),
-              const ClipRRect(
+              ClipRRect(
                 borderRadius: AppRadius.circularSm,
                 child: SizedBox(
                   width: 220,
                   height: 18,
-                  child: ColoredBox(color: _titleFill),
+                  child: ColoredBox(color: titleFill),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),

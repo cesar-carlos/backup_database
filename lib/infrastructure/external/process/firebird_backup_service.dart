@@ -1675,8 +1675,8 @@ QUIT;
     );
 
     Future<void> cleanup() async {
-      await _deletePathBestEffort(File(tempDbPath));
-      await _deletePathBestEffort(File(logPath));
+      await BackupArtifactUtils.safeDeletePartial(tempDbPath);
+      await BackupArtifactUtils.safeDeletePartial(logPath);
     }
 
     final arguments = <String>[
@@ -1755,16 +1755,6 @@ QUIT;
     }
   }
 
-  static Future<void> _deletePathBestEffort(File file) async {
-    try {
-      if (await file.exists()) {
-        await file.delete();
-      }
-    } on Object {
-      // ignore
-    }
-  }
-
   Failure _failureFromProcess({
     required ps.ProcessResult processResult,
     required String toolName,
@@ -1836,7 +1826,7 @@ QUIT;
       return failure;
     }
     return BackupFailure(
-      message: failure.toString(),
+      message: failureUserMessage(failure),
       originalError: failure,
     );
   }

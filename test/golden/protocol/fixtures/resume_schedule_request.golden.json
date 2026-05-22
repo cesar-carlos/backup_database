@@ -1,6 +1,7 @@
 {
   "type": "resumeSchedule",
   "payload": {
-    "scheduleId": "s-1"
+    "scheduleId": "s-1",
+    "idempotencyKey": "idem-resume"
   }
 }

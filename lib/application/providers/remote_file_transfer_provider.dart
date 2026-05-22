@@ -196,7 +196,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         _isLoading = false;
       },
       (failure) {
-        _error = failure is Failure ? failure.message : failure.toString();
+        _error = failureUserMessage(failure);
         _isLoading = false;
       },
     );
@@ -322,7 +322,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
       },
       (failure) {
         _error =
-            'Falha ao baixar arquivo após ${SocketConfig.maxRetries} tentativas: $failure';
+            'Falha ao baixar arquivo após ${SocketConfig.maxRetries} tentativas: '
+            '${failureUserMessage(failure)}';
         return false;
       },
     );
@@ -387,10 +388,11 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             LoggerService.info('Upload concluído: ${destination.name}');
           },
           (failure) {
+            final msg = failureUserMessage(failure);
             LoggerService.warning(
-              'Erro ao enviar para ${destination.name}: $failure',
+              'Erro ao enviar para ${destination.name}: $msg',
             );
-            errors.add('${destination.name}: $failure');
+            errors.add('${destination.name}: $msg');
           },
         );
       }
@@ -481,7 +483,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
       },
       (failure) {
         _error =
-            'Falha ao baixar backup após ${SocketConfig.maxRetries} tentativas: $failure';
+            'Falha ao baixar backup após ${SocketConfig.maxRetries} tentativas: '
+            '${failureUserMessage(failure)}';
         LoggerService.error('Falha no download de backup', failure);
         return false;
       },
@@ -511,8 +514,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         'Arquivo baixado verificado: $outputFilePath ($downloadedSize bytes)',
       );
 
-      final stagingKey = _remoteStagingDirectoryKey(relativePath);
-      if (stagingKey != null) {
+      final stagingKey = runId ?? _remoteStagingDirectoryKey(relativePath);
+      if (stagingKey != null && stagingKey.isNotEmpty) {
         final remoteCleanup = await _connectionManager.cleanupRemoteStaging(
           runId: stagingKey,
         );
@@ -634,7 +637,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
           );
         },
         (failure) {
-          final errMsg = '${destination.name}: $failure';
+          final errMsg =
+              '${destination.name}: ${failureUserMessage(failure)}';
           LoggerService.error(
             'Erro no upload para ${destination.name}',
             failure,

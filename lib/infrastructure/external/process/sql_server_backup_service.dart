@@ -178,7 +178,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
           return rd.Failure(
             failure is Failure
                 ? failure
-                : BackupFailure(message: failure.toString()),
+                : BackupFailure(message: failureUserMessage(failure)),
           );
         }
       }

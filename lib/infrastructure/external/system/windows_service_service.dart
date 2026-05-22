@@ -1935,7 +1935,7 @@ try {
   Failure _asFailure(Object failure) {
     if (failure is Failure) return failure;
     return ServerFailure(
-      message: failure.toString(),
+      message: failureUserMessage(failure),
       originalError: failure,
     );
   }

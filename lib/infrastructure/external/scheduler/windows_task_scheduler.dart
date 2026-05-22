@@ -4,9 +4,8 @@ import 'dart:io';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/entities/schedule_config.dart' as parser;
 import 'package:backup_database/domain/services/i_task_scheduler_service.dart';
-import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart'
-    as parser;
 import 'package:result_dart/result_dart.dart' as rd;
 
 /// Serviço para gerenciar tarefas agendadas no Windows Task Scheduler.

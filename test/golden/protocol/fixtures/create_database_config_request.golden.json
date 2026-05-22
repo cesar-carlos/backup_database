@@ -1,0 +1,12 @@
+{
+  "type": "createDatabaseConfigRequest",
+  "payload": {
+    "databaseType": "postgres",
+    "config": {
+      "id": "pg-new",
+      "name": "App DB",
+      "host": "db.local"
+    },
+    "idempotencyKey": "idem-db-create"
+  }
+}

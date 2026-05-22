@@ -366,33 +366,36 @@ void main() {
         handler.start();
         expect(handler.isAuthenticated, isFalse);
 
-        // Captura primeira mensagem de erro do servidor
-        final responseCompleter = Completer<Message>.sync();
+        final notAuthCompleter = Completer<Message>.sync();
+        final authResponseCompleter = Completer<Message>.sync();
         final buffer = <int>[];
-        void onData(List<int> data) {
+        pair.client.listen((List<int> data) {
           buffer.addAll(data);
-          if (buffer.length >= 16 + 4) {
+          while (buffer.length >= 16 + 4) {
             final length =
                 (buffer[5] << 24) |
                 (buffer[6] << 16) |
                 (buffer[7] << 8) |
                 buffer[8];
             final total = 16 + length + 4;
-            if (buffer.length >= total) {
-              try {
-                final message = protocol.deserializeMessage(
-                  Uint8List.fromList(buffer.sublist(0, total)),
-                );
-                if (message.header.type == MessageType.error &&
-                    !responseCompleter.isCompleted) {
-                  responseCompleter.complete(message);
-                }
-              } on Object catch (_) {}
+            if (buffer.length < total) break;
+            try {
+              final message = protocol.deserializeMessage(
+                Uint8List.fromList(buffer.sublist(0, total)),
+              );
+              buffer.removeRange(0, total);
+              if (message.header.type == MessageType.error &&
+                  !notAuthCompleter.isCompleted) {
+                notAuthCompleter.complete(message);
+              } else if (message.header.type == MessageType.authResponse &&
+                  !authResponseCompleter.isCompleted) {
+                authResponseCompleter.complete(message);
+              }
+            } on Object catch (_) {
+              buffer.removeRange(0, total);
             }
           }
-        }
-
-        pair.client.listen(onData);
+        });
 
         // Cliente envia listSchedules ANTES de auth — guard deve rejeitar
         final illegalMsg = Message(
@@ -408,7 +411,7 @@ void main() {
         pair.client.add(bytes);
         await pair.client.flush();
 
-        final response = await responseCompleter.future.timeout(
+        final response = await notAuthCompleter.future.timeout(
           const Duration(seconds: 2),
           onTimeout: () =>
               throw TimeoutException('No NOT_AUTHENTICATED response received'),
@@ -419,11 +422,101 @@ void main() {
         expect(getErrorCodeFromMessage(response), ErrorCode.notAuthenticated);
 
         // Importante: NAO desconecta — cliente pode ainda enviar
-        // authRequest valido na sequencia (o test apenas confere que
-        // handler nao desconectou unilateralmente).
+        // authRequest valido na sequencia.
         await Future<void>.delayed(const Duration(milliseconds: 100));
         expect(disconnectedId, isNull);
 
+        when(
+          () => mockAuth.validateAuthRequest(any()),
+        ).thenAnswer((_) async => const AuthValidationResult(isValid: true));
+
+        pair.client.add(
+          protocol.serializeMessage(
+            createAuthRequest(serverId: 'srv', passwordHash: 'hash'),
+          ),
+        );
+        await pair.client.flush();
+
+        final authResponse = await authResponseCompleter.future.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => throw TimeoutException('No authResponse after retry'),
+        );
+        expect(authResponse.payload['success'], isTrue);
+        expect(handler.isAuthenticated, isTrue);
+        verify(() => mockAuth.validateAuthRequest(any())).called(1);
+
+        handler.disconnect();
+      },
+    );
+
+    test(
+      'authRequest with non-string serverId does not crash handler (F0.4)',
+      () async {
+        final pair = await createSocketPair();
+        addTearDown(() {
+          pair.client.destroy();
+          pair.server.destroy();
+        });
+
+        final mockAuth = MockServerAuthentication();
+        when(
+          () => mockAuth.validateAuthRequest(any()),
+        ).thenAnswer((_) async => const AuthValidationResult(isValid: true));
+
+        final handler = ClientHandler(
+          socket: pair.server,
+          protocol: protocol,
+          onDisconnect: (_) {},
+          authentication: mockAuth,
+        );
+        handler.start();
+
+        final responseCompleter = Completer<Message>.sync();
+        final buffer = <int>[];
+        pair.client.listen((data) {
+          buffer.addAll(data);
+          if (buffer.length >= 16 + 4) {
+            final length =
+                (buffer[5] << 24) |
+                (buffer[6] << 16) |
+                (buffer[7] << 8) |
+                buffer[8];
+            final total = 16 + length + 4;
+            if (buffer.length >= total) {
+              try {
+                final message = protocol.deserializeMessage(
+                  Uint8List.fromList(buffer.sublist(0, total)),
+                );
+                if (message.header.type == MessageType.authResponse &&
+                    !responseCompleter.isCompleted) {
+                  responseCompleter.complete(message);
+                }
+              } on Object catch (_) {}
+            }
+          }
+        });
+
+        final badAuth = Message(
+          header: MessageHeader(
+            type: MessageType.authRequest,
+            length: 0,
+          ),
+          payload: const <String, dynamic>{
+            'serverId': 42,
+            'passwordHash': 'hash',
+          },
+          checksum: 0,
+        );
+        final serialized = protocol.serializeMessage(badAuth);
+        pair.client.add(serialized);
+        await pair.client.flush();
+
+        final response = await responseCompleter.future.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => throw TimeoutException('No authResponse'),
+        );
+        expect(response.payload['success'], isTrue);
+        expect(handler.authenticatedServerId, isNull);
         handler.disconnect();
       },
     );

@@ -57,10 +57,8 @@ mixin AsyncStateMixin on ChangeNotifier {
   /// Helper para extrair mensagem amigável de qualquer `Object`.
   /// Antes era reimplementado inline com `failure as Failure` (cast
   /// direto, crashava com tipos inesperados).
-  static String extractFailureMessage(Object failure) {
-    if (failure is Failure) return failure.message;
-    return failure.toString();
-  }
+  static String extractFailureMessage(Object failure) =>
+      failureUserMessage(failure);
 
   /// Helper para extrair `code` de uma `Failure`. Retorna `null` para
   /// qualquer outro tipo.

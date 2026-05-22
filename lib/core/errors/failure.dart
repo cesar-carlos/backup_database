@@ -115,3 +115,12 @@ class BackupCompressionFailure extends Failure {
     super.originalError,
   });
 }
+
+String failureUserMessage(Object? failure, {String fallback = 'Erro'}) {
+  if (failure == null) return fallback;
+  if (failure is Failure) {
+    return failure.message.isEmpty ? fallback : failure.message;
+  }
+  final str = failure.toString();
+  return str.isEmpty ? fallback : str;
+}

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:path/path.dart' as p;
@@ -97,16 +98,7 @@ class TempDirectoryService {
         }
       }
 
-      final testFile = File(
-        p.join(
-          dir.path,
-          '.write_test_${DateTime.now().millisecondsSinceEpoch}',
-        ),
-      );
-      await testFile.writeAsString('test');
-      await testFile.delete();
-
-      return true;
+      return DirectoryPermissionCheck.hasWritePermission(dir);
     } on Object catch (e, stackTrace) {
       LoggerService.warning(
         'Diretório sem permissão de escrita: ${dir.path}',

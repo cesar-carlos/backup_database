@@ -202,58 +202,51 @@ class SybaseConfigRepository
       return const rd.Success(<SybaseConfig>[]);
     }
 
-    try {
-      final query = whereClause == null
-          ? _selectColumns
-          : '$_selectColumns $whereClause';
-      final rows = await database
-          .customSelect(
-            query,
-            readsFrom: {database.sybaseConfigsTable},
-            variables: whereVariables,
-          )
-          .get();
-
-      final entities = <SybaseConfig>[];
-      for (final row in rows) {
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao buscar $errorContext Sybase',
+      action: () async {
         try {
-          final entity = await rowToEntity(row);
-          entities.add(entity);
-        } on Object catch (e, stackTrace) {
-          final rowId = row.read<String>('id');
-          LoggerService.error(
-            'Erro ao converter configuração Sybase ($errorContext): $rowId',
-            e,
-            stackTrace,
-          );
-          continue;
+          final query = whereClause == null
+              ? _selectColumns
+              : '$_selectColumns $whereClause';
+          final rows = await database
+              .customSelect(
+                query,
+                readsFrom: {database.sybaseConfigsTable},
+                variables: whereVariables,
+              )
+              .get();
+
+          final entities = <SybaseConfig>[];
+          for (final row in rows) {
+            try {
+              final entity = await rowToEntity(row);
+              entities.add(entity);
+            } on Object catch (e, stackTrace) {
+              final rowId = row.read<String>('id');
+              LoggerService.error(
+                'Erro ao converter configuração Sybase ($errorContext): $rowId',
+                e,
+                stackTrace,
+              );
+            }
+          }
+
+          return entities;
+        } on Object catch (e) {
+          final errorStr = e.toString().toLowerCase();
+          if (errorStr.contains('no such table') ||
+              errorStr.contains(missingTableContext)) {
+            LoggerService.warning(
+              'Tabela sybase_configs não encontrada durante SELECT, '
+              'retornando lista vazia',
+            );
+            return <SybaseConfig>[];
+          }
+          rethrow;
         }
-      }
-
-      return rd.Success(entities);
-    } on Object catch (e, stackTrace) {
-      final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('no such table') ||
-          errorStr.contains(missingTableContext)) {
-        LoggerService.warning(
-          'Tabela sybase_configs não encontrada durante SELECT, '
-          'retornando lista vazia',
-        );
-        return const rd.Success(<SybaseConfig>[]);
-      }
-
-      LoggerService.error(
-        'Erro ao buscar $errorContext Sybase',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DatabaseFailure(
-          message: 'Erro ao buscar $errorContext: $e',
-          originalError: e,
-        ),
-      );
-    }
+      },
+    );
   }
 
   @override

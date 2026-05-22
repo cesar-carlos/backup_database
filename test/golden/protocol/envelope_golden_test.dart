@@ -15,9 +15,23 @@ import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/preflight_messages.dart';
+import 'package:backup_database/infrastructure/protocol/protocol_versions.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+Schedule _goldenDailySqlServerSchedule() => Schedule(
+  id: 's-new',
+  name: 'Backup Diario',
+  databaseConfigId: 'db-1',
+  databaseType: DatabaseType.sqlServer,
+  scheduleType: ScheduleType.daily.name,
+  scheduleConfig: '{}',
+  destinationIds: const ['dest-1'],
+  backupFolder: r'C:\backup',
+  createdAt: DateTime.utc(2026, 4, 19, 12),
+  updatedAt: DateTime.utc(2026, 4, 19, 12),
+);
 
 /// Golden tests do envelope JSON do protocolo socket (M6.1).
 ///
@@ -84,6 +98,42 @@ void main() {
       _assertGolden(msg, 'schedule_cancelled');
     });
 
+    group('schedule list/update legacy (P1)', () {
+      test('scheduleList com um schedule', () {
+        final msg = createScheduleListMessage(
+          requestId: 1,
+          schedules: [_goldenDailySqlServerSchedule()],
+        );
+        _assertGolden(msg, 'schedule_list_one_item');
+      });
+
+      test('updateSchedule', () {
+        final msg = createUpdateScheduleMessage(
+          requestId: 1,
+          schedule: _goldenDailySqlServerSchedule(),
+        );
+        _assertGolden(msg, 'update_schedule_request');
+      });
+
+      test('scheduleUpdated', () {
+        final msg = createScheduleUpdatedMessage(
+          requestId: 1,
+          schedule: _goldenDailySqlServerSchedule(),
+        );
+        _assertGolden(msg, 'schedule_updated');
+      });
+
+      test('scheduleMutationResponse created com schedule', () {
+        final msg = createScheduleMutationResponse(
+          requestId: 1,
+          operation: 'created',
+          scheduleId: 's-new',
+          schedule: _goldenDailySqlServerSchedule(),
+        );
+        _assertGolden(msg, 'schedule_mutation_response_created');
+      });
+    });
+
     group('backup events backward compat (M2.3)', () {
       test('backupProgress sem runId (servidor v1)', () {
         final msg = createBackupProgressMessage(
@@ -105,6 +155,18 @@ void main() {
           runId: 'schedule-1_fixed-uuid-aaa',
         );
         _assertGolden(msg, 'backup_progress_v2_with_run_id');
+      });
+
+      test('backupStep com runId (servidor v2+)', () {
+        final msg = createBackupStepMessage(
+          requestId: 1,
+          scheduleId: 'schedule-1',
+          step: 'compression',
+          message: 'Comprimindo backup...',
+          progress: 0.8,
+          runId: 'schedule-1_fixed-uuid-aaa',
+        );
+        _assertGolden(msg, 'backup_step_v2_with_run_id');
       });
 
       test('backupComplete sem runId/backupPath (servidor v1)', () {
@@ -506,21 +568,9 @@ void main() {
       });
 
       test('createSchedule request', () {
-        final s = Schedule(
-          id: 's-new',
-          name: 'Backup Diario',
-          databaseConfigId: 'db-1',
-          databaseType: DatabaseType.sqlServer,
-          scheduleType: ScheduleType.daily.name,
-          scheduleConfig: '{}',
-          destinationIds: const ['dest-1'],
-          backupFolder: r'C:\backup',
-          createdAt: DateTime.utc(2026, 4, 19, 12),
-          updatedAt: DateTime.utc(2026, 4, 19, 12),
-        );
         final msg = createCreateScheduleMessage(
           requestId: 1,
-          schedule: s,
+          schedule: _goldenDailySqlServerSchedule(),
           idempotencyKey: 'idem-create',
         );
         _assertGolden(msg, 'create_schedule_request');
@@ -562,6 +612,7 @@ void main() {
         final msg = createPauseScheduleMessage(
           requestId: 3,
           scheduleId: 's-1',
+          idempotencyKey: 'idem-pause',
         );
         _assertGolden(msg, 'pause_schedule_request');
       });
@@ -570,6 +621,7 @@ void main() {
         final msg = createResumeScheduleMessage(
           requestId: 4,
           scheduleId: 's-1',
+          idempotencyKey: 'idem-resume',
         );
         _assertGolden(msg, 'resume_schedule_request');
       });
@@ -649,11 +701,11 @@ void main() {
         _assertGolden(msg, 'test_database_connection_response_auth_failed');
       });
 
-      test('capabilitiesResponse v1 com flags atuais', () {
+      test('capabilitiesResponse baseline (supportsFirebird false)', () {
         final msg = createCapabilitiesResponseMessage(
           requestId: 1,
-          protocolVersion: 1,
-          wireVersion: 1,
+          protocolVersion: kCurrentProtocolVersion,
+          wireVersion: kCurrentWireVersion,
           supportsRunId: true,
           supportsResume: true,
           supportsArtifactRetention: true,
@@ -670,8 +722,8 @@ void main() {
       test('capabilitiesResponse com supportsFirebird true', () {
         final msg = createCapabilitiesResponseMessage(
           requestId: 1,
-          protocolVersion: 1,
-          wireVersion: 1,
+          protocolVersion: kCurrentProtocolVersion,
+          wireVersion: kCurrentWireVersion,
           supportsRunId: true,
           supportsResume: true,
           supportsArtifactRetention: true,
@@ -683,6 +735,63 @@ void main() {
           serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
         );
         _assertGolden(msg, 'capabilities_response_with_firebird');
+      });
+    });
+
+    group('database config CRUD (PR-2)', () {
+      test('listDatabaseConfigsRequest', () {
+        final msg = createListDatabaseConfigsRequest(
+          databaseType: RemoteDatabaseType.sybase,
+          requestId: 1,
+        );
+        _assertGolden(msg, 'list_database_configs_request');
+      });
+
+      test('listDatabaseConfigsResponse com envelope', () {
+        final msg = createListDatabaseConfigsResponse(
+          requestId: 1,
+          databaseType: RemoteDatabaseType.sybase,
+          configs: const [
+            {'id': 'cfg-1', 'name': 'Prod'},
+          ],
+          serverTimeUtc: DateTime.utc(2026, 4, 19, 12),
+        );
+        _assertGolden(msg, 'list_database_configs_response');
+      });
+
+      test('createDatabaseConfigRequest com idempotencyKey', () {
+        final msg = createCreateDatabaseConfigRequest(
+          databaseType: RemoteDatabaseType.postgres,
+          config: const {
+            'id': 'pg-new',
+            'name': 'App DB',
+            'host': 'db.local',
+          },
+          idempotencyKey: 'idem-db-create',
+          requestId: 2,
+        );
+        _assertGolden(msg, 'create_database_config_request');
+      });
+
+      test('databaseConfigMutationResponse created', () {
+        final msg = createDatabaseConfigMutationResponse(
+          requestId: 2,
+          operation: 'created',
+          databaseType: RemoteDatabaseType.postgres,
+          configId: 'pg-new',
+          config: const {'id': 'pg-new', 'name': 'App DB'},
+        );
+        _assertGolden(msg, 'database_config_mutation_response_created');
+      });
+
+      test('deleteDatabaseConfigRequest', () {
+        final msg = createDeleteDatabaseConfigRequest(
+          databaseType: RemoteDatabaseType.sqlServer,
+          configId: 'mssql-7',
+          idempotencyKey: 'idem-db-delete',
+          requestId: 3,
+        );
+        _assertGolden(msg, 'delete_database_config_request');
       });
     });
   });

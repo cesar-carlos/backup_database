@@ -3,7 +3,7 @@
   "payload": {
     "success": true,
     "statusCode": 200,
-    "protocolVersion": 1,
+    "protocolVersion": 2,
     "wireVersion": 1,
     "supportsRunId": true,
     "supportsResume": true,

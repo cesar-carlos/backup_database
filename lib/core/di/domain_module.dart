@@ -4,79 +4,14 @@ import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
-import 'package:backup_database/infrastructure/datasources/local/database.dart';
-import 'package:backup_database/infrastructure/external/scheduler/cron_parser.dart';
-import 'package:backup_database/infrastructure/external/system/system.dart';
-import 'package:backup_database/infrastructure/repositories/repositories.dart';
 import 'package:get_it/get_it.dart';
 
 /// Sets up domain layer dependencies.
 ///
-/// This module registers repositories, domain services,
-/// and use cases. Dependencies from infrastructure are
-/// provided here following the Dependency Inversion Principle.
+/// Registra serviços de domínio e casos de uso. Implementações de
+/// repositório e adapters de infraestrutura ficam no módulo de
+/// infraestrutura (`infrastructure_module.dart`).
 Future<void> setupDomainModule(GetIt getIt) async {
-  // ========================================================================
-  // REPOSITORIES
-  // ========================================================================
-
-  // Config repositories (SQL Server, Sybase, PostgreSQL, Firebird) are
-  // registered via [registerBackupDatabaseDefaultSgbds] in
-  // [setupInfrastructureModule].
-
-  // Backup Repositories
-  getIt.registerLazySingleton<IBackupDestinationRepository>(
-    () => BackupDestinationRepository(getIt<AppDatabase>()),
-  );
-  getIt.registerLazySingleton<IScheduleRepository>(
-    () => ScheduleRepository(getIt<AppDatabase>()),
-  );
-  getIt.registerLazySingleton<IBackupLogRepository>(
-    () => BackupLogRepository(getIt<AppDatabase>()),
-  );
-  getIt.registerLazySingleton<IBackupHistoryRepository>(
-    () => CachedBackupHistoryRepository(
-      repository: BackupHistoryRepository(
-        getIt<AppDatabase>(),
-        getIt<IBackupLogRepository>() as BackupLogRepository,
-      ),
-    ),
-  );
-
-  // System Repositories
-  getIt.registerLazySingleton<IEmailConfigRepository>(
-    () => EmailConfigRepository(
-      getIt<AppDatabase>(),
-      getIt<ISecureCredentialService>(),
-    ),
-  );
-  getIt.registerLazySingleton<IEmailNotificationTargetRepository>(
-    () => EmailNotificationTargetRepository(getIt<AppDatabase>()),
-  );
-  getIt.registerLazySingleton<IEmailTestAuditRepository>(
-    () => EmailTestAuditRepository(getIt<AppDatabase>()),
-  );
-  getIt.registerLazySingleton<ILicenseRepository>(
-    () => LicenseRepository(getIt<AppDatabase>()),
-  );
-  getIt.registerLazySingleton<IServerCredentialRepository>(
-    () => ServerCredentialRepository(getIt<AppDatabase>()),
-  );
-  getIt.registerLazySingleton<IConnectionLogRepository>(
-    () => ConnectionLogRepository(getIt<AppDatabase>()),
-  );
-  getIt.registerLazySingleton<IServerConnectionRepository>(
-    () => ServerConnectionRepository(getIt<AppDatabase>()),
-  );
-
-  getIt.registerLazySingleton<IMachineSettingsRepository>(
-    () => MachineSettingsRepository(getIt<AppDatabase>()),
-  );
-
-  getIt.registerLazySingleton<IUserPreferencesRepository>(
-    UserPreferencesRepository.new,
-  );
-
   getIt.registerLazySingleton<TempDirectoryService>(
     () => TempDirectoryService(
       machineSettings: getIt<IMachineSettingsRepository>(),
@@ -90,9 +25,6 @@ Future<void> setupDomainModule(GetIt getIt) async {
   getIt.registerLazySingleton<IBackupRunningState>(
     getIt.get<BackupProgressProvider>,
   );
-
-  getIt.registerLazySingleton<IScheduleCalculator>(ScheduleCalculator.new);
-  getIt.registerLazySingleton<IFileValidator>(FileValidator.new);
 
   getIt.registerLazySingleton<ILicensePolicyService>(
     () => LicensePolicyService(

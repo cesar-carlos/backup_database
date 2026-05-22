@@ -310,7 +310,7 @@ class FileTransferMessageHandler {
       );
     } finally {
       // Sempre libera o lock, mesmo em caso de erro
-      await _lockService.releaseLock(filePath);
+      await _lockService.releaseLock(filePath, owner: clientId);
     }
   }
 

@@ -7,6 +7,7 @@ import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/constants/schedule_dialog_strings.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/utils/directory_permission_check.dart';
+import 'package:backup_database/core/utils/winrar_install_probe.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/compression_format.dart';
@@ -18,7 +19,6 @@ import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
-import 'package:backup_database/infrastructure/external/compression/winrar_service.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_advanced_database_section.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_firebird_nbackup_section.dart';
@@ -337,14 +337,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     }
   }
 
-  int? _parseFirebirdNbackupLevelFromController() {
-    final trimmed = _firebirdNbackupPhysicalLevelController.text.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    return int.parse(trimmed);
-  }
-
   @override
   void dispose() {
     _nameController.dispose();
@@ -417,6 +409,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         const CancelButton(),
         SaveButton(onPressed: _save, isEditing: isEditing),
       ],
+      onSubmitIntent: () {
+        unawaited(_save());
+      },
     );
   }
 
@@ -1359,7 +1354,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   /// o setup mudasse (ex.: novo path de instalação), seria necessário
   /// atualizar 2 lugares. Agora delega ao `WinRarService.isInstalledInSystem`,
   /// mantendo a lista canônica em uma única fonte.
-  Future<bool> _checkWinRarAvailable() => WinRarService.isInstalledInSystem();
+  Future<bool> _checkWinRarAvailable() => WinrarInstallProbe.isInstalledInSystem();
 
   Future<void> _save() async {
     final name = _nameController.text.trim();
@@ -1463,6 +1458,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _backupType,
     );
 
+    int? firebirdNbackupPhysicalLevel;
     if (_databaseType == DatabaseType.firebird) {
       final t = _firebirdNbackupPhysicalLevelController.text.trim();
       if (t.isNotEmpty) {
@@ -1478,6 +1474,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           );
           return;
         }
+        firebirdNbackupPhysicalLevel = v;
       }
     }
 
@@ -1626,10 +1623,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             (_backupType == BackupType.differential),
       );
     } else {
-      final firebirdNbackupPhysicalLevel =
-          _databaseType == DatabaseType.firebird
-          ? _parseFirebirdNbackupLevelFromController()
-          : null;
       schedule = Schedule(
         id: widget.schedule?.id,
         name: _nameController.text.trim(),

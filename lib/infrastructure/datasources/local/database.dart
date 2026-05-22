@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/services/i_app_database_lifecycle.dart';
 import 'package:backup_database/infrastructure/datasources/daos/daos.dart';
 import 'package:backup_database/infrastructure/datasources/local/tables/tables.dart';
 import 'package:drift/drift.dart';
@@ -57,7 +58,7 @@ part 'database.g.dart';
     FileTransferDao,
   ],
 )
-class AppDatabase extends _$AppDatabase {
+class AppDatabase extends _$AppDatabase implements IAppDatabaseLifecycle {
   AppDatabase({String databaseName = 'backup_database'})
     : super(_openConnection(databaseName));
 

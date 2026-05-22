@@ -15,6 +15,8 @@ class IdempotencyPolicy {
     MessageType.cancelBackupRequest,
     MessageType.createSchedule,
     MessageType.deleteSchedule,
+    MessageType.pauseSchedule,
+    MessageType.resumeSchedule,
     MessageType.createDatabaseConfigRequest,
     MessageType.deleteDatabaseConfigRequest,
   };

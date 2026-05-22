@@ -1,6 +1,6 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/domain/entities/connection_status.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
-import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class ServerListItem extends StatelessWidget {

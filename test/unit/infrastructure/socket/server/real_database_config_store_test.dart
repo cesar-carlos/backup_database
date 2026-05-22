@@ -1,3 +1,4 @@
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
@@ -134,6 +135,18 @@ void main() {
       );
       final outcome = await store.list(RemoteDatabaseType.sybase);
       expect(outcome.errorCode, ErrorCode.fileNotFound);
+    });
+
+    test('NotFoundFailure do repository mapeia para fileNotFound', () async {
+      when(() => sybaseRepo.getAll()).thenAnswer(
+        (_) async => const rd.Failure(
+          NotFoundFailure(message: 'Configuração não encontrada'),
+        ),
+      );
+      final outcome = await store.list(RemoteDatabaseType.sybase);
+      expect(outcome.errorCode, ErrorCode.fileNotFound);
+      expect(outcome.error, 'Configuração não encontrada');
+      expect(outcome.error, isNot(contains('Failure(message:')));
     });
   });
 

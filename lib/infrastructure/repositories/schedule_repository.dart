@@ -54,56 +54,52 @@ class ScheduleRepository implements IScheduleRepository {
 
   @override
   Future<rd.Result<Schedule>> create(Schedule schedule) async {
-    try {
-      final validationResult = await _validateAllDestinationsExist(
-        schedule.destinationIds,
-      );
-      if (validationResult != null) {
-        return validationResult;
-      }
+    final validationResult = await _validateAllDestinationsExist(
+      schedule.destinationIds,
+    );
+    if (validationResult != null) {
+      return validationResult;
+    }
 
-      final companion = _toCompanion(schedule);
-
-      await _database.transaction(() async {
-        await _database.scheduleDao.insertSchedule(companion);
-        await _replaceScheduleDestinations(
-          schedule.id,
-          schedule.destinationIds,
-        );
-      });
-
-      return rd.Success(schedule);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        '[ScheduleRepository] Failed to create schedule',
-        e,
-        stackTrace,
-      );
-      final errorStr = e.toString();
-      if (errorStr.contains('foreign key constraint failed')) {
-        return const rd.Failure(
-          DatabaseFailure(
+    return RepositoryGuard.run(
+      errorMessage: 'Erro ao criar agendamento',
+      failureBuilder: (message, originalError) {
+        final errorStr = originalError.toString();
+        if (errorStr.contains('foreign key constraint failed')) {
+          return const DatabaseFailure(
             message:
                 'Erro ao criar agendamento: um ou mais destinos '
                 'selecionados não existem. Por favor, selecione destinos válidos.',
-          ),
-        );
-      }
-      if (errorStr.contains('Configuracao SQL Server inexistente') ||
-          errorStr.contains('Configuracao Sybase inexistente') ||
-          errorStr.contains('Configuracao PostgreSQL inexistente')) {
-        return const rd.Failure(
-          DatabaseFailure(
+          );
+        }
+        if (errorStr.contains('Configuracao SQL Server inexistente') ||
+            errorStr.contains('Configuracao Sybase inexistente') ||
+            errorStr.contains('Configuracao PostgreSQL inexistente')) {
+          return const DatabaseFailure(
             message:
                 'A configuração de banco selecionada não existe mais. '
                 'Recarregue a página de configurações e selecione uma configuração válida.',
-          ),
+          );
+        }
+        return DatabaseFailure(
+          message: message,
+          originalError: originalError,
         );
-      }
-      return rd.Failure(
-        DatabaseFailure(message: 'Erro ao criar agendamento: $e'),
-      );
-    }
+      },
+      action: () async {
+        final companion = _toCompanion(schedule);
+
+        await _database.transaction(() async {
+          await _database.scheduleDao.insertSchedule(companion);
+          await _replaceScheduleDestinations(
+            schedule.id,
+            schedule.destinationIds,
+          );
+        });
+
+        return schedule;
+      },
+    );
   }
 
   @override

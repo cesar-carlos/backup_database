@@ -1,0 +1,10 @@
+{
+  "type": "backupStep",
+  "payload": {
+    "scheduleId": "schedule-1",
+    "step": "compression",
+    "message": "Comprimindo backup...",
+    "progress": 0.8,
+    "runId": "schedule-1_fixed-uuid-aaa"
+  }
+}

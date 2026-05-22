@@ -17,9 +17,10 @@ import 'package:backup_database/infrastructure/socket/server/remote_execution_re
 /// Compartilham o `IScheduleRepository` e o `IdempotencyRegistry` via
 /// DI para que comandos cruzados nao percam coerencia.
 ///
-/// Operacoes mutaveis aceitam `idempotencyKey` opcional. Repeticao
-/// dentro do TTL retorna a MESMA resposta cacheada — defesa contra
-/// retransmissao por reconexao.
+/// Operacoes mutaveis exigem `idempotencyKey` ([IdempotencyPolicy]).
+/// Repeticao dentro do TTL retorna a MESMA resposta cacheada — defesa
+/// contra retransmissao por reconexao. Falhas de validacao/dominio nao
+/// sao cacheadas.
 class ScheduleCrudMessageHandler {
   ScheduleCrudMessageHandler({
     required IScheduleRepository scheduleRepository,

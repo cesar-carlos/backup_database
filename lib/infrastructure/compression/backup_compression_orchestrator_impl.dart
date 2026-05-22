@@ -78,7 +78,7 @@ class BackupCompressionOrchestratorImpl
         return Success(result);
       } else {
         final failure = compressionResult.exceptionOrNull()!;
-        final failureMessage = failure.toString();
+        final failureMessage = core_errors.failureUserMessage(failure);
 
         LoggerService.error('Falha na compressão: $failureMessage', failure);
 
