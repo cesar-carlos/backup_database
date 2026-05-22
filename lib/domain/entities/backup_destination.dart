@@ -111,8 +111,9 @@ class FtpDestinationConfig {
     this.enableVerboseLog = false,
     this.connectionTimeoutSeconds,
     this.uploadTimeoutMinutes,
-    this.enableStrongIntegrityValidation = true,
-    this.enableReadBackValidation = true,
+    this.enableStrongIntegrityValidation = false,
+    this.enableReadBackValidation = false,
+    this.allowInvalidCertificates = true,
     this.protectedBackupIdShortPrefixes = const {},
   });
 
@@ -141,9 +142,11 @@ class FtpDestinationConfig {
       connectionTimeoutSeconds: json['connectionTimeoutSeconds'] as int?,
       uploadTimeoutMinutes: json['uploadTimeoutMinutes'] as int?,
       enableStrongIntegrityValidation:
-          json['enableStrongIntegrityValidation'] as bool? ?? true,
+          json['enableStrongIntegrityValidation'] as bool? ?? false,
       enableReadBackValidation:
-          json['enableReadBackValidation'] as bool? ?? true,
+          json['enableReadBackValidation'] as bool? ?? false,
+      allowInvalidCertificates:
+          json['allowInvalidCertificates'] as bool? ?? true,
     );
   }
   final String host;
@@ -162,6 +165,7 @@ class FtpDestinationConfig {
   final int? uploadTimeoutMinutes;
   final bool enableStrongIntegrityValidation;
   final bool enableReadBackValidation;
+  final bool allowInvalidCertificates;
   final Set<String> protectedBackupIdShortPrefixes;
 
   int get effectiveMaxAttempts =>
@@ -188,6 +192,7 @@ class FtpDestinationConfig {
     'enableVerboseLog': enableVerboseLog,
     'enableStrongIntegrityValidation': enableStrongIntegrityValidation,
     'enableReadBackValidation': enableReadBackValidation,
+    'allowInvalidCertificates': allowInvalidCertificates,
     if (connectionTimeoutSeconds != null)
       'connectionTimeoutSeconds': connectionTimeoutSeconds,
     if (uploadTimeoutMinutes != null)

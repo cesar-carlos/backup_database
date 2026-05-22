@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
@@ -64,6 +65,8 @@ class FtpDestinationService implements IFtpService {
       }
 
       FTPConnect? ftp;
+      var ftpConnected = false;
+      Timer? cancellationWatcher;
       try {
         ftp = FTPConnect(
           config.host,
@@ -72,13 +75,20 @@ class FtpDestinationService implements IFtpService {
           pass: config.password,
           timeout: config.effectiveUploadTimeoutSeconds,
           securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
+          allowInvalidCertificates: config.allowInvalidCertificates,
           showLog: config.enableVerboseLog || kDebugMode,
         );
 
         final connected = await ftp.connect();
+        ftpConnected = connected;
         if (!connected) {
           throw Exception('Falha ao conectar ao servidor FTP');
         }
+        cancellationWatcher = _startCancellationWatcher(
+          ftp: ftp,
+          isCancelled: isCancelled,
+          context: ctx,
+        );
 
         final supportsRestStream = await _checkRestStreamSupport(ftp);
         switch (supportsRestStream) {
@@ -109,7 +119,9 @@ class FtpDestinationService implements IFtpService {
           enableReadBackValidation: config.enableReadBackValidation,
         );
         if (alreadyUploaded) {
+          cancellationWatcher?.cancel();
           await ftp.disconnect();
+          ftpConnected = false;
           ftp = null;
           stopwatch.stop();
 
@@ -152,6 +164,7 @@ class FtpDestinationService implements IFtpService {
           await _safeDeletePart(ftp, remotePartName);
           throw Exception('Falha no upload do arquivo (retorno falso)');
         }
+        _throwIfCancelled(isCancelled);
 
         final validationResult = await _validatePartSize(
           ftp,
@@ -169,6 +182,7 @@ class FtpDestinationService implements IFtpService {
             ),
           );
         }
+        _throwIfCancelled(isCancelled);
 
         final renamed = await ftp.rename(remotePartName, fileName);
         if (!renamed) {
@@ -178,6 +192,8 @@ class FtpDestinationService implements IFtpService {
             'Verifique permissões no servidor FTP.',
           );
         }
+
+        _throwIfCancelled(isCancelled);
 
         final finalIntegrityResult = await _validateFinalIntegrity(
           ftp: ftp,
@@ -201,10 +217,11 @@ class FtpDestinationService implements IFtpService {
 
         if (sha256Hash != null) {
           await _uploadSidecar(ftp, fileName, sha256Hash);
-          await _deleteSidecarBestEffort(ftp, fileName);
         }
 
+        cancellationWatcher?.cancel();
         await ftp.disconnect();
+        ftpConnected = false;
         ftp = null;
 
         stopwatch.stop();
@@ -230,7 +247,8 @@ class FtpDestinationService implements IFtpService {
           ),
         );
       } on _ResumeNotSupportedPolicyException catch (e) {
-        if (ftp != null) {
+        cancellationWatcher?.cancel();
+        if (ftp != null && ftpConnected) {
           try {
             await ftp.disconnect();
           } on Object catch (e, st) {
@@ -243,7 +261,8 @@ class FtpDestinationService implements IFtpService {
         }
         return rd.Failure(e.failure);
       } on _UploadCancelledException {
-        if (ftp != null) {
+        cancellationWatcher?.cancel();
+        if (ftp != null && ftpConnected) {
           if (!config.keepPartOnCancel) {
             try {
               await _safeDeletePart(ftp, remotePartName);
@@ -257,6 +276,7 @@ class FtpDestinationService implements IFtpService {
           }
           try {
             await ftp.disconnect();
+            ftpConnected = false;
           } on Object catch (disconnectError) {
             LoggerService.debug(
               'Erro ao desconectar FTP após cancelamento: $disconnectError',
@@ -271,9 +291,11 @@ class FtpDestinationService implements IFtpService {
           ),
         );
       } on Object catch (e) {
-        if (ftp != null) {
+        cancellationWatcher?.cancel();
+        if (ftp != null && ftpConnected) {
           try {
             await ftp.disconnect();
+            ftpConnected = false;
           } on Object catch (disconnectError) {
             LoggerService.debug(
               'Erro ao desconectar FTP após falha: $disconnectError',
@@ -300,6 +322,42 @@ class FtpDestinationService implements IFtpService {
           originalError: e,
         ),
       );
+    }
+  }
+
+  Timer? _startCancellationWatcher({
+    required FTPConnect ftp,
+    required bool Function()? isCancelled,
+    required String context,
+  }) {
+    if (isCancelled == null) {
+      return null;
+    }
+    var disconnectStarted = false;
+    return Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!isCancelled()) return;
+      timer.cancel();
+      if (disconnectStarted) return;
+      disconnectStarted = true;
+      LoggerService.info(
+        '${context}Cancelamento FTP detectado; encerrando conexão',
+      );
+      unawaited(
+        ftp.disconnect().catchError((Object e, StackTrace st) {
+          LoggerService.debug(
+            'FTP disconnect after cancellation signal: $e',
+            e,
+            st,
+          );
+          return false;
+        }),
+      );
+    });
+  }
+
+  void _throwIfCancelled(bool Function()? isCancelled) {
+    if (isCancelled != null && isCancelled()) {
+      throw _UploadCancelledException();
     }
   }
 
@@ -524,6 +582,7 @@ class FtpDestinationService implements IFtpService {
     }
   }
 
+  // ignore: unused_element, retained while sidecar cleanup remains disabled.
   Future<void> _deleteSidecarBestEffort(FTPConnect ftp, String fileName) async {
     const sidecarSuffix = '.sha256';
     final sidecarName = '$fileName$sidecarSuffix';
@@ -923,6 +982,7 @@ class FtpDestinationService implements IFtpService {
         pass: config.password,
         timeout: config.effectiveConnectionTimeoutSeconds,
         securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
+        allowInvalidCertificates: config.allowInvalidCertificates,
         showLog: config.enableVerboseLog || kDebugMode,
       );
 
@@ -1039,6 +1099,7 @@ class FtpDestinationService implements IFtpService {
         pass: config.password,
         timeout: config.effectiveUploadTimeoutSeconds,
         securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
+        allowInvalidCertificates: config.allowInvalidCertificates,
         showLog: config.enableVerboseLog || kDebugMode,
       );
 

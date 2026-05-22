@@ -70,11 +70,7 @@ class FTPFile {
 
     final lPort = Utils.parsePort(response.message, _socket.supportIPV6);
     _socket.logger.log('Opening DataSocket to Port $lPort');
-    final dataSocket = await Socket.connect(
-      _socket.host,
-      lPort,
-      timeout: Duration(seconds: _socket.timeout),
-    );
+    final dataSocket = await _socket.openDataSocket(lPort);
     var response2 = await _socket.readResponse();
     var isTransferCompleted = response2.isSuccessCode();
     if (!isTransferCompleted &&
@@ -130,7 +126,7 @@ class FTPFile {
 
     final iPort = Utils.parsePort(response.message, _socket.supportIPV6);
     _socket.logger.log('Opening DataSocket to Port $iPort');
-    final dataSocket = await Socket.connect(_socket.host, iPort);
+    final dataSocket = await _socket.openDataSocket(iPort);
     var response2 = await _socket.readResponse();
     var isTransferCompleted = response2.isSuccessCode();
     if (!isTransferCompleted &&
@@ -212,7 +208,7 @@ class FTPFile {
 
     final iPort = Utils.parsePort(response.message, _socket.supportIPV6);
     _socket.logger.log('Opening DataSocket to Port $iPort');
-    final dataSocket = await Socket.connect(_socket.host, iPort);
+    final dataSocket = await _socket.openDataSocket(iPort);
     var response2 = await _socket.readResponse();
     var isTransferCompleted = response2.isSuccessCode();
     if (!isTransferCompleted &&

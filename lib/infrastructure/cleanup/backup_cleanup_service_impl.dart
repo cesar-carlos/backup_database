@@ -233,6 +233,9 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
       enableVerboseLog: config.enableVerboseLog,
       connectionTimeoutSeconds: config.connectionTimeoutSeconds,
       uploadTimeoutMinutes: config.uploadTimeoutMinutes,
+      enableStrongIntegrityValidation: config.enableStrongIntegrityValidation,
+      enableReadBackValidation: config.enableReadBackValidation,
+      allowInvalidCertificates: config.allowInvalidCertificates,
       protectedBackupIdShortPrefixes: protectedShortIds,
     );
     await _runRemoteCleanup(

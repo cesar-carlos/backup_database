@@ -11,6 +11,7 @@ import 'package:backup_database/domain/services/i_file_transfer_lock_service.dar
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/system/os_version_checker.dart';
@@ -462,6 +463,10 @@ class AppBootstrap {
       await _dependencies.uiServices.socketServerStartupTask.start(
         bootstrapConfig,
       );
+      if (service_locator.getIt
+          .isRegistered<ITemporaryBackupCleanupScheduler>()) {
+        service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
+      }
       _logBootstrapPhase(bootstrapWatch, 'scheduler_and_socket_ready');
 
       _dependencies.runtime.runApp(_dependencies.runtime.createApp());

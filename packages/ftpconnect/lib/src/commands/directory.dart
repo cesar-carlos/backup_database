@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import '../ftp_entry.dart';
@@ -49,11 +48,7 @@ class FTPDirectory {
     _socket.sendCommandWithoutWaitingResponse(_socket.listCommand.describeEnum);
 
     final iPort = Utils.parsePort(response.message, _socket.supportIPV6);
-    final dataSocket = await Socket.connect(
-      _socket.host,
-      iPort,
-      timeout: Duration(seconds: _socket.timeout),
-    );
+    final dataSocket = await _socket.openDataSocket(iPort);
     var response2 = await _socket.readResponse();
     var isTransferCompleted = response2.isSuccessCode();
     if (!isTransferCompleted &&

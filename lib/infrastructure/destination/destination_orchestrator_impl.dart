@@ -311,9 +311,11 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
       connectionTimeoutSeconds: configJson['connectionTimeoutSeconds'] as int?,
       uploadTimeoutMinutes: configJson['uploadTimeoutMinutes'] as int?,
       enableStrongIntegrityValidation:
-          configJson['enableStrongIntegrityValidation'] as bool? ?? true,
+          configJson['enableStrongIntegrityValidation'] as bool? ?? false,
       enableReadBackValidation:
-          configJson['enableReadBackValidation'] as bool? ?? true,
+          configJson['enableReadBackValidation'] as bool? ?? false,
+      allowInvalidCertificates:
+          configJson['allowInvalidCertificates'] as bool? ?? true,
     );
 
     LoggerService.info(

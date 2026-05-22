@@ -12,6 +12,7 @@ import 'package:backup_database/core/di/service_locator.dart'
 import 'package:backup_database/core/service/service_shutdown_handler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/infrastructure/external/system/system.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
@@ -150,6 +151,7 @@ class ServiceModeInitializer {
           await healthChecker!.start();
           await service_locator.getIt<ExecutionQueueService>().initialize();
           service_locator.getIt<RemoteStagingCleanupScheduler>().start();
+          service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
         },
       );
 
@@ -404,6 +406,19 @@ class ServiceModeInitializer {
       final scheduler = schedulerServiceRef();
       final health = healthCheckerRef();
       final eventLog = eventLogRef();
+
+      try {
+        if (service_locator.getIt
+            .isRegistered<ITemporaryBackupCleanupScheduler>()) {
+          service_locator.getIt<ITemporaryBackupCleanupScheduler>().stop();
+        }
+      } on Object catch (e, s) {
+        LoggerService.warning(
+          '[ServiceModeInitializer] TemporaryBackupCleanupScheduler.stop: $e',
+          e,
+          s,
+        );
+      }
 
       try {
         if (service_locator.getIt

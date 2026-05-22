@@ -58,12 +58,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
   bool _useFtps = false;
   bool _enableResumeFtp = true;
   bool _keepPartOnCancelFtp = true;
+  bool _ftpAllowInvalidCertificates = true;
   FtpWhenResumeNotSupported _whenResumeNotSupportedFtp =
       FtpWhenResumeNotSupported.fallback;
   bool _enableVerboseLogFtp = false;
-  bool _enableStrongIntegrityValidationFtp = true;
-  bool _enableReadBackValidationFtp = true;
-  _FtpIntegrityPreset _ftpIntegrityPreset = _FtpIntegrityPreset.maximum;
+  bool _enableStrongIntegrityValidationFtp = false;
+  bool _enableReadBackValidationFtp = false;
+  _FtpIntegrityPreset _ftpIntegrityPreset = _FtpIntegrityPreset.quick;
   final _connectionTimeoutSecondsController = TextEditingController();
   final _uploadTimeoutMinutesController = TextEditingController();
   final _maxAttemptsFtpController = TextEditingController();
@@ -127,9 +128,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
           );
           _enableVerboseLogFtp = (config['enableVerboseLog'] as bool?) ?? false;
           _enableStrongIntegrityValidationFtp =
-              (config['enableStrongIntegrityValidation'] as bool?) ?? true;
+              (config['enableStrongIntegrityValidation'] as bool?) ?? false;
           _enableReadBackValidationFtp =
-              (config['enableReadBackValidation'] as bool?) ?? true;
+              (config['enableReadBackValidation'] as bool?) ?? false;
+          _ftpAllowInvalidCertificates =
+              (config['allowInvalidCertificates'] as bool?) ?? true;
           _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
             enableStrongIntegrityValidation:
                 _enableStrongIntegrityValidationFtp,
@@ -723,6 +726,33 @@ class _DestinationDialogState extends State<DestinationDialog> {
           style: FluentTheme.of(context).typography.caption,
         ),
         const SizedBox(height: 16),
+        if (_useFtps) ...[
+          InfoLabel(
+            label: _dialogLabel(
+              'Permitir certificado FTPS invalido',
+              'Allow invalid FTPS certificate',
+            ),
+            child: ToggleSwitch(
+              checked: _ftpAllowInvalidCertificates,
+              onChanged: (value) {
+                setState(() {
+                  _ftpAllowInvalidCertificates = value;
+                });
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _dialogLabel(
+              'Compatibilidade com certificados autoassinados. Desative para validar certificados em producao.',
+              'Compatibility with self-signed certificates. Turn off to validate production certificates.',
+            ),
+            style: FluentTheme.of(context).typography.caption?.copyWith(
+              color: AppColors.warning,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         InfoLabel(
           label: _dialogLabel(
             'Retomada de upload (REST STREAM)',
@@ -805,7 +835,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return switch (_ftpIntegrityPreset) {
       _FtpIntegrityPreset.quick => _dialogLabel(
         'Impacto de performance: baixo. Menor confiança de integridade.',
-        'Performance impact: low. Lower integrity confidence.',
+        'Performance impact: low. Validates size and writes SHA-256 sidecar.',
       ),
       _FtpIntegrityPreset.balanced => _dialogLabel(
         'Impacto de performance: médio. Bom equilíbrio para uso diário.',
@@ -1406,6 +1436,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
         'password': _ftpPasswordController.text,
         'remotePath': _ftpRemotePathController.text.trim(),
         'useFtps': _useFtps,
+        'allowInvalidCertificates': _ftpAllowInvalidCertificates,
         'enableVerboseLog': _enableVerboseLogFtp,
         'enableStrongIntegrityValidation': _enableStrongIntegrityValidationFtp,
         'enableReadBackValidation': _enableReadBackValidationFtp,
@@ -1680,6 +1711,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           'password': _ftpPasswordController.text,
           'remotePath': _ftpRemotePathController.text.trim(),
           'useFtps': _useFtps,
+          'allowInvalidCertificates': _ftpAllowInvalidCertificates,
           'enableResume': _enableResumeFtp,
           'keepPartOnCancel': _keepPartOnCancelFtp,
           'whenResumeNotSupported': _whenResumeNotSupportedFtp.name,
@@ -2216,7 +2248,7 @@ class _FtpAdvancedOptionsSection extends StatelessWidget {
         Text(
           labelBuilder(
             'Rapido: so tamanho. Equilibrado: hash remoto. Maxima: hash remoto + read-back quando necessario.',
-            'Quick: size only. Balanced: remote hash. Maximum: remote hash + read-back when needed.',
+            'Quick: size + SHA-256 sidecar. Balanced: remote hash. Maximum: remote hash + read-back when needed.',
           ),
           style: FluentTheme.of(context).typography.caption,
         ),

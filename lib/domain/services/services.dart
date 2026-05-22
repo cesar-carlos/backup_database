@@ -40,6 +40,8 @@ export 'i_sql_server_backup_service.dart';
 export 'i_storage_checker.dart';
 export 'i_sybase_backup_service.dart';
 export 'i_task_scheduler_service.dart';
+export 'i_temporary_backup_cleanup_scheduler.dart';
+export 'i_temporary_backup_cleanup_service.dart';
 export 'i_transfer_staging_service.dart';
 export 'i_windows_machine_startup_service.dart';
 export 'i_windows_message_box.dart';

@@ -7,6 +7,8 @@ import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
 import 'package:backup_database/infrastructure/cleanup/backup_cleanup_service_impl.dart';
+import 'package:backup_database/infrastructure/cleanup/temporary_backup_cleanup_scheduler.dart';
+import 'package:backup_database/infrastructure/cleanup/temporary_backup_cleanup_service.dart';
 import 'package:backup_database/infrastructure/compression/backup_compression_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/destination/destination_orchestrator_impl.dart';
@@ -129,6 +131,19 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       backupLogRepository: getIt<IBackupLogRepository>(),
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
     ),
+  );
+  getIt.registerLazySingleton<ITemporaryBackupCleanupService>(
+    () => TemporaryBackupCleanupService(
+      backupHistoryRepository: getIt<IBackupHistoryRepository>(),
+    ),
+  );
+  getIt.registerLazySingleton<TemporaryBackupCleanupScheduler>(
+    () => TemporaryBackupCleanupScheduler(
+      getIt<ITemporaryBackupCleanupService>(),
+    ),
+  );
+  getIt.registerLazySingleton<ITemporaryBackupCleanupScheduler>(
+    getIt.get<TemporaryBackupCleanupScheduler>,
   );
 
   // ========================================================================

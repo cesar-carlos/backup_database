@@ -4,6 +4,7 @@ import 'package:backup_database/core/di/service_locator.dart'
 import 'package:backup_database/domain/services/i_backup_cancellation_service.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/transfer_staging_cleanup_scheduler.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
@@ -41,6 +42,13 @@ class AppCleanup {
     await _runStep('parar limpeza periodica de staging remoto', () async {
       if (service_locator.getIt.isRegistered<RemoteStagingCleanupScheduler>()) {
         service_locator.getIt<RemoteStagingCleanupScheduler>().stop();
+      }
+    });
+
+    await _runStep('parar limpeza periodica de temporarios locais', () async {
+      if (service_locator.getIt
+          .isRegistered<ITemporaryBackupCleanupScheduler>()) {
+        service_locator.getIt<ITemporaryBackupCleanupScheduler>().stop();
       }
     });
 

@@ -34,12 +34,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
 
   getIt.registerLazySingleton<ISendFileToDestinationService>(
     () => SendFileToDestinationService(
-      localDestinationService: getIt<ILocalDestinationService>(),
-      sendToFtp: getIt<SendToFtp>(),
-      googleDriveDestinationService: getIt<IGoogleDriveDestinationService>(),
-      sendToDropbox: getIt<SendToDropbox>(),
-      sendToNextcloud: getIt<SendToNextcloud>(),
-      licensePolicyService: getIt<ILicensePolicyService>(),
+      destinationOrchestrator: getIt<IDestinationOrchestrator>(),
     ),
   );
 

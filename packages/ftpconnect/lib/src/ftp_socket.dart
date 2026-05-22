@@ -8,14 +8,23 @@ import 'ftpconnect_base.dart';
 import 'logger.dart';
 
 class FTPSocket {
-  FTPSocket(this.host, this.port, this.securityType, this.logger, this.timeout);
+  FTPSocket(
+    this.host,
+    this.port,
+    this.securityType,
+    this.logger,
+    this.timeout, {
+    this.allowInvalidCertificates = true,
+  });
 
   final String host;
   final int port;
   final Logger logger;
   final int timeout;
   final SecurityType securityType;
+  final bool allowInvalidCertificates;
   late RawSocket _socket;
+  bool _dataChannelProtected = false;
   TransferMode transferMode = TransferMode.passive;
   TransferType _transferType = TransferType.auto;
   ListCommand listCommand = ListCommand.mlsd;
@@ -85,7 +94,7 @@ class FTPSocket {
           host,
           port,
           timeout: timeout,
-          onBadCertificate: (_) => true,
+          onBadCertificate: (_) => allowInvalidCertificates,
         );
       } else {
         _socket = await RawSocket.connect(
@@ -118,13 +127,14 @@ class FTPSocket {
 
       _socket = await RawSecureSocket.secure(
         _socket,
-        onBadCertificate: (_) => true,
+        onBadCertificate: (_) => allowInvalidCertificates,
       );
     }
 
     if ([SecurityType.ftpes, SecurityType.ftps].contains(securityType)) {
       await sendCommand('PBSZ 0');
-      await sendCommand('PROT P');
+      final protReply = await sendCommand('PROT P');
+      _dataChannelProtected = protReply.isSuccessCode();
     }
 
     var lResp = await sendCommand('USER $user');
@@ -163,6 +173,19 @@ class FTPSocket {
       throw FTPConnectException('Could not start Passive Mode', res.message);
     }
     return res;
+  }
+
+  Future<Socket> openDataSocket(int port) async {
+    final timeout = Duration(seconds: this.timeout);
+    if (_dataChannelProtected) {
+      return SecureSocket.connect(
+        host,
+        port,
+        timeout: timeout,
+        onBadCertificate: (_) => allowInvalidCertificates,
+      );
+    }
+    return Socket.connect(host, port, timeout: timeout);
   }
 
   Future<void> setTransferType(TransferType pTransferType) async {

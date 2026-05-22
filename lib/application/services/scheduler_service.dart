@@ -489,12 +489,14 @@ class SchedulerService implements ISchedulerService {
         // indefinidamente. Em timeout, simulamos failures para todas as
         // destinations não confirmadas e seguimos o fluxo de erro.
         List<rd.Result<void>> sendResults;
+        var uploadTimedOut = false;
         try {
           sendResults = await _destinationOrchestrator
               .uploadToAllDestinations(
                 sourceFilePath: backupHistory.backupPath,
                 destinations: destinations,
                 isCancelled: () =>
+                    uploadTimedOut ||
                     _cancelRequestedSchedules.contains(schedule.id),
                 backupId: backupIdForPath,
                 onProgress: _createThrottledUploadProgressCallback(
@@ -503,6 +505,7 @@ class SchedulerService implements ISchedulerService {
               )
               .timeout(_uploadTimeout);
         } on TimeoutException {
+          uploadTimedOut = true;
           LoggerService.error(
             'Upload para destinos excedeu o timeout de '
             '${_uploadTimeout.inMinutes} minutos para ${schedule.name}',
