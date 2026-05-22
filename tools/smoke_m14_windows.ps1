@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 
-if (-not $IsWindows) {
+if ($env:OS -notlike 'Windows*') {
   Write-Error "This smoke script must run on Windows."
 }
 

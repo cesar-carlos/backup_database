@@ -1,5 +1,5 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/molecules/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -78,15 +78,15 @@ class DestinationListItem extends StatelessWidget {
   Color _getTypeColor(DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return AppColors.destinationLocal;
+        return AppPalette.destinationLocal;
       case DestinationType.ftp:
-        return AppColors.destinationFtp;
+        return AppPalette.destinationFtp;
       case DestinationType.googleDrive:
-        return AppColors.destinationGoogleDrive;
+        return AppPalette.destinationGoogleDrive;
       case DestinationType.dropbox:
-        return AppColors.destinationDropbox;
+        return AppPalette.destinationDropbox;
       case DestinationType.nextcloud:
-        return AppColors.destinationNextcloud;
+        return AppPalette.destinationNextcloud;
     }
   }
 

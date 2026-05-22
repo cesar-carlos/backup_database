@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/connected_client_provider.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/connection/connected_client.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -41,10 +41,10 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     FluentIcons.error,
                     size: 64,
-                    color: AppColors.error,
+                    color: context.colors.danger,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -122,7 +122,7 @@ class _ConnectedClientsListState extends State<ConnectedClientsList> {
                 provider.error!,
                 style: FluentTheme.of(
                   context,
-                ).typography.body?.copyWith(color: AppColors.error),
+                ).typography.body?.copyWith(color: context.colors.danger),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -274,7 +274,7 @@ class _ConnectedClientRow extends StatelessWidget {
 
   Widget _buildAuthChip(BuildContext context) {
     final color = client.isAuthenticated
-        ? AppColors.success
+        ? context.colors.success
         : FluentTheme.of(context).resources.textFillColorSecondary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

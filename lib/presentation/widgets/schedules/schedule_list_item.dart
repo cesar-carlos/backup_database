@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:backup_database/core/utils/database_type_metadata.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
@@ -128,13 +128,13 @@ class ScheduleListItem extends StatelessWidget {
   Color _getScheduleTypeColor(ScheduleType type) {
     switch (type) {
       case ScheduleType.daily:
-        return AppColors.scheduleDaily;
+        return AppPalette.scheduleDaily;
       case ScheduleType.weekly:
-        return AppColors.scheduleWeekly;
+        return AppPalette.scheduleWeekly;
       case ScheduleType.monthly:
-        return AppColors.scheduleMonthly;
+        return AppPalette.scheduleMonthly;
       case ScheduleType.interval:
-        return AppColors.scheduleInterval;
+        return AppPalette.scheduleInterval;
     }
   }
 }

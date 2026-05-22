@@ -149,6 +149,49 @@ void main() {
       },
     );
 
+    test(
+      'should cleanup staging using path key when runId differs from folder',
+      () async {
+        const serverRelativePath =
+            'remote/sch-transfer-1_folder-uuid-111111111111111111111111111111/backup.bak';
+        const wrongRunId = 'sch-transfer-1_run-uuid-000000000000000000000001';
+
+        when(
+          () => machineSettings.getScheduleTransferDestinationsJson(),
+        ).thenAnswer((_) async => null);
+
+        when(
+          () => connectionManager.requestFile(
+            filePath: any(named: 'filePath'),
+            outputPath: any(named: 'outputPath'),
+            scheduleId: any(named: 'scheduleId'),
+            runId: any(named: 'runId'),
+            onProgress: any(named: 'onProgress'),
+          ),
+        ).thenAnswer((invocation) async {
+          final outputPath = invocation.namedArguments[#outputPath] as String;
+          await File(outputPath).writeAsString('x');
+          return const rd.Success(());
+        });
+
+        final ok = await provider.transferCompletedBackupToClient(
+          scheduleId,
+          serverRelativePath,
+          runId: wrongRunId,
+        );
+
+        expect(ok, isTrue);
+        verify(
+          () => connectionManager.cleanupRemoteStaging(
+            runId: 'sch-transfer-1_folder-uuid-111111111111111111111111111111',
+          ),
+        ).called(1);
+        verifyNever(
+          () => connectionManager.cleanupRemoteStaging(runId: wrongRunId),
+        );
+      },
+    );
+
     test('should skip upload when no linked destinations', () async {
       when(
         () => machineSettings.getScheduleTransferDestinationsJson(),

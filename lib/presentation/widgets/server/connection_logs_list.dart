@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/connection_log_provider.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/connection_log.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -39,10 +39,10 @@ class _ConnectionLogsListState extends State<ConnectionLogsList> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     FluentIcons.error,
                     size: 64,
-                    color: AppColors.error,
+                    color: context.colors.danger,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -217,7 +217,7 @@ class _ConnectionLogsContent extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: FluentTheme.of(
                           context,
-                        ).typography.body?.copyWith(color: AppColors.error),
+                        ).typography.body?.copyWith(color: context.colors.danger),
                       ),
                     );
                   },
@@ -239,7 +239,7 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = success ? AppColors.success : AppColors.error;
+    final color = success ? context.colors.success : context.colors.danger;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(

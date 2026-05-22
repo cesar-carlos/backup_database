@@ -514,7 +514,10 @@ class RemoteFileTransferProvider extends ChangeNotifier {
         'Arquivo baixado verificado: $outputFilePath ($downloadedSize bytes)',
       );
 
-      final stagingKey = runId ?? _remoteStagingDirectoryKey(relativePath);
+      // Path `remote/<chave>/` e autoritativo; runId do envelope pode
+      // divergir em servidores legados que ainda geravam dois UUIDs.
+      final stagingKey =
+          _remoteStagingDirectoryKey(relativePath) ?? runId;
       if (stagingKey != null && stagingKey.isNotEmpty) {
         final remoteCleanup = await _connectionManager.cleanupRemoteStaging(
           runId: stagingKey,

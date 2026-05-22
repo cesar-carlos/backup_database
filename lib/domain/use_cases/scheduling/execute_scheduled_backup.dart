@@ -10,6 +10,7 @@ class ExecuteScheduledBackup {
   Future<rd.Result<void>> call(
     String scheduleId, {
     ExecutionOrigin executionOrigin = ExecutionOrigin.local,
+    String? runId,
   }) async {
     if (scheduleId.isEmpty) {
       return const rd.Failure(
@@ -20,6 +21,7 @@ class ExecuteScheduledBackup {
     return _schedulerService.executeNow(
       scheduleId,
       executionOrigin: executionOrigin,
+      runId: runId,
     );
   }
 }

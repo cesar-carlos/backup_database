@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -108,7 +108,7 @@ class ScheduleGrid extends StatelessWidget {
           ),
           AppDataGridAction<Schedule>(
             icon: FluentIcons.delete,
-            iconColor: AppColors.error,
+            iconColor: context.colors.danger,
             tooltip: 'Excluir',
             onPressed: (row) => onDelete(row.id),
             isEnabled: (_) => scheduleActionsEnabled,
@@ -122,13 +122,13 @@ class ScheduleGrid extends StatelessWidget {
   Color getScheduleTypeColor(ScheduleType type) {
     switch (type) {
       case ScheduleType.daily:
-        return AppColors.scheduleDaily;
+        return AppPalette.scheduleDaily;
       case ScheduleType.weekly:
-        return AppColors.scheduleWeekly;
+        return AppPalette.scheduleWeekly;
       case ScheduleType.monthly:
-        return AppColors.scheduleMonthly;
+        return AppPalette.scheduleMonthly;
       case ScheduleType.interval:
-        return AppColors.scheduleInterval;
+        return AppPalette.scheduleInterval;
     }
   }
 }

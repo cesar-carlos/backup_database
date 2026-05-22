@@ -1,5 +1,5 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -102,7 +102,7 @@ class DestinationGrid extends StatelessWidget {
           ),
           AppDataGridAction<BackupDestination>(
             icon: FluentIcons.delete,
-            iconColor: AppColors.error,
+            iconColor: context.colors.danger,
             tooltip: appLocaleString(context, 'Excluir', 'Delete'),
             onPressed: (row) => onDelete(row.id),
           ),
@@ -130,15 +130,15 @@ class DestinationGrid extends StatelessWidget {
   Color _getTypeColor(DestinationType type) {
     switch (type) {
       case DestinationType.local:
-        return AppColors.destinationLocal;
+        return AppPalette.destinationLocal;
       case DestinationType.ftp:
-        return AppColors.destinationFtp;
+        return AppPalette.destinationFtp;
       case DestinationType.googleDrive:
-        return AppColors.destinationGoogleDrive;
+        return AppPalette.destinationGoogleDrive;
       case DestinationType.dropbox:
-        return AppColors.destinationDropbox;
+        return AppPalette.destinationDropbox;
       case DestinationType.nextcloud:
-        return AppColors.destinationNextcloud;
+        return AppPalette.destinationNextcloud;
     }
   }
 

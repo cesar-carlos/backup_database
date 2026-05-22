@@ -11,6 +11,7 @@ abstract class ISchedulerService {
   Future<Result<void>> executeNow(
     String scheduleId, {
     ExecutionOrigin executionOrigin = ExecutionOrigin.local,
+    String? runId,
   });
 
   Future<Result<void>> cancelExecution(String scheduleId);

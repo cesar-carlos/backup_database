@@ -22,7 +22,10 @@ import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_notification_service.dart';
 import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 import 'package:backup_database/domain/services/i_storage_checker.dart';
+import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
+import 'package:backup_database/infrastructure/transfer_staging_service.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -55,6 +58,9 @@ class _MockBackupProgressNotifier extends Mock
 class _MockProcessService extends Mock implements ProcessService {}
 
 class _MockLicensePolicyService extends Mock implements ILicensePolicyService {}
+
+class _MockTransferStagingService extends Mock
+    implements ITransferStagingService {}
 
 void main() {
   late _MockScheduleRepository scheduleRepository;
@@ -539,6 +545,159 @@ void main() {
             schedule: any(named: 'schedule'),
           ),
         );
+      },
+    );
+
+    test(
+      'executeNow uses provided runId for remoteCommand staging key',
+      () async {
+        const fixedRunId =
+            'schedule-1_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+        final stagingMock = _MockTransferStagingService();
+        when(
+          () => stagingMock.copyToStaging(
+            any(),
+            any(),
+            remoteFolderKey: any(named: 'remoteFolderKey'),
+          ),
+        ).thenAnswer((_) async => 'remote/$fixedRunId/remote.bak');
+
+        final schedule = buildSchedule();
+        final backupPath = '${tempDir.path}${Platform.pathSeparator}remote.bak';
+        final backupFile = File(backupPath)..writeAsStringSync('backup');
+        final history = BackupHistory(
+          id: 'history-runid',
+          scheduleId: schedule.id,
+          databaseName: schedule.name,
+          databaseType: schedule.databaseType.name,
+          backupPath: backupFile.path,
+          fileSize: 1024,
+          status: BackupStatus.success,
+          startedAt: DateTime.now().subtract(const Duration(seconds: 3)),
+        );
+
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+            notifyOnComplete: false,
+          ),
+        ).thenAnswer((_) async => rd.Success(history));
+        when(
+          () => scheduleCalculator.getNextRunTime(any()),
+        ).thenReturn(DateTime.now().add(const Duration(days: 1)));
+        when(
+          () => scheduleRepository.update(any()),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(() => licensePolicyService.setRunContext(any())).thenReturn(null);
+        when(() => licensePolicyService.clearRunContext()).thenReturn(null);
+
+        final remoteService = SchedulerService(
+          scheduleRepository: scheduleRepository,
+          destinationRepository: destinationRepository,
+          backupHistoryRepository: backupHistoryRepository,
+          backupOrchestratorService: backupOrchestratorService,
+          destinationOrchestrator: destinationOrchestrator,
+          cleanupService: cleanupService,
+          notificationService: notificationService,
+          scheduleCalculator: scheduleCalculator,
+          storageChecker: storageChecker,
+          progressNotifier: progressNotifier,
+          licensePolicyService: licensePolicyService,
+          transferStagingService: stagingMock,
+        );
+
+        final result = await remoteService.executeNow(
+          scheduleId,
+          executionOrigin: ExecutionOrigin.remoteCommand,
+          runId: fixedRunId,
+        );
+
+        expect(result.isSuccess(), isTrue);
+        verify(
+          () => stagingMock.copyToStaging(
+            backupFile.path,
+            scheduleId,
+            remoteFolderKey: fixedRunId,
+          ),
+        ).called(1);
+        verify(() => licensePolicyService.setRunContext(fixedRunId)).called(1);
+      },
+    );
+
+    test(
+      'executeNow copies remote staging under runId folder (integration)',
+      () async {
+        final transferBase = Directory(
+          p.join(tempDir.path, 'transfer_staging'),
+        )..createSync();
+        final staging = TransferStagingService(
+          transferBasePath: transferBase.path,
+        );
+        const fixedRunId =
+            'schedule-1_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
+        final schedule = buildSchedule();
+        final backupPath = '${tempDir.path}${Platform.pathSeparator}x.bak';
+        File(backupPath).writeAsStringSync('z');
+        final history = BackupHistory(
+          id: 'history-staging-int',
+          scheduleId: schedule.id,
+          databaseName: schedule.name,
+          databaseType: schedule.databaseType.name,
+          backupPath: backupPath,
+          fileSize: 1,
+          status: BackupStatus.success,
+          startedAt: DateTime.now().subtract(const Duration(seconds: 1)),
+        );
+
+        when(
+          () => scheduleRepository.getById(scheduleId),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+            notifyOnComplete: false,
+          ),
+        ).thenAnswer((_) async => rd.Success(history));
+        when(
+          () => scheduleCalculator.getNextRunTime(any()),
+        ).thenReturn(DateTime.now().add(const Duration(days: 1)));
+        when(
+          () => scheduleRepository.update(any()),
+        ).thenAnswer((_) async => rd.Success(schedule));
+        when(() => licensePolicyService.setRunContext(any())).thenReturn(null);
+        when(() => licensePolicyService.clearRunContext()).thenReturn(null);
+
+        final remoteService = SchedulerService(
+          scheduleRepository: scheduleRepository,
+          destinationRepository: destinationRepository,
+          backupHistoryRepository: backupHistoryRepository,
+          backupOrchestratorService: backupOrchestratorService,
+          destinationOrchestrator: destinationOrchestrator,
+          cleanupService: cleanupService,
+          notificationService: notificationService,
+          scheduleCalculator: scheduleCalculator,
+          storageChecker: storageChecker,
+          progressNotifier: progressNotifier,
+          licensePolicyService: licensePolicyService,
+          transferStagingService: staging,
+        );
+
+        await remoteService.executeNow(
+          scheduleId,
+          executionOrigin: ExecutionOrigin.remoteCommand,
+          runId: fixedRunId,
+        );
+
+        final staged = File(
+          p.join(transferBase.path, 'remote', fixedRunId, 'x.bak'),
+        );
+        expect(await staged.exists(), isTrue);
       },
     );
   });

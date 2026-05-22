@@ -420,10 +420,8 @@ class ScheduleMessageHandler {
       progressSlotReserved = true;
 
       // Registra o contexto antes de iniciar o backup para que eventos
-      // de progresso encontrem o destinatario correto. O `runId` aqui
-      // pertence ao escopo do handler remoto; o `SchedulerService` gera
-      // outro internamente para uso em logs/historico — ambos podem
-      // coexistir ate PR-2 unificar a geracao no contrato remoto.
+      // de progresso encontrem o destinatario correto. O mesmo `runId`
+      // e repassado ao `SchedulerService` para staging e correlacao.
       final runId = _executionRegistry.generateRunId(scheduleId);
       executionContext = _executionRegistry.register(
         runId: runId,
@@ -450,6 +448,7 @@ class ScheduleMessageHandler {
       final result = await _executeBackup(
         scheduleId,
         executionOrigin: ExecutionOrigin.remoteCommand,
+        runId: runId,
       );
 
       // Antes: `await result.fold(asyncSuccess, asyncFailure)` com fold

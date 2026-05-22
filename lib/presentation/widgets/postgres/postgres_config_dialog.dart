@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:backup_database/application/providers/postgres_config_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
@@ -97,7 +97,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
       ),
       title: Row(
         children: [
-          const Icon(FluentIcons.server, color: AppColors.primary),
+          const Icon(FluentIcons.server, color: AppPalette.databasePostgresql),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -289,18 +289,18 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
+              color: context.colors.info.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.3),
+                color: context.colors.info.withValues(alpha: 0.3),
               ),
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   FluentIcons.info,
                   size: 18,
-                  color: AppColors.primary,
+                  color: context.colors.info,
                 ),
                 const SizedBox(width: 8),
                 Expanded(

@@ -280,6 +280,7 @@ class SchedulerService implements ISchedulerService {
   Future<rd.Result<void>> _executeScheduledBackup(
     Schedule schedule, {
     ExecutionOrigin executionOrigin = ExecutionOrigin.local,
+    String? runId,
   }) async {
     final isRemoteCommand = executionOrigin == ExecutionOrigin.remoteCommand;
 
@@ -290,11 +291,11 @@ class SchedulerService implements ISchedulerService {
     );
 
     String? tempBackupPath;
-    final runId = '${schedule.id}_${const Uuid().v4()}';
+    final effectiveRunId = runId ?? '${schedule.id}_${const Uuid().v4()}';
 
     try {
-      _licensePolicyService.setRunContext(runId);
-      LogContext.setContext(runId: runId, scheduleId: schedule.id);
+      _licensePolicyService.setRunContext(effectiveRunId);
+      LogContext.setContext(runId: effectiveRunId, scheduleId: schedule.id);
 
       // Garante que o BackupProgressProvider está em estado "running" para
       // que `setCurrentHistoryId` (chamado pelo orchestrator) consiga
@@ -647,12 +648,12 @@ class SchedulerService implements ISchedulerService {
         LoggerService.info(
           'Copiando backup para staging: ${backupHistory.backupPath} '
           '(scheduleId: ${schedule.id}, '
-          'remoteKey: ${isRemoteCommand ? runId : "legado=scheduleId"})',
+          'remoteKey: ${isRemoteCommand ? effectiveRunId : "legado=scheduleId"})',
         );
         stagingRelativePath = await _transferStagingService.copyToStaging(
           backupHistory.backupPath,
           schedule.id,
-          remoteFolderKey: isRemoteCommand ? runId : null,
+          remoteFolderKey: isRemoteCommand ? effectiveRunId : null,
         );
 
         if (stagingRelativePath != null) {
@@ -791,6 +792,7 @@ class SchedulerService implements ISchedulerService {
   Future<rd.Result<void>> _runScheduleWithLock(
     Schedule schedule, {
     ExecutionOrigin executionOrigin = ExecutionOrigin.local,
+    String? runId,
   }) async {
     if (_executingSchedules.isNotEmpty) {
       // Mensagem agora inclui qual schedule está bloqueando, facilitando
@@ -813,6 +815,7 @@ class SchedulerService implements ISchedulerService {
       return await _executeScheduledBackup(
         schedule,
         executionOrigin: executionOrigin,
+        runId: runId,
       );
     } finally {
       _executingSchedules.remove(schedule.id);
@@ -913,12 +916,16 @@ class SchedulerService implements ISchedulerService {
   Future<rd.Result<void>> executeNow(
     String scheduleId, {
     ExecutionOrigin executionOrigin = ExecutionOrigin.local,
+    String? runId,
   }) async {
     final result = await _scheduleRepository.getById(scheduleId);
 
     return result.fold(
-      (schedule) async =>
-          _runScheduleWithLock(schedule, executionOrigin: executionOrigin),
+      (schedule) async => _runScheduleWithLock(
+        schedule,
+        executionOrigin: executionOrigin,
+        runId: runId,
+      ),
       rd.Failure.new,
     );
   }
