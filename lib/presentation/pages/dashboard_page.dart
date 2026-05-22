@@ -5,7 +5,9 @@ import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/app_image_assets.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/constants/route_names.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/schedule_config.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
@@ -43,7 +45,12 @@ class _DashboardPageState extends State<DashboardPage> {
     return ScaffoldPage(
       header: const PageHeader(title: Text('Painel')),
       content: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -54,11 +61,29 @@ class _DashboardPageState extends State<DashboardPage> {
                   final connections = connProvider.connections;
 
                   if (connections.isEmpty) {
-                    return const SizedBox.shrink();
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                      child: EmptyState(
+                        icon: FluentIcons.server,
+                        message: appLocaleString(
+                          context,
+                          'Nenhum servidor salvo. Adicione uma conexão para '
+                              'ver métricas remotas.',
+                          'No saved servers. Add a connection to see remote '
+                              'metrics.',
+                        ),
+                        actionLabel: appLocaleString(
+                          context,
+                          'Conectar',
+                          'Connect',
+                        ),
+                        onAction: () => context.go(RouteNames.serverLogin),
+                      ),
+                    );
                   }
 
                   return Card(
-                    margin: const EdgeInsets.only(bottom: 24),
+                    margin: const EdgeInsets.only(bottom: AppSpacing.lg),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -109,18 +134,68 @@ class _DashboardPageState extends State<DashboardPage> {
             if (isClientMode)
               Consumer<ServerConnectionProvider>(
                 builder: (context, connProvider, _) {
-                  if (connProvider.isConnected) return const SizedBox.shrink();
+                  final health = connProvider.serverHealth;
+                  if (!connProvider.isConnected ||
+                      health == null ||
+                      health.isOk) {
+                    return const SizedBox.shrink();
+                  }
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: InfoBar(
-                      title: const Text('Desconectado'),
-                      content: const Text(
-                        'Conecte-se a um servidor para ver métricas em tempo real.',
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Servidor com problemas',
+                          'Server degraded',
+                        ),
+                      ),
+                      content: SelectableText(
+                        health.message ??
+                            appLocaleString(
+                              context,
+                              'Verifique o servidor antes de executar backups.',
+                              'Check the server before running backups.',
+                            ),
+                      ),
+                      severity: health.isUnhealthy
+                          ? InfoBarSeverity.error
+                          : InfoBarSeverity.warning,
+                      isLong: true,
+                    ),
+                  );
+                },
+              ),
+            if (isClientMode)
+              Consumer<ServerConnectionProvider>(
+                builder: (context, connProvider, _) {
+                  if (connProvider.isConnected ||
+                      connProvider.connections.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: InfoBar(
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Desconectado',
+                          'Disconnected',
+                        ),
+                      ),
+                      content: Text(
+                        appLocaleString(
+                          context,
+                          'Conecte-se a um servidor para ver métricas em tempo real.',
+                          'Connect to a server to see live metrics.',
+                        ),
                       ),
                       severity: InfoBarSeverity.warning,
                       action: Button(
-                        onPressed: () => context.go('/server-login'),
-                        child: const Text('Conectar'),
+                        onPressed: () => context.go(RouteNames.serverLogin),
+                        child: Text(
+                          appLocaleString(context, 'Conectar', 'Connect'),
+                        ),
                       ),
                     ),
                   );
@@ -128,6 +203,43 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             Consumer<DashboardProvider>(
               builder: (context, provider, child) {
+                final loadError = provider.error;
+                if (loadError != null && loadError.trim().isNotEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: InfoBar(
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Erro ao carregar o painel',
+                          'Failed to load dashboard',
+                        ),
+                      ),
+                      content: SelectableText.rich(
+                        TextSpan(
+                          text: loadError,
+                          style: FluentTheme.of(context).typography.body
+                              ?.copyWith(
+                                color: context.colors.danger,
+                              ),
+                        ),
+                      ),
+                      severity: InfoBarSeverity.error,
+                      action: Button(
+                        onPressed: () =>
+                            unawaited(provider.loadDashboardData()),
+                        child: Text(
+                          appLocaleString(
+                            context,
+                            'Tentar novamente',
+                            'Try again',
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
                 if (provider.isLoading && provider.totalBackups == 0) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
@@ -157,7 +269,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 title: 'Total de Backups',
                                 value: provider.totalBackups.toString(),
                                 iconAsset: _dashboardStatIconAsset,
-                                color: AppColors.primary,
+                                color: AppPalette.primary,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -167,7 +279,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 title: 'Backups Hoje',
                                 value: provider.backupsToday.toString(),
                                 iconAsset: _dashboardStatIconAsset,
-                                color: AppColors.statsBackups,
+                                color: AppPalette.statsBackups,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -177,7 +289,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 title: 'Falharam Hoje',
                                 value: provider.failedToday.toString(),
                                 iconAsset: _dashboardStatIconAsset,
-                                color: AppColors.statsFailed,
+                                color: AppPalette.statsFailed,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -187,7 +299,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                 title: 'Agendamentos Ativos',
                                 value: provider.activeSchedules.toString(),
                                 iconAsset: _dashboardStatIconAsset,
-                                color: AppColors.statsActive,
+                                color: AppPalette.statsActive,
                               ),
                             ),
                           ],
@@ -214,7 +326,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                   'totalBackups',
                                 ),
                                 iconAsset: _dashboardStatIconAsset,
-                                color: AppColors.primary,
+                                color: AppPalette.primary,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -227,7 +339,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                   'backupsToday',
                                 ),
                                 iconAsset: _dashboardStatIconAsset,
-                                color: AppColors.statsBackups,
+                                color: AppPalette.statsBackups,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -240,7 +352,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                   'failedToday',
                                 ),
                                 iconAsset: _dashboardStatIconAsset,
-                                color: AppColors.statsFailed,
+                                color: AppPalette.statsFailed,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -253,7 +365,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                   'activeSchedules',
                                 ),
                                 iconAsset: _dashboardStatIconAsset,
-                                color: AppColors.statsActive,
+                                color: AppPalette.statsActive,
                               ),
                             ),
                           ],
@@ -322,13 +434,13 @@ class _DashboardPageState extends State<DashboardPage> {
                                       _getScheduleDescription(schedule),
                                     ),
                                     trailing: schedule.enabled
-                                        ? const Icon(
+                                        ? Icon(
                                             FluentIcons.check_mark,
-                                            color: AppColors.success,
+                                            color: context.colors.success,
                                           )
-                                        : const Icon(
+                                        : Icon(
                                             FluentIcons.cancel,
-                                            color: AppColors.grey600,
+                                            color: context.colors.disabled,
                                           ),
                                   );
                                 },

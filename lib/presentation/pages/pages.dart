@@ -5,6 +5,7 @@ export 'destinations_page.dart';
 export 'logs_page.dart';
 export 'main_layout.dart';
 export 'notifications_page.dart';
+export 'remote_database_configs_page.dart';
 export 'remote_schedules_page.dart';
 export 'schedules_page.dart';
 export 'server_login_page.dart';

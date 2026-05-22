@@ -58,6 +58,7 @@ void main() {
         expect(caps.supportsChunkAck, isFalse);
         expect(caps.supportsExecutionQueue, isTrue);
         expect(caps.supportsFirebird, isFalse);
+        expect(caps.supportsAsyncStart, isTrue);
       },
     );
 

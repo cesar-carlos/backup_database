@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/connection_log_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/domain/entities/connection_log.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:backup_database/presentation/widgets/client/client.dart';
@@ -49,30 +51,42 @@ class ServerLoginPage extends StatelessWidget {
                   if (provider.isLoading) {
                     return const Center(child: ProgressRing());
                   }
-                  if (provider.error != null) {
+                  final loadError = provider.error;
+                  if (loadError != null) {
                     return AppCard(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
+                            Icon(
                               FluentIcons.error,
                               size: 64,
-                              color: AppColors.error,
+                              color: context.colors.danger,
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              provider.error!,
-                              style: FluentTheme.of(
-                                context,
-                              ).typography.bodyLarge,
+                            const SizedBox(height: AppSpacing.md),
+                            SelectableText.rich(
+                              TextSpan(
+                                text: loadError,
+                                style:
+                                    FluentTheme.of(
+                                      context,
+                                    ).typography.bodyLarge?.copyWith(
+                                      color: context.colors.danger,
+                                    ),
+                              ),
                               textAlign: TextAlign.center,
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.md),
                             Button(
                               onPressed: () => provider.loadConnections(),
-                              child: const Text('Tentar Novamente'),
+                              child: Text(
+                                appLocaleString(
+                                  context,
+                                  'Tentar novamente',
+                                  'Try again',
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -341,7 +355,7 @@ class _ConnectionLogRowCompact extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = log.success ? AppColors.success : AppColors.error;
+    final color = log.success ? context.colors.success : context.colors.danger;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -363,7 +377,7 @@ class _ConnectionLogRowCompact extends StatelessWidget {
                     SelectableText(
                       log.errorMessage!,
                       style: FluentTheme.of(context).typography.body?.copyWith(
-                        color: AppColors.error,
+                        color: context.colors.danger,
                         fontSize: 12,
                       ),
                     ),

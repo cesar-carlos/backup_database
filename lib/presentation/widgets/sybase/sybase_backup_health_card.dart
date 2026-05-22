@@ -171,7 +171,7 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
               child: Text(
                 _error!,
                 style: FluentTheme.of(context).typography.body?.copyWith(
-                  color: AppColors.error,
+                  color: context.colors.danger,
                 ),
               ),
             )
@@ -236,10 +236,10 @@ class _HealthChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.08),
+        color: AppPalette.databaseSybase.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.3),
+          color: AppPalette.databaseSybase.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
@@ -266,20 +266,21 @@ class _ChainStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final (icon, color, text) = switch (status) {
       SybaseChainStatus.ok => (
         FluentIcons.check_mark,
-        AppColors.success,
+        colors.success,
         'Cadeia OK',
       ),
       SybaseChainStatus.warning => (
         FluentIcons.warning,
-        AppColors.warning,
+        colors.warning,
         'Full expirado',
       ),
       SybaseChainStatus.broken => (
         FluentIcons.error,
-        AppColors.error,
+        colors.danger,
         'Sem base full',
       ),
     };

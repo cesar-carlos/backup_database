@@ -15,6 +15,8 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
 /// Handles remote schedule commands from the client. When the client sends
 /// executeSchedule, the server runs the backup com [ExecutionOrigin.remoteCommand]
@@ -32,6 +34,7 @@ class ScheduleMessageHandler {
     RemoteExecutionRegistry? executionRegistry,
     ExecutionEventSequencer? eventSequencer,
     bool supportsFirebird = true,
+    Future<int> Function()? stagingUsageBytesProvider,
   }) : _scheduleRepository = scheduleRepository,
        _licensePolicyService = licensePolicyService,
        _schedulerService = schedulerService,
@@ -40,7 +43,8 @@ class ScheduleMessageHandler {
        _progressNotifier = progressNotifier,
        _executionRegistry = executionRegistry ?? RemoteExecutionRegistry(),
        _eventSequencer = eventSequencer ?? ExecutionEventSequencer(),
-       _supportsFirebird = supportsFirebird {
+       _supportsFirebird = supportsFirebird,
+       _stagingUsageBytesProvider = stagingUsageBytesProvider {
     _progressNotifier.addListener(_onProgressChanged);
   }
 
@@ -60,6 +64,7 @@ class ScheduleMessageHandler {
   final RemoteExecutionRegistry _executionRegistry;
   final ExecutionEventSequencer _eventSequencer;
   final bool _supportsFirebird;
+  final Future<int> Function()? _stagingUsageBytesProvider;
 
   void dispose() {
     _progressNotifier.removeListener(_onProgressChanged);
@@ -201,7 +206,10 @@ class ScheduleMessageHandler {
       );
       await sendToClient(
         clientId,
-        createScheduleErrorMessage(requestId: requestId, error: e.toString()),
+        createScheduleErrorMessage(
+          requestId: requestId,
+          error: failureUserMessage(e, fallback: 'Erro interno'),
+        ),
       );
     }
   }
@@ -226,11 +234,11 @@ class ScheduleMessageHandler {
       );
       return;
     }
-    await _sendError(
-      clientId,
-      requestId,
-      _failureMessage(result.exceptionOrNull()),
-      sendToClient,
+    await SocketErrorSender.sendScheduleError(
+      clientId: clientId,
+      requestId: requestId,
+      error: failureUserMessage(result.exceptionOrNull()),
+      sendToClient: sendToClient,
     );
   }
 
@@ -244,11 +252,11 @@ class ScheduleMessageHandler {
       final schedule = getScheduleFromUpdatePayload(message);
       if (schedule.databaseType == DatabaseType.firebird &&
           !_supportsFirebird) {
-        await _sendError(
-          clientId,
-          requestId,
-          ErrorCode.unsupportedDatabaseType.defaultMessage,
-          sendToClient,
+        await SocketErrorSender.sendScheduleError(
+          clientId: clientId,
+          requestId: requestId,
+          error: ErrorCode.unsupportedDatabaseType.defaultMessage,
+          sendToClient: sendToClient,
           errorCode: ErrorCode.unsupportedDatabaseType,
         );
         return;
@@ -267,14 +275,19 @@ class ScheduleMessageHandler {
         );
         return;
       }
-      await _sendError(
-        clientId,
-        requestId,
-        _failureMessage(result.exceptionOrNull()),
-        sendToClient,
+      await SocketErrorSender.sendScheduleError(
+        clientId: clientId,
+        requestId: requestId,
+        error: failureUserMessage(result.exceptionOrNull()),
+        sendToClient: sendToClient,
       );
     } on Object catch (e) {
-      await _sendError(clientId, requestId, e.toString(), sendToClient);
+      await SocketErrorSender.sendScheduleError(
+        clientId: clientId,
+        requestId: requestId,
+        error: failureUserMessage(e, fallback: 'Erro ao atualizar agendamento'),
+        sendToClient: sendToClient,
+      );
     }
   }
 
@@ -286,11 +299,11 @@ class ScheduleMessageHandler {
   ) async {
     final scheduleId = getScheduleIdFromExecutePayload(message);
     if (scheduleId.isEmpty) {
-      await _sendError(
-        clientId,
-        requestId,
-        'scheduleId vazio',
-        sendToClient,
+      await SocketErrorSender.sendScheduleError(
+        clientId: clientId,
+        requestId: requestId,
+        error: 'scheduleId vazio',
+        sendToClient: sendToClient,
         errorCode: ErrorCode.invalidRequest,
       );
       return;
@@ -303,12 +316,13 @@ class ScheduleMessageHandler {
         requestId: requestId.toString(),
         scheduleId: scheduleId,
       );
-      await _sendError(
-        clientId,
-        requestId,
-        'Já existe um backup em execução no servidor. '
-        'Aguarde conclusão para iniciar novo.',
-        sendToClient,
+      await SocketErrorSender.sendScheduleError(
+        clientId: clientId,
+        requestId: requestId,
+        error:
+            'Já existe um backup em execução no servidor. '
+            'Aguarde conclusão para iniciar novo.',
+        sendToClient: sendToClient,
         errorCode: ErrorCode.backupAlreadyRunning,
       );
       return;
@@ -324,11 +338,11 @@ class ScheduleMessageHandler {
         requestId: requestId.toString(),
         scheduleId: scheduleId,
       );
-      await _sendError(
-        clientId,
-        requestId,
-        'Já existe um backup em execução para este agendamento.',
-        sendToClient,
+      await SocketErrorSender.sendScheduleError(
+        clientId: clientId,
+        requestId: requestId,
+        error: 'Já existe um backup em execução para este agendamento.',
+        sendToClient: sendToClient,
         errorCode: ErrorCode.backupAlreadyRunning,
       );
       return;
@@ -346,14 +360,14 @@ class ScheduleMessageHandler {
     try {
       final scheduleResult = await _scheduleRepository.getById(scheduleId);
       if (scheduleResult.isError()) {
-        await _sendError(
-          clientId,
-          requestId,
-          _failureMessage(
+        await SocketErrorSender.sendScheduleError(
+          clientId: clientId,
+          requestId: requestId,
+          error: failureUserMessage(
             scheduleResult.exceptionOrNull(),
             fallback: 'Agendamento não encontrado',
           ),
-          sendToClient,
+          sendToClient: sendToClient,
           errorCode: ErrorCode.scheduleNotFound,
         );
         return;
@@ -361,11 +375,11 @@ class ScheduleMessageHandler {
 
       final schedule = scheduleResult.getOrNull();
       if (schedule == null) {
-        await _sendError(
-          clientId,
-          requestId,
-          'Agendamento não encontrado',
-          sendToClient,
+        await SocketErrorSender.sendScheduleError(
+          clientId: clientId,
+          requestId: requestId,
+          error: 'Agendamento não encontrado',
+          sendToClient: sendToClient,
           errorCode: ErrorCode.scheduleNotFound,
         );
         return;
@@ -373,28 +387,45 @@ class ScheduleMessageHandler {
 
       if (schedule.databaseType == DatabaseType.firebird &&
           !_supportsFirebird) {
-        await _sendError(
-          clientId,
-          requestId,
-          ErrorCode.unsupportedDatabaseType.defaultMessage,
-          sendToClient,
+        await SocketErrorSender.sendScheduleError(
+          clientId: clientId,
+          requestId: requestId,
+          error: ErrorCode.unsupportedDatabaseType.defaultMessage,
+          sendToClient: sendToClient,
           errorCode: ErrorCode.unsupportedDatabaseType,
         );
         return;
+      }
+
+      final measureStaging = _stagingUsageBytesProvider;
+      if (measureStaging != null) {
+        final used = await measureStaging();
+        if (StagingUsagePolicy.shouldBlock(used)) {
+          await SocketErrorSender.sendScheduleError(
+            clientId: clientId,
+            requestId: requestId,
+            error:
+                'Staging remoto acima do limite; libere espaco ou aguarde a '
+                'limpeza periodica.',
+            sendToClient: sendToClient,
+            errorCode: ErrorCode.stagingFull,
+          );
+          return;
+        }
       }
 
       // ADR-001: nao exige destinos no host; so valida schedule + licenca.
       final policyResult = await _licensePolicyService
           .validateExecutionCapabilities(schedule, const <BackupDestination>[]);
       if (policyResult.isError()) {
-        await _sendError(
-          clientId,
-          requestId,
-          _failureMessage(
+        await SocketErrorSender.sendScheduleError(
+          clientId: clientId,
+          requestId: requestId,
+          error: failureUserMessage(
             policyResult.exceptionOrNull(),
             fallback: 'Licença não permite execução',
           ),
-          sendToClient,
+          sendToClient: sendToClient,
           errorCode: ErrorCode.licenseDenied,
         );
         return;
@@ -407,12 +438,13 @@ class ScheduleMessageHandler {
           requestId: requestId.toString(),
           scheduleId: scheduleId,
         );
-        await _sendError(
-          clientId,
-          requestId,
-          'Já existe um backup em execução no servidor. '
-          'Aguarde conclusão para iniciar novo.',
-          sendToClient,
+        await SocketErrorSender.sendScheduleError(
+          clientId: clientId,
+          requestId: requestId,
+          error:
+              'Já existe um backup em execução no servidor. '
+              'Aguarde conclusão para iniciar novo.',
+          sendToClient: sendToClient,
           errorCode: ErrorCode.backupAlreadyRunning,
         );
         return;
@@ -458,7 +490,7 @@ class ScheduleMessageHandler {
       // qualquer falha de envio era invisível.
       if (result.isError()) {
         final failure = result.exceptionOrNull();
-        final errorMessage = _failureMessage(failure);
+        final errorMessage = failureUserMessage(failure);
         LoggerService.warningWithContext(
           'Backup failed',
           clientId: clientId,
@@ -466,7 +498,12 @@ class ScheduleMessageHandler {
           scheduleId: scheduleId,
           error: failure,
         );
-        await _sendError(clientId, requestId, errorMessage, sendToClient);
+        await SocketErrorSender.sendScheduleError(
+          clientId: clientId,
+          requestId: requestId,
+          error: errorMessage,
+          sendToClient: sendToClient,
+        );
         _progressNotifier.failBackup(errorMessage);
         _executionRegistry.unregister(runId);
         return;
@@ -491,11 +528,11 @@ class ScheduleMessageHandler {
           ),
         );
       } else {
-        await _sendError(
-          clientId,
-          requestId,
-          _failureMessage(updatedScheduleResult.exceptionOrNull()),
-          sendToClient,
+        await SocketErrorSender.sendScheduleError(
+          clientId: clientId,
+          requestId: requestId,
+          error: failureUserMessage(updatedScheduleResult.exceptionOrNull()),
+          sendToClient: sendToClient,
         );
       }
 
@@ -515,8 +552,12 @@ class ScheduleMessageHandler {
         error: e,
         stackTrace: st,
       );
+      final errorMessage = failureUserMessage(
+        e,
+        fallback: 'Erro ao executar agendamento',
+      );
       if (progressSlotReserved) {
-        _progressNotifier.failBackup(e.toString());
+        _progressNotifier.failBackup(errorMessage);
       }
       final failedMeta = _eventSequencer.next();
       await sendToClient(
@@ -524,7 +565,7 @@ class ScheduleMessageHandler {
         createBackupFailedMessage(
           requestId: requestId,
           scheduleId: scheduleId,
-          error: e.toString(),
+          error: errorMessage,
           runId: executionContext?.runId,
           eventId: failedMeta.eventId,
           sequence: failedMeta.sequence,
@@ -544,11 +585,11 @@ class ScheduleMessageHandler {
   ) async {
     final scheduleId = getScheduleIdFromCancelRequest(message);
     if (scheduleId == null || scheduleId.isEmpty) {
-      await _sendError(
-        clientId,
-        requestId,
-        'scheduleId vazio ou inválido',
-        sendToClient,
+      await SocketErrorSender.sendScheduleError(
+        clientId: clientId,
+        requestId: requestId,
+        error: 'scheduleId vazio ou inválido',
+        sendToClient: sendToClient,
         errorCode: ErrorCode.invalidRequest,
       );
       return;
@@ -556,11 +597,11 @@ class ScheduleMessageHandler {
 
     final activeContext = _executionRegistry.getActiveByScheduleId(scheduleId);
     if (activeContext == null) {
-      await _sendError(
-        clientId,
-        requestId,
-        'Não há backup em execução para este schedule',
-        sendToClient,
+      await SocketErrorSender.sendScheduleError(
+        clientId: clientId,
+        requestId: requestId,
+        error: 'Não há backup em execução para este schedule',
+        sendToClient: sendToClient,
         errorCode: ErrorCode.noActiveExecution,
       );
       return;
@@ -575,14 +616,14 @@ class ScheduleMessageHandler {
 
     final cancelResult = await _schedulerService.cancelExecution(scheduleId);
     if (cancelResult.isError()) {
-      await _sendError(
-        clientId,
-        requestId,
-        _failureMessage(
+      await SocketErrorSender.sendScheduleError(
+        clientId: clientId,
+        requestId: requestId,
+        error: failureUserMessage(
           cancelResult.exceptionOrNull(),
           fallback: 'Falha ao cancelar backup',
         ),
-        sendToClient,
+        sendToClient: sendToClient,
         errorCode: ErrorCode.unknown,
       );
       return;
@@ -597,45 +638,5 @@ class ScheduleMessageHandler {
         scheduleId: scheduleId,
       ),
     );
-  }
-
-  /// Helper para envio de erro padronizado. Antes era 14 cópias de
-  /// `await sendToClient(clientId, createScheduleErrorMessage(...))` com
-  /// pequenas variações. Centralizar evita divergência e facilita
-  /// adicionar instrumentação (ex.: contar erros enviados).
-  ///
-  /// [errorCode] e opcional para preservar compat — quando fornecido,
-  /// `statusCode` e derivado automaticamente da tabela oficial e o
-  /// payload carrega `errorCode` no envelope (F0.2 do plano). Cliente
-  /// pode aplicar retry/gate baseado em `statusCode`/`errorCode` em vez
-  /// de parsing de string.
-  Future<void> _sendError(
-    String clientId,
-    int requestId,
-    String error,
-    SendToClient sendToClient, {
-    ErrorCode? errorCode,
-  }) {
-    return sendToClient(
-      clientId,
-      createScheduleErrorMessage(
-        requestId: requestId,
-        error: error,
-        errorCode: errorCode,
-      ),
-    );
-  }
-
-  /// Extrai mensagem amigável de uma falha que veio do `Result.exceptionOrNull()`.
-  /// Antes era `failure?.toString() ?? 'fallback'`, que para `Failure`
-  /// gerava strings tipo `Failure(message: ..., code: null)` exibidas ao
-  /// cliente — feio e expõe internals.
-  String _failureMessage(Object? failure, {String fallback = 'Erro'}) {
-    if (failure == null) return fallback;
-    if (failure is Failure) {
-      return failure.message.isEmpty ? fallback : failure.message;
-    }
-    final str = failure.toString();
-    return str.isEmpty ? fallback : str;
   }
 }

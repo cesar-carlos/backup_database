@@ -1,5 +1,5 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -70,7 +70,7 @@ class RecentBackupsList extends StatelessWidget {
                       FluentTheme.of(
                         context,
                       ).typography.caption?.copyWith(
-                        color: AppColors.backupWarning,
+                        color: AppPalette.backupWarning,
                       ),
                 ),
               ],
@@ -111,13 +111,13 @@ class RecentBackupsList extends StatelessWidget {
   Color _getStatusColor(BackupStatus status) {
     switch (status) {
       case BackupStatus.success:
-        return AppColors.backupSuccess;
+        return AppPalette.backupSuccess;
       case BackupStatus.error:
-        return AppColors.backupError;
+        return AppPalette.backupError;
       case BackupStatus.warning:
-        return AppColors.backupWarning;
+        return AppPalette.backupWarning;
       case BackupStatus.running:
-        return AppColors.backupRunning;
+        return AppPalette.backupRunning;
     }
   }
 
@@ -229,13 +229,13 @@ class RecentBackupsList extends StatelessWidget {
       case BackupType.full:
       case BackupType.fullSingle:
       case BackupType.convertedFullSingle:
-        return AppColors.primary;
+        return AppPalette.primary;
       case BackupType.differential:
       case BackupType.convertedDifferential:
-        return Colors.blue;
+        return AppPalette.info;
       case BackupType.log:
       case BackupType.convertedLog:
-        return Colors.orange;
+        return AppPalette.warning;
     }
   }
 }

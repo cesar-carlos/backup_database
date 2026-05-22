@@ -106,14 +106,7 @@ Future<void> setupPresentationModule(GetIt getIt) async {
     () => ConnectionLogProvider(getIt<IConnectionLogRepository>()),
   );
 
-  getIt.registerFactory<RemoteSchedulesProvider>(
-    () => RemoteSchedulesProvider(
-      getIt<ConnectionManager>(),
-      transferProvider: getIt<RemoteFileTransferProvider>(),
-    ),
-  );
-
-  getIt.registerFactory<RemoteFileTransferProvider>(
+  getIt.registerLazySingleton<RemoteFileTransferProvider>(
     () => RemoteFileTransferProvider(
       getIt<ConnectionManager>(),
       getIt<IBackupDestinationRepository>(),
@@ -124,11 +117,29 @@ Future<void> setupPresentationModule(GetIt getIt) async {
     ),
   );
 
-  getIt.registerFactory<ServerConnectionProvider>(
+  getIt.registerLazySingleton<RemoteSchedulesProvider>(
+    () => RemoteSchedulesProvider(
+      getIt<ConnectionManager>(),
+      transferProvider: getIt<RemoteFileTransferProvider>(),
+      ensureServerHealthy: () async {
+        final connectionProvider = getIt<ServerConnectionProvider>();
+        await connectionProvider.refreshServerStatus();
+        return connectionProvider.isServerHealthy;
+      },
+    ),
+  );
+
+  getIt.registerLazySingleton<RemoteDatabaseConfigProvider>(
+    () => RemoteDatabaseConfigProvider(getIt<ConnectionManager>()),
+  );
+
+  getIt.registerLazySingleton<ServerConnectionProvider>(
     () => ServerConnectionProvider(
       getIt<IServerConnectionRepository>(),
       getIt<ConnectionManager>(),
       getIt<IConnectionLogRepository>(),
+      onExecutionResumeAfterReconnect:
+          getIt<RemoteSchedulesProvider>().tryResumeExecutionAfterReconnect,
     ),
   );
 }

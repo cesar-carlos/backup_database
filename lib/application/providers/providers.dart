@@ -12,6 +12,7 @@ export 'license_provider.dart';
 export 'log_provider.dart';
 export 'notification_provider.dart';
 export 'postgres_config_provider.dart';
+export 'remote_database_config_provider.dart';
 export 'remote_file_transfer_provider.dart';
 export 'remote_schedules_provider.dart';
 export 'scheduler_provider.dart';

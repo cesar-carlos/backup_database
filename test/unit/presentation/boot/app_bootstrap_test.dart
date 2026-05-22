@@ -221,6 +221,7 @@ AppBootstrapDependencies _buildDependencies({
     },
     applyBootstrapConfig: (config) {
       events.add('apply_config');
+      setAppMode(config.appMode);
     },
     setupServiceLocator: () async {
       events.add('di');

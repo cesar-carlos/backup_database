@@ -11,6 +11,7 @@
     "supportsChunkAck": false,
     "supportsExecutionQueue": true,
     "supportsFirebird": true,
+    "supportsAsyncStart": true,
     "chunkSize": 65536,
     "compression": "gzip",
     "serverTimeUtc": "2026-04-19T12:00:00.000Z"

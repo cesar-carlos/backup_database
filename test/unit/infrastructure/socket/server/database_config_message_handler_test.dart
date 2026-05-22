@@ -235,6 +235,31 @@ void main() {
       },
     );
 
+    test(
+      'Firebird rejeitado quando supportsFirebird e false (test connection)',
+      () async {
+        handler = DatabaseConfigMessageHandler(
+          prober: prober,
+          supportsFirebird: false,
+          clock: () => DateTime.utc(2026),
+        );
+        final req = createTestDatabaseConnectionRequest(
+          databaseType: RemoteDatabaseType.firebird,
+          databaseConfigId: 'cfg-fb',
+        );
+        await handler.handle('c1', req, send);
+
+        expect(sentMessages, hasLength(1));
+        final resp = sentMessages.single;
+        expect(resp.header.type, MessageType.error);
+        expect(
+          getErrorCodeFromMessage(resp),
+          ErrorCode.unsupportedDatabaseType,
+        );
+        expect(prober.lastType, isNull);
+      },
+    );
+
     test('NotConfiguredProber default responde com falha unknown', () async {
       handler = DatabaseConfigMessageHandler(
         clock: () => DateTime.utc(2026),

@@ -89,8 +89,11 @@ void main() {
     // Default: backup async resolve sucesso (mas testes que querem
     // observar runtime async substituem isso por Completer<...>)
     when(
-      () =>
-          executeBackup(any(), executionOrigin: any(named: 'executionOrigin')),
+      () => executeBackup(
+        any(),
+        executionOrigin: any(named: 'executionOrigin'),
+        runId: any(named: 'runId'),
+      ),
     ).thenAnswer((_) async => const rd.Success(true));
     when(
       () => scheduleRepository.getById(scheduleId),
@@ -173,6 +176,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         );
       },
@@ -207,6 +211,7 @@ void main() {
           () => executeBackup(
             scheduleId,
             executionOrigin: ExecutionOrigin.remoteCommand,
+            runId: any(named: 'runId'),
           ),
         ).called(1);
       },
@@ -220,6 +225,7 @@ void main() {
         () => executeBackup(
           any(),
           executionOrigin: any(named: 'executionOrigin'),
+          runId: any(named: 'runId'),
         ),
       ).thenAnswer((_) => blockBackup.future);
 
@@ -253,6 +259,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         ).thenAnswer((_) => blockBackup.future);
         when(() => progressNotifier.currentSnapshot).thenReturn(
@@ -286,6 +293,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         ).thenAnswer((_) => blockBackup.future);
         when(() => progressNotifier.currentSnapshot).thenReturn(
@@ -318,6 +326,7 @@ void main() {
         () => executeBackup(
           any(),
           executionOrigin: any(named: 'executionOrigin'),
+          runId: any(named: 'runId'),
         ),
       );
     });
@@ -389,6 +398,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         ).thenAnswer((_) => blockBackup.future);
 
@@ -404,6 +414,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: ExecutionOrigin.remoteCommand,
+            runId: any(named: 'runId'),
           ),
         ).called(1);
         expect(sent, hasLength(2));
@@ -649,6 +660,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         );
       },
@@ -756,6 +768,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         );
       },
@@ -788,6 +801,8 @@ void main() {
       await handler.handle('c1', req, sendToClient);
       final resp = sent.single.message;
       expect(resp.header.type, MessageType.error);
+      expect(getErrorCodeFromMessage(resp), ErrorCode.queueFull);
+      expect(getStatusCodeFromMessage(resp), StatusCodes.serviceUnavailable);
       expect(getErrorFromMessage(resp), contains('Fila'));
     });
   });
@@ -869,12 +884,14 @@ void main() {
           () => executeBackup(
             runnerScheduleId,
             executionOrigin: ExecutionOrigin.remoteCommand,
+            runId: any(named: 'runId'),
           ),
         ).called(1);
         verifyNever(
           () => executeBackup(
             queuedScheduleId,
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         );
         expect(queue.queueSize, 0);

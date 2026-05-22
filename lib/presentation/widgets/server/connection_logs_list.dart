@@ -32,7 +32,8 @@ class _ConnectionLogsListState extends State<ConnectionLogsList> {
         if (provider.isLoading && provider.logs.isEmpty) {
           return const Center(child: ProgressRing());
         }
-        if (provider.error != null) {
+        final loadError = provider.error;
+        if (loadError != null) {
           return AppCard(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -44,10 +45,15 @@ class _ConnectionLogsListState extends State<ConnectionLogsList> {
                     size: 64,
                     color: context.colors.danger,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    provider.error!,
-                    style: FluentTheme.of(context).typography.bodyLarge,
+                  const SizedBox(height: AppSpacing.md),
+                  SelectableText.rich(
+                    TextSpan(
+                      text: loadError,
+                      style: FluentTheme.of(context).typography.bodyLarge
+                          ?.copyWith(
+                            color: context.colors.danger,
+                          ),
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -211,13 +217,15 @@ class _ConnectionLogsContent extends StatelessWidget {
 
                     return Tooltip(
                       message: message,
-                      child: Text(
+                      child: SelectableText(
                         message,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: FluentTheme.of(
-                          context,
-                        ).typography.body?.copyWith(color: context.colors.danger),
+                        style:
+                            FluentTheme.of(
+                              context,
+                            ).typography.body?.copyWith(
+                              color: context.colors.danger,
+                            ),
                       ),
                     );
                   },

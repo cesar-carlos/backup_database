@@ -100,6 +100,7 @@ class StatusCodes {
     ErrorCode.unsupportedProtocolVersion: serviceUnavailable,
     ErrorCode.diskFull: serviceUnavailable,
     ErrorCode.stagingFull: serviceUnavailable,
+    ErrorCode.queueFull: serviceUnavailable,
     ErrorCode.ioError: serviceUnavailable,
 
     // Conexao

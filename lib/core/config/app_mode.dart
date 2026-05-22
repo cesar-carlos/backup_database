@@ -1,8 +1,3 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 enum AppMode { server, client, unified }
 
 AppMode? _currentMode;
@@ -97,42 +92,4 @@ AppMode resolveAppMode({
 
   // 6. Default to server mode
   return AppMode.server;
-}
-
-AppMode getAppMode(List<String> args) {
-  String? installModeContent;
-  try {
-    final exeDir = File(Platform.resolvedExecutable).parent;
-    final installModeFile = File(
-      '${exeDir.path}${Platform.pathSeparator}.install_mode',
-    );
-    if (installModeFile.existsSync()) {
-      installModeContent = installModeFile.readAsStringSync();
-    }
-  } on Object catch (_) {
-    // ignore; continue to next check
-  }
-
-  String? legacyModeContent;
-  try {
-    final exeDir = File(Platform.resolvedExecutable).parent;
-    final modeFile = File(
-      '${exeDir.path}${Platform.pathSeparator}config'
-      '${Platform.pathSeparator}mode.ini',
-    );
-    if (modeFile.existsSync()) {
-      legacyModeContent = modeFile.readAsStringSync();
-    }
-  } on Object catch (_) {
-    // ignore; fall back to server
-  }
-
-  return resolveAppMode(
-    args: args,
-    isDebugMode: kDebugMode,
-    debugAppMode: dotenv.env['DEBUG_APP_MODE'],
-    appModeEnv: dotenv.env['APP_MODE'],
-    installModeContent: installModeContent,
-    legacyModeContent: legacyModeContent,
-  );
 }

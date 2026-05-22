@@ -84,14 +84,14 @@ class AppPageState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accentOrSemantic = _resolveColor(context);
-    final useOnSurfaceForCopy =
-        !isLoading && tone == AppPageStateTone.neutral;
+    final useOnSurfaceForCopy = !isLoading && tone == AppPageStateTone.neutral;
     final titleIconColor = useOnSurfaceForCopy
         ? context.colors.onSurface
         : accentOrSemantic;
     final titleStyle = FluentTheme.of(
       context,
     ).typography.subtitle?.copyWith(color: titleIconColor);
+    final detailMessage = message?.trim();
 
     return Center(
       child: Padding(
@@ -118,17 +118,28 @@ class AppPageState extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: titleStyle,
               ),
-              if (message != null && message!.trim().isNotEmpty) ...[
+              if (detailMessage != null && detailMessage.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.sm),
-                Text(
-                  message!,
-                  textAlign: TextAlign.center,
-                  style: FluentTheme.of(context).typography.body?.copyWith(
-                    color: useOnSurfaceForCopy
-                        ? context.colors.onSurface
-                        : null,
+                if (tone == AppPageStateTone.danger)
+                  SelectableText.rich(
+                    TextSpan(
+                      text: detailMessage,
+                      style: FluentTheme.of(context).typography.body?.copyWith(
+                        color: context.colors.danger,
+                      ),
+                    ),
+                    textAlign: TextAlign.center,
+                  )
+                else
+                  Text(
+                    detailMessage,
+                    textAlign: TextAlign.center,
+                    style: FluentTheme.of(context).typography.body?.copyWith(
+                      color: useOnSurfaceForCopy
+                          ? context.colors.onSurface
+                          : null,
+                    ),
                   ),
-                ),
               ],
               if (actionLabel != null && onAction != null) ...[
                 const SizedBox(height: AppSpacing.lg),

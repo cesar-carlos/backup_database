@@ -3,28 +3,79 @@ import 'dart:async';
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/di/service_locator.dart';
-import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure.dart'
+    show Failure, failureUserMessage;
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/utils/error_mapper.dart'
     show mapExceptionToMessage;
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/connection_status.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
+import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
+import 'package:backup_database/infrastructure/protocol/preflight_messages.dart';
+import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:uuid/uuid.dart';
+
+typedef EnsureServerHealthyForBackup = Future<bool> Function();
+
+enum RemotePreflightUiAction { proceed, showDialog, notApplicable }
+
+class RemotePreflightRunResult {
+  const RemotePreflightRunResult({
+    required this.action,
+    this.preflight,
+    this.errorMessage,
+  });
+
+  final RemotePreflightUiAction action;
+  final PreflightResult? preflight;
+  final String? errorMessage;
+
+  bool get isBlocked => preflight?.isBlocked ?? false;
+
+  bool get hasWarningsOnly =>
+      preflight != null && preflight!.hasWarnings && !preflight!.isBlocked;
+}
 
 class RemoteSchedulesProvider extends ChangeNotifier {
   RemoteSchedulesProvider(
     this._connectionManager, {
     RemoteFileTransferProvider? transferProvider,
     TempDirectoryService? tempDirectoryService,
+    EnsureServerHealthyForBackup? ensureServerHealthy,
   }) : _transferProvider = transferProvider,
        _tempDirectoryService =
-           tempDirectoryService ?? getIt<TempDirectoryService>();
+           tempDirectoryService ?? getIt<TempDirectoryService>(),
+       _ensureServerHealthy =
+           ensureServerHealthy ??
+           (() =>
+               _refreshServerHealthViaConnectionManager(_connectionManager)) {
+    _listenToConnectionStatus();
+    _queueEventsSubscription = _connectionManager.queueEvents.listen(
+      _onQueueEvent,
+    );
+  }
 
   final ConnectionManager _connectionManager;
+  final EnsureServerHealthyForBackup _ensureServerHealthy;
+
+  static Future<bool> _refreshServerHealthViaConnectionManager(
+    ConnectionManager manager,
+  ) async {
+    final result = await manager.getServerHealth();
+    return result.fold(
+      (health) => health.isOk,
+      (_) => true,
+    );
+  }
+
+  StreamSubscription<ConnectionStatus>? _statusSubscription;
+  StreamSubscription<QueueEvent>? _queueEventsSubscription;
   final RemoteFileTransferProvider? _transferProvider;
   final TempDirectoryService _tempDirectoryService;
 
@@ -48,6 +99,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   double? _transferProgress;
   bool _isTransferringFile = false;
 
+  List<QueuedExecution> _executionQueue = [];
+  bool _isLoadingExecutionQueue = false;
+  String? _executionQueueError;
+
   List<Schedule> get schedules => _schedules;
   bool get isLoading => _isLoading;
   bool get isUpdating => _isUpdating;
@@ -65,6 +120,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   String? get transferMessage => _transferMessage;
   double? get transferProgress => _transferProgress;
   bool get isTransferringFile => _isTransferringFile;
+  List<QueuedExecution> get executionQueue => _executionQueue;
+  bool get isLoadingExecutionQueue => _isLoadingExecutionQueue;
+  String? get executionQueueError => _executionQueueError;
 
   Future<void> loadSchedules() async {
     if (!_connectionManager.isConnected) {
@@ -95,6 +153,197 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     );
 
     notifyListeners();
+  }
+
+  Future<void> loadExecutionQueue() async {
+    if (!_connectionManager.isConnected ||
+        !_connectionManager.isExecutionQueueSupported) {
+      _executionQueue = [];
+      _executionQueueError = null;
+      _isLoadingExecutionQueue = false;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingExecutionQueue = true;
+    _executionQueueError = null;
+    notifyListeners();
+
+    final result = await _connectionManager.getExecutionQueue();
+    result.fold(
+      (snapshot) {
+        _executionQueue = List<QueuedExecution>.from(snapshot.queue);
+        _isLoadingExecutionQueue = false;
+        _executionQueueError = null;
+      },
+      (exception) {
+        _executionQueueError = mapExceptionToMessage(exception);
+        _isLoadingExecutionQueue = false;
+      },
+    );
+    notifyListeners();
+  }
+
+  Future<bool> createRemoteSchedule(Schedule schedule) async {
+    if (!_connectionManager.isConnected) {
+      _error = 'Conecte-se a um servidor para criar agendamentos.';
+      _lastErrorCode = null;
+      notifyListeners();
+      return false;
+    }
+
+    _isUpdating = true;
+    _updatingScheduleId = null;
+    _error = null;
+    _lastErrorCode = null;
+    notifyListeners();
+
+    final result = await _connectionManager.createRemoteSchedule(
+      schedule: schedule,
+      idempotencyKey: const Uuid().v4(),
+    );
+
+    return result.fold(
+      (_) async {
+        _error = null;
+        _lastErrorCode = null;
+        _isUpdating = false;
+        notifyListeners();
+        await _reloadSchedulesAndQueue();
+        return true;
+      },
+      (exception) {
+        _error = failureUserMessage(exception);
+        _lastErrorCode = exception is Failure ? exception.code : null;
+        _isUpdating = false;
+        notifyListeners();
+        return false;
+      },
+    );
+  }
+
+  Future<bool> deleteRemoteSchedule(String scheduleId) async {
+    if (!_connectionManager.isConnected) {
+      _error = 'Conecte-se a um servidor para excluir agendamentos.';
+      _lastErrorCode = null;
+      notifyListeners();
+      return false;
+    }
+    if (scheduleId.isEmpty) {
+      _error = 'Identificador de agendamento inválido.';
+      _lastErrorCode = null;
+      notifyListeners();
+      return false;
+    }
+
+    _isUpdating = true;
+    _updatingScheduleId = scheduleId;
+    _error = null;
+    _lastErrorCode = null;
+    notifyListeners();
+
+    final result = await _connectionManager.deleteRemoteSchedule(
+      scheduleId: scheduleId,
+      idempotencyKey: const Uuid().v4(),
+    );
+
+    return result.fold(
+      (_) async {
+        _schedules = _schedules.where((s) => s.id != scheduleId).toList();
+        _error = null;
+        _lastErrorCode = null;
+        _isUpdating = false;
+        _updatingScheduleId = null;
+        notifyListeners();
+        await _reloadSchedulesAndQueue();
+        return true;
+      },
+      (exception) {
+        _error = failureUserMessage(exception);
+        _lastErrorCode = exception is Failure ? exception.code : null;
+        _isUpdating = false;
+        _updatingScheduleId = null;
+        notifyListeners();
+        return false;
+      },
+    );
+  }
+
+  Future<bool> setRemoteSchedulePaused({
+    required String scheduleId,
+    required bool paused,
+  }) async {
+    if (!_connectionManager.isConnected) {
+      _error = paused
+          ? 'Conecte-se a um servidor para pausar agendamentos.'
+          : 'Conecte-se a um servidor para retomar agendamentos.';
+      _lastErrorCode = null;
+      notifyListeners();
+      return false;
+    }
+    if (scheduleId.isEmpty) {
+      _error = 'Identificador de agendamento inválido.';
+      _lastErrorCode = null;
+      notifyListeners();
+      return false;
+    }
+
+    _isUpdating = true;
+    _updatingScheduleId = scheduleId;
+    _error = null;
+    _lastErrorCode = null;
+    notifyListeners();
+
+    final idempotencyKey = const Uuid().v4();
+    final result = paused
+        ? await _connectionManager.pauseRemoteSchedule(
+            scheduleId: scheduleId,
+            idempotencyKey: idempotencyKey,
+          )
+        : await _connectionManager.resumeRemoteSchedule(
+            scheduleId: scheduleId,
+            idempotencyKey: idempotencyKey,
+          );
+
+    return result.fold(
+      (mutation) async {
+        final snapshot = mutation.schedule;
+        if (snapshot != null) {
+          final index = _schedules.indexWhere((s) => s.id == snapshot.id);
+          if (index >= 0) {
+            _schedules = List<Schedule>.from(_schedules)..[index] = snapshot;
+          }
+        } else {
+          final index = _schedules.indexWhere((s) => s.id == scheduleId);
+          if (index >= 0) {
+            _schedules = List<Schedule>.from(_schedules)
+              ..[index] = _schedules[index].copyWith(enabled: !paused);
+          }
+        }
+        _error = null;
+        _lastErrorCode = null;
+        _isUpdating = false;
+        _updatingScheduleId = null;
+        notifyListeners();
+        await _reloadSchedulesAndQueue();
+        return true;
+      },
+      (exception) {
+        _error = failureUserMessage(exception);
+        _lastErrorCode = exception is Failure ? exception.code : null;
+        _isUpdating = false;
+        _updatingScheduleId = null;
+        notifyListeners();
+        return false;
+      },
+    );
+  }
+
+  Future<void> _reloadSchedulesAndQueue() async {
+    await loadSchedules();
+    if (_connectionManager.isExecutionQueueSupported) {
+      await loadExecutionQueue();
+    }
   }
 
   Future<bool> updateSchedule(Schedule schedule) async {
@@ -137,7 +386,46 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     );
   }
 
-  Future<bool> executeSchedule(String scheduleId) async {
+  Future<RemotePreflightRunResult> runPreflightForSchedule() async {
+    if (!_connectionManager.isConnected) {
+      return const RemotePreflightRunResult(
+        action: RemotePreflightUiAction.notApplicable,
+        errorMessage: 'Conecte-se a um servidor para executar agendamentos.',
+      );
+    }
+    if (!_connectionManager.isRunIdSupported) {
+      return const RemotePreflightRunResult(
+        action: RemotePreflightUiAction.notApplicable,
+      );
+    }
+
+    final result = await _connectionManager.validateServerBackupPrerequisites();
+    return result.fold(
+      (preflight) {
+        if (preflight.isBlocked || preflight.hasWarnings) {
+          return RemotePreflightRunResult(
+            action: RemotePreflightUiAction.showDialog,
+            preflight: preflight,
+          );
+        }
+        return RemotePreflightRunResult(
+          action: RemotePreflightUiAction.proceed,
+          preflight: preflight,
+        );
+      },
+      (exception) {
+        LoggerService.warning('Preflight remoto falhou: $exception');
+        return const RemotePreflightRunResult(
+          action: RemotePreflightUiAction.proceed,
+        );
+      },
+    );
+  }
+
+  Future<bool> executeSchedule(
+    String scheduleId, {
+    bool skipPreflightCheck = false,
+  }) async {
     if (!_connectionManager.isConnected) {
       _error = 'Conecte-se a um servidor para executar agendamentos.';
       _lastErrorCode = null;
@@ -145,9 +433,21 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       return false;
     }
 
+    if (_connectionManager.isRunIdSupported) {
+      final isHealthy = await _ensureServerHealthy();
+      if (!isHealthy) {
+        _error =
+            'Servidor indisponível ou com problemas de saúde. '
+            'Atualize o status da conexão e tente novamente.';
+        _lastErrorCode = null;
+        notifyListeners();
+        return false;
+      }
+    }
+
     _beginExecution(scheduleId);
 
-    if (_connectionManager.isRunIdSupported) {
+    if (_connectionManager.isRunIdSupported && !skipPreflightCheck) {
       final preflightOk = await _runServerPreflightGate();
       if (!preflightOk) {
         return false;
@@ -171,13 +471,13 @@ class RemoteSchedulesProvider extends ChangeNotifier {
             onProgress: _onBackupProgress,
           );
 
-    return backupResult.fold(
-      (backupPath) => _finishBackupAndDownload(
+    final finished = await backupResult.fold(
+      (backupPath) async => _finishBackupAndDownload(
         scheduleId: scheduleId,
         backupPath: backupPath,
         runId: _activeRunId,
       ),
-      (exception) {
+      (exception) async {
         if (_shouldPreserveStateAfterDisconnectFailure(exception)) {
           _isExecuting = false;
           _disconnectedDuringRun = true;
@@ -193,6 +493,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         return false;
       },
     );
+    if (_connectionManager.isExecutionQueueSupported) {
+      unawaited(loadExecutionQueue());
+    }
+    return finished;
   }
 
   bool _shouldPreserveStateAfterDisconnectFailure(Object failure) {
@@ -238,6 +542,41 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onQueueEvent(QueueEvent event) {
+    if (_activeRunId == null || event.runId != _activeRunId) {
+      return;
+    }
+    if (event.isQueued) {
+      _backupStep = 'Na fila';
+      _backupMessage =
+          event.message ??
+          (event.queuePosition != null
+              ? 'Posição ${event.queuePosition} na fila do servidor'
+              : 'Aguardando slot no servidor');
+      _backupProgress ??= 0;
+      notifyListeners();
+      return;
+    }
+    if (event.isStarted) {
+      _backupStep = 'Em execução';
+      _backupMessage = event.message ?? 'Backup iniciado no servidor';
+      notifyListeners();
+    }
+  }
+
+  static const String _artifactExpiredMessage =
+      'Artefato expirou no servidor; execute um novo backup.';
+
+  bool _isArtifactUsableForResume(ArtifactMetadataResult artifact) {
+    if (!artifact.found || artifact.stagingPath == null) {
+      return false;
+    }
+    if (_connectionManager.isArtifactRetentionSupported && artifact.isExpired) {
+      return false;
+    }
+    return true;
+  }
+
   Future<bool> _runServerPreflightGate() async {
     final result = await _connectionManager.validateServerBackupPrerequisites();
     return result.fold(
@@ -254,9 +593,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           return false;
         }
         if (preflight.hasWarnings) {
-          _backupStep = 'Avisos do servidor';
-          _backupMessage = preflight.warnings.map((c) => c.message).join('; ');
-          notifyListeners();
+          _resetExecutionState();
+          return false;
         }
         return true;
       },
@@ -426,9 +764,13 @@ class RemoteSchedulesProvider extends ChangeNotifier {
                 );
                 await meta.fold(
                   (artifact) async {
-                    if (!artifact.found || artifact.stagingPath == null) {
+                    if (!_isArtifactUsableForResume(artifact)) {
                       _resetExecutionState(
-                        error: 'Backup concluído sem artefato no servidor',
+                        error:
+                            artifact.isExpired &&
+                                _connectionManager.isArtifactRetentionSupported
+                            ? _artifactExpiredMessage
+                            : 'Backup concluído sem artefato no servidor',
                       );
                       return;
                     }
@@ -465,12 +807,17 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           );
           await meta.fold(
             (artifact) async {
-              if (artifact.found && artifact.stagingPath != null) {
+              if (_isArtifactUsableForResume(artifact)) {
                 await _finishBackupAndDownload(
                   scheduleId: scheduleId,
                   backupPath: artifact.stagingPath!,
                   runId: runId,
                 );
+                return;
+              }
+              if (artifact.isExpired &&
+                  _connectionManager.isArtifactRetentionSupported) {
+                _resetExecutionState(error: _artifactExpiredMessage);
                 return;
               }
               _resetExecutionState(
@@ -493,10 +840,13 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           );
           await meta.fold(
             (artifact) async {
-              if (!artifact.found || artifact.stagingPath == null) {
+              if (!_isArtifactUsableForResume(artifact)) {
                 _resetExecutionState(
                   error:
-                      'Backup concluído, mas artefato não encontrado no servidor',
+                      artifact.isExpired &&
+                          _connectionManager.isArtifactRetentionSupported
+                      ? _artifactExpiredMessage
+                      : 'Backup concluído, mas artefato não encontrado no servidor',
                 );
                 return;
               }
@@ -584,6 +934,51 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> cancelQueuedRemoteBackup(String runId) async {
+    if (!_connectionManager.isConnected) {
+      _error = 'Conecte-se a um servidor para cancelar itens da fila.';
+      _lastErrorCode = null;
+      notifyListeners();
+      return false;
+    }
+    if (!_connectionManager.isExecutionQueueSupported) {
+      _error = 'Servidor não suporta cancelamento na fila remota.';
+      _lastErrorCode = null;
+      notifyListeners();
+      return false;
+    }
+    if (runId.isEmpty) {
+      _error = 'Identificador de execução inválido.';
+      _lastErrorCode = null;
+      notifyListeners();
+      return false;
+    }
+
+    final result = await _connectionManager.cancelQueuedRemoteBackup(
+      runId: runId,
+    );
+
+    return result.fold(
+      (cancelResult) async {
+        if (cancelResult.isCancelled) {
+          await loadExecutionQueue();
+          return true;
+        }
+        _error =
+            cancelResult.message ?? 'Item não encontrado na fila do servidor.';
+        _lastErrorCode = null;
+        notifyListeners();
+        return false;
+      },
+      (exception) {
+        _error = mapExceptionToMessage(exception);
+        _lastErrorCode = exception is Failure ? exception.code : null;
+        notifyListeners();
+        return false;
+      },
+    );
+  }
+
   Future<bool> cancelSchedule() async {
     if (!_connectionManager.isConnected) {
       _error = 'Conecte-se a um servidor para cancelar agendamentos.';
@@ -642,5 +1037,38 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         : 'Conexão perdida durante o backup.';
     _lastErrorCode = null;
     notifyListeners();
+  }
+
+  void _listenToConnectionStatus() {
+    final previous = _statusSubscription;
+    if (previous != null) {
+      unawaited(previous.cancel());
+    }
+    _statusSubscription = _connectionManager.statusStream?.listen(
+      _onConnectionStatusChanged,
+    );
+  }
+
+  void _onConnectionStatusChanged(ConnectionStatus status) {
+    final isTerminal =
+        status == ConnectionStatus.disconnected ||
+        status == ConnectionStatus.error ||
+        status == ConnectionStatus.authenticationFailed;
+    if (isTerminal) {
+      clearExecutionStateOnDisconnect();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_statusSubscription != null) {
+      unawaited(_statusSubscription!.cancel());
+      _statusSubscription = null;
+    }
+    if (_queueEventsSubscription != null) {
+      unawaited(_queueEventsSubscription!.cancel());
+      _queueEventsSubscription = null;
+    }
+    super.dispose();
   }
 }

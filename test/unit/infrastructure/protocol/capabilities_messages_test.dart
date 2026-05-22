@@ -103,6 +103,7 @@ void main() {
         expect(caps.supportsChunkAck, isFalse);
         expect(caps.supportsExecutionQueue, isFalse);
         expect(caps.supportsFirebird, isFalse);
+        expect(caps.supportsAsyncStart, isFalse);
         expect(caps.chunkSize, 65536);
         expect(caps.compression, 'gzip');
         expect(caps.serverTimeUtc, isNull);
@@ -140,6 +141,7 @@ void main() {
       expect(legacy.supportsChunkAck, isFalse);
       expect(legacy.supportsExecutionQueue, isFalse);
       expect(legacy.supportsFirebird, isFalse);
+      expect(legacy.supportsAsyncStart, isFalse);
       // Mas mantem features ja existentes em v1
       expect(legacy.supportsResume, isTrue);
     });

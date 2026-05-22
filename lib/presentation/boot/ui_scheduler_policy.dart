@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 
 typedef UiSchedulerPolicyWarning = void Function(String message);
@@ -34,7 +35,7 @@ class UiSchedulerPolicy {
         (failure) {
           _onWarning?.call(
             'Não foi possível consultar status do serviço para decisão de '
-            'scheduler: $failure',
+            'scheduler: ${failureUserMessage(failure)}',
           );
           return _shouldSkipOnFailure();
         },

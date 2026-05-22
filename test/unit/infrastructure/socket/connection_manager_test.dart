@@ -10,6 +10,7 @@ import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/protocol_versions.dart';
+import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
@@ -422,8 +423,16 @@ void main() {
           ServerCapabilities.legacyDefault.supportsChunkAck,
         );
         expect(
+          manager.isResumeSupported,
+          ServerCapabilities.legacyDefault.supportsResume,
+        );
+        expect(
           manager.isFirebirdSupported,
           ServerCapabilities.legacyDefault.supportsFirebird,
+        );
+        expect(
+          manager.isAsyncStartSupported,
+          ServerCapabilities.legacyDefault.supportsAsyncStart,
         );
       },
     );
@@ -450,6 +459,7 @@ void main() {
           reason: 'PR-4 TTL/410/cleanup',
         );
         expect(manager.isFirebirdSupported, isFalse);
+        expect(manager.isAsyncStartSupported, isTrue);
       },
     );
 
@@ -663,6 +673,145 @@ void main() {
 
       final result = await manager.getExecutionQueue();
       expect(result.isError(), isTrue);
+    });
+  });
+
+  group('ConnectionManager queueEvents push (dedup)', () {
+    test('emite evento de fila na primeira ocorrencia', () async {
+      final port = getPort();
+      await server.start(port: port);
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final session = (await manager.getServerSession()).getOrNull()!;
+      final events = <QueueEvent>[];
+      final sub = manager.queueEvents.listen(events.add);
+
+      final now = DateTime.utc(2026, 5, 22, 10);
+      await server.sendToClient(
+        session.clientId,
+        createBackupQueuedEvent(
+          runId: 'run-q-1',
+          scheduleId: 'sched-1',
+          sequence: 1,
+          eventId: 'evt-queued-1',
+          serverTimeUtc: now,
+          queuePosition: 1,
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await sub.cancel();
+
+      expect(events.length, 1);
+      expect(events.single.runId, 'run-q-1');
+      expect(events.single.isQueued, isTrue);
+      expect(events.single.eventId, 'evt-queued-1');
+      expect(events.single.sequence, 1);
+    });
+
+    test('ignora duplicata pelo mesmo eventId', () async {
+      final port = getPort();
+      await server.start(port: port);
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final session = (await manager.getServerSession()).getOrNull()!;
+      final events = <QueueEvent>[];
+      final sub = manager.queueEvents.listen(events.add);
+
+      final now = DateTime.utc(2026, 5, 22, 10);
+      final msg = createBackupQueuedEvent(
+        runId: 'run-q-2',
+        scheduleId: 'sched-2',
+        sequence: 1,
+        eventId: 'evt-dup',
+        serverTimeUtc: now,
+      );
+
+      await server.sendToClient(session.clientId, msg);
+      await server.sendToClient(session.clientId, msg);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await sub.cancel();
+
+      expect(events.length, 1);
+    });
+
+    test('ignora sequence regressiva no mesmo runId', () async {
+      final port = getPort();
+      await server.start(port: port);
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final session = (await manager.getServerSession()).getOrNull()!;
+      final events = <QueueEvent>[];
+      final sub = manager.queueEvents.listen(events.add);
+
+      final now = DateTime.utc(2026, 5, 22, 10);
+      await server.sendToClient(
+        session.clientId,
+        createBackupStartedEvent(
+          runId: 'run-q-3',
+          scheduleId: 'sched-3',
+          sequence: 3,
+          eventId: 'evt-started-3',
+          serverTimeUtc: now,
+        ),
+      );
+      await server.sendToClient(
+        session.clientId,
+        createBackupDequeuedEvent(
+          runId: 'run-q-3',
+          scheduleId: 'sched-3',
+          sequence: 2,
+          eventId: 'evt-dequeued-stale',
+          serverTimeUtc: now,
+          reason: 'dispatched',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await sub.cancel();
+
+      expect(events.length, 1);
+      expect(events.single.sequence, 3);
+      expect(events.single.isStarted, isTrue);
+    });
+
+    test('aceita sequence maior no mesmo runId com novo eventId', () async {
+      final port = getPort();
+      await server.start(port: port);
+      await manager.connect(host: '127.0.0.1', port: port);
+
+      final session = (await manager.getServerSession()).getOrNull()!;
+      final events = <QueueEvent>[];
+      final sub = manager.queueEvents.listen(events.add);
+
+      final now = DateTime.utc(2026, 5, 22, 10);
+      await server.sendToClient(
+        session.clientId,
+        createBackupQueuedEvent(
+          runId: 'run-q-4',
+          scheduleId: 'sched-4',
+          sequence: 1,
+          eventId: 'evt-q4-1',
+          serverTimeUtc: now,
+        ),
+      );
+      await server.sendToClient(
+        session.clientId,
+        createBackupDequeuedEvent(
+          runId: 'run-q-4',
+          scheduleId: 'sched-4',
+          sequence: 2,
+          eventId: 'evt-q4-2',
+          serverTimeUtc: now,
+          reason: 'dispatched',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await sub.cancel();
+
+      expect(events.length, 2);
+      expect(events[0].isQueued, isTrue);
+      expect(events[1].isDequeued, isTrue);
+      expect(events[0].sequence, lessThan(events[1].sequence));
     });
   });
 }

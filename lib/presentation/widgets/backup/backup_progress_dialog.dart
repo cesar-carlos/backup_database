@@ -4,8 +4,7 @@ import 'package:backup_database/application/providers/backup_progress_provider.d
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/upload_progress_labels.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
-import 'package:backup_database/core/theme/tokens/app_z_index.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -26,6 +25,7 @@ class BackupProgressDialog extends StatelessWidget {
 
     return Consumer<BackupProgressProvider>(
       builder: (context, provider, child) {
+        final colors = context.colors;
         final progress = provider.currentProgress;
 
         if (progress == null) {
@@ -42,12 +42,12 @@ class BackupProgressDialog extends StatelessWidget {
             title: Row(
               children: [
                 if (progress.step == BackupStep.completed)
-                  const Icon(
+                  Icon(
                     FluentIcons.check_mark,
-                    color: AppColors.successIcon,
+                    color: colors.success,
                   )
                 else if (progress.step == BackupStep.error)
-                  const Icon(FluentIcons.error, color: AppColors.errorIcon)
+                  Icon(FluentIcons.error, color: colors.danger)
                 else
                   const SizedBox(
                     width: 20,
@@ -115,7 +115,7 @@ class BackupProgressDialog extends StatelessWidget {
                               FluentTheme.of(
                                 context,
                               ).typography.caption?.copyWith(
-                                color: AppColors.grey600,
+                                color: colors.disabled,
                               ),
                         ),
                       ),
@@ -125,23 +125,25 @@ class BackupProgressDialog extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.errorBackground,
+                          color: colors.danger.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.errorBorder),
+                          border: Border.all(
+                            color: colors.danger.withValues(alpha: 0.4),
+                          ),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(
+                            Icon(
                               FluentIcons.error,
-                              color: AppColors.errorIcon,
+                              color: colors.danger,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 progress.error!,
-                                style: const TextStyle(
-                                  color: AppColors.errorText,
+                                style: TextStyle(
+                                  color: colors.danger,
                                 ),
                               ),
                             ),

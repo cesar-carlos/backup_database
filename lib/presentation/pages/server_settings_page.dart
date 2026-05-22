@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:backup_database/application/providers/server_credential_provider.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/server_credential.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/server/server.dart';
@@ -234,15 +234,20 @@ class _CredentialsTab extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             FluentIcons.error,
                             size: 64,
-                            color: AppColors.error,
+                            color: context.colors.danger,
                           ),
                           const SizedBox(height: 16),
-                          Text(
-                            provider.error!,
-                            style: FluentTheme.of(context).typography.bodyLarge,
+                          SelectableText.rich(
+                            TextSpan(
+                              text: provider.error,
+                              style: FluentTheme.of(context)
+                                  .typography
+                                  .bodyLarge
+                                  ?.copyWith(color: context.colors.danger),
+                            ),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 16),

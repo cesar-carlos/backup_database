@@ -1,8 +1,10 @@
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
     show SendToClient;
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 
 /// Provider assincrono que retorna o snapshot atual da fila de
 /// execucoes. Wirings em PR-1 retornam lista vazia (mutex global de
@@ -73,16 +75,12 @@ class ExecutionQueueMessageHandler {
         e,
         st,
       );
-      // Fail-soft: responde com fila vazia em vez de error. Cliente
-      // continua usavel; operador detecta via metricas/logs.
-      await sendToClient(
-        clientId,
-        createExecutionQueueResponseMessage(
-          requestId: requestId,
-          queue: const <QueuedExecution>[],
-          maxQueueSize: _maxQueueSize,
-          serverTimeUtc: _clock(),
-        ),
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: 'Falha ao consultar fila de execucao: $e',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.unknown,
       );
     }
   }

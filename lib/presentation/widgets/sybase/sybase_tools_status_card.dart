@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/sybase_tools_status.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -104,20 +104,21 @@ class _ToolStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final (icon, color, text) = switch (status) {
       SybaseToolStatus.ok => (
         FluentIcons.check_mark,
-        AppColors.success,
+        colors.success,
         'OK',
       ),
       SybaseToolStatus.warning => (
         FluentIcons.warning,
-        AppColors.warning,
+        colors.warning,
         'Recomendado',
       ),
       SybaseToolStatus.missing => (
         FluentIcons.cancel,
-        AppColors.error,
+        colors.danger,
         required ? 'Faltando' : 'Opcional',
       ),
     };

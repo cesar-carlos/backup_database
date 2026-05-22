@@ -12,7 +12,6 @@ import 'package:backup_database/domain/services/i_license_policy_service.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
-import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
@@ -26,6 +25,7 @@ import 'package:backup_database/infrastructure/socket/server/execution_event_seq
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
 /// Handler para `startBackup` nao-bloqueante (M2.2/PR-2) e
@@ -139,12 +139,12 @@ class ExecutionMessageHandler {
         ? payload['scheduleId'] as String
         : '';
     if (scheduleId.isEmpty) {
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        '`scheduleId` ausente ou vazio',
-        ErrorCode.invalidRequest,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: '`scheduleId` ausente ou vazio',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }
@@ -176,12 +176,12 @@ class ExecutionMessageHandler {
     } on _StartFailure catch (f) {
       // Falha de validacao -> error message (NAO cacheada pela
       // idempotency registry conforme regra "fail-NO-cache").
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        f.message,
-        f.errorCode,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: f.message,
+        sendToClient: sendToClient,
+        errorCode: f.errorCode,
       );
     } on Object catch (e, st) {
       LoggerService.warning(
@@ -189,12 +189,15 @@ class ExecutionMessageHandler {
         e,
         st,
       );
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        failureUserMessage(e, fallback: 'Erro interno ao iniciar backup'),
-        ErrorCode.unknown,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: failureUserMessage(
+          e,
+          fallback: 'Erro interno ao iniciar backup',
+        ),
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.unknown,
       );
     }
   }
@@ -281,7 +284,7 @@ class ExecutionMessageHandler {
         // receber backupComplete/Failed do backup ativo.
         throw const _StartFailure(
           'Fila de execucao esta cheia, tente novamente em breve',
-          ErrorCode.unknown,
+          ErrorCode.queueFull,
         );
       }
       LoggerService.infoWithContext(
@@ -694,12 +697,12 @@ class ExecutionMessageHandler {
     final payload = message.payload;
     final runId = payload['runId'] is String ? payload['runId'] as String : '';
     if (runId.isEmpty) {
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        '`runId` ausente ou vazio',
-        ErrorCode.invalidRequest,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: '`runId` ausente ou vazio',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }
@@ -713,12 +716,12 @@ class ExecutionMessageHandler {
       );
       await sendToClient(clientId, response);
     } on _StartFailure catch (f) {
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        f.message,
-        f.errorCode,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: f.message,
+        sendToClient: sendToClient,
+        errorCode: f.errorCode,
       );
     } on Object catch (e, st) {
       LoggerService.warning(
@@ -726,12 +729,15 @@ class ExecutionMessageHandler {
         e,
         st,
       );
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        failureUserMessage(e, fallback: 'Erro interno ao cancelar fila'),
-        ErrorCode.unknown,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: failureUserMessage(
+          e,
+          fallback: 'Erro interno ao cancelar fila',
+        ),
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.unknown,
       );
     }
   }
@@ -825,12 +831,12 @@ class ExecutionMessageHandler {
     final hasRun = runIdRaw != null && runIdRaw.isNotEmpty;
     final hasSch = scheduleIdRaw != null && scheduleIdRaw.isNotEmpty;
     if (hasRun == hasSch) {
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        'Informe APENAS um de `runId` ou `scheduleId`',
-        ErrorCode.invalidRequest,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: 'Informe APENAS um de `runId` ou `scheduleId`',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }
@@ -859,12 +865,12 @@ class ExecutionMessageHandler {
       );
       await sendToClient(clientId, response);
     } on _StartFailure catch (f) {
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        f.message,
-        f.errorCode,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: f.message,
+        sendToClient: sendToClient,
+        errorCode: f.errorCode,
       );
     } on Object catch (e, st) {
       LoggerService.warning(
@@ -872,12 +878,15 @@ class ExecutionMessageHandler {
         e,
         st,
       );
-      await _sendErrorMsg(
-        clientId,
-        requestId,
-        failureUserMessage(e, fallback: 'Erro interno ao cancelar backup'),
-        ErrorCode.unknown,
-        sendToClient,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: failureUserMessage(
+          e,
+          fallback: 'Erro interno ao cancelar backup',
+        ),
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.unknown,
       );
     }
   }
@@ -952,7 +961,8 @@ class ExecutionMessageHandler {
         serverTimeUtc: _clock(),
         runId: ctx.runId,
         scheduleId: scheduleId,
-        message: 'Falha ao cancelar: ${failureUserMessage(err, fallback: "desconhecido")}',
+        message:
+            'Falha ao cancelar: ${failureUserMessage(err, fallback: "desconhecido")}',
         errorCode: ErrorCode.unknown,
       );
     }
@@ -964,23 +974,6 @@ class ExecutionMessageHandler {
       runId: ctx.runId,
       scheduleId: scheduleId,
       message: 'Cancelamento sinalizado ao scheduler',
-    );
-  }
-
-  Future<void> _sendErrorMsg(
-    String clientId,
-    int requestId,
-    String message,
-    ErrorCode errorCode,
-    SendToClient sendToClient,
-  ) async {
-    await sendToClient(
-      clientId,
-      createErrorMessage(
-        requestId: requestId,
-        errorMessage: message,
-        errorCode: errorCode,
-      ),
     );
   }
 }

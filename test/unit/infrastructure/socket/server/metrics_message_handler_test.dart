@@ -6,6 +6,8 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_running_state.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
+import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -335,6 +337,37 @@ void main() {
           observability['socketRecentMutableAudits'],
           isA<List<dynamic>>(),
         );
+      },
+    );
+
+    test(
+      'falha ao montar payload -> protocol error (nao schedule error)',
+      () async {
+        when(
+          () => historyRepo.getAll(limit: any(named: 'limit')),
+        ).thenThrow(Exception('db down'));
+
+        final handler = MetricsMessageHandler(
+          backupHistoryRepository: historyRepo,
+          scheduleRepository: scheduleRepo,
+          backupRunningState: runningState,
+        );
+
+        Message? sent;
+        Future<void> capture(String clientId, Message msg) async {
+          sent = msg;
+        }
+
+        await handler.handle(
+          'client-1',
+          createMetricsRequestMessage(),
+          capture,
+        );
+
+        expect(sent, isNotNull);
+        expect(sent!.header.type, MessageType.error);
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.unknown);
+        expect(getErrorFromMessage(sent!), contains('db down'));
       },
     );
 

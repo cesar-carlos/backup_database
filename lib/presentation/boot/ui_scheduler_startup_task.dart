@@ -1,3 +1,4 @@
+import 'package:backup_database/core/config/app_mode_policy.dart';
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
@@ -23,6 +24,13 @@ class UiSchedulerStartupTask {
 
   Future<void> start(BootstrapConfig config) async {
     try {
+      if (!AppModePolicy.shouldStartLocalSchedulerInUi) {
+        logInfo(
+          'Modo cliente detectado - agendamento local nao sera iniciado',
+        );
+        return;
+      }
+
       if (!isTaskSchedulerEnabled()) {
         logWarning(
           'Agendamento local nao iniciado: Task Scheduler indisponivel para '

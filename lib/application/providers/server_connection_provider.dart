@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
-import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/config/app_mode_policy.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:backup_database/domain/repositories/i_connection_log_repository.dart';
@@ -14,12 +15,15 @@ import 'package:backup_database/infrastructure/socket/client/socket_client_servi
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+typedef ExecutionResumeAfterReconnect = Future<void> Function();
+
 class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   ServerConnectionProvider(
     this._repository,
     this._connectionManager,
-    this._connectionLogRepository,
-  ) {
+    this._connectionLogRepository, {
+    ExecutionResumeAfterReconnect? onExecutionResumeAfterReconnect,
+  }) : _onExecutionResumeAfterReconnect = onExecutionResumeAfterReconnect {
     unawaited(loadConnections());
     _listenToConnectionStatus();
   }
@@ -27,6 +31,7 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   final IServerConnectionRepository _repository;
   final ConnectionManager _connectionManager;
   final IConnectionLogRepository _connectionLogRepository;
+  final ExecutionResumeAfterReconnect? _onExecutionResumeAfterReconnect;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
 
   List<ServerConnection> _connections = [];
@@ -52,6 +57,13 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
       unawaited(previous.cancel());
     }
     _statusSubscription = _connectionManager.statusStream?.listen((status) {
+      final resumeAfterReconnect = _onExecutionResumeAfterReconnect;
+      if (status == ConnectionStatus.connected &&
+          AppModePolicy.isClient &&
+          resumeAfterReconnect != null) {
+        unawaited(resumeAfterReconnect());
+      }
+
       // Quando a conexao cai externamente (timeout, RST, erro), invalida
       // cache de health/session — UI nao deve continuar mostrando dados
       // de servidor que ja saiu. Capabilities tambem foi limpo no
@@ -125,7 +137,7 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
         result.fold(
           (list) {
             _connections = list;
-            if (currentAppMode == AppMode.client &&
+            if (AppModePolicy.shouldAutoConnectSavedServers &&
                 !_hasTriedAutoConnectAtStartup &&
                 list.isNotEmpty &&
                 !_connectionManager.isConnected) {
@@ -142,7 +154,7 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   /// Tenta conectar em sequência a todos os servidores configurados em background.
   /// Para na primeira conexão bem-sucedida. Não altera [isConnecting].
   Future<void> tryConnectToSavedServersInBackground() async {
-    if (currentAppMode != AppMode.client) return;
+    if (!AppModePolicy.shouldAutoConnectSavedServers) return;
     if (_connectionManager.isConnected) return;
     final list = _connections;
     if (list.isEmpty) return;
@@ -381,7 +393,7 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
             (failure) {
               LoggerService.info(
                 '[ServerConnectionProvider] getServerHealth falhou: '
-                '$failure. Health permanece com cache anterior.',
+                '${failureUserMessage(failure)}. Health permanece com cache anterior.',
               );
               return null;
             },
@@ -393,7 +405,7 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
             (failure) {
               LoggerService.info(
                 '[ServerConnectionProvider] getServerSession falhou: '
-                '$failure. Session permanece com cache anterior.',
+                '${failureUserMessage(failure)}. Session permanece com cache anterior.',
               );
               return null;
             },

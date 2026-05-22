@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
-import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/server/diagnostics_provider.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 
 /// Handler de endpoints de diagnostico operacional (PR-3 commit final).
 ///
@@ -283,14 +283,13 @@ class DiagnosticsMessageHandler {
     String message,
     SendToClient sendToClient, {
     ErrorCode errorCode = ErrorCode.invalidRequest,
-  }) async {
-    await sendToClient(
-      clientId,
-      createErrorMessage(
-        requestId: requestId,
-        errorMessage: message,
-        errorCode: errorCode,
-      ),
+  }) {
+    return SocketErrorSender.sendProtocolError(
+      clientId: clientId,
+      requestId: requestId,
+      errorMessage: message,
+      sendToClient: sendToClient,
+      errorCode: errorCode,
     );
   }
 }

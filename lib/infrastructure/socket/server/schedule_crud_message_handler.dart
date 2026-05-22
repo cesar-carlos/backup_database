@@ -2,13 +2,13 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
-import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_policy.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 
 /// Handler de CRUD de schedule (PR-2): create, delete, pause, resume.
 ///
@@ -68,13 +68,12 @@ class ScheduleCrudMessageHandler {
     } on _CrudFailure catch (f) {
       // Falhas validacao/dominio NAO sao cacheadas (cliente pode
       // tentar de novo apos corrigir).
-      await sendToClient(
-        clientId,
-        createErrorMessage(
-          requestId: requestId,
-          errorMessage: f.message,
-          errorCode: f.errorCode,
-        ),
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: f.message,
+        sendToClient: sendToClient,
+        errorCode: f.errorCode,
       );
     } on Object catch (e, st) {
       LoggerService.warningWithContext(
@@ -84,13 +83,12 @@ class ScheduleCrudMessageHandler {
         error: e,
         stackTrace: st,
       );
-      await sendToClient(
-        clientId,
-        createErrorMessage(
-          requestId: requestId,
-          errorMessage: 'Erro interno: $e',
-          errorCode: ErrorCode.unknown,
-        ),
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: 'Erro interno: $e',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.unknown,
       );
     }
   }

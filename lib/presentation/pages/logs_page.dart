@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/log_provider.dart';
 import 'package:backup_database/application/services/log_service.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:file_picker/file_picker.dart';
@@ -315,20 +315,21 @@ class _LogsContent extends StatelessWidget {
     }
 
     if (provider.error != null && provider.logs.isEmpty) {
+      final colors = context.colors;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               FluentIcons.error,
               size: 48,
-              color: AppColors.error,
+              color: colors.danger,
             ),
             const SizedBox(height: 16),
             Text(
               provider.error!,
               style: FluentTheme.of(context).typography.body?.copyWith(
-                color: AppColors.error,
+                color: colors.danger,
               ),
             ),
             const SizedBox(height: 16),
@@ -437,7 +438,7 @@ class _LogListItem extends StatelessWidget {
                     const SizedBox(width: 8),
                     _Chip(
                       label: _getCategoryLabel(log.category),
-                      color: AppColors.primary,
+                      color: context.colors.info,
                     ),
                   ],
                 ),
@@ -463,15 +464,16 @@ class _LogListItem extends StatelessWidget {
   }
 
   Color _getLevelColor(BuildContext context, LogLevel level) {
+    final colors = context.colors;
     switch (level) {
       case LogLevel.debug:
-        return AppColors.logDebug;
+        return colors.disabled;
       case LogLevel.info:
-        return AppColors.primary;
+        return colors.info;
       case LogLevel.warning:
-        return AppColors.logWarning;
+        return colors.warning;
       case LogLevel.error:
-        return AppColors.error;
+        return colors.danger;
     }
   }
 }

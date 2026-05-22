@@ -20,6 +20,13 @@ enum ErrorCode {
     'STAGING_FULL',
     'Staging remoto acima do limite configurado',
   ),
+
+  /// Fila de execucao remota cheia (`queueSize >= maxQueueSize`).
+  /// Mapeia para 503 — cliente deve aplicar backoff e tentar de novo.
+  queueFull(
+    'QUEUE_FULL',
+    'Fila de execucao esta cheia, tente novamente em breve',
+  ),
   invalidChecksum('INVALID_CHECKSUM', 'Checksum invalido'),
 
   /// Wire version do `MessageHeader` nao reconhecida pelo servidor.

@@ -62,6 +62,8 @@ class FirebirdBackupServiceStub implements IFirebirdBackupService {
     required FirebirdConfig config,
     Duration? timeout,
   }) async {
-    return const rd.Success(<String>[]);
+    return const rd.Failure(
+      ValidationFailure(message: probePendingMessage),
+    );
   }
 }

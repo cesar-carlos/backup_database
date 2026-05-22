@@ -111,6 +111,10 @@ void main() {
           StatusCodes.serviceUnavailable,
         );
         expect(
+          StatusCodes.forErrorCode(ErrorCode.queueFull),
+          StatusCodes.serviceUnavailable,
+        );
+        expect(
           StatusCodes.forErrorCode(ErrorCode.ioError),
           StatusCodes.serviceUnavailable,
         );

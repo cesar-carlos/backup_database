@@ -2,12 +2,12 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
-import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
     show RemoteExecutionRegistry, SendToClient;
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 
 /// Responde `executionStatusRequest` com o estado atual de uma
 /// execucao remota identificada por `runId`.
@@ -50,13 +50,12 @@ class ExecutionStatusMessageHandler {
         clientId: clientId,
         requestId: requestId.toString(),
       );
-      await sendToClient(
-        clientId,
-        createErrorMessage(
-          requestId: requestId,
-          errorMessage: 'runId vazio ou ausente no payload',
-          errorCode: ErrorCode.invalidRequest,
-        ),
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: 'runId vazio ou ausente no payload',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }

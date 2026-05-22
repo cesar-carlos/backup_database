@@ -119,6 +119,9 @@ class BackupDatabaseApp extends StatelessWidget {
           create: (_) => service_locator.getIt<RemoteSchedulesProvider>(),
         ),
         ChangeNotifierProvider(
+          create: (_) => service_locator.getIt<RemoteDatabaseConfigProvider>(),
+        ),
+        ChangeNotifierProvider(
           create: (_) => service_locator.getIt<RemoteFileTransferProvider>(),
         ),
         ChangeNotifierProvider(

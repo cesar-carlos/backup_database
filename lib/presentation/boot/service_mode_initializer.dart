@@ -11,12 +11,15 @@ import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/service/service_shutdown_handler.dart';
 import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart';
+import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
 import 'package:backup_database/domain/services/i_remote_staging_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/domain/services/i_socket_server_lifecycle.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
+import 'package:backup_database/presentation/boot/socket_server_bootstrap.dart';
 import 'package:flutter/foundation.dart';
 
 class ServiceModeInitializer {
@@ -153,6 +156,18 @@ class ServiceModeInitializer {
           await service_locator.getIt<IExecutionQueueBootstrap>().initialize();
           service_locator.getIt<IRemoteStagingCleanupScheduler>().start();
           service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
+
+          final socketLifecycle = service_locator
+              .getIt<ISocketServerLifecycle>();
+          await SocketServerBootstrap.ensureListening(
+            isSocketServerRunning: () => socketLifecycle.isRunning,
+            socketServerPort: () => socketLifecycle.port,
+            cleanupExpiredFileTransferLocks: () => service_locator
+                .getIt<IFileTransferLockService>()
+                .cleanupExpiredLocks(),
+            startSocketServer: socketLifecycle.start,
+            logInfo: LoggerService.info,
+          );
         },
       );
 

@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/schedule_message_handler.dart';
+import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -94,6 +95,7 @@ void main() {
       () => executeBackup(
         any(),
         executionOrigin: any(named: 'executionOrigin'),
+        runId: any(named: 'runId'),
       ),
     ).thenAnswer((_) async => const rd.Success(rd.unit));
 
@@ -154,6 +156,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         );
         verifyNever(() => progressNotifier.tryStartBackup(any()));
@@ -176,6 +179,7 @@ void main() {
           () => executeBackup(
             scheduleId,
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
 
@@ -196,6 +200,7 @@ void main() {
           () => executeBackup(
             scheduleId,
             executionOrigin: ExecutionOrigin.remoteCommand,
+            runId: any(named: 'runId'),
           ),
         ).called(1);
       },
@@ -228,6 +233,7 @@ void main() {
           () => executeBackup(
             scheduleId,
             executionOrigin: ExecutionOrigin.remoteCommand,
+            runId: any(named: 'runId'),
           ),
         ).called(1);
       },
@@ -276,6 +282,46 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'executeSchedule rejeita com STAGING_FULL quando staging no limite',
+      () async {
+        handler.dispose();
+        handler = ScheduleMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          updateSchedule: updateSchedule,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: executionRegistry,
+          stagingUsageBytesProvider: () async =>
+              StagingUsagePolicy.blockThresholdBytes,
+        );
+
+        Message? sentMessage;
+        Future<void> sendToClient(String clientId, Message msg) async {
+          sentMessage = msg;
+        }
+
+        await handler.handle(
+          'client-1',
+          createExecuteScheduleMessage(requestId: 1, scheduleId: scheduleId),
+          sendToClient,
+        );
+
+        expect(sentMessage, isNotNull);
+        expect(getErrorCodeFromMessage(sentMessage!), ErrorCode.stagingFull);
+        verifyNever(
+          () => executeBackup(
+            any(),
+            executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         );
       },
@@ -337,6 +383,7 @@ void main() {
           () => executeBackup(
             scheduleId,
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         ).thenAnswer((_) async => const rd.Success(rd.unit));
 
@@ -370,6 +417,7 @@ void main() {
           () => executeBackup(
             scheduleId,
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         ).thenAnswer(
           (_) async => const rd.Failure(BackupFailure(message: 'erro')),
@@ -498,6 +546,7 @@ void main() {
           () => executeBackup(
             any(),
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         );
         verifyNever(() => progressNotifier.tryStartBackup(any()));
@@ -528,6 +577,7 @@ void main() {
           () => executeBackup(
             scheduleId,
             executionOrigin: any(named: 'executionOrigin'),
+            runId: any(named: 'runId'),
           ),
         ).thenAnswer((_) async {
           capturedContext = executionRegistry.getActiveByScheduleId(scheduleId);

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:backup_database/application/providers/sybase_config_provider.dart';
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
@@ -269,7 +269,10 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       ),
       title: Row(
         children: [
-          const Icon(FluentIcons.server, color: AppColors.primary),
+          const Icon(
+            FluentIcons.server,
+            color: AppPalette.databaseSybase,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -408,18 +411,18 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
+                color: context.colors.info.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
+                  color: context.colors.info.withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     FluentIcons.info,
                     size: 18,
-                    color: AppColors.primary,
+                    color: context.colors.info,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -499,19 +502,19 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
+                color: context.colors.info.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
+                  color: context.colors.info.withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
+                  Icon(
                     FluentIcons.info,
                     size: 18,
-                    color: AppColors.primary,
+                    color: context.colors.info,
                   ),
                   const SizedBox(width: 8),
                   Expanded(

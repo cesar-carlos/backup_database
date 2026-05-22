@@ -13,6 +13,7 @@ import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
+import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
@@ -72,6 +73,8 @@ class ConnectionManager {
   final Map<String, double> _lastProgressByRunId = <String, double>{};
   final Map<String, List<Message>> _pendingBackupStreamByRunId = {};
   final BackupEventDeduplicator _backupEventDedup = BackupEventDeduplicator();
+  final StreamController<QueueEvent> _queueEventController =
+      StreamController<QueueEvent>.broadcast();
 
   static const Duration _executionStatusPollInterval = Duration(seconds: 2);
   static const int _maxPendingBackupStreamEventsPerRunId = 64;
@@ -131,11 +134,18 @@ class ConnectionManager {
   bool get isRunIdSupported => _effectiveCapabilities.supportsRunId;
 
   /// `true` quando o servidor anuncia suporte a fila de execucao
-  /// (`backupQueued/Dequeued/Started`, `getExecutionQueue`,
-  /// `cancelQueuedBackup` — PR-3b). Falso por enquanto em todos os
-  /// servidores ate a fila ser implementada.
+  /// (`backupQueued`/`Dequeued`/`Started`, `getExecutionQueue`,
+  /// `cancelQueuedBackup` — PR-3b).
   bool get isExecutionQueueSupported =>
       _effectiveCapabilities.supportsExecutionQueue;
+
+  /// `true` quando o servidor anuncia retomada de transferencia de arquivo
+  /// (`startChunk` > 0). Servidor `v1` legado: [ServerCapabilities.legacyDefault]
+  /// mantem `true` por compatibilidade.
+  bool get isResumeSupported => _effectiveCapabilities.supportsResume;
+
+  /// Eventos push de fila (`backupQueued`/`Dequeued`/`Started`), deduplicados.
+  Stream<QueueEvent> get queueEvents => _queueEventController.stream;
 
   /// `true` quando o servidor anuncia retencao formal de artefato com
   /// TTL e `getArtifactMetadata` (PR-4). Cliente deve usar este gate
@@ -149,6 +159,11 @@ class ConnectionManager {
   bool get isChunkAckSupported => _effectiveCapabilities.supportsChunkAck;
 
   bool get isFirebirdSupported => _effectiveCapabilities.supportsFirebird;
+
+  /// `true` quando o servidor anuncia `startBackup` assincrono (202 +
+  /// `runId` imediato, progresso via stream/eventos).
+  bool get isAsyncStartSupported =>
+      _effectiveCapabilities.supportsAsyncStart;
 
   Future<void> connect({
     required String host,
@@ -331,6 +346,23 @@ class ConnectionManager {
       );
       return;
     }
+    final queueEvent = readQueueEvent(message);
+    if (queueEvent != null) {
+      if (_backupEventDedup.shouldAcceptFields(
+        eventId: queueEvent.eventId,
+        sequence: queueEvent.sequence,
+        runId: queueEvent.runId,
+      )) {
+        _handleQueueEvent(queueEvent);
+        _queueEventController.add(queueEvent);
+      } else {
+        LoggerService.debug(
+          '[ConnectionManager] evento de fila duplicado ignorado: '
+          '${queueEvent.type.name} runId=${queueEvent.runId}',
+        );
+      }
+      return;
+    }
     if (_isBackupStreamMessage(message.header.type)) {
       final messageRunId = getRunIdFromBackupMessage(message);
       if (messageRunId != null && messageRunId.isNotEmpty) {
@@ -364,6 +396,42 @@ class ConnectionManager {
       type == MessageType.backupStep ||
       type == MessageType.backupComplete ||
       type == MessageType.backupFailed;
+
+  void _handleQueueEvent(QueueEvent event) {
+    final state = _activeBackupsByRunId[event.runId];
+    final onProgress = state?.onProgress;
+    if (onProgress == null) {
+      return;
+    }
+    if (event.isQueued) {
+      final positionText = event.queuePosition != null
+          ? 'Posição ${event.queuePosition} na fila do servidor'
+          : 'Aguardando slot no servidor';
+      onProgress(
+        'Na fila',
+        event.message ?? positionText,
+        _lastProgressByRunId[event.runId] ?? 0,
+      );
+      return;
+    }
+    if (event.isDequeued) {
+      if (event.reason == 'cancelled') {
+        onProgress(
+          'Cancelado',
+          event.message ?? 'Backup removido da fila do servidor',
+          _lastProgressByRunId[event.runId] ?? 0,
+        );
+      }
+      return;
+    }
+    if (event.isStarted) {
+      onProgress(
+        'Em execução',
+        event.message ?? 'Backup iniciado no servidor',
+        _lastProgressByRunId[event.runId] ?? 0,
+      );
+    }
+  }
 
   void _bufferBackupStreamUntilListener({
     required String runId,
@@ -757,12 +825,18 @@ class ConnectionManager {
     _lastProgressByRunId.clear();
     _pendingBackupStreamByRunId.clear();
     _backupEventDedup.clear();
-    for (final completer in _pendingRequests.values) {
-      if (!completer.isCompleted) {
-        completer.completeError(StateError('Disconnected'));
+    final pendingRpcs = Map<int, Completer<Message>>.from(_pendingRequests);
+    _pendingRequests.clear();
+    for (final entry in pendingRpcs.entries) {
+      if (!entry.value.isCompleted) {
+        entry.value.complete(
+          createErrorMessage(
+            requestId: entry.key,
+            errorMessage: 'Disconnected',
+          ),
+        );
       }
     }
-    _pendingRequests.clear();
     // Invalida cache de capabilities: proxima conexao pode ser para
     // um servidor diferente, com versao/flags distintas. Manter cache
     // antigo levaria providers a habilitar features inexistentes no
@@ -937,7 +1011,14 @@ class ConnectionManager {
       final partExists = await partFile.exists();
       final resumeMetadata = await _resumeMetadataStore.read(outputPath);
 
-      if (partExists) {
+      if (partExists && !isResumeSupported) {
+        LoggerService.info(
+          '[ConnectionManager] Servidor sem suporte a resume; '
+          'reiniciando download do zero.',
+        );
+        await partFile.delete();
+        await _resumeMetadataStore.delete(outputPath);
+      } else if (partExists) {
         if (resumeMetadata == null) {
           LoggerService.warning(
             '[ConnectionManager] Arquivo parcial descartado: '
@@ -1375,12 +1456,6 @@ class ConnectionManager {
   }
 
   /// Lista a fila atual de execucoes aguardando slot livre (PR-3b).
-  ///
-  /// Hoje (PR-1) o servidor retorna lista vazia — mutex global de 1
-  /// backup ainda rejeita disparo concorrente em vez de enfileirar.
-  /// Quando PR-3b habilitar fila persistida, o mesmo endpoint retornara
-  /// itens reais sem mudanca no contrato (forward-compat ja garantida
-  /// pelo `ExecutionQueueResult`).
   Future<rd.Result<ExecutionQueueResult>> getExecutionQueue() async {
     if (!isConnected) {
       return rd.Failure(Exception('ConnectionManager not connected'));

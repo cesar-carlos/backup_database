@@ -1,10 +1,10 @@
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
-import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
     show SendToClient;
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 
 /// Snapshot imutavel da sessao de um cliente conectado, do ponto de
 /// vista do servidor.
@@ -69,13 +69,12 @@ class SessionMessageHandler {
         // Cliente nao mais conectado (race condition rara: handler
         // recebe a request e o cliente desconecta antes do lookup).
         // Retorna erro padronizado em vez de inventar dados.
-        await sendToClient(
-          clientId,
-          createErrorMessage(
-            requestId: requestId,
-            errorMessage: 'Sessao nao encontrada para clientId: $clientId',
-            errorCode: ErrorCode.unknown,
-          ),
+        await SocketErrorSender.sendProtocolError(
+          clientId: clientId,
+          requestId: requestId,
+          errorMessage: 'Sessao nao encontrada para clientId: $clientId',
+          sendToClient: sendToClient,
+          errorCode: ErrorCode.unknown,
         );
         return;
       }
@@ -99,13 +98,12 @@ class SessionMessageHandler {
         e,
         st,
       );
-      await sendToClient(
-        clientId,
-        createErrorMessage(
-          requestId: requestId,
-          errorMessage: 'Falha ao consultar sessao: $e',
-          errorCode: ErrorCode.unknown,
-        ),
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: 'Falha ao consultar sessao: $e',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.unknown,
       );
     }
   }

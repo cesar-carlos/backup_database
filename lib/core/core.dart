@@ -1,5 +1,6 @@
 export 'compatibility/compatibility.dart';
 export 'config/app_mode.dart';
+export 'config/app_mode_policy.dart';
 export 'constants/constants.dart';
 export 'di/di.dart';
 export 'errors/errors.dart';

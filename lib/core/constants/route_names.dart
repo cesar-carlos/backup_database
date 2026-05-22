@@ -10,6 +10,7 @@ class RouteNames {
   static const String serverSettings = '/server-settings';
   static const String serverLogin = '/server-login';
   static const String remoteSchedules = '/remote-schedules';
+  static const String remoteDatabaseConfigs = '/remote-databases';
   static const String connectionLogs = '/connection-logs';
 
   static const String dashboardName = 'dashboard';
@@ -23,5 +24,6 @@ class RouteNames {
   static const String serverSettingsName = 'server-settings';
   static const String serverLoginName = 'server-login';
   static const String remoteSchedulesName = 'remote-schedules';
+  static const String remoteDatabaseConfigsName = 'remote-databases';
   static const String connectionLogsName = 'connection-logs';
 }

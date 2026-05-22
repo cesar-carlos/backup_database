@@ -3,12 +3,13 @@ import 'package:backup_database/domain/repositories/i_backup_history_repository.
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_backup_running_state.dart';
 import 'package:backup_database/domain/services/i_metrics_collector.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/metrics_messages.dart';
-import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart'
     show RemoteExecutionRegistry, SendToClient;
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
 import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
@@ -83,12 +84,12 @@ class MetricsMessageHandler {
         ),
       );
     } on Object catch (e) {
-      await sendToClient(
-        clientId,
-        createScheduleErrorMessage(
-          requestId: requestId,
-          error: e.toString(),
-        ),
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: e.toString(),
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.unknown,
       );
     }
   }

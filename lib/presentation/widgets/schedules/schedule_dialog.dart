@@ -360,7 +360,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       scrollable: false,
       title: Row(
         children: [
-          const Icon(FluentIcons.calendar, color: AppColors.primary),
+          const Icon(
+            FluentIcons.calendar,
+            color: AppPalette.scheduleDaily,
+          ),
           const SizedBox(width: 12),
           Text(
             isEditing
@@ -1102,23 +1105,24 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   Widget _buildDestinationSelector() {
     if (_destinations.isEmpty) {
+      final colors = context.colors;
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.errorBackground.withValues(alpha: 0.3),
+          color: colors.danger.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+          border: Border.all(color: colors.danger.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
-            const Icon(FluentIcons.warning, color: AppColors.error),
+            Icon(FluentIcons.warning, color: colors.danger),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 'Nenhum destino configurado. Configure um destino primeiro.',
                 style: FluentTheme.of(
                   context,
-                ).typography.caption?.copyWith(color: AppColors.error),
+                ).typography.caption?.copyWith(color: colors.danger),
               ),
             ),
           ],

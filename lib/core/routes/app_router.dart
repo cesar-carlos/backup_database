@@ -1,3 +1,4 @@
+import 'package:backup_database/core/config/app_mode_policy.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/presentation/pages/pages.dart';
 import 'package:flutter/widgets.dart';
@@ -5,9 +6,18 @@ import 'package:go_router/go_router.dart';
 
 final appNavigatorKey = GlobalKey<NavigatorState>();
 
+String? appRouteRedirect(BuildContext context, GoRouterState state) {
+  final path = state.uri.path;
+  if (!AppModePolicy.isRouteAllowedInCurrentMode(path)) {
+    return AppModePolicy.redirectForBlockedClientRoute(path);
+  }
+  return null;
+}
+
 final appRouter = GoRouter(
   navigatorKey: appNavigatorKey,
   initialLocation: RouteNames.dashboard,
+  redirect: appRouteRedirect,
   routes: [
     ShellRoute(
       builder: (context, state, child) => MainLayout(child: child),
@@ -66,6 +76,11 @@ final appRouter = GoRouter(
           path: RouteNames.remoteSchedules,
           name: RouteNames.remoteSchedulesName,
           builder: (context, state) => const RemoteSchedulesPage(),
+        ),
+        GoRoute(
+          path: RouteNames.remoteDatabaseConfigs,
+          name: RouteNames.remoteDatabaseConfigsName,
+          builder: (context, state) => const RemoteDatabaseConfigsPage(),
         ),
         GoRoute(
           path: RouteNames.connectionLogs,

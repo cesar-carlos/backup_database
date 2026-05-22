@@ -1,3 +1,5 @@
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
+import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
@@ -99,7 +101,7 @@ void main() {
     );
 
     test(
-      'provider lanca excecao -> responde fila vazia (fail-soft)',
+      'provider lanca excecao -> protocol error (nao fila vazia silenciosa)',
       () async {
         final handler = ExecutionQueueMessageHandler(
           queueProvider: () async => throw Exception('db unavailable'),
@@ -115,11 +117,9 @@ void main() {
         );
 
         expect(sent, isNotNull);
-        expect(sent!.header.type, MessageType.executionQueueResponse);
-        final result = readExecutionQueueFromResponse(sent!);
-        // Fail-soft: cliente recebe fila vazia em vez de error
-        expect(result.queue, isEmpty);
-        expect(result.totalQueued, 0);
+        expect(sent!.header.type, MessageType.error);
+        expect(getErrorCodeFromMessage(sent!), ErrorCode.unknown);
+        expect(getErrorFromMessage(sent!), contains('db unavailable'));
       },
     );
 

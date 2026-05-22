@@ -1,4 +1,5 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/connection_status.dart';
 import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -87,84 +88,126 @@ class ServerListItem extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (onTestConnection != null) ...[
-                        Tooltip(
-                          message: appLocaleString(
+                        Semantics(
+                          button: true,
+                          label: appLocaleString(
                             context,
                             'Testar conexão',
                             'Test connection',
                           ),
-                          child: IconButton(
-                            icon: const Icon(FluentIcons.link),
-                            onPressed: isTestingConnection
-                                ? null
-                                : onTestConnection,
+                          child: Tooltip(
+                            message: appLocaleString(
+                              context,
+                              'Testar conexão',
+                              'Test connection',
+                            ),
+                            child: IconButton(
+                              icon: const Icon(FluentIcons.link),
+                              onPressed: isTestingConnection
+                                  ? null
+                                  : onTestConnection,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                       ],
                       if (onConnect != null) ...[
-                        Tooltip(
-                          message: _isConnectedToThis
+                        Semantics(
+                          button: true,
+                          label: _isConnectedToThis
                               ? appLocaleString(
                                   context,
                                   'Desconectar',
                                   'Disconnect',
                                 )
                               : appLocaleString(context, 'Conectar', 'Connect'),
-                          child: IconButton(
-                            icon: Icon(
-                              _isConnectedToThis
-                                  ? FluentIcons.plug_disconnected
-                                  : FluentIcons.plug,
+                          child: Tooltip(
+                            message: _isConnectedToThis
+                                ? appLocaleString(
+                                    context,
+                                    'Desconectar',
+                                    'Disconnect',
+                                  )
+                                : appLocaleString(
+                                    context,
+                                    'Conectar',
+                                    'Connect',
+                                  ),
+                            child: IconButton(
+                              icon: Icon(
+                                _isConnectedToThis
+                                    ? FluentIcons.plug_disconnected
+                                    : FluentIcons.plug,
+                              ),
+                              onPressed: isConnecting ? null : onConnect,
                             ),
-                            onPressed: isConnecting ? null : onConnect,
                           ),
                         ),
                         const SizedBox(width: 8),
                       ],
                       if (onShowLogs != null) ...[
-                        Tooltip(
-                          message: appLocaleString(
+                        Semantics(
+                          button: true,
+                          label: appLocaleString(
                             context,
                             'Log desta conexão',
                             'Connection log',
                           ),
-                          child: IconButton(
-                            icon: const Icon(FluentIcons.history),
-                            onPressed: onShowLogs,
+                          child: Tooltip(
+                            message: appLocaleString(
+                              context,
+                              'Log desta conexão',
+                              'Connection log',
+                            ),
+                            child: IconButton(
+                              icon: const Icon(FluentIcons.history),
+                              onPressed: onShowLogs,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                       ],
                       if (onEdit != null) ...[
-                        Button(
-                          onPressed: onEdit,
-                          child: Text(
-                            appLocaleString(
-                              context,
-                              'Esta conexão',
-                              'This connection',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Tooltip(
-                          message: appLocaleString(
+                        Semantics(
+                          button: true,
+                          label: appLocaleString(
                             context,
                             'Editar conexão',
                             'Edit connection',
                           ),
-                          child: IconButton(
-                            icon: const Icon(FluentIcons.edit),
-                            onPressed: onEdit,
+                          child: Tooltip(
+                            message: appLocaleString(
+                              context,
+                              'Editar conexão',
+                              'Edit connection',
+                            ),
+                            child: IconButton(
+                              icon: const Icon(FluentIcons.edit),
+                              onPressed: onEdit,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                       ],
                       if (onDelete != null)
-                        IconButton(
-                          icon: const Icon(FluentIcons.delete),
-                          onPressed: onDelete,
+                        Semantics(
+                          button: true,
+                          label: appLocaleString(
+                            context,
+                            'Excluir conexão',
+                            'Delete connection',
+                          ),
+                          child: Tooltip(
+                            message: appLocaleString(
+                              context,
+                              'Excluir conexão',
+                              'Delete connection',
+                            ),
+                            child: IconButton(
+                              icon: const Icon(FluentIcons.delete),
+                              onPressed: onDelete,
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -206,14 +249,14 @@ class ServerListItem extends StatelessWidget {
       return (
         appLocaleString(context, 'Conectando...', 'Connecting...'),
         FluentIcons.sync,
-        FluentTheme.of(context).accentColor,
+        context.colors.info,
       );
     }
     if (_isConnectedToThis) {
       return (
         appLocaleString(context, 'Conectado', 'Connected'),
         FluentIcons.check_mark,
-        FluentTheme.of(context).accentColor,
+        context.colors.success,
       );
     }
     return (

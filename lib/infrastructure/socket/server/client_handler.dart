@@ -10,12 +10,12 @@ import 'package:backup_database/infrastructure/datasources/daos/connection_log_d
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
-import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/payload_limits.dart';
 import 'package:backup_database/infrastructure/socket/heartbeat.dart';
 import 'package:backup_database/infrastructure/socket/server/server_authentication.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_rate_limiter.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_server_telemetry.dart';
 import 'package:uuid/uuid.dart';
@@ -148,14 +148,14 @@ class ClientHandler {
           'Encerrando conexão.',
         );
         unawaited(
-          send(
-            createErrorMessage(
-              requestId: 0,
-              errorMessage:
-                  'Message length out of range: $length (max '
-                  '${SocketConfig.maxMessagePayloadBytes})',
-              errorCode: ErrorCode.parseError,
-            ),
+          SocketErrorSender.sendProtocolError(
+            clientId: _clientId,
+            requestId: 0,
+            errorMessage:
+                'Message length out of range: $length (max '
+                '${SocketConfig.maxMessagePayloadBytes})',
+            sendToClient: (_, message) => send(message),
+            errorCode: ErrorCode.parseError,
           ),
         );
         disconnect();
@@ -182,14 +182,14 @@ class ClientHandler {
             'limite ($length bytes; max $maxForType). Encerrando conexão.',
           );
           unawaited(
-            send(
-              createErrorMessage(
-                requestId: 0,
-                errorMessage:
-                    'Payload too large for ${type.name}: $length bytes '
-                    '(max $maxForType)',
-                errorCode: ErrorCode.payloadTooLarge,
-              ),
+            SocketErrorSender.sendProtocolError(
+              clientId: _clientId,
+              requestId: 0,
+              errorMessage:
+                  'Payload too large for ${type.name}: $length bytes '
+                  '(max $maxForType)',
+              sendToClient: (_, message) => send(message),
+              errorCode: ErrorCode.payloadTooLarge,
             ).whenComplete(disconnect),
           );
           return;
@@ -306,14 +306,14 @@ class ClientHandler {
               '${message.header.type.name} from $_remoteAddress',
             );
             unawaited(
-              send(
-                createErrorMessage(
-                  requestId: message.header.requestId,
-                  errorMessage:
-                      'Mensagem ${message.header.type.name} rejeitada: '
-                      'autenticacao nao concluida',
-                  errorCode: ErrorCode.notAuthenticated,
-                ),
+              SocketErrorSender.sendProtocolError(
+                clientId: _clientId,
+                requestId: message.header.requestId,
+                errorMessage:
+                    'Mensagem ${message.header.type.name} rejeitada: '
+                    'autenticacao nao concluida',
+                sendToClient: (_, msg) => send(msg),
+                errorCode: ErrorCode.notAuthenticated,
               ),
             );
             // Nao desconecta: cliente ainda pode enviar `authRequest`
@@ -341,12 +341,12 @@ class ClientHandler {
           'supported=${e.supportedVersions.join(',')}',
         );
         unawaited(
-          send(
-            createErrorMessage(
-              requestId: 0,
-              errorMessage: e.message,
-              errorCode: ErrorCode.unsupportedProtocolVersion,
-            ),
+          SocketErrorSender.sendProtocolError(
+            clientId: _clientId,
+            requestId: 0,
+            errorMessage: e.message,
+            sendToClient: (_, msg) => send(msg),
+            errorCode: ErrorCode.unsupportedProtocolVersion,
           ).whenComplete(disconnect),
         );
         return;
@@ -355,12 +355,12 @@ class ClientHandler {
           'ClientHandler parse error for $_remoteAddress: ${e.message}',
         );
         unawaited(
-          send(
-            createErrorMessage(
-              requestId: 0,
-              errorMessage: 'Failed to parse message: ${e.message}',
-              errorCode: ErrorCode.parseError,
-            ),
+          SocketErrorSender.sendProtocolError(
+            clientId: _clientId,
+            requestId: 0,
+            errorMessage: 'Failed to parse message: ${e.message}',
+            sendToClient: (_, msg) => send(msg),
+            errorCode: ErrorCode.parseError,
           ),
         );
       }
@@ -381,13 +381,13 @@ class ClientHandler {
       'retryAfter=${denied.retryAfterSeconds}s',
     );
     unawaited(
-      send(
-        createErrorMessage(
-          requestId: message.header.requestId,
-          errorMessage: ErrorCode.rateLimitExceeded.defaultMessage,
-          errorCode: ErrorCode.rateLimitExceeded,
-          retryAfterSeconds: denied.retryAfterSeconds,
-        ),
+      SocketErrorSender.sendProtocolError(
+        clientId: _clientId,
+        requestId: message.header.requestId,
+        errorMessage: ErrorCode.rateLimitExceeded.defaultMessage,
+        sendToClient: (_, msg) => send(msg),
+        errorCode: ErrorCode.rateLimitExceeded,
+        retryAfterSeconds: denied.retryAfterSeconds,
       ),
     );
     return true;

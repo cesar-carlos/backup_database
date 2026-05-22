@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
+import 'package:backup_database/application/providers/remote_database_config_provider.dart';
 import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
@@ -115,6 +116,16 @@ class _MainLayoutState extends State<MainLayout> {
         route: RouteNames.remoteSchedules,
       ),
       NavigationItem(
+        icon: FluentIcons.database,
+        selectedIcon: FluentIcons.database,
+        label: appLocaleString(
+          context,
+          'Bancos no servidor',
+          'Server databases',
+        ),
+        route: RouteNames.remoteDatabaseConfigs,
+      ),
+      NavigationItem(
         icon: FluentIcons.history,
         selectedIcon: FluentIcons.history,
         label: appLocaleString(context, 'Log de Conexões', 'Connection log'),
@@ -162,7 +173,8 @@ class _MainLayoutState extends State<MainLayout> {
             .where(
               (item) =>
                   item.route != RouteNames.serverLogin &&
-                  item.route != RouteNames.remoteSchedules,
+                  item.route != RouteNames.remoteSchedules &&
+                  item.route != RouteNames.remoteDatabaseConfigs,
             )
             .toList();
 
@@ -215,6 +227,12 @@ class _MainLayoutState extends State<MainLayout> {
         if (context.read<ServerConnectionProvider>().isConnected) {
           unawaited(
             context.read<RemoteSchedulesProvider>().loadSchedules(),
+          );
+        }
+      case RouteNames.remoteDatabaseConfigs:
+        if (context.read<ServerConnectionProvider>().isConnected) {
+          unawaited(
+            context.read<RemoteDatabaseConfigProvider>().loadConfigs(),
           );
         }
       case RouteNames.connectionLogs:

@@ -206,13 +206,14 @@ Future<_StartBackupE2eEnv> _startStartBackupE2eServer({
     () => executeBackup(
       _e2eScheduleId,
       executionOrigin: ExecutionOrigin.remoteCommand,
+      runId: any(named: 'runId'),
     ),
   ).thenAnswer((_) async {
     // Aguarda o cliente registrar `_activeBackupsByRunId` após
     // `startRemoteBackup` — o mock conclui sincronamente sem isso.
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 500));
     progressNotifier.completeBackup(
-      message: 'Backup concluído',
+      message: 'Backup conclído',
       backupPath: artifactPath,
     );
     return const rd.Success(true);
@@ -343,6 +344,7 @@ Future<_QueueDrainE2eEnv> _startQueueDrainE2eServer({
     () => executeBackup(
       _e2eScheduleId,
       executionOrigin: ExecutionOrigin.remoteCommand,
+      runId: any(named: 'runId'),
     ),
   ).thenAnswer((_) async {
     executeCalls++;
@@ -465,6 +467,7 @@ Future<_DeepQueueE2eEnv> _startDeepQueueE2eServer({
     () => executeBackup(
       any(),
       executionOrigin: any(named: 'executionOrigin'),
+      runId: any(named: 'runId'),
     ),
   ).thenAnswer((invocation) async {
     final scheduleId = invocation.positionalArguments[0] as String;
@@ -988,6 +991,7 @@ void main() {
           () => executeBackup(
             _e2eScheduleId,
             executionOrigin: ExecutionOrigin.remoteCommand,
+            runId: any(named: 'runId'),
           ),
         ).thenAnswer((_) => blockBackup.future);
 

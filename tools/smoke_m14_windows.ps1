@@ -50,3 +50,12 @@ foreach ($s in $scenarios) {
 Write-Host ""
 Write-Host "All recorded scenarios passed." -ForegroundColor Green
 Write-Host "Mark M14 in docs/notes/plano_refatoracao_e_melhorias_2026-04-19.md when done."
+
+# --- Optional manual smoke: client remote backup flow (comments only) ---
+# Run the app in client mode, then walk through:
+#   1. Connect — add or select a saved server (Conectar), confirm dashboard shows connected state.
+#   2. Remote schedules — open Agendamentos remotos; list loads from the server.
+#   3. Queue — if the server supports execution queue, confirm "Fila no servidor" and queued items.
+#   4. Run — trigger a remote backup (Executar); watch progress and completion or queue placement.
+#   5. Health — with a degraded server, confirm dashboard InfoBar warning before running again.
+# No automation here; record pass/fail manually alongside M14 scenarios above if desired.

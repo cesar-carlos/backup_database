@@ -44,6 +44,7 @@ Message createCapabilitiesResponseMessage({
   required int chunkSize,
   required String compression,
   required DateTime serverTimeUtc,
+  bool supportsAsyncStart = true,
 }) {
   final payload = wrapSuccessResponse(<String, dynamic>{
     'protocolVersion': protocolVersion,
@@ -54,6 +55,7 @@ Message createCapabilitiesResponseMessage({
     'supportsChunkAck': supportsChunkAck,
     'supportsExecutionQueue': supportsExecutionQueue,
     'supportsFirebird': supportsFirebird,
+    'supportsAsyncStart': supportsAsyncStart,
     'chunkSize': chunkSize,
     'compression': compression,
     'serverTimeUtc': serverTimeUtc.toUtc().toIso8601String(),
@@ -94,6 +96,7 @@ class ServerCapabilities {
     required this.supportsChunkAck,
     required this.supportsExecutionQueue,
     required this.supportsFirebird,
+    required this.supportsAsyncStart,
     required this.chunkSize,
     required this.compression,
     required this.serverTimeUtc,
@@ -112,6 +115,7 @@ class ServerCapabilities {
     supportsChunkAck: false,
     supportsExecutionQueue: false,
     supportsFirebird: false,
+    supportsAsyncStart: false,
     chunkSize: 65536,
     compression: 'gzip',
     serverTimeUtc: null,
@@ -125,6 +129,7 @@ class ServerCapabilities {
   final bool supportsChunkAck;
   final bool supportsExecutionQueue;
   final bool supportsFirebird;
+  final bool supportsAsyncStart;
   final int chunkSize;
   final String compression;
 
@@ -152,6 +157,7 @@ ServerCapabilities readCapabilitiesFromResponse(Message message) {
     supportsExecutionQueue:
         (payload['supportsExecutionQueue'] as bool?) ?? false,
     supportsFirebird: (payload['supportsFirebird'] as bool?) ?? false,
+    supportsAsyncStart: (payload['supportsAsyncStart'] as bool?) ?? false,
     chunkSize: (payload['chunkSize'] as num?)?.toInt() ?? 65536,
     compression: (payload['compression'] as String?) ?? 'gzip',
     serverTimeUtc: _parseServerTime(payload['serverTimeUtc']),

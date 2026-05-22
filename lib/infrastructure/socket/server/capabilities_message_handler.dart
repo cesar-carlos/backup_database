@@ -26,6 +26,8 @@ import 'package:backup_database/infrastructure/socket/server/remote_execution_re
 ///   - `supportsChunkAck = false` (decisao explicita ADR-002).
 ///   - `supportsExecutionQueue = true` (PR-3a/F2.16: FIFO persistida,
 ///     `getExecutionQueue`, `cancelQueuedBackup`, eventos de fila).
+///   - `supportsAsyncStart = true` (`startBackup` retorna 202 + `runId`
+///     sem bloquear ate `backupComplete`/`Failed`).
 /// - `chunkSize` e `compression` refletem `SocketConfig` atual.
 /// - `serverTimeUtc` permite o cliente detectar drift de relogio.
 class CapabilitiesMessageHandler {

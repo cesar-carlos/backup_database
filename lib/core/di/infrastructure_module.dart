@@ -314,6 +314,11 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   /// [ScheduleCrudMessageHandler] e mantenha este const coerente.
   const kSocketServerSupportsFirebird = true;
 
+  final stagingDir = await resolveMachineStagingBackupsDirectory();
+  final lockDir = await resolveMachineLocksDirectory();
+  final transferBasePath = stagingDir.path;
+  final lockPath = lockDir.path;
+
   getIt.registerLazySingleton<ScheduleMessageHandler>(
     () => ScheduleMessageHandler(
       scheduleRepository: getIt<IScheduleRepository>(),
@@ -324,13 +329,10 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
       progressNotifier: getIt<IBackupProgressNotifier>(),
       executionRegistry: getIt<RemoteExecutionRegistry>(),
       eventSequencer: getIt<ExecutionEventSequencer>(),
+      stagingUsageBytesProvider: () =>
+          StagingUsageMeasurer.measure(transferBasePath),
     ),
   );
-
-  final stagingDir = await resolveMachineStagingBackupsDirectory();
-  final lockDir = await resolveMachineLocksDirectory();
-  final transferBasePath = stagingDir.path;
-  final lockPath = lockDir.path;
 
   getIt.registerLazySingleton<IFileTransferLockService>(
     () => FileTransferLockService(lockBasePath: lockPath),

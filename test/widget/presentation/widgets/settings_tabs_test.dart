@@ -343,6 +343,7 @@ void main() {
   testWidgets('SettingsPage renders four settings tabs including system', (
     WidgetTester tester,
   ) async {
+    setAppMode(AppMode.unified);
     await _pumpSettingsHarness(
       tester,
       const SettingsPage(),

@@ -10,7 +10,7 @@ import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/app_colors.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
@@ -228,7 +228,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Widget _buildTitle() {
     return Row(
       children: [
-        Icon(_getTypeIcon(_selectedType), color: AppColors.primary),
+        Icon(
+          _getTypeIcon(_selectedType),
+          color: _getTypeColor(_selectedType),
+        ),
         const SizedBox(width: 12),
         Text(
           isEditing
@@ -645,7 +648,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(FluentIcons.info, size: 20, color: AppColors.primary),
+          Icon(FluentIcons.info, size: 20, color: context.colors.info),
           const SizedBox(width: 8),
           Expanded(
             child: ValueListenableBuilder<TextEditingValue>(
@@ -663,7 +666,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
                       style: FluentTheme.of(context).typography.caption
                           ?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                            color: context.colors.info,
                           ),
                     ),
                     const SizedBox(height: 4),
@@ -747,7 +750,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               'Compatibility with self-signed certificates. Turn off to validate production certificates.',
             ),
             style: FluentTheme.of(context).typography.caption?.copyWith(
-              color: AppColors.warning,
+              color: context.colors.warning,
             ),
           ),
           const SizedBox(height: 16),
@@ -822,11 +825,12 @@ class _DestinationDialogState extends State<DestinationDialog> {
     }
   }
 
-  Color _getFtpIntegrityImpactColor() {
+  Color _getFtpIntegrityImpactColor(BuildContext context) {
+    final colors = context.colors;
     return switch (_ftpIntegrityPreset) {
-      _FtpIntegrityPreset.quick => AppColors.success,
-      _FtpIntegrityPreset.balanced => AppColors.primary,
-      _FtpIntegrityPreset.maximum => AppColors.warning,
+      _FtpIntegrityPreset.quick => colors.success,
+      _FtpIntegrityPreset.balanced => colors.info,
+      _FtpIntegrityPreset.maximum => colors.warning,
     };
   }
 
@@ -858,7 +862,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       maxAttemptsController: _maxAttemptsFtpController,
       connectionTimeoutSecondsController: _connectionTimeoutSecondsController,
       uploadTimeoutMinutesController: _uploadTimeoutMinutesController,
-      impactColor: _getFtpIntegrityImpactColor(),
+      impactColor: _getFtpIntegrityImpactColor(context),
       impactText: _getFtpIntegrityImpactText(),
       labelBuilder: _dialogLabel,
       onPresetChanged: (value) {
@@ -1027,13 +1031,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.errorBackground.withValues(alpha: 0.3),
+        color: context.colors.danger.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+        border: Border.all(color: context.colors.danger.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          const Icon(FluentIcons.warning, color: AppColors.error),
+          Icon(FluentIcons.warning, color: context.colors.danger),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1043,7 +1047,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
               style: FluentTheme.of(
                 context,
-              ).typography.caption?.copyWith(color: AppColors.error),
+              ).typography.caption?.copyWith(color: context.colors.danger),
             ),
           ),
         ],
@@ -1061,9 +1065,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
       isSignedIn: isSignedIn,
       isLoading: isLoading,
       isConfigured: googleAuth.isConfigured,
-      signedInBackgroundColor: AppColors.googleDriveSignedInBackground,
-      signedInBorderColor: AppColors.googleDriveSignedInBorder,
-      signedInIconColor: AppColors.googleDriveSignedIn,
+      signedInBackgroundColor: AppPalette.googleDriveSignedInBackground,
+      signedInBorderColor: AppPalette.googleDriveSignedInBorder,
+      signedInIconColor: AppPalette.googleDriveSignedIn,
       signedInLabel: _dialogLabel(
         'Conectado como ${googleAuth.currentEmail ?? 'usuario'}',
         'Connected as ${googleAuth.currentEmail ?? 'user'}',
@@ -1215,13 +1219,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.errorBackground.withValues(alpha: 0.3),
+        color: context.colors.danger.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+        border: Border.all(color: context.colors.danger.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          const Icon(FluentIcons.warning, color: AppColors.error),
+          Icon(FluentIcons.warning, color: context.colors.danger),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1231,7 +1235,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               ),
               style: FluentTheme.of(
                 context,
-              ).typography.caption?.copyWith(color: AppColors.error),
+              ).typography.caption?.copyWith(color: context.colors.danger),
             ),
           ),
         ],
@@ -1249,11 +1253,13 @@ class _DestinationDialogState extends State<DestinationDialog> {
       isSignedIn: isSignedIn,
       isLoading: isLoading,
       isConfigured: dropboxAuth.isConfigured,
-      signedInBackgroundColor: AppColors.destinationDropbox.withValues(
+      signedInBackgroundColor: AppPalette.destinationDropbox.withValues(
         alpha: 0.1,
       ),
-      signedInBorderColor: AppColors.destinationDropbox.withValues(alpha: 0.3),
-      signedInIconColor: AppColors.destinationDropbox,
+      signedInBorderColor: AppPalette.destinationDropbox.withValues(
+        alpha: 0.3,
+      ),
+      signedInIconColor: AppPalette.destinationDropbox,
       signedInLabel: _dialogLabel(
         'Conectado como ${dropboxAuth.currentEmail ?? 'usuario'}',
         'Connected as ${dropboxAuth.currentEmail ?? 'user'}',
@@ -1344,6 +1350,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
         return FluentIcons.cloud;
       case DestinationType.nextcloud:
         return FluentIcons.cloud;
+    }
+  }
+
+  Color _getTypeColor(DestinationType type) {
+    switch (type) {
+      case DestinationType.local:
+        return AppPalette.destinationLocal;
+      case DestinationType.ftp:
+        return AppPalette.destinationFtp;
+      case DestinationType.googleDrive:
+        return AppPalette.destinationGoogleDrive;
+      case DestinationType.dropbox:
+        return AppPalette.destinationDropbox;
+      case DestinationType.nextcloud:
+        return AppPalette.destinationNextcloud;
     }
   }
 
@@ -2093,7 +2114,7 @@ class _OAuthStatusCard extends StatelessWidget {
               errorMessage!,
               style: FluentTheme.of(
                 context,
-              ).typography.caption?.copyWith(color: AppColors.error),
+              ).typography.caption?.copyWith(color: context.colors.danger),
             ),
           ],
         ],
@@ -2124,16 +2145,18 @@ class _OAuthCredentialsSectionCard extends StatelessWidget {
           context,
         ).resources.cardBackgroundFillColorDefault.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: context.colors.info.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 FluentIcons.settings,
-                color: AppColors.primary,
+                color: context.colors.info,
                 size: 20,
               ),
               const SizedBox(width: 8),
@@ -2141,7 +2164,7 @@ class _OAuthCredentialsSectionCard extends StatelessWidget {
                 title,
                 style: FluentTheme.of(
                   context,
-                ).typography.subtitle?.copyWith(color: AppColors.primary),
+                ).typography.subtitle?.copyWith(color: context.colors.info),
               ),
             ],
           ),
@@ -2827,7 +2850,7 @@ class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
+              color: context.colors.info.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
             child: SelectableText(
@@ -3047,7 +3070,7 @@ class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
+              color: context.colors.info.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
             child: SelectableText(

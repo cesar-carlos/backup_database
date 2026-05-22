@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
-import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_policy.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/server/database_config_store.dart';
 import 'package:backup_database/infrastructure/socket/server/database_connection_prober.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
 
 /// Handler que responde `testDatabaseConnectionRequest` (PR-2).
 ///
@@ -28,15 +28,18 @@ class DatabaseConfigMessageHandler {
     DatabaseConfigStore? store,
     IdempotencyRegistry? idempotencyRegistry,
     DateTime Function()? clock,
+    bool supportsFirebird = true,
   }) : _prober = prober ?? const NotConfiguredProber(),
        _store = store ?? const NotConfiguredDatabaseConfigStore(),
        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now,
+       _supportsFirebird = supportsFirebird;
 
   final DatabaseConnectionProber _prober;
   final DatabaseConfigStore _store;
   final IdempotencyRegistry _idempotencyRegistry;
   final DateTime Function() _clock;
+  final bool _supportsFirebird;
 
   Future<void> handle(
     String clientId,
@@ -64,24 +67,32 @@ class DatabaseConfigMessageHandler {
     // Defesa F0.4 / F0.6: tipos errados ou faltando -> 400 invalidRequest
     final databaseTypeRaw = payload['databaseType'];
     if (databaseTypeRaw is! String) {
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        'Campo `databaseType` ausente ou nao-string',
-        ErrorCode.invalidRequest,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: 'Campo `databaseType` ausente ou nao-string',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }
     final databaseType = RemoteDatabaseType.fromWire(databaseTypeRaw);
     if (databaseType == null) {
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        '`databaseType` nao suportado: $databaseTypeRaw',
-        ErrorCode.invalidRequest,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: '`databaseType` nao suportado: $databaseTypeRaw',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
+      return;
+    }
+    if (await _rejectFirebirdIfUnsupported(
+      clientId,
+      requestId,
+      databaseType,
+      sendToClient,
+    )) {
       return;
     }
 
@@ -91,12 +102,13 @@ class DatabaseConfigMessageHandler {
     final hasConfig = payload['config'] is Map;
     if (hasId == hasConfig) {
       // Ambos ou nenhum -> contrato violado
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        'Informe APENAS um de `databaseConfigId` ou `config` (XOR)',
-        ErrorCode.invalidRequest,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage:
+            'Informe APENAS um de `databaseConfigId` ou `config` (XOR)',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }
@@ -149,23 +161,6 @@ class DatabaseConfigMessageHandler {
     );
   }
 
-  Future<void> _sendError(
-    String clientId,
-    Future<void> Function(String clientId, Message message) sendToClient,
-    int requestId,
-    String message,
-    ErrorCode errorCode,
-  ) async {
-    await sendToClient(
-      clientId,
-      createErrorMessage(
-        requestId: requestId,
-        errorMessage: message,
-        errorCode: errorCode,
-      ),
-    );
-  }
-
   // ---------------------------------------------------------------
   // CRUD remoto (PR-2)
   // ---------------------------------------------------------------
@@ -178,24 +173,32 @@ class DatabaseConfigMessageHandler {
     final requestId = message.header.requestId;
     final typeRaw = message.payload['databaseType'];
     if (typeRaw is! String) {
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        '`databaseType` ausente ou nao-string',
-        ErrorCode.invalidRequest,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: '`databaseType` ausente ou nao-string',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }
     final type = RemoteDatabaseType.fromWire(typeRaw);
     if (type == null) {
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        '`databaseType` nao suportado: $typeRaw',
-        ErrorCode.invalidRequest,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: '`databaseType` nao suportado: $typeRaw',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
+      return;
+    }
+    if (await _rejectFirebirdIfUnsupported(
+      clientId,
+      requestId,
+      type,
+      sendToClient,
+    )) {
       return;
     }
 
@@ -215,12 +218,12 @@ class DatabaseConfigMessageHandler {
     }
 
     if (!outcome.success) {
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        outcome.error ?? 'Falha ao listar configs',
-        outcome.errorCode ?? ErrorCode.unknown,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: outcome.error ?? 'Falha ao listar configs',
+        sendToClient: sendToClient,
+        errorCode: outcome.errorCode ?? ErrorCode.unknown,
       );
       return;
     }
@@ -247,24 +250,32 @@ class DatabaseConfigMessageHandler {
 
     final dbTypeRaw = payload['databaseType'];
     if (dbTypeRaw is! String) {
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        '`databaseType` ausente ou nao-string',
-        ErrorCode.invalidRequest,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: '`databaseType` ausente ou nao-string',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
       return;
     }
     final dbType = RemoteDatabaseType.fromWire(dbTypeRaw);
     if (dbType == null) {
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        '`databaseType` nao suportado: $dbTypeRaw',
-        ErrorCode.invalidRequest,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: '`databaseType` nao suportado: $dbTypeRaw',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.invalidRequest,
       );
+      return;
+    }
+    if (await _rejectFirebirdIfUnsupported(
+      clientId,
+      requestId,
+      dbType,
+      sendToClient,
+    )) {
       return;
     }
 
@@ -286,12 +297,12 @@ class DatabaseConfigMessageHandler {
       );
       await sendToClient(clientId, response);
     } on _DbConfigFailure catch (f) {
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        f.message,
-        f.errorCode,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: f.message,
+        sendToClient: sendToClient,
+        errorCode: f.errorCode,
       );
     } on Object catch (e, st) {
       LoggerService.warning(
@@ -299,12 +310,12 @@ class DatabaseConfigMessageHandler {
         e,
         st,
       );
-      await _sendError(
-        clientId,
-        sendToClient,
-        requestId,
-        'Erro interno: $e',
-        ErrorCode.unknown,
+      await SocketErrorSender.sendProtocolError(
+        clientId: clientId,
+        requestId: requestId,
+        errorMessage: 'Erro interno: $e',
+        sendToClient: sendToClient,
+        errorCode: ErrorCode.unknown,
       );
     }
   }
@@ -424,6 +435,25 @@ class DatabaseConfigMessageHandler {
       databaseType: type,
       configId: id,
     );
+  }
+
+  Future<bool> _rejectFirebirdIfUnsupported(
+    String clientId,
+    int requestId,
+    RemoteDatabaseType databaseType,
+    Future<void> Function(String, Message) sendToClient,
+  ) async {
+    if (_supportsFirebird || databaseType != RemoteDatabaseType.firebird) {
+      return false;
+    }
+    await SocketErrorSender.sendProtocolError(
+      clientId: clientId,
+      requestId: requestId,
+      errorMessage: ErrorCode.unsupportedDatabaseType.defaultMessage,
+      sendToClient: sendToClient,
+      errorCode: ErrorCode.unsupportedDatabaseType,
+    );
+    return true;
   }
 }
 
