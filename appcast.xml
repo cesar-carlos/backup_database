@@ -8,7 +8,7 @@
       <title>Version 3.2.1</title>
       <pubDate>Mon, 25 May 2026 13:26:26 +0000</pubDate>
       <description>Release 3.2.1 com endurecimento do contrato de instancia unica global por computador.\n\nDestaques:\n- Mutex global compartilhado entre UI, Windows Service e execucoes agendadas.\n- Delegacao IPC para execucoes --schedule-id duplicadas, com canRunSchedule no PONG v1.\n- Timeouts configuraveis para conexao IPC e execucao delegada.\n- Logs estruturados para auditoria de lock, duplicatas, delegacao e exit codes.\n- Ajustes de instalador/autostart/NSSM para evitar entradas concorrentes.\n\nArtefatos:\n- BackupDatabase-Setup-3.2.1.exe\n- BackupDatabase-Setup-3.2.1.exe.sha256</description>
-      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.2.1/BackupDatabase-Setup-3.2.1.exe" sparkle:version="3.2.1" sparkle:os="windows" length="38253102" type="application/octet-stream" sha256="2a9127a1825c9c01ebeb8747d1e27eb1e29d7d2e9c6d17c2c859f2c9ce259b2d" />
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.2.1/BackupDatabase-Setup-3.2.1.exe" sparkle:version="3.2.1" sparkle:os="windows" length="38333794" type="application/octet-stream" sha256="82392fce8658b312eafc5fc9c9bc14aa579a150472706dffdcbfbcf130185199" />
     </item>
     <item>
       <title>Version 3.2.0</title>
