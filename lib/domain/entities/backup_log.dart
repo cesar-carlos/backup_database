@@ -7,8 +7,7 @@ enum LogLevel {
   debug,
   info,
   warning,
-  error
-  ;
+  error;
 
   static LogLevel fromString(String value) {
     final normalized = value.trim().toLowerCase();

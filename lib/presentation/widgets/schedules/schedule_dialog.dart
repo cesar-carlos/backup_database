@@ -1358,7 +1358,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   /// o setup mudasse (ex.: novo path de instalação), seria necessário
   /// atualizar 2 lugares. Agora delega ao `WinRarService.isInstalledInSystem`,
   /// mantendo a lista canônica em uma única fonte.
-  Future<bool> _checkWinRarAvailable() => WinrarInstallProbe.isInstalledInSystem();
+  Future<bool> _checkWinRarAvailable() =>
+      WinrarInstallProbe.isInstalledInSystem();
 
   Future<void> _save() async {
     final name = _nameController.text.trim();

@@ -54,8 +54,9 @@ class HealthCheckService {
         );
       }
 
-      final hasPermission =
-          await DirectoryPermissionCheck.hasWritePermission(directory);
+      final hasPermission = await DirectoryPermissionCheck.hasWritePermission(
+        directory,
+      );
       if (!hasPermission) {
         return HealthCheckResult(
           status: HealthStatus.unhealthy,

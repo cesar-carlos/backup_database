@@ -551,8 +551,7 @@ void main() {
     test(
       'executeNow uses provided runId for remoteCommand staging key',
       () async {
-        const fixedRunId =
-            'schedule-1_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+        const fixedRunId = 'schedule-1_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
         final stagingMock = _MockTransferStagingService();
         when(
           () => stagingMock.copyToStaging(
@@ -637,8 +636,7 @@ void main() {
         final staging = TransferStagingService(
           transferBasePath: transferBase.path,
         );
-        const fixedRunId =
-            'schedule-1_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+        const fixedRunId = 'schedule-1_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
         final schedule = buildSchedule();
         final backupPath = '${tempDir.path}${Platform.pathSeparator}x.bak';

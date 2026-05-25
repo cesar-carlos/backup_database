@@ -14,8 +14,7 @@ import 'package:backup_database/infrastructure/protocol/response_envelope.dart';
 enum PreflightSeverity {
   blocking,
   warning,
-  info
-  ;
+  info;
 
   static PreflightSeverity fromString(String value) {
     return values.firstWhere(
@@ -36,8 +35,7 @@ enum PreflightSeverity {
 enum PreflightStatus {
   passed,
   passedWithWarnings,
-  blocked
-  ;
+  blocked;
 
   static PreflightStatus fromString(String value) {
     return values.firstWhere(

@@ -30,8 +30,7 @@ typedef TestConnectionRunTest<TConfig> =
 String testConnectionUserMessage(
   Object? failure, {
   required String fallback,
-}) =>
-    failureUserMessage(failure, fallback: fallback);
+}) => failureUserMessage(failure, fallback: fallback);
 
 class TestConnectionRunner<TConfig> {
   TestConnectionRunner({

@@ -1,8 +1,7 @@
 enum CompressionFormat {
   none,
   zip,
-  rar
-  ;
+  rar;
 
   String get displayName {
     switch (this) {

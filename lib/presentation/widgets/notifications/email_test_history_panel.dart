@@ -77,7 +77,9 @@ class EmailTestHistoryPanel extends StatelessWidget {
     final sortedHistory = [...history]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final latestEntry = sortedHistory.isEmpty ? null : sortedHistory.first;
-    final failureCount = sortedHistory.where((entry) => !entry.isSuccess).length;
+    final failureCount = sortedHistory
+        .where((entry) => !entry.isSuccess)
+        .length;
     final successCount = sortedHistory.length - failureCount;
     final theme = FluentTheme.of(context);
 
@@ -326,7 +328,11 @@ class EmailTestHistoryPanel extends StatelessWidget {
               ),
               content: Column(
                 children: [
-                  for (var index = 0; index < sortedHistory.length; index++) ...[
+                  for (
+                    var index = 0;
+                    index < sortedHistory.length;
+                    index++
+                  ) ...[
                     _HistoryEntryCard(
                       audit: sortedHistory[index],
                       configName:
@@ -385,9 +391,14 @@ class _ResponsiveMetricGrid extends StatelessWidget {
                 children: [
                   for (var index = 0; index < rowChildren.length; index++) ...[
                     Expanded(child: rowChildren[index]),
-                    if (index < rowChildren.length - 1) const SizedBox(width: 12),
+                    if (index < rowChildren.length - 1)
+                      const SizedBox(width: 12),
                   ],
-                  for (var filler = rowChildren.length; filler < columns; filler++) ...[
+                  for (
+                    var filler = rowChildren.length;
+                    filler < columns;
+                    filler++
+                  ) ...[
                     if (filler > 0) const SizedBox(width: 12),
                     const Expanded(child: SizedBox.shrink()),
                   ],
@@ -484,11 +495,11 @@ class _HistoryEntryCard extends StatelessWidget {
             'Delivery validated successfully for the recipient.',
           )
         : (audit.errorType ??
-            appLocaleString(
-              context,
-              'Falha sem tipo informado.',
-              'Failure without a reported type.',
-            ));
+              appLocaleString(
+                context,
+                'Falha sem tipo informado.',
+                'Failure without a reported type.',
+              ));
 
     return Container(
       width: double.infinity,
@@ -620,7 +631,11 @@ class _HistoryEntryCard extends StatelessWidget {
                     'Duration',
                   ),
                   value: audit.durationMs == null
-                      ? appLocaleString(context, 'Não informada', 'Not available')
+                      ? appLocaleString(
+                          context,
+                          'Não informada',
+                          'Not available',
+                        )
                       : '${audit.durationMs} ms',
                   caption: appLocaleString(
                     context,

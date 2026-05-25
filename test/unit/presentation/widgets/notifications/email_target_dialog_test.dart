@@ -31,15 +31,23 @@ void main() {
     );
   }
 
-  testWidgets('renders new recipient sections and event toggles', (tester) async {
+  testWidgets('renders new recipient sections and event toggles', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildDialog());
     await tester.pumpAndSettle();
 
     expect(_findTextPtOrEn('Identification', 'Identification'), findsOneWidget);
     expect(_findTextPtOrEn('Events', 'Events'), findsOneWidget);
     expect(_findTextPtOrEn('Status', 'Status'), findsOneWidget);
-    expect(_findTextPtOrEn('Notify on success', 'Notify on success'), findsOneWidget);
-    expect(_findTextPtOrEn('Recipient active', 'Recipient active'), findsOneWidget);
+    expect(
+      _findTextPtOrEn('Notify on success', 'Notify on success'),
+      findsOneWidget,
+    );
+    expect(
+      _findTextPtOrEn('Recipient active', 'Recipient active'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('renders edit recipient title when editing', (tester) async {

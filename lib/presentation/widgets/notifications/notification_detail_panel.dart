@@ -164,12 +164,12 @@ class _NotificationSummaryCard extends StatelessWidget {
         : config.recipients.first;
     final latestTest = testHistory.isEmpty
         ? null
-        : ([...testHistory]..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
-            .first;
-    final latestFailure = testHistory
-        .where((entry) => !entry.isSuccess)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        : ([
+            ...testHistory,
+          ]..sort((a, b) => b.createdAt.compareTo(a.createdAt))).first;
+    final latestFailure =
+        testHistory.where((entry) => !entry.isSuccess).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final activeRecipients = targets.where((target) => target.enabled).length;
     final lastFailure = latestFailure.isEmpty ? null : latestFailure.first;
 
@@ -256,12 +256,12 @@ class _NotificationSummaryCard extends StatelessWidget {
                         'Attempt at ${_formatDateTime(context, latestTest.createdAt)} for ${latestTest.recipientEmail}.',
                       )
                     : (latestTest.errorMessage?.trim().isNotEmpty ?? false)
-                        ? latestTest.errorMessage!.trim()
-                        : appLocaleString(
-                            context,
-                            'Revise o histórico para detalhes técnicos.',
-                            'Review the history for technical details.',
-                          ),
+                    ? latestTest.errorMessage!.trim()
+                    : appLocaleString(
+                        context,
+                        'Revise o histórico para detalhes técnicos.',
+                        'Review the history for technical details.',
+                      ),
               ),
               isLong: true,
             ),
@@ -299,16 +299,16 @@ class _NotificationSummaryCard extends StatelessWidget {
                         'There is no audit for this configuration yet.',
                       )
                     : latestTest.isSuccess
-                        ? appLocaleString(
-                            context,
-                            'Última tentativa concluída sem erro.',
-                            'Latest attempt completed without errors.',
-                          )
-                        : appLocaleString(
-                            context,
-                            'Última tentativa terminou com falha.',
-                            'Latest attempt ended in failure.',
-                          ),
+                    ? appLocaleString(
+                        context,
+                        'Última tentativa concluída sem erro.',
+                        'Latest attempt completed without errors.',
+                      )
+                    : appLocaleString(
+                        context,
+                        'Última tentativa terminou com falha.',
+                        'Latest attempt ended in failure.',
+                      ),
               ),
               _SummaryFactTile(
                 label: appLocaleString(
@@ -356,11 +356,11 @@ class _NotificationSummaryCard extends StatelessWidget {
                         'No error was found in the current filter.',
                       )
                     : (lastFailure.errorType ??
-                        appLocaleString(
-                          context,
-                          'Falha sem tipo informado.',
-                          'Failure without a reported type.',
-                        )),
+                          appLocaleString(
+                            context,
+                            'Falha sem tipo informado.',
+                            'Failure without a reported type.',
+                          )),
               ),
               _SummaryFactTile(
                 label: appLocaleString(context, 'Anexos', 'Attachments'),
@@ -557,9 +557,14 @@ class _ResponsiveFactGrid extends StatelessWidget {
                 children: [
                   for (var index = 0; index < rowChildren.length; index++) ...[
                     Expanded(child: rowChildren[index]),
-                    if (index < rowChildren.length - 1) const SizedBox(width: 12),
+                    if (index < rowChildren.length - 1)
+                      const SizedBox(width: 12),
                   ],
-                  for (var filler = rowChildren.length; filler < columns; filler++) ...[
+                  for (
+                    var filler = rowChildren.length;
+                    filler < columns;
+                    filler++
+                  ) ...[
                     if (filler > 0) const SizedBox(width: 12),
                     const Expanded(child: SizedBox.shrink()),
                   ],
@@ -600,7 +605,7 @@ class _RecipientsSection extends StatelessWidget {
   final ValueChanged<EmailNotificationTarget> onEditTarget;
   final ValueChanged<EmailNotificationTarget> onDeleteTarget;
   final void Function(EmailNotificationTarget target, bool enabled)
-      onToggleTargetEnabled;
+  onToggleTargetEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -766,8 +771,9 @@ class _RecipientListItem extends StatelessWidget {
 
     Widget managementColumn(bool alignEnd) {
       return Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Text(statusText, style: theme.typography.caption),
           const SizedBox(height: 8),

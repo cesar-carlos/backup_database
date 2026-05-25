@@ -162,8 +162,7 @@ class ConnectionManager {
 
   /// `true` quando o servidor anuncia `startBackup` assincrono (202 +
   /// `runId` imediato, progresso via stream/eventos).
-  bool get isAsyncStartSupported =>
-      _effectiveCapabilities.supportsAsyncStart;
+  bool get isAsyncStartSupported => _effectiveCapabilities.supportsAsyncStart;
 
   Future<void> connect({
     required String host,

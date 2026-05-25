@@ -50,8 +50,9 @@ void main() {
     status: 'success',
   );
 
-  testWidgets('EmailConfigList renders configurations and selection callback',
-      (tester) async {
+  testWidgets('EmailConfigList renders configurations and selection callback', (
+    tester,
+  ) async {
     EmailConfig? selected;
 
     await tester.pumpWidget(
@@ -81,8 +82,9 @@ void main() {
     expect(selected?.id, configB.id);
   });
 
-  testWidgets('EmailConfigList shows empty state when there are no configs',
-      (tester) async {
+  testWidgets('EmailConfigList shows empty state when there are no configs', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       wrap(
         EmailConfigList(
@@ -104,77 +106,79 @@ void main() {
   });
 
   testWidgets(
-      'NotificationDetailPanel shows summary, recipients, and SMTP history',
-      (tester) async {
-    await tester.pumpWidget(
-      wrap(
-        NotificationDetailPanel(
-          selectedConfig: configA,
-          configs: [configA, configB],
-          targets: [targetA],
-          testHistory: [historyA],
-          historyError: null,
-          isHistoryLoading: false,
-          historyPeriod: NotificationHistoryPeriod.last7Days,
-          historyConfigIdFilter: configA.id,
-          canManage: true,
-          isTestingSelectedConfig: false,
-          onEditConfig: (_) {},
-          onDeleteConfig: (_) {},
-          onAddTarget: () {},
-          onEditTarget: (_) {},
-          onDeleteTarget: (_) {},
-          onToggleConfigEnabled: (_, enabled) {},
-          onToggleTargetEnabled: (_, enabled) {},
-          onTestConfig: () {},
-          onHistoryConfigChanged: (_) {},
-          onHistoryPeriodChanged: (_) {},
-          onRefreshHistory: () {},
+    'NotificationDetailPanel shows summary, recipients, and SMTP history',
+    (tester) async {
+      await tester.pumpWidget(
+        wrap(
+          NotificationDetailPanel(
+            selectedConfig: configA,
+            configs: [configA, configB],
+            targets: [targetA],
+            testHistory: [historyA],
+            historyError: null,
+            isHistoryLoading: false,
+            historyPeriod: NotificationHistoryPeriod.last7Days,
+            historyConfigIdFilter: configA.id,
+            canManage: true,
+            isTestingSelectedConfig: false,
+            onEditConfig: (_) {},
+            onDeleteConfig: (_) {},
+            onAddTarget: () {},
+            onEditTarget: (_) {},
+            onDeleteTarget: (_) {},
+            onToggleConfigEnabled: (_, enabled) {},
+            onToggleTargetEnabled: (_, enabled) {},
+            onTestConfig: () {},
+            onHistoryConfigChanged: (_) {},
+            onHistoryPeriodChanged: (_) {},
+            onRefreshHistory: () {},
+          ),
         ),
-      ),
-    );
+      );
 
-    expect(find.text('Configuration summary'), findsOneWidget);
-    expect(find.text('Recipients'), findsOneWidget);
-    expect(find.text('SMTP test history'), findsOneWidget);
-    expect(find.text('alpha-recipient@example.com'), findsWidgets);
-    expect(find.text('smtp-alpha.example.com'), findsWidgets);
-  });
+      expect(find.text('Configuration summary'), findsOneWidget);
+      expect(find.text('Recipients'), findsOneWidget);
+      expect(find.text('SMTP test history'), findsOneWidget);
+      expect(find.text('alpha-recipient@example.com'), findsWidgets);
+      expect(find.text('smtp-alpha.example.com'), findsWidgets);
+    },
+  );
 
   testWidgets(
-      'NotificationDetailPanel shows recipient empty state when config has no targets',
-      (tester) async {
-    await tester.pumpWidget(
-      wrap(
-        NotificationDetailPanel(
-          selectedConfig: configA,
-          configs: [configA],
-          targets: const [],
-          testHistory: const [],
-          historyError: null,
-          isHistoryLoading: false,
-          historyPeriod: NotificationHistoryPeriod.last7Days,
-          historyConfigIdFilter: configA.id,
-          canManage: true,
-          isTestingSelectedConfig: false,
-          onEditConfig: (_) {},
-          onDeleteConfig: (_) {},
-          onAddTarget: () {},
-          onEditTarget: (_) {},
-          onDeleteTarget: (_) {},
-          onToggleConfigEnabled: (_, enabled) {},
-          onToggleTargetEnabled: (_, enabled) {},
-          onTestConfig: () {},
-          onHistoryConfigChanged: (_) {},
-          onHistoryPeriodChanged: (_) {},
-          onRefreshHistory: () {},
+    'NotificationDetailPanel shows recipient empty state when config has no targets',
+    (tester) async {
+      await tester.pumpWidget(
+        wrap(
+          NotificationDetailPanel(
+            selectedConfig: configA,
+            configs: [configA],
+            targets: const [],
+            testHistory: const [],
+            historyError: null,
+            isHistoryLoading: false,
+            historyPeriod: NotificationHistoryPeriod.last7Days,
+            historyConfigIdFilter: configA.id,
+            canManage: true,
+            isTestingSelectedConfig: false,
+            onEditConfig: (_) {},
+            onDeleteConfig: (_) {},
+            onAddTarget: () {},
+            onEditTarget: (_) {},
+            onDeleteTarget: (_) {},
+            onToggleConfigEnabled: (_, enabled) {},
+            onToggleTargetEnabled: (_, enabled) {},
+            onTestConfig: () {},
+            onHistoryConfigChanged: (_) {},
+            onHistoryPeriodChanged: (_) {},
+            onRefreshHistory: () {},
+          ),
         ),
-      ),
-    );
+      );
 
-    expect(
-      find.text('No recipients registered for SMTP Alpha.'),
-      findsOneWidget,
-    );
-  });
+      expect(
+        find.text('No recipients registered for SMTP Alpha.'),
+        findsOneWidget,
+      );
+    },
+  );
 }

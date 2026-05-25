@@ -12,8 +12,7 @@ enum RemoteDatabaseType {
   sybase('sybase'),
   sqlServer('sqlServer'),
   postgres('postgres'),
-  firebird('firebird')
-  ;
+  firebird('firebird');
 
   final String wireName;
   const RemoteDatabaseType(this.wireName);

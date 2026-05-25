@@ -146,13 +146,18 @@ class _EmailConfigListState extends State<EmailConfigList> {
           else
             Column(
               children: [
-                for (var index = 0; index < filteredConfigs.length; index++) ...[
+                for (
+                  var index = 0;
+                  index < filteredConfigs.length;
+                  index++
+                ) ...[
                   _EmailConfigListItem(
                     config: filteredConfigs[index],
                     isSelected:
                         filteredConfigs[index].id == widget.selectedConfigId,
-                    isUpdating:
-                        widget.updatingConfigIds.contains(filteredConfigs[index].id),
+                    isUpdating: widget.updatingConfigIds.contains(
+                      filteredConfigs[index].id,
+                    ),
                     canManage: widget.canManage,
                     onSelect: () => widget.onSelect(filteredConfigs[index]),
                     onEdit: () => widget.onEdit(filteredConfigs[index]),
@@ -326,8 +331,9 @@ class _EmailConfigListItem extends StatelessWidget {
                       const SizedBox(width: 8),
                       ToggleSwitch(
                         checked: config.enabled,
-                        onChanged:
-                            canManage && !isUpdating ? onToggleEnabled : null,
+                        onChanged: canManage && !isUpdating
+                            ? onToggleEnabled
+                            : null,
                       ),
                       if (isUpdating) ...[
                         const SizedBox(width: 8),

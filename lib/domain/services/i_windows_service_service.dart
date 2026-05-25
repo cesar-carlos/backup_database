@@ -24,8 +24,7 @@ enum WindowsServiceStateCode {
   running(4),
   continuePending(5),
   pausePending(6),
-  paused(7)
-  ;
+  paused(7);
 
   const WindowsServiceStateCode(this.code);
   final int code;

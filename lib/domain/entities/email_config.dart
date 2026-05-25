@@ -3,8 +3,7 @@ import 'package:uuid/uuid.dart';
 enum SmtpAuthMode {
   password('password'),
   oauthGoogle('oauth_google'),
-  oauthMicrosoft('oauth_microsoft')
-  ;
+  oauthMicrosoft('oauth_microsoft');
 
   const SmtpAuthMode(this.value);
   final String value;
@@ -23,8 +22,7 @@ enum SmtpAuthMode {
 
 enum SmtpOAuthProvider {
   google('google'),
-  microsoft('microsoft')
-  ;
+  microsoft('microsoft');
 
   const SmtpOAuthProvider(this.value);
   final String value;

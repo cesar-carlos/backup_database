@@ -439,7 +439,8 @@ void main() {
 
         final authResponse = await authResponseCompleter.future.timeout(
           const Duration(seconds: 2),
-          onTimeout: () => throw TimeoutException('No authResponse after retry'),
+          onTimeout: () =>
+              throw TimeoutException('No authResponse after retry'),
         );
         expect(authResponse.payload['success'], isTrue);
         expect(handler.isAuthenticated, isTrue);

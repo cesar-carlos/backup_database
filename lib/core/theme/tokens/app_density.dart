@@ -10,8 +10,7 @@ enum AppDensity {
   spacious(
     spacingMultiplier: 1.25,
     targetSize: 52,
-  )
-  ;
+  );
 
   const AppDensity({
     required this.spacingMultiplier,

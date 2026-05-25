@@ -127,8 +127,7 @@ class LocalDestinationService implements ILocalDestinationService {
         );
       }
 
-      final canWrite =
-          await DirectoryPermissionCheck.hasWritePermissionForPath(
+      final canWrite = await DirectoryPermissionCheck.hasWritePermissionForPath(
         destinationDir,
       );
       if (!canWrite) {
@@ -487,8 +486,7 @@ class LocalDestinationService implements ILocalDestinationService {
       if (!await directory.exists()) {
         await directory.create(recursive: true);
       }
-      final canWrite =
-          await DirectoryPermissionCheck.hasWritePermissionForPath(
+      final canWrite = await DirectoryPermissionCheck.hasWritePermissionForPath(
         config.path,
       );
       if (!canWrite) {

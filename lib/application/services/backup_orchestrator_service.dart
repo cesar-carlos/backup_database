@@ -272,12 +272,10 @@ class BackupOrchestratorService {
         const errorMessage = 'Unsupported database type';
         return _failRunningHistory(
           history: history,
-          errorMessage:
-              '$errorMessage: ${schedule.databaseType}',
+          errorMessage: '$errorMessage: ${schedule.databaseType}',
           logStep: LogStepConstants.backupError,
           failure: ValidationFailure(
-            message:
-                '$errorMessage: ${schedule.databaseType}',
+            message: '$errorMessage: ${schedule.databaseType}',
           ),
           notifyOnComplete: notifyOnComplete,
         );

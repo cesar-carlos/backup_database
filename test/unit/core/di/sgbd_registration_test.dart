@@ -189,7 +189,10 @@ void main() {
 
         final firebirdProviderFirst = sl<FirebirdConfigProvider>();
         final firebirdProviderSecond = sl<FirebirdConfigProvider>();
-        expect(identical(firebirdProviderFirst, firebirdProviderSecond), isFalse);
+        expect(
+          identical(firebirdProviderFirst, firebirdProviderSecond),
+          isFalse,
+        );
       } finally {
         await appDatabase.close();
       }

@@ -95,8 +95,7 @@ enum ErrorCode {
   rateLimitExceeded(
     'RATE_LIMIT_EXCEEDED',
     'Limite de requisicoes excedido',
-  )
-  ;
+  );
 
   final String code;
   final String defaultMessage;

@@ -128,160 +128,160 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-            Text(
-              appLocaleString(
-                context,
-                'Identificação',
-                'Identification',
+              Text(
+                appLocaleString(
+                  context,
+                  'Identificação',
+                  'Identification',
+                ),
+                style: theme.typography.subtitle?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              style: theme.typography.subtitle?.copyWith(
-                fontWeight: FontWeight.bold,
+              const SizedBox(height: 8),
+              Text(
+                appLocaleString(
+                  context,
+                  'Defina o e-mail e os tipos de evento que esse contato receberá.',
+                  'Define the e-mail address and the event types this contact should receive.',
+                ),
+                style: theme.typography.caption,
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              appLocaleString(
-                context,
-                'Defina o e-mail e os tipos de evento que esse contato receberá.',
-                'Define the e-mail address and the event types this contact should receive.',
+              const SizedBox(height: 16),
+              AppTextField(
+                controller: _recipientController,
+                label: appLocaleString(
+                  context,
+                  'E-mail do destinatário',
+                  'Recipient e-mail',
+                ),
+                keyboardType: TextInputType.emailAddress,
+                hint: appLocaleString(
+                  context,
+                  'destino@exemplo.com',
+                  'recipient@example.com',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return appLocaleString(
+                      context,
+                      'E-mail é obrigatório.',
+                      'E-mail is required.',
+                    );
+                  }
+                  if (!value.contains('@')) {
+                    return appLocaleString(
+                      context,
+                      'E-mail inválido.',
+                      'Invalid e-mail.',
+                    );
+                  }
+                  return null;
+                },
               ),
-              style: theme.typography.caption,
-            ),
-            const SizedBox(height: 16),
-            AppTextField(
-              controller: _recipientController,
-              label: appLocaleString(
-                context,
-                'E-mail do destinatário',
-                'Recipient e-mail',
+              const SizedBox(height: 20),
+              Text(
+                appLocaleString(
+                  context,
+                  'Eventos',
+                  'Events',
+                ),
+                style: theme.typography.subtitle?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              keyboardType: TextInputType.emailAddress,
-              hint: appLocaleString(
-                context,
-                'destino@exemplo.com',
-                'recipient@example.com',
+              const SizedBox(height: 8),
+              Text(
+                appLocaleString(
+                  context,
+                  'Ative somente os eventos que devem gerar notificações para este destinatário.',
+                  'Enable only the events that should notify this recipient.',
+                ),
+                style: theme.typography.caption,
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return appLocaleString(
-                    context,
-                    'E-mail é obrigatório.',
-                    'E-mail is required.',
-                  );
-                }
-                if (!value.contains('@')) {
-                  return appLocaleString(
-                    context,
-                    'E-mail inválido.',
-                    'Invalid e-mail.',
-                  );
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-            Text(
-              appLocaleString(
-                context,
-                'Eventos',
-                'Events',
+              const SizedBox(height: 16),
+              _TargetToggleField(
+                label: appLocaleString(
+                  context,
+                  'Receber notificações de sucesso',
+                  'Notify on success',
+                ),
+                description: appLocaleString(
+                  context,
+                  'Usado para confirmar execuções concluídas sem erro.',
+                  'Used to confirm executions that finished successfully.',
+                ),
+                value: _notifyOnSuccess,
+                onChanged: (value) {
+                  setState(() {
+                    _notifyOnSuccess = value;
+                  });
+                },
               ),
-              style: theme.typography.subtitle?.copyWith(
-                fontWeight: FontWeight.bold,
+              const SizedBox(height: 12),
+              _TargetToggleField(
+                label: appLocaleString(
+                  context,
+                  'Receber notificações de erro',
+                  'Notify on error',
+                ),
+                description: appLocaleString(
+                  context,
+                  'Priorize para contatos de suporte ou operação.',
+                  'Prioritize for support or operations contacts.',
+                ),
+                value: _notifyOnError,
+                onChanged: (value) {
+                  setState(() {
+                    _notifyOnError = value;
+                  });
+                },
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              appLocaleString(
-                context,
-                'Ative somente os eventos que devem gerar notificações para este destinatário.',
-                'Enable only the events that should notify this recipient.',
+              const SizedBox(height: 12),
+              _TargetToggleField(
+                label: appLocaleString(
+                  context,
+                  'Receber notificações de aviso',
+                  'Notify on warning',
+                ),
+                description: appLocaleString(
+                  context,
+                  'Inclui eventos intermediários ou pendências operacionais.',
+                  'Includes intermediate events or operational warnings.',
+                ),
+                value: _notifyOnWarning,
+                onChanged: (value) {
+                  setState(() {
+                    _notifyOnWarning = value;
+                  });
+                },
               ),
-              style: theme.typography.caption,
-            ),
-            const SizedBox(height: 16),
-            _TargetToggleField(
-              label: appLocaleString(
-                context,
-                'Receber notificações de sucesso',
-                'Notify on success',
+              const SizedBox(height: 20),
+              Text(
+                appLocaleString(context, 'Status', 'Status'),
+                style: theme.typography.subtitle?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              description: appLocaleString(
-                context,
-                'Usado para confirmar execuções concluídas sem erro.',
-                'Used to confirm executions that finished successfully.',
+              const SizedBox(height: 12),
+              _TargetToggleField(
+                label: appLocaleString(
+                  context,
+                  'Destinatário ativo',
+                  'Recipient active',
+                ),
+                description: appLocaleString(
+                  context,
+                  'Destinatários inativos permanecem cadastrados, mas não recebem notificações.',
+                  'Inactive recipients remain registered, but do not receive notifications.',
+                ),
+                value: _enabled,
+                onChanged: (value) {
+                  setState(() {
+                    _enabled = value;
+                  });
+                },
               ),
-              value: _notifyOnSuccess,
-              onChanged: (value) {
-                setState(() {
-                  _notifyOnSuccess = value;
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            _TargetToggleField(
-              label: appLocaleString(
-                context,
-                'Receber notificações de erro',
-                'Notify on error',
-              ),
-              description: appLocaleString(
-                context,
-                'Priorize para contatos de suporte ou operação.',
-                'Prioritize for support or operations contacts.',
-              ),
-              value: _notifyOnError,
-              onChanged: (value) {
-                setState(() {
-                  _notifyOnError = value;
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            _TargetToggleField(
-              label: appLocaleString(
-                context,
-                'Receber notificações de aviso',
-                'Notify on warning',
-              ),
-              description: appLocaleString(
-                context,
-                'Inclui eventos intermediários ou pendências operacionais.',
-                'Includes intermediate events or operational warnings.',
-              ),
-              value: _notifyOnWarning,
-              onChanged: (value) {
-                setState(() {
-                  _notifyOnWarning = value;
-                });
-              },
-            ),
-            const SizedBox(height: 20),
-            Text(
-              appLocaleString(context, 'Status', 'Status'),
-              style: theme.typography.subtitle?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _TargetToggleField(
-              label: appLocaleString(
-                context,
-                'Destinatário ativo',
-                'Recipient active',
-              ),
-              description: appLocaleString(
-                context,
-                'Destinatários inativos permanecem cadastrados, mas não recebem notificações.',
-                'Inactive recipients remain registered, but do not receive notifications.',
-              ),
-              value: _enabled,
-              onChanged: (value) {
-                setState(() {
-                  _enabled = value;
-                });
-              },
-            ),
             ],
           ),
         ),
@@ -327,7 +327,10 @@ class _TargetToggleField extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 4),
                 Text(description, style: captionStyle),
               ],
