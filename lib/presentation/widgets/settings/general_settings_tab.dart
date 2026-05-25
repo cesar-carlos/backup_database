@@ -43,7 +43,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
         });
       }
     } on Object catch (e, s) {
-      LoggerService.warning('Erro ao carregar pasta temporÃ¡ria', e, s);
+      LoggerService.warning('Erro ao carregar pasta temporária', e, s);
       if (mounted) {
         setState(() => _isLoadingTempPath = false);
       }
@@ -54,7 +54,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     final result = await FilePicker.platform.getDirectoryPath(
       dialogTitle: appLocaleString(
         context,
-        'Selecionar pasta temporÃ¡ria de downloads',
+        'Selecionar pasta temporária de downloads',
         'Select temporary downloads folder',
       ),
     );
@@ -69,7 +69,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
               context,
               message: appLocaleString(
                 context,
-                'NÃ£o foi possÃ­vel definir a pasta temporÃ¡ria. Verifique se tem permissÃ£o de escrita.',
+                'Não foi possível definir a pasta temporária. Verifique se tem permissão de escrita.',
                 'Could not set temporary folder. Check write permissions.',
               ),
             ),
@@ -85,7 +85,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
             context,
             message: appLocaleString(
               context,
-              'Pasta temporÃ¡ria alterada com sucesso!',
+              'Pasta temporária alterada com sucesso!',
               'Temporary folder changed successfully!',
             ),
           ),
@@ -100,7 +100,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
       title: appLocaleString(context, 'Confirmar', 'Confirm'),
       message: appLocaleString(
         context,
-        'Deseja voltar a usar a pasta temporÃ¡ria padrÃ£o do sistema?',
+        'Deseja voltar a usar a pasta temporária padrão do sistema?',
         'Do you want to use the system default temporary folder again?',
       ),
       confirmLabel: appLocaleString(context, 'Confirmar', 'Confirm'),
@@ -135,7 +135,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
     return AppSectionCard(
       title: appLocaleString(
         context,
-        'Pasta temporÃ¡ria de downloads',
+        'Pasta temporária de downloads',
         'Temporary downloads folder',
       ),
       description: appLocaleString(
@@ -198,7 +198,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                     child: Text(
                       appLocaleString(
                         context,
-                        'Usar padrÃ£o do sistema',
+                        'Usar padrão do sistema',
                         'Use system default',
                       ),
                     ),
