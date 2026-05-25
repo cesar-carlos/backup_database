@@ -131,6 +131,91 @@ void main() {
         expect(messageBox.warningMessage, isNull);
       },
     );
+
+    test('should not send SHOW_WINDOW when lock owner is service', () async {
+      final messageBox = _FakeWindowsMessageBox();
+      final ipcClient = _FakeSingleInstanceIpcClient(
+        existingUser: 'user_a',
+        existingRole: 'service',
+        notifyResults: [true],
+      );
+      final checker = SingleInstanceChecker(
+        singleInstanceService: _FakeSingleInstanceService(
+          checkAndLockResult: false,
+        ),
+        ipcClient: ipcClient,
+        messageBox: messageBox,
+        getCurrentUsername: () => 'user_a',
+        maxRetryAttempts: 1,
+      );
+
+      final canContinue = await checker.checkAndHandleSecondInstance();
+
+      expect(canContinue, isFalse);
+      expect(ipcClient.notifyAttemptCount, 0);
+      expect(messageBox.warningMessage, contains('serviço do Windows'));
+    });
+
+    test(
+      'should delegate scheduled duplicate and exit with result code',
+      () async {
+        final exitCodes = <int>[];
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingRole: 'service',
+          canRunSchedule: true,
+          delegationResult: const SingleInstanceScheduledDelegationResult(
+            exitCode: 0,
+          ),
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: _FakeWindowsMessageBox(),
+          launchOrigin: LaunchOrigin.scheduledExecution,
+          scheduledScheduleId: '00000000-0000-4000-8000-000000000001',
+          exitProcess: exitCodes.add,
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(ipcClient.delegatedScheduleIds, [
+          '00000000-0000-4000-8000-000000000001',
+        ]);
+        expect(exitCodes, [0]);
+      },
+    );
+
+    test(
+      'should fail scheduled duplicate when lock owner cannot run schedule',
+      () async {
+        final exitCodes = <int>[];
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingRole: 'ui',
+          delegationResult: const SingleInstanceScheduledDelegationResult(
+            exitCode: 0,
+          ),
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: _FakeWindowsMessageBox(),
+          launchOrigin: LaunchOrigin.scheduledExecution,
+          scheduledScheduleId: '00000000-0000-4000-8000-000000000001',
+          exitProcess: exitCodes.add,
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(ipcClient.delegatedScheduleIds, isEmpty);
+        expect(exitCodes, [1]);
+      },
+    );
   });
 }
 
@@ -154,7 +239,11 @@ class _FakeSingleInstanceService implements ISingleInstanceService {
   Future<void> releaseLock() async {}
 
   @override
-  Future<bool> startIpcServer({Function()? onShowWindow}) async {
+  Future<bool> startIpcServer({
+    required String role,
+    Function()? onShowWindow,
+    RunScheduleIpcHandler? onRunSchedule,
+  }) async {
     return true;
   }
 }
@@ -162,11 +251,18 @@ class _FakeSingleInstanceService implements ISingleInstanceService {
 class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
   _FakeSingleInstanceIpcClient({
     this.existingUser,
+    this.existingRole,
+    this.canRunSchedule = false,
+    this.delegationResult,
     List<bool>? notifyResults,
   }) : _notifyResults = notifyResults ?? <bool>[true];
 
   final String? existingUser;
+  final String? existingRole;
+  final bool canRunSchedule;
+  final SingleInstanceScheduledDelegationResult? delegationResult;
   final List<bool> _notifyResults;
+  final delegatedScheduleIds = <String>[];
 
   int _notifyAttemptIndex = 0;
 
@@ -186,6 +282,23 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
   }
 
   @override
+  Future<String?> getExistingInstanceRole() async {
+    return existingRole;
+  }
+
+  @override
+  Future<SingleInstanceOwnerInfo?> getExistingInstanceInfo() async {
+    final role = existingRole;
+    if (role == null) {
+      return null;
+    }
+    return SingleInstanceOwnerInfo(
+      role: role,
+      canRunSchedule: canRunSchedule,
+    );
+  }
+
+  @override
   Future<bool> notifyExistingInstance() async {
     if (_notifyAttemptIndex >= _notifyResults.length) {
       _notifyAttemptIndex++;
@@ -194,6 +307,14 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
     final result = _notifyResults[_notifyAttemptIndex];
     _notifyAttemptIndex++;
     return result;
+  }
+
+  @override
+  Future<SingleInstanceScheduledDelegationResult?> delegateScheduledExecution(
+    String scheduleId,
+  ) async {
+    delegatedScheduleIds.add(scheduleId);
+    return delegationResult;
   }
 }
 

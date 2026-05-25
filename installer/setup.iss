@@ -72,10 +72,7 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
-
-[Registry]
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"" --minimized --launch-origin=windows-startup"; Flags: uninsdeletevalue; Tasks: startup
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent; Check: ShouldLaunchPostInstall
 
 [UninstallDelete]
 Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs
@@ -89,6 +86,11 @@ var
 
 function IsServiceInstalled(const ServiceName: String): Boolean; forward;
 function StopService(const ServiceName: String): Boolean; forward;
+function ShouldLaunchPostInstall(): Boolean; forward;
+procedure RemoveLegacyStartupEntries(); forward;
+procedure DeleteClientStartupTask(); forward;
+procedure ConfigureClientStartupTask(const AppExePath: String); forward;
+procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, NssmPath: String); forward;
 
 function GetUpdateContextPath(): String;
 begin
@@ -514,6 +516,18 @@ begin
       ModeFile.Free;
     end;
 
+    RemoveLegacyStartupEntries();
+
+    if WizardIsTaskSelected('startup') then
+    begin
+      if SelectedMode = 'server' then
+        InstallAndStartServiceFromInstaller(AppExePath, ExpandConstant('{app}'), NssmPath)
+      else
+        ConfigureClientStartupTask(AppExePath);
+    end
+    else
+      DeleteClientStartupTask();
+
     if WizardSilent() and FileExists(UpdateContextPath) then
     begin
       if RunTempPowerShellScript(
@@ -535,6 +549,63 @@ end;
 function IsServerMode(): Boolean;
 begin
   Result := (SelectedMode = 'server');
+end;
+
+function ShouldLaunchPostInstall(): Boolean;
+begin
+  Result := not ((SelectedMode = 'server') and WizardIsTaskSelected('startup'));
+end;
+
+procedure RemoveLegacyStartupEntries();
+var
+  ResultCode: Integer;
+begin
+  Exec('reg.exe', 'delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v "{#MyAppName}" /f', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('reg.exe', 'delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "BackupDatabase" /f', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('reg.exe', 'delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "{#MyAppName}" /f', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure DeleteClientStartupTask();
+var
+  ResultCode: Integer;
+begin
+  Exec('schtasks.exe', '/Delete /TN "\BackupDatabase\MachineStartup" /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure ConfigureClientStartupTask(const AppExePath: String);
+var
+  ResultCode: Integer;
+  TaskRun: String;
+begin
+  DeleteClientStartupTask();
+  TaskRun := '"\"' + AppExePath + '\" --minimized --launch-origin=windows-startup"';
+  Exec('schtasks.exe', '/Create /TN "\BackupDatabase\MachineStartup" /SC ONLOGON /TR ' + TaskRun + ' /F /RL LIMITED', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if ResultCode <> 0 then
+    Log('Warning: failed to create client startup scheduled task, exit=' + IntToStr(ResultCode));
+end;
+
+procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, NssmPath: String);
+var
+  ResultCode: Integer;
+  ScriptPath: String;
+  Args: String;
+begin
+  ScriptPath := ExpandConstant('{app}\tools\install_service.ps1');
+  Args :=
+    '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" ' +
+    '-NonInteractive ' +
+    '-AppPath "' + AppExePath + '" ' +
+    '-AppDirectory "' + AppDirectory + '" ' +
+    '-NssmPath "' + NssmPath + '"';
+  if Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    if ResultCode = 0 then
+      Exec('sc.exe', 'start BackupDatabaseService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+    else
+      Log('Warning: install_service.ps1 failed, exit=' + IntToStr(ResultCode));
+  end
+  else
+    Log('Warning: failed to launch install_service.ps1 from installer');
 end;
 
 function IsServiceInstalled(const ServiceName: String): Boolean;

@@ -82,10 +82,8 @@ class SingleInstanceService implements ISingleInstanceService {
         return true;
       }
 
-      final mutexName = isServiceMode
-          ? SingleInstanceConfig.serviceMutexName
-          : SingleInstanceConfig.uiMutexName;
-      final modeName = isServiceMode ? 'Serviço' : 'UI';
+      const mutexName = SingleInstanceConfig.instanceMutexName;
+      final modeName = isServiceMode ? 'service' : 'ui';
       final mutexNamePtr = mutexName.toNativeUtf16();
 
       _setLastErrorFn(0);
@@ -102,26 +100,26 @@ class SingleInstanceService implements ISingleInstanceService {
             : _lockFallbackModeProvider();
         if (fallbackMode == SingleInstanceLockFallbackMode.failSafe) {
           LoggerService.error(
-            '[SingleInstance] CreateMutex failed: handle=$_mutexHandle, '
-            'GetLastError=$lastError. '
-            'Fallback mode fail_safe: refusing startup to preserve exclusivity.',
+            'event=single_instance_lock_error ownerRole=$modeName '
+            'handle=$_mutexHandle getLastError=$lastError '
+            'fallback=fail_safe action=deny',
           );
           _isFirstInstance = false;
           return false;
         }
 
         LoggerService.warning(
-          '[SingleInstance] CreateMutex failed: handle=$_mutexHandle, '
-          'GetLastError=$lastError. '
-          'Fallback mode fail_open: proceeding without exclusivity guarantee.',
+          'event=single_instance_lock_error ownerRole=$modeName '
+          'handle=$_mutexHandle getLastError=$lastError '
+          'fallback=fail_open action=allow',
         );
         _isFirstInstance = true;
         return true;
       }
 
       if (lastError == ERROR_ALREADY_EXISTS) {
-        LoggerService.info(
-          'Outra instância de $modeName já está em execução (Mutex existe)',
+        LoggerService.infoWithContext(
+          'event=single_instance_lock_denied ownerRole=$modeName',
         );
         _isFirstInstance = false;
 
@@ -131,8 +129,9 @@ class SingleInstanceService implements ISingleInstanceService {
         return false;
       }
 
-      LoggerService.info(
-        'Primeira instância de $modeName do aplicativo (Mutex criado) - Handle: $_mutexHandle',
+      LoggerService.infoWithContext(
+        'event=single_instance_lock_acquired ownerRole=$modeName '
+        'handle=$_mutexHandle',
       );
       _isFirstInstance = true;
       return true;
@@ -155,9 +154,17 @@ class SingleInstanceService implements ISingleInstanceService {
   }
 
   @override
-  Future<bool> startIpcServer({Function()? onShowWindow}) async {
+  Future<bool> startIpcServer({
+    required String role,
+    Function()? onShowWindow,
+    RunScheduleIpcHandler? onRunSchedule,
+  }) async {
     try {
-      return await _ipcService.startServer(onShowWindow: onShowWindow);
+      return await _ipcService.startServer(
+        role: role,
+        onShowWindow: onShowWindow,
+        onRunSchedule: onRunSchedule,
+      );
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao iniciar IPC Server', e, stackTrace);
       return false;

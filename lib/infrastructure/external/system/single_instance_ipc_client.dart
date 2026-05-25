@@ -16,4 +16,21 @@ class SingleInstanceIpcClient implements ISingleInstanceIpcClient {
   Future<String?> getExistingInstanceUser() {
     return IpcService.getExistingInstanceUser();
   }
+
+  @override
+  Future<String?> getExistingInstanceRole() {
+    return IpcService.getExistingInstanceRole();
+  }
+
+  @override
+  Future<SingleInstanceOwnerInfo?> getExistingInstanceInfo() {
+    return IpcService.getExistingInstanceInfo();
+  }
+
+  @override
+  Future<SingleInstanceScheduledDelegationResult?> delegateScheduledExecution(
+    String scheduleId,
+  ) {
+    return IpcService.delegateScheduledExecution(scheduleId);
+  }
 }

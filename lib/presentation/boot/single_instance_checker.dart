@@ -1,10 +1,12 @@
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/uuid_validator.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
 import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
+import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
 
 class SingleInstanceChecker {
   SingleInstanceChecker({
@@ -12,7 +14,9 @@ class SingleInstanceChecker {
     required ISingleInstanceIpcClient ipcClient,
     required IWindowsMessageBox messageBox,
     String? Function()? getCurrentUsername,
+    void Function(int code)? exitProcess,
     LaunchOrigin launchOrigin = LaunchOrigin.manual,
+    String? scheduledScheduleId,
     int maxRetryAttempts = SingleInstanceConfig.maxRetryAttempts,
     Duration retryDelay = SingleInstanceConfig.retryDelay,
   }) : _singleInstanceService = singleInstanceService,
@@ -20,7 +24,9 @@ class SingleInstanceChecker {
        _messageBox = messageBox,
        _getCurrentUsername =
            getCurrentUsername ?? WindowsUserService.getCurrentUsername,
+       _exitProcess = exitProcess,
        _launchOrigin = launchOrigin,
+       _scheduledScheduleId = scheduledScheduleId,
        _maxRetryAttempts = maxRetryAttempts > 0 ? maxRetryAttempts : 1,
        _retryDelay = retryDelay;
 
@@ -28,7 +34,9 @@ class SingleInstanceChecker {
   final ISingleInstanceIpcClient _ipcClient;
   final IWindowsMessageBox _messageBox;
   final String? Function() _getCurrentUsername;
+  final void Function(int code)? _exitProcess;
   final LaunchOrigin _launchOrigin;
+  final String? _scheduledScheduleId;
   final int _maxRetryAttempts;
   final Duration _retryDelay;
 
@@ -55,6 +63,11 @@ class SingleInstanceChecker {
       'neste computador.\n\n'
       'N\u00E3o foi poss\u00EDvel identificar o usu\u00E1rio da inst\u00E2ncia '
       'existente.';
+  static const String _dialogMessageServiceOwner =
+      'O Backup Database j\u00E1 est\u00E1 em execu\u00E7\u00E3o como servi\u00E7o '
+      'do Windows neste computador.\n\n'
+      'N\u00E3o \u00E9 poss\u00EDvel abrir outra inst\u00E2ncia enquanto o '
+      'servi\u00E7o estiver ativo.';
 
   Future<bool> checkAndHandleSecondInstance() async {
     final isFirstInstance = await _singleInstanceService.checkAndLock();
@@ -69,14 +82,20 @@ class SingleInstanceChecker {
 
   Future<void> handleSecondInstance() async {
     if (_launchOrigin == LaunchOrigin.windowsStartup) {
-      LoggerService.info(
-        'duplicate_launch_suppressed_windows_startup: mutex negou UI; '
-        'encerrando sem IPC nem popup.',
+      LoggerService.infoWithContext(
+        'event=duplicate_launch_suppressed launchOrigin=windows-startup',
       );
       return;
     }
 
+    if (_launchOrigin == LaunchOrigin.scheduledExecution) {
+      await _handleScheduledSecondInstance();
+      return;
+    }
+
     final currentUser = _getCurrentUsername() ?? 'Desconhecido';
+    final ownerInfo = await _getExistingInfo();
+    final existingRole = ownerInfo?.role;
 
     String? existingUser;
     try {
@@ -92,36 +111,45 @@ class SingleInstanceChecker {
 
     if (isDifferentUser || couldNotDetermineUser) {
       LoggerService.warning(
-        'SEGUNDA INSTANCIA DETECTADA. '
-        'Usuario atual: $currentUser. '
-        '${existingUser != null ? "Instancia existente em: $existingUser" : "Nao foi possivel determinar usuario da instancia existente"}',
+        'event=duplicate_manual_launch ownerRole=${existingRole ?? "unknown"} '
+        'currentUser=$currentUser existingUser=${existingUser ?? "unknown"}',
       );
     } else {
-      LoggerService.info(
-        'SEGUNDA INSTANCIA DETECTADA (mesmo usuario). '
-        'Usuario: $currentUser. Mostrando aviso ao usuario.',
+      LoggerService.infoWithContext(
+        'event=duplicate_manual_launch ownerRole=${existingRole ?? "unknown"} '
+        'currentUser=$currentUser existingUser=$existingUser',
       );
     }
 
-    var wasExistingWindowNotified = false;
-    for (var i = 0; i < _maxRetryAttempts; i++) {
-      final notified = await _ipcClient.notifyExistingInstance();
-      if (notified) {
-        LoggerService.info('Instancia existente notificada via IPC');
-        wasExistingWindowNotified = true;
-        break;
-      }
-      await Future.delayed(_retryDelay);
-    }
+    final isServiceOwner =
+        existingRole == SingleInstanceConfig.ipcInstanceRoleService;
 
-    if (!wasExistingWindowNotified) {
-      LoggerService.warning(
-        'Nao foi possivel notificar instancia existente via IPC '
-        'apos $_maxRetryAttempts tentativas',
+    var wasExistingWindowNotified = false;
+    if (!isServiceOwner) {
+      for (var i = 0; i < _maxRetryAttempts; i++) {
+        final notified = await _ipcClient.notifyExistingInstance();
+        if (notified) {
+          LoggerService.info('Instancia existente notificada via IPC');
+          wasExistingWindowNotified = true;
+          break;
+        }
+        await Future.delayed(_retryDelay);
+      }
+
+      if (!wasExistingWindowNotified) {
+        LoggerService.warning(
+          'Nao foi possivel notificar instancia existente via IPC '
+          'apos $_maxRetryAttempts tentativas',
+        );
+      }
+    } else {
+      LoggerService.info(
+        'Segunda instancia manual bloqueada porque o dono do lock e servico',
       );
     }
 
     final dialogMessage = _getDialogMessage(
+      isServiceOwner: isServiceOwner,
       isDifferentUser: isDifferentUser,
       couldNotDetermineUser: couldNotDetermineUser,
       existingUser: existingUser,
@@ -130,12 +158,80 @@ class SingleInstanceChecker {
     _messageBox.showWarning(dialogTitle, dialogMessage);
   }
 
+  Future<void> _handleScheduledSecondInstance() async {
+    final scheduleId = _scheduledScheduleId;
+    if (scheduleId == null || !UuidValidator.isValid(scheduleId)) {
+      LoggerService.error(
+        'event=scheduled_duplicate_invalid_schedule_id '
+        'launchOrigin=scheduledExecution scheduleId=$scheduleId',
+      );
+      _exitProcess?.call(ScheduledBackupExitCode.invalidScheduleId);
+      return;
+    }
+
+    final ownerInfo = await _getExistingInfo();
+    if (ownerInfo?.canRunSchedule != true) {
+      LoggerService.warning(
+        'event=scheduled_duplicate_owner_cannot_run_schedule '
+        'ownerRole=${ownerInfo?.role ?? "unknown"} '
+        'canRunSchedule=${ownerInfo?.canRunSchedule ?? "unknown"}',
+      );
+      _exitProcess?.call(ScheduledBackupExitCode.genericFailure);
+      return;
+    }
+
+    LoggerService.infoWithContext(
+      'event=scheduled_duplicate_delegating ownerRole=${ownerInfo!.role} '
+      'canRunSchedule=${ownerInfo.canRunSchedule}',
+      scheduleId: scheduleId,
+    );
+    final result = await _ipcClient.delegateScheduledExecution(scheduleId);
+    if (result == null) {
+      LoggerService.error(
+        'event=scheduled_duplicate_delegation_failed scheduleId=$scheduleId',
+      );
+      _exitProcess?.call(ScheduledBackupExitCode.genericFailure);
+      return;
+    }
+
+    LoggerService.infoWithContext(
+      'event=scheduled_duplicate_delegation_finished '
+      'exitCode=${result.exitCode} message=${result.message ?? ""}',
+      scheduleId: scheduleId,
+    );
+    _exitProcess?.call(result.exitCode);
+  }
+
+  Future<SingleInstanceOwnerInfo?> _getExistingInfo() async {
+    try {
+      final ownerInfo = await _ipcClient.getExistingInstanceInfo();
+      if (ownerInfo != null) {
+        return ownerInfo;
+      }
+      final role = await _ipcClient.getExistingInstanceRole();
+      if (role == null) {
+        return null;
+      }
+      return SingleInstanceOwnerInfo(role: role, canRunSchedule: false);
+    } on Object catch (e) {
+      LoggerService.debug(
+        'Nao foi possivel obter info da instancia existente: $e',
+      );
+      return null;
+    }
+  }
+
   String _getDialogMessage({
+    required bool isServiceOwner,
     required bool isDifferentUser,
     required bool couldNotDetermineUser,
     required bool wasExistingWindowNotified,
     String? existingUser,
   }) {
+    if (isServiceOwner) {
+      return _dialogMessageServiceOwner;
+    }
+
     if (isDifferentUser) {
       if (existingUser != null && existingUser.isNotEmpty) {
         return '$_dialogMessageDifferentUser\n\n'

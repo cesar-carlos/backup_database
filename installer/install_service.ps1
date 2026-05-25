@@ -9,8 +9,16 @@ param(
     [string]$DisplayName = "Backup Database Service",
     [string]$Description = "Servico de backup automatico para SQL Server, Sybase, PostgreSQL e Firebird",
     [string]$ServiceUser = "",
-    [SecureString]$ServicePassword
+    [SecureString]$ServicePassword,
+    [switch]$NonInteractive
 )
+
+function Pause-IfInteractive {
+    param([string]$Message = "Pressione Enter para sair")
+    if (-not $NonInteractive) {
+        Read-Host $Message
+    }
+}
 
 # Verificar se está executando como administrador
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -18,7 +26,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIde
 if (-not $isAdmin) {
     Write-Host "ERRO: Este script deve ser executado como Administrador!" -ForegroundColor Red
     Write-Host "Clique com botão direito e selecione 'Executar como administrador'" -ForegroundColor Yellow
-    Read-Host "Pressione Enter para sair"
+    Pause-IfInteractive
     exit 1
 }
 
@@ -39,14 +47,14 @@ if ([string]::IsNullOrEmpty($NssmPath)) {
 if (-not (Test-Path $NssmPath)) {
     Write-Host "ERRO: NSSM não encontrado em: $NssmPath" -ForegroundColor Red
     Write-Host "Verifique se o aplicativo foi instalado corretamente." -ForegroundColor Yellow
-    Read-Host "Pressione Enter para sair"
+    Pause-IfInteractive
     exit 1
 }
 
 # Verificar se o executável existe
 if (-not (Test-Path $AppPath)) {
     Write-Host "ERRO: Executável não encontrado em: $AppPath" -ForegroundColor Red
-    Read-Host "Pressione Enter para sair"
+    Pause-IfInteractive
     exit 1
 }
 
@@ -68,7 +76,7 @@ Write-Host "Instalando serviço..." -ForegroundColor Green
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERRO: Falha ao instalar serviço!" -ForegroundColor Red
-    Read-Host "Pressione Enter para sair"
+    Pause-IfInteractive
     exit 1
 }
 
@@ -82,7 +90,7 @@ function Set-NssmCritical {
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERRO CRÍTICO: falha ao configurar NSSM $Key (exit $LASTEXITCODE). Abortando." -ForegroundColor Red
         & $NssmPath remove $ServiceName confirm | Out-Null
-        Read-Host "Pressione Enter para sair"
+        Pause-IfInteractive
         exit 1
     }
 }
@@ -117,6 +125,7 @@ Set-NssmCritical -Key "AppStderr" -ExtraArgs @("$logPath\service_stderr.log")
 
 # Configurar auto-restart em caso de crash
 & $NssmPath set $ServiceName AppExit Default Restart
+& $NssmPath set $ServiceName AppExit 77 Exit
 & $NssmPath set $ServiceName AppRestartDelay 60000
 
 # Configurar usuário do serviço
@@ -145,7 +154,7 @@ $verifyService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if (-not $verifyService) {
     Write-Host "ERRO: Serviço '$ServiceName' não encontrado após instalação!" -ForegroundColor Red
     Write-Host "Verifique o log do NSSM e tente novamente." -ForegroundColor Yellow
-    Read-Host "Pressione Enter para sair"
+    Pause-IfInteractive
     exit 1
 }
 
@@ -169,4 +178,4 @@ Write-Host "Ou use o Gerenciador de Serviços do Windows (services.msc)" -Foregr
 Write-Host ""
 Write-Host "Logs do serviço estão em: $logPath" -ForegroundColor Cyan
 Write-Host ""
-Read-Host "Pressione Enter para sair"
+Pause-IfInteractive

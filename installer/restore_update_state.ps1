@@ -165,6 +165,7 @@ if ($serviceExists) {
         (Get-ConfigValue -Config $serviceConfig -Name "AppStderr" -Default "C:\ProgramData\BackupDatabase\logs\service_stderr.log")
     )
     Set-NssmValue -Arguments @("set", $ServiceName, "AppExit", "Default", "Restart")
+    Set-NssmValue -Arguments @("set", $ServiceName, "AppExit", "77", "Exit")
     Set-NssmValue -Arguments @(
         "set",
         $ServiceName,

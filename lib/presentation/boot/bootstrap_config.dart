@@ -52,9 +52,11 @@ class BootstrapConfigResolver {
 
     return BootstrapConfig(
       appMode: appMode,
-      singleInstanceEnabled: SingleInstanceConfig.isEnabledFromEnvValue(
-        envValues['SINGLE_INSTANCE_ENABLED'],
-      ),
+      singleInstanceEnabled:
+          !isDebugMode ||
+          SingleInstanceConfig.isEnabledFromEnvValue(
+            envValues['SINGLE_INSTANCE_ENABLED'],
+          ),
       uiSingleInstanceLockFallbackMode:
           SingleInstanceConfig.lockFallbackModeFromEnvValue(
             envValues['SINGLE_INSTANCE_LOCK_FALLBACK_MODE'],

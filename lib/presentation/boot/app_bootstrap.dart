@@ -12,12 +12,11 @@ import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
 import 'package:backup_database/domain/services/i_remote_staging_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
-import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_socket_server_lifecycle.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
-import 'package:backup_database/domain/services/i_windows_message_box.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
+import 'package:backup_database/infrastructure/external/system/single_instance_ipc_client.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
@@ -414,8 +413,6 @@ class AppBootstrap {
       'Modo do aplicativo: ${bootstrapConfig.appMode.name}',
     );
 
-    await _dependencies.environment.setupServiceLocator();
-    _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
     _dependencies.runtime.logInfo(
       '[main] singleInstanceLockFallbackUi='
       '${bootstrapConfig.uiSingleInstanceLockFallbackMode.name}',
@@ -436,6 +433,9 @@ class AppBootstrap {
         'Single instance check desabilitado via configuracao',
       );
     }
+
+    await _dependencies.environment.setupServiceLocator();
+    _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
 
     try {
       await _dependencies.uiServices.initializeApp(
@@ -496,13 +496,24 @@ class AppBootstrap {
     LaunchBootstrapContext bootstrapContext,
   ) async {
     final singleInstanceChecker = SingleInstanceChecker(
-      singleInstanceService: service_locator.getIt<ISingleInstanceService>(),
-      ipcClient: service_locator.getIt<ISingleInstanceIpcClient>(),
-      messageBox: service_locator.getIt<IWindowsMessageBox>(),
+      singleInstanceService: SingleInstanceService(),
+      ipcClient: SingleInstanceIpcClient(),
+      messageBox: const WindowsMessageBox(),
       launchOrigin: bootstrapContext.launchOrigin,
+      scheduledScheduleId: _getScheduleIdFromArgs(bootstrapContext.rawArgs),
+      exitProcess: exit,
     );
 
     return singleInstanceChecker.checkAndHandleSecondInstance();
+  }
+
+  static String? _getScheduleIdFromArgs(List<String> args) {
+    for (final arg in args) {
+      if (arg.startsWith('--schedule-id=')) {
+        return arg.substring('--schedule-id='.length);
+      }
+    }
+    return null;
   }
 
   static void _defaultCheckOsCompatibility() {
@@ -608,6 +619,7 @@ class AppBootstrap {
       final singleInstanceService = service_locator
           .getIt<ISingleInstanceService>();
       await singleInstanceService.startIpcServer(
+        role: SingleInstanceConfig.ipcInstanceRoleUi,
         onShowWindow: () async {
           LoggerService.info(
             'Recebido comando SHOW_WINDOW via IPC de outra instancia',
@@ -626,6 +638,7 @@ class AppBootstrap {
             );
           }
         },
+        onRunSchedule: ScheduledBackupExecutor.execute,
       );
       LoggerService.info('IPC Server inicializado e pronto');
     } on Object catch (e) {

@@ -589,6 +589,7 @@ class WindowsServiceService implements IWindowsServiceService {
       ['set', _serviceName, 'AppStdout', '$logPath\\service_stdout.log'],
       ['set', _serviceName, 'AppStderr', '$logPath\\service_stderr.log'],
       ['set', _serviceName, 'AppExit', 'Default', 'Restart'],
+      ['set', _serviceName, 'AppExit', '77', 'Exit'],
       ['set', _serviceName, 'AppRestartDelay', '60000'],
     ];
 
@@ -1400,6 +1401,7 @@ try {
   & \$nssmPath set $_serviceName Description "$_description" | Out-Null
   & \$nssmPath set $_serviceName Start SERVICE_AUTO_START | Out-Null
   & \$nssmPath set $_serviceName AppExit Default Restart | Out-Null
+  & \$nssmPath set $_serviceName AppExit 77 Exit | Out-Null
   & \$nssmPath set $_serviceName AppRestartDelay 60000 | Out-Null
   if (\$serviceUser -ne '' -and \$servicePassword -ne '') {
     & \$nssmPath set $_serviceName ObjectName \$serviceUser \$servicePassword | Out-Null

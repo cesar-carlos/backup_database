@@ -3,18 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('UI and Windows service instance contract', () {
-    test('should use distinct mutex names for UI and service', () {
+    test('should use the same global mutex for UI and service', () {
       expect(
         SingleInstanceConfig.uiMutexName,
-        isNot(equals(SingleInstanceConfig.serviceMutexName)),
-      );
-      expect(
-        SingleInstanceConfig.uiMutexName,
-        contains('UIMutex'),
+        equals(SingleInstanceConfig.instanceMutexName),
       );
       expect(
         SingleInstanceConfig.serviceMutexName,
-        contains('ServiceMutex'),
+        equals(SingleInstanceConfig.instanceMutexName),
+      );
+      expect(
+        SingleInstanceConfig.instanceMutexName,
+        contains('InstanceMutex'),
       );
     });
 

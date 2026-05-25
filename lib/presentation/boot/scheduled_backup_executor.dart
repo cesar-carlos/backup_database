@@ -19,6 +19,12 @@ abstract class ScheduledBackupExitCode {
 
 class ScheduledBackupExecutor {
   static Future<void> executeAndExit(String scheduleId) async {
+    final exitCode = await execute(scheduleId);
+    await AppCleanup.cleanup();
+    exit(exitCode);
+  }
+
+  static Future<int> execute(String scheduleId) async {
     LoggerService.info('Executando backup agendado: $scheduleId');
 
     if (!UuidValidator.isValid(scheduleId)) {
@@ -26,8 +32,7 @@ class ScheduledBackupExecutor {
         'scheduleId inválido recebido em --schedule-id="$scheduleId"; '
         'esperado um UUID v1-v5.',
       );
-      await AppCleanup.cleanup();
-      exit(ScheduledBackupExitCode.invalidScheduleId);
+      return ScheduledBackupExitCode.invalidScheduleId;
     }
 
     var exitCode = ScheduledBackupExitCode.success;
@@ -43,7 +48,6 @@ class ScheduledBackupExecutor {
       exitCode = ScheduledBackupExitCode.genericFailure;
     }
 
-    await AppCleanup.cleanup();
-    exit(exitCode);
+    return exitCode;
   }
 }

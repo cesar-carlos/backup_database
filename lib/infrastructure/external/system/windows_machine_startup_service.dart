@@ -11,7 +11,10 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
   static const String _fullTaskPath = machineLogonStartupTaskPath;
   static const String _hkcuRunKey =
       r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
+  static const String _hklmRunKey =
+      r'HKLM\Software\Microsoft\Windows\CurrentVersion\Run';
   static const String _runValueName = 'BackupDatabase';
+  static const String _legacyRunValueName = 'Backup Database';
 
   @override
   Future<WindowsMachineStartupInspection> inspect() async {
@@ -56,7 +59,7 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
       return const WindowsMachineStartupOutcome(ok: true);
     }
 
-    await _removeHkcuRun();
+    await _removeLegacyRunEntries();
     await _deleteScheduledTask();
 
     if (!enabled) {
@@ -111,17 +114,23 @@ class WindowsMachineStartupService implements IWindowsMachineStartupService {
     }
   }
 
-  Future<void> _removeHkcuRun() async {
+  Future<void> _removeLegacyRunEntries() async {
+    await _removeRunValue(_hkcuRunKey, _runValueName);
+    await _removeRunValue(_hkcuRunKey, _legacyRunValueName);
+    await _removeRunValue(_hklmRunKey, _legacyRunValueName);
+  }
+
+  Future<void> _removeRunValue(String key, String valueName) async {
     final result = await Process.run('reg', [
       'delete',
-      _hkcuRunKey,
+      key,
       '/v',
-      _runValueName,
+      valueName,
       '/f',
     ]);
     if (result.exitCode != 0 && result.exitCode != 1) {
       LoggerService.debug(
-        'reg delete Run/BackupDatabase: exit=${result.exitCode} '
+        'reg delete $key/$valueName: exit=${result.exitCode} '
         'stderr=${result.stderr}',
       );
     }

@@ -18,9 +18,15 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_socket_server_lifecycle.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
+import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
+import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
 import 'package:backup_database/presentation/boot/socket_server_bootstrap.dart';
 import 'package:flutter/foundation.dart';
+
+abstract class ServiceModeExitCode {
+  static const int lockDenied = 77;
+}
 
 class ServiceModeInitializer {
   ServiceModeInitializer._();
@@ -47,7 +53,7 @@ class ServiceModeInitializer {
         '${SingleInstanceConfig.serviceMutexName.split(r'\').last} '
         'coexists_with_ui=independent_mutex',
       );
-      const totalSteps = 10;
+      const totalSteps = 11;
 
       await _bootstrapStep(
         step: 1,
@@ -81,29 +87,30 @@ class ServiceModeInitializer {
       await _bootstrapStep(
         step: 4,
         totalSteps: totalSteps,
-        label: 'Configurando dependencias (DI)',
-        action: service_locator.setupServiceLocatorForServiceMode,
+        label: 'Verificando single instance global',
+        action: () async {
+          singleInstanceService = SingleInstanceService();
+          final isFirstServiceInstance = await singleInstanceService!
+              .checkAndLock(isServiceMode: true);
+          if (!isFirstServiceInstance) {
+            LoggerService.warning(
+              'Outra instancia do aplicativo ja esta em execucao. '
+              'Encerrando servico.',
+            );
+            await _appendBootstrapLog(
+              'step 4/$totalSteps: global instance lock denied, exiting '
+              '${ServiceModeExitCode.lockDenied}',
+            );
+            exit(ServiceModeExitCode.lockDenied);
+          }
+        },
       );
 
       await _bootstrapStep(
         step: 5,
         totalSteps: totalSteps,
-        label: 'Verificando single instance',
-        action: () async {
-          singleInstanceService = service_locator
-              .getIt<ISingleInstanceService>();
-          final isFirstServiceInstance = await singleInstanceService!
-              .checkAndLock(isServiceMode: true);
-          if (!isFirstServiceInstance) {
-            LoggerService.warning(
-              'Outra instancia do servico ja esta em execucao. Encerrando.',
-            );
-            await _appendBootstrapLog(
-              'step 5/$totalSteps: existing service instance found, exiting 0',
-            );
-            exit(0);
-          }
-        },
+        label: 'Configurando dependencias (DI)',
+        action: service_locator.setupServiceLocatorForServiceMode,
       );
 
       await _bootstrapStep(
@@ -121,6 +128,18 @@ class ServiceModeInitializer {
       await _bootstrapStep(
         step: 7,
         totalSteps: totalSteps,
+        label: 'Inicializando IPC do processo dono do lock',
+        action: () async {
+          await singleInstanceService!.startIpcServer(
+            role: SingleInstanceConfig.ipcInstanceRoleService,
+            onRunSchedule: ScheduledBackupExecutor.execute,
+          );
+        },
+      );
+
+      await _bootstrapStep(
+        step: 8,
+        totalSteps: totalSteps,
         label: 'Inicializando Event Log',
         action: () async {
           await eventLog!.initialize();
@@ -129,7 +148,7 @@ class ServiceModeInitializer {
       );
 
       await _bootstrapStep(
-        step: 8,
+        step: 9,
         totalSteps: totalSteps,
         label: 'Configurando shutdown handler',
         action: () async {
@@ -146,7 +165,7 @@ class ServiceModeInitializer {
       );
 
       await _bootstrapStep(
-        step: 9,
+        step: 10,
         totalSteps: totalSteps,
         label:
             'Iniciando scheduler, health, fila persistida e limpeza de staging',
@@ -172,7 +191,7 @@ class ServiceModeInitializer {
       );
 
       await _bootstrapStep(
-        step: 10,
+        step: 11,
         totalSteps: totalSteps,
         label: 'Inicializando auto update do servico',
         action: () async {

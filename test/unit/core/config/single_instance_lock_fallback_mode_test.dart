@@ -37,4 +37,57 @@ void main() {
       );
     });
   });
+
+  group('SingleInstanceConfig IPC timeouts', () {
+    setUp(TestWidgetsFlutterBinding.ensureInitialized);
+
+    test('should use defaults when timeout env values are absent', () {
+      dotenv.loadFromString(envString: 'OTHER_KEY=value');
+
+      expect(
+        SingleInstanceConfig.ipcConnectTimeout,
+        SingleInstanceConfig.defaultIpcConnectTimeout,
+      );
+      expect(
+        SingleInstanceConfig.scheduledDelegationTimeout,
+        SingleInstanceConfig.defaultScheduledDelegationTimeout,
+      );
+    });
+
+    test('should parse valid timeout env values', () {
+      dotenv.loadFromString(
+        envString: [
+          'SINGLE_INSTANCE_IPC_CONNECT_TIMEOUT_SECONDS=7',
+          'SCHEDULED_DELEGATION_TIMEOUT_SECONDS=42',
+        ].join('\n'),
+      );
+
+      expect(
+        SingleInstanceConfig.ipcConnectTimeout,
+        const Duration(seconds: 7),
+      );
+      expect(
+        SingleInstanceConfig.scheduledDelegationTimeout,
+        const Duration(seconds: 42),
+      );
+    });
+
+    test('should fallback for invalid timeout env values', () {
+      dotenv.loadFromString(
+        envString: [
+          'SINGLE_INSTANCE_IPC_CONNECT_TIMEOUT_SECONDS=0',
+          'SCHEDULED_DELEGATION_TIMEOUT_SECONDS=invalid',
+        ].join('\n'),
+      );
+
+      expect(
+        SingleInstanceConfig.ipcConnectTimeout,
+        SingleInstanceConfig.defaultIpcConnectTimeout,
+      );
+      expect(
+        SingleInstanceConfig.scheduledDelegationTimeout,
+        SingleInstanceConfig.defaultScheduledDelegationTimeout,
+      );
+    });
+  });
 }

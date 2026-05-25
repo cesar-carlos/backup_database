@@ -43,6 +43,19 @@ void main() {
       expect(config.appMode, AppMode.client);
     });
 
+    test('ignores disabled single instance flag outside debug mode', () {
+      final resolver = BootstrapConfigResolver(
+        environment: const <String, String>{
+          'SINGLE_INSTANCE_ENABLED': 'false',
+        },
+        isDebugMode: false,
+      );
+
+      final config = resolver.resolve(rawArgs: const <String>[]);
+
+      expect(config.singleInstanceEnabled, isTrue);
+    });
+
     test('defaults invalid UI scheduler fallback to failOpen and warns', () {
       final warnings = <String>[];
       final resolver = BootstrapConfigResolver(

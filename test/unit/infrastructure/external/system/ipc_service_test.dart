@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -64,7 +65,7 @@ void main() {
       }
     });
 
-    test('should return false when V1 PONG has wrong role', () async {
+    test('should return true when V1 PONG has service role', () async {
       final server = await _bindEphemeralIpcMockServer();
 
       server.listen((Socket socket) {
@@ -75,7 +76,7 @@ void main() {
               utf8.encode(
                 '${SingleInstanceConfig.ipcPongLinePrefix}'
                 'v=${SingleInstanceConfig.ipcProtocolVersion}|'
-                'role=service|pid=1',
+                'role=${SingleInstanceConfig.ipcInstanceRoleService}|pid=1',
               ),
             );
             await socket.flush();
@@ -86,7 +87,7 @@ void main() {
       try {
         final isRunning = await IpcService.checkServerRunning();
 
-        expect(isRunning, isFalse);
+        expect(isRunning, isTrue);
       } finally {
         await server.close();
       }
@@ -146,6 +147,72 @@ void main() {
           for (final d in decoys) {
             await d.close();
           }
+        }
+      },
+    );
+  });
+
+  group('IpcService.getExistingInstanceInfo', () {
+    test('should parse V1 PONG role and schedule capability', () async {
+      final server = await _bindEphemeralIpcMockServer();
+
+      server.listen((Socket socket) {
+        socket.listen((List<int> data) async {
+          final message = utf8.decode(data).trim();
+          if (message == SingleInstanceConfig.ipcPingMessage) {
+            socket.add(
+              utf8.encode(
+                '${SingleInstanceConfig.ipcPongLinePrefix}'
+                'v=${SingleInstanceConfig.ipcProtocolVersion}|'
+                'role=${SingleInstanceConfig.ipcInstanceRoleService}|'
+                'canRunSchedule=true|pid=1',
+              ),
+            );
+            await socket.flush();
+          }
+        });
+      });
+
+      try {
+        final info = await IpcService.getExistingInstanceInfo();
+
+        expect(info, isNotNull);
+        expect(info!.role, SingleInstanceConfig.ipcInstanceRoleService);
+        expect(info.canRunSchedule, isTrue);
+      } finally {
+        await server.close();
+      }
+    });
+
+    test(
+      'should default schedule capability to false for legacy V1 PONG',
+      () async {
+        final server = await _bindEphemeralIpcMockServer();
+
+        server.listen((Socket socket) {
+          socket.listen((List<int> data) async {
+            final message = utf8.decode(data).trim();
+            if (message == SingleInstanceConfig.ipcPingMessage) {
+              socket.add(
+                utf8.encode(
+                  '${SingleInstanceConfig.ipcPongLinePrefix}'
+                  'v=${SingleInstanceConfig.ipcProtocolVersion}|'
+                  'role=${SingleInstanceConfig.ipcInstanceRoleUi}|pid=1',
+                ),
+              );
+              await socket.flush();
+            }
+          });
+        });
+
+        try {
+          final info = await IpcService.getExistingInstanceInfo();
+
+          expect(info, isNotNull);
+          expect(info!.role, SingleInstanceConfig.ipcInstanceRoleUi);
+          expect(info.canRunSchedule, isFalse);
+        } finally {
+          await server.close();
         }
       },
     );
@@ -263,7 +330,7 @@ void main() {
       }
     });
 
-    test('should return null when V1 USER_INFO has wrong role', () async {
+    test('should parse V1 USER_INFO with service role', () async {
       final server = await _bindEphemeralIpcMockServer();
 
       server.listen((Socket socket) {
@@ -275,7 +342,8 @@ void main() {
               utf8.encode(
                 '${SingleInstanceConfig.ipcUserInfoLinePrefix}'
                 'v=${SingleInstanceConfig.ipcProtocolVersion}|'
-                'role=service|pid=1|u64=$u64',
+                'role=${SingleInstanceConfig.ipcInstanceRoleService}|'
+                'pid=1|u64=$u64',
               ),
             );
             await socket.flush();
@@ -285,7 +353,7 @@ void main() {
 
       try {
         final result = await IpcService.getExistingInstanceUser();
-        expect(result, isNull);
+        expect(result, equals('test_user'));
       } finally {
         await server.close();
       }
@@ -333,6 +401,7 @@ void main() {
       final ipc = IpcService();
       var showCount = 0;
       final started = await ipc.startServer(
+        role: SingleInstanceConfig.ipcInstanceRoleUi,
         onShowWindow: () {
           showCount++;
         },
@@ -368,6 +437,125 @@ void main() {
         await ipc.stop();
       }
     });
+
+    test('should delegate RUN_SCHEDULE and return exit code', () async {
+      final reserved = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final listenEphemeralPort = reserved.port;
+      await reserved.close();
+      IpcService.ipcPortsOverrideForTests = [listenEphemeralPort];
+
+      final ipc = IpcService();
+      final started = await ipc.startServer(
+        role: SingleInstanceConfig.ipcInstanceRoleService,
+        onRunSchedule: (scheduleId) async {
+          expect(scheduleId, '00000000-0000-4000-8000-000000000001');
+          return 0;
+        },
+      );
+      expect(started, isTrue);
+
+      try {
+        final result = await IpcService.delegateScheduledExecution(
+          '00000000-0000-4000-8000-000000000001',
+        );
+
+        expect(result, isNotNull);
+        expect(result!.exitCode, 0);
+        expect(result.message, SingleInstanceConfig.ipcRunScheduleMessageOk);
+      } finally {
+        await ipc.stop();
+      }
+    });
+
+    test('should return capability in PONG from real server', () async {
+      final reserved = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final listenEphemeralPort = reserved.port;
+      await reserved.close();
+      IpcService.ipcPortsOverrideForTests = [listenEphemeralPort];
+
+      final ipc = IpcService();
+      final started = await ipc.startServer(
+        role: SingleInstanceConfig.ipcInstanceRoleService,
+        onRunSchedule: (_) async => 0,
+      );
+      expect(started, isTrue);
+
+      try {
+        final info = await IpcService.getExistingInstanceInfo();
+
+        expect(info, isNotNull);
+        expect(info!.role, SingleInstanceConfig.ipcInstanceRoleService);
+        expect(info.canRunSchedule, isTrue);
+      } finally {
+        await ipc.stop();
+      }
+    });
+
+    test(
+      'should return owner cannot run schedule when server lacks handler',
+      () async {
+        final reserved = await ServerSocket.bind(
+          InternetAddress.loopbackIPv4,
+          0,
+        );
+        final listenEphemeralPort = reserved.port;
+        await reserved.close();
+        IpcService.ipcPortsOverrideForTests = [listenEphemeralPort];
+
+        final ipc = IpcService();
+        final started = await ipc.startServer(
+          role: SingleInstanceConfig.ipcInstanceRoleUi,
+        );
+        expect(started, isTrue);
+
+        try {
+          final result = await IpcService.delegateScheduledExecution(
+            '00000000-0000-4000-8000-000000000001',
+          );
+
+          expect(result, isNotNull);
+          expect(result!.exitCode, 1);
+          expect(
+            result.message,
+            SingleInstanceConfig.ipcRunScheduleMessageOwnerCannotRunSchedule,
+          );
+        } finally {
+          await ipc.stop();
+        }
+      },
+    );
+
+    test(
+      'should return timeout result when RUN_SCHEDULE owner does not reply',
+      () async {
+        dotenv.loadFromString(
+          envString: 'SCHEDULED_DELEGATION_TIMEOUT_SECONDS=1',
+        );
+        final server = await _bindEphemeralIpcMockServer();
+
+        server.listen((Socket socket) {
+          socket.listen((List<int> _) {
+            // Intentionally keep the socket open without responding.
+          });
+        });
+
+        try {
+          final result = await IpcService.delegateScheduledExecution(
+            '00000000-0000-4000-8000-000000000001',
+          );
+
+          expect(result, isNotNull);
+          expect(result!.exitCode, 1);
+          expect(
+            result.message,
+            SingleInstanceConfig.ipcRunScheduleMessageDelegationTimeout,
+          );
+        } finally {
+          dotenv.loadFromString(envString: 'OTHER_KEY=value');
+          await server.close();
+        }
+      },
+    );
   });
 }
 

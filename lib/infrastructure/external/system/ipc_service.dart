@@ -6,13 +6,17 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
 import 'package:backup_database/domain/services/i_ipc_service.dart';
+import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
+import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:meta/meta.dart';
 
 class IpcService implements IIpcService {
   ServerSocket? _server;
   Function()? _onShowWindow;
+  RunScheduleIpcHandler? _onRunSchedule;
   bool _isRunning = false;
   int _currentPort = SingleInstanceConfig.ipcBasePort;
+  String _role = SingleInstanceConfig.ipcInstanceRoleUi;
 
   static int? _cachedActivePort;
   static DateTime? _cachedActivePortAt;
@@ -20,20 +24,26 @@ class IpcService implements IIpcService {
   static List<int>? _ipcPortsOverrideForTests;
 
   @override
-  Future<bool> startServer({Function()? onShowWindow}) async {
+  Future<bool> startServer({
+    required String role,
+    Function()? onShowWindow,
+    RunScheduleIpcHandler? onRunSchedule,
+  }) async {
     if (_isRunning) {
       LoggerService.debug('IPC Server ja esta rodando');
       return true;
     }
 
+    _role = _normalizeRole(role);
     _onShowWindow = onShowWindow;
+    _onRunSchedule = onRunSchedule;
 
     final portsToTry = _getPortsToTry();
 
     for (final port in portsToTry) {
       try {
         LoggerService.debug(
-          'ipc_listen_try port=$port processRole=ui',
+          'ipc_listen_try port=$port processRole=$_role',
         );
         _server = await ServerSocket.bind(
           InternetAddress.loopbackIPv4,
@@ -43,9 +53,10 @@ class IpcService implements IIpcService {
         _markActivePort(port);
         _isRunning = true;
 
-        LoggerService.info(
-          'IPC Server iniciado na porta $_currentPort '
-          'protocol=${SingleInstanceConfig.ipcProtocolId}',
+        LoggerService.infoWithContext(
+          'event=ipc_server_started port=$_currentPort '
+          'protocol=${SingleInstanceConfig.ipcProtocolId} ownerRole=$_role '
+          'canRunSchedule=$_canRunSchedule',
         );
 
         _server!.listen(
@@ -93,10 +104,38 @@ class IpcService implements IIpcService {
 
           if (message == SingleInstanceConfig.showWindowCommand ||
               message == SingleInstanceConfig.ipcShowWindowMessage) {
-            LoggerService.info(
-              'ipc_cmd SHOW_WINDOW processRole=ui',
+            LoggerService.infoWithContext(
+              'event=ipc_show_window_received ownerRole=$_role',
             );
             _onShowWindow?.call();
+            return;
+          }
+
+          if (message.startsWith(
+            '${SingleInstanceConfig.ipcProtocolId}|'
+            '${SingleInstanceConfig.ipcRunScheduleCommand}|',
+          )) {
+            LoggerService.infoWithContext(
+              'event=ipc_run_schedule_received ownerRole=$_role '
+              'canRunSchedule=$_canRunSchedule',
+            );
+            final scheduleId = _parseRunScheduleRequest(message);
+            final result = scheduleId == null
+                ? const SingleInstanceScheduledDelegationResult(
+                    exitCode: 2,
+                    message: SingleInstanceConfig
+                        .ipcRunScheduleMessageInvalidScheduleId,
+                  )
+                : await _runDelegatedSchedule(scheduleId);
+            socket.add(
+              utf8.encode(
+                _buildRunScheduleResultLine(
+                  exitCode: result.exitCode,
+                  message: result.message,
+                ),
+              ),
+            );
+            await socket.flush();
             return;
           }
 
@@ -149,7 +188,7 @@ class IpcService implements IIpcService {
         socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
           port,
-          timeout: SingleInstanceConfig.connectionTimeout,
+          timeout: SingleInstanceConfig.ipcConnectTimeout,
         );
 
         socket.add(utf8.encode(SingleInstanceConfig.ipcShowWindowMessage));
@@ -207,14 +246,14 @@ class IpcService implements IIpcService {
         socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
           port,
-          timeout: SingleInstanceConfig.connectionTimeout,
+          timeout: SingleInstanceConfig.ipcConnectTimeout,
         );
 
         socket.add(utf8.encode(SingleInstanceConfig.ipcGetUserInfoMessage));
         await socket.flush();
 
         final data = await socket.first.timeout(
-          SingleInstanceConfig.connectionTimeout,
+          SingleInstanceConfig.ipcConnectTimeout,
         );
         final message = utf8.decode(data).trim();
         final user = _parseUserInfoResponse(message);
@@ -233,6 +272,103 @@ class IpcService implements IIpcService {
     }
 
     LoggerService.debug('ipc_user_unresolved');
+    return null;
+  }
+
+  static Future<String?> getExistingInstanceRole() async {
+    final ownerInfo = await getExistingInstanceInfo();
+    return ownerInfo?.role;
+  }
+
+  static Future<SingleInstanceOwnerInfo?> getExistingInstanceInfo() async {
+    final portsToTry = _getPortsToTry();
+
+    for (final port in portsToTry) {
+      Socket? socket;
+      try {
+        socket = await Socket.connect(
+          InternetAddress.loopbackIPv4,
+          port,
+          timeout: SingleInstanceConfig.ipcConnectTimeout,
+        );
+
+        socket.add(utf8.encode(SingleInstanceConfig.ipcPingMessage));
+        await socket.flush();
+
+        final data = await socket.first.timeout(
+          SingleInstanceConfig.ipcConnectTimeout,
+        );
+        final response = utf8.decode(data).trim();
+        final ownerInfo = _parseOwnerInfoFromV1Pong(response);
+        if (ownerInfo != null) {
+          _markActivePort(port);
+          LoggerService.infoWithContext(
+            'event=ipc_owner_info_resolved ownerRole=${ownerInfo.role} '
+            'canRunSchedule=${ownerInfo.canRunSchedule}',
+          );
+          return ownerInfo;
+        }
+      } on Object catch (_) {
+        continue;
+      } finally {
+        await _closeClientResources(socket: socket);
+      }
+    }
+
+    LoggerService.debug('ipc_owner_info_unresolved');
+    return null;
+  }
+
+  static Future<SingleInstanceScheduledDelegationResult?>
+  delegateScheduledExecution(String scheduleId) async {
+    final portsToTry = _getPortsToTry();
+
+    for (final port in portsToTry) {
+      Socket? socket;
+      try {
+        socket = await Socket.connect(
+          InternetAddress.loopbackIPv4,
+          port,
+          timeout: SingleInstanceConfig.ipcConnectTimeout,
+        );
+
+        socket.add(
+          utf8.encode(SingleInstanceConfig.ipcRunScheduleMessage(scheduleId)),
+        );
+        await socket.flush();
+
+        final data = await socket.first.timeout(
+          SingleInstanceConfig.scheduledDelegationTimeout,
+        );
+        final response = utf8.decode(data).trim();
+        final result = _parseRunScheduleResult(response);
+        if (result != null) {
+          _markActivePort(port);
+          LoggerService.infoWithContext(
+            'event=ipc_run_schedule_result port=$port '
+            'exitCode=${result.exitCode} message=${result.message ?? ""}',
+            scheduleId: scheduleId,
+          );
+          return result;
+        }
+      } on TimeoutException {
+        LoggerService.warning(
+          'event=ipc_run_schedule_timeout port=$port',
+        );
+        return const SingleInstanceScheduledDelegationResult(
+          exitCode: 1,
+          message: SingleInstanceConfig.ipcRunScheduleMessageDelegationTimeout,
+        );
+      } on Object catch (e) {
+        LoggerService.debug('ipc_run_schedule_miss port=$port error=$e');
+      } finally {
+        await _closeClientResources(socket: socket);
+      }
+    }
+
+    LoggerService.warning(
+      'ipc_run_schedule_failed ports_tried=${portsToTry.length}',
+    );
     return null;
   }
 
@@ -367,18 +503,113 @@ class IpcService implements IIpcService {
     }
   }
 
-  static String _buildV1PongLine() {
+  bool get _canRunSchedule => _onRunSchedule != null;
+
+  Future<SingleInstanceScheduledDelegationResult> _runDelegatedSchedule(
+    String scheduleId,
+  ) async {
+    final handler = _onRunSchedule;
+    if (handler == null) {
+      LoggerService.warning(
+        'event=ipc_run_schedule_no_handler ownerRole=$_role',
+      );
+      return const SingleInstanceScheduledDelegationResult(
+        exitCode: 1,
+        message:
+            SingleInstanceConfig.ipcRunScheduleMessageOwnerCannotRunSchedule,
+      );
+    }
+
+    try {
+      final exitCode = await handler(scheduleId);
+      return SingleInstanceScheduledDelegationResult(
+        exitCode: exitCode,
+        message: exitCode == 0
+            ? SingleInstanceConfig.ipcRunScheduleMessageOk
+            : SingleInstanceConfig.ipcRunScheduleMessageExecutionFailed,
+      );
+    } on Object catch (e, s) {
+      LoggerService.error('ipc_run_schedule_handler_failed', e, s);
+      return const SingleInstanceScheduledDelegationResult(
+        exitCode: 1,
+        message: SingleInstanceConfig.ipcRunScheduleMessageExecutionFailed,
+      );
+    }
+  }
+
+  static String _normalizeRole(String role) {
+    final normalized = role.trim().toLowerCase();
+    if (normalized == SingleInstanceConfig.ipcInstanceRoleService) {
+      return SingleInstanceConfig.ipcInstanceRoleService;
+    }
+    return SingleInstanceConfig.ipcInstanceRoleUi;
+  }
+
+  static String? _parseRunScheduleRequest(String message) {
+    final match = RegExp(r'(?:^|\|)scheduleId=([^|\s]+)').firstMatch(message);
+    return match?.group(1);
+  }
+
+  static String _buildRunScheduleResultLine({
+    required int exitCode,
+    String? message,
+  }) {
+    final buffer =
+        StringBuffer(SingleInstanceConfig.ipcRunScheduleResultLinePrefix)
+          ..write('v=${SingleInstanceConfig.ipcProtocolVersion}|')
+          ..write('exitCode=$exitCode');
+    if (message != null && message.isNotEmpty) {
+      buffer.write('|message64=${base64Url.encode(utf8.encode(message))}');
+    }
+    return buffer.toString();
+  }
+
+  static SingleInstanceScheduledDelegationResult? _parseRunScheduleResult(
+    String message,
+  ) {
+    if (!message.startsWith(
+      SingleInstanceConfig.ipcRunScheduleResultLinePrefix,
+    )) {
+      return null;
+    }
+    if (!message.contains('v=${SingleInstanceConfig.ipcProtocolVersion}')) {
+      return null;
+    }
+    final exitMatch = RegExp(r'(?:^|\|)exitCode=(-?\d+)').firstMatch(message);
+    final exitCode = int.tryParse(exitMatch?.group(1) ?? '');
+    if (exitCode == null) {
+      return null;
+    }
+    String? decodedMessage;
+    final messageMatch = RegExp(r'(?:^|\|)message64=([^|\s]+)').firstMatch(
+      message,
+    );
+    if (messageMatch != null) {
+      try {
+        decodedMessage = utf8.decode(base64Url.decode(messageMatch.group(1)!));
+      } on Object {
+        decodedMessage = null;
+      }
+    }
+    return SingleInstanceScheduledDelegationResult(
+      exitCode: exitCode,
+      message: decodedMessage,
+    );
+  }
+
+  String _buildV1PongLine() {
     return '${SingleInstanceConfig.ipcPongLinePrefix}'
         'v=${SingleInstanceConfig.ipcProtocolVersion}|'
-        'role=${SingleInstanceConfig.ipcInstanceRoleUi}|'
+        'role=$_role|'
+        'canRunSchedule=$_canRunSchedule|'
         'pid=$pid';
   }
 
-  static String _buildV1UserInfoLine(String username) {
+  String _buildV1UserInfoLine(String username) {
     final u64 = base64Url.encode(utf8.encode(username));
     return '${SingleInstanceConfig.ipcUserInfoLinePrefix}'
         'v=${SingleInstanceConfig.ipcProtocolVersion}|'
-        'role=${SingleInstanceConfig.ipcInstanceRoleUi}|'
+        'role=$_role|'
         'pid=$pid|'
         'u64=$u64';
   }
@@ -390,7 +621,8 @@ class IpcService implements IIpcService {
     if (!response.contains('v=${SingleInstanceConfig.ipcProtocolVersion}')) {
       return false;
     }
-    if (!response.contains('role=${SingleInstanceConfig.ipcInstanceRoleUi}')) {
+    final role = _parseRoleFromV1Line(response);
+    if (role == null) {
       return false;
     }
     if (!response.contains('pid=')) {
@@ -399,12 +631,30 @@ class IpcService implements IIpcService {
     return true;
   }
 
+  static SingleInstanceOwnerInfo? _parseOwnerInfoFromV1Pong(String response) {
+    if (!_isValidV1Pong(response)) {
+      return null;
+    }
+    final role = _parseRoleFromV1Line(response);
+    if (role == null) {
+      return null;
+    }
+    return SingleInstanceOwnerInfo(
+      role: role,
+      canRunSchedule: _parseBoolField(
+        response,
+        'canRunSchedule',
+        defaultValue: false,
+      ),
+    );
+  }
+
   static String? _parseUserInfoResponse(String message) {
     if (message.startsWith(SingleInstanceConfig.ipcUserInfoLinePrefix)) {
       if (!message.contains('v=${SingleInstanceConfig.ipcProtocolVersion}')) {
         return null;
       }
-      if (!message.contains('role=${SingleInstanceConfig.ipcInstanceRoleUi}')) {
+      if (_parseRoleFromV1Line(message) == null) {
         return null;
       }
       final match = RegExp(r'u64=([^|\s]+)').firstMatch(message);
@@ -425,5 +675,33 @@ class IpcService implements IIpcService {
     }
 
     return null;
+  }
+
+  static String? _parseRoleFromV1Line(String message) {
+    final match = RegExp(r'(?:^|\|)role=([^|\s]+)').firstMatch(message);
+    final role = match?.group(1);
+    if (role == SingleInstanceConfig.ipcInstanceRoleUi ||
+        role == SingleInstanceConfig.ipcInstanceRoleService) {
+      return role;
+    }
+    return null;
+  }
+
+  static bool _parseBoolField(
+    String message,
+    String fieldName, {
+    required bool defaultValue,
+  }) {
+    final match = RegExp(
+      '(?:^|\\|)$fieldName=([^|\\s]+)',
+    ).firstMatch(message);
+    final value = match?.group(1)?.toLowerCase();
+    if (value == 'true') {
+      return true;
+    }
+    if (value == 'false') {
+      return false;
+    }
+    return defaultValue;
   }
 }

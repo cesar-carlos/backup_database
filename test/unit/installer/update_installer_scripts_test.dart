@@ -5,6 +5,66 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
+  group('installer static startup contract', () {
+    test(
+      'setup.iss does not create HKLM Run entry and cleans legacy entries',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(setup, isNot(contains('[Registry]')));
+        expect(
+          setup,
+          contains(
+            r'delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v "{#MyAppName}" /f',
+          ),
+        );
+        expect(
+          setup,
+          contains(
+            r'delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "BackupDatabase" /f',
+          ),
+        );
+        expect(
+          setup,
+          contains(
+            r'delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "{#MyAppName}" /f',
+          ),
+        );
+      },
+    );
+
+    test(
+      'setup.iss configures client task and server service startup',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(setup, contains('ShouldLaunchPostInstall'));
+        expect(setup, contains('--minimized --launch-origin=windows-startup'));
+        expect(setup, contains('InstallAndStartServiceFromInstaller'));
+        expect(setup, contains('-NonInteractive'));
+        expect(setup, contains('sc.exe'));
+        expect(setup, contains('start BackupDatabaseService'));
+      },
+    );
+
+    test('self-hosted workflow exposes manual windows smoke suite', () async {
+      final workflow = await _repoFile(
+        p.join('.github', 'workflows', 'integration-self-hosted.yml'),
+      ).readAsString();
+
+      expect(workflow, contains('windows-smoke'));
+      expect(workflow, contains('flutter build windows --release'));
+      expect(
+        workflow,
+        contains('test/scripts/windows_single_instance_smoke.ps1'),
+      );
+    });
+  });
+
   group('installer PowerShell scripts', () {
     test(
       'merge_env preserves existing values and fills missing keys',
@@ -246,6 +306,10 @@ void main() {
           nssmLog,
           contains('set BackupDatabaseService ObjectName LocalSystem'),
         );
+        expect(
+          nssmLog,
+          contains('set BackupDatabaseService AppExit 77 Exit'),
+        );
         expect(nssmLog, contains('start BackupDatabaseService'));
         expect(await File(contextPath).exists(), isFalse);
 
@@ -317,6 +381,9 @@ void main() {
   });
 }
 
+File _repoFile(String relativePath) {
+  return File(p.join(Directory.current.path, relativePath));
+}
 
 Future<void> _deleteTempDirBestEffort(Directory directory) async {
   const maxAttempts = 8;
@@ -335,6 +402,7 @@ Future<void> _deleteTempDirBestEffort(Directory directory) async {
     }
   }
 }
+
 Future<ProcessResult> _runPowerShellScript({
   required String scriptRelativePath,
   required List<String> arguments,
