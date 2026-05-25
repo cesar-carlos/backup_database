@@ -431,6 +431,8 @@ class AutoUpdateService {
         ? configuredFeedUrl
         : null;
 
+    await _cleanupInitialArtifacts();
+
     if (!Platform.isWindows) {
       _emitSnapshot(
         AppUpdateSnapshot(
@@ -472,6 +474,10 @@ class AutoUpdateService {
       ),
     );
 
+    LoggerService.info('AutoUpdateService pronto com feed $_feedUrl');
+  }
+
+  Future<void> _cleanupInitialArtifacts() async {
     try {
       await _cleanupStaleUpdateArtifacts();
       await _cleanupStagedInstallers();
@@ -482,8 +488,6 @@ class AutoUpdateService {
         s,
       );
     }
-
-    LoggerService.info('AutoUpdateService pronto com feed $_feedUrl');
   }
 
   void startPeriodicChecks({
