@@ -380,7 +380,8 @@ class AutoUpdateService {
   /// Nome da variavel de ambiente (lida via dotenv) para sobrescrever o
   /// intervalo periodico. Valor `0` desativa o timer periodico (so on-demand).
   /// Outros valores positivos sao tratados como segundos (>=60).
-  static const String checkIntervalEnvVar = 'AUTO_UPDATE_CHECK_INTERVAL_SECONDS';
+  static const String checkIntervalEnvVar =
+      'AUTO_UPDATE_CHECK_INTERVAL_SECONDS';
 
   /// Espaco minimo (bytes) requerido em `staging/updates` antes de iniciar
   /// um download. Usamos 2x o tamanho declarado pelo appcast para acomodar
@@ -1136,10 +1137,9 @@ class AutoUpdateService {
       // Exit code dinamico: em modo servico usamos `handoffForInstaller (78)`
       // para impedir NSSM AppExit Default Restart durante a janela do setup.
       // Em modo UI nao ha NSSM envolvido, exit(0) basta.
-      final exitCode =
-          installContext.origin == AppUpdateLaunchOrigin.service
-              ? ServiceModeExitCode.handoffForInstaller
-              : 0;
+      final exitCode = installContext.origin == AppUpdateLaunchOrigin.service
+          ? ServiceModeExitCode.handoffForInstaller
+          : 0;
       _exitProcess(exitCode);
     } on AppUpdateBlockedException catch (e) {
       if (checkStopwatch.isRunning) {
@@ -1566,8 +1566,8 @@ class AutoUpdateService {
       }
       final output = result.stdout.toString();
       // `tasklist` imprime "INFO: No tasks are running..." quando nao encontra.
-      return !output.contains('No tasks are running')
-          && !output.contains('Nenhuma tarefa em execu');
+      return !output.contains('No tasks are running') &&
+          !output.contains('Nenhuma tarefa em execu');
     } on Object {
       return true;
     }

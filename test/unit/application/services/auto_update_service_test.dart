@@ -683,26 +683,19 @@ void main() {
       () async {
         final now = DateTime.utc(2026, 1, 1);
         final futureRecord = jsonEncode(<String, Object?>{
-          'schemaVersion':
-              AutoUpdateService.diagnosticsSchemaVersion + 1,
-          'timestamp': now
-              .subtract(const Duration(hours: 1))
-              .toIso8601String(),
+          'schemaVersion': AutoUpdateService.diagnosticsSchemaVersion + 1,
+          'timestamp': now.subtract(const Duration(hours: 1)).toIso8601String(),
           'source': 'manual',
           'payload': 'should-be-dropped',
         });
         final currentRecord = jsonEncode(<String, Object?>{
           'schemaVersion': AutoUpdateService.diagnosticsSchemaVersion,
-          'timestamp': now
-              .subtract(const Duration(hours: 1))
-              .toIso8601String(),
+          'timestamp': now.subtract(const Duration(hours: 1)).toIso8601String(),
           'source': 'manual',
           'payload': 'should-be-kept',
         });
         final legacyRecord = jsonEncode(<String, Object?>{
-          'timestamp': now
-              .subtract(const Duration(hours: 1))
-              .toIso8601String(),
+          'timestamp': now.subtract(const Duration(hours: 1)).toIso8601String(),
           'source': 'manual',
           'payload': 'legacy-kept',
         });
