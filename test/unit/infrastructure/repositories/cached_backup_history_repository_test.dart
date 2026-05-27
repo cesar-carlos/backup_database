@@ -7,7 +7,10 @@ import 'package:backup_database/infrastructure/repositories/cached_backup_histor
 import 'package:flutter_test/flutter_test.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-BackupHistory _history(String id, {BackupStatus status = BackupStatus.success}) {
+BackupHistory _history(
+  String id, {
+  BackupStatus status = BackupStatus.success,
+}) {
   return BackupHistory(
     id: id,
     scheduleId: 's',
@@ -51,12 +54,16 @@ class _FakeBackupHistoryRepository implements IBackupHistoryRepository {
   Future<rd.Result<void>> delete(String id) async => const rd.Success(());
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getBySchedule(String scheduleId) async {
+  Future<rd.Result<List<BackupHistory>>> getBySchedule(
+    String scheduleId,
+  ) async {
     return const rd.Success([]);
   }
 
   @override
-  Future<rd.Result<List<BackupHistory>>> getByStatus(BackupStatus status) async {
+  Future<rd.Result<List<BackupHistory>>> getByStatus(
+    BackupStatus status,
+  ) async {
     return const rd.Success([]);
   }
 
@@ -101,7 +108,9 @@ class _FakeBackupHistoryRepository implements IBackupHistoryRepository {
   }) async => rd.Success(history);
 
   @override
-  Future<rd.Result<BackupHistory>> updateIfRunning(BackupHistory history) async {
+  Future<rd.Result<BackupHistory>> updateIfRunning(
+    BackupHistory history,
+  ) async {
     return rd.Success(history);
   }
 }
@@ -141,23 +150,26 @@ void main() {
       expect(fake.getAllCalls, 2);
     });
 
-    test('returned list is immutable (mutation does not corrupt cache)', () async {
-      fake.getAllResponses
-        ..add([_history('a'), _history('b')])
-        ..add([_history('a'), _history('b'), _history('c')]);
+    test(
+      'returned list is immutable (mutation does not corrupt cache)',
+      () async {
+        fake.getAllResponses
+          ..add([_history('a'), _history('b')])
+          ..add([_history('a'), _history('b'), _history('c')]);
 
-      final first = await cached.getAll();
-      final firstList = first.getOrNull()!;
-      // Tentativa de mutação deve falhar (lista cacheada é UnmodifiableListView).
-      expect(() => firstList.add(_history('z')), throwsUnsupportedError);
+        final first = await cached.getAll();
+        final firstList = first.getOrNull()!;
+        // Tentativa de mutação deve falhar (lista cacheada é UnmodifiableListView).
+        expect(() => firstList.add(_history('z')), throwsUnsupportedError);
 
-      final second = await cached.getAll();
-      expect(
-        second.getOrNull()!.length,
-        2,
-        reason: 'cache should not have been corrupted by caller mutation',
-      );
-    });
+        final second = await cached.getAll();
+        expect(
+          second.getOrNull()!.length,
+          2,
+          reason: 'cache should not have been corrupted by caller mutation',
+        );
+      },
+    );
   });
 
   group(
