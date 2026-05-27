@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
@@ -1046,6 +1047,151 @@ void main() {
           },
           (_) => fail('Expected success'),
         );
+      },
+    );
+  });
+
+  group('SybaseBackupService - AUDIT-13', () {
+    // A.1: antes este campo era `true` (copy/paste do SQL Server, sem
+    // equivalente conceitual em Sybase). Agora `false` sinaliza "N/A"
+    // — paridade com Postgres (AUDIT-12).
+    test('BackupFlags.stopOnError = false no relatorio (achado A.1)', () async {
+      stubBackupSuccess();
+      stubDbvalidSuccess();
+
+      final fullBackupDir = Directory(
+        '${tempDir.path}/${config.databaseNameValue}',
+      );
+      await fullBackupDir.create(recursive: true);
+      await File('${fullBackupDir.path}/mydb.db').writeAsString('x' * 100);
+
+      final result = await service.executeBackup(
+        config: config,
+        context: BackupExecutionContext(
+          outputDirectory: tempDir.path,
+          scheduleId: 'sy-test',
+          customFileName: config.databaseNameValue,
+          verifyAfterBackup: true,
+        ),
+      );
+
+      expect(result.isSuccess(), isTrue);
+      final metrics = result.getOrNull()!.metrics!;
+      expect(
+        metrics.flags.stopOnError,
+        isFalse,
+        reason:
+            'Sybase nao tem conceito de STOP_ON_ERROR; reportar false '
+            'sinaliza N/A para o histórico/relatório.',
+      );
+    });
+
+    // B.1: antes o detector procurava só `_pathInstructionsHint` em
+    // PT-BR. stderr EN do shell Windows ("'dbisql' is not recognized
+    // as an internal or external command...") caia no fallback
+    // genérico. Agora delega a `ToolPathHelp.isToolNotFoundError`
+    // (mesmo helper usado por Postgres/Firebird/SQL Server).
+    test(
+      'mensagem de erro PATH em EN agora vira mensagem orientada do '
+      'ToolPathHelp (achado B.1)',
+      () async {
+        // Todas as estratégias dbisql e dbbackup falham com stderr EN
+        // de "not recognized".
+        when(
+          () => processService.run(
+            executable: 'dbisql',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            ProcessResult(
+              exitCode: 9009,
+              stdout: '',
+              stderr:
+                  "'dbisql' is not recognized as an internal or external "
+                  'command, operable program or batch file.',
+              duration: Duration(milliseconds: 5),
+            ),
+          ),
+        );
+        when(
+          () => processService.run(
+            executable: 'dbbackup',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            ProcessResult(
+              exitCode: 9009,
+              stdout: '',
+              stderr:
+                  "'dbbackup' is not recognized as an internal or external "
+                  'command, operable program or batch file.',
+              duration: Duration(milliseconds: 5),
+            ),
+          ),
+        );
+
+        final result = await service.executeBackup(
+          config: config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sy-test',
+          ),
+        );
+
+        expect(result.isError(), isTrue);
+        final message = (result.exceptionOrNull()! as Object).toString();
+        // Mensagem do ToolPathHelp inclui referência ao docs/path_setup.md
+        // e à pasta Bin64 do SQL Anywhere. Antes a saída era "Nenhuma
+        // estratégia de backup funcionou. Último erro: 'dbbackup' is not
+        // recognized..." (sem orientação).
+        expect(message, contains('path_setup'));
+        expect(message, contains('Bin64'));
+      },
+    );
+
+    // B.1 (segunda metade): mesmo achado, mas no testConnection.
+    test(
+      'testConnection com stderr EN de PATH agora retorna mensagem '
+      'orientada do ToolPathHelp (achado B.1)',
+      () async {
+        when(
+          () => processService.run(
+            executable: 'dbisql',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            ProcessResult(
+              exitCode: 9009,
+              stdout: '',
+              stderr:
+                  "'dbisql' is not recognized as an internal or external "
+                  'command, operable program or batch file.',
+              duration: Duration(milliseconds: 5),
+            ),
+          ),
+        );
+
+        final result = await service.testConnection(config);
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull()!;
+        final message = (failure as Failure).message;
+        expect(message, contains('path_setup'));
+        expect(message, contains('Bin64'));
       },
     );
   });

@@ -7,6 +7,7 @@ import 'package:backup_database/core/utils/backup_size_calculator.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/string_field_validator.dart';
+import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
@@ -588,11 +589,18 @@ class SybaseBackupService implements ISybaseBackupService {
           ),
           backupType: effectiveType.name,
           flags: BackupFlags(
+            // Sybase SQL Anywhere não tem conceito equivalente ao
+            // `STOP_ON_ERROR` do SQL Server. Reportar `true` antes era
+            // copy/paste enganoso — agora reportamos `false` para
+            // sinalizar "N/A" (mesmo tratamento aplicado ao Postgres
+            // no AUDIT-12). Idem `compression`, `stripingCount=1`,
+            // `withChecksum`: Sybase não emite manifest com CRC nem
+            // suporta striping nativo neste fluxo.
             compression: false,
             verifyPolicy: verifyPolicyLabel,
             stripingCount: 1,
             withChecksum: false,
-            stopOnError: true,
+            stopOnError: false,
           ),
           sybaseOptions: sybaseOptionsJson,
         );
@@ -1027,15 +1035,34 @@ class SybaseBackupService implements ISybaseBackupService {
     ];
   }
 
-  static const String _pathInstructionsHint =
-      'não encontrado no PATH do sistema';
+  /// Detecta se a mensagem de erro indica que `dbisql` ou `dbbackup`
+  /// está fora do PATH. Antes esta heurística procurava só pela
+  /// string PT-BR
+  /// `'não encontrado no PATH do sistema'`, perdendo stderr em inglês
+  /// como `'dbisql' is not recognized as an internal or external command`
+  /// — caindo no fallback genérico em vez de mostrar a mensagem rica do
+  /// `ToolPathHelp`. Agora delegamos ao matcher centralizado (mesmo
+  /// usado por Postgres / Firebird / SQL Server).
+  static bool _looksLikeToolNotFound(String errorLower) {
+    return ToolPathHelp.isToolNotFoundError(errorLower, 'dbisql') ||
+        ToolPathHelp.isToolNotFoundError(errorLower, 'dbbackup');
+  }
 
   String _buildNoStrategyWorkedMessage(String lastError, SybaseConfig config) {
     final lower = lastError.toLowerCase();
-    if (lower.contains(_pathInstructionsHint) ||
-        lower.contains('instruções') ||
-        lower.contains('path_setup')) {
+    // 1) Quando a mensagem já foi traduzida pelo `ToolPathHelp.buildMessage`
+    //    upstream (contém os marcadores típicos), só anexa contexto.
+    if (lower.contains('path_setup') || lower.contains('instruções')) {
       return 'Nenhuma estratégia de backup funcionou.\n\n$lastError';
+    }
+    // 2) Quando o stderr cru indica binário fora do PATH (PT/EN/PS),
+    //    substitui pela mensagem orientada do `ToolPathHelp` para
+    //    a ferramenta detectada.
+    if (_looksLikeToolNotFound(lower)) {
+      final missingTool = ToolPathHelp.isToolNotFoundError(lower, 'dbbackup')
+          ? 'dbbackup'
+          : 'dbisql';
+      return ToolPathHelp.buildMessage(missingTool);
     }
     return 'Nenhuma estratégia de backup funcionou. Último erro: $lastError\n\n'
         'AÇÕES RECOMENDADAS:\n'
@@ -1054,6 +1081,21 @@ class SybaseBackupService implements ISybaseBackupService {
     final stderr = processResult.stderr.toLowerCase();
     final combined = '${processResult.stdout}\n${processResult.stderr}'
         .toLowerCase();
+
+    // Stderr indicando binário fora do PATH (PT/EN/PowerShell) — antes
+    // caia no fallback genérico de "Erro ao executar backup (Exit Code:
+    // 9009)". Agora reportamos a mensagem orientada do `ToolPathHelp`
+    // (paridade com `_buildNoStrategyWorkedMessage` após AUDIT-13).
+    if (_looksLikeToolNotFound(combined)) {
+      final missingTool =
+          ToolPathHelp.isToolNotFoundError(
+            combined,
+            'dbbackup',
+          )
+          ? 'dbbackup'
+          : 'dbisql';
+      return ToolPathHelp.buildMessage(missingTool);
+    }
 
     if (stderr.contains('already in use')) {
       return 'O banco de dados está em uso e não foi possível conectar. '
@@ -1251,7 +1293,10 @@ class SybaseBackupService implements ISybaseBackupService {
           final result = await _runSybaseToolWithCredentials(
             executable: 'dbisql',
             arguments: arguments,
-            timeout: const Duration(seconds: 10),
+            // Antes era 10s, apertado para servidor remoto/VPN. Postgres
+            // já usa 30s; alinhamos para o mesmo limite e reduzimos
+            // falsos negativos em redes lentas.
+            timeout: const Duration(seconds: 30),
             tag: probeTag,
           );
 
@@ -1289,10 +1334,22 @@ class SybaseBackupService implements ISybaseBackupService {
 
       if (lastError.isNotEmpty) {
         final errorLower = lastError.toLowerCase();
-        if (errorLower.contains(_pathInstructionsHint) ||
-            errorLower.contains('instruções') ||
-            errorLower.contains('path_setup')) {
+        if (errorLower.contains('path_setup') ||
+            errorLower.contains('instruções')) {
           errorMessage = lastError;
+        } else if (_looksLikeToolNotFound(errorLower)) {
+          // Mesma melhoria do `_buildNoStrategyWorkedMessage`: stderr EN
+          // do shell ("'dbisql' is not recognized as an internal or
+          // external command") agora vira mensagem orientada do
+          // `ToolPathHelp`.
+          final missingTool =
+              ToolPathHelp.isToolNotFoundError(
+                errorLower,
+                'dbbackup',
+              )
+              ? 'dbbackup'
+              : 'dbisql';
+          errorMessage = ToolPathHelp.buildMessage(missingTool);
         } else if (errorLower.contains('unable to connect') ||
             errorLower.contains('server not found') ||
             errorLower.contains('connection refused') ||

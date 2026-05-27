@@ -8,7 +8,11 @@ class SybaseConfigsTable extends Table {
   TextColumn get databaseFile => text()();
   IntColumn get port => integer().withDefault(const Constant(2638))();
   TextColumn get username => text()();
-  TextColumn get password => text()(); // Criptografado
+  // Coluna mantida por compatibilidade de schema; valor é sempre `''`
+  // porque a senha real fica em secure storage (`SecureCredentialKeys
+  // .sybasePasswordKey`). Remover via migration drift quando houver
+  // janela para aplicar `M00xx_drop_sybase_password_column`.
+  TextColumn get password => text()();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   BoolColumn get isReplicationEnvironment =>
       boolean().withDefault(const Constant(false))();

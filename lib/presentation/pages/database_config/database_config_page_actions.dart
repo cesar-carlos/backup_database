@@ -234,7 +234,6 @@ mixin _DatabaseConfigPageActions on State<DatabaseConfigPage> {
     final result = await SybaseConfigDialog.show(
       context,
       config: config,
-      backupService: GetIt.instance<ISybaseBackupService>(),
     );
 
     if (result != null && mounted) {

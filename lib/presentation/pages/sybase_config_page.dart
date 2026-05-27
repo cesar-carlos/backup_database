@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:backup_database/application/providers/sybase_config_provider.dart';
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
-import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/sybase/sybase.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
 
 class SybaseConfigPage extends StatefulWidget {
@@ -127,7 +125,6 @@ class _SybaseConfigPageState extends State<SybaseConfigPage> {
     final result = await SybaseConfigDialog.show(
       context,
       config: config,
-      backupService: GetIt.instance<ISybaseBackupService>(),
     );
 
     if (!mounted) return;

@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/sybase_config_provider.dart';
 import 'package:backup_database/core/constants/app_constants.dart';
+import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/sybase_connection_field_validator.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
@@ -15,23 +17,17 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 class SybaseConfigDialog extends StatefulWidget {
-  const SybaseConfigDialog({
-    required this.backupService,
-    super.key,
-    this.config,
-  });
+  const SybaseConfigDialog({super.key, this.config});
+
   final SybaseConfig? config;
-  final ISybaseBackupService backupService;
 
   static Future<SybaseConfig?> show(
     BuildContext context, {
-    required ISybaseBackupService backupService,
     SybaseConfig? config,
   }) async {
     return showDialog<SybaseConfig>(
       context: context,
-      builder: (context) =>
-          SybaseConfigDialog(config: config, backupService: backupService),
+      builder: (context) => SybaseConfigDialog(config: config),
     );
   }
 
@@ -63,7 +59,11 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   void initState() {
     super.initState();
     _configSessionId = widget.config?.id ?? const Uuid().v4();
-    _backupService = widget.backupService;
+    // Paridade com `SqlServerConfigDialog` / `PostgresConfigDialog`:
+    // resolve o port via `getIt` em vez de receber pelo construtor.
+    // Mocks em testes usam `getIt.registerSingleton<ISybaseBackupService>(mock)`
+    // antes de exibir o dialog (mesma estratégia dos outros SGBDs).
+    _backupService = getIt<ISybaseBackupService>();
 
     if (widget.config != null) {
       _nameController.text = widget.config!.name;
@@ -375,7 +375,16 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                           'Engine Name is required',
                         );
                       }
-                      return null;
+                      // Sanitização contra connection string injection
+                      // (`ENG=foo;DBN=...`). Ver SybaseConnectionFieldValidator.
+                      return SybaseConnectionFieldValidator.validate(
+                        value.trim(),
+                        appLocaleString(
+                          context,
+                          'Nome do servidor (Engine Name)',
+                          'Server name (Engine Name)',
+                        ),
+                      );
                     },
                     prefixIcon: const Icon(FluentIcons.server),
                   ),
@@ -432,7 +441,14 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                     'Database name is required',
                   );
                 }
-                return null;
+                return SybaseConnectionFieldValidator.validate(
+                  value.trim(),
+                  appLocaleString(
+                    context,
+                    'Nome do banco de dados (DBN)',
+                    'Database name (DBN)',
+                  ),
+                );
               },
               prefixIcon: const Icon(FluentIcons.database),
             ),
@@ -484,12 +500,28 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                     'Username is required',
                   );
                 }
-                return null;
+                return SybaseConnectionFieldValidator.validate(
+                  value.trim(),
+                  appLocaleString(context, 'Usuário', 'Username'),
+                );
               },
               prefixIcon: const Icon(FluentIcons.contact),
             ),
             const SizedBox(height: 16),
-            PasswordField(controller: _passwordController),
+            PasswordField(
+              controller: _passwordController,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  // Senha vazia é permitida (alguns deploys legados usam
+                  // dbisql com auth integrada). Só validamos sanitização.
+                  return null;
+                }
+                return SybaseConnectionFieldValidator.validate(
+                  value,
+                  appLocaleString(context, 'Senha', 'Password'),
+                );
+              },
+            ),
             const SizedBox(height: 16),
             InfoLabel(
               label: appLocaleString(context, 'Habilitado', 'Enabled'),

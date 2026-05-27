@@ -89,6 +89,13 @@ void main() {
       await getIt.unregister<IPostgresBackupService>();
     }
     getIt.registerSingleton<IPostgresBackupService>(mockPostgres);
+    // Sybase agora também resolve via getIt (paridade com os outros 3
+    // SGBDs após AUDIT-13). Antes o dialog recebia o mock pelo
+    // construtor — inconsistente com SQL Server/Postgres/Firebird.
+    if (getIt.isRegistered<ISybaseBackupService>()) {
+      await getIt.unregister<ISybaseBackupService>();
+    }
+    getIt.registerSingleton<ISybaseBackupService>(mockSybase);
     if (getIt.isRegistered<IFirebirdBackupService>()) {
       await getIt.unregister<IFirebirdBackupService>();
     }
@@ -101,6 +108,9 @@ void main() {
     }
     if (getIt.isRegistered<IPostgresBackupService>()) {
       await getIt.unregister<IPostgresBackupService>();
+    }
+    if (getIt.isRegistered<ISybaseBackupService>()) {
+      await getIt.unregister<ISybaseBackupService>();
     }
     if (getIt.isRegistered<IFirebirdBackupService>()) {
       await getIt.unregister<IFirebirdBackupService>();
@@ -161,7 +171,7 @@ void main() {
         tester,
         ChangeNotifierProvider<SybaseConfigProvider>.value(
           value: mockSybaseConfigProvider,
-          child: SybaseConfigDialog(backupService: mockSybase),
+          child: const SybaseConfigDialog(),
         ),
       );
 

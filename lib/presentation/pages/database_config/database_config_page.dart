@@ -16,14 +16,12 @@ import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
-import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/firebird/firebird.dart';
 import 'package:backup_database/presentation/widgets/postgres/postgres.dart';
 import 'package:backup_database/presentation/widgets/sql_server/sql_server.dart';
 import 'package:backup_database/presentation/widgets/sybase/sybase.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
