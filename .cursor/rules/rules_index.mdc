@@ -9,7 +9,62 @@ alwaysApply: true
 ## Behavioral Guardrails
 
 - ❌ Never commit, push, or create docs unless explicitly requested
+- ❌ Never create new git branches unless explicitly requested by the user
 - ✅ Prefer self-explanatory code via naming and structure
+
+## Git workflow (must follow)
+
+These rules are about side effects on the repository. Read-only operations
+(`git status`, `git diff`, `git log`, `gh pr view`, `gh run view`, etc.) are
+always fine.
+
+### Branch creation
+
+- ❌ **Do NOT run `git checkout -b`, `git switch -c`, `git branch <name>`** or
+  any equivalent that creates a new local branch unless the user has clearly
+  asked for it (e.g. "create a branch", "open a PR", "make a feature branch").
+- ❌ Do not create a branch "to be safe" or "to follow the project's release
+  guide" without asking first. If the working tree is dirty on `main` and you
+  need to commit, **ask the user** whether to: (a) commit on `main`,
+  (b) create a branch + PR, or (c) stash and continue without committing.
+- ✅ When the user explicitly authorizes a branch, prefer the project's
+  existing naming convention (look at `git log --pretty=format:'%d' -20` to
+  spot patterns like `codex/...`, `feat/...`).
+
+### Commits and pushes
+
+- ❌ Never run `git commit`, `git push`, or `git push --force*` without
+  an explicit request from the user.
+- ❌ Never amend commits that are already pushed unless the user asks for
+  it (and warn about the force push that will be required).
+- ❌ Never run `git reset --hard`, `git clean -fdx`, `git rebase` (interactive
+  or otherwise) on the user's working tree without consent.
+- ✅ When the user asks to "save", "commit", "push", or "send to GitHub":
+  1. Run `git status` first and **only stage the files explicitly tied to
+     the current task** — never `git add -A` / `git add .` blindly. Untracked
+     files and modifications from other unrelated work must stay out.
+  2. Show the user what will be committed (`git diff --staged --stat`) before
+     creating the commit.
+  3. Follow the conventional commit style observed in `git log`.
+
+### Pull requests
+
+- ❌ Never open, close, merge, or rebase a PR (`gh pr create`, `gh pr merge`,
+  `gh pr close`) unless the user explicitly asks for that specific action.
+- ❌ Never run `gh pr merge --admin` (admin override of required checks)
+  without an explicit confirmation, even if the user previously asked to
+  merge. CI failures unrelated to the current PR must be flagged to the
+  user with options before bypassing checks.
+- ✅ Reading PR state (`gh pr view`, `gh pr checks`, `gh run view`) is
+  always allowed.
+
+### Working tree safety
+
+- ❌ Never delete or modify files outside the scope of the current task
+  (e.g. files the user is editing in another frente that show up in
+  `git status` but were not part of your work) without asking.
+- ✅ When restoring state with `git stash`, always `pop`/`apply` back at the
+  end so the user does not lose pending work.
 
 ## Rules (single source of truth per topic)
 
