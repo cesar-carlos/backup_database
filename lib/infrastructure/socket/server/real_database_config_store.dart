@@ -321,8 +321,7 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
   /// que devolve os pares `{ campo → valor }` armazenados no servidor.
   /// Adicionar SGBD novo = uma entrada nesta tabela (sem mexer no
   /// dispatcher do `update`).
-  static final Map<RemoteDatabaseType, _SecretDescriptor>
-  _secretDescriptors = {
+  static final Map<RemoteDatabaseType, _SecretDescriptor> _secretDescriptors = {
     RemoteDatabaseType.sybase: _SecretDescriptor(
       sensitiveKeys: const ['password'],
       extractor: (store, id) async {

@@ -12,9 +12,10 @@ import 'package:get_it/get_it.dart';
 
 /// Sets up presentation layer dependencies.
 ///
-/// This module registers UI state management providers.
-/// Providers are registered as factories since they may
-/// be created multiple times for different widget trees.
+/// This module registers UI state management providers. Providers que
+/// guardam estado compartilhado (OAuth tokens, conexão socket cliente,
+/// transferências de arquivo) ficam como `lazySingleton`; providers
+/// stateless ou por-tela ficam como `factory`.
 Future<void> setupPresentationModule(GetIt getIt) async {
   // ========================================================================
   // PROVIDERS (State Management)

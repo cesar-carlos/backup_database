@@ -20,6 +20,5 @@ class SecureCredentialKeys {
   /// sensibilidade da senha do utilizador: nunca deve ficar em coluna
   /// texto puro do SQLite. Repositorio Firebird migra entradas
   /// pre-existentes (coluna `cryptKey`) na primeira leitura.
-  static String firebirdCryptKeyKey(String id) =>
-      '$firebirdCryptKeyPrefix$id';
+  static String firebirdCryptKeyKey(String id) => '$firebirdCryptKeyPrefix$id';
 }

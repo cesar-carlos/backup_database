@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:backup_database/application/services/auto_update_service.dart';
@@ -9,6 +8,7 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/core/service/service_shutdown_handler.dart';
 import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
@@ -21,24 +21,29 @@ import 'package:backup_database/domain/services/i_windows_service_event_logger.d
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
+import 'package:backup_database/presentation/boot/service_account_probe.dart';
+import 'package:backup_database/presentation/boot/service_auto_update_configurator.dart';
+import 'package:backup_database/presentation/boot/service_bootstrap_log.dart';
+import 'package:backup_database/presentation/boot/service_bootstrap_step_runner.dart';
+import 'package:backup_database/presentation/boot/service_shutdown_callbacks.dart';
 import 'package:backup_database/presentation/boot/socket_server_bootstrap.dart';
 import 'package:flutter/foundation.dart';
-
-abstract class ServiceModeExitCode {
-  static const int lockDenied = 77;
-}
 
 class ServiceModeInitializer {
   ServiceModeInitializer._();
 
-  static const String _defaultProgramData = r'C:\ProgramData';
-  static const String _bootstrapLogRelativePath =
-      r'BackupDatabase\logs\service_bootstrap.log';
   static const String _serviceName = 'BackupDatabaseService';
-  static const String _supportedServiceAccount = 'LocalSystem';
+  static const int _bootstrapTotalSteps = 11;
+  static const Duration _fatalShutdownBackupBudget = Duration(seconds: 30);
 
   static Future<void> initialize() async {
     final shutdownCompleter = Completer<void>();
+    final log = ServiceBootstrapLog();
+    final stepRunner = ServiceBootstrapStepRunner(
+      totalSteps: _bootstrapTotalSteps,
+      log: log,
+    );
+
     ISchedulerService? schedulerService;
     ServiceHealthChecker? healthChecker;
     IWindowsServiceEventLogger? eventLog;
@@ -47,31 +52,27 @@ class ServiceModeInitializer {
     AutoUpdateService? autoUpdateService;
 
     try {
-      await _appendBootstrapLog('initialize: begin');
+      await log.append('initialize: begin');
       LoggerService.info(
         '[bootstrap] processRole=service single_instance_mutex='
         '${SingleInstanceConfig.serviceMutexName.split(r'\').last} '
         'coexists_with_ui=independent_mutex',
       );
-      const totalSteps = 11;
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 1,
-        totalSteps: totalSteps,
         label: 'Iniciando ServiceModeInitializer',
         action: () async {},
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 2,
-        totalSteps: totalSteps,
         label: 'Carregando variaveis de ambiente',
         action: () => EnvironmentLoader.loadIfNeeded(logPrefix: '[service]'),
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 3,
-        totalSteps: totalSteps,
         label: 'Detectando modo do aplicativo',
         action: () async {
           final config = BootstrapConfigResolver(
@@ -84,9 +85,8 @@ class ServiceModeInitializer {
             'args=${Platform.executableArguments}',
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 4,
-        totalSteps: totalSteps,
         label: 'Verificando single instance global',
         action: () async {
           singleInstanceService = SingleInstanceService();
@@ -97,25 +97,24 @@ class ServiceModeInitializer {
               'Outra instancia do aplicativo ja esta em execucao. '
               'Encerrando servico.',
             );
-            await _appendBootstrapLog(
-              'step 4/$totalSteps: global instance lock denied, exiting '
-              '${ServiceModeExitCode.lockDenied}',
+            await stepRunner.markAborted(
+              step: 4,
+              reason: 'global_instance_lock_denied',
+              exitCode: ServiceModeExitCode.lockDenied,
             );
             exit(ServiceModeExitCode.lockDenied);
           }
         },
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 5,
-        totalSteps: totalSteps,
         label: 'Configurando dependencias (DI)',
         action: service_locator.setupServiceLocatorForServiceMode,
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 6,
-        totalSteps: totalSteps,
         label: 'Obtendo servicos do container DI',
         action: () async {
           schedulerService = service_locator.getIt<ISchedulerService>();
@@ -125,9 +124,8 @@ class ServiceModeInitializer {
         },
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 7,
-        totalSteps: totalSteps,
         label: 'Inicializando IPC do processo dono do lock',
         action: () async {
           await singleInstanceService!.startIpcServer(
@@ -137,9 +135,8 @@ class ServiceModeInitializer {
         },
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 8,
-        totalSteps: totalSteps,
         label: 'Inicializando Event Log',
         action: () async {
           await eventLog!.initialize();
@@ -147,26 +144,24 @@ class ServiceModeInitializer {
         },
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 9,
-        totalSteps: totalSteps,
         label: 'Configurando shutdown handler',
         action: () async {
           shutdownHandler = ServiceShutdownHandler();
           await shutdownHandler!.initialize();
-          _registerShutdownCallbacks(
-            shutdownHandler: shutdownHandler!,
+          ServiceShutdownCallbacks(
             shutdownCompleter: shutdownCompleter,
             schedulerServiceRef: () => schedulerService,
             healthCheckerRef: () => healthChecker,
             eventLogRef: () => eventLog,
-          );
+            log: log,
+          ).register(shutdownHandler!);
         },
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 10,
-        totalSteps: totalSteps,
         label:
             'Iniciando scheduler, health, fila persistida e limpeza de staging',
         action: () async {
@@ -190,333 +185,135 @@ class ServiceModeInitializer {
         },
       );
 
-      await _bootstrapStep(
+      await stepRunner.run(
         step: 11,
-        totalSteps: totalSteps,
         label: 'Inicializando auto update do servico',
         action: () async {
-          final features = service_locator.getIt<FeatureAvailabilityService>();
-          if (!features.isAutoUpdateEnabled) {
-            LoggerService.info(
-              'AutoUpdateService omitido no servico (compatibilidade): '
-              '${features.autoUpdateDisabledReason?.diagnosticLabel ?? "unknown"}',
-            );
-            return;
-          }
-
-          autoUpdateService!.installContextProvider = (release) async {
-            return AppUpdateInstallContext(
-              origin: AppUpdateLaunchOrigin.service,
-              appMode: currentAppMode,
-              currentVersion:
-                  autoUpdateService!.snapshot.currentVersion ?? '0.0.0',
-              targetVersion: release.targetVersion,
-              relaunchArguments: List<String>.of(Platform.executableArguments),
-              executablePath: Platform.resolvedExecutable,
-              createdAt: DateTime.now(),
-            );
-          };
-          autoUpdateService!.installReadinessCheck = (release) async {
-            final serviceAccount = await _probeInstalledServiceAccount(
-              serviceName: _serviceName,
-            );
-            return buildUnsupportedServiceAccountMessage(serviceAccount);
-          };
-          autoUpdateService!.beforeInstallHook = () async {
-            await shutdownHandler?.shutdown();
-            await singleInstanceService?.releaseLock();
-          };
-          await autoUpdateService!.initialize();
-          if (!autoUpdateService!.isInitialized) {
-            LoggerService.info(
-              'AutoUpdateService em modo servico ficou desabilitado/sem feed',
-            );
-            return;
-          }
-          autoUpdateService!.startPeriodicChecks();
-          unawaited(
-            autoUpdateService!.checkNow(source: AppUpdateSource.startup),
-          );
+          await ServiceAutoUpdateConfigurator(
+            features: service_locator.getIt<FeatureAvailabilityService>(),
+            autoUpdateService: autoUpdateService!,
+            accountProbe: ServiceAccountProbe(serviceName: _serviceName),
+            beforeInstallHook: () async {
+              await shutdownHandler?.shutdown();
+              await singleInstanceService?.releaseLock();
+            },
+          ).configureAndStart();
         },
       );
 
       LoggerService.info(
         'Aplicativo rodando como servico do Windows - inicializacao completa',
       );
-      await _appendBootstrapLog(
-        'initialize: complete, waiting shutdown signal',
-      );
+      await log.append('initialize: complete, waiting shutdown signal');
 
       await shutdownCompleter.future;
 
-      await _appendBootstrapLog('initialize: shutdown signal received');
+      await log.append('initialize: shutdown signal received');
       await singleInstanceService?.releaseLock();
-      await _appendBootstrapLog('initialize: lock released, exiting');
+      await log.append('initialize: lock released, exiting');
     } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro fatal na inicializacao do modo servico',
-        e,
-        stackTrace,
+      await _handleFatalError(
+        log: log,
+        completer: shutdownCompleter,
+        eventLog: eventLog,
+        healthChecker: healthChecker,
+        schedulerService: schedulerService,
+        singleInstanceService: singleInstanceService,
+        error: e,
+        stackTrace: stackTrace,
       );
-      await _appendBootstrapLog(
-        'initialize: fatal error',
-        e,
-        stackTrace,
-      );
-
-      try {
-        await eventLog?.logCriticalError(
-          error: e.toString(),
-          context: 'Erro fatal na inicializacao do modo servico',
-        );
-      } on Object catch (_) {}
-
-      try {
-        healthChecker?.stop();
-      } on Object catch (error, stack) {
-        LoggerService.warning('Erro ao parar health checker', error, stack);
-      }
-
-      try {
-        await schedulerService?.waitForRunningBackups(
-          timeout: const Duration(seconds: 30),
-        );
-      } on Object catch (error, stack) {
-        LoggerService.warning(
-          'Erro ao aguardar backups terminarem',
-          error,
-          stack,
-        );
-      }
-
-      try {
-        await singleInstanceService?.releaseLock();
-      } on Object catch (error, stack) {
-        LoggerService.warning(
-          'Erro ao liberar lock antes de encerrar modo servico',
-          error,
-          stack,
-        );
-      }
-
-      _tryCompleteError(shutdownCompleter, e);
-
-      await _appendBootstrapLog('initialize: exiting process with code 1');
-      exit(1);
     }
   }
 
-  static String _getBootstrapLogPath() {
-    final programData =
-        Platform.environment['ProgramData'] ?? _defaultProgramData;
-    return '$programData\\$_bootstrapLogRelativePath';
-  }
-
-  @visibleForTesting
-  static String? buildUnsupportedServiceAccountMessage(String? serviceAccount) {
-    final normalized = serviceAccount?.trim();
-    if (_isSupportedSilentUpdateServiceAccount(normalized)) {
-      return null;
-    }
-    if (normalized == null || normalized.isEmpty) {
-      return 'Atualização automática silenciosa bloqueada: não foi possível '
-          'validar a conta do Windows Service. Reinstale o serviço em '
-          'LocalSystem ou execute a atualização manualmente.';
-    }
-    return 'Atualização automática silenciosa bloqueada: o Windows Service '
-        'está configurado com a conta "$normalized". Nesta rodada o '
-        'auto update silencioso só é suportado para serviços em '
-        'LocalSystem. Atualize manualmente ou reinstale o serviço '
-        'com LocalSystem.';
-  }
-
-  @visibleForTesting
-  static bool isSupportedSilentUpdateServiceAccount(String? serviceAccount) {
-    return _isSupportedSilentUpdateServiceAccount(serviceAccount);
-  }
-
-  static bool _isSupportedSilentUpdateServiceAccount(String? serviceAccount) {
-    final normalized = serviceAccount?.trim().toLowerCase();
-    return normalized != null &&
-        normalized.isNotEmpty &&
-        (normalized == _supportedServiceAccount.toLowerCase() ||
-            normalized == 'system' ||
-            normalized == r'nt authority\system');
-  }
-
-  static Future<String?> _probeInstalledServiceAccount({
-    required String serviceName,
+  static Future<void> _handleFatalError({
+    required ServiceBootstrapLog log,
+    required Completer<void> completer,
+    required IWindowsServiceEventLogger? eventLog,
+    required ServiceHealthChecker? healthChecker,
+    required ISchedulerService? schedulerService,
+    required ISingleInstanceService? singleInstanceService,
+    required Object error,
+    required StackTrace stackTrace,
   }) async {
+    LoggerService.error(
+      'Erro fatal na inicializacao do modo servico',
+      error,
+      stackTrace,
+    );
+    await log.append(
+      'initialize: fatal error',
+      error: error,
+      stackTrace: stackTrace,
+    );
+
     try {
-      final result = await Process.run('powershell.exe', <String>[
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        "(Get-CimInstance Win32_Service -Filter \"Name='$serviceName'\").StartName",
-      ]);
-      if (result.exitCode != 0) {
-        LoggerService.warning(
-          'Falha ao consultar conta do Windows Service para auto update: '
-          '${result.stderr}',
-        );
-        return null;
-      }
-      final account = result.stdout.toString().trim();
-      return account.isEmpty ? null : account;
-    } on Object catch (e, s) {
+      await eventLog?.logCriticalError(
+        error: error.toString(),
+        context: 'Erro fatal na inicializacao do modo servico',
+      );
+    } on Object catch (_) {}
+
+    try {
+      healthChecker?.stop();
+    } on Object catch (failure, stack) {
+      LoggerService.warning('Erro ao parar health checker', failure, stack);
+    }
+
+    try {
+      await schedulerService?.waitForRunningBackups(
+        timeout: _fatalShutdownBackupBudget,
+      );
+    } on Object catch (failure, stack) {
       LoggerService.warning(
-        'Erro ao consultar conta do Windows Service para auto update',
-        e,
-        s,
+        'Erro ao aguardar backups terminarem',
+        failure,
+        stack,
       );
-      return null;
     }
-  }
 
-  static Future<void> _appendBootstrapLog(
-    String message, [
-    Object? error,
-    StackTrace? stackTrace,
-  ]) async {
     try {
-      final logPath = _getBootstrapLogPath();
-      final file = File(logPath);
-      await file.parent.create(recursive: true);
-      final now = DateTime.now().toIso8601String();
-      final buffer = StringBuffer('[$now] $message');
-      if (error != null) {
-        buffer.write('\nerror: $error');
-      }
-      if (stackTrace != null) {
-        buffer.write('\nstack: $stackTrace');
-      }
-      buffer.write('\n');
-      await file.writeAsString(buffer.toString(), mode: FileMode.append);
-    } on Object catch (e) {
-      developer.log(
-        '[ServiceModeInitializer] bootstrap log write failed: $e',
-        name: 'service_bootstrap',
-        level: 1000,
+      await singleInstanceService?.releaseLock();
+    } on Object catch (failure, stack) {
+      LoggerService.warning(
+        'Erro ao liberar lock antes de encerrar modo servico',
+        failure,
+        stack,
       );
     }
+
+    _tryCompleteError(completer, error);
+
+    await log.append(
+      'initialize: exiting process with code '
+      '${ServiceModeExitCode.fatalBootstrapError}',
+    );
+    exit(ServiceModeExitCode.fatalBootstrapError);
   }
 
-  static Future<void> _bootstrapStep({
-    required int step,
-    required int totalSteps,
-    required String label,
-    required Future<void> Function() action,
-    String Function()? successDetails,
-  }) async {
-    final tag = '[$step/$totalSteps]';
-    LoggerService.info('>>> $tag $label...');
-    await _appendBootstrapLog('step $step/$totalSteps: $label begin');
-    try {
-      await action();
-      final details = successDetails?.call();
-      LoggerService.info('>>> $tag OK $label');
-      await _appendBootstrapLog(
-        'step $step/$totalSteps: $label success'
-        '${details != null ? ' ($details)' : ''}',
-      );
-    } on Object catch (e, s) {
-      await _appendBootstrapLog(
-        'step $step/$totalSteps: $label failed',
-        e,
-        s,
-      );
-      rethrow;
-    }
-  }
+  @visibleForTesting
+  static String? buildUnsupportedServiceAccountMessage(
+    String? serviceAccount,
+  ) => ServiceAccountProbe.buildUnsupportedServiceAccountMessage(
+    serviceAccount,
+  );
 
-  static void _registerShutdownCallbacks({
-    required ServiceShutdownHandler shutdownHandler,
-    required Completer<void> shutdownCompleter,
-    required ISchedulerService? Function() schedulerServiceRef,
-    required ServiceHealthChecker? Function() healthCheckerRef,
-    required IWindowsServiceEventLogger? Function() eventLogRef,
-  }) {
-    shutdownHandler.registerCallback((timeout) async {
-      LoggerService.info('Shutdown callback: parando servicos');
-      final scheduler = schedulerServiceRef();
-      final health = healthCheckerRef();
-      final eventLog = eventLogRef();
-
-      try {
-        if (service_locator.getIt
-            .isRegistered<ITemporaryBackupCleanupScheduler>()) {
-          service_locator.getIt<ITemporaryBackupCleanupScheduler>().stop();
-        }
-      } on Object catch (e, s) {
-        LoggerService.warning(
-          '[ServiceModeInitializer] TemporaryBackupCleanupScheduler.stop: $e',
-          e,
-          s,
-        );
-      }
-
-      try {
-        if (service_locator.getIt
-            .isRegistered<IRemoteStagingCleanupScheduler>()) {
-          service_locator.getIt<IRemoteStagingCleanupScheduler>().stop();
-        }
-      } on Object catch (e, s) {
-        LoggerService.warning(
-          '[ServiceModeInitializer] RemoteStagingCleanupScheduler.stop: $e',
-          e,
-          s,
-        );
-      }
-
-      health?.stop();
-      scheduler?.stop();
-
-      final budgetForBackups = timeout > const Duration(seconds: 5)
-          ? timeout - const Duration(seconds: 5)
-          : timeout;
-
-      final allCompleted =
-          await scheduler?.waitForRunningBackups(timeout: budgetForBackups) ??
-          false;
-
-      if (!allCompleted) {
-        LoggerService.warning(
-          'Alguns backups nao terminaram a tempo, mas o servico sera encerrado',
-        );
-        await eventLog?.logShutdownBackupsIncomplete(
-          timeout: budgetForBackups,
-          details: 'Backups em execucao foram interrompidos pelo timeout.',
-        );
-      }
-
-      await eventLog?.logServiceStopped();
-
-      LoggerService.info('Shutdown callback: servicos parados');
-      await _appendBootstrapLog('shutdown callback: completed');
-
-      _tryComplete(shutdownCompleter);
-    });
-  }
-
-  static void _tryComplete(Completer<void> completer) {
-    if (!completer.isCompleted) {
-      try {
-        completer.complete();
-      } on Object catch (e) {
-        LoggerService.warning('[ServiceModeInitializer] complete failed: $e');
-      }
-    }
-  }
+  @visibleForTesting
+  static bool isSupportedSilentUpdateServiceAccount(
+    String? serviceAccount,
+  ) => ServiceAccountProbe.isSupportedSilentUpdateServiceAccount(
+    serviceAccount,
+  );
 
   static void _tryCompleteError(Completer<void> completer, Object error) {
-    if (!completer.isCompleted) {
-      try {
-        completer.completeError(error);
-      } on Object catch (err) {
-        LoggerService.warning(
-          '[ServiceModeInitializer] completeError failed: $err',
-        );
-      }
+    if (completer.isCompleted) {
+      return;
+    }
+    try {
+      completer.completeError(error);
+    } on Object catch (err) {
+      LoggerService.warning(
+        '[ServiceModeInitializer] completeError failed: $err',
+      );
     }
   }
 }

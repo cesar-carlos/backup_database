@@ -47,9 +47,7 @@ class FirebirdConfigGrid extends StatelessWidget {
     // conexao TCP), e o "database" e o caminho do .fdb local. Em
     // alias-only (databaseFile vazio), mostrar o alias evita celula
     // em branco que confunde o utilizador.
-    final endpoint = c.useEmbedded
-        ? '(embedded)'
-        : '${c.host}:${c.portValue}';
+    final endpoint = c.useEmbedded ? '(embedded)' : '${c.host}:${c.portValue}';
     final database = c.databaseFile.isNotEmpty
         ? c.databaseFile
         : (c.aliasName?.trim() ?? '');

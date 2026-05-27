@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/schedule_args.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/schedule_config.dart' as parser;
 import 'package:backup_database/domain/services/i_task_scheduler_service.dart';
@@ -44,7 +45,7 @@ class WindowsTaskSchedulerService implements ITaskSchedulerService {
         '/TN',
         taskName,
         '/TR',
-        '"$executablePath" --schedule-id=${schedule.id}',
+        '"$executablePath" ${scheduleIdArgument(schedule.id)}',
         '/SC',
         scheduleType,
         ...scheduleArgs,

@@ -146,6 +146,7 @@ void main() {
           'cleanup_locks',
           'socket_start',
           'staging_start',
+          'temp_cleanup_start',
           'run_app',
         ],
       );
@@ -283,6 +284,13 @@ AppBootstrapDependencies _buildDependencies({
       },
       logInfo: _ignoreLog,
       logError: _ignoreLogWithError,
+    ),
+    temporaryBackupCleanupStartupTask: TemporaryBackupCleanupStartupTask(
+      isSchedulerRegistered: () => true,
+      startScheduler: () {
+        events.add('temp_cleanup_start');
+      },
+      logWarning: _ignoreLogWithError,
     ),
   );
 

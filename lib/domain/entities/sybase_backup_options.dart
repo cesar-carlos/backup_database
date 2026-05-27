@@ -86,9 +86,10 @@ class SybaseBackupOptions {
     final lower = value.toLowerCase();
     // `Enum.values.byName` lança em mismatch — preferimos retornar null
     // (mantendo o contrato anterior) para o caso de string corrompida.
-    return SybaseLogBackupMode.values
-        .cast<SybaseLogBackupMode?>()
-        .firstWhere((e) => e?.name == lower, orElse: () => null);
+    return SybaseLogBackupMode.values.cast<SybaseLogBackupMode?>().firstWhere(
+      (e) => e?.name == lower,
+      orElse: () => null,
+    );
   }
 
   String buildCheckpointLogClause() {
@@ -115,9 +116,10 @@ class SybaseBackupOptions {
   static SybaseCheckpointLog? checkpointLogFromString(String? value) {
     if (value == null || value.isEmpty) return null;
     final lower = value.toLowerCase();
-    return SybaseCheckpointLog.values
-        .cast<SybaseCheckpointLog?>()
-        .firstWhere((e) => e?.name == lower, orElse: () => null);
+    return SybaseCheckpointLog.values.cast<SybaseCheckpointLog?>().firstWhere(
+      (e) => e?.name == lower,
+      orElse: () => null,
+    );
   }
 
   @override

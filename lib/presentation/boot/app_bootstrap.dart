@@ -7,6 +7,7 @@ import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/platform/os_version_checker.dart';
+import 'package:backup_database/core/utils/schedule_args.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
 import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
@@ -22,18 +23,23 @@ import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
+import 'package:backup_database/presentation/boot/ipc_server_startup_task.dart';
 import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
 import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
 import 'package:backup_database/presentation/boot/service_mode_initializer.dart';
 import 'package:backup_database/presentation/boot/single_instance_checker.dart';
 import 'package:backup_database/presentation/boot/socket_server_startup_task.dart';
+import 'package:backup_database/presentation/boot/temporary_backup_cleanup_startup_task.dart';
+import 'package:backup_database/presentation/boot/tray_manager_startup_task.dart';
 import 'package:backup_database/presentation/boot/ui_scheduler_policy.dart';
 import 'package:backup_database/presentation/boot/ui_scheduler_startup_task.dart';
+import 'package:backup_database/presentation/boot/window_manager_startup_task.dart';
 import 'package:backup_database/presentation/boot/windows_native_chrome_bootstrap.dart';
 import 'package:backup_database/presentation/handlers/tray_menu_handler.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
-import 'package:fluent_ui/fluent_ui.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Widget, WidgetsFlutterBinding;
 
 typedef LaunchBootstrapContextResolverFn =
     LaunchBootstrapContext Function({
@@ -117,6 +123,7 @@ class UiBootstrapServices {
     required this.initializeUiServices,
     required this.localSchedulerStartupTask,
     required this.socketServerStartupTask,
+    required this.temporaryBackupCleanupStartupTask,
   });
 
   final Future<bool> Function(LaunchBootstrapContext bootstrapContext)
@@ -128,6 +135,7 @@ class UiBootstrapServices {
   final InitializeUiServicesFn initializeUiServices;
   final UiSchedulerStartupTask localSchedulerStartupTask;
   final SocketServerStartupTask socketServerStartupTask;
+  final TemporaryBackupCleanupStartupTask temporaryBackupCleanupStartupTask;
 
   UiBootstrapServices copyWith({
     Future<bool> Function(LaunchBootstrapContext bootstrapContext)?
@@ -139,6 +147,7 @@ class UiBootstrapServices {
     InitializeUiServicesFn? initializeUiServices,
     UiSchedulerStartupTask? localSchedulerStartupTask,
     SocketServerStartupTask? socketServerStartupTask,
+    TemporaryBackupCleanupStartupTask? temporaryBackupCleanupStartupTask,
   }) {
     return UiBootstrapServices(
       checkSingleInstance: checkSingleInstance ?? this.checkSingleInstance,
@@ -152,6 +161,9 @@ class UiBootstrapServices {
           localSchedulerStartupTask ?? this.localSchedulerStartupTask,
       socketServerStartupTask:
           socketServerStartupTask ?? this.socketServerStartupTask,
+      temporaryBackupCleanupStartupTask:
+          temporaryBackupCleanupStartupTask ??
+          this.temporaryBackupCleanupStartupTask,
     );
   }
 }
@@ -211,12 +223,7 @@ class AppBootstrapDependencies {
   factory AppBootstrapDependencies.defaults() {
     final runtime = BootstrapRuntimeHooks(
       initializeServiceMode: ServiceModeInitializer.initialize,
-      errorPolicy: const BootstrapErrorPolicy(
-        logDebug: LoggerService.debug,
-        logError: LoggerService.error,
-        cleanupApp: AppCleanup.cleanup,
-        exitProcess: exit,
-      ),
+      errorPolicy: BootstrapErrorPolicy.defaults,
       runApp: fluent.runApp,
       createApp: () => const BackupDatabaseApp(),
       logInfo: LoggerService.info,
@@ -306,6 +313,16 @@ class AppBootstrapDependencies {
           logInfo: LoggerService.info,
           logError: LoggerService.error,
         ),
+        temporaryBackupCleanupStartupTask: TemporaryBackupCleanupStartupTask(
+          isSchedulerRegistered: () {
+            return service_locator.getIt
+                .isRegistered<ITemporaryBackupCleanupScheduler>();
+          },
+          startScheduler: () {
+            service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
+          },
+          logWarning: LoggerService.warning,
+        ),
       ),
       runtime: runtime,
     );
@@ -339,11 +356,7 @@ class AppBootstrap {
   }
 
   static void handleUnhandledError(Object error, StackTrace stack) {
-    AppBootstrapDependencies.defaults().runtime.errorPolicy
-        .handleUnhandledUiError(
-          error,
-          stack,
-        );
+    BootstrapErrorPolicy.defaults.handleUnhandledUiError(error, stack);
   }
 
   @visibleForTesting
@@ -465,10 +478,7 @@ class AppBootstrap {
       await _dependencies.uiServices.socketServerStartupTask.start(
         bootstrapConfig,
       );
-      if (service_locator.getIt
-          .isRegistered<ITemporaryBackupCleanupScheduler>()) {
-        service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
-      }
+      _dependencies.uiServices.temporaryBackupCleanupStartupTask.start();
       _logBootstrapPhase(bootstrapWatch, 'scheduler_and_socket_ready');
 
       _dependencies.runtime.runApp(_dependencies.runtime.createApp());
@@ -500,20 +510,11 @@ class AppBootstrap {
       ipcClient: SingleInstanceIpcClient(),
       messageBox: const WindowsMessageBox(),
       launchOrigin: bootstrapContext.launchOrigin,
-      scheduledScheduleId: _getScheduleIdFromArgs(bootstrapContext.rawArgs),
+      scheduledScheduleId: ScheduleArgs.extract(bootstrapContext.rawArgs),
       exitProcess: exit,
     );
 
     return singleInstanceChecker.checkAndHandleSecondInstance();
-  }
-
-  static String? _getScheduleIdFromArgs(List<String> args) {
-    for (final arg in args) {
-      if (arg.startsWith('--schedule-id=')) {
-        return arg.substring('--schedule-id='.length);
-      }
-    }
-    return null;
   }
 
   static void _defaultCheckOsCompatibility() {
@@ -550,15 +551,19 @@ class AppBootstrap {
     final features = service_locator.getIt<FeatureAvailabilityService>();
     final windowManager = WindowManagerService();
 
-    await _initializeWindowManager(
-      windowManager,
-      features,
-      launchConfig,
-      bootstrapConfig.appMode,
-    );
+    await _buildWindowManagerStartupTask(
+      features: features,
+      windowManager: windowManager,
+      launchConfig: launchConfig,
+      appMode: bootstrapConfig.appMode,
+    ).start();
+
     await Future.wait([
-      _initializeIpcServer(features, bootstrapConfig),
-      _initializeTrayManager(features),
+      _buildIpcServerStartupTask(
+        features: features,
+        windowManager: windowManager,
+      ).start(bootstrapConfig),
+      _buildTrayManagerStartupTask(features: features).start(),
     ]);
 
     windowManager.setCallbacks(
@@ -569,100 +574,76 @@ class AppBootstrap {
     );
   }
 
-  static Future<void> _initializeWindowManager(
-    WindowManagerService windowManager,
-    FeatureAvailabilityService features,
-    LaunchConfig launchConfig,
-    AppMode appMode,
-  ) async {
-    if (!features.isWindowManagementEnabled) {
-      LoggerService.warning(
-        'Window manager omitido (compatibilidade): '
-        '${features.windowManagementDisabledReason?.diagnosticLabel ?? "unknown"}',
-      );
-      return;
-    }
-
-    try {
-      await windowManager.initialize(
-        title: getWindowTitleForMode(appMode),
-        startMinimized: launchConfig.startMinimized,
-      );
-      if (Platform.isWindows) {
-        final prefsRepo = service_locator.getIt<IUserPreferencesRepository>();
-        final micaOn = await prefsRepo.getUseWindowsMicaBackdrop();
-        final isDark = await prefsRepo.getDarkMode();
-        await WindowsNativeChromeBootstrap.setBackdrop(
-          micaEnabled: micaOn,
-          isDark: isDark,
+  static WindowManagerStartupTask _buildWindowManagerStartupTask({
+    required FeatureAvailabilityService features,
+    required WindowManagerService windowManager,
+    required LaunchConfig launchConfig,
+    required AppMode appMode,
+  }) {
+    return WindowManagerStartupTask(
+      isWindowManagementEnabled: () => features.isWindowManagementEnabled,
+      windowManagementDisabledLabel: () =>
+          features.windowManagementDisabledReason?.diagnosticLabel ?? 'unknown',
+      initializeWindow: () async {
+        await windowManager.initialize(
+          title: getWindowTitleForMode(appMode),
+          startMinimized: launchConfig.startMinimized,
         );
-      }
-    } on Object catch (e) {
-      LoggerService.warning(
-        'Erro ao inicializar window manager (continuando sem UI): $e',
-      );
-    }
+      },
+      applyWindowsBackdrop: WindowsNativeChromeBootstrap.setBackdrop,
+      loadWindowsBackdropPreferences: () async {
+        final prefsRepo = service_locator.getIt<IUserPreferencesRepository>();
+        final micaEnabled = await prefsRepo.getUseWindowsMicaBackdrop();
+        final isDark = await prefsRepo.getDarkMode();
+        return (micaEnabled: micaEnabled, isDark: isDark);
+      },
+      isWindowsPlatform: () => Platform.isWindows,
+      logInfo: LoggerService.info,
+      logWarning: LoggerService.warning,
+    );
   }
 
-  static Future<void> _initializeIpcServer(
-    FeatureAvailabilityService features,
-    BootstrapConfig bootstrapConfig,
-  ) async {
-    if (!bootstrapConfig.singleInstanceEnabled) {
-      LoggerService.info(
-        'IPC Server nao iniciado: single instance desabilitado via configuracao',
-      );
-      return;
-    }
-
-    try {
-      final singleInstanceService = service_locator
-          .getIt<ISingleInstanceService>();
-      await singleInstanceService.startIpcServer(
-        role: SingleInstanceConfig.ipcInstanceRoleUi,
-        onShowWindow: () async {
-          LoggerService.info(
-            'Recebido comando SHOW_WINDOW via IPC de outra instancia',
-          );
-          if (!features.isWindowManagementEnabled) {
-            return;
-          }
-          try {
-            await WindowManagerService().show();
-            LoggerService.info('Janela trazida para frente apos comando IPC');
-          } on Object catch (e, stackTrace) {
-            LoggerService.error(
-              'Erro ao mostrar janela via IPC',
-              e,
-              stackTrace,
+  static IpcServerStartupTask _buildIpcServerStartupTask({
+    required FeatureAvailabilityService features,
+    required WindowManagerService windowManager,
+  }) {
+    return IpcServerStartupTask(
+      isWindowManagementEnabled: () =>
+          features.isWindowManagementEnabled && windowManager.isInitialized,
+      showWindow: windowManager.show,
+      runSchedule: ScheduledBackupExecutor.execute,
+      startIpcServer:
+          ({
+            required onShowWindow,
+            required onRunSchedule,
+          }) async {
+            final singleInstanceService = service_locator
+                .getIt<ISingleInstanceService>();
+            await singleInstanceService.startIpcServer(
+              role: SingleInstanceConfig.ipcInstanceRoleUi,
+              onShowWindow: onShowWindow,
+              onRunSchedule: onRunSchedule,
             );
-          }
-        },
-        onRunSchedule: ScheduledBackupExecutor.execute,
-      );
-      LoggerService.info('IPC Server inicializado e pronto');
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao inicializar IPC Server: $e');
-    }
+          },
+      logInfo: LoggerService.info,
+      logWarning: LoggerService.warning,
+      logError: LoggerService.error,
+    );
   }
 
-  static Future<void> _initializeTrayManager(
-    FeatureAvailabilityService features,
-  ) async {
-    if (!features.isTrayEnabled) {
-      LoggerService.warning(
-        'Tray icon omitido (compatibilidade): '
-        '${features.trayDisabledReason?.diagnosticLabel ?? "unknown"}',
-      );
-      return;
-    }
-
-    try {
-      await TrayManagerService().initialize(
-        onMenuAction: TrayMenuHandler.handleAction,
-      );
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao inicializar tray manager: $e');
-    }
+  static TrayManagerStartupTask _buildTrayManagerStartupTask({
+    required FeatureAvailabilityService features,
+  }) {
+    return TrayManagerStartupTask(
+      isTrayEnabled: () => features.isTrayEnabled,
+      trayDisabledLabel: () =>
+          features.trayDisabledReason?.diagnosticLabel ?? 'unknown',
+      initializeTray: () async {
+        await TrayManagerService().initialize(
+          onMenuAction: TrayMenuHandler.handleAction,
+        );
+      },
+      logWarning: LoggerService.warning,
+    );
   }
 }

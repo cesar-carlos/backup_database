@@ -18,6 +18,8 @@ class WindowManagerService with WindowListener {
   bool _minimizeToTray = false;
   bool _closeToTray = false;
 
+  bool get isInitialized => _isInitialized;
+
   Future<void> initialize({
     ui.Size size = const ui.Size(1280, 800),
     ui.Size minimumSize = const ui.Size(900, 650),

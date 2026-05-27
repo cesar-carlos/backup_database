@@ -1,4 +1,3 @@
-import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/license_policy_service.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
@@ -21,10 +20,6 @@ Future<void> setupDomainModule(GetIt getIt) async {
   // ========================================================================
   // DOMAIN SERVICES
   // ========================================================================
-
-  getIt.registerLazySingleton<IBackupRunningState>(
-    getIt.get<BackupProgressProvider>,
-  );
 
   getIt.registerLazySingleton<ILicensePolicyService>(
     () => LicensePolicyService(

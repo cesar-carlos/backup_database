@@ -8,6 +8,7 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/core/utils/schedule_args.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
@@ -142,7 +143,7 @@ class AppInitializer {
       '(${SingleInstanceConfig.minimizedArgument}: $startMinimizedFromArgs)',
     );
 
-    final scheduleId = _getScheduleIdFromArgs(args);
+    final scheduleId = ScheduleArgs.extract(args);
     final startMinimized = startMinimizedFromArgs || startMinimizedFromSettings;
 
     LoggerService.info(
@@ -156,15 +157,6 @@ class AppInitializer {
       startMinimized: startMinimized,
       args: args,
     );
-  }
-
-  static String? _getScheduleIdFromArgs(List<String> args) {
-    for (final arg in args) {
-      if (arg.startsWith('--schedule-id=')) {
-        return arg.substring('--schedule-id='.length);
-      }
-    }
-    return null;
   }
 }
 

@@ -46,8 +46,14 @@ class BootstrapConfigResolver {
       isDebugMode: isDebugMode,
       debugAppMode: envValues['DEBUG_APP_MODE'],
       appModeEnv: envValues['APP_MODE'],
-      installModeContent: _readInstallModeContent(executablePath),
-      legacyModeContent: _readLegacyModeContent(executablePath),
+      installModeContent: _readInstallModeContent(
+        executablePath,
+        onWarning: _onWarning,
+      ),
+      legacyModeContent: _readLegacyModeContent(
+        executablePath,
+        onWarning: _onWarning,
+      ),
     );
 
     return BootstrapConfig(
@@ -87,7 +93,10 @@ class BootstrapConfigResolver {
     return UiSchedulerFallbackMode.failOpen;
   }
 
-  static String? _readInstallModeContent(String executablePath) {
+  static String? _readInstallModeContent(
+    String executablePath, {
+    void Function(String message)? onWarning,
+  }) {
     try {
       final exeDir = File(executablePath).parent;
       final installModeFile = File(
@@ -96,11 +105,18 @@ class BootstrapConfigResolver {
       if (installModeFile.existsSync()) {
         return installModeFile.readAsStringSync();
       }
-    } on Object catch (_) {}
+    } on Object catch (e) {
+      onWarning?.call(
+        '[main] falha ao ler .install_mode: $e (mantendo fallback de modo)',
+      );
+    }
     return null;
   }
 
-  static String? _readLegacyModeContent(String executablePath) {
+  static String? _readLegacyModeContent(
+    String executablePath, {
+    void Function(String message)? onWarning,
+  }) {
     try {
       final exeDir = File(executablePath).parent;
       final modeFile = File(
@@ -110,7 +126,11 @@ class BootstrapConfigResolver {
       if (modeFile.existsSync()) {
         return modeFile.readAsStringSync();
       }
-    } on Object catch (_) {}
+    } on Object catch (e) {
+      onWarning?.call(
+        '[main] falha ao ler config/mode.ini: $e (mantendo fallback de modo)',
+      );
+    }
     return null;
   }
 }

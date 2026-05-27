@@ -1,5 +1,6 @@
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/utils/schedule_args.dart';
 import 'package:backup_database/core/utils/service_mode_detector.dart';
 
 enum LaunchOrigin {
@@ -87,20 +88,10 @@ class LaunchBootstrapContextResolver {
       return LaunchOrigin.windowsStartup;
     }
 
-    if (_hasScheduleIdArg(rawArgs)) {
+    if (ScheduleArgs.contains(rawArgs)) {
       return LaunchOrigin.scheduledExecution;
     }
 
     return LaunchOrigin.manual;
-  }
-
-  static bool _hasScheduleIdArg(List<String> rawArgs) {
-    const prefix = '--schedule-id=';
-    for (final arg in rawArgs) {
-      if (arg.startsWith(prefix)) {
-        return true;
-      }
-    }
-    return false;
   }
 }
