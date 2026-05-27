@@ -295,6 +295,34 @@ void main() {
       },
     );
 
+    test(
+      'recusa opcoes SQL Server invalidas antes de chamar sqlcmd',
+      () async {
+        final result = await service.executeBackup(
+          config: sqlAuthConfig,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 's-1',
+            sqlServerBackupOptions: const SqlServerBackupOptions(
+              maxTransferSize: 12345,
+            ),
+          ),
+        );
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<ValidationFailure>());
+        verifyNever(
+          () => processService.run(
+            executable: any(named: 'executable'),
+            arguments: any(named: 'arguments'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        );
+      },
+    );
+
     test('gera SQL com tuning e escape de identificador', () async {
       final cfg = sqlAuthConfig.copyWith(
         database: DatabaseName('db]name'),

@@ -6,7 +6,11 @@ class SqlServerConfigsTable extends Table {
   TextColumn get server => text()();
   TextColumn get database => text()();
   TextColumn get username => text()();
-  TextColumn get password => text()(); // Criptografado
+  // Coluna mantida por compatibilidade de schema; valor é sempre `''`
+  // porque a senha real fica em secure storage (`SecureCredentialKeys
+  // .sqlServerPasswordKey`). Remover via migration drift quando houver
+  // janela para aplicar `M00xx_drop_sql_server_password_column`.
+  TextColumn get password => text()();
   IntColumn get port => integer().withDefault(const Constant(1433))();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   BoolColumn get useWindowsAuth =>

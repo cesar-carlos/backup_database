@@ -40,6 +40,8 @@ class SqlServerBackupStrategyFactory {
               enableChecksum: schedule.enableChecksum,
               verifyAfterBackup: schedule.verifyAfterBackup,
               verifyPolicy: schedule.verifyPolicy,
+              backupTimeout: schedule.backupTimeout,
+              verifyTimeout: schedule.verifyTimeout,
               sqlServerBackupOptions: backupOptions,
               cancelTag: cancelTag,
             );

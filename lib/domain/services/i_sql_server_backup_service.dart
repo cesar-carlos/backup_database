@@ -8,9 +8,4 @@ abstract class ISqlServerBackupService
     required SqlServerConfig config,
     Duration? timeout,
   });
-
-  Future<rd.Result<List<String>>> listBackupFiles({
-    required SqlServerConfig config,
-    Duration? timeout,
-  });
 }

@@ -1562,6 +1562,19 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       statsPercent: _statsPercent,
     );
 
+    if (_databaseType == DatabaseType.sqlServer) {
+      final validation = sqlServerBackupOptions.validate();
+      if (!validation.isValid) {
+        unawaited(
+          FluentInfoBarFeedback.showWarning(
+            context,
+            message: 'Opções SQL Server inválidas: ${validation.errorMessage}',
+          ),
+        );
+        return;
+      }
+    }
+
     final Schedule schedule;
     if (_databaseType == DatabaseType.sqlServer) {
       schedule = Schedule(

@@ -6,8 +6,10 @@ import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
@@ -43,6 +45,15 @@ void main() {
         name: 'n',
         host: 'h',
         databaseFile: 'f',
+        username: 'u',
+        password: 'p',
+      ),
+    );
+    registerFallbackValue(
+      SqlServerConfig(
+        name: 'n',
+        server: 'h',
+        database: DatabaseName('db'),
         username: 'u',
         password: 'p',
       ),
@@ -157,6 +168,75 @@ void main() {
     );
     expect(r.isError(), isTrue);
   });
+
+  test(
+    'SqlServer factory forwards schedule timeouts and options to service',
+    () async {
+      final mock = _MockSql();
+      final captured = <BackupExecutionContext>[];
+      when(
+        () => mock.executeBackup(
+          config: any(named: 'config'),
+          context: any(named: 'context'),
+        ),
+      ).thenAnswer((invocation) async {
+        captured.add(
+          invocation.namedArguments[#context]! as BackupExecutionContext,
+        );
+        return const rd.Success(
+          BackupExecutionResult(
+            backupPath: r'C:\x.bak',
+            fileSize: 16,
+            duration: Duration.zero,
+            databaseName: 'db',
+          ),
+        );
+      });
+      final strategy = SqlServerBackupStrategyFactory.create(mock);
+      const sqlOptions = SqlServerBackupOptions(
+        compression: true,
+        statsPercent: 5,
+      );
+      final schedule = Schedule(
+        name: 'sch',
+        databaseConfigId: 'cfg',
+        databaseType: DatabaseType.sqlServer,
+        scheduleType: 'daily',
+        scheduleConfig: '{}',
+        destinationIds: const [],
+        backupFolder: 'bf',
+        truncateLog: false,
+        enableChecksum: true,
+        verifyAfterBackup: true,
+        verifyPolicy: VerifyPolicy.strict,
+        backupTimeout: const Duration(hours: 5),
+        verifyTimeout: const Duration(hours: 1),
+        sqlServerBackupOptions: sqlOptions,
+      );
+
+      final r = await strategy.execute(
+        schedule: schedule,
+        databaseConfig: sqlCfg,
+        outputDirectory: '/tmp',
+        backupType: BackupType.full,
+        cancelTag: 'backup-h1',
+      );
+
+      expect(r.isSuccess(), isTrue);
+      final ctx = captured.single;
+      // Achado A.1 da auditoria: antes desse fix, os timeouts do schedule
+      // eram descartados pelo factory e o service caía nos defaults
+      // hardcoded (2h backup / 30min verify).
+      expect(ctx.backupTimeout, const Duration(hours: 5));
+      expect(ctx.verifyTimeout, const Duration(hours: 1));
+      expect(ctx.truncateLog, isFalse);
+      expect(ctx.enableChecksum, isTrue);
+      expect(ctx.verifyAfterBackup, isTrue);
+      expect(ctx.verifyPolicy, VerifyPolicy.strict);
+      expect(ctx.sqlServerBackupOptions, same(sqlOptions));
+      expect(ctx.cancelTag, 'backup-h1');
+    },
+  );
 
   test('Firebird factory forwards log to service after validation', () async {
     final mock = _MockFb();

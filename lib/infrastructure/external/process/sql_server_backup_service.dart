@@ -142,7 +142,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
     // "Msg 3013, Level 16, State 1, Server <name>, Line N".
     // Exigimos os três marcadores juntos para reduzir falso positivo.
     final msgPattern = RegExp(r'\bmsg\s+\d+\b');
-    final levelPattern = RegExp(r'\blevel\s+1[6-9]|\blevel\s+2[0-5]\b');
+    // Antes: r'\blevel\s+1[6-9]|\blevel\s+2[0-5]\b' — sem `\b` na
+    // primeira alternativa, casava "level 169" e "level 1900". Agora
+    // exige fronteira de palavra após a faixa numérica.
+    final levelPattern = RegExp(r'\blevel\s+(1[6-9]|2[0-5])\b');
     if (msgPattern.hasMatch(combinedOutputLower) &&
         levelPattern.hasMatch(combinedOutputLower)) {
       return true;
@@ -197,6 +200,24 @@ class SqlServerBackupService implements ISqlServerBackupService {
     final effectiveCancelTag = cancelTag ?? 'backup-$scheduleId';
     final verifyCancelTag = cancelTag ?? 'verify-$scheduleId';
     try {
+      // Validação prévia das opções avançadas: sem isso, valores fora
+      // de faixa (ex.: maxTransferSize não múltiplo de 64KB) só seriam
+      // detectados pelo servidor como `Msg 5009, Level 16, ...`,
+      // mensagem opaca para o usuário. Aqui devolvemos `ValidationFailure`
+      // com motivo legível antes de gerar T-SQL.
+      final optionsToValidate = sqlServerBackupOptions;
+      if (optionsToValidate != null) {
+        final validation = optionsToValidate.validate();
+        if (!validation.isValid) {
+          return rd.Failure(
+            ValidationFailure(
+              message:
+                  'Opções SQL Server inválidas: ${validation.errorMessage}',
+            ),
+          );
+        }
+      }
+
       LoggerService.info(
         'Iniciando backup SQL Server: ${config.databaseValue} (Tipo: ${getBackupTypeDisplayName(backupType)})',
       );
@@ -527,7 +548,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
             verifyPolicy: verifyAfterBackup ? verifyPolicy.name : 'none',
             stripingCount: sqlServerBackupOptions?.stripingCount ?? 1,
             withChecksum: enableChecksum,
-            stopOnError: true,
+            // STOP_ON_ERROR só vai no T-SQL quando enableChecksum é true
+            // (ver bloco de query acima). Antes este flag era reportado
+            // como sempre `true` no histórico, divergindo do BACKUP real.
+            stopOnError: enableChecksum,
           ),
         );
 
@@ -632,56 +656,6 @@ class SqlServerBackupService implements ISqlServerBackupService {
       LoggerService.error('Erro ao listar bancos de dados', e);
       return rd.Failure(
         NetworkFailure(message: 'Erro ao listar bancos de dados: $e'),
-      );
-    }
-  }
-
-  @override
-  Future<rd.Result<List<String>>> listBackupFiles({
-    required SqlServerConfig config,
-    Duration? timeout,
-  }) async {
-    try {
-      // databaseValue aqui é tratado como caminho de arquivo de backup;
-      // mesmo escape T-SQL aplicado nas demais consultas (linha 224, 231,
-      // 403) para evitar SQL malformado / injection se o caminho contiver
-      // aspas simples.
-      final escapedPath = _escapeSqlString(config.databaseValue);
-      final query = "RESTORE FILELISTONLY FROM DISK = N'$escapedPath'";
-
-      final arguments = [..._baseSqlcmdArgs(config), '-Q', query];
-
-      final result = await _processService.run(
-        executable: 'sqlcmd',
-        arguments: arguments,
-        environment: _sqlcmdEnvironment(config),
-        timeout: timeout ?? const Duration(minutes: 1),
-      );
-
-      return result.fold(
-        (processResult) {
-          if (!processResult.isSuccess) {
-            return rd.Failure(
-              BackupFailure(
-                message:
-                    'Falha ao listar arquivos de backup: ${processResult.stderr}',
-              ),
-            );
-          }
-
-          final files = processResult.stdout
-              .split('\n')
-              .where((line) => line.trim().isNotEmpty)
-              .toList();
-
-          return rd.Success(files);
-        },
-        rd.Failure.new,
-      );
-    } on Exception catch (e, stackTrace) {
-      LoggerService.error('Erro ao listar arquivos de backup', e, stackTrace);
-      return rd.Failure(
-        BackupFailure(message: 'Erro ao listar arquivos: $e'),
       );
     }
   }
