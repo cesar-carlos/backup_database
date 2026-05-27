@@ -28,7 +28,19 @@ bool firebirdRuntimeSupportsNbackupGuidMode({
   );
 }
 
-/// Firebird 4 native encryption uses `gbak -KEYNAME`; 2.5/3.0 use `-key`.
+/// **Reservado para o roadmap de criptografia gbak completa.**
+///
+/// Em FB 4.0 o backup logico encriptado usa `gbak -KEYNAME` em
+/// combinacao com `-CRYPT` e `-KEYHOLDER`. Em 2.5/3.0 nao existe
+/// equivalente nativo (ver `gbak` manual: encryption switches foram
+/// introduzidos em 3.0/4.0, **NUNCA `-key` sozinho**).
+///
+/// Este helper continua aqui — apesar de hoje **nao ter consumidor** —
+/// como ponto de extensao para quando entrar o ticket de UI de
+/// criptografia (`cryptPlugin`, `keyholder`, `keyName` no diálogo
+/// Firebird). Auditoria 2026-05-27 removeu o consumidor original
+/// (`_gbakCryptCliArgs` gerava comandos invalidos `-key`/`-KEYNAME
+/// solto`); ver ADR-014.
 bool firebirdGbakUsesKeyNameEncryption({
   required FirebirdServerVersionHint serverVersionHint,
   String? gbakWiTagline,

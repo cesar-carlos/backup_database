@@ -5,6 +5,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/backup_size_calculator.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
+import 'package:backup_database/core/utils/firebird_embedded_support.dart';
 import 'package:backup_database/core/utils/firebird_nbackup_output_chain_check.dart';
 import 'package:backup_database/core/utils/firebird_runtime_version.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -57,34 +58,25 @@ class FirebirdBackupService implements IFirebirdBackupService {
     return '$embedded|$lib|$host|$port|$target';
   }
 
-  static List<String> _gbakCryptCliArgs(
-    FirebirdConfig config, {
-    String? resolvedGbakTagline,
-  }) {
-    final key = config.cryptKey.trim();
-    if (key.isEmpty) {
-      return const <String>[];
-    }
-    if (firebirdGbakUsesKeyNameEncryption(
-      serverVersionHint: config.serverVersionHint,
-      gbakWiTagline: resolvedGbakTagline,
-    )) {
-      return <String>['-KEYNAME', key];
-    }
-    return <String>['-key', key];
-  }
-
-  static void _warnCryptKeyServerHintMismatch(FirebirdConfig config) {
+  /// Backup logico com chave de criptografia ainda nao e suportado nesta
+  /// versao do app. As CLI flags reais do `gbak` (`-CRYPT`, `-KEYHOLDER`,
+  /// `-KEYNAME`) exigem o trio combinado para encriptar, e `-key` nao e
+  /// switch valido de `gbak` em nenhuma versao do Firebird. Enquanto o
+  /// suporte completo (UI + tres campos) nao chega, qualquer config com
+  /// `cryptKey` nao vazio e rejeitada antes de o backup comecar (em vez
+  /// de gerar comando invalido que confunde o utilizador).
+  static ValidationFailure? _rejectCryptKeyIfPresent(FirebirdConfig config) {
     if (config.cryptKey.trim().isEmpty) {
-      return;
+      return null;
     }
-    if (config.serverVersionHint == FirebirdServerVersionHint.v25) {
-      LoggerService.warning(
-        'Firebird: chave de criptografia configurada com hint 2.5; gbak usa '
-        '-key (plugin legado). Para criptografia nativa Firebird 4 (-KEYNAME), '
-        'defina hint 4.0 ou Automatico com gbak -z.',
-      );
-    }
+    return const ValidationFailure(
+      message:
+          'Backup logico Firebird com chave de criptografia ainda nao e '
+          'suportado nesta versao. A flag real do gbak requer a combinacao '
+          '-CRYPT + -KEYHOLDER + -KEYNAME (apenas Firebird 3+). Remova a '
+          'chave da configuracao ou aguarde o suporte dedicado no diálogo '
+          'de agendamento.',
+    );
   }
 
   @visibleForTesting
@@ -112,225 +104,35 @@ class FirebirdBackupService implements IFirebirdBackupService {
     r'^\s*(\{?[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}?)\s*$',
   );
 
-  static const String _engine12Dll = 'engine12.dll';
-  static const String _engine13Dll = 'engine13.dll';
-
-  static const String _legacyAuthProviderDllName = 'Engine12';
-  static const String _legacyAuthRejectedSnake =
-      'your user name and password are not defined';
-
-  static String _combinedProcessOutput(ps.ProcessResult result) =>
-      '${result.stderr}\n${result.stdout}'.trim();
-
-  static bool _processOutputImpliesLegacyAuthPluginRejection(
-    String combined,
-  ) {
-    return combined.toLowerCase().contains(_legacyAuthRejectedSnake);
-  }
-
-  static bool _firebirdConfigAllowsLegacyProviderRetry(FirebirdConfig config) {
-    return config.serverVersionHint != FirebirdServerVersionHint.v25;
-  }
-
-  static bool _argsContainLegacyProvider(List<String> args) {
-    for (var i = 0; i < args.length - 1; i++) {
-      if (args[i].toLowerCase() == '-provider' &&
-          args[i + 1].toLowerCase() ==
-              _legacyAuthProviderDllName.toLowerCase()) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  static int? _indexOfArgIgnoreCase(List<String> args, String flag) {
-    final lower = flag.toLowerCase();
-    for (var i = 0; i < args.length; i++) {
-      if (args[i].toLowerCase() == lower) {
-        return i;
-      }
-    }
-    return null;
-  }
-
-  static List<String>? _argumentsWithInjectedLegacyProvider({
-    required String executable,
-    required List<String> arguments,
-  }) {
-    if (_argsContainLegacyProvider(arguments)) {
-      return null;
-    }
-    switch (executable) {
-      case 'gbak':
-        final anchor =
-            _indexOfArgIgnoreCase(arguments, '-b') ??
-            _indexOfArgIgnoreCase(arguments, '-c');
-        if (anchor == null) {
-          return null;
-        }
-        return <String>[
-          ...arguments.sublist(0, anchor + 1),
-          '-PROVIDER',
-          _legacyAuthProviderDllName,
-          ...arguments.sublist(anchor + 1),
-        ];
-      case 'nbackup':
-        return <String>[
-          '-PROVIDER',
-          _legacyAuthProviderDllName,
-          ...arguments,
-        ];
-      case 'gstat':
-        final iH = _indexOfArgIgnoreCase(arguments, '-h');
-        if (iH == null) {
-          return null;
-        }
-        return <String>[
-          ...arguments.sublist(0, iH + 1),
-          '-PROVIDER',
-          _legacyAuthProviderDllName,
-          ...arguments.sublist(iH + 1),
-        ];
-      case 'isql':
-        final iQ = _indexOfArgIgnoreCase(arguments, '-q');
-        if (iQ == null) {
-          return <String>[
-            '-PROVIDER',
-            _legacyAuthProviderDllName,
-            ...arguments,
-          ];
-        }
-        return <String>[
-          ...arguments.sublist(0, iQ + 1),
-          '-PROVIDER',
-          _legacyAuthProviderDllName,
-          ...arguments.sublist(iQ + 1),
-        ];
-      default:
-        return null;
-    }
-  }
-
-  Future<rd.Result<ps.ProcessResult>> _runFirebirdCliWithOptionalLegacyRetry({
+  /// Executa um CLI Firebird (`gbak`/`nbackup`/`gstat`/`isql`) com o
+  /// `Path` correto para o `fbclient.dll` configurado. **Nao injeta**
+  /// `-PROVIDER Engine12` em retry de auth: nenhum CLI Firebird aceita
+  /// esse switch como argumento de linha de comando (Engine12 e um nome
+  /// de provider configurado via `firebird.conf` / `databases.conf`). O
+  /// erro original ("your user name and password are not defined") ja e
+  /// traduzido por `_failureFromProcess` com remediacao explicita
+  /// (AuthServer em firebird.conf), sem mascarar com novo erro de
+  /// "switch invalido" que a tentativa de retry produzia.
+  Future<rd.Result<ps.ProcessResult>> _runFirebirdCli({
     required String executable,
     required List<String> arguments,
     required FirebirdConfig config,
     required Duration timeout,
     String? cancelTag,
-  }) async {
-    var args = List<String>.from(arguments);
-
-    Future<rd.Result<ps.ProcessResult>> runOnce() {
-      return _processService.run(
-        executable: executable,
-        arguments: args,
-        environment: _clientLibEnvironment(config),
-        timeout: timeout,
-        tag: cancelTag,
-      );
-    }
-
-    final first = await runOnce();
-    if (first.isError()) {
-      return first;
-    }
-    final firstProcess = first.getOrNull()!;
-    if (firstProcess.isSuccess) {
-      return first;
-    }
-    if (!_firebirdConfigAllowsLegacyProviderRetry(config) ||
-        !_processOutputImpliesLegacyAuthPluginRejection(
-          _combinedProcessOutput(firstProcess),
-        )) {
-      return first;
-    }
-    final next = _argumentsWithInjectedLegacyProvider(
+  }) {
+    return _processService.run(
       executable: executable,
-      arguments: args,
+      arguments: arguments,
+      environment: _clientLibEnvironment(config),
+      timeout: timeout,
+      tag: cancelTag,
     );
-    if (next == null) {
-      return first;
-    }
-    args = next;
-    LoggerService.warning(
-      'Firebird ($executable): autenticacao rejeitada na primeira '
-      'tentativa (plugin/protocolo). Nova execucao com -PROVIDER '
-      '$_legacyAuthProviderDllName (modo compativel). Em Firebird 3+ '
-      'considere AuthServer em firebird.conf (ex.: Legacy_Auth, Srp).',
-    );
-
-    return runOnce();
   }
 
   Future<ValidationFailure?> _validateEmbeddedEnginePlugins(
     FirebirdConfig config,
-  ) async {
-    if (!config.useEmbedded || !Platform.isWindows) {
-      return null;
-    }
-    if (config.serverVersionHint == FirebirdServerVersionHint.v25) {
-      return null;
-    }
-
-    final clientRaw = config.clientLibraryPath?.trim();
-    if (clientRaw == null || clientRaw.isEmpty) {
-      return const ValidationFailure(
-        message:
-            'Modo embedded Firebird 3.0+ no Windows requer Client library path '
-            '(fbclient.dll) para validar a pasta plugins (engine12.dll / '
-            'engine13.dll).',
-      );
-    }
-
-    final clientAbs = p.normalize(File(clientRaw).absolute.path);
-    if (!await File(clientAbs).exists()) {
-      return ValidationFailure(
-        message: 'Client library Firebird nao encontrado: $clientAbs',
-      );
-    }
-
-    final binDir = p.dirname(clientAbs);
-    final installRoot = p.normalize(p.join(binDir, '..'));
-    final pluginsDir = p.join(installRoot, 'plugins');
-
-    final hint = config.serverVersionHint;
-    if (hint == FirebirdServerVersionHint.v40) {
-      if (!await File(p.join(pluginsDir, _engine13Dll)).exists()) {
-        return ValidationFailure(
-          message:
-              'Firebird embedded 4.0: nao encontrado $_engine13Dll em '
-              "'$pluginsDir'. Use uma instalacao completa do servidor ou "
-              'copie os plugins para essa pasta.',
-        );
-      }
-      return null;
-    }
-    if (hint == FirebirdServerVersionHint.v30) {
-      if (!await File(p.join(pluginsDir, _engine12Dll)).exists()) {
-        return ValidationFailure(
-          message:
-              'Firebird embedded 3.0: nao encontrado $_engine12Dll em '
-              "'$pluginsDir'. Use uma instalacao completa do servidor ou "
-              'copie os plugins para essa pasta.',
-        );
-      }
-      return null;
-    }
-    if (hint == FirebirdServerVersionHint.auto) {
-      final has12 = await File(p.join(pluginsDir, _engine12Dll)).exists();
-      final has13 = await File(p.join(pluginsDir, _engine13Dll)).exists();
-      if (!has12 && !has13) {
-        return ValidationFailure(
-          message:
-              'Firebird embedded (hint Auto): nao encontrado $_engine12Dll '
-              'nem $_engine13Dll em '
-              "'$pluginsDir'. Confira a instalacao ou defina o hint de "
-              'versao (3.0 / 4.0).',
-        );
-      }
-    }
-
-    return null;
+  ) {
+    return FirebirdEmbeddedSupport.validateEmbeddedEnginePlugins(config);
   }
 
   Future<String?> _resolveGbakZTagline(
@@ -379,7 +181,7 @@ class FirebirdBackupService implements IFirebirdBackupService {
           _gbakZTaglineCache[key] = '';
           return null;
         }
-        final clipped = tag.length > 120 ? '${tag.substring(0, 117)}...' : tag;
+        final clipped = tag.length > 100 ? '${tag.substring(0, 97)}...' : tag;
         _gbakZTaglineCache[key] = clipped;
         return clipped;
       },
@@ -469,14 +271,23 @@ class FirebirdBackupService implements IFirebirdBackupService {
     }
   }
 
-  static List<String> _firebirdServiceManagerPair(FirebirdConfig config) {
+  static List<String> _gbakServiceManagerPair(FirebirdConfig config) {
     return <String>[
       '-SE',
       '${config.host}/${config.portValue}:service_mgr',
     ];
   }
 
-  static List<String> _firebirdServiceManagerSwitch(FirebirdConfig config) {
+  /// Decide se acrescenta `-SE host/port:service_mgr` a uma chamada
+  /// **`gbak`**. Nao se aplica a `nbackup`: a CLI do `nbackup` nao
+  /// possui um switch `-SE`/`-SERVICE`; para `nbackup` via Services
+  /// Manager o Firebird exige o utilitario separado `fbsvcmgr` com
+  /// switches diferentes (`-action_nbak`, `-nbk_level n`, etc.), o que
+  /// fica fora do MVP. Em modo `always` com hint `v25` (gbak 2.5
+  /// suporta `-SE`, mas o utilizador pode estar a apontar para um
+  /// servidor sem services API completo), emitimos um warning para
+  /// alinhar expectativas.
+  static List<String> _gbakServiceManagerSwitch(FirebirdConfig config) {
     if (config.useEmbedded) {
       return const <String>[];
     }
@@ -485,14 +296,20 @@ class FirebirdBackupService implements IFirebirdBackupService {
         return const <String>[];
       case FirebirdServiceManagerMode.always:
         if (config.serverVersionHint == FirebirdServerVersionHint.v25) {
+          LoggerService.warning(
+            'Firebird: serviceManagerMode=always + hint v2.5 — gbak -SE '
+            'omitido (o utilizador escolheu Sempre usar, mas a política '
+            'evita Services Manager neste hint). Defina hint 3.0/4.0 se '
+            'pretende forcar -SE.',
+          );
           return const <String>[];
         }
-        return _firebirdServiceManagerPair(config);
+        return _gbakServiceManagerPair(config);
       case FirebirdServiceManagerMode.auto:
         switch (config.serverVersionHint) {
           case FirebirdServerVersionHint.v30:
           case FirebirdServerVersionHint.v40:
-            return _firebirdServiceManagerPair(config);
+            return _gbakServiceManagerPair(config);
           case FirebirdServerVersionHint.auto:
           case FirebirdServerVersionHint.v25:
             return const <String>[];
@@ -606,11 +423,17 @@ class FirebirdBackupService implements IFirebirdBackupService {
     try {
       tempDir = await Directory.systemTemp.createTemp('fb_nbackup_guid_');
       final scriptFile = File(p.join(tempDir.path, 'nbackup_parent_guid.sql'));
+      // Em algumas builds, RDB$GUID e CHAR(16) CHARACTER SET OCTETS, e o
+      // CAST direto para VARCHAR retorna bytes ilegiveis. Preferimos a
+      // funcao UUID_TO_CHAR (FB 2.5+) que produz o formato canonico
+      // hexadecimal. Em ambientes onde a funcao nao existir, isql vai
+      // falhar com erro de funcao desconhecida e o caller cai no fluxo
+      // de fallback (mensagem "GUID nao encontrado").
       final sql =
           '''
 SET HEADING OFF;
 SET LIST OFF;
-SELECT FIRST 1 TRIM(CAST(RDB\$GUID AS VARCHAR(38)))
+SELECT FIRST 1 UUID_TO_CHAR(RDB\$GUID)
 FROM RDB\$BACKUP_HISTORY
 WHERE RDB\$BACKUP_LEVEL = $parentLevel
 ORDER BY RDB\$TIMESTAMP DESC;
@@ -629,7 +452,7 @@ QUIT;
         dbSpec,
       ];
 
-      final run = await _runFirebirdCliWithOptionalLegacyRetry(
+      final run = await _runFirebirdCli(
         executable: 'isql',
         arguments: arguments,
         config: config,
@@ -724,22 +547,16 @@ QUIT;
       );
     }
 
+    final cryptKeyFailure = _rejectCryptKeyIfPresent(config);
+    if (cryptKeyFailure != null) {
+      return rd.Failure(cryptKeyFailure);
+    }
+
     final specResult = _connectionSpec(config);
     if (specResult.isError()) {
       return rd.Failure(_asFailure(specResult.exceptionOrNull()!));
     }
     final dbSpec = specResult.getOrNull()!;
-
-    if (!useGbakFlow && config.cryptKey.trim().isNotEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message:
-              'Chave de criptografia (AES) so se aplica ao backup logico '
-              'com gbak. Use tipo Full Single ou remova a chave para backup '
-              'fisico (nbackup).',
-        ),
-      );
-    }
 
     final embeddedFailure = await _validateEmbeddedEnginePlugins(config);
     if (embeddedFailure != null) {
@@ -806,7 +623,6 @@ QUIT;
     final backupPath = p.join(context.outputDirectory, backupFileName);
 
     if (useGbak) {
-      _warnCryptKeyServerHintMismatch(config);
       LoggerService.info(
         'Iniciando backup Firebird logico (gbak): '
         '${config.primaryDatabase.value}',
@@ -815,16 +631,12 @@ QUIT;
         executable: 'gbak',
         arguments: <String>[
           '-b',
-          ..._firebirdServiceManagerSwitch(config),
+          ..._gbakServiceManagerSwitch(config),
           '-user',
           config.username,
           '-pas',
           config.password,
           '-y',
-          ..._gbakCryptCliArgs(
-            config,
-            resolvedGbakTagline: resolvedGbakTagline,
-          ),
           dbSpec,
           backupPath,
         ],
@@ -842,6 +654,11 @@ QUIT;
       'Iniciando backup Firebird fisico (nbackup -B $nbackupBArg): '
       '${config.primaryDatabase.value}',
     );
+    // nbackup nao aceita `-SE host/port:service_mgr` (nao existe esse
+    // switch na CLI). O remoto via Services Manager exigiria a tool
+    // `fbsvcmgr` com switches diferentes (`-action_nbak`, ...) — fora
+    // do MVP. Para o cliente/servidor habitual, `nbackup` usa o
+    // proprio protocolo Firebird via `dbSpec`.
     return _runCliBackup(
       executable: 'nbackup',
       arguments: <String>[
@@ -849,7 +666,6 @@ QUIT;
         config.username,
         '-PASSWORD',
         config.password,
-        ..._firebirdServiceManagerSwitch(config),
         '-B',
         nbackupBArg,
         dbSpec,
@@ -877,7 +693,7 @@ QUIT;
     String? resolvedGbakTagline,
   }) async {
     final stopwatch = Stopwatch()..start();
-    final runResult = await _runFirebirdCliWithOptionalLegacyRetry(
+    final runResult = await _runFirebirdCli(
       executable: executable,
       arguments: arguments,
       config: config,
@@ -929,7 +745,6 @@ QUIT;
               backupPath: backupPath,
               config: config,
               context: context,
-              resolvedGbakTagline: resolvedGbakTagline,
             );
             verifySw.stop();
             verifyDuration = verifySw.elapsed;
@@ -999,7 +814,7 @@ QUIT;
       dbSpec,
     ];
 
-    final result = await _runFirebirdCliWithOptionalLegacyRetry(
+    final result = await _runFirebirdCli(
       executable: 'gstat',
       arguments: arguments,
       config: config,
@@ -1254,7 +1069,7 @@ QUIT;
         dbSpec,
       ];
 
-      final run = await _runFirebirdCliWithOptionalLegacyRetry(
+      final run = await _runFirebirdCli(
         executable: 'isql',
         arguments: arguments,
         config: config,
@@ -1320,7 +1135,7 @@ QUIT;
         dbSpec,
       ];
 
-      final run = await _runFirebirdCliWithOptionalLegacyRetry(
+      final run = await _runFirebirdCli(
         executable: 'isql',
         arguments: arguments,
         config: config,
@@ -1448,7 +1263,7 @@ QUIT;
       dbSpec,
     ];
 
-    final result = await _runFirebirdCliWithOptionalLegacyRetry(
+    final result = await _runFirebirdCli(
       executable: 'gstat',
       arguments: arguments,
       config: config,
@@ -1584,18 +1399,7 @@ QUIT;
   }
 
   Map<String, String>? _clientLibEnvironment(FirebirdConfig config) {
-    final lib = config.clientLibraryPath?.trim();
-    if (lib == null || lib.isEmpty) {
-      return null;
-    }
-    final dir = p.dirname(lib);
-    final key = Platform.isWindows ? 'Path' : 'PATH';
-    final current = Platform.environment[key] ?? Platform.environment['PATH'];
-    if (current == null || current.isEmpty) {
-      return {key: dir};
-    }
-    final sep = Platform.isWindows ? ';' : ':';
-    return {key: '$dir$sep$current'};
+    return FirebirdEmbeddedSupport.clientLibEnvironment(config);
   }
 
   (int?, int?) _parseGstatPageStats(String text) {
@@ -1660,7 +1464,6 @@ QUIT;
     required String backupPath,
     required FirebirdConfig config,
     required BackupExecutionContext context,
-    String? resolvedGbakTagline,
   }) async {
     final stamp =
         '${DateTime.now().microsecondsSinceEpoch}_'
@@ -1681,7 +1484,7 @@ QUIT;
 
     final arguments = <String>[
       '-c',
-      ..._firebirdServiceManagerSwitch(config),
+      ..._gbakServiceManagerSwitch(config),
       backupPath,
       tempDbPath,
       '-user',
@@ -1690,14 +1493,10 @@ QUIT;
       config.password,
       '-y',
       logPath,
-      ..._gbakCryptCliArgs(
-        config,
-        resolvedGbakTagline: resolvedGbakTagline,
-      ),
     ];
 
     try {
-      final runResult = await _runFirebirdCliWithOptionalLegacyRetry(
+      final runResult = await _runFirebirdCli(
         executable: 'gbak',
         arguments: arguments,
         config: config,
@@ -1805,7 +1604,12 @@ QUIT;
     } else if (errorOutput.isNotEmpty) {
       errorMessage = errorOutput.split('\n').first.trim();
       if (errorMessage.length > 200) {
-        errorMessage = '${errorMessage.substring(0, 200)}...';
+        // Tenta cortar num boundary de palavra para nao quebrar o
+        // ultimo token ao meio; cai no corte hard so quando nao ha
+        // espaco proximo (raro em saidas de CLI Firebird).
+        final softBoundary = errorMessage.lastIndexOf(' ', 200);
+        final cut = softBoundary > 150 ? softBoundary : 200;
+        errorMessage = '${errorMessage.substring(0, cut)}...';
       }
     }
 

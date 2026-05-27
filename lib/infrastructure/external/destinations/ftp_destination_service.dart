@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/failure.dart' hide FtpFailure;
@@ -33,207 +34,104 @@ class FtpDestinationService implements IFtpService {
     final stopwatch = Stopwatch()..start();
     final ctx = _buildLogContext(runId: runId, destinationId: destinationId);
 
+    LoggerService.info('$ctx Enviando para FTP: ${config.host}');
+
+    final sourceFile = File(sourceFilePath);
+    if (!await sourceFile.exists()) {
+      return rd.Failure(
+        FileSystemFailure(
+          message: 'Arquivo de origem não encontrado: $sourceFilePath',
+        ),
+      );
+    }
+
+    final fileSize = await sourceFile.length();
+    final fileName = customFileName ?? p.basename(sourceFilePath);
+    final remotePartName = _buildRemotePartName(
+      finalFileName: fileName,
+      runId: runId,
+      destinationId: destinationId,
+    );
+
+    final hashStopwatch = Stopwatch()..start();
+    LoggerService.debug('Calculando SHA-256 do arquivo local...');
+    final sha256Hash = await _computeSha256Streaming(sourceFile);
+    hashStopwatch.stop();
+    if (sha256Hash != null) {
+      LoggerService.debug(
+        'SHA-256 calculado em ${hashStopwatch.elapsedMilliseconds}ms '
+        '(${ByteFormat.format(fileSize)})',
+      );
+    }
+
+    FTPConnect? ftp;
+    var ftpConnected = false;
+    Timer? cancellationWatcher;
     try {
-      LoggerService.info('$ctx Enviando para FTP: ${config.host}');
-
-      final sourceFile = File(sourceFilePath);
-      if (!await sourceFile.exists()) {
-        return rd.Failure(
-          FileSystemFailure(
-            message: 'Arquivo de origem não encontrado: $sourceFilePath',
-          ),
-        );
-      }
-
-      final fileSize = await sourceFile.length();
-      final fileName = customFileName ?? p.basename(sourceFilePath);
-      final remotePartName = _buildRemotePartName(
-        finalFileName: fileName,
-        runId: runId,
-        destinationId: destinationId,
+      ftp = FTPConnect(
+        config.host,
+        port: config.port,
+        user: config.username,
+        pass: config.password,
+        timeout: config.effectiveUploadTimeoutSeconds,
+        securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
+        allowInvalidCertificates: config.allowInvalidCertificates,
+        showLog: config.enableVerboseLog || kDebugMode,
       );
 
-      final hashStopwatch = Stopwatch()..start();
-      LoggerService.debug('Calculando SHA-256 do arquivo local...');
-      final sha256Hash = await _computeSha256Streaming(sourceFile);
-      hashStopwatch.stop();
-      if (sha256Hash != null) {
-        LoggerService.debug(
-          'SHA-256 calculado em ${hashStopwatch.elapsedMilliseconds}ms '
-          '(${ByteFormat.format(fileSize)})',
-        );
+      final connected = await ftp.connect();
+      ftpConnected = connected;
+      if (!connected) {
+        throw Exception('Falha ao conectar ao servidor FTP');
+      }
+      cancellationWatcher = _startCancellationWatcher(
+        ftp: ftp,
+        isCancelled: isCancelled,
+        context: ctx,
+      );
+
+      final supportsRestStream = await _checkRestStreamSupport(ftp);
+      switch (supportsRestStream) {
+        case true:
+          LoggerService.debug('Upload FTP: servidor suporta REST STREAM');
+        case false:
+          LoggerService.debug(
+            'Upload FTP: fallback para upload completo (REST STREAM não suportado)',
+          );
+        case null:
+          break;
       }
 
-      FTPConnect? ftp;
-      var ftpConnected = false;
-      Timer? cancellationWatcher;
-      try {
-        ftp = FTPConnect(
-          config.host,
-          port: config.port,
-          user: config.username,
-          pass: config.password,
-          timeout: config.effectiveUploadTimeoutSeconds,
-          securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
-          allowInvalidCertificates: config.allowInvalidCertificates,
-          showLog: config.enableVerboseLog || kDebugMode,
-        );
+      await _ensureBinaryTransferType(ftp);
 
-        final connected = await ftp.connect();
-        ftpConnected = connected;
-        if (!connected) {
-          throw Exception('Falha ao conectar ao servidor FTP');
-        }
-        cancellationWatcher = _startCancellationWatcher(
-          ftp: ftp,
-          isCancelled: isCancelled,
-          context: ctx,
-        );
+      if (config.remotePath.isNotEmpty && config.remotePath != '/') {
+        await _createRemoteDirectories(ftp, config.remotePath);
+        await ftp.changeDirectory(config.remotePath);
+      }
 
-        final supportsRestStream = await _checkRestStreamSupport(ftp);
-        switch (supportsRestStream) {
-          case true:
-            LoggerService.debug('Upload FTP: servidor suporta REST STREAM');
-          case false:
-            LoggerService.debug(
-              'Upload FTP: fallback para upload completo (REST STREAM não suportado)',
-            );
-          case null:
-            break;
-        }
-
-        await _ensureBinaryTransferType(ftp);
-
-        if (config.remotePath.isNotEmpty && config.remotePath != '/') {
-          await _createRemoteDirectories(ftp, config.remotePath);
-          await ftp.changeDirectory(config.remotePath);
-        }
-
-        final alreadyUploaded = await _isRemoteFileAlreadyComplete(
-          ftp: ftp,
-          remoteFileName: fileName,
-          expectedSize: fileSize,
-          localSha256: sha256Hash,
-          enableStrongIntegrityValidation:
-              config.enableStrongIntegrityValidation,
-          enableReadBackValidation: config.enableReadBackValidation,
-        );
-        if (alreadyUploaded) {
-          cancellationWatcher?.cancel();
-          await ftp.disconnect();
-          ftpConnected = false;
-          ftp = null;
-          stopwatch.stop();
-
-          final remotePath = p.posix.join(
-            config.remotePath == '/' ? '' : config.remotePath,
-            fileName,
-          );
-          LoggerService.info(
-            '$ctx Upload FTP concluído por idempotência: '
-            '$remotePath (arquivo já existente no destino)',
-          );
-
-          return rd.Success(
-            FtpUploadResult(
-              remotePath: remotePath,
-              fileSize: fileSize,
-              duration: stopwatch.elapsed,
-              sha256: sha256Hash,
-              hashDurationMs: sha256Hash != null
-                  ? hashStopwatch.elapsedMilliseconds
-                  : null,
-            ),
-          );
-        }
-
-        final uploadResult = await _performUploadWithResume(
-          ftp: ftp,
-          sourceFile: sourceFile,
-          fileSize: fileSize,
-          remotePartName: remotePartName,
-          supportsRestStream: supportsRestStream ?? false,
-          enableResumeFromConfig: config.enableResume,
-          whenResumeNotSupportedFail:
-              config.whenResumeNotSupported == FtpWhenResumeNotSupported.fail,
-          onProgress: onProgress,
-          isCancelled: isCancelled,
-        );
-
-        if (!uploadResult.uploaded) {
-          await _safeDeletePart(ftp, remotePartName);
-          throw Exception('Falha no upload do arquivo (retorno falso)');
-        }
-        _throwIfCancelled(isCancelled);
-
-        final validationResult = await _validatePartSize(
-          ftp,
-          remotePartName,
-          fileSize,
-        );
-
-        if (!validationResult.isValid) {
-          await _safeDeletePart(ftp, remotePartName);
-          return rd.Failure(
-            FtpFailure(
-              message: validationResult.errorMessage!,
-              code: FailureCodes.ftpIntegrityValidationFailed,
-              originalError: validationResult.originalError,
-            ),
-          );
-        }
-        _throwIfCancelled(isCancelled);
-
-        final renamed = await ftp.rename(remotePartName, fileName);
-        if (!renamed) {
-          await _safeDeletePart(ftp, remotePartName);
-          throw Exception(
-            'Falha ao renomear arquivo temporário para nome final. '
-            'Verifique permissões no servidor FTP.',
-          );
-        }
-
-        _throwIfCancelled(isCancelled);
-
-        final finalIntegrityResult = await _validateFinalIntegrity(
-          ftp: ftp,
-          remoteFileName: fileName,
-          expectedSize: fileSize,
-          localSha256: sha256Hash,
-          enableStrongIntegrityValidation:
-              config.enableStrongIntegrityValidation,
-          enableReadBackValidation: config.enableReadBackValidation,
-        );
-        if (!finalIntegrityResult.isValid) {
-          await _safeDeletePart(ftp, fileName);
-          return rd.Failure(
-            FtpFailure(
-              message: finalIntegrityResult.errorMessage!,
-              code: finalIntegrityResult.failureCode,
-              originalError: finalIntegrityResult.originalError,
-            ),
-          );
-        }
-
-        if (sha256Hash != null) {
-          await _uploadSidecar(ftp, fileName, sha256Hash);
-        }
-
+      final alreadyUploaded = await _isRemoteFileAlreadyComplete(
+        ftp: ftp,
+        remoteFileName: fileName,
+        expectedSize: fileSize,
+        localSha256: sha256Hash,
+        enableStrongIntegrityValidation: config.enableStrongIntegrityValidation,
+        enableReadBackValidation: config.enableReadBackValidation,
+      );
+      if (alreadyUploaded) {
         cancellationWatcher?.cancel();
         await ftp.disconnect();
         ftpConnected = false;
         ftp = null;
-
         stopwatch.stop();
 
         final remotePath = p.posix.join(
           config.remotePath == '/' ? '' : config.remotePath,
           fileName,
         );
-        final hashInfo = sha256Hash != null
-            ? ' (SHA-256: $sha256Hash, hash ${hashStopwatch.elapsedMilliseconds}ms)'
-            : '';
-        LoggerService.info('$ctx Upload FTP concluído: $remotePath$hashInfo');
+        LoggerService.info(
+          '$ctx Upload FTP concluído por idempotência: '
+          '$remotePath (arquivo já existente no destino)',
+        );
 
         return rd.Success(
           FtpUploadResult(
@@ -246,76 +144,170 @@ class FtpDestinationService implements IFtpService {
                 : null,
           ),
         );
-      } on _ResumeNotSupportedPolicyException catch (e) {
-        cancellationWatcher?.cancel();
-        if (ftp != null && ftpConnected) {
+      }
+
+      final uploadResult = await _performUploadWithResume(
+        ftp: ftp,
+        sourceFile: sourceFile,
+        fileSize: fileSize,
+        remotePartName: remotePartName,
+        supportsRestStream: supportsRestStream ?? false,
+        enableResumeFromConfig: config.enableResume,
+        whenResumeNotSupportedFail:
+            config.whenResumeNotSupported == FtpWhenResumeNotSupported.fail,
+        onProgress: onProgress,
+        isCancelled: isCancelled,
+      );
+
+      if (!uploadResult.uploaded) {
+        await _safeDeletePart(ftp, remotePartName);
+        throw Exception('Falha no upload do arquivo (retorno falso)');
+      }
+      _throwIfCancelled(isCancelled);
+
+      final validationResult = await _validatePartSize(
+        ftp,
+        remotePartName,
+        fileSize,
+      );
+
+      if (!validationResult.isValid) {
+        await _safeDeletePart(ftp, remotePartName);
+        return rd.Failure(
+          FtpFailure(
+            message: validationResult.errorMessage!,
+            code: FailureCodes.ftpIntegrityValidationFailed,
+            originalError: validationResult.originalError,
+          ),
+        );
+      }
+      _throwIfCancelled(isCancelled);
+
+      final renamed = await ftp.rename(remotePartName, fileName);
+      if (!renamed) {
+        await _safeDeletePart(ftp, remotePartName);
+        throw Exception(
+          'Falha ao renomear arquivo temporário para nome final. '
+          'Verifique permissões no servidor FTP.',
+        );
+      }
+
+      _throwIfCancelled(isCancelled);
+
+      final finalIntegrityResult = await _validateFinalIntegrity(
+        ftp: ftp,
+        remoteFileName: fileName,
+        expectedSize: fileSize,
+        localSha256: sha256Hash,
+        enableStrongIntegrityValidation: config.enableStrongIntegrityValidation,
+        enableReadBackValidation: config.enableReadBackValidation,
+      );
+      if (!finalIntegrityResult.isValid) {
+        await _safeDeletePart(ftp, fileName);
+        return rd.Failure(
+          FtpFailure(
+            message: finalIntegrityResult.errorMessage!,
+            code: finalIntegrityResult.failureCode,
+            originalError: finalIntegrityResult.originalError,
+          ),
+        );
+      }
+
+      if (sha256Hash != null) {
+        await _uploadSidecar(ftp, fileName, sha256Hash);
+      }
+
+      cancellationWatcher?.cancel();
+      await ftp.disconnect();
+      ftpConnected = false;
+      ftp = null;
+
+      stopwatch.stop();
+
+      final remotePath = p.posix.join(
+        config.remotePath == '/' ? '' : config.remotePath,
+        fileName,
+      );
+      final hashInfo = sha256Hash != null
+          ? ' (SHA-256: $sha256Hash, hash ${hashStopwatch.elapsedMilliseconds}ms)'
+          : '';
+      LoggerService.info('$ctx Upload FTP concluído: $remotePath$hashInfo');
+
+      return rd.Success(
+        FtpUploadResult(
+          remotePath: remotePath,
+          fileSize: fileSize,
+          duration: stopwatch.elapsed,
+          sha256: sha256Hash,
+          hashDurationMs: sha256Hash != null
+              ? hashStopwatch.elapsedMilliseconds
+              : null,
+        ),
+      );
+    } on _ResumeNotSupportedPolicyException catch (e) {
+      cancellationWatcher?.cancel();
+      if (ftp != null && ftpConnected) {
+        try {
+          await ftp.disconnect();
+        } on Object catch (e, st) {
+          LoggerService.debug(
+            'FTP disconnect after resume policy failure: $e',
+            e,
+            st,
+          );
+        }
+      }
+      return rd.Failure(e.failure);
+    } on _UploadCancelledException {
+      cancellationWatcher?.cancel();
+      if (ftp != null && ftpConnected) {
+        if (!config.keepPartOnCancel) {
           try {
-            await ftp.disconnect();
+            await _safeDeletePart(ftp, remotePartName);
           } on Object catch (e, st) {
             LoggerService.debug(
-              'FTP disconnect after resume policy failure: $e',
+              'FTP delete part after cancel: $e',
               e,
               st,
             );
           }
         }
-        return rd.Failure(e.failure);
-      } on _UploadCancelledException {
-        cancellationWatcher?.cancel();
-        if (ftp != null && ftpConnected) {
-          if (!config.keepPartOnCancel) {
-            try {
-              await _safeDeletePart(ftp, remotePartName);
-            } on Object catch (e, st) {
-              LoggerService.debug(
-                'FTP delete part after cancel: $e',
-                e,
-                st,
-              );
-            }
-          }
-          try {
-            await ftp.disconnect();
-            ftpConnected = false;
-          } on Object catch (disconnectError) {
-            LoggerService.debug(
-              'Erro ao desconectar FTP após cancelamento: $disconnectError',
-            );
-          }
+        try {
+          await ftp.disconnect();
+          ftpConnected = false;
+        } on Object catch (disconnectError) {
+          LoggerService.debug(
+            'Erro ao desconectar FTP após cancelamento: $disconnectError',
+          );
         }
-        LoggerService.info('$ctx Upload FTP cancelado pelo usuário');
-        return const rd.Failure(
-          BackupFailure(
-            message: 'Upload cancelado pelo usuário.',
-            code: FailureCodes.uploadCancelled,
-          ),
-        );
-      } on Object catch (e) {
-        cancellationWatcher?.cancel();
-        if (ftp != null && ftpConnected) {
-          try {
-            await ftp.disconnect();
-            ftpConnected = false;
-          } on Object catch (disconnectError) {
-            LoggerService.debug(
-              'Erro ao desconectar FTP após falha: $disconnectError',
-            );
-          }
-        }
-
-        stopwatch.stop();
-        final lastError = e is Exception ? e : Exception(e.toString());
-        LoggerService.warning('$ctx Upload FTP falhou: $e', lastError);
-        return rd.Failure(
-          FtpFailure(
-            message: _getFtpErrorMessage(lastError, config.host),
-            originalError: lastError,
-          ),
-        );
       }
+      LoggerService.info('$ctx Upload FTP cancelado pelo usuário');
+      return const rd.Failure(
+        BackupFailure(
+          message: 'Upload cancelado pelo usuário.',
+          code: FailureCodes.uploadCancelled,
+        ),
+      );
     } on Object catch (e, stackTrace) {
+      cancellationWatcher?.cancel();
+      if (ftp != null && ftpConnected) {
+        try {
+          await ftp.disconnect();
+          ftpConnected = false;
+        } on Object catch (disconnectError) {
+          LoggerService.debug(
+            'Erro ao desconectar FTP após falha: $disconnectError',
+          );
+        }
+      }
+
       stopwatch.stop();
-      LoggerService.error('$ctx Erro no upload FTP', e, stackTrace);
+      final lastError = e is Exception ? e : Exception(e.toString());
+      LoggerService.warning(
+        '$ctx Upload FTP falhou: $e',
+        lastError,
+        stackTrace,
+      );
       return rd.Failure(
         FtpFailure(
           message: _getFtpErrorMessage(e, config.host),
@@ -410,16 +402,20 @@ class FtpDestinationService implements IFtpService {
         LoggerService.info(
           'Retomando upload de $remotePartName a partir do byte $offset',
         );
+        var lastLoggedResumePercent = -1;
         final uploaded = await ftp.uploadFileWithResume(
           sourceFile,
           offset: offset,
           sRemoteName: remotePartName,
-          onProgress: (p, s, t) => ftpProgressAdapter(
-            p,
-            s,
-            t,
-            stepOverride: 'Retomando de ${p.toInt()}%',
-          ),
+          onProgress: (p, s, t) {
+            final percent = p.toInt();
+            String? step;
+            if (percent >= lastLoggedResumePercent + _resumeLogPercentStep) {
+              step = 'Retomando de $percent%';
+              lastLoggedResumePercent = percent;
+            }
+            ftpProgressAdapter(p, s, t, stepOverride: step);
+          },
         );
         return _UploadResult(uploaded: uploaded, resumed: true);
 
@@ -472,7 +468,15 @@ class FtpDestinationService implements IFtpService {
     return '${parts.map((p) => '[$p]').join()} ';
   }
 
-  static String _buildRemotePartName({
+  /// Gera nome do arquivo temporário remoto `<final>.<token>.part`.
+  ///
+  /// O token combina `runId` + `destinationId` quando disponíveis. Sem eles,
+  /// usa `<ms>_<random>` para evitar a classe de colisão documentada no
+  /// helper `DirectoryPermissionCheck` (anti-padrão "timestamp puro" em
+  /// `architectural_patterns.mdc` §3b): runs concorrentes que caem no
+  /// mesmo millisegundo gerariam o mesmo `.part`.
+  @visibleForTesting
+  static String buildRemotePartName({
     required String finalFileName,
     String? runId,
     String? destinationId,
@@ -481,10 +485,29 @@ class FtpDestinationService implements IFtpService {
       if (runId != null && runId.isNotEmpty) runId,
       if (destinationId != null && destinationId.isNotEmpty) destinationId,
     ].join('_');
-    final fallbackToken = DateTime.now().millisecondsSinceEpoch.toString();
+    final fallbackToken =
+        '${DateTime.now().millisecondsSinceEpoch}_${_randomSuffix()}';
     final rawToken = tokenSource.isNotEmpty ? tokenSource : fallbackToken;
     final safeToken = rawToken.replaceAll(RegExp('[^A-Za-z0-9._-]'), '_');
     return '$finalFileName.$safeToken.part';
+  }
+
+  static String _buildRemotePartName({
+    required String finalFileName,
+    String? runId,
+    String? destinationId,
+  }) => buildRemotePartName(
+    finalFileName: finalFileName,
+    runId: runId,
+    destinationId: destinationId,
+  );
+
+  static final _random = Random.secure();
+
+  /// 8 hex chars (~32 bits) de entropia para sufixos de nomes temporários.
+  static String _randomSuffix() {
+    final bytes = List<int>.generate(4, (_) => _random.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
   Future<bool> _isRemoteFileAlreadyComplete({
@@ -551,7 +574,7 @@ class FtpDestinationService implements IFtpService {
     final tempFile = File(
       p.join(
         Directory.systemTemp.path,
-        '${DateTime.now().millisecondsSinceEpoch}_$sidecarName',
+        '${DateTime.now().millisecondsSinceEpoch}_${_randomSuffix()}_$sidecarName',
       ),
     );
     try {
@@ -582,22 +605,6 @@ class FtpDestinationService implements IFtpService {
     }
   }
 
-  // ignore: unused_element, retained while sidecar cleanup remains disabled.
-  Future<void> _deleteSidecarBestEffort(FTPConnect ftp, String fileName) async {
-    const sidecarSuffix = '.sha256';
-    final sidecarName = '$fileName$sidecarSuffix';
-    try {
-      await ftp.deleteFile(sidecarName);
-      LoggerService.debug(
-        'Arquivo sidecar removido do FTP após conclusão: $sidecarName',
-      );
-    } on Object catch (e) {
-      LoggerService.warning(
-        'Não foi possível remover sidecar do FTP: $sidecarName — $e',
-      );
-    }
-  }
-
   Future<void> _safeDeletePart(FTPConnect ftp, String remotePartName) async {
     try {
       await ftp.deleteFile(remotePartName);
@@ -612,6 +619,11 @@ class FtpDestinationService implements IFtpService {
   static const _sizeValidationRetryDelay = Duration(milliseconds: 800);
   static const _integrityReadBackMaxAttempts = 2;
   static const _integrityReadBackRetryDelay = Duration(seconds: 1);
+
+  /// Incremento mínimo de progresso (em %) entre logs consecutivos no
+  /// caminho de resume. Evita explosão de logs idênticos em arquivos
+  /// grandes (anti-padrão "throttle por módulo" em `architectural_patterns.mdc` §5.5).
+  static const _resumeLogPercentStep = 10;
 
   Future<_SizeValidationResult> _validatePartSize(
     FTPConnect ftp,
@@ -792,7 +804,8 @@ class FtpDestinationService implements IFtpService {
     required String localSha256,
   }) async {
     final tempFileName =
-        '${DateTime.now().millisecondsSinceEpoch}_${p.basename(remoteFileName)}';
+        '${DateTime.now().millisecondsSinceEpoch}_${_randomSuffix()}_'
+        '${p.basename(remoteFileName)}';
     final tempRemoteCopy = File(
       p.join(Directory.systemTemp.path, tempFileName),
     );
@@ -872,17 +885,48 @@ class FtpDestinationService implements IFtpService {
     }
   }
 
-  String _getFtpErrorMessage(dynamic e, String host) {
+  /// Mapeia uma exceção do upload para uma mensagem amigável ao usuário.
+  ///
+  /// Estratégia em duas camadas:
+  /// 1. **Tipo específico** (`TimeoutException`, `SocketException`,
+  ///    `HandshakeException`/`TlsException`): determinístico.
+  /// 2. **Heurística por substring** apenas como fallback para exceções
+  ///    genéricas do `ftpconnect` (que joga `Exception('...')` com
+  ///    códigos FTP no texto: 530, 550, 452 etc.).
+  ///
+  /// O heurístico foi reforçado para evitar falsos positivos do padrão
+  /// anterior (`errorStr.contains('host')` matcheava qualquer mensagem
+  /// com a palavra "host" no meio).
+  @visibleForTesting
+  static String getFtpErrorMessage(Object e, String host) {
+    if (e is TimeoutException) {
+      return 'Tempo limite excedido ao conectar ao FTP: $host\n'
+          'Verifique sua conexão de rede.';
+    }
+    if (e is HandshakeException || e is TlsException) {
+      return 'Erro de TLS/SSL no FTPS: $host\n'
+          'Verifique certificado do servidor ou habilite '
+          '"aceitar certificados inválidos" para servidores autoassinados.\n'
+          'Detalhes: $e';
+    }
+    if (e is SocketException) {
+      return 'Erro de conexão: não foi possível conectar ao servidor FTP: $host\n'
+          'Verifique se o servidor está online e acessível.\n'
+          'Detalhes: ${e.message}';
+    }
+
     final errorStr = e.toString().toLowerCase();
 
     if (errorStr.contains('connection refused') ||
-        errorStr.contains('host') ||
-        errorStr.contains('socket')) {
+        errorStr.contains('connection reset') ||
+        errorStr.contains('no route to host') ||
+        errorStr.contains('unreachable') ||
+        errorStr.contains('hostname')) {
       return 'Erro de conexão: não foi possível conectar ao servidor FTP: $host\n'
           'Verifique se o servidor está online e acessível.';
     }
     if (errorStr.contains('login') ||
-        errorStr.contains('530') ||
+        _containsFtpCode(errorStr, 530) ||
         errorStr.contains('auth')) {
       return 'Erro de autenticação FTP\n'
           'Verifique usuário e senha.';
@@ -891,8 +935,13 @@ class FtpDestinationService implements IFtpService {
       return 'Tempo limite excedido ao conectar ao FTP: $host\n'
           'Verifique sua conexão de rede.';
     }
+    if (errorStr.contains('disk') ||
+        errorStr.contains('no space') ||
+        _containsFtpCode(errorStr, 452)) {
+      return 'Servidor FTP sem espaço em disco.';
+    }
     if (errorStr.contains('permission') ||
-        errorStr.contains('550') ||
+        _containsFtpCode(errorStr, 550) ||
         errorStr.contains('rename') ||
         errorStr.contains('rnfr') ||
         errorStr.contains('rnto')) {
@@ -901,8 +950,7 @@ class FtpDestinationService implements IFtpService {
     }
     if (errorStr.contains('corrompido') ||
         errorStr.contains('integridade') ||
-        errorStr.contains('tamanho') ||
-        errorStr.contains('size')) {
+        errorStr.contains('tamanho')) {
       return 'Erro de integridade: arquivo no destino não confere com o original.\n'
           'Detalhes: $e';
     }
@@ -911,14 +959,20 @@ class FtpDestinationService implements IFtpService {
       return 'Não foi possível confirmar a integridade no destino FTP.\n'
           'Detalhes: $e';
     }
-    if (errorStr.contains('disk') ||
-        errorStr.contains('space') ||
-        errorStr.contains('452')) {
-      return 'Servidor FTP sem espaço em disco.';
-    }
 
     return 'Erro no upload FTP após várias tentativas.\n'
         'Servidor: $host\nDetalhes: $e';
+  }
+
+  String _getFtpErrorMessage(Object e, String host) =>
+      getFtpErrorMessage(e, host);
+
+  /// Verifica se `text` contém um código FTP de 3 dígitos (e.g. 530, 550)
+  /// como token isolado (não como substring acidental dentro de outro
+  /// número ou identificador).
+  static bool _containsFtpCode(String text, int code) {
+    final pattern = RegExp('(?<![0-9])$code(?![0-9])');
+    return pattern.hasMatch(text);
   }
 
   Future<void> _createRemoteDirectories(FTPConnect ftp, String path) async {
@@ -1004,13 +1058,15 @@ class FtpDestinationService implements IFtpService {
       }
 
       final testFileName =
-          '_test_conn_${DateTime.now().millisecondsSinceEpoch}.tmp';
+          '_test_conn_${DateTime.now().millisecondsSinceEpoch}_'
+          '${_randomSuffix()}.tmp';
       final testFileRenamed = '$testFileName.ok';
 
       final tempFile = File(
         p.join(
           Directory.systemTemp.path,
-          '${DateTime.now().millisecondsSinceEpoch}_ftp_test.tmp',
+          '${DateTime.now().millisecondsSinceEpoch}_${_randomSuffix()}_'
+          'ftp_test.tmp',
         ),
       );
       try {

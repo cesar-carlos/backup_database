@@ -186,9 +186,16 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
     Map<String, dynamic> config,
   ) async {
     try {
+      // Segredos (password, cryptKey) NAO sao reenviados pelo servidor
+      // ao cliente nos snapshots de list/get; se o cliente apenas
+      // re-submeter o formulario sem reescrever a senha, o payload
+      // chega com string vazia. Sem o merge abaixo, o repository
+      // sobrescrevia o segredo armazenado com vazio (perda silenciosa).
+      // Politica: campo ausente OU string vazia -> manter valor atual.
+      final merged = await _mergeSecretsWithExisting(type, config);
       switch (type) {
         case RemoteDatabaseType.sybase:
-          final cfg = DatabaseConfigSerializers.sybaseFromMap(config);
+          final cfg = DatabaseConfigSerializers.sybaseFromMap(merged);
           final r = await sybaseRepository.update(cfg);
           if (r.isError()) return _failureFromException(r.exceptionOrNull());
           final updated = r.getOrNull();
@@ -202,7 +209,7 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
             config: DatabaseConfigSerializers.sybaseToMap(updated),
           );
         case RemoteDatabaseType.sqlServer:
-          final cfg = DatabaseConfigSerializers.sqlServerFromMap(config);
+          final cfg = DatabaseConfigSerializers.sqlServerFromMap(merged);
           final r = await sqlServerRepository.update(cfg);
           if (r.isError()) return _failureFromException(r.exceptionOrNull());
           final updated = r.getOrNull();
@@ -216,7 +223,7 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
             config: DatabaseConfigSerializers.sqlServerToMap(updated),
           );
         case RemoteDatabaseType.postgres:
-          final cfg = DatabaseConfigSerializers.postgresFromMap(config);
+          final cfg = DatabaseConfigSerializers.postgresFromMap(merged);
           final r = await postgresRepository.update(cfg);
           if (r.isError()) return _failureFromException(r.exceptionOrNull());
           final updated = r.getOrNull();
@@ -230,7 +237,7 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
             config: DatabaseConfigSerializers.postgresToMap(updated),
           );
         case RemoteDatabaseType.firebird:
-          final cfg = DatabaseConfigSerializers.firebirdFromMap(config);
+          final cfg = DatabaseConfigSerializers.firebirdFromMap(merged);
           final r = await firebirdRepository.update(cfg);
           if (r.isError()) return _failureFromException(r.exceptionOrNull());
           final updated = r.getOrNull();
@@ -261,6 +268,98 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
         errorCode: ErrorCode.unknown,
       );
     }
+  }
+
+  /// Le a entidade existente e injeta os segredos ausentes no payload
+  /// remoto. Mantem o resto do payload intacto (host, porta, opcoes,
+  /// ...) — apenas preenche `password`/`cryptKey` quando vierem vazios.
+  ///
+  /// Implementacao via **tabela de extractors** (1 entrada por SGBD): o
+  /// extractor recebe o `id` e devolve os pares `{ campo → valor }` que
+  /// estao armazenados no servidor. So sao injectados no payload quando
+  /// o campo correspondente vier ausente ou vazio.
+  ///
+  /// Optimizacao: se nenhum dos campos sensiveis do tipo vier vazio,
+  /// **nao chamamos `getById`** (evita I/O contra repository quando o
+  /// cliente reenviou todos os segredos).
+  ///
+  /// Se `id` nao existir no payload ou a config nao existir mais no
+  /// servidor, devolve o payload inalterado (o repository.update vai
+  /// devolver `NotFound` adiante).
+  Future<Map<String, dynamic>> _mergeSecretsWithExisting(
+    RemoteDatabaseType type,
+    Map<String, dynamic> payload,
+  ) async {
+    final id = payload['id'] is String ? payload['id'] as String : '';
+    if (id.isEmpty) return payload;
+    final descriptor = _secretDescriptors[type];
+    if (descriptor == null) return payload;
+    final missingKeys = descriptor.sensitiveKeys
+        .where((k) => !_hasNonEmptyString(payload, k))
+        .toList(growable: false);
+    if (missingKeys.isEmpty) return payload;
+    final merged = Map<String, dynamic>.from(payload);
+
+    try {
+      final stored = await descriptor.extractor(this, id);
+      for (final key in missingKeys) {
+        final value = stored[key];
+        if (value == null || value.isEmpty) continue;
+        merged[key] = value;
+      }
+    } on Object catch (e, st) {
+      LoggerService.warning(
+        'Falha ao mesclar segredos existentes (${type.wireName}): $e',
+        e,
+        st,
+      );
+    }
+    return merged;
+  }
+
+  /// Descritor por SGBD: lista de chaves sensiveis no payload + extractor
+  /// que devolve os pares `{ campo → valor }` armazenados no servidor.
+  /// Adicionar SGBD novo = uma entrada nesta tabela (sem mexer no
+  /// dispatcher do `update`).
+  static final Map<RemoteDatabaseType, _SecretDescriptor>
+  _secretDescriptors = {
+    RemoteDatabaseType.sybase: _SecretDescriptor(
+      sensitiveKeys: const ['password'],
+      extractor: (store, id) async {
+        final cfg = (await store.sybaseRepository.getById(id)).getOrNull();
+        if (cfg == null) return const {};
+        return {'password': cfg.password};
+      },
+    ),
+    RemoteDatabaseType.sqlServer: _SecretDescriptor(
+      sensitiveKeys: const ['password'],
+      extractor: (store, id) async {
+        final cfg = (await store.sqlServerRepository.getById(id)).getOrNull();
+        if (cfg == null) return const {};
+        return {'password': cfg.password};
+      },
+    ),
+    RemoteDatabaseType.postgres: _SecretDescriptor(
+      sensitiveKeys: const ['password'],
+      extractor: (store, id) async {
+        final cfg = (await store.postgresRepository.getById(id)).getOrNull();
+        if (cfg == null) return const {};
+        return {'password': cfg.password};
+      },
+    ),
+    RemoteDatabaseType.firebird: _SecretDescriptor(
+      sensitiveKeys: const ['password', 'cryptKey'],
+      extractor: (store, id) async {
+        final cfg = (await store.firebirdRepository.getById(id)).getOrNull();
+        if (cfg == null) return const {};
+        return {'password': cfg.password, 'cryptKey': cfg.cryptKey};
+      },
+    ),
+  };
+
+  static bool _hasNonEmptyString(Map<String, dynamic> map, String key) {
+    final v = map[key];
+    return v is String && v.isNotEmpty;
   }
 
   @override
@@ -332,4 +431,31 @@ class RealDatabaseConfigStore implements DatabaseConfigStore {
       errorCode: notFound ? ErrorCode.fileNotFound : ErrorCode.unknown,
     );
   }
+}
+
+/// Metadata por SGBD para o merge de segredos vazios em
+/// `RealDatabaseConfigStore._mergeSecretsWithExisting`.
+///
+/// Mantido como tipo dedicado (em vez de `Record`/`Tuple`) para deixar
+/// claro o contrato e permitir extensao futura (ex.: regras de
+/// validacao adicionais por chave) sem mexer no dispatcher de update.
+class _SecretDescriptor {
+  const _SecretDescriptor({
+    required this.sensitiveKeys,
+    required this.extractor,
+  });
+
+  /// Chaves do payload remoto consideradas sensiveis para este SGBD.
+  /// Apenas estas sao verificadas antes de chamar o `extractor`
+  /// (otimizacao: se o cliente reenviou todas, evitamos I/O).
+  final List<String> sensitiveKeys;
+
+  /// Resolve a entidade armazenada e devolve os pares
+  /// `{ chave_sensivel → valor }` que devem ser usados quando o
+  /// payload nao reenviar o valor.
+  final Future<Map<String, String>> Function(
+    RealDatabaseConfigStore store,
+    String id,
+  )
+  extractor;
 }

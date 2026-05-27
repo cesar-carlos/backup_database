@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/firebird_embedded_support.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
@@ -376,6 +377,15 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
       );
     }
 
+    // Mesma validacao embedded + plugins que o backup principal usa
+    // (extraida para `FirebirdEmbeddedSupport`). Garante mensagem de
+    // erro consistente em vez de cair tarde com "plugin not found".
+    final embeddedFailure =
+        await FirebirdEmbeddedSupport.validateEmbeddedEnginePlugins(config);
+    if (embeddedFailure != null) {
+      return rd.Failure(embeddedFailure);
+    }
+
     String databaseArgument;
     if (config.useEmbedded) {
       final path = config.databaseFile.trim();
@@ -426,7 +436,9 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         databaseArgument,
       ];
 
-      final environment = _firebirdClientLibEnvironment(config);
+      final environment = FirebirdEmbeddedSupport.clientLibEnvironment(
+        config,
+      );
 
       final result = await _processService.run(
         executable: 'isql',
@@ -496,18 +508,4 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
     }
   }
 
-  Map<String, String>? _firebirdClientLibEnvironment(FirebirdConfig config) {
-    final lib = config.clientLibraryPath?.trim();
-    if (lib == null || lib.isEmpty) {
-      return null;
-    }
-    final dir = p.dirname(lib);
-    final key = Platform.isWindows ? 'Path' : 'PATH';
-    final current = Platform.environment[key] ?? Platform.environment['PATH'];
-    if (current == null || current.isEmpty) {
-      return {key: dir};
-    }
-    final sep = Platform.isWindows ? ';' : ':';
-    return {key: '$dir$sep$current'};
-  }
 }

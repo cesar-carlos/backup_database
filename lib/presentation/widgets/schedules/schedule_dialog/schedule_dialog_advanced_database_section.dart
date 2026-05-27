@@ -322,6 +322,24 @@ class ScheduleDialogFirebirdAdvancedSummarySection extends StatelessWidget {
               c.cryptKey.trim().isEmpty ? 'Não definida' : 'Definida',
             ),
           ),
+          if (c.cryptKey.trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            // ADR-014 + §1.6.8: backup logico Firebird com chave nao
+            // suportado nesta versao. Sinalizado aqui para o
+            // utilizador descobrir antes do primeiro disparo (que
+            // falharia com ValidationFailure em executeBackup).
+            const InfoBar(
+              title: Text('Chave de criptografia presente'),
+              content: Text(
+                'Backups deste agendamento serão rejeitados antes de '
+                'invocar gbak. Suporte completo (-CRYPT + -KEYHOLDER + '
+                '-KEYNAME) virá numa versão futura. Remova a chave da '
+                'configuração Firebird para conseguir executar Full '
+                'Single agora.',
+              ),
+              severity: InfoBarSeverity.warning,
+            ),
+          ],
         ],
       ],
     );

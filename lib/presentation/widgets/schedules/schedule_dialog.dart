@@ -130,6 +130,22 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     return <DatabaseType>[...withoutFb, DatabaseType.firebird];
   }
 
+  /// Normaliza `backupType` para um valor valido apos troca de SGBD.
+  ///
+  /// Devolve o **mesmo tipo** se o SGBD suportar (preserva escolha do
+  /// utilizador). So coage para `full` quando o tipo nao se aplica:
+  /// - Nao-postgres / nao-firebird nao suportam `fullSingle`
+  /// - Sybase nao suporta `differential` na UI (apenas full / log).
+  /// - Firebird ja oferece Full / Full Single / Diferencial / Log na
+  ///   UI; `convertedFullSingle` (vindo de import legado) cai para
+  ///   `fullSingle` pois e o equivalente direto na ferramenta gbak.
+  /// - `convertedDifferential` / `convertedLog` ficam preservados para
+  ///   Firebird/Postgres porque a regra do strategy aceita.
+  ///
+  /// Esta funcao **NAO** deve ser chamada no `_save()` — ali o tipo ja
+  /// foi escolhido pelo utilizador e nao deve ser reescrito silenciosamente
+  /// (caso contrario, agendamento incremental existente vira full no
+  /// proximo save, perdendo a cadeia).
   BackupType _normalizeBackupTypeForDatabase(
     DatabaseType databaseType,
     BackupType backupType,
@@ -143,19 +159,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         backupType == BackupType.differential) {
       return BackupType.full;
     }
-    if (databaseType == DatabaseType.firebird) {
-      switch (backupType) {
-        case BackupType.full:
-        case BackupType.fullSingle:
-          return backupType;
-        case BackupType.convertedFullSingle:
-          return BackupType.fullSingle;
-        case BackupType.log:
-        case BackupType.differential:
-        case BackupType.convertedDifferential:
-        case BackupType.convertedLog:
-          return BackupType.full;
-      }
+    if (databaseType == DatabaseType.firebird &&
+        backupType == BackupType.convertedFullSingle) {
+      return BackupType.fullSingle;
     }
     return backupType;
   }
@@ -1458,10 +1464,13 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     final effectiveCompressionFormat = _compressBackup
         ? _compressionFormat
         : CompressionFormat.none;
-    final effectiveBackupType = _normalizeBackupTypeForDatabase(
-      _databaseType,
-      _backupType,
-    );
+    // Importante: NAO chamar `_normalizeBackupTypeForDatabase` aqui.
+    // Esse helper so existe para sanitizar troca de SGBD no dropdown
+    // (e em initState para schedules importados). No save, o tipo ja
+    // foi escolhido pelo utilizador e qualquer coercao silenciosa
+    // (ex.: Diferencial Firebird -> Full) destroi cadeias incrementais
+    // sem aviso.
+    final effectiveBackupType = _backupType;
 
     int? firebirdNbackupPhysicalLevel;
     if (_databaseType == DatabaseType.firebird) {

@@ -122,9 +122,16 @@ class ScheduleDialogGeneralSection extends StatelessWidget {
                 BackupType.log,
               ];
             } else if (databaseType == DatabaseType.firebird) {
+              // Firebird suporta backup fisico (nbackup -B 0/-B 1) e
+              // logico (gbak). O backend mapeia Diferencial/Log para
+              // `nbackup -B 1` e Full Single para `gbak`. A regra
+              // `FirebirdSupportedBackupTypesRule` aceita todos exceto
+              // `convertedFullSingle`.
               allTypes = [
                 BackupType.full,
                 BackupType.fullSingle,
+                BackupType.differential,
+                BackupType.log,
               ];
             } else {
               allTypes = [

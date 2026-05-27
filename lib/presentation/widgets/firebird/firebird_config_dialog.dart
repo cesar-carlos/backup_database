@@ -349,15 +349,33 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               controller: _cryptKeyController,
               label: appLocaleString(
                 context,
-                'Chave de criptografia (opcional)',
-                'Encryption key (optional)',
+                'Chave de criptografia (não suportada nesta versão)',
+                'Encryption key (not supported in this version)',
               ),
               hint: appLocaleString(
                 context,
-                'FB 4: nome da chave (-KEYNAME); FB 2.5/3: senha (-key)',
-                'FB 4: key name (-KEYNAME); FB 2.5/3: passphrase (-key)',
+                'Backup logico encriptado requer -CRYPT + -KEYHOLDER + '
+                    '-KEYNAME (FB 3+); UI dedicada virá em versão futura.',
+                'Encrypted logical backup needs -CRYPT + -KEYHOLDER + '
+                    '-KEYNAME (FB 3+); dedicated UI coming in a future '
+                    'release.',
               ),
               prefixIcon: const Icon(FluentIcons.lock),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              appLocaleString(
+                context,
+                'Aviso: backups Firebird com chave preenchida são '
+                    'rejeitados antes de invocar gbak (a flag -key não '
+                    'existe; -KEYNAME sozinho não encripta). Valor é '
+                    'preservado entre versões via secure storage.',
+                'Warning: Firebird backups with a key filled are rejected '
+                    'before invoking gbak (the -key flag does not exist; '
+                    '-KEYNAME alone does not encrypt). Value is preserved '
+                    'across versions via secure storage.',
+              ),
+              style: FluentTheme.of(context).typography.caption,
             ),
             const SizedBox(height: AppSpacing.md),
             InfoLabel(

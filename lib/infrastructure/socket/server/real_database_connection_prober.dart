@@ -1,3 +1,4 @@
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_firebird_config_repository.dart';
 import 'package:backup_database/domain/repositories/i_postgres_config_repository.dart';
@@ -280,7 +281,10 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
       final Object? exception = result.exceptionOrNull();
       return DatabaseProbeOutcome.failure(
         latencyMs: sw.elapsedMilliseconds,
-        error: exception?.toString() ?? 'Erro desconhecido na sondagem',
+        // `Failure.toString()` retorna "Failure(message: ..., code: ...)"
+        // que vaza detalhes internos. Preferimos `.message` para
+        // mostrar texto preparado para utilizador final.
+        error: _userFacingMessage(exception),
         errorCode: _classifyError(exception),
       );
     }
@@ -295,6 +299,23 @@ class RealDatabaseConnectionProber implements DatabaseConnectionProber {
       error: 'Conexao recusada (autenticacao ou indisponibilidade)',
       errorCode: ErrorCode.authenticationFailed,
     );
+  }
+
+  /// Extrai mensagem amigavel de qualquer payload de erro:
+  /// - `Failure` -> usa `.message` (texto preparado para o utilizador)
+  /// - outro `Object` -> usa `toString()` como fallback
+  /// - `null` -> mensagem generica
+  String _userFacingMessage(Object? exception) {
+    if (exception == null) {
+      return 'Erro desconhecido na sondagem';
+    }
+    if (exception is Failure) {
+      return exception.message.isNotEmpty
+          ? exception.message
+          : 'Erro desconhecido na sondagem';
+    }
+    final str = exception.toString();
+    return str.isEmpty ? 'Erro desconhecido na sondagem' : str;
   }
 
   /// Classifica a exception em ErrorCode de protocolo. Heuristica

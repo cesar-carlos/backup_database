@@ -432,128 +432,82 @@ class ToolVerificationService {
     );
   }
 
+  /// Regex que casa com a tagline de versao do Firebird CLI
+  /// (`WI-V3.0.10.33601 Firebird 3.0`, `WI-V4.0.5.3144`, etc.).
+  /// Usar este token e mais robusto que apenas confiar no exit code:
+  /// ajuda a distinguir o `isql` real do Firebird do `isql` do
+  /// unixODBC (colisao de nome), e captura mensagens de versao mesmo
+  /// quando a CLI usa exit code != 0 (algumas builds antigas).
+  static final RegExp _firebirdVersionToken = RegExp(
+    r'\bWI-V[\d.]+',
+    caseSensitive: false,
+  );
+
   Future<rd.Result<bool>> verifyFirebirdCliTools() async {
     try {
       LoggerService.info(
         'Verificando ferramentas Firebird (gbak, nbackup, gstat, isql)...',
       );
 
-      final gbakResult = await _processService.run(
-        executable: 'gbak',
-        arguments: const ['-?'],
-        timeout: const Duration(seconds: 5),
-      );
-
-      final gbakOk = gbakResult.fold(
-        (pr) => pr.isSuccess,
-        (_) => false,
-      );
-      if (!gbakOk) {
-        LoggerService.warning(
-          'gbak indisponivel ou falhou ao executar -?',
+      for (final tool in const ['gbak', 'nbackup', 'gstat', 'isql']) {
+        final result = await _processService.run(
+          executable: tool,
+          arguments: const ['-z'],
+          timeout: const Duration(seconds: 5),
         );
-        return rd.Failure(
-          ValidationFailure(
-            message: ToolPathHelp.buildMessage('gbak'),
-          ),
+
+        final outcome = result.fold<rd.Result<bool>>(
+          (pr) {
+            // `-z` imprime a tagline `WI-V<major.minor.patch...>` em
+            // stdout (ou stderr em algumas versoes). Se o token nao
+            // aparecer, e provavel que estejamos perante outro binario
+            // homonimo (ex.: isql do unixODBC) ou versao Firebird
+            // muito antiga sem suporte a `-z` — ambos cenarios em que
+            // a CLI nao serve para o backup.
+            final combined = '${pr.stdout}\n${pr.stderr}';
+            final matched = _firebirdVersionToken.hasMatch(combined);
+            if (pr.isSuccess && matched) {
+              LoggerService.info(
+                '$tool encontrado e disponivel (Firebird CLI '
+                'reconhecida via WI-V tagline)',
+              );
+              return const rd.Success(true);
+            }
+            if (!pr.isSuccess) {
+              LoggerService.warning(
+                '$tool indisponivel ou falhou ao executar -z '
+                '(exit: ${pr.exitCode})',
+              );
+            } else {
+              LoggerService.warning(
+                '$tool respondeu a -z mas nao tem tagline Firebird '
+                '(WI-V*); pode ser binario homonimo nao-Firebird.',
+              );
+            }
+            return rd.Failure(
+              ValidationFailure(
+                message: ToolPathHelp.buildMessage(tool),
+              ),
+            );
+          },
+          (Object failure) {
+            final errorMessage = failure is Failure
+                ? failure.message
+                : failure.toString();
+            LoggerService.warning('Erro ao verificar $tool: $errorMessage');
+            return rd.Failure(
+              ValidationFailure(
+                message: ToolPathHelp.buildMessage(tool),
+              ),
+            );
+          },
         );
-      }
-      LoggerService.info('gbak encontrado e disponivel');
-
-      final nbackupResult = await _processService.run(
-        executable: 'nbackup',
-        arguments: const ['-?'],
-        timeout: const Duration(seconds: 5),
-      );
-
-      final nbackupOk = nbackupResult.fold(
-        (pr) => pr.isSuccess,
-        (_) => false,
-      );
-      if (!nbackupOk) {
-        LoggerService.warning(
-          'nbackup indisponivel ou falhou ao executar -?',
-        );
-        return rd.Failure(
-          ValidationFailure(
-            message: ToolPathHelp.buildMessage('nbackup'),
-          ),
-        );
-      }
-      LoggerService.info('nbackup encontrado e disponivel');
-
-      final gstatResult = await _processService.run(
-        executable: 'gstat',
-        arguments: const ['-?'],
-        timeout: const Duration(seconds: 5),
-      );
-
-      final gstatOutcome = gstatResult.fold<rd.Result<bool>>(
-        (pr) {
-          if (pr.isSuccess) {
-            LoggerService.info('gstat encontrado e disponivel');
-            return const rd.Success(true);
-          }
-          LoggerService.warning(
-            'gstat indisponivel ou falhou ao executar -? '
-            '(exit: ${pr.exitCode})',
-          );
-          return rd.Failure(
-            ValidationFailure(
-              message: ToolPathHelp.buildMessage('gstat'),
-            ),
-          );
-        },
-        (Object failure) {
-          final errorMessage = failure is Failure
-              ? failure.message
-              : failure.toString();
-          LoggerService.warning('Erro ao verificar gstat: $errorMessage');
-          return rd.Failure(
-            ValidationFailure(
-              message: ToolPathHelp.buildMessage('gstat'),
-            ),
-          );
-        },
-      );
-      if (gstatOutcome.isError()) {
-        return gstatOutcome;
+        if (outcome.isError()) {
+          return outcome;
+        }
       }
 
-      final isqlResult = await _processService.run(
-        executable: 'isql',
-        arguments: const ['-?'],
-        timeout: const Duration(seconds: 5),
-      );
-
-      return isqlResult.fold(
-        (pr) {
-          if (pr.isSuccess) {
-            LoggerService.info('isql encontrado e disponivel');
-            return const rd.Success(true);
-          }
-          LoggerService.warning(
-            'isql indisponivel ou falhou ao executar -? '
-            '(exit: ${pr.exitCode})',
-          );
-          return rd.Failure(
-            ValidationFailure(
-              message: ToolPathHelp.buildMessage('isql'),
-            ),
-          );
-        },
-        (Object failure) {
-          final errorMessage = failure is Failure
-              ? failure.message
-              : failure.toString();
-          LoggerService.warning('Erro ao verificar isql: $errorMessage');
-          return rd.Failure(
-            ValidationFailure(
-              message: ToolPathHelp.buildMessage('isql'),
-            ),
-          );
-        },
-      );
+      return const rd.Success(true);
     } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao verificar ferramentas Firebird',

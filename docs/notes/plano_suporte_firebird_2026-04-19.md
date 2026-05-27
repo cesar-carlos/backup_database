@@ -1,12 +1,16 @@
 # Plano: Suporte a Backup de Bancos Firebird
 
 Data base: 2026-04-19
-Revisão documental: 2026-05-18 (§3.0 / §8.2 alinhados ao repositório;
-`dart analyze` + `flutter test` reverificados — ver §8.2).
-Status: **Plano concluído (MVP no repositório, 2026-05-18).** O critério **§3.0**
-e a verificação automática **§8.2** estão satisfeitos. **§8.1** (smokes manuais)
-e o backlog em **§3.0** (*Fora do escopo actual do código*) e na subsecção **E4**
-da secção documental **§3** (*PR-E*; pós-MVP) não fazem parte deste fecho.
+Revisão documental: 2026-05-27 (auditoria pós-MVP: correções §1.6.5 /
+§1.6.7 / §1.6.8, hardening UI/UX e secure storage de `cryptKey` — ver
+*Sincronização recente* em §3.0; `dart analyze`/`flutter analyze` 0
+issues; `flutter test` **1812** pass / **13** skip / 0 fail).
+Status: **Plano concluído (MVP no repositório, 2026-05-18; reforçado
+pela auditoria de 2026-05-27).** O critério **§3.0** e a verificação
+automática **§8.2** continuam satisfeitos. **§8.1** (smokes manuais) e o
+backlog em **§3.0** (*Fora do escopo actual do código*) e na subsecção
+**E4** da secção documental **§3** (*PR-E*; pós-MVP) não fazem parte
+deste fecho.
 
 **Entrega que cumpre o objetivo MVP** (PR-E + PR-F + PR-G): núcleo **PR-E**
 (domain, Drift v32, repository, `FirebirdBackupService` gbak +
@@ -206,23 +210,40 @@ via `_firebirdServiceManagerSwitch` no `FirebirdBackupService` (`gbak` após
    via `probeGstatHeaderConnection` (`gstat -h`).
 4. **WireCrypt em FB 4.0**: mensagens dedicadas + variantes em
    `_failureFromProcess` (`firebird_backup_service.dart`).
-5. **Auth fallback em cascata (entregue)**: após `your user name and password are
-   not defined`, segunda tentativa com `-PROVIDER Engine12` quando
-   `serverVersionHint != v25` (`_runFirebirdCliWithOptionalLegacyRetry` em
-   `gbak` / `nbackup` / `gstat` / `isql` / verify `gbak -c`).
-6. **Embedded validation**: `_validateEmbeddedEnginePlugins` (Windows + FB3+)
-   antes de `gstat`/`gbak` / backup.
-7. **`-SE service_mgr` em `gbak` e `nbackup` (entregue)**: `serviceManagerMode`
-   na entidade (Drift/UI); `FirebirdBackupService` insere `-SE` e o par
-   `host/port:service_mgr` via `_firebirdServiceManagerSwitch`: em **`gbak`**
-   após `-b` (Full Single) e após `-c` (verify); em **`nbackup`** após
-   `-PASSWORD` e antes de `-B` (Full / Diferencial / Log). **Omitido** em
-   `useEmbedded` ou `never`; em **`always`**, excepto `serverVersionHint == v25`;
-   em **`auto`**, só para hints **v30** e **v40** (não para `auto` nem `v25`).
-   Testes em `firebird_backup_service_test.dart`.
-8. **Criptografia lógica**: campo `cryptKey` na config; **`gbak -b`/`-c`** usam
-   **`-KEYNAME`** em hint **v40** ou **Auto** com `WI-V4+`; **`-key`** em 2.5/3.0;
-   aviso em log se `cryptKey` com hint **v25**. Flags `-CRYPT`/`-KEYHOLDER` = backlog.
+5. **Auth fallback (rev. 2026-05-27)**: a tentativa anterior de retry
+   automático com `-PROVIDER Engine12` foi **removida** após auditoria —
+   `nbackup`, `gstat`, `isql` e o próprio `gbak` **não** aceitam `-PROVIDER`
+   como switch de linha de comando (nem nas docs oficiais, nem no parser
+   `nbackup_action_in_sw_table` do FirebirdSQL). `Engine12` é nome de
+   provider configurado via `firebird.conf` (`Providers = Remote,Engine12,
+   Loopback`) ou `AuthClient/AuthServer`. A app agora devolve a falha
+   original com mensagem amigável em `_failureFromProcess` apontando para
+   a config de `AuthServer` em `firebird.conf` quando a stderr contém
+   `your user name and password are not defined`. ADR-related:
+   `docs/adr/010-firebird-cli-assumptions.md`. Ver §3.0.
+6. **Embedded validation**: `FirebirdEmbeddedSupport.validateEmbeddedEnginePlugins`
+   (helper compartilhado em `lib/core/utils/`, Windows + FB3+), antes de
+   `gstat`/`gbak`/`isql`/backup. Aceita os dois layouts comuns: `<root>/bin/
+   fbclient.dll + <root>/plugins/engine1?.dll` (instalador oficial) e
+   `<root>/fbclient.dll + <root>/plugins/engine1?.dll` (zip embedded).
+7. **`-SE service_mgr` (rev. 2026-05-27)**: aplicado **apenas a `gbak`**
+   (`_gbakServiceManagerSwitch`), pois `nbackup` não possui switch
+   `-SE`/`-SERVICE` (Firebird docs + fonte). Para backup `nbackup` via
+   Services Manager remoto, o Firebird exige a ferramenta separada
+   `fbsvcmgr` com switches próprios (`-action_nbak`, `-nbk_level n`,
+   `-dbname`, `-nbk_file`) — fora do MVP, registado como item de roadmap.
+   Política do helper `gbak`: omite em `useEmbedded` ou `never`; em
+   `always` exceto hint `v25` (loga warning); em `auto` só para hints
+   `v30`/`v40`. Testes em `firebird_backup_service_test.dart`.
+8. **Criptografia lógica (rev. 2026-05-27)**: `cryptKey` **rejeitado**
+   no início do `executeBackup` com `ValidationFailure` clara —
+   `_rejectCryptKeyIfPresent`. Motivo: `gbak` não tem switch `-key` (em
+   nenhuma versão), e `-KEYNAME` sozinho (FB4) é incompleto (a doc
+   oficial exige o trio `-CRYPT` + `-KEYHOLDER` + `-KEYNAME`). UI
+   continua a aceitar o campo (com tooltip "não suportado"), mas o
+   campo agora vive em **secure storage** (`SecureCredentialKeys.firebirdCryptKeyKey`,
+   migração transparente no `rowToEntity`) em vez de coluna SQLite. Suporte
+   completo a `-CRYPT`/`-KEYHOLDER`/`-KEYNAME` permanece como roadmap.
 
 ---
 
@@ -251,11 +272,47 @@ que permanecem neste ficheiro como foco de QA são os **smokes manuais** do §8 
 repositório sem** essa evidência manual está em **§8.2**. O critério de MVP no
 repositório está no parágrafo seguinte.
 
-**Sincronização recente (doc ↔ código):** `-SE` em **`gbak`** e **`nbackup`**
-(`_firebirdServiceManagerSwitch`, §1.6.7); matriz §8.1 (v25 sem `-SE`; 3.x/4.x
-com `-SE` quando a política aplica). Número actual de testes no bullet **PR-E**
-do §8 (`flutter test`: **1454** pass, **11** skip, 2026-05-18). **Fecho do plano
-no repositório** sem QA manual: ver **§8.2**.
+**Sincronização recente (doc ↔ código, 2026-05-27 — auditoria pós-MVP):**
+- **`-SE service_mgr` agora só em `gbak`** (helper renomeado para
+  `_gbakServiceManagerSwitch`, §1.6.7): `nbackup` não aceita `-SE`
+  (parser não tem essa entrada; o caminho remoto Services Manager para
+  nbackup exige `fbsvcmgr`, fora do MVP).
+- **Cascada `-PROVIDER Engine12` removida** (§1.6.5): nenhuma CLI
+  Firebird aceita esse switch; mensagem amigável em `_failureFromProcess`
+  com remediação `AuthServer` em `firebird.conf` substitui o retry.
+- **`cryptKey` rejeitado em backup** com `ValidationFailure` clara
+  (§1.6.8): `gbak` não tem `-key` em nenhuma versão; `-KEYNAME` sozinho
+  é incompleto. Suporte completo (`-CRYPT`+`-KEYHOLDER`+`-KEYNAME`) =
+  roadmap. **`cryptKey` migrado para secure storage** (chave
+  `firebirdCryptKeyKey`), com migração transparente no `rowToEntity`.
+- **Dropdown Firebird** no `schedule_dialog` agora oferece **Full,
+  Full Single, Diferencial, Log** (§5 PR-F): a infraestrutura já
+  suportava (`nbackup -B 1`); a omissão na UI era regressão face ao
+  plano original.
+- **`_normalizeBackupTypeForDatabase` removido do `_save()`**: agendamento
+  Firebird Diferencial deixou de ser silenciosamente coergido para Full
+  (bug que destruía cadeia incremental).
+- **`UUID_TO_CHAR(RDB$GUID)`** em vez de `CAST(... AS VARCHAR(38))` na
+  consulta de parent GUID FB4 (compatível com builds onde a coluna é
+  `CHAR(16) OCTETS`).
+- **Embedded validation** aceita também `<binDir>/plugins/` (layout
+  zip-embedded), extraída para `FirebirdEmbeddedSupport` em
+  `lib/core/utils/` (compartilhada com `SqlScriptExecutionService`).
+- **`verifyFirebirdCliTools` usa `-z` + regex `WI-V`** (em vez de `-?`):
+  distingue Firebird CLI de homônimos (unixODBC `isql`) e tolera builds
+  antigas com exit code != 0 em `-?`.
+- **`FirebirdConfigGrid`** mostra `(embedded)` em modo local e fallback
+  para alias quando `databaseFile` vazio.
+- **`RealDatabaseConfigStore.update` mescla password/cryptKey vazios**
+  com valor armazenado (B12): evita wipe silencioso quando cliente
+  remoto reedita formulário sem reescrever segredos.
+- **`RealDatabaseConnectionProber`** usa `failure.message` (não mais
+  `failure.toString()` que vazava `"Failure(...)"` ao utilizador).
+- ADR: `docs/adr/010-firebird-cli-assumptions.md` formaliza as decisões
+  acima e previne reintroduzir os bugs `-PROVIDER`/`nbackup -SE`.
+
+Verificação automática 2026-05-27: `dart analyze` 0 issues; `flutter
+analyze` 0 issues; `flutter test` **1812** pass, **13** skip, 0 fail.
 
 **Critério “plano MVP concluído”:** PR-E/F/G implementados, `dart analyze` /
 `flutter analyze` sem issues, `flutter test` verde, `build_runner` sem erros
@@ -826,11 +883,12 @@ moderno em servidor moderno opera Firebird remoto.
 |---|---|---|
 | `gbak` não tem verify nativo; utilizadores esperam o mesmo nível de garantia que SQL Server `CHECKSUM`/Postgres `pg_verifybackup` | E + F | Tooltip claro no schedule_dialog: "Firebird não suporta verify nativo. Use 'Strict' apenas se tiver espaço extra para restore temporário". Salvar `verifyMode=skipped\|restoreToTemp` em `BackupMetrics.flags` |
 | Confusão `gbak` vs `nbackup` (artefatos com semânticas diferentes) | F | Tooltip por tipo no schedule_dialog explicando ferramenta usada; salvar `tool=gbak\|nbackup` + `firebirdVersion=v25\|v30\|v40` em `BackupMetrics.flags` para auditoria |
-| FB 2.5 com Legacy_Auth pode falhar em servidores configurados só para SRP | E | Detectar mensagem `Your user name and password are not defined` e propagar erro com remediação (`AuthServer = Legacy_Auth, Srp` em `firebird.conf`) |
+| FB 2.5 com Legacy_Auth pode falhar em servidores configurados só para SRP | E | Detectar mensagem `Your user name and password are not defined` e propagar erro com remediação (`AuthServer = Legacy_Auth, Srp` em `firebird.conf`). **Auditoria 2026-05-27**: a tentativa anterior de retry com `-PROVIDER Engine12` foi removida — switch inexistente em todas as CLIs Firebird (gbak/nbackup/gstat/isql), produzia "switch invalido" mascarando o erro original. Mensagem amigável em `_failureFromProcess` é hoje a remediação canónica. |
 | FB 4.0 com `WireCrypt = Required` rejeita clientes 2.5/3.0 antigos sem WireCrypt | E | Detectar `Incompatible wire encryption requirements` e falhar fast com remediação (`WireCrypt = Enabled` no servidor ou atualizar binários) |
-| Detecção automática de versão (`gbak -z`/`gstat -h`) pode falhar em ambientes restritos | E | Respeitar hints **v25/v30/v40** na UI; com **Auto**, falha da sonda não aborta o backup — métricas podem ficar `auto` sem token parseável; `-SE` em modo **auto** só com hints **v30/v40** (§1.6.7), não com **Auto** sozinho |
+| Detecção automática de versão (`gbak -z`/`gstat -h`) pode falhar em ambientes restritos | E | Respeitar hints **v25/v30/v40** na UI; com **Auto**, falha da sonda não aborta o backup — métricas podem ficar `auto` sem token parseável; `-SE` (apenas `gbak`, §1.6.7) em modo **auto** só com hints **v30/v40**, não com **Auto** sozinho |
 | Cache de versão pode ficar stale após upgrade do servidor | E + F | Cache em memória (perde no restart); botão "Testar conexão" no dialog força re-detecção; documentar que mudança de versão exige restart ou save da config |
-| `cryptKey` salvo na storage segura mas utilizador muda `serverVersionHint` para `v25` (que ignora) | E + F | Service loga warning único por execução; UI mostra warning não-bloqueante no dialog |
+| `cryptKey` em backup logico do Firebird (qualquer versão) | E + F | **Auditoria 2026-05-27**: `gbak` não tem switch `-key` (em nenhuma versão), e `-KEYNAME` sozinho (FB4) é incompleto — exige o trio `-CRYPT`+`-KEYHOLDER`+`-KEYNAME`. Backup com `cryptKey` não vazio é hoje **rejeitado** com `ValidationFailure` clara antes de invocar a CLI (`_rejectCryptKeyIfPresent`). UI mantém o campo (para guardar valor entre versões) mas com tooltip "não suportado". Suporte completo entra no roadmap junto com plugin keyholder. `cryptKey` foi migrado para secure storage (`SecureCredentialKeys.firebirdCryptKeyKey`) com migração transparente no `rowToEntity`. |
+| Embedded em FB 3.0+ exige plugins (`engine12.dll`/`engine13.dll`) — utilizador aponta `clientLibraryPath` para zip-embedded com plugins **junto** do fbclient.dll | E | `FirebirdEmbeddedSupport.validateEmbeddedEnginePlugins` (helper compartilhado em `lib/core/utils/`) aceita os dois layouts comuns: `<root>/bin/fbclient.dll + <root>/plugins/` (instalador oficial) **e** `<root>/fbclient.dll + <root>/plugins/` (zip embedded). |
 | Backup nbackup com nível incremental sem o nível anterior gera erro críptico | E | **MVP:** avisos em log (`_warnFirebirdNbackupOperationalSemantics` em `firebird_backup_service.dart`); sem validação prévia da cadeia nem fallback automático para `-B 0` — o erro vem do `nbackup`. **Backlog:** validar cadeia (p.ex. `.nbk` de nível 0 no destino) e opcional fallback / `executedBackupType` alinhado a Postgres incremental. |
 | `nbackup` em FB 4.0 com GUID-based incompatível com cadeia FB 3.0 antiga | E | Modo GUID só activa com hint **v40** ou `WI-V4+` em `gbak -z`; FB 2.5/3.0 mantêm `-B` numérico + ficheiros `.nbk` na pasta; upgrade de servidor: executar Full (nível 0) antes de incrementais |
 | Embedded em FB 3.0+ exige plugins (`engine12.dll`/`engine13.dll`) na pasta — utilizador aponta `clientLibraryPath` mas esquece plugins | E | `_validateEmbeddedEnginePlugins` em `firebird_backup_service.dart` (antes de `gstat`/`gbak`); falha com mensagem clara |

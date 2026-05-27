@@ -141,7 +141,9 @@ void main() {
     });
 
     test(
-      'executeBackup retries nbackup with -PROVIDER Engine12 on legacy auth',
+      'executeBackup nbackup NAO injeta -PROVIDER Engine12 em retry — '
+      'switch inexistente; devolve falha original com remediacao explicita '
+      'sobre AuthServer em firebird.conf',
       () async {
         var nCalls = 0;
         when(
@@ -156,29 +158,15 @@ void main() {
         ).thenAnswer((invocation) async {
           nCalls++;
           final args = invocation.namedArguments[#arguments]! as List<String>;
-          final outPath = args.last;
-          if (nCalls == 1) {
-            expect(args, isNot(contains('-PROVIDER')));
-            return const rd.Success(
-              ProcessResult(
-                exitCode: 1,
-                stdout: '',
-                stderr:
-                    'Your user name and password are not defined. Ask your '
-                    'database admin.',
-                duration: Duration(milliseconds: 1),
-              ),
-            );
-          }
-          expect(args.indexOf('-PROVIDER'), lessThan(args.indexOf('-USER')));
-          expect(args, contains('Engine12'));
-          await File(outPath).writeAsBytes(List<int>.filled(12, 2));
+          expect(args, isNot(contains('-PROVIDER')));
           return const rd.Success(
             ProcessResult(
-              exitCode: 0,
+              exitCode: 1,
               stdout: '',
-              stderr: '',
-              duration: Duration(milliseconds: 2),
+              stderr:
+                  'Your user name and password are not defined. Ask your '
+                  'database admin.',
+              duration: Duration(milliseconds: 1),
             ),
           );
         });
@@ -191,23 +179,24 @@ void main() {
           ),
         );
 
-        expect(result.isSuccess(), isTrue);
-        expect(nCalls, 2);
-        verify(
-          () => processService.run(
-            executable: 'nbackup',
-            arguments: any(named: 'arguments'),
-            workingDirectory: any(named: 'workingDirectory'),
-            environment: any(named: 'environment'),
-            timeout: any(named: 'timeout'),
-            tag: any(named: 'tag'),
-          ),
-        ).called(2);
+        expect(result.isError(), isTrue);
+        // Apenas 1 chamada — nao retry com -PROVIDER (que nao existe na
+        // CLI nbackup; injectar quebraria com "switch invalido").
+        expect(nCalls, 1);
+        final failure = result.exceptionOrNull();
+        expect(failure, isA<BackupFailure>());
+        // Mensagem amigavel com remediacao (`AuthServer` em firebird.conf)
+        // — definida em `_failureFromProcess`.
+        expect(
+          (failure! as BackupFailure).message.toLowerCase(),
+          contains('authserver'),
+        );
       },
     );
 
     test(
-      'executeBackup does not retry nbackup legacy provider when hint is v25',
+      'executeBackup nbackup com hint v25 nao retry e devolve mesma '
+      'falha amigavel (sem mudanca de comportamento para v2.5)',
       () async {
         var nCalls = 0;
         final cfg = FirebirdConfig(
@@ -368,8 +357,9 @@ void main() {
     );
 
     test(
-      'executeBackup full (nbackup) passes -SE service_mgr when hint v30 and '
-      'serviceManager auto',
+      'executeBackup full (nbackup) NEVER passes -SE service_mgr — switch '
+      'inexistente em nbackup; servico Firebird remoto via Services Manager '
+      'requereria a tool fbsvcmgr (fora do MVP)',
       () async {
         final cfg = FirebirdConfig(
           name: 'fb-nb-se',
@@ -391,10 +381,8 @@ void main() {
           ),
         ).thenAnswer((invocation) async {
           final args = invocation.namedArguments[#arguments]! as List<String>;
-          expect(args.indexOf('-PASSWORD'), lessThan(args.indexOf('-SE')));
-          expect(args.indexOf('-SE'), lessThan(args.indexOf('-B')));
-          expect(args, contains('-SE'));
-          expect(args, contains('srv.example/3050:service_mgr'));
+          expect(args, isNot(contains('-SE')));
+          expect(args, isNot(contains('srv.example/3050:service_mgr')));
           final outPath = args.last;
           await File(outPath).writeAsBytes(List<int>.filled(64, 1));
           return const rd.Success(
@@ -1159,12 +1147,36 @@ void main() {
     );
 
     test(
-      'executeBackup fullSingle hint v40 passes crypt key as -KEYNAME to gbak',
+      'executeBackup aceita layout "zip-embedded" — fbclient.dll e '
+      'plugins/ no MESMO diretorio (sem subpasta bin/)',
+      skip: !Platform.isWindows,
       () async {
-        final cfg = tcpConfig.copyWith(
+        // Cenario comum: utilizador descompacta o zip embedded para um
+        // diretorio unico (<root>/fbclient.dll + <root>/plugins/...).
+        // Antes da auditoria 2026-05-27, `_validateEmbeddedEnginePlugins`
+        // so procurava em `<binDir>/../plugins/` e rejeitava este layout
+        // valido. Agora aceita os dois.
+        final root = Directory(p.join(tempDir.path, 'fb_zip_embedded'));
+        final pluginsDir = Directory(p.join(root.path, 'plugins'));
+        root.createSync(recursive: true);
+        pluginsDir.createSync(recursive: true);
+        final clientPath = p.join(root.path, 'fbclient.dll');
+        await File(clientPath).writeAsString('x');
+        await File(p.join(pluginsDir.path, 'engine13.dll')).writeAsString('p');
+        final dbPath = p.join(tempDir.path, 'edb_zip.fdb');
+        await File(dbPath).writeAsBytes(<int>[1]);
+
+        final cfg = FirebirdConfig(
+          name: 'emb-zip',
+          host: 'localhost',
+          databaseFile: dbPath,
+          username: 'u',
+          password: 'p',
+          useEmbedded: true,
+          clientLibraryPath: clientPath,
           serverVersionHint: FirebirdServerVersionHint.v40,
-          cryptKey: 'MyDbKey',
         );
+
         when(
           () => processService.run(
             executable: 'gbak',
@@ -1176,19 +1188,40 @@ void main() {
           ),
         ).thenAnswer((invocation) async {
           final args = invocation.namedArguments[#arguments]! as List<String>;
-          expect(args, contains('-KEYNAME'));
-          expect(args, contains('MyDbKey'));
-          expect(args, isNot(contains('-key')));
-          await File(args.last).writeAsBytes(List<int>.filled(32, 1));
+          await File(args.last).writeAsBytes(List<int>.filled(16, 7));
           return const rd.Success(
             ProcessResult(
               exitCode: 0,
               stdout: '',
               stderr: '',
-              duration: Duration(milliseconds: 3),
+              duration: Duration(milliseconds: 4),
             ),
           );
         });
+
+        final result = await service.executeBackup(
+          config: cfg,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sched-zip',
+            backupType: BackupType.fullSingle,
+          ),
+        );
+
+        expect(result.isSuccess(), isTrue);
+      },
+    );
+
+    test(
+      'executeBackup com cryptKey REJEITA antes de invocar gbak — flags '
+      'reais (-CRYPT/-KEYHOLDER/-KEYNAME) exigem trio combinado e ainda '
+      'nao tem UI dedicada; backup com cryptKey solto produz comando '
+      'invalido em CLI real, entao falhamos cedo com ValidationFailure',
+      () async {
+        final cfg = tcpConfig.copyWith(
+          serverVersionHint: FirebirdServerVersionHint.v40,
+          cryptKey: 'MyDbKey',
+        );
 
         final result = await service.executeBackup(
           config: cfg,
@@ -1199,12 +1232,29 @@ void main() {
           ),
         );
 
-        expect(result.isSuccess(), isTrue);
+        expect(result.isError(), isTrue);
+        final failure = result.exceptionOrNull();
+        expect(failure, isA<ValidationFailure>());
+        expect(
+          (failure! as ValidationFailure).message,
+          contains('chave de criptografia'),
+        );
+        verifyNever(
+          () => processService.run(
+            executable: 'gbak',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        );
       },
     );
 
     test(
-      'executeBackup passes tcp connection spec and crypt key to gbak',
+      'executeBackup com cryptKey nao trafega `-key` (switch inexistente '
+      'em gbak); falhamos cedo antes de chamar a CLI',
       () async {
         final cfg = FirebirdConfig(
           name: 'k',
@@ -1213,6 +1263,41 @@ void main() {
           username: 'u',
           password: 'p',
           cryptKey: '  sekrit  ',
+        );
+
+        final result = await service.executeBackup(
+          config: cfg,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'sched-1',
+            backupType: BackupType.fullSingle,
+          ),
+        );
+
+        expect(result.isError(), isTrue);
+        expect(result.exceptionOrNull(), isA<ValidationFailure>());
+        verifyNever(
+          () => processService.run(
+            executable: 'gbak',
+            arguments: any(named: 'arguments'),
+            workingDirectory: any(named: 'workingDirectory'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+            tag: any(named: 'tag'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'executeBackup passes tcp connection spec to gbak (sem cryptKey)',
+      () async {
+        final cfg = FirebirdConfig(
+          name: 'k',
+          host: 'h',
+          databaseFile: '/db/x.fdb',
+          username: 'u',
+          password: 'p',
         );
         when(
           () => processService.run(
@@ -1230,8 +1315,8 @@ void main() {
           expect(args, contains('u'));
           expect(args, contains('-pas'));
           expect(args, contains('p'));
-          expect(args, contains('-key'));
-          expect(args, contains('sekrit'));
+          expect(args, isNot(contains('-key')));
+          expect(args, isNot(contains('-KEYNAME')));
           expect(args, contains('h/3050:/db/x.fdb'));
           final outPath = args.last;
           await File(outPath).writeAsBytes(List<int>.filled(64, 1));

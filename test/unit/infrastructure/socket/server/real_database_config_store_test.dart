@@ -203,6 +203,166 @@ void main() {
       );
       expect(outcome.success, isTrue);
     });
+
+    // ---- B12: merge de segredos vazios com valor armazenado ----
+    //
+    // Servidor nao reenvia password/cryptKey nos snapshots de list/get
+    // por seguranca. Quando o cliente remoto reedita o formulario sem
+    // reescrever esses campos, o payload chega com string vazia. Sem
+    // merge, o repository sobrescreve o segredo com vazio (perda
+    // silenciosa). Os testes abaixo asseguram que o valor existente e
+    // preservado nesse cenario para os 4 SGBDs.
+
+    test(
+      'Sybase: update com password vazio preserva password existente',
+      () async {
+        when(
+          () => sybaseRepo.getById('sb-1'),
+        ).thenAnswer((_) async => rd.Success(sybaseCfg)); // password='p'
+        SybaseConfig? captured;
+        when(() => sybaseRepo.update(any())).thenAnswer((invocation) async {
+          captured = invocation.positionalArguments.first as SybaseConfig;
+          return rd.Success(sybaseCfg);
+        });
+
+        final outcome = await store.update(
+          RemoteDatabaseType.sybase,
+          const {
+            'id': 'sb-1',
+            'name': 'updated',
+            'serverName': 's',
+            'databaseName': 'd',
+            'username': 'u',
+            'password': '', // <-- cliente nao reescreveu
+          },
+        );
+
+        expect(outcome.success, isTrue);
+        expect(captured, isNotNull);
+        expect(captured!.password, 'p'); // preservou existente
+      },
+    );
+
+    test(
+      'SqlServer: update com password vazio preserva password existente',
+      () async {
+        when(
+          () => sqlRepo.getById('sql-1'),
+        ).thenAnswer((_) async => rd.Success(sqlCfg));
+        SqlServerConfig? captured;
+        when(() => sqlRepo.update(any())).thenAnswer((invocation) async {
+          captured = invocation.positionalArguments.first as SqlServerConfig;
+          return rd.Success(sqlCfg);
+        });
+
+        await store.update(
+          RemoteDatabaseType.sqlServer,
+          const {
+            'id': 'sql-1',
+            'name': 'updated',
+            'server': 's',
+            'database': 'd',
+            'username': 'u',
+            'password': '',
+          },
+        );
+        expect(captured!.password, 'p');
+      },
+    );
+
+    test(
+      'Postgres: update com password vazio preserva password existente',
+      () async {
+        when(
+          () => pgRepo.getById('pg-1'),
+        ).thenAnswer((_) async => rd.Success(pgCfg));
+        PostgresConfig? captured;
+        when(() => pgRepo.update(any())).thenAnswer((invocation) async {
+          captured = invocation.positionalArguments.first as PostgresConfig;
+          return rd.Success(pgCfg);
+        });
+
+        await store.update(
+          RemoteDatabaseType.postgres,
+          const {
+            'id': 'pg-1',
+            'name': 'updated',
+            'host': 'h',
+            'database': 'd',
+            'username': 'u',
+            'password': '',
+          },
+        );
+        expect(captured!.password, 'p');
+      },
+    );
+
+    test(
+      'Firebird: update com password E cryptKey vazios preserva ambos os '
+      'segredos armazenados (B12)',
+      () async {
+        final existing = fbCfg.copyWith(
+          password: 'stored-pw',
+          cryptKey: 'stored-ck',
+        );
+        when(
+          () => fbRepo.getById('fb-1'),
+        ).thenAnswer((_) async => rd.Success(existing));
+        FirebirdConfig? captured;
+        when(() => fbRepo.update(any())).thenAnswer((invocation) async {
+          captured = invocation.positionalArguments.first as FirebirdConfig;
+          return rd.Success(existing);
+        });
+
+        await store.update(
+          RemoteDatabaseType.firebird,
+          const {
+            'id': 'fb-1',
+            'name': 'updated',
+            'host': 'h',
+            'databaseFile': r'C:\data\db.fdb',
+            'username': 'u',
+            'password': '', // ambos vazios
+            'cryptKey': '',
+          },
+        );
+
+        expect(captured, isNotNull);
+        expect(captured!.password, 'stored-pw');
+        expect(captured!.cryptKey, 'stored-ck');
+      },
+    );
+
+    test(
+      'update com password preenchido NAO sobrescreve com valor armazenado '
+      '(cliente realmente quis renovar a senha) e EVITA I/O extra a '
+      'getById (early-return do descritor)',
+      () async {
+        SybaseConfig? captured;
+        when(() => sybaseRepo.update(any())).thenAnswer((invocation) async {
+          captured = invocation.positionalArguments.first as SybaseConfig;
+          return rd.Success(sybaseCfg);
+        });
+
+        await store.update(
+          RemoteDatabaseType.sybase,
+          const {
+            'id': 'sb-1',
+            'name': 'updated',
+            'serverName': 's',
+            'databaseName': 'd',
+            'username': 'u',
+            'password': 'new-pw', // <-- cliente renovou
+          },
+        );
+
+        expect(captured!.password, 'new-pw');
+        // Early-return: nenhuma chave sensivel veio vazia, entao o
+        // descriptor evita a chamada `getById` (otimizacao: sem I/O
+        // extra contra repository).
+        verifyNever(() => sybaseRepo.getById(any()));
+      },
+    );
   });
 
   group('delete', () {

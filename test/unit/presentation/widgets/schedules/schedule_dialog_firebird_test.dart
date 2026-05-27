@@ -249,9 +249,22 @@ void main() {
     id: 'sched-fb-1',
   );
 
+  Schedule firebirdScheduleWithDifferential() => Schedule(
+    name: 'FB incremental',
+    databaseConfigId: 'fb-cfg-1',
+    databaseType: DatabaseType.firebird,
+    scheduleType: 'daily',
+    scheduleConfig: '{}',
+    destinationIds: const <String>['dest-1'],
+    backupFolder: 'bf',
+    backupType: BackupType.differential,
+    id: 'sched-fb-diff',
+  );
+
   group('ScheduleDialog - Firebird', () {
     testWidgets(
-      'new Firebird schedule lists only Full and Full Single backup types',
+      'new Firebird schedule lists Full, Full Single, Diferencial and Log '
+      '(infra suporta gbak + nbackup -B 0/-B 1)',
       (tester) async {
         await tester.pumpWidget(
           buildScheduleDialogHarness(
@@ -275,8 +288,11 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Full Single'), findsOneWidget);
-        expect(find.text('Diferencial'), findsNothing);
-        expect(find.text('Log de Transações'), findsNothing);
+        expect(find.text('Diferencial'), findsOneWidget);
+        expect(find.text('Log de Transações'), findsOneWidget);
+        // Tipos "convertidos" continuam a NAO aparecer no dropdown — sao
+        // apenas marcadores internos para schedules importados de outros
+        // SGBDs (rule do strategy rejeita `convertedFullSingle`).
         expect(find.text('Diferencial (convertido)'), findsNothing);
         expect(find.text('Full Single (convertido)'), findsNothing);
         expect(find.text('Log de Transações (convertido)'), findsNothing);
@@ -284,7 +300,8 @@ void main() {
     );
 
     testWidgets(
-      'editing Firebird schedule with log backup normalizes to Full caption',
+      'editing Firebird schedule com BackupType.log preserva o tipo no UI '
+      '(sem coercao silenciosa para Full)',
       (tester) async {
         await tester.pumpWidget(
           buildScheduleDialogHarness(
@@ -303,9 +320,43 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Diferencial'), findsNothing);
-        expect(find.text('Log de Transações'), findsNothing);
+        // O dropdown deve continuar a mostrar Log (sem reescrever para
+        // Full, que era o bug anterior — destruia cadeia incremental no
+        // primeiro save).
+        expect(find.text('Log de Transações'), findsOneWidget);
         expect(find.textContaining('nbackup'), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'editing Firebird schedule com BackupType.differential preserva o '
+      'tipo no UI (B5: bug anterior coergia para Full no save)',
+      (tester) async {
+        await tester.pumpWidget(
+          buildScheduleDialogHarness(
+            schedule: firebirdScheduleWithDifferential(),
+            firebirdConfigs: [firebirdConfig()],
+            destinations: [
+              BackupDestination(
+                id: 'dest-1',
+                name: 'Local',
+                type: DestinationType.local,
+                config: '{"path":"C:/backup"}',
+              ),
+            ],
+            license: licenseWithBackupTypesAndVerify(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // O valor inicial do dropdown deve refletir BackupType.differential
+        // (a UI seleciona pela string `displayName`). Bug anterior
+        // `_normalizeBackupTypeForDatabase` no initState colapsava
+        // `differential` -> `full` para Firebird.
+        expect(find.text('Diferencial'), findsOneWidget);
+        // E o titulo do schedule continua o original — confirmacao de
+        // que estamos no modo edicao.
+        expect(find.text('FB incremental'), findsWidgets);
       },
     );
 

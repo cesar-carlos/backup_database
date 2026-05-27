@@ -31,15 +31,7 @@ class FirebirdConfigGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return DatabaseConfigDataGrid<FirebirdConfig>(
       configs: configs,
-      rowOf: (FirebirdConfig c) => DatabaseConfigGridRow(
-        databaseType: DatabaseType.firebird,
-        name: c.name,
-        serverEndpoint: '${c.host}:${c.portValue}',
-        database: c.databaseFile,
-        username: c.username,
-        id: c.id,
-        enabled: c.enabled,
-      ),
+      rowOf: _rowOf,
       onEdit: onEdit,
       onDuplicate: onDuplicate,
       onDelete: onDelete,
@@ -47,6 +39,28 @@ class FirebirdConfigGrid extends StatelessWidget {
       onAddWhenEmpty: onAddWhenEmpty,
       addWhenEmptyButtonLabel: addWhenEmptyButtonLabel,
       connectionTestSnapshot: connectionTestSnapshot,
+    );
+  }
+
+  static DatabaseConfigGridRow _rowOf(FirebirdConfig c) {
+    // Em modo embedded o host/port nao tem significado (nao ha
+    // conexao TCP), e o "database" e o caminho do .fdb local. Em
+    // alias-only (databaseFile vazio), mostrar o alias evita celula
+    // em branco que confunde o utilizador.
+    final endpoint = c.useEmbedded
+        ? '(embedded)'
+        : '${c.host}:${c.portValue}';
+    final database = c.databaseFile.isNotEmpty
+        ? c.databaseFile
+        : (c.aliasName?.trim() ?? '');
+    return DatabaseConfigGridRow(
+      databaseType: DatabaseType.firebird,
+      name: c.name,
+      serverEndpoint: endpoint,
+      database: database,
+      username: c.username,
+      id: c.id,
+      enabled: c.enabled,
     );
   }
 }
