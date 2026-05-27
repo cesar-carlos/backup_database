@@ -63,7 +63,6 @@ void main() {
         ipcClient: ipcClient,
         messageBox: messageBox,
         getCurrentUsername: () => 'user_a',
-        maxRetryAttempts: 3,
       );
 
       final canContinue = await checker.checkAndHandleSecondInstance();
@@ -129,6 +128,99 @@ void main() {
         expect(ipcClient.getExistingInstanceUserCallCount, 0);
         expect(ipcClient.notifyAttemptCount, 0);
         expect(messageBox.warningMessage, isNull);
+      },
+    );
+
+    // F6: foreground notify deve ser pulado quando o dono é outro usuário,
+    // evitando focar a janela na sessão de outra pessoa.
+    test(
+      'should not send SHOW_WINDOW when existing instance is a different user',
+      () async {
+        final messageBox = _FakeWindowsMessageBox();
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingUser: 'user_a',
+          notifyResults: [true],
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: messageBox,
+          getCurrentUsername: () => 'user_b',
+          maxRetryAttempts: 1,
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(ipcClient.notifyAttemptCount, 0);
+        expect(
+          messageBox.warningMessage,
+          contains('em outro usuário do Windows'),
+        );
+      },
+    );
+
+    test(
+      'should not send SHOW_WINDOW when existing instance user is unknown',
+      () async {
+        final messageBox = _FakeWindowsMessageBox();
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingRole: 'ui',
+          notifyResults: [true],
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: messageBox,
+          getCurrentUsername: () => 'user_a',
+          maxRetryAttempts: 1,
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(ipcClient.notifyAttemptCount, 0);
+        expect(messageBox.warningMessage, contains('identificar o usu'));
+      },
+    );
+
+    // F4: race acquire→IPC. Tenta múltiplas vezes obter info quando a
+    // primeira chamada retorna null (dono ainda subindo o IPC server).
+    test(
+      'should retry getExistingInstanceInfo when first attempt returns null',
+      () async {
+        final messageBox = _FakeWindowsMessageBox();
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          // existingRole = null para que o fallback de getExistingInstanceRole
+          // também devolva null nas tentativas iniciais (caso contrário o
+          // fallback resolveria o role na 1ª iteração e o retry nem
+          // aconteceria).
+          existingUser: 'user_a',
+          notifyResults: [true],
+          // Primeiras 2 tentativas retornam null (IPC ainda subindo),
+          // 3ª finalmente responde com role.
+          ownerInfoResults: [null, null, 'ui'],
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: messageBox,
+          getCurrentUsername: () => 'user_a',
+          maxRetryAttempts: 1,
+          ownerInfoRetryDelay: const Duration(milliseconds: 1),
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(ipcClient.getExistingInstanceInfoCallCount, 3);
+        expect(ipcClient.notifyAttemptCount, 1);
       },
     );
 
@@ -255,18 +347,23 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
     this.canRunSchedule = false,
     this.delegationResult,
     List<bool>? notifyResults,
-  }) : _notifyResults = notifyResults ?? <bool>[true];
+    List<String?>? ownerInfoResults,
+  }) : _notifyResults = notifyResults ?? <bool>[true],
+       _ownerInfoResults = ownerInfoResults;
 
   final String? existingUser;
   final String? existingRole;
   final bool canRunSchedule;
   final SingleInstanceScheduledDelegationResult? delegationResult;
   final List<bool> _notifyResults;
+  final List<String?>? _ownerInfoResults;
   final delegatedScheduleIds = <String>[];
 
   int _notifyAttemptIndex = 0;
+  int _ownerInfoCallIndex = 0;
 
   int get notifyAttemptCount => _notifyAttemptIndex;
+  int get getExistingInstanceInfoCallCount => _ownerInfoCallIndex;
 
   int getExistingInstanceUserCallCount = 0;
 
@@ -288,6 +385,22 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
 
   @override
   Future<SingleInstanceOwnerInfo?> getExistingInstanceInfo() async {
+    final index = _ownerInfoCallIndex;
+    _ownerInfoCallIndex++;
+    final scriptedResults = _ownerInfoResults;
+    if (scriptedResults != null) {
+      if (index >= scriptedResults.length) {
+        return null;
+      }
+      final role = scriptedResults[index];
+      if (role == null) {
+        return null;
+      }
+      return SingleInstanceOwnerInfo(
+        role: role,
+        canRunSchedule: canRunSchedule,
+      );
+    }
     final role = existingRole;
     if (role == null) {
       return null;

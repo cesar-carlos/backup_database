@@ -58,11 +58,10 @@ class BootstrapConfigResolver {
 
     return BootstrapConfig(
       appMode: appMode,
-      singleInstanceEnabled:
-          !isDebugMode ||
-          SingleInstanceConfig.isEnabledFromEnvValue(
-            envValues['SINGLE_INSTANCE_ENABLED'],
-          ),
+      singleInstanceEnabled: _resolveSingleInstanceEnabled(
+        isDebugMode: isDebugMode,
+        envValue: envValues['SINGLE_INSTANCE_ENABLED'],
+      ),
       uiSingleInstanceLockFallbackMode:
           SingleInstanceConfig.lockFallbackModeFromEnvValue(
             envValues['SINGLE_INSTANCE_LOCK_FALLBACK_MODE'],
@@ -72,6 +71,24 @@ class BootstrapConfigResolver {
         onWarning: _onWarning,
       ),
     );
+  }
+
+  /// Resolução explícita do flag de instância única:
+  ///
+  /// - **Release** (`isDebugMode=false`): SEMPRE `true`. O env é
+  ///   ignorado intencionalmente para evitar que alguém deixe um
+  ///   `SINGLE_INSTANCE_ENABLED=false` no `.env` de produção e
+  ///   acidentalmente permita 2 instâncias rodando.
+  /// - **Debug** (`isDebugMode=true`): segue o env (default `true`),
+  ///   permitindo desabilitar localmente para iterar.
+  static bool _resolveSingleInstanceEnabled({
+    required bool isDebugMode,
+    required String? envValue,
+  }) {
+    if (!isDebugMode) {
+      return true;
+    }
+    return SingleInstanceConfig.isEnabledFromEnvValue(envValue);
   }
 
   static UiSchedulerFallbackMode parseUiSchedulerFallbackMode(

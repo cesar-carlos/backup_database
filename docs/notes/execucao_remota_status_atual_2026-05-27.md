@@ -11,7 +11,7 @@ Substitui na prática a maior parte do `plano_cliente_recursos_servidor_execucao
 
 | Métrica | Valor |
 |---|---|
-| Testes | **1963** (1950 passed + 13 skipped) |
+| Testes | **2009** (1996 passed + 13 skipped) — AUDIT-15 adicionou cobertura de F1/F2/F3/F4/F6 e idempotência do `SingleInstanceService` |
 | Drift `schemaVersion` | **33** (v32 Firebird, v33 idempotency persistence) |
 | `kCurrentWireVersion` | `1` (binary header sem mudança) |
 | `kCurrentProtocolVersion` | **2** (PR-G Firebird) |

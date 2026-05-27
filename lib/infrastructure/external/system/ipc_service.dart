@@ -185,10 +185,13 @@ class IpcService implements IIpcService {
       try {
         LoggerService.debug('ipc_show_window_try port=$port');
 
+        // F5: usa timeout curto (1s) — sempre loopback, e o caller
+        // (`SingleInstanceChecker`) já faz retry. Antes era 5s por
+        // tentativa × 5 retries = 25s+ de janela morta no pior caso.
         socket = await Socket.connect(
           InternetAddress.loopbackIPv4,
           port,
-          timeout: SingleInstanceConfig.ipcConnectTimeout,
+          timeout: SingleInstanceConfig.showWindowConnectTimeout,
         );
 
         socket.add(utf8.encode(SingleInstanceConfig.ipcShowWindowMessage));

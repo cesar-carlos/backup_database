@@ -19,6 +19,8 @@ class SingleInstanceChecker {
     String? scheduledScheduleId,
     int maxRetryAttempts = SingleInstanceConfig.maxRetryAttempts,
     Duration retryDelay = SingleInstanceConfig.retryDelay,
+    int ownerInfoMaxAttempts = _defaultOwnerInfoMaxAttempts,
+    Duration ownerInfoRetryDelay = _defaultOwnerInfoRetryDelay,
   }) : _singleInstanceService = singleInstanceService,
        _ipcClient = ipcClient,
        _messageBox = messageBox,
@@ -28,7 +30,21 @@ class SingleInstanceChecker {
        _launchOrigin = launchOrigin,
        _scheduledScheduleId = scheduledScheduleId,
        _maxRetryAttempts = maxRetryAttempts > 0 ? maxRetryAttempts : 1,
-       _retryDelay = retryDelay;
+       _retryDelay = retryDelay,
+       _ownerInfoMaxAttempts = ownerInfoMaxAttempts > 0
+           ? ownerInfoMaxAttempts
+           : 1,
+       _ownerInfoRetryDelay = ownerInfoRetryDelay;
+
+  /// F4: tenta múltiplas vezes obter info da instância existente. Cobre a
+  /// race entre `checkAndLock` (que adquire o mutex cedo no boot) e o
+  /// `startIpcServer` (que sobe ~300ms depois, após `setupServiceLocator`).
+  /// Sem retry, a 2ª UI mostra "Unknown user" mesmo quando o dono está
+  /// literalmente abrindo agora.
+  static const int _defaultOwnerInfoMaxAttempts = 3;
+  static const Duration _defaultOwnerInfoRetryDelay = Duration(
+    milliseconds: 250,
+  );
 
   final ISingleInstanceService _singleInstanceService;
   final ISingleInstanceIpcClient _ipcClient;
@@ -39,6 +55,8 @@ class SingleInstanceChecker {
   final String? _scheduledScheduleId;
   final int _maxRetryAttempts;
   final Duration _retryDelay;
+  final int _ownerInfoMaxAttempts;
+  final Duration _ownerInfoRetryDelay;
 
   static const String dialogTitle =
       'Backup Database - J\u00E1 em Execu\u00E7\u00E3o';
@@ -124,8 +142,16 @@ class SingleInstanceChecker {
     final isServiceOwner =
         existingRole == SingleInstanceConfig.ipcInstanceRoleService;
 
+    // F6: só envia SHOW_WINDOW quando temos certeza que o dono é o
+    // MESMO usuário. Caso contrário (sessão diferente / usuário
+    // desconhecido / serviço SYSTEM), trazer a janela "para frente"
+    // ou (a) é no-op cross-session (rejeitado pelo Win32), ou (b)
+    // foca a janela na sessão de outra pessoa — surpresa indesejada.
+    final shouldNotifyForeground =
+        !isServiceOwner && !isDifferentUser && !couldNotDetermineUser;
+
     var wasExistingWindowNotified = false;
-    if (!isServiceOwner) {
+    if (shouldNotifyForeground) {
       for (var i = 0; i < _maxRetryAttempts; i++) {
         final notified = await _ipcClient.notifyExistingInstance();
         if (notified) {
@@ -142,9 +168,15 @@ class SingleInstanceChecker {
           'apos $_maxRetryAttempts tentativas',
         );
       }
-    } else {
+    } else if (isServiceOwner) {
       LoggerService.info(
         'Segunda instancia manual bloqueada porque o dono do lock e servico',
+      );
+    } else {
+      LoggerService.info(
+        'event=duplicate_skip_show_window_cross_user '
+        'isDifferentUser=$isDifferentUser '
+        'couldNotDetermineUser=$couldNotDetermineUser',
       );
     }
 
@@ -202,7 +234,22 @@ class SingleInstanceChecker {
     _exitProcess?.call(result.exitCode);
   }
 
+  /// F4: tenta múltiplas vezes resolver a info da instância existente.
+  /// Coberto pelo `_ownerInfoMaxAttempts`/`_ownerInfoRetryDelay`.
   Future<SingleInstanceOwnerInfo?> _getExistingInfo() async {
+    for (var attempt = 0; attempt < _ownerInfoMaxAttempts; attempt++) {
+      final info = await _tryGetExistingInfoOnce();
+      if (info != null) {
+        return info;
+      }
+      if (attempt < _ownerInfoMaxAttempts - 1) {
+        await Future.delayed(_ownerInfoRetryDelay);
+      }
+    }
+    return null;
+  }
+
+  Future<SingleInstanceOwnerInfo?> _tryGetExistingInfoOnce() async {
     try {
       final ownerInfo = await _ipcClient.getExistingInstanceInfo();
       if (ownerInfo != null) {

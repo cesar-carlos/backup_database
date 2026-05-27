@@ -104,8 +104,12 @@ class SingleInstanceConfig {
   ];
 
   // Retry configuration
-  static const int maxRetryAttempts = 5;
-  static const Duration retryDelay = Duration(milliseconds: 200);
+  ///
+  /// Pior caso de janela morta ao acionar SHOW_WINDOW antes do dialog:
+  /// `maxRetryAttempts * (showWindowConnectTimeout + retryDelay)`.
+  /// Com 3 * (1000 + 100) = 3,3s, é tolerável para o usuário desktop.
+  static const int maxRetryAttempts = 3;
+  static const Duration retryDelay = Duration(milliseconds: 100);
 
   // Timeout configuration
   static const Duration connectionTimeout = Duration(seconds: 1);
@@ -116,6 +120,13 @@ class SingleInstanceConfig {
   static const Duration ipcDiscoveryFastTimeout = Duration(milliseconds: 150);
   static const Duration ipcDiscoverySlowTimeout = Duration(milliseconds: 300);
   static const Duration ipcPortCacheTtl = Duration(minutes: 2);
+
+  /// Timeout para o comando `SHOW_WINDOW` enviado pela 2ª instância à
+  /// dona do lock. Mantido CURTO (loopback é local) para evitar a
+  /// percepção de "app travado" quando o usuário clica no atalho —
+  /// pior caso, `maxRetryAttempts * (this + retryDelay)` define o
+  /// teto da janela morta antes do dialog de aviso aparecer.
+  static const Duration showWindowConnectTimeout = Duration(seconds: 1);
 
   static Duration get ipcConnectTimeout => durationFromSecondsEnvValue(
     envValue: _envValue('SINGLE_INSTANCE_IPC_CONNECT_TIMEOUT_SECONDS'),
