@@ -11,6 +11,7 @@ export 'firebird_config_dao.dart';
 export 'idempotency_dao.dart';
 export 'license_dao.dart';
 export 'machine_settings_dao.dart';
+export 'mutable_command_audit_dao.dart';
 export 'postgres_config_dao.dart';
 export 'schedule_dao.dart';
 export 'schedule_destination_dao.dart';

@@ -140,18 +140,40 @@ class ScheduleMessageHandler {
         );
         _executionRegistry.unregister(context.runId);
       } else if (snapshot.step == 'Erro') {
-        final failedMeta = _eventSequencer.next();
-        await context.sendToClient(
-          context.clientId,
-          createBackupFailedMessage(
-            requestId: context.requestId,
-            scheduleId: context.scheduleId,
-            error: snapshot.error ?? 'Erro desconhecido',
-            runId: context.runId,
-            eventId: failedMeta.eventId,
-            sequence: failedMeta.sequence,
-          ),
-        );
+        // PR-6: cancelado emite `backupCancelled` separado para que
+        // clientes ouvindo o mesmo runId saibam que foi cancel manual /
+        // watchdog em vez de falha tecnica. Cliente legado que nao
+        // conhece `MessageType.backupCancelled` cai no fallback
+        // `MessageType.error` ao deserializar — sem regressao.
+        if (snapshot.cancelled) {
+          final cancelledMeta = _eventSequencer.next();
+          await context.sendToClient(
+            context.clientId,
+            createBackupCancelledMessage(
+              requestId: context.requestId,
+              scheduleId: context.scheduleId,
+              runId: context.runId,
+              cancelledBy: context.clientId,
+              occurredAt: DateTime.now(),
+              reason: snapshot.cancelReason ?? snapshot.error,
+              eventId: cancelledMeta.eventId,
+              sequence: cancelledMeta.sequence,
+            ),
+          );
+        } else {
+          final failedMeta = _eventSequencer.next();
+          await context.sendToClient(
+            context.clientId,
+            createBackupFailedMessage(
+              requestId: context.requestId,
+              scheduleId: context.scheduleId,
+              error: snapshot.error ?? 'Erro desconhecido',
+              runId: context.runId,
+              eventId: failedMeta.eventId,
+              sequence: failedMeta.sequence,
+            ),
+          );
+        }
         _executionRegistry.unregister(context.runId);
       }
     }

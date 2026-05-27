@@ -42,7 +42,9 @@ void main() {
           final versionRow = await dbMigrated
               .customSelect('PRAGMA user_version')
               .getSingle();
-          expect(versionRow.read<int>('user_version'), 33);
+          // PR-6 (v34 + v35) introduziu 3 colunas novas + audit table;
+          // schema avancou para 35.
+          expect(versionRow.read<int>('user_version'), 35);
 
           final tableRows = await dbMigrated
               .customSelect(

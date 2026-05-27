@@ -5038,6 +5038,18 @@ class $BackupHistoryTableTable extends BackupHistoryTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _lastProgressAtMeta = const VerificationMeta(
+    'lastProgressAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastProgressAt =
+      GeneratedColumn<DateTime>(
+        'last_progress_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _databaseTypeMeta = const VerificationMeta(
     'databaseType',
   );
@@ -5153,6 +5165,7 @@ class $BackupHistoryTableTable extends BackupHistoryTable
     runId,
     scheduleId,
     databaseName,
+    lastProgressAt,
     databaseType,
     backupPath,
     fileSize,
@@ -5203,6 +5216,15 @@ class $BackupHistoryTableTable extends BackupHistoryTable
       );
     } else if (isInserting) {
       context.missing(_databaseNameMeta);
+    }
+    if (data.containsKey('last_progress_at')) {
+      context.handle(
+        _lastProgressAtMeta,
+        lastProgressAt.isAcceptableOrUnknown(
+          data['last_progress_at']!,
+          _lastProgressAtMeta,
+        ),
+      );
     }
     if (data.containsKey('database_type')) {
       context.handle(
@@ -5308,6 +5330,10 @@ class $BackupHistoryTableTable extends BackupHistoryTable
         DriftSqlType.string,
         data['${effectivePrefix}database_name'],
       )!,
+      lastProgressAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_progress_at'],
+      ),
       databaseType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}database_type'],
@@ -5365,6 +5391,13 @@ class BackupHistoryTableData extends DataClass
   final String? runId;
   final String? scheduleId;
   final String databaseName;
+
+  /// PR-6: timestamp do ultimo `backupProgress` registrado para esta
+  /// execucao. Usado pelo watchdog runtime no `SchedulerService` para
+  /// detectar orchestrator travado (sem progresso por
+  /// `runningHeartbeatTimeout`). Nullable para preservar compat com
+  /// linhas anteriores a v34.
+  final DateTime? lastProgressAt;
   final String databaseType;
   final String backupPath;
   final int fileSize;
@@ -5380,6 +5413,7 @@ class BackupHistoryTableData extends DataClass
     this.runId,
     this.scheduleId,
     required this.databaseName,
+    this.lastProgressAt,
     required this.databaseType,
     required this.backupPath,
     required this.fileSize,
@@ -5402,6 +5436,9 @@ class BackupHistoryTableData extends DataClass
       map['schedule_id'] = Variable<String>(scheduleId);
     }
     map['database_name'] = Variable<String>(databaseName);
+    if (!nullToAbsent || lastProgressAt != null) {
+      map['last_progress_at'] = Variable<DateTime>(lastProgressAt);
+    }
     map['database_type'] = Variable<String>(databaseType);
     map['backup_path'] = Variable<String>(backupPath);
     map['file_size'] = Variable<int>(fileSize);
@@ -5433,6 +5470,9 @@ class BackupHistoryTableData extends DataClass
           ? const Value.absent()
           : Value(scheduleId),
       databaseName: Value(databaseName),
+      lastProgressAt: lastProgressAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastProgressAt),
       databaseType: Value(databaseType),
       backupPath: Value(backupPath),
       fileSize: Value(fileSize),
@@ -5464,6 +5504,7 @@ class BackupHistoryTableData extends DataClass
       runId: serializer.fromJson<String?>(json['runId']),
       scheduleId: serializer.fromJson<String?>(json['scheduleId']),
       databaseName: serializer.fromJson<String>(json['databaseName']),
+      lastProgressAt: serializer.fromJson<DateTime?>(json['lastProgressAt']),
       databaseType: serializer.fromJson<String>(json['databaseType']),
       backupPath: serializer.fromJson<String>(json['backupPath']),
       fileSize: serializer.fromJson<int>(json['fileSize']),
@@ -5484,6 +5525,7 @@ class BackupHistoryTableData extends DataClass
       'runId': serializer.toJson<String?>(runId),
       'scheduleId': serializer.toJson<String?>(scheduleId),
       'databaseName': serializer.toJson<String>(databaseName),
+      'lastProgressAt': serializer.toJson<DateTime?>(lastProgressAt),
       'databaseType': serializer.toJson<String>(databaseType),
       'backupPath': serializer.toJson<String>(backupPath),
       'fileSize': serializer.toJson<int>(fileSize),
@@ -5502,6 +5544,7 @@ class BackupHistoryTableData extends DataClass
     Value<String?> runId = const Value.absent(),
     Value<String?> scheduleId = const Value.absent(),
     String? databaseName,
+    Value<DateTime?> lastProgressAt = const Value.absent(),
     String? databaseType,
     String? backupPath,
     int? fileSize,
@@ -5517,6 +5560,9 @@ class BackupHistoryTableData extends DataClass
     runId: runId.present ? runId.value : this.runId,
     scheduleId: scheduleId.present ? scheduleId.value : this.scheduleId,
     databaseName: databaseName ?? this.databaseName,
+    lastProgressAt: lastProgressAt.present
+        ? lastProgressAt.value
+        : this.lastProgressAt,
     databaseType: databaseType ?? this.databaseType,
     backupPath: backupPath ?? this.backupPath,
     fileSize: fileSize ?? this.fileSize,
@@ -5540,6 +5586,9 @@ class BackupHistoryTableData extends DataClass
       databaseName: data.databaseName.present
           ? data.databaseName.value
           : this.databaseName,
+      lastProgressAt: data.lastProgressAt.present
+          ? data.lastProgressAt.value
+          : this.lastProgressAt,
       databaseType: data.databaseType.present
           ? data.databaseType.value
           : this.databaseType,
@@ -5572,6 +5621,7 @@ class BackupHistoryTableData extends DataClass
           ..write('runId: $runId, ')
           ..write('scheduleId: $scheduleId, ')
           ..write('databaseName: $databaseName, ')
+          ..write('lastProgressAt: $lastProgressAt, ')
           ..write('databaseType: $databaseType, ')
           ..write('backupPath: $backupPath, ')
           ..write('fileSize: $fileSize, ')
@@ -5592,6 +5642,7 @@ class BackupHistoryTableData extends DataClass
     runId,
     scheduleId,
     databaseName,
+    lastProgressAt,
     databaseType,
     backupPath,
     fileSize,
@@ -5611,6 +5662,7 @@ class BackupHistoryTableData extends DataClass
           other.runId == this.runId &&
           other.scheduleId == this.scheduleId &&
           other.databaseName == this.databaseName &&
+          other.lastProgressAt == this.lastProgressAt &&
           other.databaseType == this.databaseType &&
           other.backupPath == this.backupPath &&
           other.fileSize == this.fileSize &&
@@ -5629,6 +5681,7 @@ class BackupHistoryTableCompanion
   final Value<String?> runId;
   final Value<String?> scheduleId;
   final Value<String> databaseName;
+  final Value<DateTime?> lastProgressAt;
   final Value<String> databaseType;
   final Value<String> backupPath;
   final Value<int> fileSize;
@@ -5645,6 +5698,7 @@ class BackupHistoryTableCompanion
     this.runId = const Value.absent(),
     this.scheduleId = const Value.absent(),
     this.databaseName = const Value.absent(),
+    this.lastProgressAt = const Value.absent(),
     this.databaseType = const Value.absent(),
     this.backupPath = const Value.absent(),
     this.fileSize = const Value.absent(),
@@ -5662,6 +5716,7 @@ class BackupHistoryTableCompanion
     this.runId = const Value.absent(),
     this.scheduleId = const Value.absent(),
     required String databaseName,
+    this.lastProgressAt = const Value.absent(),
     required String databaseType,
     required String backupPath,
     required int fileSize,
@@ -5685,6 +5740,7 @@ class BackupHistoryTableCompanion
     Expression<String>? runId,
     Expression<String>? scheduleId,
     Expression<String>? databaseName,
+    Expression<DateTime>? lastProgressAt,
     Expression<String>? databaseType,
     Expression<String>? backupPath,
     Expression<int>? fileSize,
@@ -5702,6 +5758,7 @@ class BackupHistoryTableCompanion
       if (runId != null) 'run_id': runId,
       if (scheduleId != null) 'schedule_id': scheduleId,
       if (databaseName != null) 'database_name': databaseName,
+      if (lastProgressAt != null) 'last_progress_at': lastProgressAt,
       if (databaseType != null) 'database_type': databaseType,
       if (backupPath != null) 'backup_path': backupPath,
       if (fileSize != null) 'file_size': fileSize,
@@ -5721,6 +5778,7 @@ class BackupHistoryTableCompanion
     Value<String?>? runId,
     Value<String?>? scheduleId,
     Value<String>? databaseName,
+    Value<DateTime?>? lastProgressAt,
     Value<String>? databaseType,
     Value<String>? backupPath,
     Value<int>? fileSize,
@@ -5738,6 +5796,7 @@ class BackupHistoryTableCompanion
       runId: runId ?? this.runId,
       scheduleId: scheduleId ?? this.scheduleId,
       databaseName: databaseName ?? this.databaseName,
+      lastProgressAt: lastProgressAt ?? this.lastProgressAt,
       databaseType: databaseType ?? this.databaseType,
       backupPath: backupPath ?? this.backupPath,
       fileSize: fileSize ?? this.fileSize,
@@ -5766,6 +5825,9 @@ class BackupHistoryTableCompanion
     }
     if (databaseName.present) {
       map['database_name'] = Variable<String>(databaseName.value);
+    }
+    if (lastProgressAt.present) {
+      map['last_progress_at'] = Variable<DateTime>(lastProgressAt.value);
     }
     if (databaseType.present) {
       map['database_type'] = Variable<String>(databaseType.value);
@@ -5810,6 +5872,7 @@ class BackupHistoryTableCompanion
           ..write('runId: $runId, ')
           ..write('scheduleId: $scheduleId, ')
           ..write('databaseName: $databaseName, ')
+          ..write('lastProgressAt: $lastProgressAt, ')
           ..write('databaseType: $databaseType, ')
           ..write('backupPath: $backupPath, ')
           ..write('fileSize: $fileSize, ')
@@ -10013,6 +10076,17 @@ class $ExecutionQueueItemsTableTable extends ExecutionQueueItemsTable
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _expiresAtMicrosMeta = const VerificationMeta(
+    'expiresAtMicros',
+  );
+  @override
+  late final GeneratedColumn<int> expiresAtMicros = GeneratedColumn<int>(
+    'expires_at_micros',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -10022,6 +10096,7 @@ class $ExecutionQueueItemsTableTable extends ExecutionQueueItemsTable
     requestId,
     requestedBy,
     queuedAtMicros,
+    expiresAtMicros,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -10092,6 +10167,15 @@ class $ExecutionQueueItemsTableTable extends ExecutionQueueItemsTable
     } else if (isInserting) {
       context.missing(_queuedAtMicrosMeta);
     }
+    if (data.containsKey('expires_at_micros')) {
+      context.handle(
+        _expiresAtMicrosMeta,
+        expiresAtMicros.isAcceptableOrUnknown(
+          data['expires_at_micros']!,
+          _expiresAtMicrosMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -10132,6 +10216,10 @@ class $ExecutionQueueItemsTableTable extends ExecutionQueueItemsTable
         DriftSqlType.int,
         data['${effectivePrefix}queued_at_micros'],
       )!,
+      expiresAtMicros: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}expires_at_micros'],
+      ),
     );
   }
 
@@ -10150,6 +10238,12 @@ class ExecutionQueueItemsTableData extends DataClass
   final int requestId;
   final String requestedBy;
   final int queuedAtMicros;
+
+  /// PR-6: TTL (microseconds since epoch). Itens nao drenados ate este
+  /// instante sao removidos pelo `pruneExpired` da `ExecutionQueueService`
+  /// e publicados como `backupDequeued(reason='ttlExpired')`. Nullable
+  /// para preservar compat com itens persistidos pre-v34 (sem TTL).
+  final int? expiresAtMicros;
   const ExecutionQueueItemsTableData({
     required this.id,
     required this.runId,
@@ -10158,6 +10252,7 @@ class ExecutionQueueItemsTableData extends DataClass
     required this.requestId,
     required this.requestedBy,
     required this.queuedAtMicros,
+    this.expiresAtMicros,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -10169,6 +10264,9 @@ class ExecutionQueueItemsTableData extends DataClass
     map['request_id'] = Variable<int>(requestId);
     map['requested_by'] = Variable<String>(requestedBy);
     map['queued_at_micros'] = Variable<int>(queuedAtMicros);
+    if (!nullToAbsent || expiresAtMicros != null) {
+      map['expires_at_micros'] = Variable<int>(expiresAtMicros);
+    }
     return map;
   }
 
@@ -10181,6 +10279,9 @@ class ExecutionQueueItemsTableData extends DataClass
       requestId: Value(requestId),
       requestedBy: Value(requestedBy),
       queuedAtMicros: Value(queuedAtMicros),
+      expiresAtMicros: expiresAtMicros == null && nullToAbsent
+          ? const Value.absent()
+          : Value(expiresAtMicros),
     );
   }
 
@@ -10197,6 +10298,7 @@ class ExecutionQueueItemsTableData extends DataClass
       requestId: serializer.fromJson<int>(json['requestId']),
       requestedBy: serializer.fromJson<String>(json['requestedBy']),
       queuedAtMicros: serializer.fromJson<int>(json['queuedAtMicros']),
+      expiresAtMicros: serializer.fromJson<int?>(json['expiresAtMicros']),
     );
   }
   @override
@@ -10210,6 +10312,7 @@ class ExecutionQueueItemsTableData extends DataClass
       'requestId': serializer.toJson<int>(requestId),
       'requestedBy': serializer.toJson<String>(requestedBy),
       'queuedAtMicros': serializer.toJson<int>(queuedAtMicros),
+      'expiresAtMicros': serializer.toJson<int?>(expiresAtMicros),
     };
   }
 
@@ -10221,6 +10324,7 @@ class ExecutionQueueItemsTableData extends DataClass
     int? requestId,
     String? requestedBy,
     int? queuedAtMicros,
+    Value<int?> expiresAtMicros = const Value.absent(),
   }) => ExecutionQueueItemsTableData(
     id: id ?? this.id,
     runId: runId ?? this.runId,
@@ -10229,6 +10333,9 @@ class ExecutionQueueItemsTableData extends DataClass
     requestId: requestId ?? this.requestId,
     requestedBy: requestedBy ?? this.requestedBy,
     queuedAtMicros: queuedAtMicros ?? this.queuedAtMicros,
+    expiresAtMicros: expiresAtMicros.present
+        ? expiresAtMicros.value
+        : this.expiresAtMicros,
   );
   ExecutionQueueItemsTableData copyWithCompanion(
     ExecutionQueueItemsTableCompanion data,
@@ -10247,6 +10354,9 @@ class ExecutionQueueItemsTableData extends DataClass
       queuedAtMicros: data.queuedAtMicros.present
           ? data.queuedAtMicros.value
           : this.queuedAtMicros,
+      expiresAtMicros: data.expiresAtMicros.present
+          ? data.expiresAtMicros.value
+          : this.expiresAtMicros,
     );
   }
 
@@ -10259,7 +10369,8 @@ class ExecutionQueueItemsTableData extends DataClass
           ..write('clientId: $clientId, ')
           ..write('requestId: $requestId, ')
           ..write('requestedBy: $requestedBy, ')
-          ..write('queuedAtMicros: $queuedAtMicros')
+          ..write('queuedAtMicros: $queuedAtMicros, ')
+          ..write('expiresAtMicros: $expiresAtMicros')
           ..write(')'))
         .toString();
   }
@@ -10273,6 +10384,7 @@ class ExecutionQueueItemsTableData extends DataClass
     requestId,
     requestedBy,
     queuedAtMicros,
+    expiresAtMicros,
   );
   @override
   bool operator ==(Object other) =>
@@ -10284,7 +10396,8 @@ class ExecutionQueueItemsTableData extends DataClass
           other.clientId == this.clientId &&
           other.requestId == this.requestId &&
           other.requestedBy == this.requestedBy &&
-          other.queuedAtMicros == this.queuedAtMicros);
+          other.queuedAtMicros == this.queuedAtMicros &&
+          other.expiresAtMicros == this.expiresAtMicros);
 }
 
 class ExecutionQueueItemsTableCompanion
@@ -10296,6 +10409,7 @@ class ExecutionQueueItemsTableCompanion
   final Value<int> requestId;
   final Value<String> requestedBy;
   final Value<int> queuedAtMicros;
+  final Value<int?> expiresAtMicros;
   const ExecutionQueueItemsTableCompanion({
     this.id = const Value.absent(),
     this.runId = const Value.absent(),
@@ -10304,6 +10418,7 @@ class ExecutionQueueItemsTableCompanion
     this.requestId = const Value.absent(),
     this.requestedBy = const Value.absent(),
     this.queuedAtMicros = const Value.absent(),
+    this.expiresAtMicros = const Value.absent(),
   });
   ExecutionQueueItemsTableCompanion.insert({
     this.id = const Value.absent(),
@@ -10313,6 +10428,7 @@ class ExecutionQueueItemsTableCompanion
     required int requestId,
     required String requestedBy,
     required int queuedAtMicros,
+    this.expiresAtMicros = const Value.absent(),
   }) : runId = Value(runId),
        scheduleId = Value(scheduleId),
        clientId = Value(clientId),
@@ -10327,6 +10443,7 @@ class ExecutionQueueItemsTableCompanion
     Expression<int>? requestId,
     Expression<String>? requestedBy,
     Expression<int>? queuedAtMicros,
+    Expression<int>? expiresAtMicros,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -10336,6 +10453,7 @@ class ExecutionQueueItemsTableCompanion
       if (requestId != null) 'request_id': requestId,
       if (requestedBy != null) 'requested_by': requestedBy,
       if (queuedAtMicros != null) 'queued_at_micros': queuedAtMicros,
+      if (expiresAtMicros != null) 'expires_at_micros': expiresAtMicros,
     });
   }
 
@@ -10347,6 +10465,7 @@ class ExecutionQueueItemsTableCompanion
     Value<int>? requestId,
     Value<String>? requestedBy,
     Value<int>? queuedAtMicros,
+    Value<int?>? expiresAtMicros,
   }) {
     return ExecutionQueueItemsTableCompanion(
       id: id ?? this.id,
@@ -10356,6 +10475,7 @@ class ExecutionQueueItemsTableCompanion
       requestId: requestId ?? this.requestId,
       requestedBy: requestedBy ?? this.requestedBy,
       queuedAtMicros: queuedAtMicros ?? this.queuedAtMicros,
+      expiresAtMicros: expiresAtMicros ?? this.expiresAtMicros,
     );
   }
 
@@ -10383,6 +10503,9 @@ class ExecutionQueueItemsTableCompanion
     if (queuedAtMicros.present) {
       map['queued_at_micros'] = Variable<int>(queuedAtMicros.value);
     }
+    if (expiresAtMicros.present) {
+      map['expires_at_micros'] = Variable<int>(expiresAtMicros.value);
+    }
     return map;
   }
 
@@ -10395,7 +10518,8 @@ class ExecutionQueueItemsTableCompanion
           ..write('clientId: $clientId, ')
           ..write('requestId: $requestId, ')
           ..write('requestedBy: $requestedBy, ')
-          ..write('queuedAtMicros: $queuedAtMicros')
+          ..write('queuedAtMicros: $queuedAtMicros, ')
+          ..write('expiresAtMicros: $expiresAtMicros')
           ..write(')'))
         .toString();
   }
@@ -10747,6 +10871,596 @@ class IdempotencyEntriesTableCompanion
           ..write('responseJson: $responseJson, ')
           ..write('createdAtMicros: $createdAtMicros, ')
           ..write('expiresAtMicros: $expiresAtMicros, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MutableCommandAuditTableTable extends MutableCommandAuditTable
+    with
+        TableInfo<
+          $MutableCommandAuditTableTable,
+          MutableCommandAuditTableData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MutableCommandAuditTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _commandTypeMeta = const VerificationMeta(
+    'commandType',
+  );
+  @override
+  late final GeneratedColumn<String> commandType = GeneratedColumn<String>(
+    'command_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _requestIdMeta = const VerificationMeta(
+    'requestId',
+  );
+  @override
+  late final GeneratedColumn<int> requestId = GeneratedColumn<int>(
+    'request_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _idempotencyKeyMeta = const VerificationMeta(
+    'idempotencyKey',
+  );
+  @override
+  late final GeneratedColumn<String> idempotencyKey = GeneratedColumn<String>(
+    'idempotency_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _resultMeta = const VerificationMeta('result');
+  @override
+  late final GeneratedColumn<String> result = GeneratedColumn<String>(
+    'result',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _durationMsMeta = const VerificationMeta(
+    'durationMs',
+  );
+  @override
+  late final GeneratedColumn<int> durationMs = GeneratedColumn<int>(
+    'duration_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _timestampUtcMicrosMeta =
+      const VerificationMeta('timestampUtcMicros');
+  @override
+  late final GeneratedColumn<int> timestampUtcMicros = GeneratedColumn<int>(
+    'timestamp_utc_micros',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    clientId,
+    commandType,
+    requestId,
+    runId,
+    idempotencyKey,
+    result,
+    durationMs,
+    timestampUtcMicros,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'mutable_command_audit_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MutableCommandAuditTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clientIdMeta);
+    }
+    if (data.containsKey('command_type')) {
+      context.handle(
+        _commandTypeMeta,
+        commandType.isAcceptableOrUnknown(
+          data['command_type']!,
+          _commandTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_commandTypeMeta);
+    }
+    if (data.containsKey('request_id')) {
+      context.handle(
+        _requestIdMeta,
+        requestId.isAcceptableOrUnknown(data['request_id']!, _requestIdMeta),
+      );
+    }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    }
+    if (data.containsKey('idempotency_key')) {
+      context.handle(
+        _idempotencyKeyMeta,
+        idempotencyKey.isAcceptableOrUnknown(
+          data['idempotency_key']!,
+          _idempotencyKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('result')) {
+      context.handle(
+        _resultMeta,
+        result.isAcceptableOrUnknown(data['result']!, _resultMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_resultMeta);
+    }
+    if (data.containsKey('duration_ms')) {
+      context.handle(
+        _durationMsMeta,
+        durationMs.isAcceptableOrUnknown(data['duration_ms']!, _durationMsMeta),
+      );
+    }
+    if (data.containsKey('timestamp_utc_micros')) {
+      context.handle(
+        _timestampUtcMicrosMeta,
+        timestampUtcMicros.isAcceptableOrUnknown(
+          data['timestamp_utc_micros']!,
+          _timestampUtcMicrosMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_timestampUtcMicrosMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MutableCommandAuditTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MutableCommandAuditTableData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      )!,
+      commandType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}command_type'],
+      )!,
+      requestId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}request_id'],
+      ),
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      ),
+      idempotencyKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}idempotency_key'],
+      ),
+      result: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}result'],
+      )!,
+      durationMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_ms'],
+      ),
+      timestampUtcMicros: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}timestamp_utc_micros'],
+      )!,
+    );
+  }
+
+  @override
+  $MutableCommandAuditTableTable createAlias(String alias) {
+    return $MutableCommandAuditTableTable(attachedDatabase, alias);
+  }
+}
+
+class MutableCommandAuditTableData extends DataClass
+    implements Insertable<MutableCommandAuditTableData> {
+  final String id;
+  final String clientId;
+  final String commandType;
+  final int? requestId;
+  final String? runId;
+  final String? idempotencyKey;
+  final String result;
+  final int? durationMs;
+  final int timestampUtcMicros;
+  const MutableCommandAuditTableData({
+    required this.id,
+    required this.clientId,
+    required this.commandType,
+    this.requestId,
+    this.runId,
+    this.idempotencyKey,
+    required this.result,
+    this.durationMs,
+    required this.timestampUtcMicros,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['client_id'] = Variable<String>(clientId);
+    map['command_type'] = Variable<String>(commandType);
+    if (!nullToAbsent || requestId != null) {
+      map['request_id'] = Variable<int>(requestId);
+    }
+    if (!nullToAbsent || runId != null) {
+      map['run_id'] = Variable<String>(runId);
+    }
+    if (!nullToAbsent || idempotencyKey != null) {
+      map['idempotency_key'] = Variable<String>(idempotencyKey);
+    }
+    map['result'] = Variable<String>(result);
+    if (!nullToAbsent || durationMs != null) {
+      map['duration_ms'] = Variable<int>(durationMs);
+    }
+    map['timestamp_utc_micros'] = Variable<int>(timestampUtcMicros);
+    return map;
+  }
+
+  MutableCommandAuditTableCompanion toCompanion(bool nullToAbsent) {
+    return MutableCommandAuditTableCompanion(
+      id: Value(id),
+      clientId: Value(clientId),
+      commandType: Value(commandType),
+      requestId: requestId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(requestId),
+      runId: runId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runId),
+      idempotencyKey: idempotencyKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(idempotencyKey),
+      result: Value(result),
+      durationMs: durationMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(durationMs),
+      timestampUtcMicros: Value(timestampUtcMicros),
+    );
+  }
+
+  factory MutableCommandAuditTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MutableCommandAuditTableData(
+      id: serializer.fromJson<String>(json['id']),
+      clientId: serializer.fromJson<String>(json['clientId']),
+      commandType: serializer.fromJson<String>(json['commandType']),
+      requestId: serializer.fromJson<int?>(json['requestId']),
+      runId: serializer.fromJson<String?>(json['runId']),
+      idempotencyKey: serializer.fromJson<String?>(json['idempotencyKey']),
+      result: serializer.fromJson<String>(json['result']),
+      durationMs: serializer.fromJson<int?>(json['durationMs']),
+      timestampUtcMicros: serializer.fromJson<int>(json['timestampUtcMicros']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'clientId': serializer.toJson<String>(clientId),
+      'commandType': serializer.toJson<String>(commandType),
+      'requestId': serializer.toJson<int?>(requestId),
+      'runId': serializer.toJson<String?>(runId),
+      'idempotencyKey': serializer.toJson<String?>(idempotencyKey),
+      'result': serializer.toJson<String>(result),
+      'durationMs': serializer.toJson<int?>(durationMs),
+      'timestampUtcMicros': serializer.toJson<int>(timestampUtcMicros),
+    };
+  }
+
+  MutableCommandAuditTableData copyWith({
+    String? id,
+    String? clientId,
+    String? commandType,
+    Value<int?> requestId = const Value.absent(),
+    Value<String?> runId = const Value.absent(),
+    Value<String?> idempotencyKey = const Value.absent(),
+    String? result,
+    Value<int?> durationMs = const Value.absent(),
+    int? timestampUtcMicros,
+  }) => MutableCommandAuditTableData(
+    id: id ?? this.id,
+    clientId: clientId ?? this.clientId,
+    commandType: commandType ?? this.commandType,
+    requestId: requestId.present ? requestId.value : this.requestId,
+    runId: runId.present ? runId.value : this.runId,
+    idempotencyKey: idempotencyKey.present
+        ? idempotencyKey.value
+        : this.idempotencyKey,
+    result: result ?? this.result,
+    durationMs: durationMs.present ? durationMs.value : this.durationMs,
+    timestampUtcMicros: timestampUtcMicros ?? this.timestampUtcMicros,
+  );
+  MutableCommandAuditTableData copyWithCompanion(
+    MutableCommandAuditTableCompanion data,
+  ) {
+    return MutableCommandAuditTableData(
+      id: data.id.present ? data.id.value : this.id,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      commandType: data.commandType.present
+          ? data.commandType.value
+          : this.commandType,
+      requestId: data.requestId.present ? data.requestId.value : this.requestId,
+      runId: data.runId.present ? data.runId.value : this.runId,
+      idempotencyKey: data.idempotencyKey.present
+          ? data.idempotencyKey.value
+          : this.idempotencyKey,
+      result: data.result.present ? data.result.value : this.result,
+      durationMs: data.durationMs.present
+          ? data.durationMs.value
+          : this.durationMs,
+      timestampUtcMicros: data.timestampUtcMicros.present
+          ? data.timestampUtcMicros.value
+          : this.timestampUtcMicros,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MutableCommandAuditTableData(')
+          ..write('id: $id, ')
+          ..write('clientId: $clientId, ')
+          ..write('commandType: $commandType, ')
+          ..write('requestId: $requestId, ')
+          ..write('runId: $runId, ')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('result: $result, ')
+          ..write('durationMs: $durationMs, ')
+          ..write('timestampUtcMicros: $timestampUtcMicros')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    clientId,
+    commandType,
+    requestId,
+    runId,
+    idempotencyKey,
+    result,
+    durationMs,
+    timestampUtcMicros,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MutableCommandAuditTableData &&
+          other.id == this.id &&
+          other.clientId == this.clientId &&
+          other.commandType == this.commandType &&
+          other.requestId == this.requestId &&
+          other.runId == this.runId &&
+          other.idempotencyKey == this.idempotencyKey &&
+          other.result == this.result &&
+          other.durationMs == this.durationMs &&
+          other.timestampUtcMicros == this.timestampUtcMicros);
+}
+
+class MutableCommandAuditTableCompanion
+    extends UpdateCompanion<MutableCommandAuditTableData> {
+  final Value<String> id;
+  final Value<String> clientId;
+  final Value<String> commandType;
+  final Value<int?> requestId;
+  final Value<String?> runId;
+  final Value<String?> idempotencyKey;
+  final Value<String> result;
+  final Value<int?> durationMs;
+  final Value<int> timestampUtcMicros;
+  final Value<int> rowid;
+  const MutableCommandAuditTableCompanion({
+    this.id = const Value.absent(),
+    this.clientId = const Value.absent(),
+    this.commandType = const Value.absent(),
+    this.requestId = const Value.absent(),
+    this.runId = const Value.absent(),
+    this.idempotencyKey = const Value.absent(),
+    this.result = const Value.absent(),
+    this.durationMs = const Value.absent(),
+    this.timestampUtcMicros = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MutableCommandAuditTableCompanion.insert({
+    required String id,
+    required String clientId,
+    required String commandType,
+    this.requestId = const Value.absent(),
+    this.runId = const Value.absent(),
+    this.idempotencyKey = const Value.absent(),
+    required String result,
+    this.durationMs = const Value.absent(),
+    required int timestampUtcMicros,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       clientId = Value(clientId),
+       commandType = Value(commandType),
+       result = Value(result),
+       timestampUtcMicros = Value(timestampUtcMicros);
+  static Insertable<MutableCommandAuditTableData> custom({
+    Expression<String>? id,
+    Expression<String>? clientId,
+    Expression<String>? commandType,
+    Expression<int>? requestId,
+    Expression<String>? runId,
+    Expression<String>? idempotencyKey,
+    Expression<String>? result,
+    Expression<int>? durationMs,
+    Expression<int>? timestampUtcMicros,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (clientId != null) 'client_id': clientId,
+      if (commandType != null) 'command_type': commandType,
+      if (requestId != null) 'request_id': requestId,
+      if (runId != null) 'run_id': runId,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      if (result != null) 'result': result,
+      if (durationMs != null) 'duration_ms': durationMs,
+      if (timestampUtcMicros != null)
+        'timestamp_utc_micros': timestampUtcMicros,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MutableCommandAuditTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? clientId,
+    Value<String>? commandType,
+    Value<int?>? requestId,
+    Value<String?>? runId,
+    Value<String?>? idempotencyKey,
+    Value<String>? result,
+    Value<int?>? durationMs,
+    Value<int>? timestampUtcMicros,
+    Value<int>? rowid,
+  }) {
+    return MutableCommandAuditTableCompanion(
+      id: id ?? this.id,
+      clientId: clientId ?? this.clientId,
+      commandType: commandType ?? this.commandType,
+      requestId: requestId ?? this.requestId,
+      runId: runId ?? this.runId,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+      result: result ?? this.result,
+      durationMs: durationMs ?? this.durationMs,
+      timestampUtcMicros: timestampUtcMicros ?? this.timestampUtcMicros,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (commandType.present) {
+      map['command_type'] = Variable<String>(commandType.value);
+    }
+    if (requestId.present) {
+      map['request_id'] = Variable<int>(requestId.value);
+    }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
+    if (idempotencyKey.present) {
+      map['idempotency_key'] = Variable<String>(idempotencyKey.value);
+    }
+    if (result.present) {
+      map['result'] = Variable<String>(result.value);
+    }
+    if (durationMs.present) {
+      map['duration_ms'] = Variable<int>(durationMs.value);
+    }
+    if (timestampUtcMicros.present) {
+      map['timestamp_utc_micros'] = Variable<int>(timestampUtcMicros.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MutableCommandAuditTableCompanion(')
+          ..write('id: $id, ')
+          ..write('clientId: $clientId, ')
+          ..write('commandType: $commandType, ')
+          ..write('requestId: $requestId, ')
+          ..write('runId: $runId, ')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('result: $result, ')
+          ..write('durationMs: $durationMs, ')
+          ..write('timestampUtcMicros: $timestampUtcMicros, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -12532,6 +13246,15 @@ class $FileTransfersTableTable extends FileTransfersTable
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _runIdMeta = const VerificationMeta('runId');
+  @override
+  late final GeneratedColumn<String> runId = GeneratedColumn<String>(
+    'run_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -12547,6 +13270,7 @@ class $FileTransfersTableTable extends FileTransfersTable
     sourcePath,
     destinationPath,
     checksum,
+    runId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -12670,6 +13394,12 @@ class $FileTransfersTableTable extends FileTransfersTable
     } else if (isInserting) {
       context.missing(_checksumMeta);
     }
+    if (data.containsKey('run_id')) {
+      context.handle(
+        _runIdMeta,
+        runId.isAcceptableOrUnknown(data['run_id']!, _runIdMeta),
+      );
+    }
     return context;
   }
 
@@ -12731,6 +13461,10 @@ class $FileTransfersTableTable extends FileTransfersTable
         DriftSqlType.string,
         data['${effectivePrefix}checksum'],
       )!,
+      runId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}run_id'],
+      ),
     );
   }
 
@@ -12755,6 +13489,12 @@ class FileTransfersTableData extends DataClass
   final String sourcePath;
   final String destinationPath;
   final String checksum;
+
+  /// PR-6: rastreabilidade ponta-a-ponta por `runId` de execucao remota.
+  /// Permite cliente correlacionar transferencia com `getExecutionStatus`,
+  /// logs e historico do servidor. Nullable para preservar compat com
+  /// linhas pre-v34 e com fluxos locais (sem `runId`).
+  final String? runId;
   const FileTransfersTableData({
     required this.id,
     required this.scheduleId,
@@ -12769,6 +13509,7 @@ class FileTransfersTableData extends DataClass
     required this.sourcePath,
     required this.destinationPath,
     required this.checksum,
+    this.runId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -12792,6 +13533,9 @@ class FileTransfersTableData extends DataClass
     map['source_path'] = Variable<String>(sourcePath);
     map['destination_path'] = Variable<String>(destinationPath);
     map['checksum'] = Variable<String>(checksum);
+    if (!nullToAbsent || runId != null) {
+      map['run_id'] = Variable<String>(runId);
+    }
     return map;
   }
 
@@ -12816,6 +13560,9 @@ class FileTransfersTableData extends DataClass
       sourcePath: Value(sourcePath),
       destinationPath: Value(destinationPath),
       checksum: Value(checksum),
+      runId: runId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runId),
     );
   }
 
@@ -12838,6 +13585,7 @@ class FileTransfersTableData extends DataClass
       sourcePath: serializer.fromJson<String>(json['sourcePath']),
       destinationPath: serializer.fromJson<String>(json['destinationPath']),
       checksum: serializer.fromJson<String>(json['checksum']),
+      runId: serializer.fromJson<String?>(json['runId']),
     );
   }
   @override
@@ -12857,6 +13605,7 @@ class FileTransfersTableData extends DataClass
       'sourcePath': serializer.toJson<String>(sourcePath),
       'destinationPath': serializer.toJson<String>(destinationPath),
       'checksum': serializer.toJson<String>(checksum),
+      'runId': serializer.toJson<String?>(runId),
     };
   }
 
@@ -12874,6 +13623,7 @@ class FileTransfersTableData extends DataClass
     String? sourcePath,
     String? destinationPath,
     String? checksum,
+    Value<String?> runId = const Value.absent(),
   }) => FileTransfersTableData(
     id: id ?? this.id,
     scheduleId: scheduleId ?? this.scheduleId,
@@ -12888,6 +13638,7 @@ class FileTransfersTableData extends DataClass
     sourcePath: sourcePath ?? this.sourcePath,
     destinationPath: destinationPath ?? this.destinationPath,
     checksum: checksum ?? this.checksum,
+    runId: runId.present ? runId.value : this.runId,
   );
   FileTransfersTableData copyWithCompanion(FileTransfersTableCompanion data) {
     return FileTransfersTableData(
@@ -12918,6 +13669,7 @@ class FileTransfersTableData extends DataClass
           ? data.destinationPath.value
           : this.destinationPath,
       checksum: data.checksum.present ? data.checksum.value : this.checksum,
+      runId: data.runId.present ? data.runId.value : this.runId,
     );
   }
 
@@ -12936,7 +13688,8 @@ class FileTransfersTableData extends DataClass
           ..write('completedAt: $completedAt, ')
           ..write('sourcePath: $sourcePath, ')
           ..write('destinationPath: $destinationPath, ')
-          ..write('checksum: $checksum')
+          ..write('checksum: $checksum, ')
+          ..write('runId: $runId')
           ..write(')'))
         .toString();
   }
@@ -12956,6 +13709,7 @@ class FileTransfersTableData extends DataClass
     sourcePath,
     destinationPath,
     checksum,
+    runId,
   );
   @override
   bool operator ==(Object other) =>
@@ -12973,7 +13727,8 @@ class FileTransfersTableData extends DataClass
           other.completedAt == this.completedAt &&
           other.sourcePath == this.sourcePath &&
           other.destinationPath == this.destinationPath &&
-          other.checksum == this.checksum);
+          other.checksum == this.checksum &&
+          other.runId == this.runId);
 }
 
 class FileTransfersTableCompanion
@@ -12991,6 +13746,7 @@ class FileTransfersTableCompanion
   final Value<String> sourcePath;
   final Value<String> destinationPath;
   final Value<String> checksum;
+  final Value<String?> runId;
   final Value<int> rowid;
   const FileTransfersTableCompanion({
     this.id = const Value.absent(),
@@ -13006,6 +13762,7 @@ class FileTransfersTableCompanion
     this.sourcePath = const Value.absent(),
     this.destinationPath = const Value.absent(),
     this.checksum = const Value.absent(),
+    this.runId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FileTransfersTableCompanion.insert({
@@ -13022,6 +13779,7 @@ class FileTransfersTableCompanion
     required String sourcePath,
     required String destinationPath,
     required String checksum,
+    this.runId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        scheduleId = Value(scheduleId),
@@ -13047,6 +13805,7 @@ class FileTransfersTableCompanion
     Expression<String>? sourcePath,
     Expression<String>? destinationPath,
     Expression<String>? checksum,
+    Expression<String>? runId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -13063,6 +13822,7 @@ class FileTransfersTableCompanion
       if (sourcePath != null) 'source_path': sourcePath,
       if (destinationPath != null) 'destination_path': destinationPath,
       if (checksum != null) 'checksum': checksum,
+      if (runId != null) 'run_id': runId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -13081,6 +13841,7 @@ class FileTransfersTableCompanion
     Value<String>? sourcePath,
     Value<String>? destinationPath,
     Value<String>? checksum,
+    Value<String?>? runId,
     Value<int>? rowid,
   }) {
     return FileTransfersTableCompanion(
@@ -13097,6 +13858,7 @@ class FileTransfersTableCompanion
       sourcePath: sourcePath ?? this.sourcePath,
       destinationPath: destinationPath ?? this.destinationPath,
       checksum: checksum ?? this.checksum,
+      runId: runId ?? this.runId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -13143,6 +13905,9 @@ class FileTransfersTableCompanion
     if (checksum.present) {
       map['checksum'] = Variable<String>(checksum.value);
     }
+    if (runId.present) {
+      map['run_id'] = Variable<String>(runId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -13165,6 +13930,7 @@ class FileTransfersTableCompanion
           ..write('sourcePath: $sourcePath, ')
           ..write('destinationPath: $destinationPath, ')
           ..write('checksum: $checksum, ')
+          ..write('runId: $runId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -13205,6 +13971,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ExecutionQueueItemsTableTable(this);
   late final $IdempotencyEntriesTableTable idempotencyEntriesTable =
       $IdempotencyEntriesTableTable(this);
+  late final $MutableCommandAuditTableTable mutableCommandAuditTable =
+      $MutableCommandAuditTableTable(this);
   late final $ServerCredentialsTableTable serverCredentialsTable =
       $ServerCredentialsTableTable(this);
   late final $ConnectionLogsTableTable connectionLogsTable =
@@ -13253,6 +14021,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final IdempotencyDao idempotencyDao = IdempotencyDao(
     this as AppDatabase,
   );
+  late final MutableCommandAuditDao mutableCommandAuditDao =
+      MutableCommandAuditDao(this as AppDatabase);
   late final ServerCredentialDao serverCredentialDao = ServerCredentialDao(
     this as AppDatabase,
   );
@@ -13286,6 +14056,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     machineSettingsTable,
     executionQueueItemsTable,
     idempotencyEntriesTable,
+    mutableCommandAuditTable,
     serverCredentialsTable,
     connectionLogsTable,
     serverConnectionsTable,
@@ -16246,6 +17017,7 @@ typedef $$BackupHistoryTableTableCreateCompanionBuilder =
       Value<String?> runId,
       Value<String?> scheduleId,
       required String databaseName,
+      Value<DateTime?> lastProgressAt,
       required String databaseType,
       required String backupPath,
       required int fileSize,
@@ -16264,6 +17036,7 @@ typedef $$BackupHistoryTableTableUpdateCompanionBuilder =
       Value<String?> runId,
       Value<String?> scheduleId,
       Value<String> databaseName,
+      Value<DateTime?> lastProgressAt,
       Value<String> databaseType,
       Value<String> backupPath,
       Value<int> fileSize,
@@ -16303,6 +17076,11 @@ class $$BackupHistoryTableTableFilterComposer
 
   ColumnFilters<String> get databaseName => $composableBuilder(
     column: $table.databaseName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastProgressAt => $composableBuilder(
+    column: $table.lastProgressAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16386,6 +17164,11 @@ class $$BackupHistoryTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get lastProgressAt => $composableBuilder(
+    column: $table.lastProgressAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get databaseType => $composableBuilder(
     column: $table.databaseType,
     builder: (column) => ColumnOrderings(column),
@@ -16459,6 +17242,11 @@ class $$BackupHistoryTableTableAnnotationComposer
 
   GeneratedColumn<String> get databaseName => $composableBuilder(
     column: $table.databaseName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastProgressAt => $composableBuilder(
+    column: $table.lastProgressAt,
     builder: (column) => column,
   );
 
@@ -16549,6 +17337,7 @@ class $$BackupHistoryTableTableTableManager
                 Value<String?> runId = const Value.absent(),
                 Value<String?> scheduleId = const Value.absent(),
                 Value<String> databaseName = const Value.absent(),
+                Value<DateTime?> lastProgressAt = const Value.absent(),
                 Value<String> databaseType = const Value.absent(),
                 Value<String> backupPath = const Value.absent(),
                 Value<int> fileSize = const Value.absent(),
@@ -16565,6 +17354,7 @@ class $$BackupHistoryTableTableTableManager
                 runId: runId,
                 scheduleId: scheduleId,
                 databaseName: databaseName,
+                lastProgressAt: lastProgressAt,
                 databaseType: databaseType,
                 backupPath: backupPath,
                 fileSize: fileSize,
@@ -16583,6 +17373,7 @@ class $$BackupHistoryTableTableTableManager
                 Value<String?> runId = const Value.absent(),
                 Value<String?> scheduleId = const Value.absent(),
                 required String databaseName,
+                Value<DateTime?> lastProgressAt = const Value.absent(),
                 required String databaseType,
                 required String backupPath,
                 required int fileSize,
@@ -16599,6 +17390,7 @@ class $$BackupHistoryTableTableTableManager
                 runId: runId,
                 scheduleId: scheduleId,
                 databaseName: databaseName,
+                lastProgressAt: lastProgressAt,
                 databaseType: databaseType,
                 backupPath: backupPath,
                 fileSize: fileSize,
@@ -18910,6 +19702,7 @@ typedef $$ExecutionQueueItemsTableTableCreateCompanionBuilder =
       required int requestId,
       required String requestedBy,
       required int queuedAtMicros,
+      Value<int?> expiresAtMicros,
     });
 typedef $$ExecutionQueueItemsTableTableUpdateCompanionBuilder =
     ExecutionQueueItemsTableCompanion Function({
@@ -18920,6 +19713,7 @@ typedef $$ExecutionQueueItemsTableTableUpdateCompanionBuilder =
       Value<int> requestId,
       Value<String> requestedBy,
       Value<int> queuedAtMicros,
+      Value<int?> expiresAtMicros,
     });
 
 class $$ExecutionQueueItemsTableTableFilterComposer
@@ -18963,6 +19757,11 @@ class $$ExecutionQueueItemsTableTableFilterComposer
 
   ColumnFilters<int> get queuedAtMicros => $composableBuilder(
     column: $table.queuedAtMicros,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get expiresAtMicros => $composableBuilder(
+    column: $table.expiresAtMicros,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -19010,6 +19809,11 @@ class $$ExecutionQueueItemsTableTableOrderingComposer
     column: $table.queuedAtMicros,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get expiresAtMicros => $composableBuilder(
+    column: $table.expiresAtMicros,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ExecutionQueueItemsTableTableAnnotationComposer
@@ -19045,6 +19849,11 @@ class $$ExecutionQueueItemsTableTableAnnotationComposer
 
   GeneratedColumn<int> get queuedAtMicros => $composableBuilder(
     column: $table.queuedAtMicros,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get expiresAtMicros => $composableBuilder(
+    column: $table.expiresAtMicros,
     builder: (column) => column,
   );
 }
@@ -19102,6 +19911,7 @@ class $$ExecutionQueueItemsTableTableTableManager
                 Value<int> requestId = const Value.absent(),
                 Value<String> requestedBy = const Value.absent(),
                 Value<int> queuedAtMicros = const Value.absent(),
+                Value<int?> expiresAtMicros = const Value.absent(),
               }) => ExecutionQueueItemsTableCompanion(
                 id: id,
                 runId: runId,
@@ -19110,6 +19920,7 @@ class $$ExecutionQueueItemsTableTableTableManager
                 requestId: requestId,
                 requestedBy: requestedBy,
                 queuedAtMicros: queuedAtMicros,
+                expiresAtMicros: expiresAtMicros,
               ),
           createCompanionCallback:
               ({
@@ -19120,6 +19931,7 @@ class $$ExecutionQueueItemsTableTableTableManager
                 required int requestId,
                 required String requestedBy,
                 required int queuedAtMicros,
+                Value<int?> expiresAtMicros = const Value.absent(),
               }) => ExecutionQueueItemsTableCompanion.insert(
                 id: id,
                 runId: runId,
@@ -19128,6 +19940,7 @@ class $$ExecutionQueueItemsTableTableTableManager
                 requestId: requestId,
                 requestedBy: requestedBy,
                 queuedAtMicros: queuedAtMicros,
+                expiresAtMicros: expiresAtMicros,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -19364,6 +20177,309 @@ typedef $$IdempotencyEntriesTableTableProcessedTableManager =
         >,
       ),
       IdempotencyEntriesTableData,
+      PrefetchHooks Function()
+    >;
+typedef $$MutableCommandAuditTableTableCreateCompanionBuilder =
+    MutableCommandAuditTableCompanion Function({
+      required String id,
+      required String clientId,
+      required String commandType,
+      Value<int?> requestId,
+      Value<String?> runId,
+      Value<String?> idempotencyKey,
+      required String result,
+      Value<int?> durationMs,
+      required int timestampUtcMicros,
+      Value<int> rowid,
+    });
+typedef $$MutableCommandAuditTableTableUpdateCompanionBuilder =
+    MutableCommandAuditTableCompanion Function({
+      Value<String> id,
+      Value<String> clientId,
+      Value<String> commandType,
+      Value<int?> requestId,
+      Value<String?> runId,
+      Value<String?> idempotencyKey,
+      Value<String> result,
+      Value<int?> durationMs,
+      Value<int> timestampUtcMicros,
+      Value<int> rowid,
+    });
+
+class $$MutableCommandAuditTableTableFilterComposer
+    extends Composer<_$AppDatabase, $MutableCommandAuditTableTable> {
+  $$MutableCommandAuditTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get commandType => $composableBuilder(
+    column: $table.commandType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get requestId => $composableBuilder(
+    column: $table.requestId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get result => $composableBuilder(
+    column: $table.result,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get timestampUtcMicros => $composableBuilder(
+    column: $table.timestampUtcMicros,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MutableCommandAuditTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $MutableCommandAuditTableTable> {
+  $$MutableCommandAuditTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get commandType => $composableBuilder(
+    column: $table.commandType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get requestId => $composableBuilder(
+    column: $table.requestId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get result => $composableBuilder(
+    column: $table.result,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get timestampUtcMicros => $composableBuilder(
+    column: $table.timestampUtcMicros,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MutableCommandAuditTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MutableCommandAuditTableTable> {
+  $$MutableCommandAuditTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+
+  GeneratedColumn<String> get commandType => $composableBuilder(
+    column: $table.commandType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get requestId =>
+      $composableBuilder(column: $table.requestId, builder: (column) => column);
+
+  GeneratedColumn<String> get runId =>
+      $composableBuilder(column: $table.runId, builder: (column) => column);
+
+  GeneratedColumn<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get result =>
+      $composableBuilder(column: $table.result, builder: (column) => column);
+
+  GeneratedColumn<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get timestampUtcMicros => $composableBuilder(
+    column: $table.timestampUtcMicros,
+    builder: (column) => column,
+  );
+}
+
+class $$MutableCommandAuditTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MutableCommandAuditTableTable,
+          MutableCommandAuditTableData,
+          $$MutableCommandAuditTableTableFilterComposer,
+          $$MutableCommandAuditTableTableOrderingComposer,
+          $$MutableCommandAuditTableTableAnnotationComposer,
+          $$MutableCommandAuditTableTableCreateCompanionBuilder,
+          $$MutableCommandAuditTableTableUpdateCompanionBuilder,
+          (
+            MutableCommandAuditTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $MutableCommandAuditTableTable,
+              MutableCommandAuditTableData
+            >,
+          ),
+          MutableCommandAuditTableData,
+          PrefetchHooks Function()
+        > {
+  $$MutableCommandAuditTableTableTableManager(
+    _$AppDatabase db,
+    $MutableCommandAuditTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MutableCommandAuditTableTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$MutableCommandAuditTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$MutableCommandAuditTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> clientId = const Value.absent(),
+                Value<String> commandType = const Value.absent(),
+                Value<int?> requestId = const Value.absent(),
+                Value<String?> runId = const Value.absent(),
+                Value<String?> idempotencyKey = const Value.absent(),
+                Value<String> result = const Value.absent(),
+                Value<int?> durationMs = const Value.absent(),
+                Value<int> timestampUtcMicros = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MutableCommandAuditTableCompanion(
+                id: id,
+                clientId: clientId,
+                commandType: commandType,
+                requestId: requestId,
+                runId: runId,
+                idempotencyKey: idempotencyKey,
+                result: result,
+                durationMs: durationMs,
+                timestampUtcMicros: timestampUtcMicros,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String clientId,
+                required String commandType,
+                Value<int?> requestId = const Value.absent(),
+                Value<String?> runId = const Value.absent(),
+                Value<String?> idempotencyKey = const Value.absent(),
+                required String result,
+                Value<int?> durationMs = const Value.absent(),
+                required int timestampUtcMicros,
+                Value<int> rowid = const Value.absent(),
+              }) => MutableCommandAuditTableCompanion.insert(
+                id: id,
+                clientId: clientId,
+                commandType: commandType,
+                requestId: requestId,
+                runId: runId,
+                idempotencyKey: idempotencyKey,
+                result: result,
+                durationMs: durationMs,
+                timestampUtcMicros: timestampUtcMicros,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MutableCommandAuditTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MutableCommandAuditTableTable,
+      MutableCommandAuditTableData,
+      $$MutableCommandAuditTableTableFilterComposer,
+      $$MutableCommandAuditTableTableOrderingComposer,
+      $$MutableCommandAuditTableTableAnnotationComposer,
+      $$MutableCommandAuditTableTableCreateCompanionBuilder,
+      $$MutableCommandAuditTableTableUpdateCompanionBuilder,
+      (
+        MutableCommandAuditTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $MutableCommandAuditTableTable,
+          MutableCommandAuditTableData
+        >,
+      ),
+      MutableCommandAuditTableData,
       PrefetchHooks Function()
     >;
 typedef $$ServerCredentialsTableTableCreateCompanionBuilder =
@@ -20237,6 +21353,7 @@ typedef $$FileTransfersTableTableCreateCompanionBuilder =
       required String sourcePath,
       required String destinationPath,
       required String checksum,
+      Value<String?> runId,
       Value<int> rowid,
     });
 typedef $$FileTransfersTableTableUpdateCompanionBuilder =
@@ -20254,6 +21371,7 @@ typedef $$FileTransfersTableTableUpdateCompanionBuilder =
       Value<String> sourcePath,
       Value<String> destinationPath,
       Value<String> checksum,
+      Value<String?> runId,
       Value<int> rowid,
     });
 
@@ -20328,6 +21446,11 @@ class $$FileTransfersTableTableFilterComposer
 
   ColumnFilters<String> get checksum => $composableBuilder(
     column: $table.checksum,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get runId => $composableBuilder(
+    column: $table.runId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -20405,6 +21528,11 @@ class $$FileTransfersTableTableOrderingComposer
     column: $table.checksum,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get runId => $composableBuilder(
+    column: $table.runId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$FileTransfersTableTableAnnotationComposer
@@ -20468,6 +21596,9 @@ class $$FileTransfersTableTableAnnotationComposer
 
   GeneratedColumn<String> get checksum =>
       $composableBuilder(column: $table.checksum, builder: (column) => column);
+
+  GeneratedColumn<String> get runId =>
+      $composableBuilder(column: $table.runId, builder: (column) => column);
 }
 
 class $$FileTransfersTableTableTableManager
@@ -20523,6 +21654,7 @@ class $$FileTransfersTableTableTableManager
                 Value<String> sourcePath = const Value.absent(),
                 Value<String> destinationPath = const Value.absent(),
                 Value<String> checksum = const Value.absent(),
+                Value<String?> runId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FileTransfersTableCompanion(
                 id: id,
@@ -20538,6 +21670,7 @@ class $$FileTransfersTableTableTableManager
                 sourcePath: sourcePath,
                 destinationPath: destinationPath,
                 checksum: checksum,
+                runId: runId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -20555,6 +21688,7 @@ class $$FileTransfersTableTableTableManager
                 required String sourcePath,
                 required String destinationPath,
                 required String checksum,
+                Value<String?> runId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FileTransfersTableCompanion.insert(
                 id: id,
@@ -20570,6 +21704,7 @@ class $$FileTransfersTableTableTableManager
                 sourcePath: sourcePath,
                 destinationPath: destinationPath,
                 checksum: checksum,
+                runId: runId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -20652,6 +21787,11 @@ class $AppDatabaseManager {
       $$IdempotencyEntriesTableTableTableManager(
         _db,
         _db.idempotencyEntriesTable,
+      );
+  $$MutableCommandAuditTableTableTableManager get mutableCommandAuditTable =>
+      $$MutableCommandAuditTableTableTableManager(
+        _db,
+        _db.mutableCommandAuditTable,
       );
   $$ServerCredentialsTableTableTableManager get serverCredentialsTable =>
       $$ServerCredentialsTableTableTableManager(

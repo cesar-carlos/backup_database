@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:backup_database/core/constants/backup_constants.dart';
 import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_persistence.dart';
@@ -34,15 +35,27 @@ class ExecutionQueueService implements IExecutionQueueBootstrap {
     Uuid? uuid,
     DateTime Function()? clock,
     ExecutionQueuePersistence? persistence,
+    Duration? queuedItemTtl,
   }) : _maxQueueSize = maxQueueSize,
        _uuid = uuid ?? const Uuid(),
        _clock = clock ?? DateTime.now,
-       _persistence = persistence;
+       _persistence = persistence,
+       _queuedItemTtl = queuedItemTtl ?? BackupConstants.queuedItemTtl;
 
   final int _maxQueueSize;
   final Uuid _uuid;
   final DateTime Function() _clock;
   final ExecutionQueuePersistence? _persistence;
+
+  /// PR-6: TTL aplicado em cada `tryEnqueue`. Itens nao drenados ate
+  /// `queuedAt + queuedItemTtl` sao removidos por `pruneExpired` e
+  /// publicados como `backupDequeued(reason: 'ttlExpired')`.
+  final Duration _queuedItemTtl;
+
+  /// Callback opcional invocado para cada item removido por TTL. Caller
+  /// (geralmente `ExecutionMessageHandler`) emite `backupDequeued` +
+  /// atualiza `BackupHistory` com `QUEUED_TTL_EXPIRED`.
+  void Function(QueuedExecutionItem expired)? onItemExpired;
 
   bool _initialized = false;
 
@@ -134,13 +147,17 @@ class ExecutionQueueService implements IExecutionQueueBootstrap {
     if (isScheduleQueued(scheduleId)) return null;
 
     final effectiveRunId = runId ?? '${scheduleId}_${_uuid.v4()}';
+    final queuedAt = _clock();
     final item = QueuedExecutionItem(
       runId: effectiveRunId,
       scheduleId: scheduleId,
       clientId: clientId,
       requestId: requestId,
       requestedBy: requestedBy,
-      queuedAt: _clock(),
+      queuedAt: queuedAt,
+      // PR-6: TTL configurado por instancia da fila. Padrao 30min
+      // (`BackupConstants.queuedItemTtl`).
+      expiresAt: queuedAt.add(_queuedItemTtl),
     );
 
     final persistence = _persistence;
@@ -207,6 +224,43 @@ class ExecutionQueueService implements IExecutionQueueBootstrap {
       }
     }
     return false;
+  }
+
+  /// PR-6: remove itens expirados (queuedAt + queuedItemTtl <= now).
+  /// Retorna a lista removida (na ordem em que estavam). Caller pode
+  /// publicar `backupDequeued(reason: 'ttlExpired')` por item via
+  /// [onItemExpired] callback (chamado de dentro deste metodo apos
+  /// remocao bem-sucedida).
+  Future<List<QueuedExecutionItem>> pruneExpired() async {
+    if (_queue.isEmpty) return const <QueuedExecutionItem>[];
+    final now = _clock();
+    final expired = _queue
+        .where((it) => it.isExpiredAt(now))
+        .toList(
+          growable: false,
+        );
+    if (expired.isEmpty) return const <QueuedExecutionItem>[];
+
+    final persistence = _persistence;
+    for (final item in expired) {
+      if (persistence != null) {
+        await persistence.deleteByRunId(item.runId);
+      }
+      _scheduleIdsInQueue.remove(item.scheduleId);
+    }
+    _queue.removeWhere((it) => it.isExpiredAt(now));
+
+    final callback = onItemExpired;
+    if (callback != null) {
+      for (final item in expired) {
+        try {
+          callback(item);
+        } on Object {
+          // best-effort: callback nao quebra housekeeping
+        }
+      }
+    }
+    return expired;
   }
 
   /// Remove todos os itens (shutdown / testes).

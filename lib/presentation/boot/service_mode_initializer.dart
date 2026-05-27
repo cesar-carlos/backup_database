@@ -10,7 +10,9 @@ import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/core/service/service_shutdown_handler.dart';
+import 'package:backup_database/domain/services/i_audit_retention_scheduler.dart';
 import 'package:backup_database/domain/services/i_execution_queue_bootstrap.dart';
+import 'package:backup_database/domain/services/i_execution_queue_housekeeping_scheduler.dart';
 import 'package:backup_database/domain/services/i_file_transfer_lock_service.dart';
 import 'package:backup_database/domain/services/i_remote_staging_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
@@ -170,6 +172,10 @@ class ServiceModeInitializer {
           await service_locator.getIt<IExecutionQueueBootstrap>().initialize();
           service_locator.getIt<IRemoteStagingCleanupScheduler>().start();
           service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
+          // PR-6: housekeeping de TTL na fila de execucao remota.
+          service_locator.getIt<IExecutionQueueHousekeepingScheduler>().start();
+          // PR-6: retencao do audit log (30 dias default).
+          service_locator.getIt<IAuditRetentionScheduler>().start();
 
           final socketLifecycle = service_locator
               .getIt<ISocketServerLifecycle>();

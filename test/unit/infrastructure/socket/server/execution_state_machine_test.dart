@@ -164,6 +164,41 @@ void main() {
         expect(e.toString(), contains('failed'));
       }
     });
+
+    test(
+      'PR-6: transicoes enforced em ExecutionMessageHandler permanecem validas',
+      () {
+        // Se alguem mudar a tabela e quebrar uma dessas, o handler
+        // comeca a responder 409 INVALID_STATE_TRANSITION em fluxos
+        // legitimos. Test guarda a invariante explicitamente.
+        expect(
+          () => ExecutionStateMachine.enforceTransition(
+            ExecutionState.running,
+            ExecutionState.cancelled,
+          ),
+          returnsNormally,
+          reason: 'cancelBackup em runId running deve continuar permitido',
+        );
+        expect(
+          () => ExecutionStateMachine.enforceTransition(
+            ExecutionState.queued,
+            ExecutionState.cancelled,
+          ),
+          returnsNormally,
+          reason: 'cancelQueuedBackup em runId queued deve continuar permitido',
+        );
+        expect(
+          () => ExecutionStateMachine.enforceTransition(
+            ExecutionState.queued,
+            ExecutionState.running,
+          ),
+          returnsNormally,
+          reason:
+              '_drainNextFromQueue (queued -> running) deve continuar '
+              'permitido',
+        );
+      },
+    );
   });
 
   group('ExecutionStateMachine.isTerminal', () {

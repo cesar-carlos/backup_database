@@ -95,6 +95,41 @@ enum ErrorCode {
   rateLimitExceeded(
     'RATE_LIMIT_EXCEEDED',
     'Limite de requisicoes excedido',
+  ),
+
+  /// Handler tentou aplicar transicao de estado nao permitida pela
+  /// `ExecutionStateMachine` (ex.: `cancelled -> running` ou cancel em
+  /// runId terminal). Bug logico do handler, nao operacional. Mapeia
+  /// para 409 (conflito de estado). Cliente nao deve repetir cegamente —
+  /// problema esta em quem disparou.
+  invalidStateTransition(
+    'INVALID_STATE_TRANSITION',
+    'Transicao de estado de execucao invalida',
+  ),
+
+  /// Backup sem `backupProgress` dentro de
+  /// `BackupConstants.runningHeartbeatTimeout` (default 10min). Watchdog
+  /// do `SchedulerService` dispara `cancelExecution` automaticamente.
+  /// Mapeia para 503 (servidor temporariamente indisponivel para esse
+  /// backup; outros backups continuam funcionando).
+  runWatchdogTimeout(
+    'RUN_WATCHDOG_TIMEOUT',
+    'Backup sem progresso dentro do timeout',
+  ),
+
+  /// Backup excedeu `BackupConstants.runningMaxDuration` (default 6h).
+  /// Hard limit absoluto independente de progresso. Mapeia para 503.
+  runHardTimeout(
+    'RUN_HARD_TIMEOUT',
+    'Backup excedeu duracao maxima permitida',
+  ),
+
+  /// Item na fila excedeu `BackupConstants.queuedItemTtl` (default 30min)
+  /// sem ser drenado. Housekeeping da fila remove e marca BackupHistory
+  /// associado com este codigo. Mapeia para 410 (recurso expirou).
+  queuedTtlExpired(
+    'QUEUED_TTL_EXPIRED',
+    'Item na fila expirou antes de ser executado',
   );
 
   final String code;

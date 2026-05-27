@@ -944,5 +944,74 @@ void main() {
         localHandler.dispose();
       },
     );
+
+    test(
+      'PR-6: snapshot cancelado emite backupCancelled (nao backupFailed)',
+      () async {
+        when(() => progressNotifier.currentSnapshot).thenReturn(
+          const BackupProgressSnapshot(
+            step: 'Erro',
+            message: 'Backup cancelado',
+            error: 'Backup cancelado pelo usuario.',
+            cancelled: true,
+            cancelReason: 'operador',
+          ),
+        );
+
+        void Function()? capturedListener;
+        when(() => progressNotifier.addListener(any())).thenAnswer((inv) {
+          capturedListener = inv.positionalArguments.first as void Function();
+        });
+        when(() => progressNotifier.removeListener(any())).thenAnswer((_) {});
+
+        final localRegistry = RemoteExecutionRegistry();
+        final localHandler = ScheduleMessageHandler(
+          scheduleRepository: scheduleRepository,
+          licensePolicyService: licensePolicyService,
+          schedulerService: schedulerService,
+          updateSchedule: updateSchedule,
+          executeBackup: executeBackup,
+          progressNotifier: progressNotifier,
+          executionRegistry: localRegistry,
+        );
+
+        final runId = localRegistry.generateRunId('schedule-CXL');
+        final sentMessages = <Message>[];
+        Future<void> capture(String clientId, Message msg) async {
+          sentMessages.add(msg);
+        }
+
+        localRegistry.register(
+          runId: runId,
+          scheduleId: 'schedule-CXL',
+          clientId: 'client-CXL',
+          requestId: 777,
+          sendToClient: capture,
+        );
+
+        await Future(() => capturedListener!());
+        await Future.delayed(Duration.zero);
+
+        // Verifica que NAO houve backupFailed (substituido por backupCancelled).
+        expect(
+          sentMessages.where(isBackupFailedMessage).toList(),
+          isEmpty,
+          reason: 'snapshot cancelled deve emitir backupCancelled, nao failed',
+        );
+
+        // Verifica que o evento backupCancelled foi enviado com os
+        // campos esperados.
+        final cancelledMsg = sentMessages.firstWhere(
+          (m) => m.header.type == MessageType.backupCancelled,
+        );
+        expect(getRunIdFromBackupMessage(cancelledMsg), runId);
+        expect(cancelledMsg.payload['scheduleId'], 'schedule-CXL');
+        expect(cancelledMsg.payload['cancelledBy'], 'client-CXL');
+        expect(cancelledMsg.payload['reason'], 'operador');
+        expect(cancelledMsg.payload['occurredAt'], isA<String>());
+
+        localHandler.dispose();
+      },
+    );
   });
 }

@@ -330,6 +330,10 @@ class RemoteFileTransferProvider extends ChangeNotifier {
 
     if (_fileTransferDao != null) {
       try {
+        // PR-6: tenta extrair `runId` do path `remote/<runId>/...`
+        // (layout server-first PR-3c+). Para layout legado
+        // `remote/<scheduleId>/...` ou paths sem `remote/`, fica null.
+        final stagingKey = _remoteStagingDirectoryKey(selected.path);
         await _fileTransferDao.insertTransfer(
           FileTransfersTableCompanion.insert(
             id: const Uuid().v4(),
@@ -345,6 +349,7 @@ class RemoteFileTransferProvider extends ChangeNotifier {
             sourcePath: selected.path,
             destinationPath: outputFilePath,
             checksum: '',
+            runId: Value(stagingKey),
           ),
         );
       } on Object catch (e, st) {

@@ -6,6 +6,7 @@ import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/file_transfer_lock_service.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_store.dart';
+import 'package:backup_database/infrastructure/socket/server/audit_retention_scheduler.dart';
 import 'package:backup_database/infrastructure/socket/server/capabilities_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/client_manager.dart';
 import 'package:backup_database/infrastructure/socket/server/database_config_message_handler.dart';
@@ -15,6 +16,7 @@ import 'package:backup_database/infrastructure/socket/server/diagnostics_message
 import 'package:backup_database/infrastructure/socket/server/diagnostics_provider.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_message_handler.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_queue_housekeeping_scheduler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_persistence.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
@@ -91,7 +93,11 @@ Future<void> _registerExecutionRegistryAndStaging(GetIt getIt) async {
   );
 
   getIt.registerLazySingleton<SocketServerTelemetry>(
-    () => SocketServerTelemetry(metricsCollector: getIt<IMetricsCollector>()),
+    () => SocketServerTelemetry(
+      metricsCollector: getIt<IMetricsCollector>(),
+      // PR-6: audit persistente em SQLite (sobrevive a restart).
+      auditDao: getIt<AppDatabase>().mutableCommandAuditDao,
+    ),
   );
 
   // Wirings que dependem do `transferBasePath` literal ficam fechados
@@ -166,6 +172,9 @@ void _registerStagingDependentHandlers(
         stagingBasePath: transferBasePath,
         validateBackupDirectory: const ValidateBackupDirectory(),
         storageChecker: getIt<IStorageChecker>(),
+        // PR-6: check de cadeia de log Sybase.
+        scheduleRepository: getIt<IScheduleRepository>(),
+        validateSybaseLogPreflight: getIt<ValidateSybaseLogBackupPreflight>(),
       ),
     ),
   );
@@ -234,6 +243,25 @@ Future<void> _registerHandlersAndQueueService(GetIt getIt) async {
   );
   getIt.registerLazySingleton<IExecutionQueueBootstrap>(
     getIt.get<ExecutionQueueService>,
+  );
+
+  // PR-6: housekeeping da fila (`pruneExpired` a cada 1min). Iniciado
+  // no `ServiceModeInitializer` step 10. Em modo UI nao roda.
+  getIt.registerLazySingleton<ExecutionQueueHousekeepingScheduler>(
+    () => ExecutionQueueHousekeepingScheduler(getIt<ExecutionQueueService>()),
+  );
+  getIt.registerLazySingleton<IExecutionQueueHousekeepingScheduler>(
+    getIt.get<ExecutionQueueHousekeepingScheduler>,
+  );
+
+  // PR-6: retencao do audit log (default 30 dias / 24h tick).
+  getIt.registerLazySingleton<AuditRetentionScheduler>(
+    () => AuditRetentionScheduler(
+      getIt<AppDatabase>().mutableCommandAuditDao,
+    ),
+  );
+  getIt.registerLazySingleton<IAuditRetentionScheduler>(
+    getIt.get<AuditRetentionScheduler>,
   );
 
   // PR-3c: `getExecutionStatus` reaproveita registry, fila e historico
@@ -341,6 +369,12 @@ void _registerTcpSocketServer(GetIt getIt) {
       broadcast: server.sendToClient,
       sequencer: getIt<ExecutionEventSequencer>(),
     );
+    // PR-6: wirar callback de TTL expirado a partir da fila para o
+    // handler que conhece o `eventBus` (publica `backupDequeued`).
+    // Setar APOS o eventBus para garantir que `notifyQueueItemExpired`
+    // tem `bus != null` quando o housekeeping comecar a rodar.
+    getIt<ExecutionQueueService>().onItemExpired =
+        getIt<ExecutionMessageHandler>().notifyQueueItemExpired;
     return server;
   });
 

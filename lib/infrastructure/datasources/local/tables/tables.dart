@@ -11,6 +11,7 @@ export 'firebird_configs_table.dart';
 export 'idempotency_entries_table.dart';
 export 'licenses_table.dart';
 export 'machine_settings_table.dart';
+export 'mutable_command_audit_table.dart';
 export 'postgres_configs_table.dart';
 export 'schedule_destinations_table.dart';
 export 'schedules_table.dart';

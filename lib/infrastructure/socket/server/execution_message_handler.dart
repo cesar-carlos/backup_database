@@ -23,6 +23,7 @@ import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_event_sequencer.dart';
 import 'package:backup_database/infrastructure/socket/server/execution_queue_service.dart';
+import 'package:backup_database/infrastructure/socket/server/execution_state_machine.dart';
 import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
@@ -651,6 +652,22 @@ class ExecutionMessageHandler {
 
     LogContext.setContext(runId: next.runId, scheduleId: next.scheduleId);
 
+    // PR-6: enforcement formal `queued -> running` antes de publicar
+    // backupStarted. Garante que o item realmente estava em queued (e
+    // nao foi extraido fora da maquina).
+    try {
+      ExecutionStateMachine.enforceTransition(
+        ExecutionState.queued,
+        ExecutionState.running,
+      );
+    } on InvalidStateTransitionException catch (e) {
+      LoggerService.error('enforceTransition rejected drain: $e');
+      _progressNotifier.failBackup(
+        'Bug interno: transicao de estado invalida no drain da fila',
+      );
+      return;
+    }
+
     // Publica `backupStarted` antes de iniciar — cliente atualiza
     // UI para "Em execucao" sincronizado com o estado real.
     eventBus.fireAndForgetStarted(
@@ -738,6 +755,30 @@ class ExecutionMessageHandler {
       orElse: () => null,
     );
     if (found != null) scheduleId = found.scheduleId;
+
+    // PR-6: enforcement de transicao `queued -> cancelled`. Como o item
+    // foi achado em `snapshot()`, esta em `queued`. Bug de chamador
+    // upstream se tentar cancelar runId fora de queued (registry
+    // distingue queued de running).
+    if (found != null) {
+      try {
+        ExecutionStateMachine.enforceTransition(
+          ExecutionState.queued,
+          ExecutionState.cancelled,
+        );
+      } on InvalidStateTransitionException catch (e) {
+        LoggerService.error('enforceTransition rejected cancelQueued: $e');
+        return createCancelQueuedBackupResponse(
+          requestId: requestId,
+          state: ExecutionState.failed,
+          runId: runId,
+          serverTimeUtc: _clock(),
+          scheduleId: scheduleId,
+          message: 'Transicao de estado invalida',
+          errorCode: ErrorCode.invalidStateTransition,
+        );
+      }
+    }
 
     final removed = await _queueService.removeByRunId(runId);
     if (!removed) {
@@ -926,6 +967,29 @@ class ExecutionMessageHandler {
       scheduleId: scheduleId,
     );
 
+    // PR-6: enforcement formal de transicao. A execucao em curso ja esta
+    // em `running` (registry tem contexto ativo). Bloquear se algum
+    // chamador upstream tentar cancelar runId em estado nao-running.
+    try {
+      ExecutionStateMachine.enforceTransition(
+        ExecutionState.running,
+        ExecutionState.cancelled,
+      );
+    } on InvalidStateTransitionException catch (e) {
+      LoggerService.error(
+        'enforceTransition rejected cancelBackup: $e',
+      );
+      return createCancelBackupResponse(
+        requestId: requestId,
+        state: ExecutionState.failed,
+        serverTimeUtc: _clock(),
+        runId: ctx.runId,
+        scheduleId: scheduleId,
+        message: 'Transicao de estado invalida',
+        errorCode: ErrorCode.invalidStateTransition,
+      );
+    }
+
     final result = await _schedulerService.cancelExecution(scheduleId);
     if (result.isError()) {
       final err = result.exceptionOrNull();
@@ -955,6 +1019,34 @@ class ExecutionMessageHandler {
       runId: ctx.runId,
       scheduleId: scheduleId,
       message: 'Cancelamento sinalizado ao scheduler',
+    );
+  }
+
+  /// PR-6: callback wired ao `ExecutionQueueService.onItemExpired`.
+  /// Publica `backupDequeued(reason='ttlExpired')` para o cliente que
+  /// enfileirou o item. Em sucesso, o cliente saberá que o item foi
+  /// removido sem ter sido executado — pode tentar um novo
+  /// `startBackup` com novo `idempotencyKey` se ainda quiser rodar.
+  ///
+  /// `BackupHistory` nao e criado para itens que so ficaram em fila
+  /// (so e criado quando running comeca). Quando criado, atualizar com
+  /// `QUEUED_TTL_EXPIRED` fica como follow-up se precisarmos do
+  /// rastro no historico.
+  void notifyQueueItemExpired(QueuedExecutionItem item) {
+    final bus = eventBus;
+    if (bus == null) return;
+    bus.fireAndForgetDequeued(
+      clientId: item.clientId,
+      runId: item.runId,
+      scheduleId: item.scheduleId,
+      reason: 'ttlExpired',
+    );
+    LoggerService.warningWithContext(
+      'Fila: item TTL expirou e foi removido',
+      clientId: item.clientId,
+      requestId: item.requestId.toString(),
+      scheduleId: item.scheduleId,
+      runId: item.runId,
     );
   }
 }

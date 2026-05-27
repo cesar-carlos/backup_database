@@ -16,4 +16,10 @@ class ExecutionQueueItemsTable extends Table {
   TextColumn get requestedBy => text()();
 
   IntColumn get queuedAtMicros => integer()();
+
+  /// PR-6: TTL (microseconds since epoch). Itens nao drenados ate este
+  /// instante sao removidos pelo `pruneExpired` da `ExecutionQueueService`
+  /// e publicados como `backupDequeued(reason='ttlExpired')`. Nullable
+  /// para preservar compat com itens persistidos pre-v34 (sem TTL).
+  IntColumn get expiresAtMicros => integer().nullable()();
 }

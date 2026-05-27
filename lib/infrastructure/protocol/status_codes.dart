@@ -92,9 +92,13 @@ class StatusCodes {
     ErrorCode.fileBusy: conflict,
     ErrorCode.backupAlreadyRunning: conflict,
     ErrorCode.noActiveExecution: conflict,
+    ErrorCode.invalidStateTransition: conflict,
 
     // Rate limit
     ErrorCode.rateLimitExceeded: tooManyRequests,
+
+    // Recurso expirou (TTL fila / artefato)
+    ErrorCode.queuedTtlExpired: gone,
 
     // Servico / pre-requisito
     ErrorCode.unsupportedProtocolVersion: serviceUnavailable,
@@ -102,6 +106,8 @@ class StatusCodes {
     ErrorCode.stagingFull: serviceUnavailable,
     ErrorCode.queueFull: serviceUnavailable,
     ErrorCode.ioError: serviceUnavailable,
+    ErrorCode.runWatchdogTimeout: serviceUnavailable,
+    ErrorCode.runHardTimeout: serviceUnavailable,
 
     // Conexao
     ErrorCode.connectionLost: serviceUnavailable,

@@ -25,6 +25,7 @@ abstract class BackupHistory with _$BackupHistory {
     DateTime? finishedAt,
     int? durationSeconds,
     BackupMetrics? metrics,
+    DateTime? lastProgressAt,
   }) {
     return BackupHistory.raw(
       id: id ?? const Uuid().v4(),
@@ -41,6 +42,7 @@ abstract class BackupHistory with _$BackupHistory {
       finishedAt: finishedAt,
       durationSeconds: durationSeconds,
       metrics: metrics,
+      lastProgressAt: lastProgressAt,
     );
   }
 
@@ -59,6 +61,11 @@ abstract class BackupHistory with _$BackupHistory {
     DateTime? finishedAt,
     int? durationSeconds,
     BackupMetrics? metrics,
+
+    /// PR-6: timestamp do ultimo `backupProgress` registrado. Usado
+    /// pelo watchdog runtime do `SchedulerService` para detectar
+    /// orchestrator travado. Nullable porque linhas pre-v34 nao tem.
+    DateTime? lastProgressAt,
   }) = _BackupHistory;
 
   @override

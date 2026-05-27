@@ -126,6 +126,14 @@ void main() {
           StatusCodes.forErrorCode(ErrorCode.timeout),
           StatusCodes.serviceUnavailable,
         );
+        expect(
+          StatusCodes.forErrorCode(ErrorCode.runWatchdogTimeout),
+          StatusCodes.serviceUnavailable,
+        );
+        expect(
+          StatusCodes.forErrorCode(ErrorCode.runHardTimeout),
+          StatusCodes.serviceUnavailable,
+        );
       });
 
       test('unknown -> 500 (fail-safe)', () {
@@ -139,6 +147,20 @@ void main() {
         expect(
           StatusCodes.forErrorCode(ErrorCode.rateLimitExceeded),
           StatusCodes.tooManyRequests,
+        );
+      });
+
+      test('invalidStateTransition -> 409 (PR-6)', () {
+        expect(
+          StatusCodes.forErrorCode(ErrorCode.invalidStateTransition),
+          StatusCodes.conflict,
+        );
+      });
+
+      test('queuedTtlExpired -> 410 (PR-6)', () {
+        expect(
+          StatusCodes.forErrorCode(ErrorCode.queuedTtlExpired),
+          StatusCodes.gone,
         );
       });
     });

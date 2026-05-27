@@ -466,6 +466,10 @@ class RemoteSchedulesProvider extends ChangeNotifier {
               notifyListeners();
             },
           )
+        // Fallback consciente para servidor `v1` sem `supportsRunId`.
+        // O caminho deprecado ainda existe para compat de janela; quando o
+        // suporte a servidor v1 for removido, este else cai junto.
+        // ignore: deprecated_member_use_from_same_package
         : await _connectionManager.executeSchedule(
             scheduleId,
             onProgress: _onBackupProgress,
