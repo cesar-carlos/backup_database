@@ -297,7 +297,10 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
       );
     } on Object catch (e) {
       setErrorManual(
-        _formatTestErrorMessage('Erro ao testar configuração: $e'),
+        _formatTestErrorMessage(
+          'Erro ao testar configuração: '
+          '${AsyncStateMixin.extractFailureMessage(e)}',
+        ),
       );
       return false;
     } finally {
@@ -340,7 +343,10 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
       );
     } on Object catch (e) {
       _replaceConfigInMemory(previousConfig);
-      setErrorManual('Erro ao atualizar status da configuração: $e');
+      setErrorManual(
+        'Erro ao atualizar status da configuração: '
+        '${AsyncStateMixin.extractFailureMessage(e)}',
+      );
       return false;
     } finally {
       _updatingConfigIds.remove(configId);

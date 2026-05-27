@@ -187,28 +187,30 @@ void main() {
       expect(result.exceptionOrNull(), isA<NotFoundFailure>());
     });
 
-    test('rowToEntity falls back to serverName when database_name is empty',
-        () async {
-      // Simula linha legada (pré-migração v3) com `database_name` vazio.
-      final now = DateTime.utc(2026, 5, 27);
-      await database.sybaseConfigDao.insertConfig(
-        SybaseConfigsTableCompanion.insert(
-          id: 'legacy-1',
-          name: 'legacy',
-          serverName: 'engname',
-          databaseName: '',
-          databaseFile: '',
-          username: 'dba',
-          password: '',
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
+    test(
+      'rowToEntity falls back to serverName when database_name is empty',
+      () async {
+        // Simula linha legada (pré-migração v3) com `database_name` vazio.
+        final now = DateTime.utc(2026, 5, 27);
+        await database.sybaseConfigDao.insertConfig(
+          SybaseConfigsTableCompanion.insert(
+            id: 'legacy-1',
+            name: 'legacy',
+            serverName: 'engname',
+            databaseName: '',
+            databaseFile: '',
+            username: 'dba',
+            password: '',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
 
-      final read = await repository.getById('legacy-1');
-      expect(read.isSuccess(), isTrue);
-      // Fallback: databaseName vazio resolve para serverName.
-      expect(read.getOrNull()!.databaseNameValue, 'engname');
-    });
+        final read = await repository.getById('legacy-1');
+        expect(read.isSuccess(), isTrue);
+        // Fallback: databaseName vazio resolve para serverName.
+        expect(read.getOrNull()!.databaseNameValue, 'engname');
+      },
+    );
   });
 }

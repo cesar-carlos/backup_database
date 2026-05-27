@@ -12,6 +12,7 @@ import 'package:backup_database/domain/services/i_local_destination_service.dart
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
+import 'package:backup_database/domain/use_cases/destinations/send_to_google_drive.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
 import 'package:backup_database/infrastructure/destination/destination_orchestrator_impl.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -93,7 +94,7 @@ void main() {
     orchestrator = DestinationOrchestratorImpl(
       localDestinationService: localDestinationService,
       sendToFtp: SendToFtp(ftpService),
-      googleDriveDestinationService: googleDriveDestinationService,
+      sendToGoogleDrive: SendToGoogleDrive(googleDriveDestinationService),
       sendToDropbox: SendToDropbox(dropboxDestinationService),
       sendToNextcloud: SendToNextcloud(nextcloudDestinationService),
       licensePolicyService: licensePolicyService,

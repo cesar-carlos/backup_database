@@ -229,17 +229,17 @@ class BackupProgressProvider extends ChangeNotifier
     notifyListeners();
   }
 
-  void startBackup(String scheduleName) {
-    _isRunning = true;
-    _currentScheduleName = scheduleName;
-    _currentProgress = BackupProgress(
-      step: BackupStep.initializing,
-      message: 'Iniciando backup: $scheduleName',
-      startedAt: DateTime.now(),
-      progress: 0,
-    );
-    notifyListeners();
-  }
+  /// Inicia um backup **com guard** de concorrência.
+  ///
+  /// Retorna `true` se o slot foi reservado, `false` se já havia backup
+  /// em execução. Idempotente em relação a `tryStartBackup`.
+  ///
+  /// Antes esta API era um setter incondicional que sobrescrevia o
+  /// estado mesmo durante backup concorrente — caller mal-comportado
+  /// (`SchedulerProvider.executeNow` chamado em paralelo a um socket
+  /// backup remoto) corrompia o progresso. Agora ambos os entry points
+  /// honram o mesmo mutex.
+  bool startBackup(String scheduleName) => tryStartBackup(scheduleName);
 
   void updateProgressWithStep({
     required BackupStep step,

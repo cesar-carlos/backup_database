@@ -397,123 +397,130 @@ class ProcessService {
         runInShell: shouldUseShell,
       );
 
-      if (tag != null && tag.isNotEmpty) {
+      // Registra a tag DEPOIS de start(), e SEMPRE remove no `finally`
+      // abaixo. Antes, `remove` rodava só no caminho de sucesso, então
+      // `TimeoutException` ou exceção genérica deixavam a tag vazando
+      // em `_runningProcesses` apontando para um processo já morto.
+      final hasTag = tag != null && tag.isNotEmpty;
+      if (hasTag) {
         _runningProcesses[tag] = process;
       }
 
-      final stdoutBuffer = _BoundedByteBuffer(_maxOutputBytes);
-      final stderrBuffer = _BoundedByteBuffer(_maxOutputBytes);
-      String? stdoutError;
-      String? stderrError;
+      try {
+        final stdoutBuffer = _BoundedByteBuffer(_maxOutputBytes);
+        final stderrBuffer = _BoundedByteBuffer(_maxOutputBytes);
+        String? stdoutError;
+        String? stderrError;
 
-      final stdoutFuture = process.stdout
-          .listen(
-            (chunk) {
-              try {
-                stdoutBuffer.add(chunk);
-              } on Object catch (e) {
-                stdoutError = 'Erro ao processar stdout: $e';
+        final stdoutFuture = process.stdout
+            .listen(
+              (chunk) {
+                try {
+                  stdoutBuffer.add(chunk);
+                } on Object catch (e) {
+                  stdoutError = 'Erro ao processar stdout: $e';
+                  LoggerService.warning(stdoutError!);
+                }
+              },
+              onError: (error) {
+                stdoutError = 'Erro ao capturar stdout: $error';
                 LoggerService.warning(stdoutError!);
-              }
-            },
-            onError: (error) {
-              stdoutError = 'Erro ao capturar stdout: $error';
-              LoggerService.warning(stdoutError!);
-            },
-          )
-          .asFuture();
+              },
+            )
+            .asFuture();
 
-      final stderrFuture = process.stderr
-          .listen(
-            (chunk) {
-              try {
-                stderrBuffer.add(chunk);
-              } on Object catch (e) {
-                stderrError = 'Erro ao processar stderr: $e';
+        final stderrFuture = process.stderr
+            .listen(
+              (chunk) {
+                try {
+                  stderrBuffer.add(chunk);
+                } on Object catch (e) {
+                  stderrError = 'Erro ao processar stderr: $e';
+                  LoggerService.warning(stderrError!);
+                }
+              },
+              onError: (error) {
+                stderrError = 'Erro ao capturar stderr: $error';
                 LoggerService.warning(stderrError!);
-              }
-            },
-            onError: (error) {
-              stderrError = 'Erro ao capturar stderr: $error';
-              LoggerService.warning(stderrError!);
-            },
-          )
-          .asFuture();
+              },
+            )
+            .asFuture();
 
-      int exitCode;
-      if (timeout != null) {
-        exitCode = await process.exitCode.timeout(
-          timeout,
-          onTimeout: () {
-            process.kill();
-            throw TimeoutException('Processo excedeu o timeout de $timeout');
-          },
+        int exitCode;
+        if (timeout != null) {
+          exitCode = await process.exitCode.timeout(
+            timeout,
+            onTimeout: () {
+              process.kill();
+              throw TimeoutException('Processo excedeu o timeout de $timeout');
+            },
+          );
+        } else {
+          exitCode = await process.exitCode;
+        }
+
+        try {
+          await stdoutFuture;
+        } on Object catch (e) {
+          LoggerService.warning('Erro ao aguardar stdout: $e');
+        }
+
+        try {
+          await stderrFuture;
+        } on Object catch (e) {
+          LoggerService.warning('Erro ao aguardar stderr: $e');
+        }
+
+        stopwatch.stop();
+
+        final stdout = _decorateTruncated(
+          _decodeProcessOutput(stdoutBuffer.takeBytes()),
+          truncated: stdoutBuffer.wasTruncated,
+          droppedBytes: stdoutBuffer.droppedBytes,
+          streamName: 'stdout',
         );
-      } else {
-        exitCode = await process.exitCode;
-      }
+        var stderr = _decorateTruncated(
+          _decodeProcessOutput(stderrBuffer.takeBytes()),
+          truncated: stderrBuffer.wasTruncated,
+          droppedBytes: stderrBuffer.droppedBytes,
+          streamName: 'stderr',
+        );
 
-      try {
-        await stdoutFuture;
-      } on Object catch (e) {
-        LoggerService.warning('Erro ao aguardar stdout: $e');
-      }
+        if (stdoutError != null) {
+          stderr = '${stderr.isEmpty ? '' : '$stderr\n'}$stdoutError';
+        }
+        if (stderrError != null) {
+          stderr = '${stderr.isEmpty ? '' : '$stderr\n'}$stderrError';
+        }
 
-      try {
-        await stderrFuture;
-      } on Object catch (e) {
-        LoggerService.warning('Erro ao aguardar stderr: $e');
-      }
+        if (stdout.isNotEmpty) {
+          LoggerService.debug('STDOUT: $stdout');
+        }
+        if (stderr.isNotEmpty) {
+          LoggerService.debug('STDERR: $stderr');
+        }
 
-      stopwatch.stop();
+        final result = ProcessResult(
+          exitCode: exitCode,
+          stdout: stdout,
+          stderr: stderr,
+          duration: stopwatch.elapsed,
+        );
 
-      if (tag != null && tag.isNotEmpty) {
-        _runningProcesses.remove(tag);
-      }
+        LoggerService.info(
+          'Processo finalizado - Exit Code: $exitCode - Duração: ${result.duration.inSeconds}s',
+        );
 
-      final stdout = _decorateTruncated(
-        _decodeProcessOutput(stdoutBuffer.takeBytes()),
-        truncated: stdoutBuffer.wasTruncated,
-        droppedBytes: stdoutBuffer.droppedBytes,
-        streamName: 'stdout',
-      );
-      var stderr = _decorateTruncated(
-        _decodeProcessOutput(stderrBuffer.takeBytes()),
-        truncated: stderrBuffer.wasTruncated,
-        droppedBytes: stderrBuffer.droppedBytes,
-        streamName: 'stderr',
-      );
+        if (exitCode != 0) {
+          return rd.Success(result);
+        }
 
-      if (stdoutError != null) {
-        stderr = '${stderr.isEmpty ? '' : '$stderr\n'}$stdoutError';
-      }
-      if (stderrError != null) {
-        stderr = '${stderr.isEmpty ? '' : '$stderr\n'}$stderrError';
-      }
-
-      if (stdout.isNotEmpty) {
-        LoggerService.debug('STDOUT: $stdout');
-      }
-      if (stderr.isNotEmpty) {
-        LoggerService.debug('STDERR: $stderr');
-      }
-
-      final result = ProcessResult(
-        exitCode: exitCode,
-        stdout: stdout,
-        stderr: stderr,
-        duration: stopwatch.elapsed,
-      );
-
-      LoggerService.info(
-        'Processo finalizado - Exit Code: $exitCode - Duração: ${result.duration.inSeconds}s',
-      );
-
-      if (exitCode != 0) {
         return rd.Success(result);
+      } finally {
+        if (hasTag) {
+          _runningProcesses.remove(tag);
+        }
       }
-
-      return rd.Success(result);
     } on TimeoutException catch (e) {
       stopwatch.stop();
       LoggerService.error('Timeout ao executar processo', e);

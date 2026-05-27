@@ -199,5 +199,60 @@ void main() {
       expect(result.isError(), isTrue);
       expect(attempts, 1);
     });
+
+    test(
+      'aborts immediately when isCancelled() returns true before first attempt',
+      () async {
+        var attempts = 0;
+        final result = await executeResultWithRetry<int>(
+          operation: () async {
+            attempts++;
+            return const rd.Success(1);
+          },
+          operationName: 'test op',
+          isCancelled: () => true,
+        );
+
+        expect(result.isError(), isTrue);
+        expect(attempts, 0, reason: 'operation must not run after cancel');
+        final f = result.exceptionOrNull()! as Failure;
+        expect(f.code, FailureCodes.uploadCancelled);
+      },
+    );
+
+    test('aborts during backoff sleep (does not wait full delay)', () async {
+      var attempts = 0;
+      var cancelToggle = false;
+
+      // 1ª tentativa: falha retryable. 2ª tentativa nunca acontece
+      // porque cancel é ativado durante o backoff de 100ms.
+      final stopwatch = Stopwatch()..start();
+      final result = await executeResultWithRetry<int>(
+        operation: () async {
+          attempts++;
+          // Ativa cancel logo após a 1ª tentativa (será polled durante
+          // o sleep, em fatias de 250ms).
+          Future.delayed(const Duration(milliseconds: 50), () {
+            cancelToggle = true;
+          });
+          return rd.Failure(TimeoutException('transient'));
+        },
+        operationName: 'test op',
+        initialDelay: const Duration(seconds: 30),
+        maxAttempts: 5,
+        isCancelled: () => cancelToggle,
+      );
+      stopwatch.stop();
+
+      expect(attempts, 1, reason: 'should only run first attempt');
+      expect(result.isError(), isTrue);
+      final f = result.exceptionOrNull()! as Failure;
+      expect(f.code, FailureCodes.uploadCancelled);
+      expect(
+        stopwatch.elapsed.inSeconds,
+        lessThan(2),
+        reason: 'cancel must short-circuit the 30s backoff sleep',
+      );
+    });
   });
 }

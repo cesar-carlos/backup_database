@@ -29,6 +29,10 @@ class PostgresBackupStrategyFactory {
               scheduleId: schedule.id,
               backupType: backupType,
               verifyAfterBackup: schedule.verifyAfterBackup,
+              // Sem isso, `VerifyPolicy.strict` do schedule era ignorado:
+              // o service Postgres só logava warning em falha de verify,
+              // nunca propagando Failure mesmo com strict configurado.
+              verifyPolicy: schedule.verifyPolicy,
               backupTimeout: schedule.backupTimeout,
               verifyTimeout: schedule.verifyTimeout,
               cancelTag: cancelTag,

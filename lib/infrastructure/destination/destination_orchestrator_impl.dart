@@ -21,6 +21,7 @@ import 'package:backup_database/domain/services/i_nextcloud_destination_service.
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_dropbox.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_ftp.dart';
+import 'package:backup_database/domain/use_cases/destinations/send_to_google_drive.dart';
 import 'package:backup_database/domain/use_cases/destinations/send_to_nextcloud.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
@@ -29,14 +30,14 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
   const DestinationOrchestratorImpl({
     required ILocalDestinationService localDestinationService,
     required SendToFtp sendToFtp,
-    required IGoogleDriveDestinationService googleDriveDestinationService,
+    required SendToGoogleDrive sendToGoogleDrive,
     required SendToDropbox sendToDropbox,
     required SendToNextcloud sendToNextcloud,
     required ILicensePolicyService licensePolicyService,
     required CircuitBreakerRegistry circuitBreakerRegistry,
   }) : _localDestinationService = localDestinationService,
        _sendToFtp = sendToFtp,
-       _googleDriveDestinationService = googleDriveDestinationService,
+       _sendToGoogleDrive = sendToGoogleDrive,
        _sendToDropbox = sendToDropbox,
        _sendToNextcloud = sendToNextcloud,
        _licensePolicyService = licensePolicyService,
@@ -44,7 +45,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
 
   final ILocalDestinationService _localDestinationService;
   final SendToFtp _sendToFtp;
-  final IGoogleDriveDestinationService _googleDriveDestinationService;
+  final SendToGoogleDrive _sendToGoogleDrive;
   final SendToDropbox _sendToDropbox;
   final SendToNextcloud _sendToNextcloud;
   final ILicensePolicyService _licensePolicyService;
@@ -294,29 +295,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
 
-    final config = FtpDestinationConfig(
-      host: configJson['host'] as String,
-      port: configJson['port'] as int? ?? 21,
-      username: configJson['username'] as String,
-      password: configJson['password'] as String,
-      remotePath: configJson['remotePath'] as String? ?? '/',
-      useFtps: configJson['useFtps'] as bool? ?? false,
-      enableResume: configJson['enableResume'] as bool? ?? true,
-      keepPartOnCancel: configJson['keepPartOnCancel'] as bool? ?? true,
-      maxAttempts: configJson['maxAttempts'] as int?,
-      whenResumeNotSupported: _parseWhenResumeNotSupported(
-        configJson['whenResumeNotSupported'] as String?,
-      ),
-      enableVerboseLog: configJson['enableVerboseLog'] as bool? ?? false,
-      connectionTimeoutSeconds: configJson['connectionTimeoutSeconds'] as int?,
-      uploadTimeoutMinutes: configJson['uploadTimeoutMinutes'] as int?,
-      enableStrongIntegrityValidation:
-          configJson['enableStrongIntegrityValidation'] as bool? ?? false,
-      enableReadBackValidation:
-          configJson['enableReadBackValidation'] as bool? ?? false,
-      allowInvalidCertificates:
-          configJson['allowInvalidCertificates'] as bool? ?? true,
-    );
+    final config = FtpDestinationConfig.fromJson(configJson);
 
     LoggerService.info(
       'Enviando backup para FTP: ${destination.name} (${config.host})',
@@ -324,6 +303,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
 
     final uploadResult = await executeResultWithRetry<FtpUploadResult>(
       maxAttempts: config.effectiveMaxAttempts,
+      isCancelled: isCancelled,
       operation: () async {
         if (isCancelled != null && isCancelled()) {
           return _cancelledFailure();
@@ -374,22 +354,19 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
 
-    final config = GoogleDriveDestinationConfig(
-      folderId: configJson['folderId'] as String,
-      folderName: configJson['folderName'] as String? ?? 'Backups',
-      accessToken: configJson['accessToken'] as String? ?? '',
-      refreshToken: configJson['refreshToken'] as String? ?? '',
-    );
+    final config = GoogleDriveDestinationConfig.fromJson(configJson);
     final result = await executeResultWithRetry<GoogleDriveUploadResult>(
+      isCancelled: isCancelled,
       operation: () async {
         if (isCancelled != null && isCancelled()) {
           return _cancelledFailure();
         }
-        return _googleDriveDestinationService.upload(
+        return _sendToGoogleDrive.call(
           sourceFilePath: sourceFilePath,
           config: config,
           customFileName: _buildCustomFileName(sourceFilePath, backupId),
           onProgress: onProgress,
+          isCancelled: isCancelled,
         );
       },
       operationName: 'Upload Google Drive ${destination.name}',
@@ -418,11 +395,9 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
 
-    final config = DropboxDestinationConfig(
-      folderPath: configJson['folderPath'] as String? ?? '',
-      folderName: configJson['folderName'] as String? ?? 'Backups',
-    );
+    final config = DropboxDestinationConfig.fromJson(configJson);
     final result = await executeResultWithRetry<DropboxUploadResult>(
+      isCancelled: isCancelled,
       operation: () async {
         if (isCancelled != null && isCancelled()) {
           return _cancelledFailure();
@@ -432,6 +407,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           config: config,
           customFileName: _buildCustomFileName(sourceFilePath, backupId),
           onProgress: onProgress,
+          isCancelled: isCancelled,
         );
       },
       operationName: 'Upload Dropbox ${destination.name}',
@@ -462,6 +438,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
 
     final config = NextcloudDestinationConfig.fromJson(configJson);
     final result = await executeResultWithRetry<NextcloudUploadResult>(
+      isCancelled: isCancelled,
       operation: () async {
         if (isCancelled != null && isCancelled()) {
           return _cancelledFailure();
@@ -471,6 +448,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           config: config,
           customFileName: _buildCustomFileName(sourceFilePath, backupId),
           onProgress: onProgress,
+          isCancelled: isCancelled,
         );
       },
       operationName: 'Upload Nextcloud ${destination.name}',
@@ -484,16 +462,6 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         breaker.recordFailure(failure);
         return rd.Failure(failure);
       },
-    );
-  }
-
-  static FtpWhenResumeNotSupported _parseWhenResumeNotSupported(
-    String? value,
-  ) {
-    if (value == null) return FtpWhenResumeNotSupported.fallback;
-    return FtpWhenResumeNotSupported.values.firstWhere(
-      (e) => e.name == value,
-      orElse: () => FtpWhenResumeNotSupported.fallback,
     );
   }
 
@@ -544,7 +512,10 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     BackupDestination destination,
   ) {
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
-    if (breaker.allowsRequest) return null;
+    // tryAcquire (em vez de allowsRequest) reserva o slot em half-open
+    // para evitar saturar o destino com requests paralelas durante o
+    // probe period. O slot é liberado em recordSuccess/recordFailure.
+    if (breaker.tryAcquire()) return null;
     LoggerService.warning(
       'Circuit breaker aberto para ${destination.name}, pulando upload',
     );

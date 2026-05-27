@@ -114,4 +114,70 @@ void main() {
       },
     );
   });
+
+  group('BackupHistoryRepository.reconcileStaleRunning', () {
+    test(
+      'NÃO sobrescreve histórico que já saiu de running (success), '
+      'mesmo após cutoff',
+      () async {
+        // Cria histórico que JÁ está em status success mas startedAt
+        // antigo (simula: backup terminou OK, mas crashou antes do
+        // proxy/scheduler atualizar; agora reconcile vai escanear).
+        final old = DateTime.now().subtract(const Duration(hours: 2));
+        final history = BackupHistory(
+          id: 'hist-success-old',
+          scheduleId: 'sch-1',
+          databaseName: 'Test',
+          databaseType: 'sqlite',
+          backupPath: '/tmp/backup.bak',
+          fileSize: 1024,
+          status: BackupStatus.success,
+          startedAt: old,
+          finishedAt: old.add(const Duration(minutes: 5)),
+        );
+        await repository.create(history);
+
+        final result = await repository.reconcileStaleRunning(
+          maxAge: const Duration(minutes: 30),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(result.getOrNull(), 0, reason: 'success row must be untouched');
+
+        final fetched = await repository.getById('hist-success-old');
+        expect(fetched.getOrNull()!.status, BackupStatus.success);
+      },
+    );
+
+    test(
+      'marca running antigo como error (caminho feliz da reconciliação)',
+      () async {
+        final old = DateTime.now().subtract(const Duration(hours: 2));
+        final history = BackupHistory(
+          id: 'hist-running-old',
+          scheduleId: 'sch-1',
+          databaseName: 'Test',
+          databaseType: 'sqlite',
+          backupPath: '/tmp/backup.bak',
+          fileSize: 1024,
+          status: BackupStatus.running,
+          startedAt: old,
+        );
+        // `create` preserva startedAt da entity — útil para reproduzir
+        // backup-running antigo sem custom SQL.
+        final createResult = await repository.create(history);
+        expect(createResult.isSuccess(), isTrue);
+
+        final result = await repository.reconcileStaleRunning(
+          maxAge: const Duration(minutes: 30),
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(result.getOrNull(), 1);
+
+        final fetched = await repository.getById('hist-running-old');
+        expect(fetched.getOrNull()!.status, BackupStatus.error);
+      },
+    );
+  });
 }

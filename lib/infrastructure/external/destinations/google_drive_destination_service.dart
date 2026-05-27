@@ -10,12 +10,14 @@ import 'package:backup_database/core/errors/google_drive_failure.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/file_stream_utils.dart';
+import 'package:backup_database/core/utils/http_error_helpers.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/infrastructure/external/google/google_auth_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -55,11 +57,13 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
     String? customFileName,
     int maxRetries = 3,
     UploadProgressCallback? onProgress,
+    bool Function()? isCancelled,
   }) async {
     final stopwatch = Stopwatch()..start();
 
     try {
       LoggerService.info('Enviando para Google Drive: ${config.folderName}');
+      _throwIfCancelled(isCancelled);
 
       final sourceFile = File(sourceFilePath);
       if (!await sourceFile.exists()) {
@@ -74,16 +78,19 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
         config.folderName,
         config.folderId,
       );
+      _throwIfCancelled(isCancelled);
 
       final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final dateFolderId = await _getOrCreateFolder(
         dateFolder,
         mainFolderId,
       );
+      _throwIfCancelled(isCancelled);
 
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final fileSize = await sourceFile.length();
       final localMd5 = await FileHashUtils.computeMd5(sourceFile);
+      _throwIfCancelled(isCancelled);
 
       const largeFileThreshold = 5 * 1024 * 1024;
       final useResumableUpload = fileSize > largeFileThreshold;
@@ -96,6 +103,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
 
       Exception? lastError;
       for (var attempt = 1; attempt <= maxRetries; attempt++) {
+        _throwIfCancelled(isCancelled);
         try {
           LoggerService.debug('Tentativa $attempt de $maxRetries');
 
@@ -116,21 +124,24 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
               UploadChunkConstants.httpUploadChunkSize,
             );
 
-            if (onProgress != null) {
-              var bytesSent = 0;
-              fileStream = fileStream.transform(
-                StreamTransformer<List<int>, List<int>>.fromHandlers(
-                  handleData: (data, sink) {
-                    final chunkLength = data.length;
-                    bytesSent += chunkLength;
-                    if (fileSize > 0) {
-                      onProgress(bytesSent / fileSize);
-                    }
-                    sink.add(data);
-                  },
-                ),
-              );
-            }
+            var bytesSent = 0;
+            fileStream = fileStream.transform(
+              StreamTransformer<List<int>, List<int>>.fromHandlers(
+                handleData: (data, sink) {
+                  if (isCancelled != null && isCancelled()) {
+                    sink.addError(_UploadCancelledException());
+                    sink.close();
+                    return;
+                  }
+                  final chunkLength = data.length;
+                  bytesSent += chunkLength;
+                  if (onProgress != null && fileSize > 0) {
+                    onProgress(bytesSent / fileSize);
+                  }
+                  sink.add(data);
+                },
+              ),
+            );
 
             final media = drive.Media(
               fileStream,
@@ -207,6 +218,15 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
               duration: stopwatch.elapsed,
             ),
           );
+        } on _UploadCancelledException {
+          stopwatch.stop();
+          LoggerService.info('Upload Google Drive cancelado pelo usuário');
+          return const rd.Failure(
+            BackupFailure(
+              message: 'Upload cancelado pelo usuário.',
+              code: FailureCodes.uploadCancelled,
+            ),
+          );
         } on Object catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
           LoggerService.warning('Tentativa $attempt falhou: $e');
@@ -230,6 +250,15 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
           originalError: lastError,
         ),
       );
+    } on _UploadCancelledException {
+      stopwatch.stop();
+      LoggerService.info('Upload Google Drive cancelado pelo usuário');
+      return const rd.Failure(
+        BackupFailure(
+          message: 'Upload cancelado pelo usuário.',
+          code: FailureCodes.uploadCancelled,
+        ),
+      );
     } on Object catch (e, stackTrace) {
       stopwatch.stop();
       LoggerService.error('Erro no upload Google Drive', e, stackTrace);
@@ -245,7 +274,23 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
     }
   }
 
-  String _getGoogleDriveErrorMessage(dynamic e) {
+  static void _throwIfCancelled(bool Function()? isCancelled) {
+    if (isCancelled != null && isCancelled()) {
+      throw _UploadCancelledException();
+    }
+  }
+
+  /// Mapeia uma exceção do upload Google Drive para mensagem amigável.
+  ///
+  /// Estratégia em camadas (igual ao padrão FTP, ver
+  /// `FtpDestinationService.getFtpErrorMessage`):
+  /// 1. **Failure de integridade** (`integrity*` codes) — mensagem específica.
+  /// 2. **Tipo específico** (`drive.DetailedApiRequestError` com `.status`,
+  ///    `TimeoutException`, `SocketException`).
+  /// 3. **Heurística por substring** com word‑boundary para códigos HTTP
+  ///    (evita "11401" matchear como 401).
+  @visibleForTesting
+  static String getGoogleDriveErrorMessage(Object? e) {
     if (e is Failure && e.code != null) {
       if (e.code == FailureCodes.integrityValidationInconclusive) {
         return 'Não foi possível confirmar a integridade no Google Drive.\n'
@@ -257,37 +302,87 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
             'Detalhes: ${e.message}';
       }
     }
-
-    final errorStr = e.toString().toLowerCase();
-
-    if (errorStr.contains('401') || errorStr.contains('unauthorized')) {
-      return 'Sessão do Google Drive expirada.\n'
-          'Faça login novamente nas configurações.';
-    } else if (errorStr.contains('403') || errorStr.contains('forbidden')) {
-      return 'Sem permissão para acessar o Google Drive.\n'
-          'Verifique se as permissões foram concedidas.';
-    } else if (errorStr.contains('404') || errorStr.contains('not found')) {
-      return 'Pasta de destino não encontrada no Google Drive.\n'
-          'Verifique se a pasta ainda existe.';
-    } else if (errorStr.contains('quota') || errorStr.contains('limit')) {
-      return 'Limite de armazenamento do Google Drive atingido.\n'
-          'Libere espaço ou faça upgrade do plano.';
-    } else if (errorStr.contains('network') ||
-        errorStr.contains('connection')) {
-      return 'Erro de conexão com o Google Drive.\n'
-          'Verifique sua conexão com a internet.';
-    } else if (errorStr.contains('timeout')) {
+    if (e is TimeoutException) {
       return 'Tempo limite excedido ao enviar para o Google Drive.\n'
           'Para arquivos grandes, o upload pode levar vários minutos.\n'
           'Tente novamente ou verifique sua conexão.';
-    } else if (errorStr.contains('413') ||
-        errorStr.contains('request entity too large')) {
+    }
+    if (e is SocketException) {
+      return 'Erro de conexão com o Google Drive.\n'
+          'Verifique sua conexão com a internet.\n'
+          'Detalhes: ${e.message}';
+    }
+    if (e is drive.DetailedApiRequestError && e.status != null) {
+      final fromStatus = _googleDriveMessageByStatus(e.status!);
+      if (fromStatus != null) return fromStatus;
+    }
+
+    final errorStr = e?.toString().toLowerCase() ?? '';
+
+    final statusMatch = HttpErrorHelpers.firstHttpStatusIn(errorStr, const [
+      401,
+      403,
+      404,
+      413,
+    ]);
+    if (statusMatch != null) {
+      final fromStatus = _googleDriveMessageByStatus(statusMatch);
+      if (fromStatus != null) return fromStatus;
+    }
+    if (errorStr.contains('unauthorized')) {
+      return 'Sessão do Google Drive expirada.\n'
+          'Faça login novamente nas configurações.';
+    }
+    if (errorStr.contains('forbidden')) {
+      return 'Sem permissão para acessar o Google Drive.\n'
+          'Verifique se as permissões foram concedidas.';
+    }
+    if (errorStr.contains('not found')) {
+      return 'Pasta de destino não encontrada no Google Drive.\n'
+          'Verifique se a pasta ainda existe.';
+    }
+    if (errorStr.contains('quota') || errorStr.contains('limit exceeded')) {
+      return 'Limite de armazenamento do Google Drive atingido.\n'
+          'Libere espaço ou faça upgrade do plano.';
+    }
+    if (errorStr.contains('network') || errorStr.contains('connection')) {
+      return 'Erro de conexão com o Google Drive.\n'
+          'Verifique sua conexão com a internet.';
+    }
+    if (errorStr.contains('timeout')) {
+      return 'Tempo limite excedido ao enviar para o Google Drive.\n'
+          'Para arquivos grandes, o upload pode levar vários minutos.\n'
+          'Tente novamente ou verifique sua conexão.';
+    }
+    if (errorStr.contains('request entity too large')) {
       return 'Arquivo muito grande para upload direto.\n'
           'O Google Drive suporta arquivos de até 5TB, mas o upload pode demorar.';
     }
 
     return 'Erro no upload para o Google Drive após várias tentativas.\n'
         'Detalhes: $e';
+  }
+
+  String _getGoogleDriveErrorMessage(Object? e) =>
+      getGoogleDriveErrorMessage(e);
+
+  static String? _googleDriveMessageByStatus(int status) {
+    switch (status) {
+      case 401:
+        return 'Sessão do Google Drive expirada.\n'
+            'Faça login novamente nas configurações.';
+      case 403:
+        return 'Sem permissão para acessar o Google Drive.\n'
+            'Verifique se as permissões foram concedidas.';
+      case 404:
+        return 'Pasta de destino não encontrada no Google Drive.\n'
+            'Verifique se a pasta ainda existe.';
+      case 413:
+        return 'Arquivo muito grande para upload direto.\n'
+            'O Google Drive suporta arquivos de até 5TB, mas o upload pode demorar.';
+      default:
+        return null;
+    }
   }
 
   Future<String> _getOrCreateFolder(
@@ -330,11 +425,6 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
     GoogleDriveDestinationConfig config,
   ) async {
     try {
-      final authResult = await _getAuthenticatedClient();
-      if (authResult.isError()) {
-        return rd.Failure(authResult.exceptionOrNull()!);
-      }
-
       final clientResult = await _getAuthenticatedClient();
       if (clientResult.isError()) {
         return rd.Failure(clientResult.exceptionOrNull()!);
@@ -568,32 +658,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
       try {
         return await operation();
       } on Object catch (e) {
-        var is401 = false;
-
-        try {
-          if (e.toString().contains('DetailedApiRequestError')) {
-            final errorStr = e.toString();
-            if (errorStr.contains('status: 401') ||
-                errorStr.contains('status:401')) {
-              is401 = true;
-            }
-          }
-        } on Object catch (parseErr, s) {
-          LoggerService.warning(
-            'Erro ao parsear erro 401 do Google Drive',
-            parseErr,
-            s,
-          );
-        }
-
-        final errorStr = e.toString().toLowerCase();
-        is401 =
-            is401 ||
-            errorStr.contains('401') ||
-            errorStr.contains('unauthorized') ||
-            errorStr.contains('invalid authentication credentials');
-
-        if (is401 && attempts < maxAttempts - 1) {
+        if (_isUnauthorizedError(e) && attempts < maxAttempts - 1) {
           LoggerService.warning('Erro 401 detectado, tentando renovar token');
           _cachedClientData = null;
 
@@ -621,6 +686,26 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
       }
     }
 
-    throw Exception('Número máximo de tentativas excedido');
+    throw const GoogleDriveFailure(
+      message:
+          'Número máximo de tentativas excedido ao autenticar no Google Drive.',
+    );
   }
+
+  /// Verifica se a exceção representa um erro `401 Unauthorized`. Prioriza
+  /// o tipo nativo (`drive.DetailedApiRequestError.status`) antes de cair
+  /// na heurística por substring (com word‑boundary para evitar matchear
+  /// "11401" e similares).
+  static bool _isUnauthorizedError(Object e) {
+    if (e is drive.DetailedApiRequestError && e.status == 401) return true;
+    final errorStr = e.toString().toLowerCase();
+    if (HttpErrorHelpers.containsHttpStatus(errorStr, 401)) return true;
+    if (errorStr.contains('unauthorized')) return true;
+    if (errorStr.contains('invalid authentication credentials')) return true;
+    return false;
+  }
+}
+
+class _UploadCancelledException implements Exception {
+  _UploadCancelledException();
 }

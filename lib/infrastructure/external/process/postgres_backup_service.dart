@@ -9,6 +9,7 @@ import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
@@ -39,6 +40,7 @@ class PostgresBackupService implements IPostgresBackupService {
       backupType: context.backupType,
       customFileName: context.customFileName,
       verifyAfterBackup: context.verifyAfterBackup,
+      verifyPolicy: context.verifyPolicy,
       pgBasebackupPath: context.pgBasebackupPath,
       backupTimeout: context.backupTimeout,
       verifyTimeout: context.verifyTimeout,
@@ -52,6 +54,7 @@ class PostgresBackupService implements IPostgresBackupService {
     BackupType backupType = BackupType.full,
     String? customFileName,
     bool verifyAfterBackup = false,
+    VerifyPolicy verifyPolicy = VerifyPolicy.none,
     String? pgBasebackupPath,
     Duration? backupTimeout,
     Duration? verifyTimeout,
@@ -193,14 +196,18 @@ class PostgresBackupService implements IPostgresBackupService {
                 ? await _verifyFullSingleBackup(
                     effectiveBackupPath,
                     timeout: effectiveVerifyTimeout,
+                    cancelTag: cancelTag,
                   )
                 : await _verifyBackup(
                     effectiveBackupPath,
                     timeout: effectiveVerifyTimeout,
+                    cancelTag: cancelTag,
                   );
             verifyStopwatch.stop();
             verifyDuration = verifyStopwatch.elapsed;
 
+            String? verifyErrorMsg;
+            var verifyFailed = false;
             verifyResult.fold(
               (_) {
                 LoggerService.info(
@@ -208,14 +215,30 @@ class PostgresBackupService implements IPostgresBackupService {
                 );
               },
               (failure) {
-                final errorMessage = failure is Failure
+                verifyFailed = true;
+                verifyErrorMsg = failure is Failure
                     ? failure.message
                     : failure.toString();
                 LoggerService.warning(
-                  'Verificação de integridade falhou: $errorMessage',
+                  'Verificação de integridade falhou: $verifyErrorMsg',
                 );
               },
             );
+
+            // Antes este caminho **sempre** ignorava falhas de verify
+            // (mesmo com `VerifyPolicy.strict` configurado no schedule),
+            // porque a factory também não propagava `verifyPolicy` (ver
+            // postgres_backup_strategy_factory.dart). Agora alinhado com
+            // SQL Server / Sybase / Firebird.
+            if (verifyFailed && verifyPolicy == VerifyPolicy.strict) {
+              return rd.Failure(
+                BackupFailure(
+                  message:
+                      'Verificação de integridade falhou: '
+                      '${verifyErrorMsg ?? "erro desconhecido"}',
+                ),
+              );
+            }
           }
 
           final totalDuration = backupDuration + verifyDuration;
@@ -1221,6 +1244,7 @@ class PostgresBackupService implements IPostgresBackupService {
   Future<rd.Result<void>> _verifyBackup(
     String backupPath, {
     required Duration timeout,
+    String? cancelTag,
   }) async {
     final verifyArgs = ['-D', backupPath];
 
@@ -1228,6 +1252,7 @@ class PostgresBackupService implements IPostgresBackupService {
       executable: 'pg_verifybackup',
       arguments: verifyArgs,
       timeout: timeout,
+      tag: cancelTag,
     );
 
     return verifyResult.fold((processResult) {
@@ -1248,6 +1273,7 @@ class PostgresBackupService implements IPostgresBackupService {
   Future<rd.Result<void>> _verifyFullSingleBackup(
     String backupPath, {
     required Duration timeout,
+    String? cancelTag,
   }) async {
     final verifyArgs = ['-l', backupPath];
 
@@ -1255,6 +1281,7 @@ class PostgresBackupService implements IPostgresBackupService {
       executable: 'pg_restore',
       arguments: verifyArgs,
       timeout: timeout,
+      tag: cancelTag,
     );
 
     return verifyResult.fold((processResult) {

@@ -60,10 +60,18 @@ class SqlServerBackupService implements ISqlServerBackupService {
   String _escapeSqlString(String value) => value.replaceAll("'", "''");
 
   /// Verifica o recovery model do banco antes de um backup de log.
-  /// Retorna [rd.Success] quando o modo permite o backup (`FULL` ou
-  /// `BULK_LOGGED`) ou quando a checagem foi inconclusiva (best-effort).
-  /// Retorna [rd.Failure] apenas quando o modo é `SIMPLE`, caso em que o
-  /// backup de log deve ser abortado explicitamente.
+  ///
+  /// Retorna:
+  /// - [rd.Success] quando o modo é `FULL`/`BULK_LOGGED` **ou** quando o
+  ///   `sqlcmd` rodou com sucesso mas o `SELECT` voltou vazio (parsing
+  ///   inconclusivo — tratado como best-effort para não bloquear
+  ///   schedules cujo banco não retorna `recovery_model_desc` em
+  ///   versões/configurações específicas).
+  /// - [rd.Failure] quando o modo é `SIMPLE` **ou** quando a execução do
+  ///   `sqlcmd` falhou (rede, credencial, timeout, exit code ≠ 0). Antes
+  ///   o caminho de falha era "fail-open" (assumia FULL e prosseguia
+  ///   com o `BACKUP LOG`), que então falhava mais tarde com mensagem
+  ///   menos clara para o usuário.
   Future<rd.Result<void>> _checkRecoveryModel(SqlServerConfig config) async {
     const query =
         'SELECT recovery_model_desc FROM sys.databases WHERE name = DB_NAME()';
@@ -77,8 +85,28 @@ class SqlServerBackupService implements ISqlServerBackupService {
 
     return result.fold(
       (processResult) {
-        if (!processResult.isSuccess) return const rd.Success(unit);
+        if (!processResult.isSuccess) {
+          final stderr = processResult.stderr.trim();
+          return rd.Failure(
+            ValidationFailure(
+              message:
+                  'Não foi possível verificar o recovery model do banco antes '
+                  'do backup de log (sqlcmd exit code '
+                  '${processResult.exitCode}). Verifique credenciais, rede e '
+                  'permissões do usuário SQL Server.\n'
+                  '${stderr.isEmpty ? "" : "Detalhes: $stderr"}',
+            ),
+          );
+        }
         final model = processResult.stdout.trim().toUpperCase();
+        if (model.isEmpty) {
+          // Inconclusive — best-effort: deixa o BACKUP LOG decidir.
+          LoggerService.warning(
+            'Recovery model check inconclusivo (sqlcmd OK mas stdout vazio). '
+            'Prosseguindo com BACKUP LOG (best-effort).',
+          );
+          return const rd.Success(unit);
+        }
         if (model.contains('SIMPLE')) {
           return const rd.Failure(
             ValidationFailure(
@@ -90,7 +118,14 @@ class SqlServerBackupService implements ISqlServerBackupService {
         }
         return const rd.Success(unit);
       },
-      (_) => const rd.Success(unit),
+      (failure) => rd.Failure(
+        ValidationFailure(
+          message:
+              'Não foi possível verificar o recovery model do banco antes '
+              'do backup de log: ${failure is Failure ? failure.message : failure}',
+          originalError: failure,
+        ),
+      ),
     );
   }
 
@@ -349,6 +384,11 @@ class SqlServerBackupService implements ISqlServerBackupService {
           final file = File(path);
           final ready = await BackupArtifactUtils.waitForStableFile(file);
           if (!ready) {
+            // Antes não havia cleanup aqui: stripes parcialmente
+            // escritos ficavam no disco indefinidamente após falha.
+            for (final partial in backupPaths) {
+              await BackupArtifactUtils.safeDeletePartial(partial);
+            }
             return rd.Failure(
               BackupFailure(
                 message: 'Arquivo de backup não foi criado em: $path',
@@ -362,11 +402,18 @@ class SqlServerBackupService implements ISqlServerBackupService {
           stablePaths,
         );
         if (!sizeRes.isSuccess()) {
+          for (final partial in backupPaths) {
+            await BackupArtifactUtils.safeDeletePartial(partial);
+          }
           return rd.Failure(sizeRes.exceptionOrNull()!);
         }
         final fileSize = sizeRes.getOrNull()!;
 
         if (fileSize == 0) {
+          // Stripes vazios também ficavam no disco. Limpa todos.
+          for (final partial in backupPaths) {
+            await BackupArtifactUtils.safeDeletePartial(partial);
+          }
           return const rd.Failure(
             BackupFailure(
               message: 'Arquivo de backup foi criado mas está vazio',
@@ -595,8 +642,12 @@ class SqlServerBackupService implements ISqlServerBackupService {
     Duration? timeout,
   }) async {
     try {
-      final query =
-          "RESTORE FILELISTONLY FROM DISK = N'${config.databaseValue}'";
+      // databaseValue aqui é tratado como caminho de arquivo de backup;
+      // mesmo escape T-SQL aplicado nas demais consultas (linha 224, 231,
+      // 403) para evitar SQL malformado / injection se o caminho contiver
+      // aspas simples.
+      final escapedPath = _escapeSqlString(config.databaseValue);
+      final query = "RESTORE FILELISTONLY FROM DISK = N'$escapedPath'";
 
       final arguments = [..._baseSqlcmdArgs(config), '-Q', query];
 

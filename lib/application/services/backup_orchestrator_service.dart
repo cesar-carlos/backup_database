@@ -484,10 +484,11 @@ class BackupOrchestratorService {
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro no backup', e, stackTrace);
 
+      final friendlyMessage = e is Failure ? e.message : e.toString();
       final finishedAt = DateTime.now();
       history = history.copyWith(
         status: BackupStatus.error,
-        errorMessage: e.toString(),
+        errorMessage: friendlyMessage,
         finishedAt: finishedAt,
         durationSeconds: finishedAt.difference(history.startedAt).inSeconds,
       );

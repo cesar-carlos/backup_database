@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/providers/database_config_provider_base.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/sybase_tools_status.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -42,9 +44,23 @@ class SybaseConfigProvider extends DatabaseConfigProviderBase<SybaseConfig> {
       final result = await _toolVerificationService.verifySybaseToolsDetailed();
       result.fold(
         (status) => _toolsStatus = status,
-        (_) => _toolsStatus = null,
+        (failure) {
+          // Antes silenciava sem feedback ao usuário; agora loga warning
+          // para diagnóstico mesmo mantendo `_toolsStatus = null`
+          // (consumidor UI já trata null como "indisponível").
+          LoggerService.warning(
+            'Erro ao verificar status das ferramentas Sybase: '
+            '${AsyncStateMixin.extractFailureMessage(failure)}',
+          );
+          _toolsStatus = null;
+        },
       );
-    } on Object catch (_) {
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Exceção inesperada ao verificar ferramentas Sybase',
+        e,
+        s,
+      );
       _toolsStatus = null;
     } finally {
       _isLoadingTools = false;

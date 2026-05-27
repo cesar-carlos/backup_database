@@ -217,27 +217,9 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     String backupHistoryId,
     Set<String> protectedShortIds,
   ) async {
-    final config = FtpDestinationConfig.fromJson(configJson);
-    final configWithProtected = FtpDestinationConfig(
-      host: config.host,
-      port: config.port,
-      username: config.username,
-      password: config.password,
-      remotePath: config.remotePath,
-      useFtps: config.useFtps,
-      retentionDays: config.retentionDays,
-      enableResume: config.enableResume,
-      keepPartOnCancel: config.keepPartOnCancel,
-      maxAttempts: config.maxAttempts,
-      whenResumeNotSupported: config.whenResumeNotSupported,
-      enableVerboseLog: config.enableVerboseLog,
-      connectionTimeoutSeconds: config.connectionTimeoutSeconds,
-      uploadTimeoutMinutes: config.uploadTimeoutMinutes,
-      enableStrongIntegrityValidation: config.enableStrongIntegrityValidation,
-      enableReadBackValidation: config.enableReadBackValidation,
-      allowInvalidCertificates: config.allowInvalidCertificates,
-      protectedBackupIdShortPrefixes: protectedShortIds,
-    );
+    final configWithProtected = FtpDestinationConfig.fromJson(
+      configJson,
+    ).copyWith(protectedBackupIdShortPrefixes: protectedShortIds);
     await _runRemoteCleanup(
       label: 'FTP',
       destination: destination,
@@ -253,14 +235,9 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     String backupHistoryId,
     Set<String> protectedShortIds,
   ) async {
-    final config = GoogleDriveDestinationConfig(
-      folderId: configJson['folderId'] as String,
-      folderName: configJson['folderName'] as String? ?? 'Backups',
-      accessToken: configJson['accessToken'] as String? ?? '',
-      refreshToken: configJson['refreshToken'] as String? ?? '',
-      retentionDays: configJson['retentionDays'] as int? ?? 30,
-      protectedBackupIdShortPrefixes: protectedShortIds,
-    );
+    final config = GoogleDriveDestinationConfig.fromJson(
+      configJson,
+    ).copyWith(protectedBackupIdShortPrefixes: protectedShortIds);
     await _runRemoteCleanup(
       label: 'Google Drive',
       destination: destination,
@@ -276,12 +253,9 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     String backupHistoryId,
     Set<String> protectedShortIds,
   ) async {
-    final config = DropboxDestinationConfig(
-      folderPath: configJson['folderPath'] as String? ?? '',
-      folderName: configJson['folderName'] as String? ?? 'Backups',
-      retentionDays: configJson['retentionDays'] as int? ?? 30,
-      protectedBackupIdShortPrefixes: protectedShortIds,
-    );
+    final config = DropboxDestinationConfig.fromJson(
+      configJson,
+    ).copyWith(protectedBackupIdShortPrefixes: protectedShortIds);
     await _runRemoteCleanup(
       label: 'Dropbox',
       destination: destination,
@@ -296,18 +270,9 @@ class BackupCleanupServiceImpl implements IBackupCleanupService {
     String backupHistoryId,
     Set<String> protectedShortIds,
   ) async {
-    final baseConfig = NextcloudDestinationConfig.fromJson(configJson);
-    final config = NextcloudDestinationConfig(
-      serverUrl: baseConfig.serverUrl,
-      username: baseConfig.username,
-      appPassword: baseConfig.appPassword,
-      authMode: baseConfig.authMode,
-      remotePath: baseConfig.remotePath,
-      folderName: baseConfig.folderName,
-      allowInvalidCertificates: baseConfig.allowInvalidCertificates,
-      retentionDays: baseConfig.retentionDays,
-      protectedBackupIdShortPrefixes: protectedShortIds,
-    );
+    final config = NextcloudDestinationConfig.fromJson(
+      configJson,
+    ).copyWith(protectedBackupIdShortPrefixes: protectedShortIds);
     await _runRemoteCleanup(
       label: 'Nextcloud',
       destination: destination,

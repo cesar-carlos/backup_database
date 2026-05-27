@@ -142,10 +142,13 @@ class PostgresConfigRepository
         );
       },
       (failure) {
+        final errMsg = failure is Failure
+            ? failure.message
+            : failure.toString();
         LoggerService.warning(
           'Erro ao remover replication slot no delete da configuracao. '
           'Slot: $slotName. Limpeza manual recomendada via '
-          "SELECT pg_drop_replication_slot('$slotName'). Erro: $failure",
+          "SELECT pg_drop_replication_slot('$slotName'). Erro: $errMsg",
         );
       },
     );

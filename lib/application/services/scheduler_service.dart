@@ -291,6 +291,14 @@ class SchedulerService implements ISchedulerService {
     );
 
     String? tempBackupPath;
+    // Elevado para o escopo externo para que o `catch` no fim do método
+    // possa atualizar o histórico para `error` caso uma exceção
+    // pós-`executeBackup` (staging/upload/notify) caia no catch sem ter
+    // passado pelos helpers `_failScheduledBackupAfterArtifactError` /
+    // `_failIfCancellationRequested`. Antes, esse caminho deixava o
+    // histórico em `running` ou (após `executeBackup` Success) em
+    // `success`, gerando UI/notificações inconsistentes com a falha real.
+    BackupHistory? backupHistoryRef;
     final effectiveRunId = runId ?? '${schedule.id}_${const Uuid().v4()}';
 
     try {
@@ -409,6 +417,7 @@ class SchedulerService implements ISchedulerService {
       }
 
       final backupHistory = backupResult.getOrNull()!;
+      backupHistoryRef = backupHistory;
       tempBackupPath = backupHistory.backupPath;
       // Registra o mapeamento scheduleId → historyId para que
       // `cancelExecution` consiga matar o processo do SGBD imediatamente
@@ -776,9 +785,31 @@ class SchedulerService implements ISchedulerService {
       return const rd.Success(rd.unit);
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro no backup agendado', e, stackTrace);
+      final friendlyMessage = _failureMessage(e);
+
+      // Se já tínhamos um histórico criado pelo orchestrator, garante
+      // que ele saia do estado `running`/`success` (este último caso é
+      // o cenário mais perigoso: `executeBackup` retornou Success, mas
+      // uma exceção em staging/upload/notify deixou o histórico
+      // falsamente como sucesso para o usuário).
+      if (backupHistoryRef != null) {
+        await _failScheduledBackupAfterArtifactError(
+          backupHistory: backupHistoryRef,
+          errorMessage: 'Erro no backup agendado: $friendlyMessage',
+          logStep: LogStepConstants.backupError,
+          failure: BackupFailure(
+            message: 'Erro no backup agendado: $friendlyMessage',
+            code: FailureCodes.backupFailed,
+            originalError: e,
+          ),
+        );
+      } else {
+        _safeFailBackup(friendlyMessage);
+      }
+
       return rd.Failure(
         BackupFailure(
-          message: 'Erro no backup agendado: $e',
+          message: 'Erro no backup agendado: $friendlyMessage',
           code: FailureCodes.backupFailed,
           originalError: e,
         ),

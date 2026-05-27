@@ -137,9 +137,10 @@ class SybaseBackupService implements ISybaseBackupService {
       // M3: substitui também `.` (microssegundos) para evitar nomes de
       // diretório como `mydb_log_2026-05-27T09-26-11.123456` que alguns
       // utilitários no Windows interpretam como tendo extensão.
-      final timestamp = DateTime.now()
-          .toIso8601String()
-          .replaceAll(RegExp('[:.]'), '-');
+      final timestamp = DateTime.now().toIso8601String().replaceAll(
+        RegExp('[:.]'),
+        '-',
+      );
       final typeSlug = effectiveType.name;
 
       // Agora todos os tipos (inclusive FULL) recebem timestamp único no
@@ -166,7 +167,13 @@ class SybaseBackupService implements ISybaseBackupService {
         await backupDir.create(recursive: true);
       }
 
-      final escapedBackupPath = backupPath.replaceAll(r'\', r'\\');
+      // Escapa tanto separadores Windows (`\` → `\\`) quanto aspas
+      // simples (`'` → `''`) para evitar quebra do SQL gerado ou
+      // injection quando o path contiver `'` (caminhos com nome de
+      // pasta entre aspas).
+      final escapedBackupPath = backupPath
+          .replaceAll(r'\', r'\\')
+          .replaceAll("'", "''");
 
       // Lista única de estratégias dbisql (nome + conn). Substitui o par
       // `dbisqlConnections` + `_dbisqlStrategyNames` que vivia em locais
@@ -801,9 +808,9 @@ class SybaseBackupService implements ISybaseBackupService {
       json['backupMethod'] = 'dbisql';
       json['connectionStrategy'] =
           dbisqlStrategyIndex >= 0 &&
-                  dbisqlStrategyIndex < dbisqlStrategies.length
-              ? dbisqlStrategies[dbisqlStrategyIndex].name
-              : 'dbisql #${dbisqlStrategyIndex + 1}';
+              dbisqlStrategyIndex < dbisqlStrategies.length
+          ? dbisqlStrategies[dbisqlStrategyIndex].name
+          : 'dbisql #${dbisqlStrategyIndex + 1}';
     }
     return json;
   }

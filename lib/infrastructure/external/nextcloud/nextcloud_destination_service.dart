@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,6 +9,7 @@ import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/nextcloud_failure.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/file_stream_utils.dart';
+import 'package:backup_database/core/utils/http_error_helpers.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
@@ -16,6 +18,7 @@ import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/infrastructure/external/nextcloud/nextcloud_webdav_utils.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
@@ -31,10 +34,14 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     String? customFileName,
     int maxRetries = 3,
     UploadProgressCallback? onProgress,
+    bool Function()? isCancelled,
   }) async {
     final stopwatch = Stopwatch()..start();
 
     try {
+      LoggerService.info('Enviando para Nextcloud: ${config.serverUrl}');
+      _throwIfCancelled(isCancelled);
+
       final sourceFile = File(sourceFilePath);
       if (!await sourceFile.exists()) {
         return rd.Failure(
@@ -59,10 +66,12 @@ class NextcloudDestinationService implements INextcloudDestinationService {
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final fileSize = await sourceFile.length();
       final localSha256 = await FileHashUtils.computeSha256(sourceFile);
+      _throwIfCancelled(isCancelled);
       final remoteFilePath = _joinRemote(dateFolderPath, fileName);
 
       Exception? lastError;
       for (var attempt = 1; attempt <= maxRetries; attempt++) {
+        _throwIfCancelled(isCancelled);
         try {
           await _ensureFolderExists(
             dio: dio,
@@ -74,6 +83,7 @@ class NextcloudDestinationService implements INextcloudDestinationService {
             config: config,
             path: dateFolderPath,
           );
+          _throwIfCancelled(isCancelled);
 
           final uploadUrl = NextcloudWebdavUtils.buildDavUrl(
             serverUrl: config.serverUrl,
@@ -81,12 +91,26 @@ class NextcloudDestinationService implements INextcloudDestinationService {
             path: remoteFilePath,
           );
 
+          final uploadStream =
+              chunkedFileStream(
+                sourceFile,
+                UploadChunkConstants.httpUploadChunkSize,
+              ).transform(
+                StreamTransformer<List<int>, List<int>>.fromHandlers(
+                  handleData: (data, sink) {
+                    if (isCancelled != null && isCancelled()) {
+                      sink.addError(_UploadCancelledException());
+                      sink.close();
+                      return;
+                    }
+                    sink.add(data);
+                  },
+                ),
+              );
+
           final response = await dio.putUri(
             uploadUrl,
-            data: chunkedFileStream(
-              sourceFile,
-              UploadChunkConstants.httpUploadChunkSize,
-            ),
+            data: uploadStream,
             onSendProgress: onProgress != null
                 ? (sent, total) {
                     if (total > 0) {
@@ -110,6 +134,9 @@ class NextcloudDestinationService implements INextcloudDestinationService {
               uploadUrl: uploadUrl,
               fileSize: fileSize,
               localSha256: localSha256,
+              enableStrongIntegrityValidation:
+                  config.enableStrongIntegrityValidation,
+              enableReadBackValidation: config.enableReadBackValidation,
             );
             if (integrityResult.isError()) {
               final failure = integrityResult.exceptionOrNull()!;
@@ -140,7 +167,28 @@ class NextcloudDestinationService implements INextcloudDestinationService {
             response: response,
             type: DioExceptionType.badResponse,
           );
+        } on _UploadCancelledException {
+          stopwatch.stop();
+          LoggerService.info('Upload Nextcloud cancelado pelo usuário');
+          return const rd.Failure(
+            BackupFailure(
+              message: 'Upload cancelado pelo usuário.',
+              code: FailureCodes.uploadCancelled,
+            ),
+          );
         } on Object catch (e) {
+          // DioException com `addError(_UploadCancelledException)` no
+          // stream chega aqui embrulhada — propaga a sentinel pra fora.
+          if (_isCancellationError(e)) {
+            stopwatch.stop();
+            LoggerService.info('Upload Nextcloud cancelado pelo usuário');
+            return const rd.Failure(
+              BackupFailure(
+                message: 'Upload cancelado pelo usuário.',
+                code: FailureCodes.uploadCancelled,
+              ),
+            );
+          }
           lastError = e is Exception ? e : Exception(e.toString());
           LoggerService.warning(
             'Nextcloud: tentativa $attempt falhou: $e',
@@ -161,6 +209,15 @@ class NextcloudDestinationService implements INextcloudDestinationService {
           originalError: lastError,
         ),
       );
+    } on _UploadCancelledException {
+      stopwatch.stop();
+      LoggerService.info('Upload Nextcloud cancelado pelo usuário');
+      return const rd.Failure(
+        BackupFailure(
+          message: 'Upload cancelado pelo usuário.',
+          code: FailureCodes.uploadCancelled,
+        ),
+      );
     } on Object catch (e) {
       stopwatch.stop();
       if (e is NextcloudFailure) {
@@ -173,6 +230,47 @@ class NextcloudDestinationService implements INextcloudDestinationService {
         ),
       );
     }
+  }
+
+  static void _throwIfCancelled(bool Function()? isCancelled) {
+    if (isCancelled != null && isCancelled()) {
+      throw _UploadCancelledException();
+    }
+  }
+
+  /// Retry com delay constante para operações pontuais (lista de pastas,
+  /// HEAD de integridade). Não usado no upload propriamente dito, que já
+  /// tem retry no loop principal.
+  Future<T> _withRetry<T>({
+    required int attempts,
+    required Duration delay,
+    required String label,
+    required Future<T> Function() operation,
+  }) async {
+    Object? lastError;
+    StackTrace? lastStack;
+    for (var i = 1; i <= attempts; i++) {
+      try {
+        return await operation();
+      } on Object catch (e, s) {
+        lastError = e;
+        lastStack = s;
+        LoggerService.warning(
+          'Nextcloud: $label falhou na tentativa $i/$attempts: $e',
+        );
+        if (i < attempts) await Future.delayed(delay);
+      }
+    }
+    Error.throwWithStackTrace(
+      lastError ?? StateError('Nextcloud retry sem erro registrado'),
+      lastStack ?? StackTrace.current,
+    );
+  }
+
+  static bool _isCancellationError(Object e) {
+    if (e is _UploadCancelledException) return true;
+    if (e is DioException && e.error is _UploadCancelledException) return true;
+    return false;
   }
 
   @override
@@ -233,10 +331,15 @@ class NextcloudDestinationService implements INextcloudDestinationService {
         Duration(days: config.retentionDays),
       );
 
-      final folders = await _listCollections(
-        dio: dio,
-        config: config,
-        path: baseFolderPath,
+      final folders = await _withRetry<List<String>>(
+        attempts: 3,
+        delay: const Duration(seconds: 2),
+        label: 'list_collections Nextcloud',
+        operation: () => _listCollections(
+          dio: dio,
+          config: config,
+          path: baseFolderPath,
+        ),
       );
 
       var deletedCount = 0;
@@ -349,22 +452,12 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     return '$l/$r';
   }
 
-  Uri _buildDavUrl({
-    required String serverUrl,
-    required String username,
-    required String path,
-  }) => NextcloudWebdavUtils.buildDavUrl(
-    serverUrl: serverUrl,
-    username: username,
-    path: path,
-  );
-
   Future<void> _ensureFolderExists({
     required Dio dio,
     required NextcloudDestinationConfig config,
     required String path,
   }) async {
-    final url = _buildDavUrl(
+    final url = NextcloudWebdavUtils.buildDavUrl(
       serverUrl: config.serverUrl,
       username: config.username,
       path: path,
@@ -442,7 +535,7 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     required NextcloudDestinationConfig config,
     required String path,
   }) async {
-    final url = _buildDavUrl(
+    final url = NextcloudWebdavUtils.buildDavUrl(
       serverUrl: config.serverUrl,
       username: config.username,
       path: path,
@@ -476,11 +569,25 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     );
   }
 
+  /// Validação de integridade do arquivo recém-enviado.
+  ///
+  /// **Camadas (gating por config)**:
+  /// 1. Sempre: `HEAD content-length` igual ao local (`size` check).
+  /// 2. `enableStrongIntegrityValidation == true`: requer hash forte.
+  ///    Nextcloud não expõe SHA-256 em propriedade WebDAV padrão, então
+  ///    só conseguimos via **read-back** (download de validação).
+  /// 3. `enableReadBackValidation == true`: faz download e compara hash.
+  ///
+  /// Para arquivos de banco grandes, é razoável manter as duas flags em
+  /// `false` (a checagem de tamanho já pega ~95% dos truncamentos), em
+  /// troca de evitar dobrar o tráfego de rede do backup.
   Future<rd.Result<void>> _validateUploadedFileIntegrity({
     required Dio dio,
     required Uri uploadUrl,
     required int fileSize,
     required String localSha256,
+    required bool enableStrongIntegrityValidation,
+    required bool enableReadBackValidation,
   }) async {
     final headSizeResult = await _validateRemoteContentLength(
       dio: dio,
@@ -489,6 +596,21 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     );
     if (headSizeResult.isError()) {
       return rd.Failure(headSizeResult.exceptionOrNull()!);
+    }
+
+    if (!enableStrongIntegrityValidation) {
+      return const rd.Success(());
+    }
+    if (!enableReadBackValidation) {
+      return const rd.Failure(
+        NextcloudFailure(
+          message:
+              'Validação forte de integridade Nextcloud habilitada, mas '
+              'read-back está desabilitado. Sem outra fonte de hash '
+              'remoto, integridade não pôde ser confirmada.',
+          code: FailureCodes.integrityValidationInconclusive,
+        ),
+      );
     }
 
     for (var attempt = 0; attempt < _integrityReadBackAttempts; attempt++) {
@@ -602,7 +724,14 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     }
   }
 
-  String _getNextcloudErrorMessage(dynamic e) {
+  /// Mapeia uma exceção do upload Nextcloud para mensagem amigável.
+  ///
+  /// Mesma estratégia em camadas do FTP/Drive/Dropbox: integridade →
+  /// tipo (`TimeoutException`/`HandshakeException`/`SocketException`/
+  /// `DioException.statusCode`) → heurística por substring com
+  /// word‑boundary em códigos HTTP.
+  @visibleForTesting
+  static String getNextcloudErrorMessage(Object? e) {
     if (e is Failure && e.code != null) {
       if (e.code == FailureCodes.integrityValidationInconclusive) {
         return 'Não foi possível confirmar a integridade no Nextcloud.\n'
@@ -614,20 +743,52 @@ class NextcloudDestinationService implements INextcloudDestinationService {
             'Detalhes: ${e.message}';
       }
     }
-
-    final errorStr = e.toString().toLowerCase();
-
-    if (errorStr.contains('401') || errorStr.contains('unauthorized')) {
-      return 'Credenciais inválidas ou sessão expirada.\n'
-          'Verifique o usuário e o App Password.';
+    if (e is TimeoutException) {
+      return 'Tempo limite excedido ao enviar para o Nextcloud.\n'
+          'Tente novamente ou verifique sua conexão.';
     }
-    if (errorStr.contains('403') || errorStr.contains('forbidden')) {
-      return 'Sem permissão para acessar o Nextcloud.\n'
-          'Verifique as permissões do usuário.';
+    if (e is HandshakeException || e is TlsException) {
+      return 'Falha de certificado TLS.\n'
+          'Se o servidor usa certificado self-signed, habilite a opção '
+          '"aceitar certificados inválidos".\n'
+          'Detalhes: $e';
     }
-    if (errorStr.contains('507') || errorStr.contains('insufficient')) {
-      return 'Armazenamento insuficiente no Nextcloud.\n'
-          'Libere espaço ou aumente a cota.';
+    if (e is SocketException) {
+      return 'Erro de conexão com o Nextcloud.\n'
+          'Verifique sua conexão e a URL do servidor.\n'
+          'Detalhes: ${e.message}';
+    }
+    if (e is DioException) {
+      final code = e.response?.statusCode;
+      final fromStatus = code == null ? null : _nextcloudMessageByStatus(code);
+      if (fromStatus != null) return fromStatus;
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        return 'Tempo limite excedido ao enviar para o Nextcloud.\n'
+            'Tente novamente ou verifique sua conexão.';
+      }
+    }
+
+    final errorStr = e?.toString().toLowerCase() ?? '';
+
+    final statusMatch = HttpErrorHelpers.firstHttpStatusIn(errorStr, const [
+      401,
+      403,
+      507,
+    ]);
+    if (statusMatch != null) {
+      final fromStatus = _nextcloudMessageByStatus(statusMatch);
+      if (fromStatus != null) return fromStatus;
+    }
+    if (errorStr.contains('unauthorized')) {
+      return _nextcloudMessageByStatus(401)!;
+    }
+    if (errorStr.contains('forbidden')) {
+      return _nextcloudMessageByStatus(403)!;
+    }
+    if (errorStr.contains('insufficient')) {
+      return _nextcloudMessageByStatus(507)!;
     }
     if (errorStr.contains('timeout')) {
       return 'Tempo limite excedido ao enviar para o Nextcloud.\n'
@@ -635,7 +796,8 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     }
     if (errorStr.contains('certificate') || errorStr.contains('handshake')) {
       return 'Falha de certificado TLS.\n'
-          'Se o servidor usa certificado self-signed, habilite a opção correspondente.';
+          'Se o servidor usa certificado self-signed, habilite a opção '
+          '"aceitar certificados inválidos".';
     }
     if (errorStr.contains('network') || errorStr.contains('connection')) {
       return 'Erro de conexão com o Nextcloud.\n'
@@ -645,4 +807,26 @@ class NextcloudDestinationService implements INextcloudDestinationService {
     return 'Erro no Nextcloud após várias tentativas.\n'
         'Detalhes: $e';
   }
+
+  String _getNextcloudErrorMessage(Object? e) => getNextcloudErrorMessage(e);
+
+  static String? _nextcloudMessageByStatus(int status) {
+    switch (status) {
+      case 401:
+        return 'Credenciais inválidas ou sessão expirada.\n'
+            'Verifique o usuário e o App Password.';
+      case 403:
+        return 'Sem permissão para acessar o Nextcloud.\n'
+            'Verifique as permissões do usuário.';
+      case 507:
+        return 'Armazenamento insuficiente no Nextcloud.\n'
+            'Libere espaço ou aumente a cota.';
+      default:
+        return null;
+    }
+  }
+}
+
+class _UploadCancelledException implements Exception {
+  _UploadCancelledException();
 }

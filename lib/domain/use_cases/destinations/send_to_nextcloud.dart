@@ -1,7 +1,7 @@
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
+import 'package:backup_database/domain/use_cases/destinations/destination_use_case.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SendToNextcloud {
@@ -13,35 +13,18 @@ class SendToNextcloud {
     required NextcloudDestinationConfig config,
     String? customFileName,
     UploadProgressCallback? onProgress,
+    bool Function()? isCancelled,
   }) async {
-    if (sourceFilePath.isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'Caminho do arquivo não pode ser vazio'),
-      );
-    }
-    if (config.serverUrl.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'URL do Nextcloud não pode ser vazia'),
-      );
-    }
-    if (config.username.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'Usuário do Nextcloud não pode ser vazio'),
-      );
-    }
-    if (config.appPassword.isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'App Password do Nextcloud não pode ser vazio',
-        ),
-      );
-    }
-    if (config.folderName.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'Nome da pasta do Nextcloud não pode ser vazio',
-        ),
-      );
+    final checks = <(String, String)>[
+      (sourceFilePath, 'Caminho do arquivo'),
+      (config.serverUrl, 'URL do Nextcloud'),
+      (config.username, 'Usuário do Nextcloud'),
+      (config.appPassword, 'App Password do Nextcloud'),
+      (config.folderName, 'Nome da pasta do Nextcloud'),
+    ];
+    for (final (value, label) in checks) {
+      final check = DestinationUseCase.notEmptyOrFailure(value, label);
+      if (check.isError()) return rd.Failure(check.exceptionOrNull()!);
     }
 
     return _service.upload(
@@ -49,6 +32,7 @@ class SendToNextcloud {
       config: config,
       customFileName: customFileName,
       onProgress: onProgress,
+      isCancelled: isCancelled,
     );
   }
 }

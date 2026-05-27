@@ -21,6 +21,24 @@ class LogProvider extends ChangeNotifier with AsyncStateMixin {
   final int _pageSize = 50;
   bool _hasMore = true;
 
+  // Guard contra notifyListeners pós-dispose (vários setters do provider
+  // disparam `unawaited(refresh())` que pode completar após o widget
+  // tree descartar este provider — sem o guard isso lançaria
+  // "A LogProvider was used after being disposed").
+  bool _isDisposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_isDisposed) return;
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
   List<BackupLog> get logs => _logs;
   LogLevel? get filterLevel => _filterLevel;
   LogCategory? get filterCategory => _filterCategory;

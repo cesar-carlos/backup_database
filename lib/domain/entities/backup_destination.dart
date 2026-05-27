@@ -131,7 +131,7 @@ class FtpDestinationConfig {
       port: json['port'] as int? ?? 21,
       username: json['username'] as String,
       password: json['password'] as String,
-      remotePath: json['remotePath'] as String,
+      remotePath: json['remotePath'] as String? ?? '/',
       useFtps: json['useFtps'] as bool? ?? false,
       retentionDays: json['retentionDays'] as int? ?? 30,
       enableResume: json['enableResume'] as bool? ?? true,
@@ -149,6 +149,56 @@ class FtpDestinationConfig {
           json['allowInvalidCertificates'] as bool? ?? true,
     );
   }
+
+  FtpDestinationConfig copyWith({
+    String? host,
+    int? port,
+    String? username,
+    String? password,
+    String? remotePath,
+    bool? useFtps,
+    int? retentionDays,
+    bool? enableResume,
+    bool? keepPartOnCancel,
+    int? maxAttempts,
+    FtpWhenResumeNotSupported? whenResumeNotSupported,
+    bool? enableVerboseLog,
+    int? connectionTimeoutSeconds,
+    int? uploadTimeoutMinutes,
+    bool? enableStrongIntegrityValidation,
+    bool? enableReadBackValidation,
+    bool? allowInvalidCertificates,
+    Set<String>? protectedBackupIdShortPrefixes,
+  }) {
+    return FtpDestinationConfig(
+      host: host ?? this.host,
+      port: port ?? this.port,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      remotePath: remotePath ?? this.remotePath,
+      useFtps: useFtps ?? this.useFtps,
+      retentionDays: retentionDays ?? this.retentionDays,
+      enableResume: enableResume ?? this.enableResume,
+      keepPartOnCancel: keepPartOnCancel ?? this.keepPartOnCancel,
+      maxAttempts: maxAttempts ?? this.maxAttempts,
+      whenResumeNotSupported:
+          whenResumeNotSupported ?? this.whenResumeNotSupported,
+      enableVerboseLog: enableVerboseLog ?? this.enableVerboseLog,
+      connectionTimeoutSeconds:
+          connectionTimeoutSeconds ?? this.connectionTimeoutSeconds,
+      uploadTimeoutMinutes: uploadTimeoutMinutes ?? this.uploadTimeoutMinutes,
+      enableStrongIntegrityValidation:
+          enableStrongIntegrityValidation ??
+          this.enableStrongIntegrityValidation,
+      enableReadBackValidation:
+          enableReadBackValidation ?? this.enableReadBackValidation,
+      allowInvalidCertificates:
+          allowInvalidCertificates ?? this.allowInvalidCertificates,
+      protectedBackupIdShortPrefixes:
+          protectedBackupIdShortPrefixes ?? this.protectedBackupIdShortPrefixes,
+    );
+  }
+
   final String host;
   final int port;
   final String username;
@@ -213,12 +263,32 @@ class GoogleDriveDestinationConfig {
   factory GoogleDriveDestinationConfig.fromJson(Map<String, dynamic> json) {
     return GoogleDriveDestinationConfig(
       folderId: json['folderId'] as String,
-      folderName: json['folderName'] as String,
-      accessToken: json['accessToken'] as String,
-      refreshToken: json['refreshToken'] as String,
+      folderName: json['folderName'] as String? ?? 'Backups',
+      accessToken: json['accessToken'] as String? ?? '',
+      refreshToken: json['refreshToken'] as String? ?? '',
       retentionDays: json['retentionDays'] as int? ?? 30,
     );
   }
+
+  GoogleDriveDestinationConfig copyWith({
+    String? folderId,
+    String? folderName,
+    String? accessToken,
+    String? refreshToken,
+    int? retentionDays,
+    Set<String>? protectedBackupIdShortPrefixes,
+  }) {
+    return GoogleDriveDestinationConfig(
+      folderId: folderId ?? this.folderId,
+      folderName: folderName ?? this.folderName,
+      accessToken: accessToken ?? this.accessToken,
+      refreshToken: refreshToken ?? this.refreshToken,
+      retentionDays: retentionDays ?? this.retentionDays,
+      protectedBackupIdShortPrefixes:
+          protectedBackupIdShortPrefixes ?? this.protectedBackupIdShortPrefixes,
+    );
+  }
+
   final String folderId;
   final String folderName;
   final String accessToken;
@@ -245,11 +315,27 @@ class DropboxDestinationConfig {
 
   factory DropboxDestinationConfig.fromJson(Map<String, dynamic> json) {
     return DropboxDestinationConfig(
-      folderPath: json['folderPath'] as String,
+      folderPath: json['folderPath'] as String? ?? '',
       folderName: json['folderName'] as String? ?? 'Backups',
       retentionDays: json['retentionDays'] as int? ?? 30,
     );
   }
+
+  DropboxDestinationConfig copyWith({
+    String? folderPath,
+    String? folderName,
+    int? retentionDays,
+    Set<String>? protectedBackupIdShortPrefixes,
+  }) {
+    return DropboxDestinationConfig(
+      folderPath: folderPath ?? this.folderPath,
+      folderName: folderName ?? this.folderName,
+      retentionDays: retentionDays ?? this.retentionDays,
+      protectedBackupIdShortPrefixes:
+          protectedBackupIdShortPrefixes ?? this.protectedBackupIdShortPrefixes,
+    );
+  }
+
   final String folderPath;
   final String folderName;
   final int retentionDays;
@@ -274,6 +360,8 @@ class NextcloudDestinationConfig {
     this.folderName = 'Backups',
     this.allowInvalidCertificates = false,
     this.retentionDays = 30,
+    this.enableStrongIntegrityValidation = false,
+    this.enableReadBackValidation = false,
     this.protectedBackupIdShortPrefixes = const {},
   });
 
@@ -294,8 +382,46 @@ class NextcloudDestinationConfig {
       allowInvalidCertificates:
           json['allowInvalidCertificates'] as bool? ?? false,
       retentionDays: json['retentionDays'] as int? ?? 30,
+      enableStrongIntegrityValidation:
+          json['enableStrongIntegrityValidation'] as bool? ?? false,
+      enableReadBackValidation:
+          json['enableReadBackValidation'] as bool? ?? false,
     );
   }
+
+  NextcloudDestinationConfig copyWith({
+    String? serverUrl,
+    String? username,
+    String? appPassword,
+    NextcloudAuthMode? authMode,
+    String? remotePath,
+    String? folderName,
+    bool? allowInvalidCertificates,
+    int? retentionDays,
+    bool? enableStrongIntegrityValidation,
+    bool? enableReadBackValidation,
+    Set<String>? protectedBackupIdShortPrefixes,
+  }) {
+    return NextcloudDestinationConfig(
+      serverUrl: serverUrl ?? this.serverUrl,
+      username: username ?? this.username,
+      appPassword: appPassword ?? this.appPassword,
+      authMode: authMode ?? this.authMode,
+      remotePath: remotePath ?? this.remotePath,
+      folderName: folderName ?? this.folderName,
+      allowInvalidCertificates:
+          allowInvalidCertificates ?? this.allowInvalidCertificates,
+      retentionDays: retentionDays ?? this.retentionDays,
+      enableStrongIntegrityValidation:
+          enableStrongIntegrityValidation ??
+          this.enableStrongIntegrityValidation,
+      enableReadBackValidation:
+          enableReadBackValidation ?? this.enableReadBackValidation,
+      protectedBackupIdShortPrefixes:
+          protectedBackupIdShortPrefixes ?? this.protectedBackupIdShortPrefixes,
+    );
+  }
+
   final String serverUrl;
   final String username;
   final String appPassword;
@@ -304,6 +430,8 @@ class NextcloudDestinationConfig {
   final String folderName;
   final bool allowInvalidCertificates;
   final int retentionDays;
+  final bool enableStrongIntegrityValidation;
+  final bool enableReadBackValidation;
   final Set<String> protectedBackupIdShortPrefixes;
 
   Map<String, dynamic> toJson() => {
@@ -315,5 +443,7 @@ class NextcloudDestinationConfig {
     'folderName': folderName,
     'allowInvalidCertificates': allowInvalidCertificates,
     'retentionDays': retentionDays,
+    'enableStrongIntegrityValidation': enableStrongIntegrityValidation,
+    'enableReadBackValidation': enableReadBackValidation,
   };
 }

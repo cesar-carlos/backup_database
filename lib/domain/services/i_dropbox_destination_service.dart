@@ -22,6 +22,7 @@ abstract class IDropboxDestinationService {
     String? customFileName,
     int maxRetries = 3,
     UploadProgressCallback? onProgress,
+    bool Function()? isCancelled,
   });
 
   Future<rd.Result<bool>> testConnection(DropboxDestinationConfig config);

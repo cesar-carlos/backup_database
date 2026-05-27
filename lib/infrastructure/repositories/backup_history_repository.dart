@@ -283,6 +283,13 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
         // Envolve todos os updates em uma transação para garantir
         // atomicidade (`reconcileStaleRunning` não pode deixar parte dos
         // jobs zumbis em estado intermediário se o app cair no meio).
+        //
+        // **Importante**: usa `updateHistoryIfRunning` (write com guard
+        // `status = running`) em vez de `updateHistory` (replace
+        // incondicional). Sem o guard, um job que terminou com sucesso
+        // entre `getRunningStartedBefore` (linha 274) e este UPDATE
+        // seria sobrescrito para `error`, gerando falso negativo no
+        // histórico do usuário.
         var updated = 0;
         await _database.transaction(() async {
           for (final row in rows) {
@@ -297,10 +304,9 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
                   .inSeconds,
             );
             final companion = _toCompanion(reconciled);
-            final ok = await _database.backupHistoryDao.updateHistory(
-              companion,
-            );
-            if (ok) updated++;
+            final rowsAffected = await _database.backupHistoryDao
+                .updateHistoryIfRunning(companion);
+            if (rowsAffected > 0) updated++;
           }
         });
         return updated;

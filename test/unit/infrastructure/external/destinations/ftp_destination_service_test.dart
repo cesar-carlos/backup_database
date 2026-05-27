@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart' hide FtpFailure;
@@ -101,5 +102,144 @@ void main() {
         },
       );
     });
+  });
+
+  group('FtpDestinationService.getFtpErrorMessage', () {
+    const host = 'ftp.example.com';
+
+    test('TimeoutException maps to "Tempo limite excedido"', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        TimeoutException('op timed out'),
+        host,
+      );
+      expect(msg, contains('Tempo limite excedido'));
+      expect(msg, contains(host));
+    });
+
+    test('SocketException maps to connection error', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        const SocketException('Connection refused'),
+        host,
+      );
+      expect(msg, contains('Erro de conexão'));
+      expect(msg, contains(host));
+    });
+
+    test('TlsException maps to TLS error', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        const TlsException('bad cert'),
+        host,
+      );
+      expect(msg, contains('TLS/SSL'));
+    });
+
+    test('HandshakeException maps to TLS error', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        const HandshakeException('handshake failed'),
+        host,
+      );
+      expect(msg, contains('TLS/SSL'));
+    });
+
+    test('FTP 530 in error string maps to authentication error', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        Exception('FTP Response: 530 Login authentication failed.'),
+        host,
+      );
+      expect(msg, contains('autenticação'));
+    });
+
+    test('FTP 550 in error string maps to permission error', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        Exception('FTP Response: 550 Permission denied.'),
+        host,
+      );
+      expect(msg, contains('permissão'));
+    });
+
+    test('FTP 452 in error string maps to disk space error', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        Exception('452 Insufficient storage space.'),
+        host,
+      );
+      expect(msg, contains('espaço em disco'));
+    });
+
+    test(
+      'unrelated digit sequences containing 530/550/452 do NOT match codes',
+      () {
+        // "11530" e "5500" não são códigos FTP isolados — devem cair no
+        // fallback genérico.
+        final msg = FtpDestinationService.getFtpErrorMessage(
+          Exception('unexpected error 11530 internal id 5500 buf 4520'),
+          host,
+        );
+        expect(msg, contains('Erro no upload FTP'));
+        expect(msg, isNot(contains('autenticação')));
+        expect(msg, isNot(contains('permissão')));
+        expect(msg, isNot(contains('espaço em disco')));
+      },
+    );
+
+    test('"hostname" substring matches as connection error', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        Exception('Unknown hostname'),
+        host,
+      );
+      expect(msg, contains('Erro de conexão'));
+    });
+
+    test('unknown error falls back to generic message', () {
+      final msg = FtpDestinationService.getFtpErrorMessage(
+        Exception('something unexpected'),
+        host,
+      );
+      expect(msg, contains('Erro no upload FTP'));
+      expect(msg, contains(host));
+    });
+  });
+
+  group('FtpDestinationService.buildRemotePartName', () {
+    test('uses runId + destinationId when both are provided', () {
+      final name = FtpDestinationService.buildRemotePartName(
+        finalFileName: 'backup.bak',
+        runId: 'run123',
+        destinationId: 'dest456',
+      );
+      expect(name, 'backup.bak.run123_dest456.part');
+    });
+
+    test('uses runId only when destinationId is empty', () {
+      final name = FtpDestinationService.buildRemotePartName(
+        finalFileName: 'backup.bak',
+        runId: 'run123',
+        destinationId: '',
+      );
+      expect(name, 'backup.bak.run123.part');
+    });
+
+    test('sanitizes unsafe characters from token', () {
+      final name = FtpDestinationService.buildRemotePartName(
+        finalFileName: 'backup.bak',
+        runId: 'run/123',
+        destinationId: 'dest:456',
+      );
+      expect(name, 'backup.bak.run_123_dest_456.part');
+    });
+
+    test(
+      'fallback (no runId/destinationId) generates unique names even '
+      'when called within the same millisecond',
+      () {
+        final names = List.generate(
+          50,
+          (_) => FtpDestinationService.buildRemotePartName(
+            finalFileName: 'backup.bak',
+          ),
+        ).toSet();
+        // Sem o sufixo aleatório, vários nomes colidiriam no mesmo ms.
+        expect(names.length, equals(50));
+      },
+    );
   });
 }

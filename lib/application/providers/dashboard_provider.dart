@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
@@ -76,7 +77,16 @@ class DashboardProvider extends ChangeNotifier with AsyncStateMixin {
 
     result.fold(
       (report) => _metricsReport = report,
-      (_) => _metricsReport = null,
+      (failure) {
+        // Métricas são opcionais (não bloqueiam o resto do dashboard),
+        // mas a falha NÃO deve ser silenciosa — sem log o usuário não
+        // distingue "sem dados" de "falhou ao buscar".
+        LoggerService.warning(
+          'Erro ao carregar relatório de métricas: '
+          '${AsyncStateMixin.extractFailureMessage(failure)}',
+        );
+        _metricsReport = null;
+      },
     );
   }
 
@@ -86,7 +96,13 @@ class DashboardProvider extends ChangeNotifier with AsyncStateMixin {
     final result = await manager.getServerMetrics();
     result.fold(
       (metrics) => _serverMetrics = metrics,
-      (_) => _serverMetrics = null,
+      (failure) {
+        LoggerService.warning(
+          'Erro ao carregar métricas do servidor: '
+          '${AsyncStateMixin.extractFailureMessage(failure)}',
+        );
+        _serverMetrics = null;
+      },
     );
   }
 

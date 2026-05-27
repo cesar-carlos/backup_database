@@ -15,7 +15,7 @@ void main() {
 
   setUp(() {
     repository = _MockBackupHistoryRepository();
-    useCase = GetSybaseBackupHealth(repository, maxDaysForBaseFull: 7);
+    useCase = GetSybaseBackupHealth(repository);
   });
 
   BackupHistory build({

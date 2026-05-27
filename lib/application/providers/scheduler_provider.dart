@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
@@ -143,8 +144,21 @@ class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
     final scheduleName = schedule?.name ?? 'Backup';
     final progressProvider = _progressProvider;
 
+    // Reserva o slot de progresso com mutex (substitui o legado
+    // `startBackup` que sobrescrevia o estado mesmo com backup concorrente).
+    // Se um backup remoto / outro `executeNow` já estiver rodando, aborta
+    // antes de invocar o orchestrator para evitar duas execuções
+    // simultâneas com o mesmo notifier de progresso.
+    var reservedProgressSlot = false;
     if (progressProvider != null) {
-      progressProvider.startBackup(scheduleName);
+      reservedProgressSlot = progressProvider.tryStartBackup(scheduleName);
+      if (!reservedProgressSlot) {
+        setErrorManual(
+          'Já existe um backup em execução. Aguarde a conclusão para '
+          'iniciar outro.',
+        );
+        return false;
+      }
       progressProvider.updateProgressWithStep(
         step: BackupStep.executingBackup,
         message: 'Executando backup do banco de dados...',
@@ -159,11 +173,6 @@ class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
         return result.fold(
           (_) {
             if (progressProvider != null) {
-              progressProvider.updateProgressWithStep(
-                step: BackupStep.completed,
-                message: 'Backup concluído com sucesso!',
-                progress: 1,
-              );
               progressProvider.completeBackup(
                 message: 'Backup concluído com sucesso!',
               );
@@ -175,7 +184,7 @@ class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
       },
     );
 
-    if (!(ok ?? false) && progressProvider != null) {
+    if (!(ok ?? false) && progressProvider != null && reservedProgressSlot) {
       progressProvider.failBackup(error ?? 'Erro desconhecido');
     }
     return ok ?? false;
@@ -209,24 +218,61 @@ class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
     return null;
   }
 
+  /// Retorna agendamentos vinculados a um banco de dados.
+  ///
+  /// Retorna `null` apenas em **falha de leitura** (logada como warning).
+  /// Lista vazia (`[]`) significa "nenhum schedule vinculado" e é
+  /// distinguível do erro. Antes, ambos viravam `null` indistinguível.
   Future<List<Schedule>?> getSchedulesByDatabaseConfig(
     String databaseConfigId,
   ) async {
     try {
       final result = await _repository.getByDatabaseConfig(databaseConfigId);
-      return result.fold((schedules) => schedules, (failure) => null);
-    } on Object {
+      return result.fold(
+        (schedules) => schedules,
+        (failure) {
+          LoggerService.warning(
+            'Erro ao buscar schedules por database config '
+            '($databaseConfigId): ${AsyncStateMixin.extractFailureMessage(failure)}',
+          );
+          return null;
+        },
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Exceção inesperada ao buscar schedules por database config '
+        '($databaseConfigId)',
+        e,
+        s,
+      );
       return null;
     }
   }
 
+  /// Retorna agendamentos vinculados a um destino de backup.
+  /// Mesma semântica de erro/empty de [getSchedulesByDatabaseConfig].
   Future<List<Schedule>?> getSchedulesByDestination(
     String destinationId,
   ) async {
     try {
       final result = await _repository.getByDestinationId(destinationId);
-      return result.fold((schedules) => schedules, (failure) => null);
-    } on Object {
+      return result.fold(
+        (schedules) => schedules,
+        (failure) {
+          LoggerService.warning(
+            'Erro ao buscar schedules por destination ($destinationId): '
+            '${AsyncStateMixin.extractFailureMessage(failure)}',
+          );
+          return null;
+        },
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Exceção inesperada ao buscar schedules por destination '
+        '($destinationId)',
+        e,
+        s,
+      );
       return null;
     }
   }

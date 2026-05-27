@@ -1,7 +1,7 @@
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
+import 'package:backup_database/domain/use_cases/destinations/destination_use_case.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SendToDropbox {
@@ -13,18 +13,20 @@ class SendToDropbox {
     required DropboxDestinationConfig config,
     String? customFileName,
     UploadProgressCallback? onProgress,
+    bool Function()? isCancelled,
   }) async {
-    if (sourceFilePath.isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'Caminho do arquivo não pode ser vazio'),
-      );
-    }
-    if (config.folderName.isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'Nome da pasta do Dropbox não pode ser vazio',
-        ),
-      );
+    final pathCheck = DestinationUseCase.notEmptyOrFailure(
+      sourceFilePath,
+      'Caminho do arquivo',
+    );
+    if (pathCheck.isError()) return rd.Failure(pathCheck.exceptionOrNull()!);
+
+    final folderCheck = DestinationUseCase.notEmptyOrFailure(
+      config.folderName,
+      'Nome da pasta do Dropbox',
+    );
+    if (folderCheck.isError()) {
+      return rd.Failure(folderCheck.exceptionOrNull()!);
     }
 
     return _service.upload(
@@ -32,6 +34,7 @@ class SendToDropbox {
       config: config,
       customFileName: customFileName,
       onProgress: onProgress,
+      isCancelled: isCancelled,
     );
   }
 }

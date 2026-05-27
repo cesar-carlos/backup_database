@@ -164,6 +164,60 @@ void main() {
       );
       expect(breaker.state, CircuitState.open);
     });
+
+    test(
+      'half-open limits to a single in-flight probe (tryAcquire semantics)',
+      () async {
+        final breaker = CircuitBreaker(
+          key: 'dest-1',
+          failureThreshold: 1,
+          openDuration: const Duration(milliseconds: 30),
+        );
+
+        breaker.recordFailure(
+          BackupFailure(
+            message: 'fail',
+            originalError: TimeoutException('timeout'),
+          ),
+        );
+        expect(breaker.state, CircuitState.open);
+
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+
+        // 1ª probe é permitida (reserva o slot in-flight).
+        expect(breaker.tryAcquire(), isTrue);
+        expect(breaker.state, CircuitState.halfOpen);
+
+        // 2ª probe simultânea (sem liberar a anterior) deve ser
+        // rejeitada — antes do fix, half-open permitia múltiplas
+        // requisições concorrentes saturando o destino frágil.
+        expect(breaker.tryAcquire(), isFalse);
+      },
+    );
+
+    test(
+      'recordSuccess em estado open NÃO fecha o circuito sem passar por '
+      'half-open probe',
+      () async {
+        final breaker = CircuitBreaker(
+          key: 'dest-1',
+          failureThreshold: 1,
+        );
+
+        breaker.recordFailure(
+          BackupFailure(
+            message: 'fail',
+            originalError: TimeoutException('timeout'),
+          ),
+        );
+        expect(breaker.state, CircuitState.open);
+
+        // Sucesso inesperado em open (caller ignorou tryAcquire/allowsRequest).
+        // Antes este caminho fechava o circuito; agora apenas avisa.
+        breaker.recordSuccess();
+        expect(breaker.state, CircuitState.open);
+      },
+    );
   });
 
   group('CircuitBreakerRegistry', () {

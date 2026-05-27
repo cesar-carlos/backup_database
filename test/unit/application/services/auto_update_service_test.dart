@@ -681,7 +681,7 @@ void main() {
     test(
       'compactDiagnosticsLines descarta linhas com schemaVersion futura',
       () async {
-        final now = DateTime.utc(2026, 1, 1);
+        final now = DateTime.utc(2026);
         final futureRecord = jsonEncode(<String, Object?>{
           'schemaVersion': AutoUpdateService.diagnosticsSchemaVersion + 1,
           'timestamp': now.subtract(const Duration(hours: 1)).toIso8601String(),
@@ -720,7 +720,7 @@ void main() {
         downloadUrl: 'https://example.com/x.exe',
         fileSizeBytes: 1,
         sha256: 'a',
-        publishedAt: DateTime.utc(2026, 5, 1),
+        publishedAt: DateTime.utc(2026, 5),
         title: 'Version 3.5.0',
         description: '',
         minSupportedAppVersion: Version.parse('3.4.0'),
@@ -745,7 +745,7 @@ void main() {
         downloadUrl: 'https://example.com/x.exe',
         fileSizeBytes: 1,
         sha256: 'a',
-        publishedAt: DateTime.utc(2026, 5, 1),
+        publishedAt: DateTime.utc(2026, 5),
         title: 'Version 3.5.0',
         description: '',
         rolloutPercentage: 0,
@@ -765,7 +765,7 @@ void main() {
         downloadUrl: 'https://example.com/x.exe',
         fileSizeBytes: 1,
         sha256: 'a',
-        publishedAt: DateTime.utc(2026, 5, 1),
+        publishedAt: DateTime.utc(2026, 5),
         title: 'Version 3.5.0',
         description: '',
         rolloutPercentage: 100,
@@ -791,7 +791,7 @@ void main() {
         downloadUrl: 'https://example.com/x.exe',
         fileSizeBytes: 1,
         sha256: 'a',
-        publishedAt: DateTime.utc(2026, 5, 1),
+        publishedAt: DateTime.utc(2026, 5),
         title: 'Version 3.5.0',
         description: '',
         rolloutPercentage: 50,

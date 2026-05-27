@@ -238,7 +238,7 @@ void main() {
     );
 
     test(
-      'restore_update_state accepts NT AUTHORITY\\SYSTEM and System aliases',
+      r'restore_update_state accepts NT AUTHORITY\SYSTEM and System aliases',
       () async {
         for (final account in <String>[
           r'NT AUTHORITY\SYSTEM',
