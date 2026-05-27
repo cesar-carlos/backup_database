@@ -15,6 +15,12 @@ class FileTransfersTable extends Table {
   TextColumn get destinationPath => text()();
   TextColumn get checksum => text()();
 
+  /// PR-6: rastreabilidade ponta-a-ponta por `runId` de execucao remota.
+  /// Permite cliente correlacionar transferencia com `getExecutionStatus`,
+  /// logs e historico do servidor. Nullable para preservar compat com
+  /// linhas pre-v34 e com fluxos locais (sem `runId`).
+  TextColumn get runId => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

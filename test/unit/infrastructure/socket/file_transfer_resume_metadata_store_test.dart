@@ -75,5 +75,78 @@ void main() {
       final metadataFile = File('$outputPath.part.meta.json');
       expect(await metadataFile.exists(), isFalse);
     });
+
+    group('PR-6: runId em FileTransferResumeMetadata', () {
+      test('write + read preserva runId', () async {
+        final metadata = FileTransferResumeMetadata(
+          filePath: 'remote/run-1/backup.zip',
+          partFilePath: '$outputPath.part',
+          chunkSize: 131072,
+          scheduleId: 'schedule-1',
+          runId: 'schedule-1_abc123',
+          updatedAt: DateTime.now().toUtc(),
+        );
+        await store.write(outputPath, metadata);
+        final restored = await store.read(outputPath);
+        expect(restored?.runId, 'schedule-1_abc123');
+      });
+
+      test('matchesRunId: ambos nulos -> permite resume (compat pre-PR-6)', () {
+        final metadata = FileTransferResumeMetadata(
+          filePath: 'p',
+          partFilePath: 'pp',
+          chunkSize: 1,
+          updatedAt: DateTime.now().toUtc(),
+        );
+        expect(metadata.matchesRunId(null), isTrue);
+        expect(metadata.matchesRunId(''), isTrue);
+      });
+
+      test('matchesRunId: requested presente, metadata nulo -> permite '
+          '(metadata legado nao bloqueia resume novo)', () {
+        final metadata = FileTransferResumeMetadata(
+          filePath: 'p',
+          partFilePath: 'pp',
+          chunkSize: 1,
+          updatedAt: DateTime.now().toUtc(),
+        );
+        expect(metadata.matchesRunId('run-novo'), isTrue);
+      });
+
+      test('matchesRunId: metadata presente, requested nulo -> permite '
+          '(cliente nao identificou runId; tolera)', () {
+        final metadata = FileTransferResumeMetadata(
+          filePath: 'p',
+          partFilePath: 'pp',
+          chunkSize: 1,
+          runId: 'run-A',
+          updatedAt: DateTime.now().toUtc(),
+        );
+        expect(metadata.matchesRunId(null), isTrue);
+      });
+
+      test('matchesRunId: ambos presentes e iguais -> permite', () {
+        final metadata = FileTransferResumeMetadata(
+          filePath: 'p',
+          partFilePath: 'pp',
+          chunkSize: 1,
+          runId: 'run-A',
+          updatedAt: DateTime.now().toUtc(),
+        );
+        expect(metadata.matchesRunId('run-A'), isTrue);
+      });
+
+      test('matchesRunId: ambos presentes e diferentes -> bloqueia '
+          '(parcial pertence a outra execucao)', () {
+        final metadata = FileTransferResumeMetadata(
+          filePath: 'p',
+          partFilePath: 'pp',
+          chunkSize: 1,
+          runId: 'run-A',
+          updatedAt: DateTime.now().toUtc(),
+        );
+        expect(metadata.matchesRunId('run-B'), isFalse);
+      });
+    });
   });
 }

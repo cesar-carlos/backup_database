@@ -111,4 +111,11 @@ enum MessageType {
   updateDatabaseConfigRequest,
   deleteDatabaseConfigRequest,
   databaseConfigMutationResponse,
+  // PR-6: evento separado de cancelamento. Antes, cancelamento manual
+  // resultava em `backupFailed` indistinguivel de falha real — outros
+  // clientes ouvindo o mesmo `runId` ficavam orfaos sem saber se foi
+  // cancel ou erro. `backupCancelled` carrega `runId`, `scheduleId`,
+  // `cancelledBy` (clientId), `occurredAt`, `eventId`, `sequence` para
+  // dedup/ordenacao identica aos demais eventos.
+  backupCancelled,
 }

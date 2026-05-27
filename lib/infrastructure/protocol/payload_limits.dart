@@ -126,6 +126,12 @@ class PayloadLimits {
     MessageType.cancelQueuedBackupRequest: 4 * 1024,
     MessageType.cancelQueuedBackupResponse: 4 * 1024,
 
+    // ---- PR-6: backupCancelled event ----
+    // Mesmo tamanho dos outros eventos de fila — carrega runId,
+    // scheduleId, cancelledBy, occurredAt, reason opcional, eventId,
+    // sequence. ~ 1KB confortavel.
+    MessageType.backupCancelled: 4 * 1024,
+
     // ---- Diagnostico operacional (PR-3 commit final) ----
     // request: so runId/configId. response: pode ter logs (256KB
     // confortavel para milhares de linhas), error details (16KB),

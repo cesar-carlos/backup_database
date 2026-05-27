@@ -71,6 +71,9 @@ class ExecutionQueueDao extends DatabaseAccessor<AppDatabase>
           requestId: item.requestId,
           requestedBy: item.requestedBy,
           queuedAtMicros: item.queuedAt.microsecondsSinceEpoch,
+          // PR-6: TTL persistido (microseconds since epoch) ou null para
+          // itens sem TTL (compat).
+          expiresAtMicros: Value(item.expiresAt?.microsecondsSinceEpoch),
         ),
       );
       return true;
@@ -85,6 +88,9 @@ class ExecutionQueueDao extends DatabaseAccessor<AppDatabase>
       requestId: row.requestId,
       requestedBy: row.requestedBy,
       queuedAt: DateTime.fromMicrosecondsSinceEpoch(row.queuedAtMicros),
+      expiresAt: row.expiresAtMicros != null
+          ? DateTime.fromMicrosecondsSinceEpoch(row.expiresAtMicros!)
+          : null,
     );
   }
 }

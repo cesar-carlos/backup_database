@@ -24,6 +24,8 @@ class BackupProgress {
     this.backupPath,
     this.historyId,
     this.cancelRequested = false,
+    this.cancelled = false,
+    this.cancelReason,
   });
   final BackupStep step;
   final String message;
@@ -40,6 +42,14 @@ class BackupProgress {
   /// renderizar feedback "Cancelando..." enquanto o processo termina.
   final bool cancelRequested;
 
+  /// PR-6: `true` quando a terminação foi por cancelamento (vs falha).
+  /// Permite que listeners distingam evento `backupCancelled` de
+  /// `backupFailed` sem precisar inferir pelo texto do erro.
+  final bool cancelled;
+
+  /// Motivo do cancelamento ('operador', 'watchdog timeout', 'hard limit').
+  final String? cancelReason;
+
   BackupProgress copyWith({
     BackupStep? step,
     String? message,
@@ -50,6 +60,8 @@ class BackupProgress {
     String? backupPath,
     String? historyId,
     bool? cancelRequested,
+    bool? cancelled,
+    String? cancelReason,
   }) {
     return BackupProgress(
       step: step ?? this.step,
@@ -61,6 +73,8 @@ class BackupProgress {
       backupPath: backupPath ?? this.backupPath,
       historyId: historyId ?? this.historyId,
       cancelRequested: cancelRequested ?? this.cancelRequested,
+      cancelled: cancelled ?? this.cancelled,
+      cancelReason: cancelReason ?? this.cancelReason,
     );
   }
 }
@@ -88,6 +102,8 @@ class BackupProgressProvider extends ChangeNotifier
       backupPath: p.backupPath,
       error: p.error,
       historyId: p.historyId,
+      cancelled: p.cancelled,
+      cancelReason: p.cancelReason,
     );
   }
 
@@ -280,6 +296,25 @@ class BackupProgressProvider extends ChangeNotifier
       message: 'Erro no backup',
       error: error,
       elapsed: elapsed,
+    );
+    notifyListeners();
+  }
+
+  @override
+  void cancelBackup(String reason) {
+    _isRunning = false;
+    _currentScheduleName = null;
+    final elapsed = _currentProgress?.startedAt != null
+        ? DateTime.now().difference(_currentProgress!.startedAt!)
+        : null;
+
+    _currentProgress = _currentProgress?.copyWith(
+      step: BackupStep.error,
+      message: 'Backup cancelado',
+      error: reason,
+      elapsed: elapsed,
+      cancelled: true,
+      cancelReason: reason,
     );
     notifyListeners();
   }

@@ -317,7 +317,11 @@ void main() {
             logMessage: any(named: 'logMessage'),
           ),
         ).called(1);
-        verify(() => progressNotifier.failBackup(any())).called(1);
+        // PR-6: cancelamento agora delega para `cancelBackup` (em vez
+        // de `failBackup`) para que `ScheduleMessageHandler` emita
+        // `backupCancelled` distinto de `backupFailed`.
+        verify(() => progressNotifier.cancelBackup(any())).called(1);
+        verifyNever(() => progressNotifier.failBackup(any()));
       },
     );
 

@@ -330,6 +330,7 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       finishedAt: data.finishedAt,
       durationSeconds: data.durationSeconds,
       metrics: BackupMetrics.fromJson(data.metrics),
+      lastProgressAt: data.lastProgressAt,
     );
   }
 
@@ -365,6 +366,7 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
       finishedAt: Value(history.finishedAt),
       durationSeconds: Value(history.durationSeconds),
       metrics: Value(metricsJson != null ? jsonEncode(metricsJson) : null),
+      lastProgressAt: Value(history.lastProgressAt),
     );
   }
 }

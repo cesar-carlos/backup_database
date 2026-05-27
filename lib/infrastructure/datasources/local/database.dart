@@ -30,6 +30,7 @@ part 'database.g.dart';
     MachineSettingsTable,
     ExecutionQueueItemsTable,
     IdempotencyEntriesTable,
+    MutableCommandAuditTable,
     ServerCredentialsTable,
     ConnectionLogsTable,
     ServerConnectionsTable,
@@ -52,6 +53,7 @@ part 'database.g.dart';
     MachineSettingsDao,
     ExecutionQueueDao,
     IdempotencyDao,
+    MutableCommandAuditDao,
     ServerCredentialDao,
     ConnectionLogDao,
     ServerConnectionDao,
@@ -68,7 +70,7 @@ class AppDatabase extends _$AppDatabase implements IAppDatabaseLifecycle {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 33;
+  int get schemaVersion => 35;
 
   @override
   MigrationStrategy get migration {
@@ -1007,6 +1009,78 @@ class AppDatabase extends _$AppDatabase implements IAppDatabaseLifecycle {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v33 para idempotency_entries_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 34) {
+          // PR-6: 3 novas colunas em tabelas existentes.
+          // - watchdog runtime: backup_history_table.last_progress_at
+          // - TTL fila: execution_queue_items_table.expires_at_micros
+          // - rastreabilidade local por runId: file_transfers_table.run_id
+          // Cada `addColumn` em try/catch separado para que falha em uma
+          // nao bloqueie as outras (padrao seguido nas v31/v32/v33).
+          try {
+            await m.addColumn(
+              backupHistoryTable,
+              backupHistoryTable.lastProgressAt,
+            );
+            LoggerService.info(
+              'Migração v34a: backup_history_table.last_progress_at (PR-6 watchdog).',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v34a: backup_history_table.last_progress_at',
+              e,
+              stackTrace,
+            );
+          }
+          try {
+            await m.addColumn(
+              executionQueueItemsTable,
+              executionQueueItemsTable.expiresAtMicros,
+            );
+            LoggerService.info(
+              'Migração v34b: execution_queue_items_table.expires_at_micros (PR-6 TTL fila).',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v34b: execution_queue_items_table.expires_at_micros',
+              e,
+              stackTrace,
+            );
+          }
+          try {
+            await m.addColumn(
+              fileTransfersTable,
+              fileTransfersTable.runId,
+            );
+            LoggerService.info(
+              'Migração v34c: file_transfers_table.run_id (PR-6 rastreabilidade).',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v34c: file_transfers_table.run_id',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 35) {
+          // PR-6: audit log persistente para `SocketServerTelemetry`.
+          // Mantem ate `BackupConstants.auditRetentionPeriod` (30d default).
+          try {
+            await m.createTable(mutableCommandAuditTable);
+            LoggerService.info(
+              'Migração v35: mutable_command_audit_table criada '
+              '(PR-6 audit persistence).',
+            );
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v35: mutable_command_audit_table',
               e,
               stackTrace,
             );

@@ -1,8 +1,56 @@
 # Plano: Cliente Consumindo Recursos do Servidor (Backup Remoto Orquestrado)
 
 Data base: 2026-02-21
-Atualizado em: 2026-04-23
-Status: **PR-1 + PR-2 + PR-3 + Wirings DI + fila persistente (2026-04-19)** — Mesmo escopo PR-1/2/3 anterior **+ F2.16 (fila)**. **PR-3c (base 2026-04-23)**: `getExecutionStatus` / `executionStatusRequest` com **registry → `running`**, **fila Drift → `queued`** (+ `queuedPosition`), **historico com `runId` → `completed` / `failed` / `cancelled`**, caindo em `**notFound**` se nada casar; `BackupHistory.runId` (Drift **v31**) preenchido em novas execucoes; linhas anteriores a migracao **sem** `runId` continuam sem resolucao por historico. **1156 testes** (2026-04-23, 11 skipped; +8 em `execution_status` / `execution_queue` PR-3c). **PR-4 (parcial)**: entregas anteriores + **M5.3 thresholds staging** + **lease de transferencia (v1 JSON)**: `owner` = `clientId`, `runId` opcional no `fileTransferStart`, `acquiredAt`/`expiresAt` com TTL default 30 min (`kDefaultTransferLeaseTtl`); re-aquisicao pelo mesmo owner ou pelo mesmo `runId` (re-sincronizacao); legado (só ISO no `.lock`) ainda bloqueia ate expirar; `cleanupExpiredLocks` no bootstrap do socket (`main.dart` antes de `socketServer.start()`). **PR-4 health staging (2026-04-23)**: `getServerHealth` / `healthResponse` inclui `stagingUsageBytes`, `stagingUsageWarnThresholdBytes`, `stagingUsageBlockThresholdBytes`, `stagingUsageLevel` (espelhando metricas); `ServerHealth` ganhou getters e campos opcionais; `warn`/`block` puxam `degraded` + mensagem. **Pendente PR-4 (opcional)**: nada critico; seguir ADR-001/PR-3c/PR-5. **Concluido em 2026-04-23 (rodada anterior)**: `supportsExecutionQueue: true`; modo serviço Windows + ADR-002. **ADR-001/PR-5** ver plano.
+Atualizado em: 2026-05-27
+Status: **PR-1 + PR-2 + PR-3 + Wirings DI + fila persistente (2026-04-19)** — Mesmo escopo PR-1/2/3 anterior **+ F2.16 (fila)**. **PR-3c (base 2026-04-23)**: `getExecutionStatus` / `executionStatusRequest` com **registry → `running`**, **fila Drift → `queued`** (+ `queuedPosition`), **historico com `runId` → `completed` / `failed` / `cancelled`**, caindo em `**notFound**` se nada casar; `BackupHistory.runId` (Drift **v31**) preenchido em novas execucoes; linhas anteriores a migracao **sem** `runId` continuam sem resolucao por historico. **PR-4 (parcial)**: entregas anteriores + **M5.3 thresholds staging** + **lease de transferencia (v1 JSON)**: `owner` = `clientId`, `runId` opcional no `fileTransferStart`, `acquiredAt`/`expiresAt` com TTL default 30 min (`kDefaultTransferLeaseTtl`); re-aquisicao pelo mesmo owner ou pelo mesmo `runId` (re-sincronizacao); legado (só ISO no `.lock`) ainda bloqueia ate expirar; `cleanupExpiredLocks` no bootstrap do socket (`main.dart` antes de `socketServer.start()`). **PR-4 health staging (2026-04-23)**: `getServerHealth` / `healthResponse` inclui `stagingUsageBytes`, `stagingUsageWarnThresholdBytes`, `stagingUsageBlockThresholdBytes`, `stagingUsageLevel` (espelhando metricas); `ServerHealth` ganhou getters e campos opcionais; `warn`/`block` puxam `degraded` + mensagem. **Concluido em 2026-04-23 (rodada anterior)**: `supportsExecutionQueue: true`; modo serviço Windows + ADR-002. **ADR-001/PR-5** ver plano.
+
+## Sincronizacao 2026-05-27 (PR-6)
+
+**Atualizacao de baseline factual** apos auditoria 2026-05-27:
+
+- **Tests reais**: ~~1156~~ → **1963** (1950 passed + 13 skipped).
+- **Drift schema**: ~~v30 (fila) / v31 (runId)~~ → **v33** (v32 Firebird, v33 idempotency persistence).
+- **`kCurrentProtocolVersion`**: ~~1~~ → **2** (PR-G Firebird remoto).
+- **Capability flags**: ~~5~~ → **6** (`supportsRunId`, `supportsResume`, `supportsArtifactRetention`, `supportsChunkAck`, `supportsExecutionQueue`, **`supportsFirebird`** novo).
+
+### PR-G Firebird Remoto (entregue ~2026-05, fora do escopo original)
+
+- `FirebirdConfigsTable` + DAO + repository (Drift v32).
+- Capability `supportsFirebird` em `lib/infrastructure/protocol/capabilities_messages.dart`.
+- `ErrorCode.unsupportedDatabaseType` (`UNSUPPORTED_DATABASE_TYPE`) para rejeitar Firebird em servidores antigos.
+- `kCurrentProtocolVersion = 2` em `lib/infrastructure/protocol/protocol_versions.dart`.
+- `SocketHandlerPolicies.rejectIfFirebirdUnsupported` centraliza o padrao em 4 handlers.
+- ADR-014 (`docs/adr/014-firebird-cli-assumptions.md`) documenta premissas.
+
+### Itens marcados como pendentes neste plano que ja foram entregues (validados pela auditoria PR-6)
+
+- [x] **M5.1 — Rate limit por cliente** (ENTREGUE) — `lib/infrastructure/socket/server/socket_rate_limiter.dart`, instanciado em `client_handler.dart:74`. Janela deslizante req/s + mutacoes/min. `ErrorCode.rateLimitExceeded` → 429 com `retryAfterSeconds`.
+- [~] **M5.2 — Audit log estruturado** (PARCIAL) — `lib/infrastructure/socket/server/socket_server_telemetry.dart::_recordMutableAudit` (linhas 153-184) captura `clientId`, `commandType`, `runId`, `idempotencyKey`, `durationMs`, `result` em memoria + log estruturado. **Pendente PR-6**: persistencia em DB.
+- [x] **M7.1 — Telemetria** (ENTREGUE) — `SocketServerTelemetry.onResponseSent` (linhas 110-122) registra `socket_request_duration_*` via `IMetricsCollector.recordHistogram` e `socket_error_total_*` via `incrementCounter`.
+- [x] **F2.14 — idempotencyKey obrigatorio** (ENTREGUE) — `lib/infrastructure/protocol/idempotency_policy.dart::IdempotencyPolicy.keyRequiredTypes` cobre 8 tipos mutaveis (`startBackup`, `cancelBackup`, `create/delete/pause/resume Schedule`, `create/delete DatabaseConfig`). `missingKeyErrorMessage` retorna `400 INVALID_REQUEST` quando ausente.
+- [x] **F2.16 idempotency persistence** (ENTREGUE) — `lib/infrastructure/protocol/idempotency_store.dart::DriftIdempotencyStore` + `IdempotencyEntriesTable` + migracao v33. Sobrevive a restart.
+- [x] **F2.17 — eventId + sequence em backupProgress/Step/Complete/Failed** (ENTREGUE) — `lib/infrastructure/socket/server/execution_event_sequencer.dart` numera monotonicamente; `lib/infrastructure/socket/client/backup_event_deduplicator.dart` faz dedup por `eventId` + ordenacao por `sequence` no cliente.
+- [~] **F1.8 — Preflight checks reais cabeados** (3 de 4) — `lib/infrastructure/socket/server/server_preflight_checks.dart::buildServerPreflightChecks` injeta `compression_tool` (WinRAR), `temp_dir_writable` (`ValidateBackupDirectory`), `disk_space` (`IStorageChecker`). **Pendente PR-6**: `validate_sybase_log_backup_preflight`.
+- [x] **M8.4 — Re-sync apos reconexao** (ENTREGUE) — `connection_manager.dart::attachRemoteBackupListener` (linhas 1721-1726) + `_replayPendingBackupStream` (linha 449-457) + buffer `_pendingBackupStreamByRunId` com cap `_maxPendingBackupStreamEventsPerRunId`. Cliente reconectado re-vincula listener e recebe eventos pendentes em ordem.
+- [x] **Cleanup local em `RemoteFileTransferProvider` removido** (ENTREGUE) — `lib/application/providers/remote_file_transfer_provider.dart:521` agora chama `_connectionManager.cleanupRemoteStaging(runId)`. A chamada local antiga (`_transferStagingService.cleanupStaging(scheduleId)`) NAO existe mais.
+- [x] **PR-2 — Sequencia completa** (ENTREGUE) — CRUD remoto DB, `testDatabaseConnection`, `startBackup`/`cancelBackup` nao-bloqueante, `IdempotencyRegistry`, `getExecutionStatus`, `getExecutionQueue`, Schedule CRUD (create/delete/pause/resume).
+- [x] **PR-3 — Sequencia completa** (ENTREGUE) — `ExecutionQueueService` FIFO, eventos de fila com `eventId`+`sequence`, `cancelQueuedBackup`, `ExecutionStateMachine` (tabela definida; **enforcement** pendente PR-6), diagnostics, wirings reais.
+- [x] **PR-4 — Sequencia (nucleo)** (ENTREGUE) — staging `remote/<runId>/` para `remoteCommand`, TTL 24h + `410 ARTIFACT_EXPIRED`, lease v1 JSON com `owner`/`runId`, `cleanupExpiredLocks` no bootstrap, health com staging, thresholds 5/10 GiB com `503 STAGING_FULL`.
+
+### Pendencias residuais (escopo PR-6 — 2026-05-27)
+
+- [ ] **enforceTransition em handlers** — `ExecutionStateMachine.enforceTransition` definido mas NAO chamado em nenhum handler. Apenas testes referenciam.
+- [ ] **Watchdog runtime** — `runningHeartbeatTimeout`, `runningMaxDuration` zero ocorrencias no codigo. Apenas `reconcileStaleRunning(24h)` no boot.
+- [ ] **TTL em itens `queued`** — fila persiste sem `expiresAt`. `queuedItemTtl`, `QUEUED_TTL_EXPIRED` apenas no documento.
+- [ ] **Evento `backupCancelled` separado** — cancelamento emite `backupFailed` em vez de evento dedicado.
+- [ ] **`runId` em `FileTransfersTable` e `FileTransferResumeMetadata`** — atual usa apenas `scheduleId`.
+- [ ] **Audit log persistente em DB** — `SocketServerTelemetry` mantem em memoria + log; falta tabela.
+- [ ] **`validate_sybase_log_backup_preflight`** no `buildServerPreflightChecks`.
+- [ ] **3 testes de integracao** — `backup_queue_integration_test`, `server_restart_recovery_test`, `file_transfer_resume_integration_test`.
+- [ ] **`ErrorCode`s do plano original nao criados**: `QUEUED_BACKUP_NOT_FOUND`, `PRECONDITION_FAILED`, `FEATURE_NOT_AVAILABLE`, `DB_CONNECTION_TEST_FAILED` (alguns tem equivalente — `NO_ACTIVE_EXECUTION` ≈ `BACKUP_NOT_RUNNING`).
+- [ ] **Inconsistencia `QUEUE_FULL/503` (codigo) vs `QUEUE_OVERFLOW/429` (plano)**. PR-6 ratifica `QUEUE_FULL/503` e corrige comentario stale em `execution_queue_messages.dart:124`.
+- [ ] **`maxConcurrentBackups` hard-coded** (sem constante nomeada). PR-6 declara constante e ratifica `1` como permanente para v1.
+- [ ] **`ConnectionManager.executeSchedule` legacy bloqueante** — caminho moderno `executeRemoteBackup` existe. PR-6 marca legacy `@Deprecated`.
 Escopo: cliente Flutter desktop + servidor Flutter desktop (socket TCP)
 
 ## Continuidade e sincronizacao do plano (2026-04-19 → 2026-04-23)
@@ -132,7 +180,7 @@ confirmados" para detalhes). Itens sem marca ainda bloqueiam.
 - Fluxo remoto ainda depende de validacao de pasta local de downloads no cliente antes de iniciar comando no servidor
 - Contrato proposto usa `requestId` UUID string, mas o protocolo binario atual suporta `requestId` inteiro (`uint32`) no header
 - `ConnectionManager.executeSchedule` continua bloqueante (aguarda completer com `SocketConfig.backupExecutionTimeout` ate o backup terminar) - precisa virar aceite imediato com acompanhamento por `runId`
-- `RemoteFileTransferProvider.transferCompletedBackupToClient` continua chamando `_transferStagingService.cleanupStaging(scheduleId)` localmente em vez de delegar ao servidor (mesmo gap apontado em 2026-03-24)
+- ~~`RemoteFileTransferProvider.transferCompletedBackupToClient` continua chamando `_transferStagingService.cleanupStaging(scheduleId)` localmente~~ — **ENTREGUE 2026-05** (auditoria PR-6): `remote_file_transfer_provider.dart:521` agora chama `_connectionManager.cleanupRemoteStaging(runId)` (server-side).
 - ~~Sem cobertura de regressao em forma de golden tests do envelope JSON~~ — entregue em 2026-04-19 (36 fixtures cobrindo todos os tipos)
 - ~~Sem mecanismo de validacao de wire version no parser~~ — entregue em 2026-04-19 (`UnsupportedProtocolVersionException` + `ErrorCode.unsupportedProtocolVersion`)
 - ~~Sem limite de payload por tipo de mensagem~~ — entregue em 2026-04-19 (`PayloadLimits` + `ErrorCode.payloadTooLarge`)

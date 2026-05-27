@@ -13,6 +13,7 @@ class FileTransferResumeMetadata {
     this.expectedHash,
     this.isCompressed = false,
     this.scheduleId,
+    this.runId,
   });
 
   final String filePath;
@@ -22,6 +23,13 @@ class FileTransferResumeMetadata {
   final String? expectedHash;
   final bool isCompressed;
   final String? scheduleId;
+
+  /// PR-6: `runId` da execucao remota que originou o artefato. Resume
+  /// valida que o `runId` solicitado bate com o salvo — se diferente,
+  /// descarta a metadata e forca download do zero (evita reaproveitar
+  /// chunk parcial de outra execucao com mesmo hash de path).
+  final String? runId;
+
   final DateTime updatedAt;
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -32,6 +40,7 @@ class FileTransferResumeMetadata {
     'expectedHash': expectedHash,
     'isCompressed': isCompressed,
     'scheduleId': scheduleId,
+    if (runId != null) 'runId': runId,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
   };
 
@@ -49,8 +58,19 @@ class FileTransferResumeMetadata {
       expectedHash: json['expectedHash'] as String?,
       isCompressed: json['isCompressed'] as bool? ?? false,
       scheduleId: json['scheduleId'] as String?,
+      runId: json['runId'] as String?,
       updatedAt: updatedAt,
     );
+  }
+
+  /// PR-6: helper para o `ConnectionManager` decidir se reaproveita
+  /// esta metadata em resume. Quando ambos `runId`s estao presentes e
+  /// sao diferentes, a metadata pertence a outra execucao e nao deve
+  /// ser usada (forca download do zero).
+  bool matchesRunId(String? requestedRunId) {
+    if (runId == null || runId!.isEmpty) return true;
+    if (requestedRunId == null || requestedRunId.isEmpty) return true;
+    return runId == requestedRunId;
   }
 }
 

@@ -14,7 +14,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$BackupHistory {
 
- String get id; String get databaseName; String get databaseType; String get backupPath; int get fileSize; BackupStatus get status; DateTime get startedAt; String? get runId; String? get scheduleId; String get backupType; String? get errorMessage; DateTime? get finishedAt; int? get durationSeconds; BackupMetrics? get metrics;
+ String get id; String get databaseName; String get databaseType; String get backupPath; int get fileSize; BackupStatus get status; DateTime get startedAt; String? get runId; String? get scheduleId; String get backupType; String? get errorMessage; DateTime? get finishedAt; int? get durationSeconds; BackupMetrics? get metrics;/// PR-6: timestamp do ultimo `backupProgress` registrado. Usado
+/// pelo watchdog runtime do `SchedulerService` para detectar
+/// orchestrator travado. Nullable porque linhas pre-v34 nao tem.
+ DateTime? get lastProgressAt;
 /// Create a copy of BackupHistory
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,7 +30,7 @@ $BackupHistoryCopyWith<BackupHistory> get copyWith => _$BackupHistoryCopyWithImp
 
 @override
 String toString() {
-  return 'BackupHistory(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics)';
+  return 'BackupHistory(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics, lastProgressAt: $lastProgressAt)';
 }
 
 
@@ -38,7 +41,7 @@ abstract mixin class $BackupHistoryCopyWith<$Res>  {
   factory $BackupHistoryCopyWith(BackupHistory value, $Res Function(BackupHistory) _then) = _$BackupHistoryCopyWithImpl;
 @useResult
 $Res call({
- String id, String databaseName, String databaseType, String backupPath, int fileSize, BackupStatus status, DateTime startedAt, String? runId, String? scheduleId, String backupType, String? errorMessage, DateTime? finishedAt, int? durationSeconds, BackupMetrics? metrics
+ String id, String databaseName, String databaseType, String backupPath, int fileSize, BackupStatus status, DateTime startedAt, String? runId, String? scheduleId, String backupType, String? errorMessage, DateTime? finishedAt, int? durationSeconds, BackupMetrics? metrics, DateTime? lastProgressAt
 });
 
 
@@ -55,7 +58,7 @@ class _$BackupHistoryCopyWithImpl<$Res>
 
 /// Create a copy of BackupHistory
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? status = null,Object? startedAt = null,Object? runId = freezed,Object? scheduleId = freezed,Object? backupType = null,Object? errorMessage = freezed,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? status = null,Object? startedAt = null,Object? runId = freezed,Object? scheduleId = freezed,Object? backupType = null,Object? errorMessage = freezed,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,Object? lastProgressAt = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
@@ -71,7 +74,8 @@ as String,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMess
 as String?,finishedAt: freezed == finishedAt ? _self.finishedAt : finishedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,durationSeconds: freezed == durationSeconds ? _self.durationSeconds : durationSeconds // ignore: cast_nullable_to_non_nullable
 as int?,metrics: freezed == metrics ? _self.metrics : metrics // ignore: cast_nullable_to_non_nullable
-as BackupMetrics?,
+as BackupMetrics?,lastProgressAt: freezed == lastProgressAt ? _self.lastProgressAt : lastProgressAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 
@@ -156,10 +160,10 @@ return raw(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)?  raw,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics,  DateTime? lastProgressAt)?  raw,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BackupHistory() when raw != null:
-return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
+return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics,_that.lastProgressAt);case _:
   return orElse();
 
 }
@@ -177,10 +181,10 @@ return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)  raw,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics,  DateTime? lastProgressAt)  raw,}) {final _that = this;
 switch (_that) {
 case _BackupHistory():
-return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
+return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics,_that.lastProgressAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +201,10 @@ return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics)?  raw,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String databaseName,  String databaseType,  String backupPath,  int fileSize,  BackupStatus status,  DateTime startedAt,  String? runId,  String? scheduleId,  String backupType,  String? errorMessage,  DateTime? finishedAt,  int? durationSeconds,  BackupMetrics? metrics,  DateTime? lastProgressAt)?  raw,}) {final _that = this;
 switch (_that) {
 case _BackupHistory() when raw != null:
-return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics);case _:
+return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that.fileSize,_that.status,_that.startedAt,_that.runId,_that.scheduleId,_that.backupType,_that.errorMessage,_that.finishedAt,_that.durationSeconds,_that.metrics,_that.lastProgressAt);case _:
   return null;
 
 }
@@ -212,7 +216,7 @@ return raw(_that.id,_that.databaseName,_that.databaseType,_that.backupPath,_that
 
 
 class _BackupHistory extends BackupHistory {
-  const _BackupHistory({required this.id, required this.databaseName, required this.databaseType, required this.backupPath, required this.fileSize, required this.status, required this.startedAt, this.runId, this.scheduleId, this.backupType = 'full', this.errorMessage, this.finishedAt, this.durationSeconds, this.metrics}): super._();
+  const _BackupHistory({required this.id, required this.databaseName, required this.databaseType, required this.backupPath, required this.fileSize, required this.status, required this.startedAt, this.runId, this.scheduleId, this.backupType = 'full', this.errorMessage, this.finishedAt, this.durationSeconds, this.metrics, this.lastProgressAt}): super._();
   
 
 @override final  String id;
@@ -229,6 +233,10 @@ class _BackupHistory extends BackupHistory {
 @override final  DateTime? finishedAt;
 @override final  int? durationSeconds;
 @override final  BackupMetrics? metrics;
+/// PR-6: timestamp do ultimo `backupProgress` registrado. Usado
+/// pelo watchdog runtime do `SchedulerService` para detectar
+/// orchestrator travado. Nullable porque linhas pre-v34 nao tem.
+@override final  DateTime? lastProgressAt;
 
 /// Create a copy of BackupHistory
 /// with the given fields replaced by the non-null parameter values.
@@ -242,7 +250,7 @@ _$BackupHistoryCopyWith<_BackupHistory> get copyWith => __$BackupHistoryCopyWith
 
 @override
 String toString() {
-  return 'BackupHistory.raw(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics)';
+  return 'BackupHistory.raw(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics, lastProgressAt: $lastProgressAt)';
 }
 
 
@@ -253,7 +261,7 @@ abstract mixin class _$BackupHistoryCopyWith<$Res> implements $BackupHistoryCopy
   factory _$BackupHistoryCopyWith(_BackupHistory value, $Res Function(_BackupHistory) _then) = __$BackupHistoryCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String databaseName, String databaseType, String backupPath, int fileSize, BackupStatus status, DateTime startedAt, String? runId, String? scheduleId, String backupType, String? errorMessage, DateTime? finishedAt, int? durationSeconds, BackupMetrics? metrics
+ String id, String databaseName, String databaseType, String backupPath, int fileSize, BackupStatus status, DateTime startedAt, String? runId, String? scheduleId, String backupType, String? errorMessage, DateTime? finishedAt, int? durationSeconds, BackupMetrics? metrics, DateTime? lastProgressAt
 });
 
 
@@ -270,7 +278,7 @@ class __$BackupHistoryCopyWithImpl<$Res>
 
 /// Create a copy of BackupHistory
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? status = null,Object? startedAt = null,Object? runId = freezed,Object? scheduleId = freezed,Object? backupType = null,Object? errorMessage = freezed,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? status = null,Object? startedAt = null,Object? runId = freezed,Object? scheduleId = freezed,Object? backupType = null,Object? errorMessage = freezed,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,Object? lastProgressAt = freezed,}) {
   return _then(_BackupHistory(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
@@ -286,7 +294,8 @@ as String,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMess
 as String?,finishedAt: freezed == finishedAt ? _self.finishedAt : finishedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,durationSeconds: freezed == durationSeconds ? _self.durationSeconds : durationSeconds // ignore: cast_nullable_to_non_nullable
 as int?,metrics: freezed == metrics ? _self.metrics : metrics // ignore: cast_nullable_to_non_nullable
-as BackupMetrics?,
+as BackupMetrics?,lastProgressAt: freezed == lastProgressAt ? _self.lastProgressAt : lastProgressAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 

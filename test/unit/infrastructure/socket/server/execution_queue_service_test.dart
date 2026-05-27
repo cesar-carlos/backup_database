@@ -278,5 +278,110 @@ void main() {
       expect(s?.queuedPosition, 2);
       expect(svc.findQueuedByRunId('desconhecido'), isNull);
     });
+
+    group('PR-6: TTL + pruneExpired', () {
+      test('item enfileirado tem expiresAt = queuedAt + ttl', () async {
+        final fakeNow = DateTime.utc(2026, 1, 1, 12);
+        final svc = ExecutionQueueService(
+          queuedItemTtl: const Duration(minutes: 30),
+          clock: () => fakeNow,
+        );
+        final item = await svc.tryEnqueue(
+          scheduleId: 's-ttl',
+          clientId: 'c',
+          requestId: 1,
+          requestedBy: 'c',
+        );
+        expect(item, isNotNull);
+        expect(item!.expiresAt, isNotNull);
+        expect(
+          item.expiresAt,
+          fakeNow.add(const Duration(minutes: 30)),
+        );
+      });
+
+      test('pruneExpired remove itens vencidos e mantem o resto', () async {
+        var fakeNow = DateTime.utc(2026, 1, 1, 12);
+        final svc = ExecutionQueueService(
+          queuedItemTtl: const Duration(minutes: 30),
+          clock: () => fakeNow,
+        );
+        // Item velho (vai expirar)
+        await svc.tryEnqueue(
+          scheduleId: 'old',
+          clientId: 'c',
+          requestId: 1,
+          requestedBy: 'c',
+        );
+        // Avancar relogio para que o primeiro caia mas o segundo nao
+        fakeNow = fakeNow.add(const Duration(minutes: 20));
+        await svc.tryEnqueue(
+          scheduleId: 'fresh',
+          clientId: 'c',
+          requestId: 2,
+          requestedBy: 'c',
+        );
+        // Avancar mais 15 min: total 35 min para o primeiro (vence),
+        // 15 min para o segundo (ainda valido — TTL 30 min)
+        fakeNow = fakeNow.add(const Duration(minutes: 15));
+        final expired = await svc.pruneExpired();
+        expect(expired, hasLength(1));
+        expect(expired.first.scheduleId, 'old');
+        expect(svc.queueSize, 1);
+        expect(svc.isScheduleQueued('fresh'), isTrue);
+        expect(svc.isScheduleQueued('old'), isFalse);
+      });
+
+      test(
+        'pruneExpired chama onItemExpired para cada item removido',
+        () async {
+          var fakeNow = DateTime.utc(2026, 1, 1, 12);
+          final svc = ExecutionQueueService(
+            queuedItemTtl: const Duration(minutes: 5),
+            clock: () => fakeNow,
+          );
+          final expired = <String>[];
+          svc.onItemExpired = (item) => expired.add(item.runId);
+          await svc.tryEnqueue(
+            scheduleId: 'a',
+            clientId: 'c',
+            requestId: 1,
+            requestedBy: 'c',
+          );
+          await svc.tryEnqueue(
+            scheduleId: 'b',
+            clientId: 'c',
+            requestId: 2,
+            requestedBy: 'c',
+          );
+          fakeNow = fakeNow.add(const Duration(minutes: 6));
+          final removed = await svc.pruneExpired();
+          expect(removed, hasLength(2));
+          expect(expired, hasLength(2));
+        },
+      );
+
+      test('pruneExpired callback que joga nao quebra housekeeping', () async {
+        var fakeNow = DateTime.utc(2026, 1, 1, 12);
+        final svc = ExecutionQueueService(
+          queuedItemTtl: const Duration(minutes: 5),
+          clock: () => fakeNow,
+        );
+        svc.onItemExpired = (_) {
+          throw Exception('listener bug');
+        };
+        await svc.tryEnqueue(
+          scheduleId: 'a',
+          clientId: 'c',
+          requestId: 1,
+          requestedBy: 'c',
+        );
+        fakeNow = fakeNow.add(const Duration(minutes: 6));
+        final removed = await svc.pruneExpired();
+        // Item removido apesar do callback ter jogado.
+        expect(removed, hasLength(1));
+        expect(svc.queueSize, 0);
+      });
+    });
   });
 }

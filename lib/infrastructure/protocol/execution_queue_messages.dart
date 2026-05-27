@@ -121,7 +121,7 @@ class ExecutionQueueResult {
   bool get isEmpty => queue.isEmpty;
 
   /// `true` quando a fila atingiu o limite — proximos disparos serao
-  /// rejeitados com `429 QUEUE_OVERFLOW` (M8 do plano).
+  /// rejeitados com `503 QUEUE_FULL` (decisao ratificada PR-6).
   bool get isFull => totalQueued >= maxQueueSize;
 
   /// Quantos slots ainda cabem antes de atingir o limite.

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_metrics_collector.dart';
+import 'package:backup_database/infrastructure/datasources/daos/mutable_command_audit_dao.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/idempotency_registry.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
@@ -7,6 +10,7 @@ import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_rate_limiter.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_telemetry_constants.dart';
+import 'package:uuid/uuid.dart';
 
 class SocketMutableCommandAuditEntry {
   const SocketMutableCommandAuditEntry({
@@ -61,12 +65,23 @@ class _PendingSocketRequest {
 class SocketServerTelemetry {
   SocketServerTelemetry({
     IMetricsCollector? metricsCollector,
+    MutableCommandAuditDao? auditDao,
     DateTime Function()? clock,
+    Uuid? uuid,
   }) : _metricsCollector = metricsCollector,
-       _clock = clock ?? DateTime.now;
+       _auditDao = auditDao,
+       _clock = clock ?? DateTime.now,
+       _uuid = uuid ?? const Uuid();
 
   final IMetricsCollector? _metricsCollector;
+
+  /// PR-6: persistencia opcional do audit. Quando null (testes / cliente
+  /// que nao precisa de retencao), so o buffer em memoria + log
+  /// estruturado continuam funcionando.
+  final MutableCommandAuditDao? _auditDao;
+
   final DateTime Function() _clock;
+  final Uuid _uuid;
 
   final Map<String, _PendingSocketRequest> _pendingByKey =
       <String, _PendingSocketRequest>{};
@@ -181,6 +196,36 @@ class SocketServerTelemetry {
       requestId: requestId.toString(),
       runId: runId,
     );
+    // PR-6: persistencia em DB (best-effort — falha nao quebra telemetria).
+    final dao = _auditDao;
+    if (dao != null) {
+      unawaited(_safePersistAudit(dao, entry));
+    }
+  }
+
+  Future<void> _safePersistAudit(
+    MutableCommandAuditDao dao,
+    SocketMutableCommandAuditEntry entry,
+  ) async {
+    try {
+      await dao.insertAudit(
+        id: _uuid.v4(),
+        clientId: entry.clientId,
+        commandType: entry.commandType,
+        requestId: entry.requestId,
+        runId: entry.runId,
+        idempotencyKey: entry.idempotencyKey,
+        result: entry.result,
+        durationMs: entry.durationMs,
+        timestampUtc: entry.timestampUtc,
+      );
+    } on Object catch (e, st) {
+      LoggerService.warning(
+        'SocketServerTelemetry: falha ao persistir audit (best-effort)',
+        e,
+        st,
+      );
+    }
   }
 
   void _pruneStalePending() {

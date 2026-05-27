@@ -502,8 +502,65 @@ Message createBackupFailedMessage({
   );
 }
 
+/// PR-6: evento dedicado de cancelamento (substitui o uso de
+/// `backupFailed` para cancelamentos explicitos).
+///
+/// Antes desse evento, outros clientes ouvindo o mesmo `runId` viam
+/// `backupFailed` sem conseguir distinguir "cancelado pelo operador" de
+/// "erro tecnico". Agora a UI pode mostrar mensagem diferente, parar
+/// retry automatico, e reusar o `idempotencyKey` para um novo disparo
+/// sem precisar consultar `getRunErrorDetails`.
+///
+/// Cliente legado que NAO conhece `MessageType.backupCancelled` cai no
+/// fallback de deserializacao (`MessageType.error`) e o
+/// `_handleBackupProgressMessage` simplesmente ignora — sem regressao.
+Message createBackupCancelledMessage({
+  required int requestId,
+  required String scheduleId,
+  required String runId,
+  required String cancelledBy,
+  required DateTime occurredAt,
+  String? reason,
+  String? eventId,
+  int? sequence,
+}) {
+  final payload = <String, dynamic>{
+    'scheduleId': scheduleId,
+    'runId': runId,
+    'cancelledBy': cancelledBy,
+    'occurredAt': occurredAt.toUtc().toIso8601String(),
+    if (reason != null && reason.isNotEmpty) 'reason': reason,
+    ...backupEventCorrelationFields(eventId: eventId, sequence: sequence),
+  };
+  final payloadJson = jsonEncode(payload);
+  final length = utf8.encode(payloadJson).length;
+  return Message(
+    header: MessageHeader(
+      type: MessageType.backupCancelled,
+      length: length,
+      requestId: requestId,
+    ),
+    payload: payload,
+    checksum: 0,
+  );
+}
+
 String? getScheduleIdFromBackupMessage(Message message) {
   return message.payload['scheduleId'] as String?;
+}
+
+/// PR-6: helpers de leitura do `backupCancelled` (mantem simetria com
+/// `getErrorFromBackupFailed` / `getStepFromBackupProgress`).
+String? getCancelledByFromBackupCancelled(Message message) =>
+    message.payload['cancelledBy'] as String?;
+
+String? getReasonFromBackupCancelled(Message message) =>
+    message.payload['reason'] as String?;
+
+DateTime? getOccurredAtFromBackupCancelled(Message message) {
+  final raw = message.payload['occurredAt'];
+  if (raw is! String) return null;
+  return DateTime.tryParse(raw);
 }
 
 String? getBackupPathFromBackupComplete(Message message) {

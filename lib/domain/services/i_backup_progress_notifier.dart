@@ -18,4 +18,11 @@ abstract class IBackupProgressNotifier {
   bool tryStartBackup([String? scheduleName]);
   void completeBackup({String? message, String? backupPath});
   void failBackup(String error);
+
+  /// PR-6: terminacao por cancelamento explicito (operador via
+  /// `cancelBackup` ou watchdog). Distingue de `failBackup` para que o
+  /// `ScheduleMessageHandler` emita `backupCancelled` separado.
+  /// Implementacoes padrao podem delegar para `failBackup(reason)`
+  /// quando nao implementarem o evento dedicado.
+  void cancelBackup(String reason);
 }

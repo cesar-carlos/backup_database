@@ -33,6 +33,40 @@ import 'package:backup_database/infrastructure/socket/client/tcp_socket_client.d
 import 'package:crypto/crypto.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+/// PR-6: excecao distinta para cancelamento de backup remoto.
+///
+/// Permite que a UI / providers tratem cancelamento sem precisar parsear
+/// `Exception.toString()`. Cliente que NAO conhece esse tipo cai no
+/// fallback de `is Exception` (continua funcional).
+class RemoteBackupCancelledException implements Exception {
+  RemoteBackupCancelledException({
+    required this.cancelledBy,
+    this.reason,
+    this.occurredAt,
+  });
+
+  /// `clientId` (peer remoto) que disparou o `cancelBackup`. Em
+  /// cancelamentos automatizados pelo proprio servidor (watchdog),
+  /// vai ser o `clientId` do registry do `runId`.
+  final String cancelledBy;
+
+  /// Motivo informado pelo servidor ('operador', 'watchdog timeout',
+  /// 'hard limit'). `null` quando nao fornecido.
+  final String? reason;
+
+  /// Quando o cancelamento efetivamente ocorreu (timezone UTC).
+  final DateTime? occurredAt;
+
+  @override
+  String toString() {
+    final reasonPart = reason != null ? ', reason=$reason' : '';
+    final whenPart = occurredAt != null
+        ? ', occurredAt=${occurredAt!.toIso8601String()}'
+        : '';
+    return 'RemoteBackupCancelledException(cancelledBy=$cancelledBy$reasonPart$whenPart)';
+  }
+}
+
 typedef BackupProgressCallback =
     void Function(
       String step,
@@ -394,7 +428,12 @@ class ConnectionManager {
       type == MessageType.backupProgress ||
       type == MessageType.backupStep ||
       type == MessageType.backupComplete ||
-      type == MessageType.backupFailed;
+      type == MessageType.backupFailed ||
+      // PR-6: tratar `backupCancelled` no mesmo pipeline para que o
+      // deduplicator + completer recebam a mensagem como evento
+      // terminal. Servidor `v1` que nao envia esse tipo continua
+      // funcional via `backupFailed` (cliente legado caminho).
+      type == MessageType.backupCancelled;
 
   void _handleQueueEvent(QueueEvent event) {
     final state = _activeBackupsByRunId[event.runId];
@@ -495,6 +534,7 @@ class ConnectionManager {
             expectedHash: state.expectedHash,
             isCompressed: state.isCompressed,
             scheduleId: state.scheduleId,
+            runId: state.runId,
             updatedAt: DateTime.now(),
           ),
         );
@@ -767,6 +807,36 @@ class ConnectionManager {
       state.completer.complete(rd.Failure(Exception(error)));
       return;
     }
+    // PR-6: tratamento dedicado de `backupCancelled` (vs falha real).
+    // Cliente UI pode usar `RemoteBackupCancelledException` para mostrar
+    // mensagem diferente e evitar retry automatico.
+    if (message.header.type == MessageType.backupCancelled) {
+      _removeBackupProgressState(message, state);
+      final cancelledBy =
+          getCancelledByFromBackupCancelled(message) ?? 'desconhecido';
+      final reason = getReasonFromBackupCancelled(message);
+      final occurredAt = getOccurredAtFromBackupCancelled(message);
+      LoggerService.info(
+        '[ConnectionManager] backupCancelled'
+        '${state.runId != null ? ' (runId=${state.runId})' : ''} '
+        'por=$cancelledBy reason=${reason ?? '-'}',
+      );
+      state.onProgress?.call(
+        'Cancelado',
+        reason ?? 'Backup cancelado por $cancelledBy',
+        _lastProgressByRunId[state.runId] ?? 0,
+      );
+      state.completer.complete(
+        rd.Failure(
+          RemoteBackupCancelledException(
+            cancelledBy: cancelledBy,
+            reason: reason,
+            occurredAt: occurredAt,
+          ),
+        ),
+      );
+      return;
+    }
   }
 
   void _removeBackupProgressState(Message message, _BackupProgressState state) {
@@ -966,13 +1036,19 @@ class ConnectionManager {
     required FileTransferResumeMetadata? metadata,
     required String filePath,
     required String? scheduleId,
+    required String? runId,
   }) {
     if (metadata == null) {
       return true;
     }
     final sameFile = metadata.filePath == filePath;
     final sameSchedule = metadata.scheduleId == scheduleId;
-    return sameFile && sameSchedule;
+    // PR-6: se ambos runIds estao presentes e divergem, descarta o
+    // parcial — pertence a outra execucao remota. `matchesRunId`
+    // implementa a regra "ambos nulos OU iguais OU um deles nulo
+    // (compat com metadata pre-PR-6 / fluxos locais)".
+    final sameRun = metadata.matchesRunId(runId);
+    return sameFile && sameSchedule && sameRun;
   }
 
   Future<rd.Result<void>> requestFile({
@@ -1029,6 +1105,7 @@ class ConnectionManager {
           metadata: resumeMetadata,
           filePath: filePath,
           scheduleId: scheduleId,
+          runId: runId,
         )) {
           LoggerService.warning(
             '[ConnectionManager] Arquivo parcial descartado: '
@@ -1080,6 +1157,7 @@ class ConnectionManager {
         partFilePath: partFilePath,
         sourceFilePath: filePath,
         scheduleId: scheduleId,
+        runId: runId,
         transferChunkSize: transferChunkSize,
         fileSink: fileSink,
         onProgress: onProgress,
@@ -1142,6 +1220,15 @@ class ConnectionManager {
     }
   }
 
+  /// Caminho legacy v1 (bloqueante via `completer.future.timeout`). Mantido
+  /// para compatibilidade com servidores antigos durante janela de transicao.
+  ///
+  /// Codigo novo deve usar [executeRemoteBackup] (aceite imediato + `runId` +
+  /// acompanhamento via stream + suporte a `queueIfBusy`). Ver decisao PR-6.
+  @Deprecated(
+    'Use executeRemoteBackup para aceite imediato + acompanhamento por runId. '
+    'Sera removido em PR futuro apos 2 releases com este aviso.',
+  )
   Future<rd.Result<String>> executeSchedule(
     String scheduleId, {
     BackupProgressCallback? onProgress,
@@ -2428,6 +2515,7 @@ class _FileTransferState {
     required this.transferChunkSize,
     required this.fileSink,
     this.onProgress,
+    this.runId,
   });
 
   final Completer<rd.Result<void>> completer;
@@ -2435,6 +2523,12 @@ class _FileTransferState {
   final String partFilePath;
   final String sourceFilePath;
   final String? scheduleId;
+
+  /// PR-6: `runId` solicitado para esta transferencia. Propagado para a
+  /// `FileTransferResumeMetadata.runId` para que tentativas futuras de
+  /// resume validem que pertence a mesma execucao remota.
+  final String? runId;
+
   final IOSink fileSink;
   final void Function(int currentChunk, int totalChunks)? onProgress;
   String fileName = '';

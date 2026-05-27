@@ -30,6 +30,7 @@ import 'package:backup_database/domain/services/i_schedule_calculator.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_storage_checker.dart';
 import 'package:backup_database/domain/services/i_transfer_staging_service.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:uuid/uuid.dart';
 
@@ -100,6 +101,34 @@ class SchedulerService implements ISchedulerService {
   final Duration _uploadTimeout;
 
   Timer? _checkTimer;
+
+  /// PR-6: timer dedicado de watchdog (separado do `_checkTimer` que
+  /// agenda backups por horario). Verifica a cada
+  /// `BackupConstants.watchdogCheckInterval` se algum backup running
+  /// estourou `runningHeartbeatTimeout` ou `runningMaxDuration` e
+  /// dispara `cancelExecution`.
+  Timer? _watchdogTimer;
+
+  /// PR-6: ultimo `updateProgress` observado por `scheduleId`. Atualizado
+  /// pelo listener registrado em `_progressNotifier`. Quando um backup
+  /// fica sem atualizar por `runningHeartbeatTimeout`, o watchdog
+  /// cancela com `RUN_WATCHDOG_TIMEOUT`.
+  final Map<String, DateTime> _lastProgressAtByScheduleId = {};
+
+  /// PR-6: timestamp de inicio por `scheduleId`. Usado para detectar
+  /// `runningMaxDuration` (hard limit) independente de progresso.
+  final Map<String, DateTime> _startedAtByScheduleId = {};
+
+  /// PR-6: motivo do cancelamento por watchdog (`'watchdog timeout'` ou
+  /// `'hard limit'`). Lido pelo `_failIfCancellationRequested` para
+  /// classificar o `BackupHistory.errorMessage` corretamente.
+  final Map<String, String> _watchdogCancelReasonByScheduleId = {};
+
+  /// Listener do `_progressNotifier` registrado em `start()` e removido
+  /// em `stop()`. Mantido como campo para garantir simetria add/remove
+  /// (sem isso, restart do scheduler vaza listeners).
+  late final void Function() _watchdogProgressListener = _onProgressForWatchdog;
+
   bool _isRunning = false;
   final Set<String> _executingSchedules = {};
   final Set<String> _cancelRequestedSchedules = {};
@@ -113,6 +142,13 @@ class SchedulerService implements ISchedulerService {
   @override
   bool get isExecutingBackup => _executingSchedules.isNotEmpty;
 
+  /// `true` quando o servidor ainda tem slot livre para iniciar um backup
+  /// novo. Hoje `BackupConstants.maxConcurrentBackups = 1`, mas a chamada
+  /// usa a constante explicitamente para evitar reintroducao do magic
+  /// number `.isEmpty` quando o limite mudar (ver ADR + backlog PR-6+).
+  bool get hasAvailableExecutionSlot =>
+      _executingSchedules.length < BackupConstants.maxConcurrentBackups;
+
   @override
   Future<void> start() async {
     if (_isRunning) return;
@@ -122,6 +158,12 @@ class SchedulerService implements ISchedulerService {
 
     await _updateAllNextRuns();
     await _reconcileStaleRunningBackups();
+
+    // PR-6: watchdog roda independente do timer local de agendamento.
+    // Mesmo quando o operador desabilita `local_schedule_timer_enabled`
+    // (modo 100% remoto), backups disparados por comando remoto ainda
+    // precisam de protecao contra orchestrator travado.
+    _startWatchdog();
 
     final localTimerEnabled =
         await _userPreferencesRepository?.getLocalScheduleTimerEnabled() ??
@@ -160,6 +202,126 @@ class SchedulerService implements ISchedulerService {
     _isRunning = false;
     _checkTimer?.cancel();
     _checkTimer = null;
+    _stopWatchdog();
+  }
+
+  /// PR-6: inicia o watchdog runtime. Registra listener no
+  /// `_progressNotifier` para capturar `updateProgress` (atualiza
+  /// `_lastProgressAtByScheduleId`) e agenda timer periodico que
+  /// avalia `runningHeartbeatTimeout` + `runningMaxDuration`.
+  void _startWatchdog() {
+    _progressNotifier.addListener(_watchdogProgressListener);
+    _watchdogTimer?.cancel();
+    _watchdogTimer = Timer.periodic(
+      BackupConstants.watchdogCheckInterval,
+      (_) => unawaited(_checkWatchdog()),
+    );
+    LoggerService.info(
+      'Watchdog runtime iniciado: '
+      'heartbeat=${BackupConstants.runningHeartbeatTimeout.inMinutes}min, '
+      'hardLimit=${BackupConstants.runningMaxDuration.inHours}h, '
+      'interval=${BackupConstants.watchdogCheckInterval.inSeconds}s',
+    );
+  }
+
+  void _stopWatchdog() {
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
+    try {
+      _progressNotifier.removeListener(_watchdogProgressListener);
+    } on Object catch (e) {
+      LoggerService.warning(
+        'Erro ao remover listener do watchdog (best-effort)',
+        e,
+      );
+    }
+    _lastProgressAtByScheduleId.clear();
+    _startedAtByScheduleId.clear();
+    _watchdogCancelReasonByScheduleId.clear();
+  }
+
+  /// Listener registrado em `_progressNotifier`. Atualiza
+  /// `_lastProgressAtByScheduleId` para o backup em curso, permitindo
+  /// que `_checkWatchdog` detecte estagnacao.
+  void _onProgressForWatchdog() {
+    // O notifier nao expoe scheduleId diretamente — uso a chave unica
+    // do `_executingSchedules` (com mutex de 1, ha no maximo 1 entrada).
+    // Se evoluir para multi-execucao, refatorar para mapear historyId.
+    if (_executingSchedules.isEmpty) return;
+    final now = DateTime.now();
+    for (final scheduleId in _executingSchedules) {
+      _lastProgressAtByScheduleId[scheduleId] = now;
+    }
+  }
+
+  /// Avalia se algum backup running estourou os timeouts e dispara
+  /// `cancelExecution`. Fail-soft: nunca interrompe o ciclo do scheduler.
+  Future<void> _checkWatchdog() async {
+    if (!_isRunning || _executingSchedules.isEmpty) return;
+    final now = DateTime.now();
+    const heartbeatTimeout = BackupConstants.runningHeartbeatTimeout;
+    const hardLimit = BackupConstants.runningMaxDuration;
+
+    // Snapshot defensivo (cancel altera o set).
+    final running = _executingSchedules.toList(growable: false);
+    for (final scheduleId in running) {
+      try {
+        final startedAt = _startedAtByScheduleId[scheduleId];
+        if (startedAt != null && now.difference(startedAt) > hardLimit) {
+          LoggerService.warning(
+            'Watchdog: hard limit excedido para scheduleId=$scheduleId '
+            '(rodando ha ${now.difference(startedAt).inMinutes}min, '
+            'limite=${hardLimit.inMinutes}min)',
+          );
+          _watchdogCancelReasonByScheduleId[scheduleId] = 'hard limit';
+          unawaited(_triggerWatchdogCancel(scheduleId, 'hard limit'));
+          continue;
+        }
+        final lastProgress = _lastProgressAtByScheduleId[scheduleId];
+        if (lastProgress != null &&
+            now.difference(lastProgress) > heartbeatTimeout) {
+          LoggerService.warning(
+            'Watchdog: heartbeat timeout para scheduleId=$scheduleId '
+            '(sem progresso ha ${now.difference(lastProgress).inMinutes}min, '
+            'limite=${heartbeatTimeout.inMinutes}min)',
+          );
+          _watchdogCancelReasonByScheduleId[scheduleId] = 'watchdog timeout';
+          unawaited(_triggerWatchdogCancel(scheduleId, 'watchdog timeout'));
+        }
+      } on Object catch (e, st) {
+        LoggerService.warning(
+          'Watchdog: erro ao avaliar scheduleId=$scheduleId',
+          e,
+          st,
+        );
+      }
+    }
+  }
+
+  Future<void> _triggerWatchdogCancel(String scheduleId, String reason) async {
+    final result = await cancelExecution(scheduleId);
+    result.fold(
+      (_) => LoggerService.info(
+        'Watchdog: cancel disparado para $scheduleId (reason=$reason)',
+      ),
+      (e) => LoggerService.warning(
+        'Watchdog: falha ao cancelar $scheduleId: $e',
+      ),
+    );
+  }
+
+  /// Hooks de teste do watchdog. NAO usar em producao.
+  @visibleForTesting
+  Future<void> runWatchdogCheckNow() => _checkWatchdog();
+
+  @visibleForTesting
+  void setLastProgressAtForSchedule(String scheduleId, DateTime when) {
+    _lastProgressAtByScheduleId[scheduleId] = when;
+  }
+
+  @visibleForTesting
+  void setStartedAtForSchedule(String scheduleId, DateTime when) {
+    _startedAtByScheduleId[scheduleId] = when;
   }
 
   Future<void> _updateAllNextRuns() async {
@@ -204,7 +366,7 @@ class SchedulerService implements ISchedulerService {
 
   Future<void> _checkSchedules() async {
     if (!_isRunning) return;
-    if (_executingSchedules.isNotEmpty) return;
+    if (!hasAvailableExecutionSlot) return;
 
     final now = DateTime.now();
     final result = await _scheduleRepository.getEnabledDueForExecution(now);
@@ -825,7 +987,7 @@ class SchedulerService implements ISchedulerService {
     ExecutionOrigin executionOrigin = ExecutionOrigin.local,
     String? runId,
   }) async {
-    if (_executingSchedules.isNotEmpty) {
+    if (!hasAvailableExecutionSlot) {
       // Mensagem agora inclui qual schedule está bloqueando, facilitando
       // o diagnóstico — antes era genérica "já existe um backup em
       // execução".
@@ -842,6 +1004,12 @@ class SchedulerService implements ISchedulerService {
     }
 
     _executingSchedules.add(schedule.id);
+    // PR-6: registra inicio para o watchdog (`runningMaxDuration` hard
+    // limit). `_lastProgressAtByScheduleId` e atualizado quando o
+    // notifier emitir updates.
+    final startedAt = DateTime.now();
+    _startedAtByScheduleId[schedule.id] = startedAt;
+    _lastProgressAtByScheduleId[schedule.id] = startedAt;
     try {
       return await _executeScheduledBackup(
         schedule,
@@ -852,6 +1020,9 @@ class SchedulerService implements ISchedulerService {
       _executingSchedules.remove(schedule.id);
       _cancelRequestedSchedules.remove(schedule.id);
       _runningHistoryIds.remove(schedule.id);
+      _startedAtByScheduleId.remove(schedule.id);
+      _lastProgressAtByScheduleId.remove(schedule.id);
+      _watchdogCancelReasonByScheduleId.remove(schedule.id);
     }
   }
 
@@ -893,9 +1064,16 @@ class SchedulerService implements ISchedulerService {
       return null;
     }
 
-    const message = 'Backup cancelado pelo usuario.';
+    // PR-6: se o cancel foi disparado pelo watchdog, usa a mensagem do
+    // motivo registrado para que `BackupHistory.errorMessage` distinga
+    // "operador clicou cancelar" de "watchdog matou por timeout".
+    final watchdogReason = _watchdogCancelReasonByScheduleId[schedule.id];
+    final message = watchdogReason != null
+        ? 'Backup cancelado por watchdog: $watchdogReason.'
+        : 'Backup cancelado pelo usuario.';
     LoggerService.warning(
-      'Cancelamento detectado para schedule ${schedule.id} (${schedule.name})',
+      'Cancelamento detectado para schedule ${schedule.id} (${schedule.name})'
+      '${watchdogReason != null ? ' (reason=$watchdogReason)' : ''}',
     );
 
     if (backupHistory != null) {
@@ -921,9 +1099,9 @@ class SchedulerService implements ISchedulerService {
       );
     }
 
-    _safeFailBackup(message);
+    _safeCancelBackup(message);
 
-    return const rd.Failure(
+    return rd.Failure(
       ValidationFailure(
         message: message,
         code: FailureCodes.backupCancelled,
@@ -1032,6 +1210,19 @@ class SchedulerService implements ISchedulerService {
       _progressNotifier.failBackup(message);
     } on Object catch (e, s) {
       LoggerService.warning('Erro ao atualizar progresso failBackup', e, s);
+    }
+  }
+
+  /// PR-6: contraparte para cancelamento explicito. Distinguir de
+  /// `_safeFailBackup` permite que `ScheduleMessageHandler` emita
+  /// `backupCancelled` (em vez de `backupFailed`) — outros clientes
+  /// ouvindo o mesmo runId sabem que foi cancel manual / watchdog, nao
+  /// falha tecnica.
+  void _safeCancelBackup(String reason) {
+    try {
+      _progressNotifier.cancelBackup(reason);
+    } on Object catch (e, s) {
+      LoggerService.warning('Erro ao atualizar progresso cancelBackup', e, s);
     }
   }
 

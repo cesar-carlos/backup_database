@@ -1,4 +1,5 @@
 import 'package:backup_database/application/services/metrics_collector.dart';
+import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
@@ -111,6 +112,75 @@ void main() {
       );
 
       expect(metrics.getSnapshot(), isEmpty);
+    });
+
+    test('PR-6: persiste audit em DB quando dao injetado', () async {
+      final db = AppDatabase.inMemory();
+      addTearDown(db.close);
+      final telemetry = SocketServerTelemetry(
+        metricsCollector: MetricsCollector(),
+        auditDao: db.mutableCommandAuditDao,
+      );
+
+      telemetry.onRequestReceived(
+        'client-persist',
+        createStartBackupRequest(
+          scheduleId: 'sch-1',
+          idempotencyKey: 'idem-persist',
+          requestId: 42,
+        ),
+      );
+      telemetry.onResponseSent(
+        'client-persist',
+        createStartBackupResponse(
+          requestId: 42,
+          runId: 'sch-1_run',
+          state: ExecutionState.running,
+          scheduleId: 'sch-1',
+          serverTimeUtc: DateTime.utc(2026, 5, 27, 12),
+        ),
+      );
+
+      // best-effort persist e async — espera o microtask.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final rows = await db.mutableCommandAuditDao.recentAudits();
+      expect(rows, hasLength(1));
+      expect(rows.first.commandType, MessageType.startBackupRequest.name);
+      expect(rows.first.clientId, 'client-persist');
+      expect(rows.first.idempotencyKey, 'idem-persist');
+      expect(rows.first.runId, 'sch-1_run');
+      expect(rows.first.result, 'success');
+    });
+
+    test('PR-6: deleteOlderThan remove apenas registros antigos', () async {
+      final db = AppDatabase.inMemory();
+      addTearDown(db.close);
+      final dao = db.mutableCommandAuditDao;
+
+      final old = DateTime.utc(2025);
+      final fresh = DateTime.utc(2026, 5, 27);
+      await dao.insertAudit(
+        id: 'a-old',
+        clientId: 'c',
+        commandType: 'startBackupRequest',
+        result: 'success',
+        timestampUtc: old,
+      );
+      await dao.insertAudit(
+        id: 'a-fresh',
+        clientId: 'c',
+        commandType: 'startBackupRequest',
+        result: 'success',
+        timestampUtc: fresh,
+      );
+
+      final cutoff = DateTime.utc(2025, 6);
+      final deleted = await dao.deleteOlderThan(cutoff);
+      expect(deleted, 1);
+
+      final rows = await dao.recentAudits();
+      expect(rows.map((r) => r.id), ['a-fresh']);
     });
   });
 }
