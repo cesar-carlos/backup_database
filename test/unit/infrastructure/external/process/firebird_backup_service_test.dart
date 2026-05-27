@@ -3113,6 +3113,61 @@ Data pages: 10
         );
       });
 
+      test(
+        'BackupFlags.stopOnError = false no relatorio (achado A.1 AUDIT-14)',
+        () async {
+          // Antes este campo era `true` (copy/paste do SQL Server, sem
+          // equivalente conceitual em Firebird gbak/nbackup). Agora `false`
+          // sinaliza "N/A" — paridade com AUDIT-12 Postgres e AUDIT-13 Sybase.
+          when(
+            () => processService.run(
+              executable: 'nbackup',
+              arguments: any(named: 'arguments'),
+              workingDirectory: any(named: 'workingDirectory'),
+              environment: any(named: 'environment'),
+              timeout: any(named: 'timeout'),
+              tag: any(named: 'tag'),
+            ),
+          ).thenAnswer((invocation) async {
+            final args = invocation.namedArguments[#arguments]! as List<String>;
+            final outPath = args.last;
+            await File(outPath).writeAsBytes(List<int>.filled(10, 1));
+            return const rd.Success(
+              ProcessResult(
+                exitCode: 0,
+                stdout: '',
+                stderr: '',
+                duration: Duration(milliseconds: 2),
+              ),
+            );
+          });
+
+          final result = await service.executeBackup(
+            config: tcpConfig,
+            context: BackupExecutionContext(
+              outputDirectory: tempDir.path,
+              scheduleId: 'sched-au14',
+            ),
+          );
+
+          expect(result.isSuccess(), isTrue);
+          final metrics = result.getOrNull()!.metrics!;
+          expect(
+            metrics.flags.stopOnError,
+            isFalse,
+            reason:
+                'Firebird nao tem conceito de STOP_ON_ERROR; reportar false '
+                'sinaliza N/A para o historico/relatorio (paridade AUDIT-12/13).',
+          );
+          // Sanity checks de outros flags N/A em Firebird.
+          expect(metrics.flags.compression, isFalse);
+          expect(metrics.flags.stripingCount, 1);
+          expect(metrics.flags.withChecksum, isFalse);
+          // Campo significativo em Firebird: o tool usado.
+          expect(metrics.flags.tool, 'nbackup');
+        },
+      );
+
       test('returns Failure when isql exits with error', () async {
         reset(processService);
         when(

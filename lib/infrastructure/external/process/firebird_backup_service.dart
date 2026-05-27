@@ -1343,11 +1343,18 @@ QUIT;
     String? resolvedGbakTagline,
   }) {
     return BackupFlags(
+      // Firebird (gbak/nbackup) não tem conceito equivalente ao
+      // `STOP_ON_ERROR` do SQL Server. Reportar `true` antes era
+      // copy/paste enganoso — agora `false` sinaliza "N/A" no
+      // histórico/relatório (paridade com AUDIT-12 Postgres e
+      // AUDIT-13 Sybase). `compression`, `stripingCount=1`,
+      // `withChecksum=false` também são N/A em Firebird neste fluxo;
+      // o campo realmente significativo é `firebirdVersion` abaixo.
       compression: false,
       verifyPolicy: verifyPolicyLabel,
       stripingCount: 1,
       withChecksum: false,
-      stopOnError: true,
+      stopOnError: false,
       tool: tool,
       firebirdVersion: _firebirdVersionForMetrics(
         config,
